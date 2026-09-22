@@ -7,6 +7,9 @@ use std::{
     net::{Ipv4Addr, SocketAddr},
 };
 
+mod search;
+pub use search::{dispatch_search, parse_search, print_search_help, SearchCommand};
+
 /// An explicit CLI output format.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputFormat {
@@ -109,6 +112,16 @@ pub async fn dispatch_get(
     format: Option<OutputFormat>,
     input: GetInput,
 ) -> anyhow::Result<()> {
+    let host = local_host(repo, scope)?;
+    let service = provenance_porcelain::Porcelain::new(
+        provenance_transport::porcelain::HostGetPort::new(host),
+    );
+    let outcome = service.get(input).await?;
+    println!("{}", render_get(&outcome, format)?);
+    Ok(())
+}
+
+fn local_host(repo: &str, scope: &str) -> anyhow::Result<provenance_transport::StatementHost> {
     let root = std::fs::canonicalize(repo)?;
     let access = provenance_transport::LocalAccess::new(
         &root,
@@ -118,13 +131,9 @@ pub async fn dispatch_get(
         SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
     )
     .map_err(|failure| anyhow::anyhow!(failure))?;
-    let host = provenance_transport::StatementHost::with_access(std::sync::Arc::new(access));
-    let service = provenance_porcelain::Porcelain::new(
-        provenance_transport::porcelain::HostGetPort::new(host),
-    );
-    let outcome = service.get(input).await?;
-    println!("{}", render_get(&outcome, format)?);
-    Ok(())
+    Ok(provenance_transport::StatementHost::with_access(
+        std::sync::Arc::new(access),
+    ))
 }
 
 /// Renders the selected record as readable text or structured JSON.

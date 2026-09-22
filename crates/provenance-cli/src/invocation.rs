@@ -8,6 +8,7 @@ pub enum Invocation {
     Builtin(Cli),
     Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
+    Search(SearchInvocation),
     Target(TargetInvocation),
 }
 
@@ -22,6 +23,12 @@ pub struct GetInvocation {
     scope: String,
     format: Option<OutputFormat>,
     input: provenance_porcelain::get::GetInput,
+}
+
+pub struct SearchInvocation {
+    context: GlobalContext,
+    format: Option<OutputFormat>,
+    command: porcelain::SearchCommand,
 }
 
 pub struct TargetInvocation {
@@ -47,6 +54,7 @@ enum CommandFamily {
     Builtin,
     Catalog,
     Get,
+    Search,
     Target,
 }
 
@@ -78,6 +86,22 @@ impl Invocation {
                     input,
                 }))
             }
+            CommandFamily::Search => {
+                let shared = ExternalArguments::parse(&arguments)?;
+                let format = match shared.format.as_deref() {
+                    None => None,
+                    Some("json") => Some(OutputFormat::Json),
+                    Some(_) => anyhow::bail!("Porcelain search supports --format json"),
+                };
+                let words = shared.words.iter().map(String::as_str).collect::<Vec<_>>();
+                let command = porcelain::parse_search(&words)
+                    .map_err(|error| anyhow::anyhow!(error))?;
+                Ok(Self::Search(SearchInvocation {
+                    context: shared.context,
+                    format,
+                    command,
+                }))
+            }
             CommandFamily::Target => {
                 let shared = ExternalArguments::parse(&arguments)?;
                 Ok(Self::Target(TargetInvocation::parse(shared)?))
@@ -98,6 +122,7 @@ impl Invocation {
                 )
                 .await
             }
+            Self::Search(invocation) => invocation.dispatch().await,
             Self::Target(invocation) => invocation.dispatch().await,
         }
     }
@@ -131,6 +156,9 @@ impl CommandFamily {
         }) {
             return Ok(Self::Target);
         }
+        if target == "search" {
+            return Ok(Self::Search);
+        }
         if catalog {
             return Ok(Self::Catalog);
         }
@@ -138,6 +166,26 @@ impl CommandFamily {
             .get_subcommands()
             .any(|candidate| candidate.get_name() == target);
         Ok(if builtin { Self::Builtin } else { Self::Get })
+    }
+}
+
+impl SearchInvocation {
+    async fn dispatch(self) -> anyhow::Result<()> {
+        match self.command {
+            porcelain::SearchCommand::Help => {
+                porcelain::print_search_help();
+                Ok(())
+            }
+            porcelain::SearchCommand::Run(query) => {
+                porcelain::dispatch_search(
+                    &self.context.repo,
+                    &self.context.scope,
+                    self.format,
+                    query,
+                )
+                .await
+            }
+        }
     }
 }
 
