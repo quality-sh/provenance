@@ -8,8 +8,7 @@ use super::{preserved_lines, read_jsonl_rows, StoredRow};
 fn rows_carry_the_stored_line_exactly_as_written() {
     let directory = tempfile::tempdir().unwrap();
     let path = camino::Utf8PathBuf::from_path_buf(directory.path().join("rule.jsonl")).unwrap();
-    let stored =
-        r#"{ "id" : "rule_one" , "schema_version":2,"note":"kept, as stored" }"#;
+    let stored = r#"{ "id" : "rule_one" , "schema_version":2,"note":"kept, as stored" }"#;
     std::fs::write(&path, format!("{stored}\n")).unwrap();
 
     let rows = read_jsonl_rows(&path).unwrap();

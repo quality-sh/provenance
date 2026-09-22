@@ -257,6 +257,6 @@ fn index_by_id(records: &[CanonicalRecord]) -> anyhow::Result<BTreeMap<String, C
 }
 
 #[cfg(test)]
-mod tests;
-#[cfg(test)]
 mod preservation_tests;
+#[cfg(test)]
+mod tests;

@@ -146,10 +146,9 @@ fn import_accepts_the_same_document_without_the_unknown_field() {
 
     import(&repo, &incoming).success();
 
-    let shard = std::fs::read_to_string(
-        repo.join(".provenance/state/scopes/default/sources/source.jsonl"),
-    )
-    .unwrap();
+    let shard =
+        std::fs::read_to_string(repo.join(".provenance/state/scopes/default/sources/source.jsonl"))
+            .unwrap();
     assert!(shard.contains("Renamed Policy"), "{shard}");
 }
 

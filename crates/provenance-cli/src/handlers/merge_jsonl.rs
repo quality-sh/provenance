@@ -34,8 +34,11 @@ pub(super) fn handle(
     let base_rows = read_rows(base)?;
     let our_rows = read_rows(ours)?;
     let their_rows = read_rows(theirs)?;
-    let record_values =
-        |rows: &[StoredRow]| rows.iter().map(|row| row.record.clone()).collect::<Vec<_>>();
+    let record_values = |rows: &[StoredRow]| {
+        rows.iter()
+            .map(|row| row.record.clone())
+            .collect::<Vec<_>>()
+    };
     let outcome = merge_records(
         &record_values(&base_rows),
         &record_values(&our_rows),

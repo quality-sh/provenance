@@ -61,7 +61,7 @@ fn added_rule() -> String {
     "{\"schema_version\":2,\"scope_id\":\"default\",\"id\":\"rule_added\",\
       \"statement\":\"The rule_added rule shall hold.\",\"status\":\"active\",\
       \"severity\":\"high\",\"requirement_ids\":[\"req_theirs\"]}\n"
-    .to_string()
+        .to_string()
 }
 
 #[test]
