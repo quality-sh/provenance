@@ -36,13 +36,13 @@ impl RequirementRelations {
         &self,
         store: &StateStore,
         scope: &ScopeId,
-        before: &Requirement,
+        records: &[Requirement],
+        owner: &StableId,
     ) -> anyhow::Result<()> {
-        let records = store.list_requirements(scope)?;
         store.validate_relation_targets(
             scope,
-            &records,
-            &before.id,
+            records,
+            owner,
             &[
                 ("depends_on", removal_targets(self.depends_on.as_ref())),
                 ("supersedes", removal_targets(self.supersedes.as_ref())),
@@ -183,11 +183,17 @@ impl StateStore {
         &self,
         scope: &ScopeId,
         id: &StableId,
-        final_sets: FinalRelations,
+        relationships: &RequirementRelations,
     ) -> anyhow::Result<()> {
         let path = shards::requirements_path(&self.layout, scope);
         self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
-            let record = records.iter_mut().find(|r| r.id == *id).unwrap();
+            let position = records
+                .iter()
+                .position(|record| record.id == *id)
+                .expect("the guarded Requirement remains present");
+            relationships.validate(self, scope, records, id)?;
+            let final_sets = relationships.expand(&records[position]);
+            let record = &mut records[position];
             record.refines = final_sets.refines;
             record.depends_on = final_sets.depends_on;
             record.supersedes = final_sets.supersedes;
