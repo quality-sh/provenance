@@ -1,3 +1,5 @@
+#![cfg(feature = "test-fixture")]
+
 use axum::{body::Body, http::Request};
 use provenance_core::protocol::QUERY_RESPONSE_BYTES;
 use provenance_core::{RequirementStatus, ScopeId, StableId};
