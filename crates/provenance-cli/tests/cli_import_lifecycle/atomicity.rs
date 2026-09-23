@@ -89,7 +89,10 @@ fn import_refuses_cross_kind_keyword_reuse_without_changing_live_state() {
     let after = dir.path().join("after.json");
     export_scope(&repo, &after).success();
     assert_eq!(std::fs::read(after).unwrap(), before);
-    assert_eq!(std::fs::read_to_string(&source_path).unwrap(), format!("{source}\n"));
+    assert_eq!(
+        std::fs::read_to_string(&source_path).unwrap(),
+        format!("{source}\n")
+    );
     let transactions = repo.join(".provenance/cache/import-transactions");
     assert!(!transactions.exists() || std::fs::read_dir(transactions).unwrap().next().is_none());
 }
@@ -101,8 +104,14 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
     init_repo(&repo, None);
     super::support::provenance()
         .args([
-            "sources", "create", "--repo", repo.to_str().unwrap(),
-            "--id", "source_anchor", "--name", "Anchor",
+            "sources",
+            "create",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--id",
+            "source_anchor",
+            "--name",
+            "Anchor",
         ])
         .assert()
         .success();
@@ -117,16 +126,26 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
         "unsupported_recommendations": [],
         "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
     });
-    std::fs::write(&landing_path, format!("{}\n", serde_json::json!({
-        "contributions": [contribution]
-    }))).unwrap();
+    std::fs::write(
+        &landing_path,
+        format!(
+            "{}\n",
+            serde_json::json!({
+                "contributions": [contribution]
+            })
+        ),
+    )
+    .unwrap();
     let baseline = dir.path().join("baseline.json");
     export_scope(&repo, &baseline).success();
 
     import_scope(&repo, &baseline).success();
     let after = dir.path().join("after.json");
     export_scope(&repo, &after).success();
-    assert_eq!(std::fs::read(after).unwrap(), std::fs::read(baseline).unwrap());
+    assert_eq!(
+        std::fs::read(after).unwrap(),
+        std::fs::read(baseline).unwrap()
+    );
     assert!(!landing_path.exists());
 }
 

@@ -1,6 +1,6 @@
 use super::{
-    ensure_new_ids_assignable, overlay_records, read_jsonl_unlocked,
-    read_message_shards_unlocked, serde_name, IdeationLandingBatch, StateStore,
+    ensure_new_ids_assignable, overlay_records, read_jsonl_unlocked, read_message_shards_unlocked,
+    serde_name, IdeationLandingBatch, StateStore,
 };
 use crate::cache::ProjectionFamily;
 use crate::jsonl::write_jsonl_atomic_under_publication;
@@ -163,18 +163,28 @@ fn read_ideation_records_unlocked(
         assertions: read_jsonl_unlocked(&shards::assertion_records_path(layout, scope))?,
         dispositions: read_jsonl_unlocked(&shards::dispositions_path(layout, scope))?,
     };
-    records.dispositions.extend(super::readers::read_legacy_dispositions_unlocked(
-        &shards::legacy_promotion_decisions_path(layout, scope),
-    )?);
+    records
+        .dispositions
+        .extend(super::readers::read_legacy_dispositions_unlocked(
+            &shards::legacy_promotion_decisions_path(layout, scope),
+        )?);
     let landings: Vec<IdeationLandingBatch> = super::readers::read_ideation_landings_unlocked(
         &shards::ideation_landings_path(layout, scope),
     )?;
     for batch in landings {
-        overlay_records(&mut records.contributions, batch.contributions, |r| r.id.as_str());
-        overlay_records(&mut records.synthesis_packets, batch.synthesis_packets, |r| r.id.as_str());
+        overlay_records(&mut records.contributions, batch.contributions, |r| {
+            r.id.as_str()
+        });
+        overlay_records(
+            &mut records.synthesis_packets,
+            batch.synthesis_packets,
+            |r| r.id.as_str(),
+        );
         overlay_records(&mut records.proposals, batch.proposals, |r| r.id.as_str());
         overlay_records(&mut records.assertions, batch.assertions, |r| r.id.as_str());
-        overlay_records(&mut records.dispositions, batch.dispositions, |r| r.id.as_str());
+        overlay_records(&mut records.dispositions, batch.dispositions, |r| {
+            r.id.as_str()
+        });
     }
     Ok(records)
 }

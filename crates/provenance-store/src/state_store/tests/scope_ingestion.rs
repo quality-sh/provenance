@@ -150,7 +150,10 @@ fn scope_import_does_not_grandfather_a_keyword_id_from_another_canonical_kind() 
         )
     })
     .unwrap_err();
-    assert!(error.to_string().contains("reserved record ID search"), "{error}");
+    assert!(
+        error.to_string().contains("reserved record ID search"),
+        "{error}"
+    );
     assert!(!staged.layout.publication_lock_path().exists());
     assert_eq!(staged.list_sources(&scope).unwrap(), vec![old]);
     assert!(staged.list_requirements(&scope).unwrap().is_empty());
@@ -166,7 +169,11 @@ fn a_keyword_id_in_another_scope_does_not_grandfather_an_import() {
         id: other.clone(),
         path_prefix: RepoPathPrefix::new("other"),
     });
-    std::fs::write(staged.layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    std::fs::write(
+        staged.layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
     let old: provenance_core::Source = serde_json::from_value(serde_json::json!({
         "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
         "scope_id": "other", "id": "search", "name": "Old source",
@@ -191,7 +198,10 @@ fn a_keyword_id_in_another_scope_does_not_grandfather_an_import() {
         )
     })
     .unwrap_err();
-    assert!(error.to_string().contains("reserved record ID search"), "{error}");
+    assert!(
+        error.to_string().contains("reserved record ID search"),
+        "{error}"
+    );
     assert!(!staged.layout.publication_lock_path().exists());
 }
 
@@ -271,9 +281,18 @@ fn a_landing_does_not_grandfather_a_different_keyword_id() {
         )
     })
     .unwrap_err();
-    assert!(error.to_string().contains("reserved record ID check"), "{error}");
+    assert!(
+        error.to_string().contains("reserved record ID check"),
+        "{error}"
+    );
     assert!(!shards::contributions_path(&staged.layout, &scope).exists());
-    assert_eq!(std::fs::read_to_string(&landing_path).unwrap().lines().count(), 1);
+    assert_eq!(
+        std::fs::read_to_string(&landing_path)
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
     assert!(!staged.layout.publication_lock_path().exists());
 }
 
@@ -289,7 +308,11 @@ fn scope_import_preserves_a_keyword_id_from_a_legacy_disposition() {
         "actor": {"identity_type": "human", "id": "reviewer"}
     }))
     .unwrap();
-    std::fs::write(&legacy_path, format!("{}\n", serde_json::to_string(&old).unwrap())).unwrap();
+    std::fs::write(
+        &legacy_path,
+        format!("{}\n", serde_json::to_string(&old).unwrap()),
+    )
+    .unwrap();
 
     let mut new = old.clone();
     new.id = StableId::new("check").unwrap();
@@ -303,7 +326,10 @@ fn scope_import_preserves_a_keyword_id_from_a_legacy_disposition() {
         )
     })
     .unwrap_err();
-    assert!(error.to_string().contains("reserved record ID check"), "{error}");
+    assert!(
+        error.to_string().contains("reserved record ID check"),
+        "{error}"
+    );
     assert!(legacy_path.exists());
     assert!(!shards::dispositions_path(&staged.layout, &scope).exists());
     assert!(!staged.layout.publication_lock_path().exists());

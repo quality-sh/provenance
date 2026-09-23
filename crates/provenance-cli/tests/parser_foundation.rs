@@ -202,12 +202,21 @@ fn target_type_usage_errors_return_two_without_opening_a_repository() {
     for arguments in [
         vec!["source_new", "create", "--type", "unknown", "--name", "New"],
         vec!["source_new", "create", "--name", "New"],
-        vec!["source_old", "update", "--type", "source", "--name", "Changed"],
+        vec![
+            "source_old",
+            "update",
+            "--type",
+            "source",
+            "--name",
+            "Changed",
+        ],
     ] {
         let directory = tempfile::tempdir().unwrap();
         let repo = directory.path().join("absent");
         let mut command = provenance();
-        command.args(&arguments).args(["--repo", repo.to_str().unwrap()]);
+        command
+            .args(&arguments)
+            .args(["--repo", repo.to_str().unwrap()]);
         command.assert().code(2).stderr(contains("--type"));
         assert!(!repo.exists(), "usage error created repository state");
     }
