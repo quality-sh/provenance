@@ -49,7 +49,11 @@ fn onboarding_downloads_and_imports_the_official_asset() {
 
     assert!(dictionary_support::reference_path(&fixture.repo).is_file());
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    assert!(stdout.contains("Imported the Issue 9 dictionary from the official asset."));
+    assert!(!stdout.contains("Imported the Issue 9 dictionary"));
+    assert!(
+        stdout.contains("  .provenance/state/dictionary.json (added the dictionary reference)\n")
+    );
+    assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
     let requests = server.requests();
     assert_eq!(
         requests.len(),
@@ -77,8 +81,9 @@ fn onboarding_imports_a_selected_pdf_without_network_access() {
         .args(["--ste-pdf", pdf.to_str().unwrap()])
         .assert()
         .success()
+        .stdout(predicate::str::contains("Imported the Issue 9 dictionary").not())
         .stdout(predicate::str::contains(
-            "Imported the Issue 9 dictionary from",
+            "  .provenance/state/dictionary.json (added the dictionary reference)\n",
         ));
 
     assert!(dictionary_support::reference_path(&fixture.repo).is_file());
@@ -198,13 +203,16 @@ fn exhausted_download_retries_fall_back_to_a_loud_warning() {
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(output.status.success(), "init failed: {stdout}");
-    assert!(stdout.contains("Warning:"), "stdout: {stdout}");
-    assert!(stdout.contains("rerun init"), "stdout: {stdout}");
-    assert!(stdout.contains("dictionary import"), "stdout: {stdout}");
+    assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
+    assert!(!stdout.contains("Warning:"), "stdout: {stdout}");
+    assert!(stderr.contains("Warning:"), "stderr: {stderr}");
+    assert!(stderr.contains("rerun init"), "stderr: {stderr}");
+    assert!(stderr.contains("dictionary import"), "stderr: {stderr}");
     assert!(
-        !stdout.to_ascii_lowercase().contains("asd-ste100.org"),
-        "the warning carries no ASD link: {stdout}"
+        !stderr.to_ascii_lowercase().contains("asd-ste100.org"),
+        "the warning carries no ASD link: {stderr}"
     );
     assert!(!stdout.contains("ASD owns"), "stdout: {stdout}");
 

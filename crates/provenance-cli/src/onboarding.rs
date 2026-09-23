@@ -57,12 +57,6 @@ impl Invocation {
             })),
         }
     }
-
-    /// The command prefix the summary's copy-pasteable next steps use; the
-    /// same prefix the injected AGENTS.md section writes.
-    pub(super) const fn command_prefix(&self) -> &'static str {
-        self.0
-    }
 }
 
 /// Reports whether the exact Provenance heading already owns a section, so a

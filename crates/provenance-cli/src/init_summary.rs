@@ -20,7 +20,7 @@ pub struct InitEnding {
 }
 
 impl InitEnding {
-    pub fn already(line: String, warning: Option<String>) -> Self {
+    pub const fn already(line: String, warning: Option<String>) -> Self {
         Self {
             result: InitResult::Already(line),
             warning,
