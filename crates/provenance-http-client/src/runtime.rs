@@ -85,9 +85,6 @@ pub fn connection(_: &'static str, _: bool, cause: reqwest::Error) -> Error {
 const fn outcome(cause: ResponseFailure) -> Error {
     Error::MalformedResponse(cause)
 }
-pub fn metadata_status() -> Error {
-    Error::Connection(ResponseFailure::contract())
-}
 
 pub async fn read_json(
     mut response: reqwest::Response,

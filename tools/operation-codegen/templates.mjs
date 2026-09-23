@@ -84,7 +84,9 @@ ${query.map(parameter => `    if (call[${JSON.stringify(propertyName(parameter))
 
 export function typescriptClient(document, compatibility) {
   const routes = operations(document).filter(({ op }) => op.operationId !== 'metadata');
-  const failureTypes = [...new Set(routes.flatMap(({ op }) => queryVariants(op).length
+  // Metadata participates in the same declared-failure contract as every other
+  // operation: a refusal is a typed MetadataFailure, never a connection loss.
+  const failureTypes = ['MetadataFailure', ...new Set(routes.flatMap(({ op }) => queryVariants(op).length
     ? queryVariants(op).map(variant => schemaName(variant.failure))
     : [ref(op.responses['400'].content['application/json'].schema)]))];
   const queryTypes = routes.flatMap(({ op }) => queryTypeDeclarations(op));
@@ -158,8 +160,11 @@ export class HttpClient {
     if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash || url.username || url.password) throw new Error('Invalid HTTP host URL');
     const client = new HttpClient(baseUrl.replace(/\\/$/, ''), fetcher);
     const response = await send(fetcher, client.baseUrl + '/metadata', { redirect: 'error', signal: options.signal }, 'metadata', false);
-    if (!response.ok) { await response.body?.cancel(); throw new ConnectionError(); }
     const value = await readJson(response, 'metadata', false, options.signal);
+    if (!response.ok) {
+      checked(value, validate.MetadataFailure, 'metadata', false);
+      throw new OperationError<components['schemas']['MetadataFailure']>(response.status, value as components['schemas']['MetadataFailure']);
+    }
     checked(value, validate.MetadataSuccess, 'metadata', false);
     const metadata = (value as components['schemas']['MetadataSuccess']).data;
     const received = metadata.compatibility;
@@ -371,7 +376,9 @@ function rustRequest(path, method, op, operation, enums) {
 export function rustClientFiles(document, compatibility) {
   const routes = operations(document).filter(({ op }) => op.operationId !== 'metadata');
   const enums = allocateEnums(document);
-  const imports = new Set(['MetadataSuccess']);
+  // Metadata participates in the same declared-failure contract as every other
+  // operation: a refusal is a typed MetadataFailure, never a connection loss.
+  const imports = new Set(['MetadataFailure', 'MetadataSuccess']);
   for (const { op } of routes) {
     if (op.requestBody) imports.add(ref(op.requestBody.content['application/json'].schema));
     if (!queryVariants(op).length) {
@@ -406,11 +413,11 @@ impl HttpClient {
 }
 `];
   }));
-  const failures = routes.map(({ op }) => {
+  const failures = ['    Metadata(Box<MetadataFailure>),', ...routes.map(({ op }) => {
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
     if (queryVariants(op).length) return `    ${variant}(Box<${variant}Failure>),`;
     return `    ${variant}(Box<${ref(op.responses['400'].content['application/json'].schema)}>),`;
-  }).join('\n');
+  })].join('\n');
   const c = compatibility;
   const connection = `// Generated from OpenAPI. Do not edit.
 use crate::types::{${[...imports].sort().join(', ')}};
@@ -441,8 +448,14 @@ impl HttpClient {
         if !matches!(url.scheme(), "http" | "https") || url.query().is_some() || url.fragment().is_some() || !url.username().is_empty() || url.password().is_some() { return Err(Error::InvalidUrl); }
         let client = Self { base_url: base_url.trim_end_matches('/').to_owned(), http: reqwest::Client::builder().default_headers(headers).retry(reqwest::retry::never()).redirect(reqwest::redirect::Policy::none()).build().map_err(|cause| runtime::connection("metadata", false, cause))? };
         let response = client.http.get(format!("{}/metadata", client.base_url)).send().await.map_err(|cause| runtime::connection("metadata", false, cause))?;
-        if !response.status().is_success() { return Err(runtime::metadata_status()); }
-        let value = runtime::read_json(response, "metadata", false).await?; runtime::validate(&value, "MetadataSuccess", "metadata", false)?;
+        let status = response.status();
+        let value = runtime::read_json(response, "metadata", false).await?;
+        if !status.is_success() {
+            runtime::validate(&value, "MetadataFailure", "metadata", false)?;
+            let failure: MetadataFailure = runtime::decode(value, "metadata", false)?;
+            return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::Metadata(Box::new(failure)) });
+        }
+        runtime::validate(&value, "MetadataSuccess", "metadata", false)?;
         let metadata: MetadataSuccess = runtime::decode(value, "metadata", false)?;
         let received = &metadata.data.compatibility;
         if (received.wire, received.state, received.review_journal, received.read_derivation) != COMPATIBILITY { return Err(Error::CompatibilityMismatch); }
