@@ -201,17 +201,15 @@ fn failure_envelopes_keep_the_optional_meta() {
     let branches = failure["oneOf"]
         .as_array()
         .or_else(|| failure["anyOf"].as_array())
-        .map(|branches| branches.iter().collect::<Vec<_>>())
-        .unwrap_or_else(|| vec![failure]);
+        .map_or_else(|| vec![failure], |branches| branches.iter().collect());
     for variant in branches {
         let meta = &variant["properties"]["meta"];
         let reference = meta.get("$ref").and_then(Value::as_str);
-        let meta = match reference {
-            Some(reference) => openapi
+        let meta = reference.map_or(meta, |reference| {
+            openapi
                 .pointer(reference.strip_prefix('#').unwrap())
-                .unwrap(),
-            None => meta,
-        };
+                .unwrap()
+        });
         assert!(
             meta.get("required").is_none(),
             "failure meta stays optional: {meta}"

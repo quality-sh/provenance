@@ -17,7 +17,10 @@ export function allocateEnums(document) {
   const allocated = new Map();
   const used = new Set();
   for (const { op } of operations(document).filter(({ op }) => op.operationId !== 'metadata')) {
-    const parameters = [...(op.parameters ?? []), ...queryVariants(op).flatMap(variant => variant.parameters)];
+    const variants = queryVariants(op);
+    const parameters = variants.length
+      ? variants.flatMap(variant => variant.parameters)
+      : (op.parameters ?? []);
     for (const parameter of parameters) {
       const schemas = [parameter.schema];
       if (parameter.schema?.type === 'array') schemas.push(parameter.schema.items);

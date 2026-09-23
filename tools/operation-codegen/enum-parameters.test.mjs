@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { rustClientFiles, typescriptClient } from './templates.mjs';
+import { allocateEnums } from './rust-parameters.mjs';
 
 const reference = name => ({ $ref: `#/components/schemas/${name}` });
 
@@ -71,4 +72,16 @@ test('identical value sets share one enum and distinct sets get distinct names',
   }
   assert.match(parameters, /pub enum Side \{/);
   assert.match(parameters, /pub enum Direction \{/);
+});
+
+test('query variants allocate enums only for parameters their methods use', () => {
+  const document = { paths: { '/query': { get: {
+    operationId: 'queryRecords',
+    parameters: [{ name: 'query', in: 'query', schema: { type: 'string', enum: ['search', 'trace'] } }],
+    'x-provenance-query-variants': [{
+      parameters: [{ name: 'direction', in: 'query', schema: { type: 'string', enum: ['in', 'out'] } }],
+    }],
+  } } } };
+  const enums = allocateEnums(document);
+  assert.deepEqual([...enums.values()], ['Direction']);
 });
