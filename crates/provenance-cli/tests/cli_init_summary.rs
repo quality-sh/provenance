@@ -62,7 +62,9 @@ fn init_prints_a_summary_that_separates_new_from_changed_files() {
         "Initialized Provenance for scope \"default\" in {}\n",
         repo.display()
     )));
-    assert!(stdout.contains("Provenance records requirements, decisions, and the rules that connect them to code.\n"));
+    assert!(stdout.contains(
+        "Provenance records requirements, decisions, and the rules that connect them to code.\n"
+    ));
     assert!(!stdout.contains("\nChanged\n"));
     let new_section = stdout
         .split_once("\nNew\n")
@@ -203,14 +205,28 @@ fn failed_dictionary_acquisition_keeps_init_successful_and_warns_even_when_quiet
     let index_dir = temporary.path().join("indexes");
     let output = Command::cargo_bin("provenance")
         .unwrap()
-        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default", "--quiet"])
+        .args([
+            "init",
+            "--path",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--quiet",
+        ])
         .env("PROVENANCE_STE100_ASSET_DIR", &asset_dir)
         .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", "http://127.0.0.1:9/unavailable")
+        .env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            "http://127.0.0.1:9/unavailable",
+        )
         .output()
         .unwrap();
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(output.stdout.is_empty());
     let warning = String::from_utf8(output.stderr).unwrap();
     assert!(warning.contains("Warning: the official Issue 9 asset is unavailable"));
@@ -227,10 +243,19 @@ fn adding_a_dictionary_reference_on_reinit_is_reported_as_a_change() {
     let index_dir = temporary.path().join("indexes");
     Command::cargo_bin("provenance")
         .unwrap()
-        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
+        .args([
+            "init",
+            "--path",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+        ])
         .env("PROVENANCE_STE100_ASSET_DIR", &asset_dir)
         .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", "http://127.0.0.1:9/unavailable")
+        .env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            "http://127.0.0.1:9/unavailable",
+        )
         .assert()
         .success();
     let pdf = temporary.path().join("issue-9.pdf");
@@ -238,13 +263,21 @@ fn adding_a_dictionary_reference_on_reinit_is_reported_as_a_change() {
 
     let stdout = Command::cargo_bin("provenance")
         .unwrap()
-        .args(["init", "--path", repo.to_str().unwrap(), "--ste-pdf", pdf.to_str().unwrap()])
+        .args([
+            "init",
+            "--path",
+            repo.to_str().unwrap(),
+            "--ste-pdf",
+            pdf.to_str().unwrap(),
+        ])
         .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
         .output()
         .unwrap();
     assert!(stdout.status.success());
     let stdout = String::from_utf8(stdout.stdout).unwrap();
-    assert!(stdout.contains("  .provenance/state/dictionary.json (added the dictionary reference)\n"));
+    assert!(
+        stdout.contains("  .provenance/state/dictionary.json (added the dictionary reference)\n")
+    );
     assert!(!stdout.contains("No change."));
     assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
 }

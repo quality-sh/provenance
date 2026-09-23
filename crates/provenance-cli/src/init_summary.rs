@@ -42,7 +42,9 @@ impl InitEnding {
     ) -> Self {
         self.result = match self.result {
             InitResult::Already(_) if changes.is_empty() => InitResult::Already(no_change_status),
-            InitResult::Already(_) => InitResult::Applied(Box::new(InitSummary::new(applied_status))),
+            InitResult::Already(_) => {
+                InitResult::Applied(Box::new(InitSummary::new(applied_status)))
+            }
             InitResult::Applied(mut summary) => {
                 summary.status_line = applied_status;
                 InitResult::Applied(summary)
@@ -185,14 +187,20 @@ mod tests {
         assert_eq!(skill_note(1, 0, 0, "link"), "added 1 link");
         assert_eq!(skill_note(0, 1, 0, "skill"), "updated 1 skill");
         assert_eq!(skill_note(0, 0, 2, "skill"), "removed 2 files");
-        assert_eq!(skill_note(3, 1, 0, "skill"), "added 3 skills, updated 1 skill");
+        assert_eq!(
+            skill_note(3, 1, 0, "skill"),
+            "added 3 skills, updated 1 skill"
+        );
         assert_eq!(skill_note(0, 0, 0, "skill"), "");
     }
 
     #[test]
     fn scope_phrase_covers_one_and_many_scopes() {
         assert_eq!(scope_phrase(&["default".to_owned()]), "scope \"default\"");
-        assert_eq!(scope_phrase(&["a".to_owned(), "b".to_owned()]), "scopes \"a\" and \"b\"");
+        assert_eq!(
+            scope_phrase(&["a".to_owned(), "b".to_owned()]),
+            "scopes \"a\" and \"b\""
+        );
         assert_eq!(
             scope_phrase(&["a".to_owned(), "b".to_owned(), "c".to_owned()]),
             "scopes \"a\", \"b\", \"c\""

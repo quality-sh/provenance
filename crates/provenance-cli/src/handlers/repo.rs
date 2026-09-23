@@ -108,17 +108,11 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         .map(|scope| scope.id.as_str().to_owned())
         .collect();
     let skills_changes = skills.planned_changes();
-    let ending = build_summary(
-        path,
-        &scope_ids,
-        &planned,
-        &skills_changes,
-        &dictionary,
-    )
-    .map_or_else(
-        || already_ending(&scope_ids, path, &dictionary),
-        |summary| InitEnding::applied(summary, dictionary.warning()),
-    );
+    let ending = build_summary(path, &scope_ids, &planned, &skills_changes, &dictionary)
+        .map_or_else(
+            || already_ending(&scope_ids, path, &dictionary),
+            |summary| InitEnding::applied(summary, dictionary.warning()),
+        );
     let PlannedFiles {
         manifest_bytes,
         manifest_before,

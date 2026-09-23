@@ -48,7 +48,10 @@ impl CargoRollback {
 
     /// The Cargo files whose bytes changed before repository publication.
     pub(super) fn changes(&self, workspace_root: &Path) -> anyhow::Result<Vec<(String, bool)>> {
-        let after = self.after.as_ref().context("Cargo files were not observed")?;
+        let after = self
+            .after
+            .as_ref()
+            .context("Cargo files were not observed")?;
         let mut changed = Vec::new();
         for (path, before, after) in [
             (&self.paths.manifest, &self.before.manifest, &after.manifest),
@@ -56,7 +59,10 @@ impl CargoRollback {
         ] {
             if before.bytes() != after.bytes() {
                 let relative = path.strip_prefix(workspace_root).with_context(|| {
-                    format!("Cargo changed a file outside workspace {}", workspace_root.display())
+                    format!(
+                        "Cargo changed a file outside workspace {}",
+                        workspace_root.display()
+                    )
                 })?;
                 changed.push((relative.display().to_string(), before.bytes().is_some()));
             }

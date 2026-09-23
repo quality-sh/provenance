@@ -374,10 +374,17 @@ fn cargo_init_reports_only_published_changes_then_no_change() {
         .args(["provenance", "init"])
         .env("PROVENANCE_STE100_ASSET_DIR", &assets)
         .env("PROVENANCE_STE100_INDEX_DIR", &indexes)
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", "http://127.0.0.1:9/unavailable")
+        .env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            "http://127.0.0.1:9/unavailable",
+        )
         .output()
         .unwrap();
-    assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
     let first = String::from_utf8(first.stdout).unwrap();
     assert!(first.contains("  Cargo.toml (added the Provenance SDK dependency)\n"));
     assert!(first.contains("  Cargo.lock (created by Cargo)\n"));
@@ -393,16 +400,26 @@ fn cargo_init_reports_only_published_changes_then_no_change() {
         .args(["provenance", "init"])
         .env("PROVENANCE_STE100_ASSET_DIR", &assets)
         .env("PROVENANCE_STE100_INDEX_DIR", &indexes)
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", "http://127.0.0.1:9/unavailable")
+        .env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            "http://127.0.0.1:9/unavailable",
+        )
         .output()
         .unwrap();
-    assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
     let second = String::from_utf8(second.stdout).unwrap();
     assert!(second.contains("No change.\n"));
     assert!(!second.contains("\nNew\n"));
     assert!(!second.contains("\nChanged\n"));
     assert!(second.ends_with("Have your agent run provenance prime to get acclimated.\n"));
-    assert_eq!(std::fs::read(fixture.root().join(".provenance/state/manifest.json")).unwrap(), manifest);
+    assert_eq!(
+        std::fs::read(fixture.root().join(".provenance/state/manifest.json")).unwrap(),
+        manifest
+    );
     assert_eq!(fixture.cargo_manifest(), cargo_manifest);
     assert_eq!(fixture.cargo_lock(), cargo_lock);
 }

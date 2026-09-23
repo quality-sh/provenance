@@ -34,8 +34,10 @@ pub(super) use export::{export_scope, ScopeExport};
 pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
         Command::CargoInit { package, ste_pdf } => {
-            tokio::task::spawn_blocking(move || cargo_init::handle(package.as_deref(), ste_pdf, quiet))
-                .await??;
+            tokio::task::spawn_blocking(move || {
+                cargo_init::handle(package.as_deref(), ste_pdf, quiet)
+            })
+            .await??;
         }
         Command::Init {
             path,
