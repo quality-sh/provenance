@@ -378,6 +378,6 @@ fn oversized_import_refuses_before_replacing_a_legacy_keyword_record() {
 
     assert!(error.to_string().contains("supported read"), "{error}");
     assert_eq!(std::fs::read(&old_path).unwrap(), old_bytes);
-    assert_eq!(staged.list_sources(&scope).unwrap(), vec![old]);
     assert!(!staged.layout.publication_lock_path().exists());
+    assert_eq!(staged.list_sources(&scope).unwrap(), vec![old]);
 }

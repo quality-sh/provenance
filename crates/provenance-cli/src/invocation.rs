@@ -50,7 +50,8 @@ impl Invocation {
             ));
         };
         if word == "search" {
-            let args = SearchCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
+            let args =
+                SearchCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
             debug_assert_eq!(args.command, "search");
             return Ok(Self::Search(args.args));
         }
