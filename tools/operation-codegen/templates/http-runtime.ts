@@ -18,12 +18,6 @@ export class MalformedResponseError extends ClientError {
   readonly _tag = 'MalformedResponseError';
   constructor(cause?: unknown) { super('MalformedResponseError', 'Host response does not match the operation contract', cause); }
 }
-export class UncertainWriteError<F extends OperationFailure = OperationFailure> extends ClientError {
-  readonly _tag = 'UncertainWriteError';
-  constructor(readonly operation: string, cause?: unknown, readonly failure?: F, readonly attemptId?: number) {
-    super('UncertainWriteError', 'Write outcome is uncertain; inspect repository state before retrying', cause);
-  }
-}
 export class OperationError<F extends OperationFailure = OperationFailure> extends ClientError {
   readonly _tag = 'OperationError';
   constructor(readonly status: number, readonly failure: F) {
@@ -32,18 +26,24 @@ export class OperationError<F extends OperationFailure = OperationFailure> exten
 }
 export class ProtocolMismatchError extends ClientError {
   readonly _tag = 'ProtocolMismatchError';
-  constructor(readonly requested: number, readonly supported: number) {
-    super('ProtocolMismatchError', 'Incompatible operation protocol');
+  constructor(readonly requested: unknown, readonly supported: unknown) {
+    super('ProtocolMismatchError', 'Incompatible compatibility tuple');
+  }
+}
+export class IdentityMismatchError extends ClientError {
+  readonly _tag = 'IdentityMismatchError';
+  constructor(readonly requested: unknown, readonly authorized: unknown) {
+    super('IdentityMismatchError', 'Host metadata does not match the requested repository and scope');
   }
 }
 
-export async function send(fetcher: typeof fetch, url: string, init: RequestInit, operation: string, mutates: boolean): Promise<Response> {
+export async function send(fetcher: typeof fetch, url: string | URL, init: RequestInit, _operation: string, _mutates: boolean): Promise<Response> {
   try { return await fetcher(url, { ...init, redirect: 'error' }); }
-  catch (cause) { throw mutates ? new UncertainWriteError(operation, cause) : new ConnectionError(cause); }
+  catch (cause) { throw new ConnectionError(cause); }
 }
 
-export async function readJson(response: Response, operation: string, mutates: boolean, signal?: AbortSignal): Promise<unknown> {
-  const malformed = (cause?: unknown) => mutates ? new UncertainWriteError(operation, cause) : new MalformedResponseError(cause);
+export async function readJson(response: Response, _operation: string, _mutates: boolean, signal?: AbortSignal): Promise<unknown> {
+  const malformed = (cause?: unknown) => new MalformedResponseError(cause);
   const reader = response.body?.getReader();
   if (!reader) throw malformed();
   let cancellation: Promise<void> | undefined;
@@ -52,10 +52,10 @@ export async function readJson(response: Response, operation: string, mutates: b
   const chunks: Uint8Array[] = [];
   let length = 0;
   try {
-    if (signal?.aborted) { await reader.cancel(); throw mutates ? new UncertainWriteError(operation) : new ConnectionError(); }
+    if (signal?.aborted) { await reader.cancel(); throw new ConnectionError(); }
     for (;;) {
       const { done, value } = await reader.read();
-      if (signal?.aborted) throw mutates ? new UncertainWriteError(operation) : new ConnectionError();
+      if (signal?.aborted) throw new ConnectionError();
       if (done) break;
       length += value.byteLength;
       if (length > MAX_RESPONSE_BYTES) {
@@ -66,7 +66,7 @@ export async function readJson(response: Response, operation: string, mutates: b
     }
   } catch (cause) {
     if (cause instanceof ClientError) throw cause;
-    throw mutates ? new UncertainWriteError(operation, cause) : new ConnectionError(cause);
+    throw new ConnectionError(cause);
   } finally { signal?.removeEventListener('abort', abort); await cancellation; reader.releaseLock(); }
   const bytes = new Uint8Array(length);
   let offset = 0;
@@ -75,6 +75,6 @@ export async function readJson(response: Response, operation: string, mutates: b
   catch (cause) { throw malformed(cause); }
 }
 
-export function checked(value: unknown, validate: (value: unknown) => boolean, operation: string, mutates: boolean): void {
-  if (!validate(value)) throw mutates ? new UncertainWriteError(operation) : new MalformedResponseError();
+export function checked(value: unknown, validate: (value: unknown) => boolean, _operation: string, _mutates: boolean): void {
+  if (!validate(value)) throw new MalformedResponseError();
 }

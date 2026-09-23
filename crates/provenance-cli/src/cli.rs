@@ -1,13 +1,7 @@
 pub mod dictionary;
 pub mod graph;
 pub mod ideation;
-pub mod knowledge;
-pub mod policy;
-pub mod references;
 pub mod report;
-pub mod sdk;
-pub mod shaping;
-pub mod updates;
 pub mod workspace;
 
 pub use ideation::{IdeationArtifactKind, SchemaCommand};
@@ -87,8 +81,17 @@ pub enum Command {
         /// Compare Git HEAD with this commit instead of its first parent.
         #[arg(long, requires = "strict")]
         base: Option<String>,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
+        /// Run only graph validity checks. Combine with other check selectors.
+        #[arg(long)]
+        graph: bool,
+        /// Run only statement quality checks. Combine with other check selectors.
+        #[arg(long)]
+        statements: bool,
+        /// Run only repository-wide Rule binding checks.
+        #[arg(long)]
+        bindings: bool,
+        #[arg(long, value_enum)]
+        format: Option<JsonFormat>,
     },
     Docs {
         #[command(subcommand)]
@@ -110,33 +113,9 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
-    Sources {
-        #[command(subcommand)]
-        command: knowledge::SourcesCommand,
-    },
-    Requirements {
-        #[command(subcommand)]
-        command: knowledge::RequirementsCommand,
-    },
     GraphReference {
         #[command(subcommand)]
         command: graph::GraphReferenceCommand,
-    },
-    Domains {
-        #[command(subcommand)]
-        command: knowledge::DomainsCommand,
-    },
-    Boundaries {
-        #[command(subcommand)]
-        command: knowledge::BoundariesCommand,
-    },
-    Topics {
-        #[command(subcommand)]
-        command: shaping::TopicsCommand,
-    },
-    Questions {
-        #[command(subcommand)]
-        command: shaping::QuestionsCommand,
     },
     Graph {
         requirement_id: String,
@@ -146,14 +125,6 @@ pub enum Command {
         scope: String,
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
-    },
-    Resolutions {
-        #[command(subcommand)]
-        command: policy::ResolutionsCommand,
-    },
-    Rules {
-        #[command(subcommand)]
-        command: policy::RulesCommand,
     },
     Traceability {
         rule_id: String,
@@ -172,26 +143,6 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
-    Thread {
-        #[command(subcommand)]
-        command: shaping::ThreadCommand,
-    },
-    Contributions {
-        #[command(subcommand)]
-        command: ideation::ContributionsCommand,
-    },
-    SynthesisPackets {
-        #[command(subcommand)]
-        command: ideation::SynthesisPacketsCommand,
-    },
-    Proposals {
-        #[command(subcommand)]
-        command: ideation::ProposalsCommand,
-    },
-    Dispositions {
-        #[command(subcommand)]
-        command: ideation::DispositionsCommand,
-    },
     Prime {
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
@@ -201,39 +152,6 @@ pub enum Command {
         format: ReportFormat,
         #[arg(long)]
         include_threads: bool,
-    },
-    Impact {
-        id: String,
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
-        #[arg(long)]
-        node_type: String,
-        #[arg(long, default_value_t = 3)]
-        max_hops: u32,
-        #[arg(long)]
-        follow_indirect: bool,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
-    },
-    Stale {
-        /// Older endpoint of the diff range; supply HEAD as the second endpoint.
-        base: Option<String>,
-        /// Newer endpoint of the diff range.
-        head: Option<String>,
-        /// Compare this commit with HEAD instead of supplying two endpoints.
-        #[arg(long, conflicts_with_all = ["base", "head"])]
-        since: Option<String>,
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
-        /// Exit non-zero when evidence is touched or gone.
-        #[arg(long)]
-        strict: bool,
-        #[arg(long, value_enum, default_value_t = ReportFormat::Markdown)]
-        format: ReportFormat,
     },
     Health {
         #[arg(long, default_value = ".")]
@@ -259,11 +177,6 @@ pub enum Command {
     Report {
         #[command(subcommand)]
         command: report::ReportCommand,
-    },
-    /// Typed language façade protocol.
-    Sdk {
-        #[command(subcommand)]
-        command: sdk::SdkCommand,
     },
     SwarmBacktrace {
         #[command(subcommand)]

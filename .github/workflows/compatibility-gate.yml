@@ -1,0 +1,37 @@
+name: Compatibility gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compatibility-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  gate:
+    name: Compatibility changes carry human authorization
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The gate reads watched values at the base revision.
+          fetch-depth: 0
+      - name: Resolve the base revision (pull request)
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "COMPAT_BASE=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+          echo "COMPAT_PULL_REQUEST=${{ github.event.pull_request.number }}" >> "$GITHUB_ENV"
+      - name: Resolve the base revision (push)
+        if: github.event_name == 'push'
+        run: echo "COMPAT_BASE=${{ github.event.before }}" >> "$GITHUB_ENV"
+      - name: Run the compatibility gate
+        run: node tools/compat-gate/check.mjs
+      - name: Run the gate tests
+        run: node --test tools/compat-gate/check.test.mjs

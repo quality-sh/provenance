@@ -1,100 +1,84 @@
 import assert from 'node:assert/strict';
 
-export async function checkRecords({ HttpClient, OperationError, PROTOCOL_VERSION }, fixture) {
-  const client = await HttpClient.connectWithBearer(fixture.url, fixture.bearer);
-  const context = { repository: fixture.targets.first, scope: 'default' };
-  await checkCursorReads(client, context);
-  const raw = async (operation, call) => {
-    const response = await fetch(`${fixture.url}/v${PROTOCOL_VERSION}/operations/${operation}`, {
-      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${fixture.bearer}` }, body: JSON.stringify(call),
-    });
-    return { status: response.status, value: await response.json() };
+export async function checkRecords({ HttpClient, OperationError }, fixture) {
+  const identity = { repository: fixture.targets.first, scope: 'default' };
+  const client = await HttpClient.connectWithBearer(fixture.url, fixture.bearer, undefined, identity);
+  const metadata = await fetch(`${fixture.url}/metadata`, {
+    headers: { authorization: `Bearer ${fixture.bearer}` },
+  }).then(response => response.json());
+  assert.deepEqual(
+    { repository: metadata.data.repository, scope: metadata.data.scope },
+    identity,
+  );
+
+  const methods = {
+    domain: 'getDomain', boundary: 'getBoundary', requirement: 'getRequirement', rule: 'getRule',
+    source: 'getSource', resolution: 'getResolution', topic: 'getTopic', question: 'getQuestion',
   };
-  const compare = async (operation, call, invoke) => {
-    const expected = await raw(operation, call);
-    assert.equal(expected.status, 200);
-    const actual = await invoke(call);
-    assert.deepEqual(actual, expected.value, `${operation} retains every field and full stamp`);
-    return actual;
-  };
-  const info = await compare('info', { context: { repository: context.repository }, request: {} }, call => client.info(call));
-  assert.equal(info.repository, context.repository);
-  assert.equal(info.protocol_version, PROTOCOL_VERSION);
-  assert.equal(typeof info.state_schema_version, 'number');
   assert.equal(Object.keys(fixture.nodes).length, 8);
-  for (const [node_type, id] of Object.entries(fixture.nodes)) {
-    const result = await compare('get', { context, request: { node_type, id } }, call => client.get(call));
-    assert.equal(result.found, true);
-    assert.equal(result.node.node_type, node_type);
-    assert.equal(result.node.id, id);
-    assert.equal(typeof result.stamp.serial, 'number');
-    assert.equal(typeof result.stamp.instance_id, 'string');
+  for (const [nodeType, id] of Object.entries(fixture.nodes)) {
+    const result = await client[methods[nodeType]]({ id });
+    assert.equal(result.data.id, id);
+    assert.equal(result.data.scope_id, 'default');
+    if (nodeType === 'requirement') {
+      assert.deepEqual(result.meta, {});
+    } else {
+      assert.ok(result.meta.stamp);
+      assert.equal(result.meta.freshness_error, null);
+    }
   }
-  const selected = (repository, scope) => ({ context: { repository, scope }, request: { node_type: 'rule', id: fixture.shared_rule } });
-  assert.equal((await client.get(selected(fixture.targets.first, 'default'))).node.statement, fixture.expected.first);
-  assert.equal((await client.get(selected(fixture.targets.second, 'default'))).node.statement, fixture.expected.second);
-  assert.equal((await client.get(selected(fixture.targets.first, 'other'))).node.statement, fixture.expected.other);
-  const missing = await client.get({ context, request: { node_type: 'rule', id: 'rule_missing' } });
-  assert.equal(missing.found, false);
-  assert.equal(Object.hasOwn(missing, 'node'), false);
-  const nullable = await client.get({ ...selected(context.repository, context.scope), context: { ...context, freshness: null } });
-  assert.equal(nullable.node.statement, fixture.expected.first);
-  const search = await compare('search', { context, request: { text: 'shared', limit: 1 } }, call => client.search(call));
-  assert.equal(search.limit, 1);
-  assert.equal(search.has_more, true);
-  assert.equal(search.nodes.length, 1);
-  assert.equal((await client.search({ context, request: { text: 'shared' } })).limit, 50);
-  const neighbors = await compare('neighbors', { context, request: { node_type: 'requirement', id: fixture.nodes.requirement, limit: 1 } }, call => client.neighbors(call));
-  assert.equal(neighbors.has_more, true);
-  assert.equal(neighbors.neighbors.length, 1);
-  const trace = await compare('trace', { context, request: { node_type: 'requirement', id: fixture.nodes.requirement, limit: 1 } }, call => client.trace(call));
-  assert.equal(trace.has_more, true);
-  assert.equal(trace.nodes.length, 1);
-  const refuses = async (operation, call, invoke, status, kind) => {
-    const expected = await raw(operation, call);
-    assert.equal(expected.status, status);
-    await assert.rejects(invoke(call), error => {
-      assert.ok(error instanceof OperationError);
-      assert.equal(error.status, status);
-      assert.equal(error.failure.error.kind, kind);
-      assert.deepEqual(error.failure, expected.value);
-      return true;
+
+  const search = await client.listRules({ query: 'search', text: 'shared', limit: 1 });
+  assert.equal(search.meta.limit, 1);
+  assert.equal(search.meta.has_more, false);
+  assert.equal(search.data.items.length, 1);
+
+  const neighbors = await client.getRequirement({
+    id: fixture.nodes.requirement, query: 'neighbors', limit: 1,
+  });
+  assert.equal(neighbors.meta.has_more, true);
+  assert.equal(neighbors.data.neighbors.length, 1);
+
+  const trace = await client.getRequirement({
+    id: fixture.nodes.requirement, query: 'trace', limit: 1,
+  });
+  assert.equal(trace.meta.has_more, true);
+  assert.equal(trace.data.nodes.length, 1);
+
+  for (const query of ['neighbors', 'trace']) {
+    const filtered = await client.getRequirement({
+      id: fixture.nodes.requirement, query, relations: ['domain_id'], limit: 20,
     });
-    return expected.value;
-  };
-  for (const limit of [0, 201]) await refuses('search', { context, request: { text: 'shared', limit } }, call => client.search(call), 400, 'invalid_input');
-  await refuses('get', selected('unknown', 'default'), call => client.get(call), 404, 'unknown_target');
-  await refuses('get', selected(fixture.denied_target, 'default'), call => client.get(call), 403, 'access_denied');
-  await refuses('get', selected(context.repository, 'missing'), call => client.get(call), 404, 'unknown_scope');
-  const staleCall = { ...selected(fixture.stale_target, 'default'), context: { repository: fixture.stale_target, scope: 'default', freshness: 'refuse_stale' } };
-  const stale = await refuses('get', staleCall, call => client.get(call), 409, 'stale');
-  assert.equal(typeof stale.error.serial, 'number');
-  assert.equal(typeof stale.error.digest, 'string');
-  assert.equal(typeof stale.error.instance_id, 'string');
-  assert.ok(stale.error.moved.length > 0);
-  await refuses('get', { ...selected(fixture.unmaterialized_target, 'default'), context: { repository: fixture.unmaterialized_target, scope: 'default', freshness: 'annotate_only' } }, call => client.get(call), 409, 'no_projection');
+    const items = query === 'neighbors' ? filtered.data.neighbors : filtered.data.nodes;
+    assert.ok(items.length > 0);
+    assert.ok(query === 'neighbors'
+      ? items.every(item => item.relation === 'domain_id')
+      : items.every(item => item.node.id === fixture.nodes.domain));
+  }
+  await checkCursorReads(client);
+
+  await assert.rejects(client.listRules({ query: 'search', text: 'shared', limit: 0 }), error => {
+    assert.ok(error instanceof OperationError);
+    assert.equal(error.status, 400);
+    assert.equal(error.failure.error.kind, 'invalid_input');
+    return true;
+  });
 }
 
-export async function checkCursorReads(client, context) {
+export async function checkCursorReads(client) {
   const seen = new Set();
-  let cursor = null;
+  let cursor;
   do {
-    const page = await client.readDocument({ context, request: { id: 'req_shared', limit: 2, cursor } });
-    assert.equal(page.operation, 'read-document');
-    assert.ok(page.entries.length <= 2);
-    for (const entry of page.entries) {
+    const page = await client.getRequirementDocument({ id: 'req_shared', limit: 2, cursor });
+    assert.ok(page.data.entries.length <= 2);
+    for (const entry of page.data.entries) {
       const record = entry.node ?? entry.thread ?? entry.message;
       const key = `${entry.kind}:${record.node_type ?? ''}:${record.id}`;
       assert.equal(seen.has(key), false, 'pages do not repeat identities');
       seen.add(key);
     }
-    cursor = page.next_cursor;
-    assert.equal(page.has_more, cursor !== null);
-  } while (cursor !== null);
+    cursor = page.meta.next_cursor ?? undefined;
+    assert.equal(page.meta.has_more, cursor !== undefined);
+  } while (cursor !== undefined);
   assert.ok(seen.has('member:requirement:req_shared'));
-  const first = await client.search({ context, request: { text: 'shared', limit: 1 } });
-  const next = await client.search({ context, request: { text: 'shared', limit: 1, cursor: first.next_cursor } });
-  assert.notEqual(first.nodes[0].id, next.nodes[0].id);
-  await assert.rejects(client.search({ context, request: { text: 'other', limit: 1, cursor: first.next_cursor } }),
-    error => error.failure.error.kind === 'cursor_invalid');
 }

@@ -107,31 +107,48 @@ fn single<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     Some(value)
 }
 
+fn constant_time_eq(expected: &[u8], supplied: &[u8]) -> bool {
+    let mut difference = expected.len() ^ supplied.len();
+    for (index, expected_byte) in expected.iter().enumerate() {
+        let supplied_byte = supplied.get(index).copied().unwrap_or_default();
+        difference |= usize::from(expected_byte ^ supplied_byte);
+    }
+    difference == 0
+}
+
 impl HostAccess for LocalAccess {
     fn authenticate(&self, headers: &HeaderMap) -> Result<(), OperationFailure> {
         let supplied = single(headers, "authorization")
             .unwrap_or_default()
             .as_bytes();
         let expected = self.credential.as_bytes();
-        let difference = supplied
-            .iter()
-            .zip(expected)
-            .fold(0, |acc, (a, b)| acc | (a ^ b));
-        if supplied.len() != expected.len() || difference != 0 {
+        if !constant_time_eq(expected, supplied) {
             return Err(OperationFailure::Unauthenticated);
         }
         self.check_origin(headers)
     }
 
     fn advertises(&self, operation: &str) -> bool {
-        catalog::contains(operation)
+        [
+            <catalog::ResolveRecord as catalog::Operation>::NAME,
+            <catalog::Trace as catalog::Operation>::NAME,
+            <catalog::Impact as catalog::Operation>::NAME,
+        ]
+        .contains(&operation)
+            || catalog::definitions()
+                .iter()
+                .any(|definition| definition.name == operation)
+    }
+
+    fn bound_identity(&self) -> Option<(String, String)> {
+        Some((self.repository.clone(), self.scope.as_str().to_owned()))
     }
 }
 
 impl ContextResolver for LocalAccess {
     fn prepare(
         &self,
-        operation: &'static str,
+        _operation: &'static str,
         context: RequestedContext,
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
@@ -145,10 +162,9 @@ impl ContextResolver for LocalAccess {
         if repository != self.repository {
             return Err(OperationFailure::UnknownTarget);
         }
-        if !self.advertises(operation)
-            || scope
-                .as_deref()
-                .is_some_and(|scope| scope != self.scope.as_str())
+        if scope
+            .as_deref()
+            .is_some_and(|scope| scope != self.scope.as_str())
         {
             return Err(OperationFailure::AccessDenied);
         }
@@ -177,5 +193,22 @@ impl ContextResolver for LocalAccess {
             requested_target: repository,
             external: true,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::constant_time_eq;
+
+    #[test]
+    fn credential_comparison_rejects_length_and_content_differences() {
+        let expected = b"Bearer 0123456789abcdef";
+        assert!(constant_time_eq(expected, expected));
+        assert!(!constant_time_eq(expected, b"Bearer 0123456789abcdee"));
+        assert!(!constant_time_eq(expected, b"Bearer 0"));
+        assert!(!constant_time_eq(
+            expected,
+            b"Bearer 0123456789abcdef-extra"
+        ));
     }
 }

@@ -1,1 +1,1 @@
--- The migration runner removes legacy services/*.jsonl shards from state stores.
+-- Retained migration history. Cache migrations do not modify canonical state.

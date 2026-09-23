@@ -113,7 +113,7 @@ function assertAgentInstructions(project) {
   const agents = readFileSync(join(project, "AGENTS.md"), "utf8");
   for (const expected of [
     "provenance-grounded-writing",
-    "npx --no provenance sdk check-statement --format json",
+    "npx --no provenance statement-checks create --stdin --format json",
     "npx --no provenance prime --quiet",
     "Write graph state only through the Provenance CLI or SDK",
     "Do not edit\n  `.provenance/state` directly",
@@ -156,7 +156,9 @@ function assertLocalEngines(project, environment, engineManifest, binaryName, ve
     "check", "--repo", ".", "--format", "json",
   ]);
   assert.equal(check.status, 0, check.stderr);
-  assert.equal(JSON.parse(check.stdout).status, "ok");
+  const categories = JSON.parse(check.stdout).categories;
+  assert.equal(categories.length, 3);
+  assert.ok(categories.every(category => category.status === "passed"));
 }
 
 function assertPreflightAndWriteGate(project, environment, npmCli) {
@@ -164,11 +166,11 @@ function assertPreflightAndWriteGate(project, environment, npmCli) {
     npmCli,
     project,
     environment,
-    ["sdk", "check-statement", "--format", "json"],
+    ["statement-checks", "create", "--stdin", "--format", "json"],
     JSON.stringify({ statement: "Stop; wait." }),
   );
   assert.equal(preflight.status, 0, preflight.stderr);
-  const report = JSON.parse(preflight.stdout);
+  const report = JSON.parse(preflight.stdout).data;
   assert.ok(report.findings.some(({ rule, kind }) => rule === "8.1" && kind === "violation"));
 
   const shard = join(
@@ -185,9 +187,9 @@ function assertPreflightAndWriteGate(project, environment, npmCli) {
     "--format", "json",
   ]);
   assert.notEqual(rejected.status, 0, "the real CLI must reject the unapproved word");
-  const error = JSON.parse(rejected.stderr.trim().replace(/^Error: /, ""));
-  assert.equal(error.field, "statement");
-  assert.ok(error.findings.some(({ rule }) => rule === "1.1"));
+  const error = JSON.parse(rejected.stderr.trim().replace(/^Error: /, "")).error;
+  assert.equal(error.kind, "statement_invalid");
+  assert.ok(error.report.findings.some(({ rule }) => rule === "1.1"));
   const afterWrite = existsSync(shard) ? readFileSync(shard, "utf8") : undefined;
   assert.equal(afterWrite, beforeWrite, "a rejected write must not change requirement state");
 }
@@ -228,10 +230,11 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
   ]);
   assert.notEqual(strict.status, 0, "the project-local strict CI command must block findings");
   const report = JSON.parse(strict.stdout);
-  assert.equal(report.status, "findings");
-  assert.equal(report.base_commit, base);
-  assert.equal(report.candidate_commit, candidate);
-  assert.deepEqual(report.diagnostics, [{
+  const statements = report.categories.find(category => category.category === "statements");
+  assert.equal(statements.status, "findings");
+  assert.equal(statements.context.base_commit, base);
+  assert.equal(statements.context.candidate_commit, candidate);
+  assert.deepEqual(statements.findings.map(finding => finding.detail), [{
     resource_kind: "requirement",
     scope_id: "default",
     id: "req_packed_manual_edit",

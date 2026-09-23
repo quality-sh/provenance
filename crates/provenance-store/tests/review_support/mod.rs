@@ -15,7 +15,13 @@ pub fn fixture() -> (tempfile::TempDir, StateStore) {
     )
     .unwrap();
     let store = StateStore::new(layout);
-    store.create_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"discovery","depends_on":[],"supersedes":[]})).unwrap()).unwrap();
+    store
+        .create_review_requirement(serde_json::from_value(json!({
+            "request_id":"fixture_create","actor":"ben","origin":null,
+            "create":{"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"discovery","depends_on":[],"supersedes":[]}
+        }))
+        .unwrap())
+        .unwrap();
     (temp, store)
 }
 

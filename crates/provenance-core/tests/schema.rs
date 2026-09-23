@@ -26,6 +26,13 @@ fn valid(schema: &Value, value: &Value) -> bool {
 fn query_defaults_and_domain_bounds_are_explicit() {
     let search = schema::<SearchQuery>(Contract::Deserialize);
     assert!(valid(&search, &json!({"text":"x"})));
+    assert!(valid(
+        &search,
+        &json!({"node_types":["requirement", "rule"]})
+    ));
+    assert!(!search["required"]
+        .as_array()
+        .is_some_and(|required| required.contains(&json!("text"))));
     assert_eq!(search["properties"]["limit"]["default"], 50);
     for limit in [0, 201] {
         assert!(

@@ -34,8 +34,15 @@ impl StateStore {
                 DiscussionAction::Start { .. } => None,
                 DiscussionAction::Reply { discussion_id, expected_version, .. }
                 | DiscussionAction::SetStatus { discussion_id, expected_version, .. } => {
-                    let head = heads.into_iter().find(|e| e.discussion_id == *discussion_id)
-                        .ok_or_else(|| anyhow::anyhow!("Discussion does not exist"))?;
+                    let head = heads
+                        .into_iter()
+                        .find(|e| e.discussion_id == *discussion_id)
+                        .ok_or_else(|| {
+                            crate::write_error::SourceFailure::wrap(
+                                crate::write_error::WriteFailure::ResourceNotFound,
+                                anyhow::anyhow!("Discussion does not exist"),
+                            )
+                        })?;
                     anyhow::ensure!(head.parent == input.parent, "Discussion parent membership mismatch");
                     anyhow::ensure!(head.version == *expected_version, "stale Discussion version");
                     let matching = self.list_threads(&input.scope_id)?.into_iter().filter(|t| t.parent == input.parent).collect::<Vec<_>>();
@@ -47,7 +54,11 @@ impl StateStore {
             };
             match &input.action {
                 DiscussionAction::Start { body, .. } | DiscussionAction::Reply { body, .. } => {
-                    anyhow::ensure!(!body.trim().is_empty(), "message body must not be empty");
+                    crate::write_error::ensure!(
+                        EmptyMessageBody,
+                        !body.trim().is_empty(),
+                        "message body must not be empty"
+                    );
                     if let Some(head) = &head {
                         anyhow::ensure!(head.status == DiscussionStatus::Active, "resolved Discussion refuses replies");
                     }

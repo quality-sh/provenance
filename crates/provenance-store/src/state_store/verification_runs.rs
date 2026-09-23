@@ -3,6 +3,8 @@ use provenance_core::{
     validate_optional_commit_pin, ScopeId, StableId, VerificationMethod, VerificationRun,
     VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
 };
+use sha2::{Digest, Sha256};
+use std::io::{BufRead, BufReader, Read};
 
 use super::requirement_reviews::now_millis;
 use super::{
@@ -155,6 +157,75 @@ impl StateStore {
                 .lines()
                 .map(|line| serde_json::from_str(line).map_err(Into::into))
                 .collect()
+        })
+    }
+
+    /// Reads verification runs through a bounded typed line reader while the
+    /// run file is locked. The digest identifies the exact live input.
+    pub(crate) fn read_verification_runs<R>(
+        &self,
+        scope_id: &ScopeId,
+        maximum: usize,
+        read: impl FnOnce(
+            &str,
+            &mut dyn FnMut() -> anyhow::Result<Option<(i64, VerificationRun)>>,
+        ) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        let path = self.layout.verification_runs_path(scope_id);
+        let lock_path = self.layout.verification_runs_lock_path(scope_id);
+        crate::jsonl::with_advisory_lock(&lock_path, || {
+            let mut file = match std::fs::File::open(&path) {
+                Ok(file) => file,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    let digest = format!("{:x}", Sha256::digest([]));
+                    let mut next = || Ok(None);
+                    return read(&digest, &mut next);
+                }
+                Err(error) => return Err(error.into()),
+            };
+            let mut hasher = Sha256::new();
+            let mut chunk = [0_u8; 8192];
+            loop {
+                let count = file.read(&mut chunk)?;
+                if count == 0 {
+                    break;
+                }
+                hasher.update(&chunk[..count]);
+            }
+            let digest = format!("{:x}", hasher.finalize());
+            let mut reader = BufReader::new(std::fs::File::open(&path)?);
+            let mut line_number = 0_i64;
+            let mut next = || {
+                let mut bytes = Vec::new();
+                let count = reader
+                    .by_ref()
+                    .take(u64::try_from(maximum + 2)?)
+                    .read_until(b'\n', &mut bytes)?;
+                if count == 0 {
+                    return Ok(None);
+                }
+                if bytes.last() == Some(&b'\n') {
+                    bytes.pop();
+                }
+                if bytes.last() == Some(&b'\r') {
+                    bytes.pop();
+                }
+                if bytes.len() > maximum {
+                    return Err(
+                        provenance_core::protocol::read_failure::ReadFailure::PageRecordTooLarge
+                            .into(),
+                    );
+                }
+                line_number += 1;
+                let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+                crate::state_store::readers::ensure_supported_record_version(
+                    &path,
+                    usize::try_from(line_number)?,
+                    &value,
+                )?;
+                Ok(Some((line_number, serde_json::from_value(value)?)))
+            };
+            read(&digest, &mut next)
         })
     }
 }

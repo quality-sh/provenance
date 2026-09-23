@@ -1,4 +1,5 @@
 //! Update requests use explicit clear lists so every client can preserve omissions.
+use crate::review::ListEdit;
 use provenance_core::{
     ArtifactLink, QuestionStatus, RequirementStatus, ResolutionInput, ResolutionMethod,
     ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceReference, SourceType, StableId,
@@ -30,14 +31,16 @@ update_input!(UpdateSourceInput, SourceClearField {
     Url, Reference, CommitPin, EffectiveDate, ReviewDate
 }, {
     declared_by: String, name: String, source_type: SourceType, url: String,
-    reference: String, commit_pin: String, effective_date: i64, review_date: i64
+    reference: String, commit_pin: String, effective_date: i64, review_date: i64,
+    supersedes: ListEdit
 });
 update_input!(UpdateResolutionInput, ResolutionClearField {
     Context, Enforcement, Confidence, MadeBy, ApprovedBy, ApprovedAt, ReviewOn
 }, {
     title: String, position: String, rationale: String, status: ResolutionStatus,
     context: String, enforcement: String, confidence: f64, inputs: Vec<ResolutionInput>,
-    made_by: String, approved_by: String, approved_at: i64, review_on: String
+    made_by: String, approved_by: String, approved_at: i64, review_on: String,
+    requirement_ids: ListEdit, supersedes: ListEdit
 });
 update_input!(UpdateRequirementInput, RequirementClearField {
     Description, Fog, DomainId
@@ -50,7 +53,8 @@ update_input!(UpdateRuleInput, RuleClearField {
 }, {
     declared_by: String, name: String, description: String, statement: String,
     status: RuleStatus, severity: RuleSeverity, source_document: String,
-    source_section: String, archived_in_commit: provenance_core::ArchivedStamp
+    source_section: String, archived_in_commit: provenance_core::ArchivedStamp,
+    requirement_ids: ListEdit, resolution_ids: ListEdit
 });
 update_input!(UpdateDomainInput, DomainClearField { Description, Color }, {
     name: String, description: String, color: String

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// Submits the record's current review revision as an immutable `proposed`
 /// candidate. The store derives the binding; the caller never states it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SubmitRequirementReview {
@@ -34,6 +35,7 @@ pub struct SubmitRequirementReview {
 
 /// Records one guarded Disposition on a review submission, with optional
 /// feedback published in the same commit.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DecideRequirementReview {
@@ -55,6 +57,7 @@ pub struct DecideRequirementReview {
 }
 
 /// A reviewer comment published atomically with its decision.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewFeedback {
@@ -64,6 +67,7 @@ pub struct ReviewFeedback {
 
 /// Withdraws a pending submission from review. The candidate, its feedback,
 /// and the graph record all stay.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WithdrawRequirementReview {

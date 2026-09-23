@@ -13,7 +13,7 @@ permissions:
 jobs:
   preflight:
     name: Verify release contract
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read
@@ -197,7 +197,7 @@ jobs:
   publish:
     if: github.event_name == 'push'
     name: Publish GitHub Release
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     needs:
       - preflight
       - publish-crates
@@ -225,7 +225,7 @@ jobs:
   publish-crates:
     if: github.event_name == 'push'
     name: Publish Rust crates
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     needs:
       - preflight
       - build

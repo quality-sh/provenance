@@ -243,15 +243,21 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     );
     assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 1);
 
-    let fresh = fixture();
+    // Seed an unenrolled Requirement.
+    let fresh = tempfile::tempdir().unwrap();
+    let layout = ProvenanceLayout::new(Utf8Path::from_path(fresh.path()).unwrap());
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
+    )
+    .unwrap();
+    let store = open(Utf8Path::from_path(fresh.path()).unwrap());
+    store
+        .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
+        .unwrap();
     refused(
-        submit(
-            &open(Utf8Path::from_path(fresh.path()).unwrap()),
-            "submit-1",
-            "prop-1",
-            None,
-            None,
-        ),
+        submit(&store, "submit-1", "prop-1", None, None),
         "requires a review revision",
     );
 }

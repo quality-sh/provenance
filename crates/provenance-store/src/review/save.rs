@@ -1,5 +1,11 @@
 use super::{classifier, guard, journal, SaveRequirement};
-use crate::{canonical_digest, publication::with_staged_state, shards, state_store::StateStore};
+use crate::{
+    canonical_digest,
+    publication::with_staged_state,
+    shards,
+    state_store::StateStore,
+    write_error::{SourceFailure, WriteFailure},
+};
 use provenance_core::review::{
     RequirementEditState, ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION,
 };
@@ -28,7 +34,16 @@ impl StateStore {
 
     /// Publishes a Requirement edit, its evidence, and its request receipt together.
     pub fn save_requirement(&self, input: SaveRequirement) -> anyhow::Result<ReviewEntry> {
-        self.save_requirement_with_origin(input, None)
+        self.save_requirement_with_origin(input, None, |_, entry| Ok(entry))
+    }
+
+    pub(crate) fn save_requirement_resource(
+        &self,
+        input: SaveRequirement,
+    ) -> anyhow::Result<super::RequirementResourceSnapshot> {
+        self.save_requirement_with_origin(input, None, |store, entry| {
+            store.requirement_resource_snapshot_unlocked(&entry.scope_id, &entry.requirement_id)
+        })
     }
 
     /// Saves a Requirement edit as a Discussion outcome and keeps the previous
@@ -40,14 +55,15 @@ impl StateStore {
         input: SaveRequirement,
         origin: provenance_core::threads::DiscussionOrigin,
     ) -> anyhow::Result<ReviewEntry> {
-        self.save_requirement_with_origin(input, Some(origin))
+        self.save_requirement_with_origin(input, Some(origin), |_, entry| Ok(entry))
     }
 
-    fn save_requirement_with_origin(
+    fn save_requirement_with_origin<R>(
         &self,
         mut input: SaveRequirement,
         origin: Option<provenance_core::threads::DiscussionOrigin>,
-    ) -> anyhow::Result<ReviewEntry> {
+        complete: impl FnOnce(&Self, ReviewEntry) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
         anyhow::ensure!(
             !input.actor.trim().is_empty(),
             "invalid review request identity"
@@ -62,6 +78,7 @@ impl StateStore {
             None => canonical_digest::canonical_bytes(&input)?,
         });
         self.with_repository_publication(|| {
+            crate::test_probes::at("requirement_save_locked")?;
             let scope_id = input.update.scope_id.clone();
             let scope = &scope_id;
             anyhow::ensure!(
@@ -81,7 +98,7 @@ impl StateStore {
                         && receipt.actor == input.actor,
                     "review request ID was reused with different intent"
                 );
-                return Ok(receipt);
+                return complete(self, receipt);
             }
             if let Some(origin) = &origin {
                 self.validate_discussion_origin(scope, origin)?;
@@ -92,16 +109,20 @@ impl StateStore {
                 .as_ref()
                 .map(|e| e.etag.clone())
                 .unwrap_or(journal::etag(&record, None)?);
-            anyhow::ensure!(
-                input.expected_etag == current_etag,
-                "stale Requirement edit etag"
-            );
+            if input.expected_etag != current_etag {
+                return Err(SourceFailure::wrap(
+                    WriteFailure::InvalidUpdate,
+                    anyhow::anyhow!("stale Requirement edit etag"),
+                ));
+            }
             with_staged_state(&self.layout, false, |layout| {
                 let staged = Self::new(layout.clone());
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
-                    staged.commit_requirement(input, &record, head, intent_digest, origin)
+                    let entry =
+                        staged.commit_requirement(input, &record, head, intent_digest, origin)?;
+                    complete(&staged, entry)
                 })
             })
         })
@@ -117,9 +138,10 @@ impl StateStore {
     ) -> anyhow::Result<ReviewEntry> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
-        self.update_requirement(input.update)?;
+        self.apply_requirement_update(input.update)?;
         if let Some(relationships) = input.relationships {
-            self.replace_review_relationships(&scope, &id, relationships)?;
+            crate::test_probes::at("requirement_relationships_expanding")?;
+            self.replace_review_relationships(&scope, &id, &relationships)?;
         }
         let path = shards::requirements_path(&self.layout, &scope);
         let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {

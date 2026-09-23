@@ -15,7 +15,7 @@ it in the same change.
 - Use the `provenance-grounded-writing` skill before you write or change a
   Requirement or Rule statement.
 - Before a graph write, send `{"statement":"<statement>"}` to
-  `provenance sdk check-statement --format json`. A clean report covers only the
+  `provenance statement-checks create --stdin --format json`. A clean report covers only the
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
   conformance.
 - Plan: `provenance prime --quiet`
@@ -105,7 +105,7 @@ fn typescript_init_writes_a_package_local_command() {
 
     let agents = read_agents(&repo);
     assert!(agents.contains("`npx --no provenance prime --quiet`"));
-    assert!(agents.contains("`npx --no provenance sdk check-statement --format json`"));
+    assert!(agents.contains("`npx --no provenance statement-checks create --stdin --format json`"));
     assert!(!agents.contains("`provenance prime --quiet`"));
 }
 

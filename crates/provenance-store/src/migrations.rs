@@ -1,5 +1,4 @@
 use crate::layout::ProvenanceLayout;
-use anyhow::Context;
 use provenance_macros::rule;
 use sqlx::{Executor, SqlitePool};
 
@@ -33,7 +32,9 @@ pub const DISCUSSION_JOURNAL_MIGRATION_ID: &str = "025";
 pub const RECORD_DELETION_MIGRATION_ID: &str = "026";
 pub const RECORD_STAMPS_MIGRATION_ID: &str = "027";
 pub const STORED_DIGESTS_MIGRATION_ID: &str = "028";
-pub const LATEST_MIGRATION_ID: &str = STORED_DIGESTS_MIGRATION_ID;
+pub const RESOURCE_PAYLOADS_MIGRATION_ID: &str = "029";
+pub const RECORD_IDENTITIES_MIGRATION_ID: &str = "030";
+pub const LATEST_MIGRATION_ID: &str = RECORD_IDENTITIES_MIGRATION_ID;
 const INITIAL_SQL: &str = include_str!("../migrations/001_initial_cache.sql");
 const SOURCE_REQUIREMENT_SQL: &str =
     include_str!("../migrations/002_sources_requirements_edges.sql");
@@ -64,92 +65,98 @@ const UNIT_DIGESTS_SQL: &str = include_str!("../migrations/020_unit_digests.sql"
 const RELATIONS_TABLE_SQL: &str = include_str!("../migrations/021_relations_table.sql");
 const RECORD_COLUMNS_SQL: &str = include_str!("../migrations/022_record_columns.sql");
 const VALIDATION_VERSION_SQL: &str = include_str!("../migrations/023_projection_validation.sql");
+const MIGRATIONS: &[(&str, &str)] = &[
+    (INITIAL_MIGRATION_ID, INITIAL_SQL),
+    (SOURCE_REQUIREMENT_MIGRATION_ID, SOURCE_REQUIREMENT_SQL),
+    (RESOLUTIONS_RULES_MIGRATION_ID, RESOLUTIONS_RULES_SQL),
+    (THREADS_MESSAGES_MIGRATION_ID, THREADS_MESSAGES_SQL),
+    (REPORT_INDEXES_MIGRATION_ID, REPORT_INDEXES_SQL),
+    (IDEATION_OUTPUTS_MIGRATION_ID, IDEATION_OUTPUTS_SQL),
+    (SHAPING_SCAFFOLDING_MIGRATION_ID, SHAPING_SCAFFOLDING_SQL),
+    (
+        RESOLUTION_SOURCE_ENRICHMENT_MIGRATION_ID,
+        RESOLUTION_SOURCE_ENRICHMENT_SQL,
+    ),
+    (DOMAINS_SERVICES_MIGRATION_ID, DOMAINS_SERVICES_SQL),
+    (SHAPING_TURN_STATE_MIGRATION_ID, SHAPING_TURN_STATE_SQL),
+    (
+        COMMIT_PIN_CONFIDENCE_MIGRATION_ID,
+        COMMIT_PIN_CONFIDENCE_SQL,
+    ),
+    (PROPOSAL_LIFECYCLE_MIGRATION_ID, PROPOSAL_LIFECYCLE_SQL),
+    (
+        DISPOSITION_TERMINOLOGY_MIGRATION_ID,
+        DISPOSITION_TERMINOLOGY_SQL,
+    ),
+    (
+        DISPOSITION_EXTERNAL_ACTION_MIGRATION_ID,
+        DISPOSITION_EXTERNAL_ACTION_SQL,
+    ),
+    (
+        DROP_RUNTIME_LEFTOVERS_MIGRATION_ID,
+        DROP_RUNTIME_LEFTOVERS_SQL,
+    ),
+    (
+        DROP_RULE_CODE_AND_SERVICES_MIGRATION_ID,
+        DROP_RULE_CODE_AND_SERVICES_SQL,
+    ),
+    (
+        REMOVE_SERVICES_SHARDS_MIGRATION_ID,
+        REMOVE_SERVICES_SHARDS_SQL,
+    ),
+    (PROJECTION_STAMP_MIGRATION_ID, PROJECTION_STAMP_SQL),
+    (
+        FAMILY_CONTENT_DIGEST_MIGRATION_ID,
+        FAMILY_CONTENT_DIGEST_SQL,
+    ),
+    (UNIT_DIGESTS_MIGRATION_ID, UNIT_DIGESTS_SQL),
+    (RELATIONS_TABLE_MIGRATION_ID, RELATIONS_TABLE_SQL),
+    (RECORD_COLUMNS_MIGRATION_ID, RECORD_COLUMNS_SQL),
+    (VALIDATION_VERSION_MIGRATION_ID, VALIDATION_VERSION_SQL),
+    (
+        REVIEW_JOURNAL_MIGRATION_ID,
+        include_str!("../migrations/024_review_journal.sql"),
+    ),
+    (
+        DISCUSSION_JOURNAL_MIGRATION_ID,
+        include_str!("../migrations/025_discussion_journal.sql"),
+    ),
+    (
+        RECORD_DELETION_MIGRATION_ID,
+        include_str!("../migrations/026_record_deletion.sql"),
+    ),
+    (
+        RECORD_STAMPS_MIGRATION_ID,
+        include_str!("../migrations/027_record_stamps.sql"),
+    ),
+    (
+        STORED_DIGESTS_MIGRATION_ID,
+        include_str!("../migrations/028_stored_digests.sql"),
+    ),
+    (
+        RESOURCE_PAYLOADS_MIGRATION_ID,
+        include_str!("../migrations/029_resource_payloads.sql"),
+    ),
+    (
+        RECORD_IDENTITIES_MIGRATION_ID,
+        include_str!("../migrations/030_record_identities.sql"),
+    ),
+];
 
 pub async fn run_migrations(
     pool: &SqlitePool,
-    layout: &ProvenanceLayout,
+    _layout: &ProvenanceLayout,
 ) -> anyhow::Result<Vec<String>> {
     pool.execute("CREATE TABLE IF NOT EXISTS _schema_migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").await?;
     let mut tx = pool.begin().await?;
     let mut applied = Vec::new();
-    for (id, sql) in [
-        (INITIAL_MIGRATION_ID, INITIAL_SQL),
-        (SOURCE_REQUIREMENT_MIGRATION_ID, SOURCE_REQUIREMENT_SQL),
-        (RESOLUTIONS_RULES_MIGRATION_ID, RESOLUTIONS_RULES_SQL),
-        (THREADS_MESSAGES_MIGRATION_ID, THREADS_MESSAGES_SQL),
-        (REPORT_INDEXES_MIGRATION_ID, REPORT_INDEXES_SQL),
-        (IDEATION_OUTPUTS_MIGRATION_ID, IDEATION_OUTPUTS_SQL),
-        (SHAPING_SCAFFOLDING_MIGRATION_ID, SHAPING_SCAFFOLDING_SQL),
-        (
-            RESOLUTION_SOURCE_ENRICHMENT_MIGRATION_ID,
-            RESOLUTION_SOURCE_ENRICHMENT_SQL,
-        ),
-        (DOMAINS_SERVICES_MIGRATION_ID, DOMAINS_SERVICES_SQL),
-        (SHAPING_TURN_STATE_MIGRATION_ID, SHAPING_TURN_STATE_SQL),
-        (
-            COMMIT_PIN_CONFIDENCE_MIGRATION_ID,
-            COMMIT_PIN_CONFIDENCE_SQL,
-        ),
-        (PROPOSAL_LIFECYCLE_MIGRATION_ID, PROPOSAL_LIFECYCLE_SQL),
-        (
-            DISPOSITION_TERMINOLOGY_MIGRATION_ID,
-            DISPOSITION_TERMINOLOGY_SQL,
-        ),
-        (
-            DISPOSITION_EXTERNAL_ACTION_MIGRATION_ID,
-            DISPOSITION_EXTERNAL_ACTION_SQL,
-        ),
-        (
-            DROP_RUNTIME_LEFTOVERS_MIGRATION_ID,
-            DROP_RUNTIME_LEFTOVERS_SQL,
-        ),
-        (
-            DROP_RULE_CODE_AND_SERVICES_MIGRATION_ID,
-            DROP_RULE_CODE_AND_SERVICES_SQL,
-        ),
-        (
-            REMOVE_SERVICES_SHARDS_MIGRATION_ID,
-            REMOVE_SERVICES_SHARDS_SQL,
-        ),
-        (PROJECTION_STAMP_MIGRATION_ID, PROJECTION_STAMP_SQL),
-        (
-            FAMILY_CONTENT_DIGEST_MIGRATION_ID,
-            FAMILY_CONTENT_DIGEST_SQL,
-        ),
-        (UNIT_DIGESTS_MIGRATION_ID, UNIT_DIGESTS_SQL),
-        (RELATIONS_TABLE_MIGRATION_ID, RELATIONS_TABLE_SQL),
-        (RECORD_COLUMNS_MIGRATION_ID, RECORD_COLUMNS_SQL),
-        (VALIDATION_VERSION_MIGRATION_ID, VALIDATION_VERSION_SQL),
-        (
-            REVIEW_JOURNAL_MIGRATION_ID,
-            include_str!("../migrations/024_review_journal.sql"),
-        ),
-        (
-            DISCUSSION_JOURNAL_MIGRATION_ID,
-            include_str!("../migrations/025_discussion_journal.sql"),
-        ),
-        (
-            RECORD_DELETION_MIGRATION_ID,
-            include_str!("../migrations/026_record_deletion.sql"),
-        ),
-        (
-            RECORD_STAMPS_MIGRATION_ID,
-            include_str!("../migrations/027_record_stamps.sql"),
-        ),
-        (
-            STORED_DIGESTS_MIGRATION_ID,
-            include_str!("../migrations/028_stored_digests.sql"),
-        ),
-    ] {
+    for &(id, sql) in MIGRATIONS {
         let already_applied: Option<String> =
             sqlx::query_scalar("SELECT id FROM _schema_migrations WHERE id = ?")
                 .bind(id)
                 .fetch_optional(&mut *tx)
                 .await?;
         if already_applied.is_none() {
-            if id == REMOVE_SERVICES_SHARDS_MIGRATION_ID {
-                remove_services_shards(layout)?;
-            }
             for statement in sql.split(';').map(str::trim).filter(|s| !s.is_empty()) {
                 tx.execute(statement).await?;
             }
@@ -181,44 +188,6 @@ async fn forget_digests(tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>) -> anyhow:
     Ok(())
 }
 
-fn remove_services_shards(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let scopes_dir = layout.scopes_dir();
-    if !scopes_dir.exists() {
-        return Ok(());
-    }
-    for scope in std::fs::read_dir(&scopes_dir)
-        .with_context(|| format!("failed to read scopes directory {scopes_dir}"))?
-    {
-        let scope = scope?;
-        if !scope.file_type()?.is_dir() {
-            continue;
-        }
-        let services_dir = scope.path().join("services");
-        if !services_dir.exists() {
-            continue;
-        }
-        for shard in std::fs::read_dir(&services_dir).with_context(|| {
-            format!(
-                "failed to read services directory {}",
-                services_dir.display()
-            )
-        })? {
-            let shard = shard?;
-            if shard.file_type()?.is_file()
-                && shard.path().extension().is_some_and(|ext| ext == "jsonl")
-            {
-                std::fs::remove_file(shard.path()).with_context(|| {
-                    format!(
-                        "failed to remove legacy services shard {}",
-                        shard.path().display()
-                    )
-                })?;
-            }
-        }
-    }
-    Ok(())
-}
-
 pub async fn applied_migrations(pool: &SqlitePool) -> anyhow::Result<Vec<String>> {
     Ok(
         sqlx::query_scalar("SELECT id FROM _schema_migrations ORDER BY id")
@@ -246,7 +215,7 @@ mod tests {
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
                 "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
-                "025", "026", "027", "028"
+                "025", "026", "027", "028", "029", "030"
             ]
         );
         assert!(run_migrations(&pool, &layout).await.unwrap().is_empty());
@@ -259,7 +228,7 @@ mod tests {
             vec![
                 "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
                 "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
-                "025", "026", "027", "028"
+                "025", "026", "027", "028", "029", "030"
             ]
         );
     }
@@ -283,55 +252,5 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(dispositions.as_deref(), Some("dispositions"));
-    }
-
-    #[tokio::test]
-    async fn migration_removes_services_shards_when_present() {
-        let (_directory, layout) = test_layout();
-        let shard = layout
-            .scopes_dir()
-            .join("default/services/services-00.jsonl");
-        std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
-        std::fs::write(&shard, "legacy service\n").unwrap();
-        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-
-        run_migrations(&pool, &layout).await.unwrap();
-
-        assert!(!shard.exists());
-    }
-
-    #[tokio::test]
-    async fn migration_no_ops_when_services_shards_are_absent() {
-        let (_directory, layout) = test_layout();
-        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-
-        run_migrations(&pool, &layout).await.unwrap();
-
-        assert!(!layout.scopes_dir().join("default/services").exists());
-    }
-
-    #[tokio::test]
-    async fn store_materializes_cleanly_after_services_shard_cleanup() {
-        let (_directory, layout) = test_layout();
-        std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
-        std::fs::write(
-            layout.manifest_path(),
-            serde_json::to_string(&provenance_core::Manifest::default_with_scope(
-                provenance_core::ScopeId::new("default").unwrap(),
-                provenance_core::RepoPathPrefix::new("."),
-            ))
-            .unwrap(),
-        )
-        .unwrap();
-        let shard = layout
-            .scopes_dir()
-            .join("default/services/services-00.jsonl");
-        std::fs::create_dir_all(shard.parent().unwrap()).unwrap();
-        std::fs::write(&shard, "not valid json\n").unwrap();
-
-        let report = crate::cache::materialize_state(&layout).await.unwrap();
-
-        assert_eq!(report.records_loaded, 0);
-        assert!(!shard.exists());
     }
 }

@@ -9,6 +9,36 @@ use provenance_core::{
 use provenance_macros::verifies;
 
 #[test]
+#[verifies("rule_porcelain_id_unique_in_repository", examples)]
+fn canonical_record_ids_are_unique_across_kinds() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    let shared = StableId::new("shared_record_id").unwrap();
+
+    store
+        .create_topic(CreateTopicInput {
+            scope_id: scope.clone(),
+            id: shared.clone(),
+            requirement_id: StableId::new("req_overtime").unwrap(),
+            title: "Shared identity".into(),
+            status: TopicStatus::Open,
+            links: Vec::new(),
+        })
+        .unwrap();
+
+    let error = store
+        .create_boundary(CreateBoundaryInput {
+            scope_id: scope,
+            id: shared,
+            requirement_id: StableId::new("req_overtime").unwrap(),
+            statement: "A different record kind cannot reuse this ID.".into(),
+            source_ref: None,
+        })
+        .unwrap_err();
+
+    assert!(error.to_string().contains("record ID already exists"));
+}
+
+#[test]
 fn shaping_records_are_written_deterministically_and_validate_relationships() {
     let (_dir, store, scope) = seeded_source_requirement_store();
 

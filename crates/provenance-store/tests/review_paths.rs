@@ -1,4 +1,5 @@
 #![cfg(any(unix, windows))]
+#[allow(dead_code)]
 mod review_support;
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -41,14 +42,6 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     let second = store
         .save_requirement(save(&store, "next", json!({"description":"later"})))
         .unwrap();
-    drop(store);
-    let reopened = StateStore::new(layout.clone());
-    assert_eq!(
-        reopened
-            .requirement_save_receipt(&scope(), &id(), &second.request_id, "ben", None)
-            .unwrap(),
-        Some(second.clone())
-    );
     cache::materialize_state(&layout).await.unwrap();
     let history = read_history(
         &root,
@@ -62,7 +55,11 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     )
     .await
     .unwrap();
-    assert_eq!(history.result.entries, [first.clone(), second]);
+    assert_eq!(
+        history.result.entries[0].request_id.as_str(),
+        "fixture_create"
+    );
+    assert_eq!(&history.result.entries[1..], &[first.clone(), second]);
     let page = read_evidence(
         &root,
         &scope(),
@@ -86,18 +83,17 @@ fn review_dir(root: &Utf8Path) -> Utf8PathBuf {
 }
 
 #[test]
-fn receipt_rejects_an_internal_directory_escape() {
+fn journal_entries_refuse_an_internal_directory_escape() {
     let (temp, store) = fixture();
-    let entry = store
+    store
         .save_requirement(save(&store, "enroll", json!({})))
         .unwrap();
+    let next = save(&store, "next", json!({}));
     let root = Utf8Path::from_path(temp.path()).unwrap();
     let journal = review_dir(root).join("journal");
     let outside = tempfile::tempdir().unwrap();
     let moved = Utf8Path::from_path(outside.path()).unwrap().join("journal");
     std::fs::rename(&journal, &moved).unwrap();
     symlink_dir(&moved, &journal);
-    assert!(store
-        .requirement_save_receipt(&scope(), &id(), &entry.request_id, "ben", None)
-        .is_err());
+    assert!(store.save_requirement(next).is_err());
 }

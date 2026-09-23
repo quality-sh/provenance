@@ -3,9 +3,11 @@ mod classifier;
 pub(crate) mod guard;
 mod input;
 mod journal;
-mod relationships;
+pub(crate) mod relationships;
+mod resource_read;
+pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
-pub use input::{RequirementRelations, SaveRequirement};
+pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
 fn owner_matches(record: &provenance_core::Requirement, owner: Option<&str>) -> anyhow::Result<()> {
     if record.declared_by.as_deref() != owner {
@@ -25,6 +27,8 @@ pub use reads::{read_evidence, read_history};
 mod snapshot;
 
 #[cfg(test)]
+mod concurrency_tests;
+#[cfg(test)]
 mod recovery_tests;
 
 #[cfg(all(test, any(unix, windows)))]
@@ -37,10 +41,12 @@ mod discussion_writes;
 
 mod create;
 pub use create::CreateReviewRequirement;
+mod authoring;
 mod discussion_messages;
 mod discussion_reads;
-pub use discussion_messages::read_discussion_messages;
-pub use discussion_reads::read_discussions;
+mod typed_adoption;
+pub use discussion_messages::{read_discussion_message, read_discussion_messages};
+pub use discussion_reads::{read_discussion, read_discussions};
 #[cfg(test)]
 mod discussion_recovery_tests;
 

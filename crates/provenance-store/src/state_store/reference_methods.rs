@@ -5,118 +5,12 @@
 //! `shards::path_for`, and reaches the field through the declaration-derived
 //! `relation_slot_mut`, so a name here cannot drift away from the field it
 //! names.
+//! Requirement references instead use the guarded review write path.
 
 use super::StateStore;
-use crate::shards;
-use provenance_core::{Question, Requirement, Resolution, Rule, ScopeId, Source, StableId};
+use provenance_core::{Question, Resolution, Rule, ScopeId, Source, StableId};
 
 impl StateStore {
-    pub fn set_requirement_refines(
-        &self,
-        scope_id: &ScopeId,
-        requirement: &StableId,
-        target: StableId,
-    ) -> anyhow::Result<Requirement> {
-        self.write_single(scope_id, "refines", requirement, Some(target))
-    }
-
-    pub fn clear_requirement_refines(
-        &self,
-        scope_id: &ScopeId,
-        requirement: &StableId,
-    ) -> anyhow::Result<Requirement> {
-        self.write_single(scope_id, "refines", requirement, None)
-    }
-
-    pub fn add_requirement_depends_on(
-        &self,
-        scope_id: &ScopeId,
-        requirement: &StableId,
-        target: StableId,
-    ) -> anyhow::Result<Requirement> {
-        self.add_to_list(scope_id, "depends_on", requirement, target)
-    }
-
-    pub fn clear_requirement_depends_on(
-        &self,
-        scope_id: &ScopeId,
-        requirement: &StableId,
-        target: &StableId,
-    ) -> anyhow::Result<Requirement> {
-        self.clear_from_list(scope_id, "depends_on", requirement, target)
-    }
-
-    pub fn add_requirement_supersedes(
-        &self,
-        scope_id: &ScopeId,
-        requirement: &StableId,
-        target: StableId,
-    ) -> anyhow::Result<Requirement> {
-        self.add_to_list(scope_id, "supersedes", requirement, target)
-    }
-
-    pub fn clear_requirement_supersedes(
-        &self,
-        scope_id: &ScopeId,
-        requirement: &StableId,
-        target: &StableId,
-    ) -> anyhow::Result<Requirement> {
-        self.clear_from_list(scope_id, "supersedes", requirement, target)
-    }
-
-    pub fn set_requirement_spawned_by(
-        &self,
-        scope_id: &ScopeId,
-        requirement: &StableId,
-        target: StableId,
-    ) -> anyhow::Result<Requirement> {
-        self.write_single(scope_id, "spawned_by", requirement, Some(target))
-    }
-
-    pub fn clear_requirement_spawned_by(
-        &self,
-        scope_id: &ScopeId,
-        requirement: &StableId,
-    ) -> anyhow::Result<Requirement> {
-        self.write_single(scope_id, "spawned_by", requirement, None)
-    }
-
-    /// Removes every citation of one source from a requirement.
-    pub fn clear_source_reference(
-        &self,
-        scope_id: &ScopeId,
-        requirement: &StableId,
-        source: &StableId,
-    ) -> anyhow::Result<Requirement> {
-        let path = shards::requirements_path(&self.layout, scope_id);
-        self.with_repository_publication(|| {
-            self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
-                let record = records
-                    .iter_mut()
-                    .find(|record| &record.id == requirement)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "requirement {} does not exist (--requirement-id)",
-                            requirement.as_str()
-                        )
-                    })?;
-                anyhow::ensure!(
-                    record
-                        .source_refs
-                        .iter()
-                        .any(|entry| &entry.source_id == source),
-                    "requirement {} does not name source {} under cites",
-                    requirement.as_str(),
-                    source.as_str()
-                );
-                record
-                    .source_refs
-                    .retain(|entry| &entry.source_id != source);
-                Ok(record.clone())
-            })
-        })
-    }
-
     pub fn add_rule_requirement(
         &self,
         scope_id: &ScopeId,

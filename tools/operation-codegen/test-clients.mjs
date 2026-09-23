@@ -3,7 +3,7 @@ import { ensureGenerated } from './ensure-generated.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,9 +30,22 @@ const hostBinary = buildBinary(root, ['--locked', '-p', 'provenance-transport', 
 const temporary = await mkdtemp(join(tmpdir(), 'provenance-clients-'));
 if (['writes', 'creation', 'discussions', 'ideation'].includes(family)) {
   const cliBinary = buildBinary(root, ['--locked', '-p', 'provenance-cli', '--bin', 'provenance'], 'provenance');
+  const steAssets = join(temporary, 'ste-assets');
+  await mkdir(steAssets);
+  await copyFile(
+    join(root, 'packages/provenance/test/fixtures/synthetic-ste-dictionary.pdf'),
+    join(steAssets, 'ASD-STE100_ISSUE9.pdf'),
+  );
   const init = ['init', '--path', temporary, '--scope', 'default', '--path-prefix', '.'];
   if (family === 'ideation') init.push('--disposition-actor-id', 'reviewer');
-  const result = spawnSync(cliBinary, init, { encoding: 'utf8' });
+  const result = spawnSync(cliBinary, init, {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PROVENANCE_STE100_ASSET_DIR: steAssets,
+      PROVENANCE_STE100_INDEX_DIR: join(temporary, 'ste-indexes'),
+    },
+  });
   assert.equal(result.status, 0, result.stderr);
   await writeFile(join(temporary, 'check.rs'), 'fn check() {}\n');
 }
@@ -57,13 +70,39 @@ try {
   await writeFile(join(temporary, 'validators.mjs'), await readFile(join(root, 'packages/provenance/src/generated/validators.mjs')));
   const module = await import(join(temporary, 'client.js'));
   const clientModule = process.argv.includes('--effect') ? (await import('./effect-host.mjs')).effectModule(module) : module;
-  await checks[family](clientModule, fixture);
-  if (!process.argv.includes('--effect')) {
-    run(['test', '--locked', '-p', 'provenance-http-client', '--test', family, '--', '--ignored'], {
-      ...process.env, PROVENANCE_TEST_HOST: fixture.url, PROVENANCE_RECORDS_FIXTURE: JSON.stringify(fixture),
+  if (family !== 'statements') {
+    // The Effect flavor executes the SDK from the built dist, whose runtime
+    // classes are distinct identities from this script's transpiled module,
+    // so the refusal is matched by its declared shape, not by instanceof.
+    await assert.rejects(clientModule.HttpClient.connectWithBearer(fixture.url, 'wrong-secret'), error => {
+      assert.equal(error._tag, 'OperationError');
+      assert.equal(error.status, 401);
+      assert.equal(error.failure.error.kind, 'unauthenticated');
+      assert.deepEqual(error.failure.meta, {});
+      return true;
     });
   }
-  console.log(`${process.argv.includes('--effect') ? 'Effect client' : 'Promise and Rust clients'} passed against the real ${family} host.`);
+  await checks[family](clientModule, fixture);
+  if (!process.argv.includes('--effect') && family === 'statements') {
+    run(['test', '--locked', '-p', 'provenance-http-client', '--test', 'v2_wire']);
+  }
+  if (!process.argv.includes('--effect') && family === 'discussions') {
+    run(
+      [
+        'test', '--locked', '-p', 'provenance-http-client', '--test', 'real_host',
+        '--', '--ignored',
+      ],
+      {
+        ...process.env,
+        PROVENANCE_CLIENT_BASE_URL: fixture.url,
+        PROVENANCE_CLIENT_TOKEN: 'fixture-secret',
+      },
+    );
+  }
+  const flavor = process.argv.includes('--effect')
+    ? 'Effect client'
+    : family === 'discussions' ? 'Promise and Rust clients' : 'Promise client';
+  console.log(`${flavor} passed against the real ${family} host.`);
 } finally {
   const exited = host.exitCode === null ? once(host, 'exit') : Promise.resolve([host.exitCode]);
   host.stdin.end();

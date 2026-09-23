@@ -1,7 +1,7 @@
-import { PROTOCOL_VERSION, type components } from "@quality-sh/provenance/client";
+import type { components } from "@quality-sh/provenance/client";
 
-type GetResponse = components["schemas"]["GetSuccessOutput"];
-type Stamp = GetResponse["stamp"];
+type GetResponse = components["schemas"]["GetRuleSuccess"];
+type Stamp = components["schemas"]["GetRuleSuccessResponseMetaStamp"];
 
 const stamp: Stamp = {
   serial: 41,
@@ -13,18 +13,21 @@ const stamp: Stamp = {
   live: ["canonical"],
 };
 
+// Trace answers always carry the page facts their producer requires.
 const stamped: GetResponse = {
-  protocol_version: PROTOCOL_VERSION,
-  operation: "get",
-  found: false,
-  stamp,
+  data: { id: "rule_a", max_depth: 1, nodes: [] },
+  meta: { stamp, limit: 50, has_more: false },
 };
 
 const degraded: GetResponse = {
   ...stamped,
-  stamp: { ...stamp, policy: "catch_up_failed" },
-  freshness_error: "catch-up failed; answer uses the stored projection",
-  freshness_cause: "catch_up_failed",
+  meta: {
+    stamp: { ...stamp, policy: "catch_up_failed" },
+    freshness_error: "catch-up failed; answer uses the stored projection",
+    freshness_cause: "catch_up_failed",
+    limit: 50,
+    has_more: false,
+  },
 };
 
 export { degraded, stamped };

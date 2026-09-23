@@ -21,18 +21,42 @@ fn init(repo: &Path) {
         ])
         .assert()
         .success();
+    // The ideation target requirement seeds through the import path, which
+    // stays a plain record: these tests pin binding portability, and a
+    // CLI-created Requirement would enroll the scope into the review journal
+    // and refuse a lossy export.
+    let seed = repo.join("seed.json");
+    std::fs::write(
+        &seed,
+        json!({
+            "scope": "default",
+            "requirements": [{
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": "default",
+                "id": "req_workflows",
+                "statement": "Accepted workflows start",
+                "status": "discovery"
+            }],
+            "sources": [],
+            "resolutions": [],
+            "rules": [],
+            "threads": [],
+            "messages": []
+        })
+        .to_string(),
+    )
+    .unwrap();
     provenance()
         .args([
-            "requirements",
-            "create",
+            "import",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "req_workflows",
-            "--statement",
-            "Accepted workflows start",
+            "--input",
+            seed.to_str().unwrap(),
+            "--format",
+            "json",
         ])
         .assert()
         .success();

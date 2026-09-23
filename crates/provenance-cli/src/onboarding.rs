@@ -12,7 +12,7 @@ it in the same change.
 - Use the `provenance-grounded-writing` skill before you write or change a
   Requirement or Rule statement.
 - Before a graph write, send `{"statement":"<statement>"}` to
-  `{command} sdk check-statement --format json`. A clean report covers only the
+  `{command} statement-checks create --stdin --format json`. A clean report covers only the
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
   conformance.
 - Plan: `{command} prime --quiet`

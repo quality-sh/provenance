@@ -2174,6 +2174,7 @@ dependencies = [
  "predicates",
  "provenance-core",
  "provenance-macros",
+ "provenance-porcelain",
  "provenance-report",
  "provenance-scanner",
  "provenance-ste100",
@@ -2181,10 +2182,12 @@ dependencies = [
  "provenance-transport",
  "pulldown-cmark",
  "remove_dir_all",
+ "rmcp",
  "rustix",
  "same-file",
  "semver",
  "serde",
+ "serde_ignored",
  "serde_json",
  "sha2 0.10.9",
  "tar",
@@ -2243,6 +2246,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "trybuild",
 ]
 
 [[package]]
@@ -2255,6 +2259,18 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "trybuild",
+]
+
+[[package]]
+name = "provenance-porcelain"
+version = "0.2.3"
+dependencies = [
+ "provenance-core",
+ "provenance-macros",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -2306,6 +2322,7 @@ version = "0.2.3"
 dependencies = [
  "fs2",
  "jsonschema",
+ "office_oxide",
  "pdf_oxide",
  "provenance-macros",
  "schemars 1.2.2",
@@ -2326,6 +2343,7 @@ dependencies = [
  "fs_at",
  "hmac",
  "jsonschema",
+ "libsqlite3-sys",
  "provenance-core",
  "provenance-macros",
  "provenance-scanner",
@@ -2354,6 +2372,8 @@ dependencies = [
  "axum",
  "futures",
  "provenance-core",
+ "provenance-macros",
+ "provenance-porcelain",
  "provenance-ste100",
  "provenance-store",
  "rmcp",
@@ -2364,6 +2384,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tower",
+ "url",
 ]
 
 [[package]]
@@ -2720,9 +2741,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.43"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0283386ce02abc0151e1761d08802dfe86c173b0b494af5cbc086574e453da06"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "log",
  "once_cell",

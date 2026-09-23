@@ -1,4 +1,4 @@
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use serde_json::{json, Value};
 
 pub(in crate::handlers::schema) fn reference_schema() -> Value {
@@ -84,6 +84,16 @@ fn schema_version() -> Value {
     json!({"type": "integer", "const": SUPPORTED_SCHEMA_VERSION.0})
 }
 
+/// The schema versions an exported record may carry. A Requirement that the
+/// guarded write path has enrolled carries the review journal schema, so the
+/// exact export admits both states of the one record format.
+fn requirement_schema_version() -> Value {
+    json!({
+        "type": "integer",
+        "enum": [SUPPORTED_SCHEMA_VERSION.0, REVIEW_SCHEMA_VERSION.0]
+    })
+}
+
 fn record_array(name: &str) -> Value {
     json!({"type": "array", "items": {"$ref": format!("#/$defs/{name}")}})
 }
@@ -111,6 +121,7 @@ fn export_definitions() -> Value {
     let id = json!({"type": "string", "pattern": "^[a-z0-9_-]+$"});
     let id_list = json!({"type": "array", "items": id.clone()});
     let version = schema_version();
+    let requirement_version = requirement_schema_version();
     let string = json!({"type": "string"});
     let confidence = json!({"type": "number", "minimum": 0, "maximum": 1});
     json!({
@@ -150,7 +161,7 @@ fn export_definitions() -> Value {
         "requirement": stamped_record("requirement", closed_record(
             &["schema_version", "scope_id", "id", "statement", "status"],
             json!({
-                "schema_version": version.clone(), "scope_id": id.clone(), "id": id.clone(),
+                "schema_version": requirement_version, "scope_id": id.clone(), "id": id.clone(),
                 "declared_by": string.clone(), "declaration_address": declaration_address(), "statement": string.clone(),
                 "description": string.clone(), "fog": string.clone(),
                 "status": {"enum": ["active", "discovery", "refinement", "resolved"]},

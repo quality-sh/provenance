@@ -21,6 +21,7 @@ impl From<OperationFailure> for ReadError {
 impl ReadError {
     pub(super) fn status(&self) -> u16 {
         match self.safe() {
+            ReadFailure::ResourceNotFound => 404,
             ReadFailure::ReadFailed => 500,
             ReadFailure::FileAccessDenied => 403,
             ReadFailure::FileUnavailable | ReadFailure::GitUnavailable => 503,

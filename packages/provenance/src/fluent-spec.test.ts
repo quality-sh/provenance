@@ -60,41 +60,31 @@ function readRecords(repo: string, relative: string): WrittenRecord[] {
     .map((line) => JSON.parse(line) as WrittenRecord);
 }
 
+function catalogCreate(
+  repo: string,
+  collection: string,
+  data: Record<string, unknown>,
+  headers: string[] = [],
+): void {
+  execFileSync(
+    engine,
+    [collection, "create", "--repo", repo, "--scope", "default", ...headers, "--stdin"],
+    { input: JSON.stringify(data) },
+  );
+}
+
 /** A requirement and a resolution the writers already hold, for the
  *  declarations that name a resolution by canonical id. */
 function seedResolution(repo: string): void {
-  execFileSync(engine, [
-    "requirements",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "req_seed",
-    "--statement",
-    "The seed requirement stands",
-  ]);
-  execFileSync(engine, [
-    "resolutions",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "res_seed",
-    "--title",
-    "Seed decision",
-    "--requirement-id",
-    "req_seed",
-    "--position",
-    "Adopt",
-    "--rationale",
-    "Seeds the relations",
-    "--status",
-    "proposed",
-  ]);
+  catalogCreate(repo, "requirements", {
+    actor: "sdk-test", id: "req_seed", statement: "The seed requirement stands",
+    status: "discovery", depends_on: [], supersedes: [],
+  }, ["--idempotency-key", "request_seed_requirement"]);
+  catalogCreate(repo, "resolutions", {
+    id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
+    supersedes: [], position: "Adopt", rationale: "Seeds the relations",
+    status: "proposed", inputs: [],
+  });
 }
 
 
@@ -391,12 +381,12 @@ test("direct nested Rule handles apply and verify through the Rust engine", asyn
   );
 
   assert.equal(callbackRan, true);
-  const runs = JSON.parse(
+  const response = JSON.parse(
     execFileSync(
       engine,
       [
-        "sdk",
         "verification-runs",
+        "list",
         "--repo",
         repo,
         "--scope",
@@ -406,7 +396,8 @@ test("direct nested Rule handles apply and verify through the Rust engine", asyn
       ],
       { encoding: "utf8" },
     ),
-  ) as Array<{ status: string }>;
+  ) as { data: { items: Array<{ status: string }> } };
+  const runs = response.data.items;
   assert.deepEqual(runs.map(({ status }) => status), ["passed"]);
 });
 

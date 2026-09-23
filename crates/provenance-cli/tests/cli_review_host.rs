@@ -98,21 +98,14 @@ fn response(result: Result<ureq::Response, ureq::Error>) -> ureq::Response {
     }
 }
 
-fn call(host: &Host, target: &str, scope: &str) -> ureq::Response {
-    response(
-        request(host, "POST", "/v9/operations/list-threads", true)
-            .set("Content-Type", "application/json")
-            .send_string(
-                &json!({"context":{"repository":target,"scope":scope},"request":null}).to_string(),
-            ),
-    )
+fn list_discussions(host: &Host) -> ureq::Response {
+    response(request(host, "GET", "/discussion-containers", true).call())
 }
 
 #[test]
 #[verifies("rule_cli_serves_review_assets", examples)]
 fn serves_assets_configuration_and_only_the_selected_graph() {
     let repo = repository();
-    let other = repository();
     let host = start(repo.path());
     let index = request(&host, "GET", "/", false).call().unwrap();
     assert_eq!(
@@ -121,7 +114,7 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
     );
     assert!(index.into_string().unwrap().contains("<!doctype html>"));
     assert_eq!(
-        request(&host, "GET", "/metadata", false)
+        request(&host, "GET", "/metadata", true)
             .call()
             .unwrap()
             .status(),
@@ -141,13 +134,12 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
     .unwrap();
     assert_eq!(config["repositoryId"], "A");
     assert_eq!(config["scope"], "default");
-    assert_eq!(config["protocolVersion"], 9);
+    assert_eq!(
+        config["compatibility"],
+        json!({"wire":9,"state":2,"review_journal":3,"read_derivation":3})
+    );
     assert!(config.get("bearer").is_none());
-    assert_eq!(call(&host, "A", "default").status(), 200);
-    for target in ["B", other.path().to_str().unwrap()] {
-        assert_eq!(call(&host, target, "default").status(), 404);
-    }
-    assert_eq!(call(&host, "A", "other").status(), 403);
+    assert_eq!(list_discussions(&host).status(), 200);
     for path in [
         "/.provenance/manifest.json",
         "/assets/missing.js",
@@ -164,18 +156,18 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
 fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
     let repo = repository();
     let host = start(repo.path());
-    for path in [
-        "/v9/operations/post-thread-message",
-        "/v9/operations/list-threads",
-        "/v9/operations/read-document",
+    for (method, path) in [
+        ("POST", "/requirements/req_example/discussions"),
+        ("GET", "/discussion-containers"),
+        ("GET", "/requirements/req_absent/document"),
     ] {
         assert_eq!(
-            response(request(&host, "POST", path, false).send_string("invalid")).status(),
+            response(request(&host, method, path, false).send_string("invalid")).status(),
             401
         );
         assert_eq!(
             response(
-                request(&host, "POST", path, true)
+                request(&host, method, path, true)
                     .set("Origin", "https://unrelated.test")
                     .send_string("invalid")
             )
@@ -184,7 +176,7 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
         );
         assert_eq!(
             response(
-                request(&host, "POST", path, true)
+                request(&host, method, path, true)
                     .set("Origin", "null")
                     .send_string("invalid")
             )
@@ -193,7 +185,7 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
         );
         assert_eq!(
             response(
-                request(&host, "POST", path, true)
+                request(&host, method, path, true)
                     .set("Host", "unrelated.test")
                     .send_string("invalid")
             )
@@ -202,12 +194,24 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
         );
         assert_eq!(
             response(
-                request(&host, "POST", path, true)
+                request(&host, method, path, true)
                     .set("Origin", host.config["endpoint"].as_str().unwrap())
                     .send_string("invalid")
             )
             .status(),
             400
+        );
+    }
+    for (site, expected) in [("cross-site", 403), ("same-origin", 400)] {
+        assert_eq!(
+            response(
+                request(&host, "POST", "/requirements/req_example/discussions", true)
+                    .set("Origin", host.config["endpoint"].as_str().unwrap())
+                    .set("Sec-Fetch-Site", site)
+                    .send_string("invalid")
+            )
+            .status(),
+            expected
         );
     }
     assert_eq!(
@@ -219,37 +223,55 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
         .status(),
         403
     );
-    let threads: Value =
-        serde_json::from_str(&call(&host, "A", "default").into_string().unwrap()).unwrap();
-    assert_eq!(threads, json!([]));
+    let discussions: Value =
+        serde_json::from_str(&list_discussions(&host).into_string().unwrap()).unwrap();
+    assert_eq!(discussions["data"]["items"], json!([]));
 }
 
 #[test]
-fn existing_writes_keep_native_scope_checks() {
+fn discussion_writes_use_the_bound_scope() {
     let repo = repository();
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo.path().to_str().unwrap());
+    provenance_store::state_store::StateStore::new(layout)
+        .create_requirement(provenance_store::state_store::CreateRequirementInput {
+            scope_id: provenance_core::ScopeId::new("default").unwrap(),
+            id: provenance_core::StableId::new("req_example").unwrap(),
+            statement: "The Requirement accepts review.".into(),
+            description: None,
+            status: provenance_core::RequirementStatus::Discovery,
+            domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
     let host = start(repo.path());
-    let mut body = json!({"context":{"repository":"A","scope":"default"},"request":{
-        "scope_id":"other", "parent":{"node_type":"requirement","node_id":"req_example"},
-        "role":"user", "body":"Check this requirement."
+    let mut body = json!({"data":{
+        "actor":"ben", "scope_id":"other", "role":"user",
+        "body":"Check this requirement."
     }});
     let post = |body: &Value| {
         response(
-            request(&host, "POST", "/v9/operations/post-thread-message", true)
+            request(&host, "POST", "/requirements/req_example/discussions", true)
                 .set("Origin", host.config["endpoint"].as_str().unwrap())
                 .set("Content-Type", "application/json")
+                .set("Idempotency-Key", "request_review_discussion")
                 .send_string(&body.to_string()),
         )
     };
     assert_eq!(post(&body).status(), 400);
-    body["request"]["scope_id"] = json!("default");
+    body["data"].as_object_mut().unwrap().remove("scope_id");
     let saved = post(&body);
     assert_eq!(saved.status(), 200);
     let saved: Value = serde_json::from_str(&saved.into_string().unwrap()).unwrap();
-    assert_eq!(saved["message"]["body"], "Check this requirement.");
-    assert!(saved["message"]["created_at"].is_u64());
-    let threads: Value =
-        serde_json::from_str(&call(&host, "A", "default").into_string().unwrap()).unwrap();
-    assert_eq!(threads.as_array().unwrap().len(), 1);
+    assert_eq!(saved["data"]["request_id"], "request_review_discussion");
+    assert_eq!(saved["data"]["actor"], "ben");
+    let discussions: Value =
+        serde_json::from_str(&list_discussions(&host).into_string().unwrap()).unwrap();
+    assert_eq!(discussions["data"]["items"].as_array().unwrap().len(), 1);
 }
 
 #[test]
@@ -318,7 +340,7 @@ fn termination_releases_the_listener() {
         .unwrap()
         .to_owned();
     let mut stalled = TcpStream::connect(&address).unwrap();
-    write!(stalled, "POST /v9/operations/list-threads HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {}\r\nContent-Length: 1000\r\n\r\n{{", host.config["bearer"].as_str().unwrap()).unwrap();
+    write!(stalled, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {}\r\nIdempotency-Key: request_stalled\r\nContent-Length: 1000\r\n\r\n{{", host.config["bearer"].as_str().unwrap()).unwrap();
     let mut partial_headers = TcpStream::connect(&address).unwrap();
     partial_headers.write_all(b"GET / HTTP/1.1\r\nHo").unwrap();
     assert!(Command::new("kill")
@@ -396,22 +418,15 @@ fn launch_url_and_responses_do_not_disclose_the_credential() {
 fn document_root_refusal_follows_target_and_scope_access_checks() {
     let repo = repository();
     let host = start(repo.path());
-    for (target, scope, authorized, expected) in [
-        ("A", "default", false, 401),
-        ("other", "default", true, 404),
-        ("A", "other", true, 403),
-        ("A", "default", true, 409),
-    ] {
+    for (authorized, expected) in [(false, 401), (true, 409)] {
         let result = response(
-            request(&host, "POST", "/v9/operations/read-document", authorized)
-                .set("Content-Type", "application/json")
-                .send_string(
-                    &json!({
-                        "context":{"repository":target,"scope":scope,"freshness":"catch_up"},
-                        "request":{"id":"req_absent"}
-                    })
-                    .to_string(),
-                ),
+            request(
+                &host,
+                "GET",
+                "/requirements/req_absent/document",
+                authorized,
+            )
+            .call(),
         );
         assert_eq!(result.status(), expected);
         if expected == 409 {

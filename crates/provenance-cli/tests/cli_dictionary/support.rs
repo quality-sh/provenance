@@ -79,13 +79,14 @@ pub fn write_reference(repo: &Path, dictionary: &DictionaryImport) {
 
 pub fn error_json(output: &Output) -> serde_json::Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
-    serde_json::from_str(
+    serde_json::from_str::<serde_json::Value>(
         stderr
             .trim()
             .strip_prefix("Error: ")
             .expect("CLI failure contains one machine-readable JSON object"),
     )
-    .unwrap()
+    .unwrap()["error"]
+        .clone()
 }
 
 /// The synthetic Issue 9 PDF. The builder makes every word, so no dictionary

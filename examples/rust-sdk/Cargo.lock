@@ -1553,6 +1553,7 @@ name = "provenance-ste100"
 version = "0.2.3"
 dependencies = [
  "fs2",
+ "office_oxide",
  "pdf_oxide",
  "provenance-macros",
  "serde",
@@ -1570,6 +1571,7 @@ dependencies = [
  "fs2",
  "fs_at",
  "hmac",
+ "libsqlite3-sys",
  "provenance-core",
  "provenance-macros",
  "provenance-scanner",

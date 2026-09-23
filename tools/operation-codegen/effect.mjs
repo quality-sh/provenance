@@ -20,15 +20,15 @@ export async function effectFiles(document) {
   const projected = clientTypeSchema(contract);
   const warnings = [];
   const generated = await runGenerator(projected, 'ProvenanceApi', warnings);
-  if (warnings.length) throw new Error(`Effect generator warnings: ${JSON.stringify(warnings)}`);
+  const actionable = warnings.filter(warning => warning.code !== 'response-headers-ignored');
+  if (actionable.length) throw new Error(`Effect generator warnings: ${JSON.stringify(actionable)}`);
   const shared = new Set(responseSchemas(contract).filter(name => Object.hasOwn(contract.components.schemas, name)));
   const names = [];
   const source = generated.replace(/^export const (\w+) = (.+)$/gm, (line, name, expression) => {
     if (!Object.hasOwn(contract.components.schemas, name)) return line;
     if (!shared.has(name)) names.push(name);
     const validation = `${shared.has(name) ? 'shared' : 'wire'}.${name}(value)`;
-    const protocol = name === 'MetadataOutput' ? ` && (value as { protocol_version: unknown }).protocol_version === ${contract['x-protocol-version']}` : '';
-    return `export const ${name} = Schema.declare<${name}>((value): value is ${name} => ${validation}${protocol}, { identifier: '${name}' })`;
+    return `export const ${name} = Schema.declare<${name}>((value): value is ${name} => ${validation}, { identifier: '${name}' })`;
   });
 
   // The pinned generator inlines every nested component into the envelope
@@ -41,22 +41,21 @@ export async function effectFiles(document) {
   const renderings = await Effect.runPromise(Effect.flatMap(OpenApiGenerator.make, generator =>
     Effect.tryPromise(() => renderNested(projected, document => Effect.runPromise(
       generator.generate(document, { name: 'ProvenanceRenderings', format: 'httpapi', onWarning: warning => renderWarnings.push(warning) }))))));
-  if (renderWarnings.length) throw new Error(`Effect generator warnings while rendering families: ${JSON.stringify(renderWarnings)}`);
+  const actionableRenderWarnings = renderWarnings.filter(warning => warning.code !== 'response-headers-ignored');
+  if (actionableRenderWarnings.length) throw new Error(`Effect generator warnings while rendering families: ${JSON.stringify(actionableRenderWarnings)}`);
   // Operation-level schemas are already emitted under their own names; their
   // renderings must not participate, or substitution would collapse each
   // envelope's body into a self-reference.
   const emitted = new Set([...generated.matchAll(/^export const (\w+) =/gm)]
     .map(match => match[1]).filter(name => Object.hasOwn(contract.components.schemas, name)));
   for (const name of emitted) renderings.delete(name);
-  const { rewritten, used, canonical } = substitute(source, renderings);
+  const { rewritten } = substitute(source, renderings);
   // Declarations form a closed set: start from the names the envelope source
   // references plus every discriminated union, then add every name those
   // bodies reference, until nothing new appears. Non-canonical duplicates of
   // identical renderings stay undeclared — the canonical name carries them.
   // A union without a rendering (an empty projected body) stays inline.
-  const declared = new Set([...used, ...discriminatedUnions(contract).map(union => union.name)
-    .filter(name => renderings.has(name))]
-    .filter(name => canonical.get(name) === undefined || canonical.get(name) === name));
+  const declared = new Set(renderings.keys());
   const bodies = new Map();
   const queue = [...declared];
   while (queue.length > 0) {
@@ -67,7 +66,7 @@ export async function effectFiles(document) {
     bodies.set(name, body.rewritten);
     for (const referenced of body.used) {
       if (declared.has(referenced)) continue;
-      if (canonical.get(referenced) !== referenced) continue;
+      if (!renderings.has(referenced)) continue;
       declared.add(referenced);
       queue.push(referenced);
     }
@@ -99,37 +98,67 @@ async function runGenerator(document, name, warnings) {
 }
 
 export function effectClient(document) {
-  const routes = Object.values(document.paths).filter(route => route.post).map(route => route.post);
+  const routes = Object.values(document.paths).flatMap(route => ['get', 'post', 'patch'].flatMap(method => route[method] ? [route[method]] : []))
+    .filter(op => op.operationId !== 'metadata' && op.responses?.['200']?.content?.['application/json'] && op.responses?.['400']?.content?.['application/json']);
   const ref = schema => schema.$ref.split('/').at(-1);
+  const queryVariants = op => op['x-provenance-query-variants'] ?? [];
+  const variantStem = (op, variant) => `${pascal(op.operationId)}${variant.selector === null ? 'Base' : pascal(variant.selector)}`;
+  const queryInputs = new Set();
+  const queryContracts = new Set();
   const methods = routes.map(op => {
-    const input = ref(op.requestBody.content['application/json'].schema);
     const success = ref(op.responses['200'].content['application/json'].schema);
     const failure = ref(op.responses['400'].content['application/json'].schema);
-    return `  ${op.operationId}(call: components['schemas']['${input}']): Effect.Effect<components['schemas']['${success}'], ClientFailure<components['schemas']['${failure}']>> {
+    const variants = queryVariants(op);
+    if (variants.length) {
+      const overloads = variants.map(variant => {
+        const stem = variantStem(op, variant);
+        queryInputs.add(`${stem}Input`);
+        for (const suffix of ['Success', 'Failure']) queryContracts.add(`${stem}${suffix}`);
+        return `  ${op.operationId}(call: ${stem}Input): Effect.Effect<${stem}Success, ClientFailure<${stem}Failure>>;`;
+      }).join('\n');
+      const inputs = variants.map(variant => `${variantStem(op, variant)}Input`).join(' | ');
+      const successes = variants.map(variant => `${variantStem(op, variant)}Success`).join(' | ');
+      const failures = variants.map(variant => `${variantStem(op, variant)}Failure`).join(' | ');
+      const branches = variants.map(variant => {
+        const stem = variantStem(op, variant);
+        const condition = variant.selector === null
+          ? 'call.query === undefined'
+          : `call.query === ${JSON.stringify(variant.selector)}`;
+        return `    if (${condition}) return this.runtime.run<${stem}Input, ${stem}Success, ${stem}Failure>('${op.operationId}', false, call, (input, signal) => this.http.${op.operationId}(input, { signal }));`;
+      }).join('\n');
+      return `${overloads}
+  ${op.operationId}(call: ${inputs}): Effect.Effect<${successes}, ClientFailure<${failures}>> {
+${branches}
+    return Effect.die(new TypeError('Invalid query selector'));
+  }`;
+    }
+    return `  ${op.operationId}(call: Parameters<HttpClient['${op.operationId}']>[0]): Effect.Effect<components['schemas']['${success}'], ClientFailure<components['schemas']['${failure}']>> {
     return this.runtime.run('${op.operationId}', ${op['x-operation-mutates'] === true}, call, (input, signal) => this.http.${op.operationId}(input, { signal }));
   }`;
   });
+  const queryTypes = [...queryInputs, ...queryContracts];
   return `// Generated from OpenAPI. Do not edit.
 import * as Effect from 'effect/Effect';
 import * as Context from 'effect/Context';
 import * as Layer from 'effect/Layer';
-import { HttpClient, type components } from './client.js';
+import { HttpClient, type components${queryTypes.map(name => `, type ${name}`).join('')} } from './client.js';
+${queryInputs.size ? `export type { ${[...queryInputs].join(', ')} } from './client.js';` : ''}
 import { ClientRuntime, requestEffect, connectionFailure, type ClientFailure } from '../effect-runtime.js';
 export interface ClientOptions {
   readonly baseUrl: string;
   readonly bearer?: string;
   readonly fetch?: typeof fetch;
+  readonly repository?: string;
+  readonly scope?: string;
 }
 export class EffectHttpClient {
   private readonly runtime = new ClientRuntime();
   private constructor(private readonly http: HttpClient) {}
   static connect(options: ClientOptions): Effect.Effect<EffectHttpClient, ClientFailure> {
     return Effect.map(requestEffect(signal => options.bearer === undefined
-      ? HttpClient.connect(options.baseUrl, options.fetch, { signal })
-      : HttpClient.connectWithBearer(options.baseUrl, options.bearer, options.fetch, { signal }), connectionFailure), http => new EffectHttpClient(http));
+      ? HttpClient.connect(options.baseUrl, options.fetch, { signal, repository: options.repository, scope: options.scope })
+      : HttpClient.connectWithBearer(options.baseUrl, options.bearer, options.fetch, { signal, repository: options.repository, scope: options.scope }), connectionFailure), http => new EffectHttpClient(http));
   }
-  unresolvedWrites() { return this.runtime.unresolvedWrites(); }
-  resolveWrite(id: number): void { this.runtime.resolveWrite(id); }
 ${methods.join('\n')}
 }
 export class ProvenanceClient extends Context.Service<ProvenanceClient, EffectHttpClient>()('@quality-sh/provenance/EffectHttpClient') {

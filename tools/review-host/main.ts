@@ -1,5 +1,4 @@
 import { HttpClient } from '@quality-sh/provenance/client';
-import type { components } from '@quality-sh/provenance/client';
 import { loadReviewStore, mountReview, DocumentUnavailableError } from 'review-renderer';
 import type { CursorReviewStore, DocumentLoader } from 'review-renderer';
 import { createSession } from './session.ts';
@@ -31,20 +30,23 @@ access.addEventListener('submit', async event => {
     if (typeof config !== 'object' || config === null ||
       !('repositoryId' in config) || typeof config.repositoryId !== 'string' ||
       !('scope' in config) || typeof config.scope !== 'string') throw new Error('Invalid configuration');
-    const client = await HttpClient.connectWithBearer(location.origin, bearer);
     const repository = config.repositoryId;
     const scope = config.scope;
+    const client = await HttpClient.connectWithBearer(
+      location.origin, bearer, fetch, { repository, scope },
+    );
     load = () => {
       const id = requirement.value.trim();
-      const context = { repository, scope };
-      const loaderFor = (id: string): DocumentLoader => cursor => client.readDocument({
-        context: { ...context, freshness: cursor ? 'annotate_only' : 'catch_up' },
-        request: { id, limit: 50, cursor },
-      });
-      const search = (request: components['schemas']['SearchRequestInput']['request']) => client.search({
-        context: { ...context, freshness: request.cursor ? 'annotate_only' : 'catch_up' },
-        request: { ...request, limit: 50 },
-      });
+      const loaderFor = (id: string): DocumentLoader => async cursor => {
+        const answer = await client.getRequirementDocument({ id, limit: 50, cursor });
+        return { ...answer.data, ...answer.meta };
+      };
+      const search = async (request: { text: string; cursor?: string }) => {
+        const answer = await client.listRequirements({
+          query: 'search', text: request.text, limit: 50, cursor: request.cursor,
+        });
+        return { nodes: answer.data.items, ...answer.meta };
+      };
       return loadReviewStore(loaderFor(id), { openDocument: loaderFor, search });
     };
     access.hidden = true;

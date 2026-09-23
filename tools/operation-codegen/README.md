@@ -51,20 +51,30 @@ node tools/operation-codegen/generate.mjs --check
 ```
 
 The candidate test compiles both languages against production shapes. It checks
-nullable required fields, omitted fields, flattened results, tagged variants,
+nullable required fields, omitted fields, v2 envelopes, tagged variants,
 and issue 9. It then round-trips actual Rust wire values through generated Rust
 types in a temporary crate. The real-host script tests both named clients and
 waits for the test host to stop. This listener requires the transport test-fixture
-feature; it is not a production listener. The records fixture selects opaque
-repository names, exercises separate scopes and freshness policies, and uses a
-fixed test bearer credential. Both clients preserve each method's declared
-failure family. The evidence fixture adds two real Git commits and complete
-verification records. Its checks cover all four cuts, null and omitted fields,
-list scope and filters, and typed file and Git refusals.
+feature; it is not a production listener. Each fixture binds one repository,
+one scope, and one fixed test credential. Both clients preserve each method's
+declared failure family. The evidence fixture adds two real Git commits and
+complete verification records. Its checks cover null and omitted fields,
+resource queries, list envelopes, and typed file refusals.
 
 `--check` generates twice in separate temporary directories and compares the full
 file inventory and bytes. Differences and oversized files fail. It does not
 compare against a source-control snapshot or change the checkout.
+
+Generation runs the contract grammar linter before any output is written. The
+linter checks the live OpenAPI and MCP documents against the frozen v2 surface
+in `docs/api-contract-v2.md`. It rejects repository or scope path prefixes,
+relationship routes, legacy verb routes, `/query` subroutes, GET bodies,
+required-null requests, raw arrays, flattened envelopes, MCP-only wrappers,
+undeclared actions or queries, mutating GETs, read POSTs without
+`MUTATES=false`, missing failure statuses, single-message reads that ship an
+items envelope, duplicate bindings, unresolved path parameters, and operation
+name collisions. `node --test grammar-lint.test.mjs` runs the linter tests
+without generation.
 
 The documents and client source directories are ignored. Generation writes an
 ignored `.generation.json` receipt with source and output hashes. Run
@@ -82,8 +92,10 @@ CI rejects generated paths in the Git index.
 The generator and real-host tests use the executable paths reported by Cargo,
 including configured target directories and platform executable suffixes.
 
-Clients require an HTTP host and check its protocol version before use. They do
-not start an engine process. They do not retry operation calls or follow redirects.
+Clients require an HTTP host and check its complete compatibility tuple through
+`GET /metadata` before use. They can also pin the repository and scope that the
+host reports. They do not start an engine process, retry mutations, or follow
+redirects.
 
 `connectWithBearer` in TypeScript and `connect_with_bearer` in Rust authenticate
 both metadata and operation requests. The Rust error contains a named
@@ -101,9 +113,8 @@ Ajv 8.20.0, ajv-formats 3.0.1 and esbuild 0.25.11 to emit standalone browser ESM
 there is no runtime compiler or schema download. The Rust runtime pins jsonschema
 0.18.3 without default network features, rejects external resolvers explicitly,
 and compiles validators once into a shared cache. Required nullable fields are
-validated before concrete deserialization. Metadata uses the generated shape
-with its version const removed only for compatibility classification, then checks
-the supported version explicitly.
+validated before concrete deserialization. Metadata uses the generated v2
+envelope and checks the supported compatibility tuple explicitly.
 
 The TypeScript tool adapter moves reference conjunctions into allOf while keeping
 sibling constraints at their evaluation scope. This preserves tagged graph-node
@@ -118,10 +129,10 @@ of the native Rust record and avoids an unsupported Effect union intersection.
 The exported OpenAPI and all wire validators retain the condition: an Archived
 Rule requires its commit stamp, and other statuses refuse a non-null stamp.
 
-The catalog mutation annotation drives response-loss classification in both
-clients. Malformed success or refusal after a write, interrupted connections,
-and validated uncertain/internal write outcomes remain uncertain. Response bodies
-are bounded to 16 MiB, and public error messages do not include raw bodies.
+The catalog mutation annotation remains available to generated consumers. A
+write returns success, a typed operation error, or a transport error. Clients
+keep no uncertain-write ledger and never replay a mutation. Response bodies are
+bounded to 16 MiB, and public error messages do not include raw bodies.
 The write fixture checks plan without mutation, apply, verification completion,
 ownership and completion refusals, and persisted records on an isolated host.
 
@@ -156,9 +167,9 @@ node tools/operation-codegen/test-clients.mjs ideation --effect
 npm run test:effect:packed --prefix packages/provenance
 ```
 
-The default host pass runs the Promise and Rust clients. The `--effect` pass
-runs the Effect client against the same scenarios without repeating the Rust
-tests. The Promise and Effect test suites share the cases in `client-policy.mjs`
+The default host pass runs the Promise client. The statements pass also runs the
+consolidated Rust v2 wire test. The `--effect` pass runs the Effect client against
+the same scenarios. The Promise and Effect test suites share the cases in `client-policy.mjs`
 for response validation, failure classification, credentials, and redirects.
 
 The installed-package check uses the existing CLI and fixture executables in

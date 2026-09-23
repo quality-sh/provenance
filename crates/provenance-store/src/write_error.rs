@@ -24,6 +24,7 @@ pub enum WriteFailure {
         conflicts: Vec<ReconciledResource>,
     },
     MissingReference,
+    ResourceNotFound,
     StatementRejected {
         diagnostics: Vec<TypedSpecDiagnostic>,
     },
@@ -32,8 +33,8 @@ pub enum WriteFailure {
     AlreadyComplete,
     FileAccessDenied,
     FileUnavailable,
+    RecordTooLarge,
     WriteFailed,
-    UncertainWrite,
 }
 
 #[derive(Debug)]
@@ -91,7 +92,7 @@ impl From<provenance_core::protocol::failure::OperationFailure> for WriteError {
 impl WriteError {
     pub fn safe(&self) -> WriteFailure {
         if self.0.downcast_ref::<PublicationStarted>().is_some() {
-            return WriteFailure::UncertainWrite;
+            return WriteFailure::WriteFailed;
         }
         if let Some(error) = self.0.downcast_ref::<SourceFailure>() {
             return error.failure.clone();
@@ -121,9 +122,10 @@ impl WriteError {
     }
     pub fn status(&self) -> u16 {
         match self.safe() {
-            WriteFailure::WriteFailed | WriteFailure::UncertainWrite => 500,
+            WriteFailure::WriteFailed => 500,
             WriteFailure::FileAccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
+            WriteFailure::ResourceNotFound => 404,
             WriteFailure::RecordOwnershipConflict
             | WriteFailure::AlreadyExists
             | WriteFailure::OwnershipConflict { .. }
