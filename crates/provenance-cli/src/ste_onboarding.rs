@@ -20,7 +20,7 @@ pub struct Plan {
     import: Option<DictionaryImport>,
     reference_before: Option<FileSnapshot>,
     reference_bytes: Option<Vec<u8>>,
-    message: Option<String>,
+    warning: Option<String>,
 }
 
 /// Onboarding acquires the Issue 9 dictionary without a manual mode: reuse an
@@ -36,17 +36,11 @@ pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Resu
         return Ok(Plan::unchanged(reference_before));
     }
 
-    let (import, message) = if let Some(pdf) = selected_pdf {
-        (
-            Some(import_pdf(pdf)?),
-            Some(format!("Imported the Issue 9 dictionary from {pdf}.")),
-        )
+    let (import, warning) = if let Some(pdf) = selected_pdf {
+        (Some(import_pdf(pdf)?), None)
     } else {
         match acquire_official_dictionary_blocking() {
-            Ok(import) => (
-                Some(import),
-                Some("Imported the Issue 9 dictionary from the official asset.".to_owned()),
-            ),
+            Ok(import) => (Some(import), None),
             Err(error) => (None, Some(fallback_guidance(&error))),
         }
     };
@@ -56,7 +50,7 @@ pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Resu
             import: None,
             reference_before: None,
             reference_bytes: None,
-            message,
+            warning,
         });
     };
     let before = FileSnapshot::read(reference_path.as_std_path())?;
@@ -67,7 +61,7 @@ pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Resu
         import: Some(import),
         reference_before: Some(before),
         reference_bytes: Some(bytes),
-        message,
+        warning,
     })
 }
 
@@ -77,7 +71,7 @@ impl Plan {
             import: None,
             reference_before: Some(reference_before),
             reference_bytes: None,
-            message: None,
+            warning: None,
         }
     }
 
@@ -110,10 +104,15 @@ impl Plan {
         )
     }
 
-    pub(super) fn print_message(&self) {
-        if let Some(message) = &self.message {
-            println!("{message}");
-        }
+    pub(super) fn warning(&self) -> Option<String> {
+        self.warning.clone()
+    }
+
+    /// Reports a planned project reference write and whether its target exists.
+    pub(super) fn reference_change(&self) -> Option<bool> {
+        let before = self.reference_before.as_ref()?;
+        let bytes = self.reference_bytes.as_ref()?;
+        (before.bytes() != Some(bytes.as_slice())).then_some(before.bytes().is_some())
     }
 }
 
@@ -128,6 +127,15 @@ fn import_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
         .map_err(|error| anyhow::anyhow!("import the dictionary: {error}"))
 }
 
+fn import_cached_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
+    if let Some(directory) = dictionary_reference::index_directory() {
+        if let Ok(import) = provenance_ste100::load_dictionary_index_for_source(&directory, bytes) {
+            return Ok(import);
+        }
+    }
+    import_bytes(bytes)
+}
+
 /// Serializes access to the shared asset and retries only the official URL.
 #[rule("rule_ste_dictionary_download_concurrency")]
 #[rule("rule_ste_dictionary_download_retry_bound")]
@@ -140,7 +148,7 @@ fn acquire_official_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
     FileExt::lock_exclusive(&lock).context("lock the shared STE asset cache")?;
     let asset = directory.join("ASD-STE100_ISSUE9.pdf");
     if let Ok(bytes) = std::fs::read(&asset) {
-        if let Ok(import) = import_bytes(&bytes) {
+        if let Ok(import) = import_cached_bytes(&bytes) {
             return Ok(import);
         }
         std::fs::remove_file(&asset).context("remove an invalid cached STE asset")?;
@@ -153,16 +161,12 @@ fn acquire_official_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
     let mut last_error = None;
     for attempt in 0..DOWNLOAD_ATTEMPTS {
         match download(&client).and_then(|bytes| {
-            let import = import_bytes(&bytes)?;
+            let import = import_cached_bytes(&bytes)?;
             store_asset(&asset, &bytes)?;
             Ok(import)
         }) {
             Ok(import) => return Ok(import),
             Err(error) => {
-                eprintln!(
-                    "STE asset download attempt {} failed: {error:#}",
-                    attempt + 1
-                );
                 last_error = Some(error);
             }
         }

@@ -14,6 +14,7 @@ const SDK_CRATE: &str = "provenance-sdk";
 pub(super) fn handle(
     requested_package: Option<&str>,
     ste_pdf: Option<Utf8PathBuf>,
+    quiet: bool,
 ) -> anyhow::Result<()> {
     let metadata = load_metadata()?;
     let package = select_package(&metadata, requested_package)?;
@@ -30,26 +31,44 @@ pub(super) fn handle(
             ste_pdf,
             invocation_channel: crate::cli::InvocationChannel::Native,
             package_manager: None,
+            quiet: true,
         },
     )?;
     let cargo_rollback = prepare_sdk(&metadata.workspace_root, package)?;
-    if let Err(error) = init.apply() {
-        let error = error.context("failed to initialize Provenance state");
-        return match cargo_rollback {
-            Some(rollback) => match rollback.rollback() {
-                Ok(()) => Err(error),
-                Err(rollback) => Err(error.context(format!("Cargo rollback failed: {rollback}"))),
-            },
-            None => Err(error),
-        };
-    }
+    let ending = match init.apply() {
+        Ok(ending) => ending,
+        Err(error) => {
+            let error = error.context("failed to initialize Provenance state");
+            return match cargo_rollback {
+                Some(rollback) => match rollback.rollback() {
+                    Ok(()) => Err(error),
+                    Err(rollback) => {
+                        Err(error.context(format!("Cargo rollback failed: {rollback}")))
+                    }
+                },
+                None => Err(error),
+            };
+        }
+    };
 
-    println!(
-        "Initialized Provenance {} for Cargo package '{}' in {}.",
-        env!("CARGO_PKG_VERSION"),
-        package.name,
-        metadata.workspace_root
-    );
+    let cargo_changes = cargo_rollback
+        .as_ref()
+        .map(|rollback| rollback.changes(metadata.workspace_root.as_std_path()))
+        .transpose()?
+        .unwrap_or_default();
+    ending
+        .for_cargo(
+            format!(
+                "Initialized Provenance for Cargo package '{}' in {}",
+                package.name, metadata.workspace_root
+            ),
+            format!(
+                "Provenance is already set up for Cargo package '{}' in {}. No change.",
+                package.name, metadata.workspace_root
+            ),
+            &cargo_changes,
+        )
+        .print(quiet);
     Ok(())
 }
 
@@ -214,19 +233,25 @@ fn prepare_sdk(
     };
     let rollback = CargoRollback::capture(paths)?;
     let dependency = format!("{SDK_CRATE}@={}", env!("CARGO_PKG_VERSION"));
-    let status = Command::new("cargo")
+    let output = Command::new("cargo")
         .args(["add", &dependency, "--manifest-path"])
         .arg(&package.manifest_path)
         .current_dir(workspace_root)
-        .status();
+        .output();
     let rollback = rollback.observe_after()?;
-    let cargo_result = status
+    let cargo_result = output
         .context("failed to run `cargo add` for the Provenance SDK")
-        .and_then(|status| {
+        .and_then(|output| {
+            let diagnostics = if output.stderr.is_empty() {
+                &output.stdout
+            } else {
+                &output.stderr
+            };
             anyhow::ensure!(
-                status.success(),
-                "`cargo add {dependency} --manifest-path {}` failed",
-                package.manifest_path
+                output.status.success(),
+                "`cargo add {dependency} --manifest-path {}` failed: {}",
+                package.manifest_path,
+                String::from_utf8_lossy(diagnostics).trim()
             );
             Ok(())
         });

@@ -76,6 +76,12 @@ pub struct InstallReport {
     files: Vec<FileInstallReport>,
 }
 
+impl InstallReport {
+    pub fn files(&self) -> &[FileInstallReport] {
+        &self.files
+    }
+}
+
 #[derive(Serialize)]
 pub struct SkillInstallStatus {
     pub installed: bool,
@@ -84,9 +90,9 @@ pub struct SkillInstallStatus {
 }
 
 #[derive(Serialize)]
-struct FileInstallReport {
-    path: String,
-    status: FileStatus,
+pub struct FileInstallReport {
+    pub path: String,
+    pub status: FileStatus,
 }
 
 pub fn list() -> anyhow::Result<Vec<SkillSummary>> {
@@ -180,8 +186,8 @@ impl InitSkillPlan {
     pub(crate) fn apply_in(
         self,
         rollback: &mut crate::atomic_file::FileRollbackJournal,
-    ) -> anyhow::Result<()> {
-        self.0.apply_in(rollback).map(|_| ())
+    ) -> anyhow::Result<InstallReport> {
+        self.0.apply_in(rollback)
     }
 }
 
