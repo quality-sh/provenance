@@ -40,6 +40,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Search records in one scope.
+    Search(crate::invocation::grammar::SearchArgs),
     #[command(name = "__cargo-init", hide = true)]
     CargoInit {
         #[arg(long)]
