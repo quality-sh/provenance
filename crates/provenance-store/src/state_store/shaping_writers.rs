@@ -1,3 +1,4 @@
+use super::read_budget::ensure_within_read_budget;
 use super::{
     CreateBoundaryInput, CreateQuestionInput, CreateTopicInput, ProposalDemand, StateStore,
     TopicClaim, UpdateQuestionInput,
@@ -65,6 +66,7 @@ impl StateStore {
                 !records.iter().any(|record| record.id == boundary.id),
                 "boundary already exists"
             );
+            ensure_within_read_budget(&boundary)?;
             records.push(boundary.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(boundary)
@@ -112,6 +114,7 @@ impl StateStore {
                 !records.iter().any(|record| record.id == topic.id),
                 "topic already exists"
             );
+            ensure_within_read_budget(&topic)?;
             records.push(topic.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(topic)
@@ -187,6 +190,7 @@ impl StateStore {
                 !records.iter().any(|record| record.id == question.id),
                 "question already exists"
             );
+            ensure_within_read_budget(&question)?;
             records.push(question.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(question)
@@ -412,7 +416,9 @@ impl StateStore {
                     )
                 })?;
             mutate(topic)?;
-            Ok(topic.clone())
+            let topic = topic.clone();
+            ensure_within_read_budget(&topic)?;
+            Ok(topic)
         })
     }
 
@@ -434,7 +440,9 @@ impl StateStore {
                     )
                 })?;
             mutate(question)?;
-            Ok(question.clone())
+            let question = question.clone();
+            ensure_within_read_budget(&question)?;
+            Ok(question)
         })
     }
 }

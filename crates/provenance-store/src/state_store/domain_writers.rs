@@ -1,3 +1,4 @@
+use super::read_budget::ensure_within_read_budget;
 use super::{CreateDomainInput, StateStore};
 use crate::shards;
 use provenance_core::{Domain, SUPPORTED_SCHEMA_VERSION};
@@ -34,6 +35,7 @@ impl StateStore {
                 !records.iter().any(|record| record.name == domain.name),
                 "domain name already exists"
             );
+            ensure_within_read_budget(&domain)?;
             records.push(domain.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(domain)

@@ -2343,6 +2343,7 @@ dependencies = [
  "fs_at",
  "hmac",
  "jsonschema",
+ "libsqlite3-sys",
  "provenance-core",
  "provenance-macros",
  "provenance-scanner",
