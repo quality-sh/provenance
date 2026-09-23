@@ -74,9 +74,9 @@ fn init_prints_a_summary_that_separates_new_from_changed_files() {
         .expect("the agent handoff follows the inventory")
         .0;
     assert!(new_section.contains("  .provenance/state (manifest for scope \"default\")\n"));
-    assert!(new_section.contains(
-        "  .agents/skills/provenance-shaping/SKILL.md (added skill file)\n"
-    ));
+    assert!(
+        new_section.contains("  .agents/skills/provenance-shaping/SKILL.md (added skill file)\n")
+    );
     assert!(new_section.contains("  .claude/skills/provenance-shaping (added link)\n"));
     assert!(new_section.contains("  AGENTS.md (added the Provenance section)\n"));
     assert!(new_section.contains("  .gitignore (added one line)\n"));
@@ -245,10 +245,25 @@ fn dictionary_warning_precedes_the_final_handoff_in_a_combined_stream() {
     let output = std::fs::File::create(&output_path).unwrap();
     let errors = output.try_clone().unwrap();
     let status = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
-        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default"])
-        .env("PROVENANCE_STE100_ASSET_DIR", temporary.path().join("assets"))
-        .env("PROVENANCE_STE100_INDEX_DIR", temporary.path().join("indexes"))
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", "http://127.0.0.1:9/unavailable")
+        .args([
+            "init",
+            "--path",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+        ])
+        .env(
+            "PROVENANCE_STE100_ASSET_DIR",
+            temporary.path().join("assets"),
+        )
+        .env(
+            "PROVENANCE_STE100_INDEX_DIR",
+            temporary.path().join("indexes"),
+        )
+        .env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            "http://127.0.0.1:9/unavailable",
+        )
         .stdout(output)
         .stderr(errors)
         .status()

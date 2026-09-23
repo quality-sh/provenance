@@ -156,7 +156,6 @@ impl InstallPlan {
         }
         Ok(())
     }
-
 }
 
 pub(super) struct FileAction {

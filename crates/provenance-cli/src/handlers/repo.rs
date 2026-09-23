@@ -261,12 +261,15 @@ impl InitPlan {
     #[rule("rule_init_apply_rolls_back_owned_changes")]
     pub(super) fn apply(self) -> anyhow::Result<InitEnding> {
         let layout = ProvenanceLayout::new(self.path.clone());
-        self.planned.manifest_before
+        self.planned
+            .manifest_before
             .recheck(layout.manifest_path().as_std_path())?;
         self.skills.recheck()?;
-        self.planned.agents_before
+        self.planned
+            .agents_before
             .recheck(self.path.join("AGENTS.md").as_std_path())?;
-        self.planned.gitignore_before
+        self.planned
+            .gitignore_before
             .recheck(self.path.join(".gitignore").as_std_path())?;
         self.dictionary.recheck(&self.path)?;
         let mut rollback = FileRollbackJournal::within(self.path.as_std_path());
@@ -286,7 +289,9 @@ impl InitPlan {
                 )?;
             }
             let gitignore_path = self.path.join(".gitignore");
-            if self.planned.gitignore_before.bytes() != Some(self.planned.gitignore_bytes.as_slice()) {
+            if self.planned.gitignore_before.bytes()
+                != Some(self.planned.gitignore_bytes.as_slice())
+            {
                 rollback.replace(
                     gitignore_path.as_std_path(),
                     &self.planned.gitignore_before,
@@ -308,11 +313,17 @@ impl InitPlan {
             }
         };
         rollback.commit()?;
-        Ok(build_summary(&self.path, &self.scope_ids, &self.planned, &skills, &self.dictionary)
-            .map_or_else(
-                || already_ending(&self.scope_ids, &self.path, &self.dictionary),
-                |summary| InitEnding::applied(summary, self.dictionary.warning()),
-            ))
+        Ok(build_summary(
+            &self.path,
+            &self.scope_ids,
+            &self.planned,
+            &skills,
+            &self.dictionary,
+        )
+        .map_or_else(
+            || already_ending(&self.scope_ids, &self.path, &self.dictionary),
+            |summary| InitEnding::applied(summary, self.dictionary.warning()),
+        ))
     }
 }
 

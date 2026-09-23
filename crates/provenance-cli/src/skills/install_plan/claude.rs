@@ -355,7 +355,12 @@ mod tests {
         let mut rollback = FileRollbackJournal::within(base);
         let (reports, reason) = action
             .apply_with(
-                |_, _| Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied")),
+                |_, _| {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "denied",
+                    ))
+                },
                 &mut rollback,
             )
             .unwrap();

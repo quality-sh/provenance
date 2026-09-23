@@ -26,7 +26,10 @@ fn noisy_cargo_add_does_not_print_during_quiet_success() {
     let warning = String::from_utf8(output.stderr).unwrap();
     assert!(warning.contains("Warning: the official Issue 9 asset is unavailable"));
     assert!(!warning.contains("FAKE_CARGO_STDERR"));
-    assert!(fixture.root().join(".provenance/state/manifest.json").exists());
+    assert!(fixture
+        .root()
+        .join(".provenance/state/manifest.json")
+        .exists());
 }
 
 #[test]
@@ -44,7 +47,10 @@ fn noisy_cargo_add_does_not_leak_before_failed_publication() {
     assert!(output.stdout.is_empty(), "{:?}", output.stdout);
     let error = String::from_utf8(output.stderr).unwrap();
     assert!(!error.contains("FAKE_CARGO_STDERR"));
-    assert!(!fixture.root().join(".provenance/state/manifest.json").exists());
+    assert!(!fixture
+        .root()
+        .join(".provenance/state/manifest.json")
+        .exists());
     assert_eq!(fixture.cargo_manifest(), before);
 }
 
@@ -63,6 +69,9 @@ fn failed_cargo_add_includes_captured_diagnostics_and_rolls_back() {
     assert!(output.stdout.is_empty(), "{:?}", output.stdout);
     let error = String::from_utf8(output.stderr).unwrap();
     assert!(error.contains("FAKE_CARGO_STDERR"), "{error}");
-    assert!(!fixture.root().join(".provenance/state/manifest.json").exists());
+    assert!(!fixture
+        .root()
+        .join(".provenance/state/manifest.json")
+        .exists());
     assert_eq!(fixture.cargo_manifest(), before);
 }
