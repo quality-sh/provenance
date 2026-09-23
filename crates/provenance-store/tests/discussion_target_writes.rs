@@ -51,9 +51,7 @@ fn target_reply_changes_only_its_discussion() {
     let (_temp, store) = fixture();
     let a = store.write_target_discussion(start("a")).unwrap();
     let b = store.write_target_discussion(start("b")).unwrap();
-    let changed = store
-        .write_target_discussion(reply("reply_a", &a))
-        .unwrap();
+    let changed = store.write_target_discussion(reply("reply_a", &a)).unwrap();
     assert_eq!(changed.discussion_id, a.discussion_id);
     assert_eq!(changed.version, 2);
     assert_eq!(b.version, 1);
@@ -232,7 +230,11 @@ fn closed_container_refuses_target_reply() {
     let line = std::fs::read_to_string(&path).unwrap();
     let mut thread: serde_json::Value = serde_json::from_str(line.trim()).unwrap();
     thread["status"] = json!("resolved");
-    std::fs::write(path, format!("{}\n", serde_json::to_string(&thread).unwrap())).unwrap();
+    std::fs::write(
+        path,
+        format!("{}\n", serde_json::to_string(&thread).unwrap()),
+    )
+    .unwrap();
     assert!(matches!(
         failure(store.write_target_discussion(reply("closed", &a))),
         WriteFailure::DiscussionClosed
