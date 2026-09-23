@@ -454,7 +454,8 @@ fn target_actions_keep_help_global_context_and_flag_like_values() {
         .args(["new_source", "create", "--help"])
         .assert()
         .success()
-        .stdout(predicates::str::contains("provenance <new-id> create"));
+        .stdout(predicates::str::contains("<TARGET> [ACTION]"))
+        .stdout(predicates::str::contains("--type"));
 
     let (_directory, repo) = initialized_repo();
     let source = json_output(&[

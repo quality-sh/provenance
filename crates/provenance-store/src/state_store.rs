@@ -59,14 +59,28 @@ pub use typed_statement_policy::TypedSpecWriteError;
 use crate::{layout::ProvenanceLayout, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
-    ensure_supported_schema_version, AssertionRecord, Boundary, Contribution, DispositionRecord,
-    Domain, ImplementationBinding, Manifest, Message, ProposalCard, Question, Requirement,
-    Resolution, Rule, SchemaVersion, Scope, ScopeId, Source, SynthesisPacket, Thread, Topic,
-    VerificationBinding,
+    ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Boundary,
+    Contribution, DispositionRecord, Domain, ImplementationBinding, Manifest, Message,
+    ProposalCard, Question, Requirement, Resolution, Rule, SchemaVersion, Scope, ScopeId, Source,
+    SynthesisPacket, Thread, Topic, VerificationBinding,
 };
+
+fn ensure_new_ids_assignable<T>(
+    existing: &[T],
+    incoming: &[T],
+    id: impl Fn(&T) -> &str,
+) -> anyhow::Result<()> {
+    for record in incoming {
+        let assigned = id(record);
+        if !existing.iter().any(|known| id(known) == assigned) {
+            ensure_record_id_assignable(assigned)?;
+        }
+    }
+    Ok(())
+}
 use readers::{
-    deserialize_closed, read_ideation_landings, read_jsonl, read_jsonl_closed,
-    read_legacy_dispositions, read_message_shards,
+    deserialize_closed, read_ideation_landings, read_jsonl, read_jsonl_closed, read_jsonl_unlocked,
+    read_legacy_dispositions, read_message_shards, read_message_shards_unlocked,
 };
 use serde::{Deserialize, Serialize};
 

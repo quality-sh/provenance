@@ -33,6 +33,123 @@ fn forged_terminal_import_fails_without_changing_live_scope() {
 }
 
 #[test]
+fn import_keeps_a_command_keyword_id_that_is_already_stored() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    init_repo(&repo, None);
+    let path = repo.join(".provenance/state/scopes/default/sources/source.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        format!(
+            "{{\"schema_version\":{},\"scope_id\":\"default\",\"id\":\"search\",\"name\":\"Existing\",\"source_type\":\"document\"}}\n",
+            SUPPORTED_SCHEMA_VERSION.0
+        ),
+    )
+    .unwrap();
+    let exported = dir.path().join("export.json");
+    export_scope(&repo, &exported).success();
+
+    import_scope(&repo, &exported).success();
+    let after = dir.path().join("after.json");
+    export_scope(&repo, &after).success();
+    assert_eq!(
+        std::fs::read(after).unwrap(),
+        std::fs::read(exported).unwrap()
+    );
+}
+
+#[test]
+fn import_refuses_cross_kind_keyword_reuse_without_changing_live_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    init_repo(&repo, None);
+    let source_path = repo.join(".provenance/state/scopes/default/sources/source.jsonl");
+    std::fs::create_dir_all(source_path.parent().unwrap()).unwrap();
+    let source = serde_json::json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
+        "id": "search", "name": "Existing", "source_type": "document"
+    });
+    std::fs::write(&source_path, format!("{source}\n")).unwrap();
+    let baseline = dir.path().join("baseline.json");
+    export_scope(&repo, &baseline).success();
+    let before = std::fs::read(&baseline).unwrap();
+    let mut replacement: serde_json::Value = serde_json::from_slice(&before).unwrap();
+    replacement["sources"] = serde_json::json!([]);
+    replacement["requirements"] = serde_json::json!([{
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
+        "id": "search", "statement": "The requirement exists.", "status": "active"
+    }]);
+    let input = dir.path().join("replacement.json");
+    write_json(&input, &replacement);
+
+    import_scope(&repo, &input)
+        .failure()
+        .stderr(predicates::str::contains("reserved record ID search"));
+    let after = dir.path().join("after.json");
+    export_scope(&repo, &after).success();
+    assert_eq!(std::fs::read(after).unwrap(), before);
+    assert_eq!(
+        std::fs::read_to_string(&source_path).unwrap(),
+        format!("{source}\n")
+    );
+    let transactions = repo.join(".provenance/cache/import-transactions");
+    assert!(!transactions.exists() || std::fs::read_dir(transactions).unwrap().next().is_none());
+}
+
+#[test]
+fn import_preserves_a_keyword_contribution_from_a_landing() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    init_repo(&repo, None);
+    super::support::provenance()
+        .args([
+            "sources",
+            "create",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--id",
+            "source_anchor",
+            "--name",
+            "Anchor",
+        ])
+        .assert()
+        .success();
+    let landing_path = repo.join(".provenance/state/scopes/default/ideation/landings.jsonl");
+    std::fs::create_dir_all(landing_path.parent().unwrap()).unwrap();
+    let contribution = serde_json::json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "search",
+        "target": {"artifact_type": "source", "artifact_id": "source_anchor"},
+        "participant_slot": "reviewer", "stance": "support", "strongest_finding": "Evidence",
+        "evidence_references": [], "material_claims": [], "risks": [], "objections": [],
+        "challenges": [], "suggested_artifact_changes": [],
+        "unsupported_recommendations": [],
+        "uncertainty": {"level": "low", "rationale": "Direct"}, "open_questions": []
+    });
+    std::fs::write(
+        &landing_path,
+        format!(
+            "{}\n",
+            serde_json::json!({
+                "contributions": [contribution]
+            })
+        ),
+    )
+    .unwrap();
+    let baseline = dir.path().join("baseline.json");
+    export_scope(&repo, &baseline).success();
+
+    import_scope(&repo, &baseline).success();
+    let after = dir.path().join("after.json");
+    export_scope(&repo, &after).success();
+    assert_eq!(
+        std::fs::read(after).unwrap(),
+        std::fs::read(baseline).unwrap()
+    );
+    assert!(!landing_path.exists());
+}
+
+#[test]
 fn late_scope_validation_failure_is_atomic() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");

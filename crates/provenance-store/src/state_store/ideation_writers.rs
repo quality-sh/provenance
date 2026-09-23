@@ -4,10 +4,23 @@ use super::{
 };
 use crate::shards;
 use provenance_core::{
-    validate_optional_confidence_score, Contribution, SynthesisPacket, SUPPORTED_SCHEMA_VERSION,
+    ensure_record_id_assignable, validate_optional_confidence_score, Contribution, ScopeId,
+    StableId, SynthesisPacket, SUPPORTED_SCHEMA_VERSION,
 };
 
 impl StateStore {
+    fn ensure_contribution_id_assignable(
+        &self,
+        scope: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<()> {
+        let existing = self.list_contributions(scope)?;
+        if !existing.iter().any(|record| record.id == *id) {
+            ensure_record_id_assignable(id.as_str())?;
+        }
+        Ok(())
+    }
+
     pub fn create_contribution(
         &self,
         input: CreateContributionInput,
@@ -66,6 +79,7 @@ impl StateStore {
             uncertainty,
             open_questions,
         } = input;
+        self.ensure_contribution_id_assignable(&scope_id, &id)?;
         for claim in &material_claims {
             validate_optional_confidence_score(claim.confidence)?;
         }
@@ -203,6 +217,13 @@ impl StateStore {
             suggested_artifacts,
             required_human_decisions,
         } = input;
+        if !self
+            .list_synthesis_packets(&scope_id)?
+            .iter()
+            .any(|record| record.id == id)
+        {
+            ensure_record_id_assignable(id.as_str())?;
+        }
         self.ensure_synthesis_target(&scope_id, &id, &target)?;
         let synthesis_packet = SynthesisPacket {
             schema_version: SUPPORTED_SCHEMA_VERSION,

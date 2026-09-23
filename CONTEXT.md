@@ -1,5 +1,9 @@
 # Domain Glossary
 
+## Command keyword
+
+A word that names a CLI command, collection, or record action. A new record cannot receive a Command keyword as its Stable ID. An existing record keeps its ID.
+
 ## Domain
 
 A reader-facing taxonomy classification for requirements. A derived rule belongs to each Domain of its upstream requirements through the canonical graph relationships.
