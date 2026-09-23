@@ -217,6 +217,10 @@ test('Discussion refusal statuses match the write runtime', () => {
   for (const kind of kinds.filter(kind => kind !== 'discussion_membership_mismatch')) {
     assert.ok(errors.some(error => error.includes(kind) && error.includes('409')));
   }
+  doc.paths['/requirements/{id}/discussions'].post.responses['401'] = response;
+  delete doc.paths['/requirements/{id}/discussions'].post.responses['400'];
+  assert.ok(documentGrammarErrors(doc).some(error =>
+    error.includes('discussion_membership_mismatch') && error.includes('400')));
 });
 
 test('method errors have the declared envelope status', () => {
