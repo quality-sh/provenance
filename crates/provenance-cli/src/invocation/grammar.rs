@@ -103,8 +103,8 @@ pub(super) struct TargetArgs {
     pub target: String,
     #[arg(value_parser = ["get", "create", "update", "answer", "claim", "release", "submit"])]
     pub action: Option<String>,
-    #[arg(long = "type")]
-    pub record_type: Option<String>,
+    #[arg(long = "type", value_parser = parse_kind)]
+    pub record_type: Option<NodeType>,
     #[arg(long, value_enum)]
     pub view: Option<GetView>,
     #[arg(long)]
