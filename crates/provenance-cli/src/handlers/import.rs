@@ -114,15 +114,15 @@ fn deserialize_scope_export(input: &str) -> anyhow::Result<ScopeExport> {
         }
     });
     match decoded {
-        Ok(exported) => match unknown {
-            Some(field) => anyhow::bail!(
-                "import refuses unknown field `{field}`: writing it back would drop it"
-            ),
-            None => {
-                deserializer.end()?;
-                Ok(exported)
+        Ok(exported) => {
+            if let Some(field) = unknown {
+                anyhow::bail!(
+                    "import refuses unknown field `{field}`: writing it back would drop it"
+                );
             }
-        },
+            deserializer.end()?;
+            Ok(exported)
+        }
         Err(_) if has_removed_service_family(input) => anyhow::bail!(
             "this export predates the service family removal; re-export from current provenance"
         ),

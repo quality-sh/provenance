@@ -168,7 +168,7 @@ fn import_refuses_trailing_input_and_leaves_the_stored_state_unchanged() {
     let incoming = dir.path().join("incoming.json");
 
     for trailing in [" {}", " junk"] {
-        std::fs::write(&incoming, format!("{}{trailing}", document)).unwrap();
+        std::fs::write(&incoming, format!("{document}{trailing}")).unwrap();
         import(&repo, &incoming).failure();
         assert_eq!(
             stored_state(&repo),
