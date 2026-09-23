@@ -88,7 +88,7 @@ impl DiscussionPort for HostDiscussionPort {
                     cursor: input.cursor,
                 })
                 .await
-                .map_err(operation_error)?;
+                .map_err(|error| operation_error(&error))?;
             let page = Stamped {
                 result: DiscussionListPage {
                     entries: response.result.entries,
@@ -124,7 +124,7 @@ impl DiscussionPort for HostDiscussionPort {
                     },
                 )
                 .await
-                .map_err(operation_error)?;
+                .map_err(|error| operation_error(&error))?;
             Ok(Stamped {
                 result: DiscussionConversation {
                     head: response.result.head,
@@ -159,7 +159,7 @@ impl DiscussionPort for HostDiscussionPort {
                     },
                 })
                 .await
-                .map_err(operation_error)
+                .map_err(|error| operation_error(&error))
         })
     }
 
@@ -184,13 +184,13 @@ impl DiscussionPort for HostDiscussionPort {
                     },
                 })
                 .await
-                .map_err(operation_error)
+                .map_err(|error| operation_error(&error))
         })
     }
 }
 
 fn operation_error<E: std::error::Error + serde::Serialize>(
-    error: OperationError<E>,
+    error: &OperationError<E>,
 ) -> DiscussionError {
     let detail =
         serde_json::to_value(&error).unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));
