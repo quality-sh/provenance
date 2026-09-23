@@ -7,9 +7,11 @@ use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::discussion::DiscussionAction;
 use provenance_porcelain::get::View;
 
-pub mod grammar;
 mod discussion;
-use grammar::{CatalogArgs, DiscussionsArgs, DiscussionsCommand, SearchArgs, SearchCommand, TargetArgs};
+pub mod grammar;
+use grammar::{
+    CatalogArgs, DiscussionsArgs, DiscussionsCommand, SearchArgs, SearchCommand, TargetArgs,
+};
 
 #[cfg(test)]
 mod tests;
@@ -60,8 +62,8 @@ impl Invocation {
             return Ok(Self::Search(args.args));
         }
         if word == "discussions" {
-            let command = DiscussionsCommand::try_parse_from(arguments)
-                .unwrap_or_else(|error| error.exit());
+            let command =
+                DiscussionsCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
             debug_assert_eq!(command.command, "discussions");
             let args = command.args;
             if args.discussion_id.as_deref() == Some("get") && args.action.is_none() {
@@ -154,7 +156,9 @@ impl Invocation {
             }
             Self::Search(args) => args.dispatch().await,
             Self::DiscussionRoot(args) => discussion::dispatch_root(args).await,
-            Self::DiscussionTarget(args, action, matches) => discussion::dispatch_target(args, action, &matches).await,
+            Self::DiscussionTarget(args, action, matches) => {
+                discussion::dispatch_target(args, action, &matches).await
+            }
             Self::Target(invocation) => invocation.dispatch().await,
         }
     }

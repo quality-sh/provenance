@@ -13,10 +13,20 @@ use std::{fmt::Display, future::Future, pin::Pin};
 
 /// One explicit Discussion action. Default graph get remains separate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DiscussionAction { Discussions, Discussion, Discuss, Reply }
+pub enum DiscussionAction {
+    Discussions,
+    Discussion,
+    Discuss,
+    Reply,
+}
 
 impl DiscussionAction {
-    pub const ALL: [Self; 4] = [Self::Discussions, Self::Discussion, Self::Discuss, Self::Reply];
+    pub const ALL: [Self; 4] = [
+        Self::Discussions,
+        Self::Discussion,
+        Self::Discuss,
+        Self::Reply,
+    ];
 
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -139,7 +149,10 @@ pub enum DiscussionOutcome {
 pub enum DiscussionError {
     InvalidOptions,
     AccessDenied,
-    Operation { message: String, detail: serde_json::Value },
+    Operation {
+        message: String,
+        detail: serde_json::Value,
+    },
 }
 
 impl Display for DiscussionError {
@@ -154,8 +167,7 @@ impl Display for DiscussionError {
 
 impl std::error::Error for DiscussionError {}
 
-pub type PortFuture<'a, T> =
-    Pin<Box<dyn Future<Output = Result<T, DiscussionError>> + Send + 'a>>;
+pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, DiscussionError>> + Send + 'a>>;
 
 /// A list answer and the scope selected by the trusted host.
 #[derive(Clone, Debug)]
@@ -167,20 +179,36 @@ pub struct ListAnswer {
 /// Canonical Discussion operations provided by the bound host.
 pub trait DiscussionPort: Send + Sync {
     fn list(&self, input: ListInput) -> PortFuture<'_, ListAnswer>;
-    fn conversation(&self, input: ConversationInput) -> PortFuture<'_, Stamped<DiscussionConversation>>;
+    fn conversation(
+        &self,
+        input: ConversationInput,
+    ) -> PortFuture<'_, Stamped<DiscussionConversation>>;
     fn start(&self, input: StartInput) -> PortFuture<'_, DiscussionEntry>;
     fn reply(&self, input: ReplyInput) -> PortFuture<'_, DiscussionEntry>;
 }
 
 impl<P: DiscussionPort> crate::Porcelain<P> {
     /// List addressed Discussions after the host selects permitted parent kinds.
-    pub async fn discussions(&self, input: ListInput) -> Result<DiscussionOutcome, DiscussionError> {
+    pub async fn discussions(
+        &self,
+        input: ListInput,
+    ) -> Result<DiscussionOutcome, DiscussionError> {
         let limit = checked_limit(input.limit)?;
         let parent = input.parent.clone();
         let status = input.status;
-        let ListAnswer { scope_id, page: Stamped { result, stamp, freshness_error } } = self.port.list(input).await?;
+        let ListAnswer {
+            scope_id,
+            page:
+                Stamped {
+                    result,
+                    stamp,
+                    freshness_error,
+                },
+        } = self.port.list(input).await?;
         Ok(DiscussionOutcome::List {
-            scope_id, parent, status,
+            scope_id,
+            parent,
+            status,
             result: page(result.entries, result.next_cursor, limit),
             stamp: Some(stamp),
             freshness_error,
@@ -188,9 +216,16 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
     }
 
     /// Read one addressed Discussion and a bounded Message page.
-    pub async fn conversation(&self, input: ConversationInput) -> Result<DiscussionOutcome, DiscussionError> {
+    pub async fn conversation(
+        &self,
+        input: ConversationInput,
+    ) -> Result<DiscussionOutcome, DiscussionError> {
         let limit = checked_limit(input.limit)?;
-        let Stamped { result, stamp, freshness_error } = self.port.conversation(input).await?;
+        let Stamped {
+            result,
+            stamp,
+            freshness_error,
+        } = self.port.conversation(input).await?;
         Ok(DiscussionOutcome::Conversation {
             result: ConversationResult {
                 head: result.head,
@@ -203,73 +238,124 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
 
     /// Start one Discussion through the canonical publication operation.
     pub async fn discuss(&self, input: StartInput) -> Result<DiscussionOutcome, DiscussionError> {
-        Ok(DiscussionOutcome::Written { receipt: self.port.start(input).await? })
+        Ok(DiscussionOutcome::Written {
+            receipt: self.port.start(input).await?,
+        })
     }
 
     /// Reply through the canonical publication operation.
     pub async fn reply(&self, input: ReplyInput) -> Result<DiscussionOutcome, DiscussionError> {
-        Ok(DiscussionOutcome::Written { receipt: self.port.reply(input).await? })
+        Ok(DiscussionOutcome::Written {
+            receipt: self.port.reply(input).await?,
+        })
     }
 }
 
 fn checked_limit(limit: Option<usize>) -> Result<usize, DiscussionError> {
     let limit = limit.unwrap_or(50);
-    (1..=200).contains(&limit).then_some(limit).ok_or(DiscussionError::InvalidOptions)
+    (1..=200)
+        .contains(&limit)
+        .then_some(limit)
+        .ok_or(DiscussionError::InvalidOptions)
 }
 
 fn page<T>(entries: Vec<T>, next_cursor: Option<String>, limit: usize) -> Page<T> {
-    Page { entries, has_more: next_cursor.is_some(), next_cursor, limit }
+    Page {
+        entries,
+        has_more: next_cursor.is_some(),
+        next_cursor,
+        limit,
+    }
 }
 
 /// Render the fields that identify a Discussion and the bounds of its page.
 pub fn render_readable(outcome: &DiscussionOutcome) -> String {
     match outcome {
-        DiscussionOutcome::List { scope_id, parent, status, result, freshness_error, .. } => {
-            let selector = parent.as_ref().map_or_else(|| "scope".to_owned(), |parent| {
-                format!("{} {}", parent.node_type.as_str(), parent.node_id.as_str())
-            });
-            let mut lines = vec![format!("discussions scope={} parent={} status={}: {} returned",
-                scope_id.as_str(), selector, status_filter_word(*status), result.entries.len())];
+        DiscussionOutcome::List {
+            scope_id,
+            parent,
+            status,
+            result,
+            freshness_error,
+            ..
+        } => {
+            let selector = parent.as_ref().map_or_else(
+                || "scope".to_owned(),
+                |parent| format!("{} {}", parent.node_type.as_str(), parent.node_id.as_str()),
+            );
+            let mut lines = vec![format!(
+                "discussions scope={} parent={} status={}: {} returned",
+                scope_id.as_str(),
+                selector,
+                status_filter_word(*status),
+                result.entries.len()
+            )];
             for entry in &result.entries {
                 lines.push(format!(
                     "- {} parent={} {} status={} version={} truncated={}\n  {}",
-                    entry.discussion_id.as_str(), entry.parent.node_type.as_str(),
-                    entry.parent.node_id.as_str(), status_word(entry.status), entry.version,
-                    entry.excerpt_truncated, entry.opening_excerpt
+                    entry.discussion_id.as_str(),
+                    entry.parent.node_type.as_str(),
+                    entry.parent.node_id.as_str(),
+                    status_word(entry.status),
+                    entry.version,
+                    entry.excerpt_truncated,
+                    entry.opening_excerpt
                 ));
             }
             lines.push(bounds(result));
-            if let Some(error) = freshness_error { lines.push(format!("warning: freshness: {error}")); }
+            if let Some(error) = freshness_error {
+                lines.push(format!("warning: freshness: {error}"));
+            }
             lines.join("\n")
         }
-        DiscussionOutcome::Conversation { result, freshness_error, .. } => {
+        DiscussionOutcome::Conversation {
+            result,
+            freshness_error,
+            ..
+        } => {
             let head = &result.head;
-            let mut lines = vec![format!(
+            let mut lines =
+                vec![format!(
                 "discussion {} parent={} {} status={} version={} thread={} request={} digest={}",
                 head.discussion_id.as_str(), head.parent.node_type.as_str(),
                 head.parent.node_id.as_str(), status_word(head.status), head.version,
                 head.thread_id.as_str(), head.request_id.as_str(), head.intent_digest
             )];
             for message in &result.messages.entries {
-                lines.push(format!("- message {} role={:?}\n  {}", message.id.as_str(), message.role, message.body));
+                lines.push(format!(
+                    "- message {} role={:?}\n  {}",
+                    message.id.as_str(),
+                    message.role,
+                    message.body
+                ));
             }
             lines.push(bounds(&result.messages));
-            if let Some(error) = freshness_error { lines.push(format!("warning: freshness: {error}")); }
+            if let Some(error) = freshness_error {
+                lines.push(format!("warning: freshness: {error}"));
+            }
             lines.join("\n")
         }
         DiscussionOutcome::Written { receipt } => format!(
             "discussion {} parent={} {} status={} version={} message={} request={} digest={}",
-            receipt.discussion_id.as_str(), receipt.parent.node_type.as_str(),
-            receipt.parent.node_id.as_str(), status_word(receipt.status), receipt.version,
+            receipt.discussion_id.as_str(),
+            receipt.parent.node_type.as_str(),
+            receipt.parent.node_id.as_str(),
+            status_word(receipt.status),
+            receipt.version,
             receipt.message_id.as_ref().map_or("none", StableId::as_str),
-            receipt.request_id.as_str(), receipt.intent_digest
+            receipt.request_id.as_str(),
+            receipt.intent_digest
         ),
     }
 }
 
 fn bounds<T>(page: &Page<T>) -> String {
-    format!("bounds: limit={} has_more={} continuation={}", page.limit, page.has_more,
-        page.next_cursor.as_deref().unwrap_or("none"))
+    format!(
+        "bounds: limit={} has_more={} continuation={}",
+        page.limit,
+        page.has_more,
+        page.next_cursor.as_deref().unwrap_or("none")
+    )
 }
 
 const fn status_word(status: DiscussionStatus) -> &'static str {

@@ -81,10 +81,33 @@ pub fn target_command() -> anyhow::Result<Command> {
         grammar::target_command(),
         definitions,
         &[
-            "repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin",
-            "status", "cursor", "body", "actor", "request-id", "expected-version", "role",
+            "repo",
+            "scope",
+            "format",
+            "quiet",
+            "type",
+            "view",
+            "depth",
+            "kind",
+            "limit",
+            "stdin",
+            "status",
+            "cursor",
+            "body",
+            "actor",
+            "request-id",
+            "expected-version",
+            "role",
         ],
-        &["status", "cursor", "body", "actor", "request-id", "expected-version", "role"],
+        &[
+            "status",
+            "cursor",
+            "body",
+            "actor",
+            "request-id",
+            "expected-version",
+            "role",
+        ],
     )
 }
 
@@ -186,7 +209,10 @@ pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
             continue;
         }
         let normalized = name.replace('_', "-");
-        if !COMMON.contains(&name) && !allowed.contains(&name) && !allowed.contains(&normalized.as_str()) {
+        if !COMMON.contains(&name)
+            && !allowed.contains(&name)
+            && !allowed.contains(&normalized.as_str())
+        {
             usage_error(anyhow::anyhow!(
                 "unsupported option --{}",
                 name.replace('_', "-")
@@ -246,8 +272,17 @@ fn input(
     let mut query = BTreeMap::new();
     let mut headers = HeaderMap::new();
     for field in declared {
-        let Some(value) = matches.try_get_one::<String>(&field.name).ok().flatten()
-            .or_else(|| matches.try_get_one::<String>(&field.name.replace('-', "_")).ok().flatten()) else {
+        let Some(value) = matches
+            .try_get_one::<String>(&field.name)
+            .ok()
+            .flatten()
+            .or_else(|| {
+                matches
+                    .try_get_one::<String>(&field.name.replace('-', "_"))
+                    .ok()
+                    .flatten()
+            })
+        else {
             continue;
         };
         match field.source {

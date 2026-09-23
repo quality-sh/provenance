@@ -12,34 +12,59 @@ mod get_port;
 mod search_port;
 pub use authoring::{Action, ActionError, TargetRoute};
 pub(super) use authoring_mcp::{call as call_authoring, tools as authoring_tools};
-pub use get_port::HostGetPort;
 pub use discussion_port::HostDiscussionPort;
+pub use get_port::HostGetPort;
 pub(crate) use provenance_porcelain::discussion::DiscussionAction;
 
-pub(crate) fn discussion_is_available(host: &crate::StatementHost, action: DiscussionAction) -> bool {
+pub(crate) fn discussion_is_available(
+    host: &crate::StatementHost,
+    action: DiscussionAction,
+) -> bool {
     discussion_port::is_available(host, action)
 }
 
 pub(crate) fn discussion_tools(host: &crate::StatementHost) -> Vec<rmcp::model::Tool> {
-    DiscussionAction::ALL.into_iter().filter(|action| discussion_is_available(host, *action))
+    DiscussionAction::ALL
+        .into_iter()
+        .filter(|action| discussion_is_available(host, *action))
         .map(|action| {
             let mut input = provenance_porcelain::discussion::input_schema(action);
             input.as_object_mut().map(|object| object.remove("$schema"));
             let mut output = provenance_porcelain::discussion::output_schema();
-            output.as_object_mut().map(|object| object.remove("$schema"));
+            output
+                .as_object_mut()
+                .map(|object| object.remove("$schema"));
             let mut tool = rmcp::model::Tool::new(
                 action.as_str(),
                 match action {
-                    DiscussionAction::Discussions => "List addressed Discussions in the bound scope or under one parent.",
-                    DiscussionAction::Discussion => "Read one addressed Discussion and a Message page.",
-                    DiscussionAction::Discuss => "Start an independent Discussion under one record.",
-                    DiscussionAction::Reply => "Reply to one addressed Discussion at its expected version.",
+                    DiscussionAction::Discussions => {
+                        "List addressed Discussions in the bound scope or under one parent."
+                    }
+                    DiscussionAction::Discussion => {
+                        "Read one addressed Discussion and a Message page."
+                    }
+                    DiscussionAction::Discuss => {
+                        "Start an independent Discussion under one record."
+                    }
+                    DiscussionAction::Reply => {
+                        "Reply to one addressed Discussion at its expected version."
+                    }
                 },
-                input.as_object().expect("Discussion input schema is an object").clone(),
+                input
+                    .as_object()
+                    .expect("Discussion input schema is an object")
+                    .clone(),
             );
-            tool.output_schema = Some(output.as_object().expect("Discussion output schema is an object").clone().into());
+            tool.output_schema = Some(
+                output
+                    .as_object()
+                    .expect("Discussion output schema is an object")
+                    .clone()
+                    .into(),
+            );
             tool
-        }).collect()
+        })
+        .collect()
 }
 
 pub(crate) async fn call_discussion(
@@ -47,7 +72,9 @@ pub(crate) async fn call_discussion(
     action: DiscussionAction,
     arguments: serde_json::Map<String, Value>,
 ) -> CallToolResult {
-    use provenance_porcelain::discussion::{ConversationInput, DiscussionError, ListInput, ReplyInput, StartInput};
+    use provenance_porcelain::discussion::{
+        ConversationInput, DiscussionError, ListInput, ReplyInput, StartInput,
+    };
     let value = Value::Object(arguments);
     let service = provenance_porcelain::Porcelain::new(HostDiscussionPort::new(host.clone()));
     let outcome = match action {
@@ -71,7 +98,9 @@ pub(crate) async fn call_discussion(
     match outcome {
         Ok(outcome) => {
             let readable = provenance_porcelain::discussion::render_readable(&outcome);
-            let mut result = CallToolResult::structured(serde_json::to_value(outcome).expect("Discussion outcome is JSON"));
+            let mut result = CallToolResult::structured(
+                serde_json::to_value(outcome).expect("Discussion outcome is JSON"),
+            );
             result.content = vec![Content::text(readable)];
             result
         }

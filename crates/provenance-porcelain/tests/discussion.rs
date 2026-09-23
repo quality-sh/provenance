@@ -1,5 +1,5 @@
-use provenance_porcelain::discussion::{render_readable, DiscussionOutcome, ListInput};
 use provenance_core::threads::DiscussionStatusFilter;
+use provenance_porcelain::discussion::{render_readable, DiscussionOutcome, ListInput};
 
 #[test]
 fn list_input_defaults_to_active_and_rejects_host_grants() {
@@ -7,7 +7,8 @@ fn list_input_defaults_to_active_and_rejects_host_grants() {
     assert_eq!(input.status, DiscussionStatusFilter::Active);
     assert!(serde_json::from_value::<ListInput>(serde_json::json!({
         "allowed_parent_kinds": ["source"]
-    })).is_err());
+    }))
+    .is_err());
 }
 
 #[test]
@@ -24,7 +25,19 @@ fn readable_list_reports_bounds_and_true_entry_fields() {
         "stamp": null, "freshness_error": null
     });
     let readable = render_readable(&serde_json::from_value::<DiscussionOutcome>(result).unwrap());
-    for expected in ["discussion_a", "req_a", "active", "version=2", "Opening text", "truncated=true", "limit=1", "next-page"] {
-        assert!(readable.contains(expected), "missing {expected}: {readable}");
+    for expected in [
+        "discussion_a",
+        "req_a",
+        "active",
+        "version=2",
+        "Opening text",
+        "truncated=true",
+        "limit=1",
+        "next-page",
+    ] {
+        assert!(
+            readable.contains(expected),
+            "missing {expected}: {readable}"
+        );
     }
 }

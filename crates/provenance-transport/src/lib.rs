@@ -146,10 +146,7 @@ impl StatementHost {
             .ok_or(OperationError::Common(OperationFailure::UnavailableNeeds))?;
         provenance_store::operations::catalog::invoke_authorized_native_typed::<O>(
             self.access.clone(),
-            RequestedContext::Scope(RepositoryScope {
-                repository,
-                scope,
-            }),
+            RequestedContext::Scope(RepositoryScope { repository, scope }),
             request,
         )
         .await

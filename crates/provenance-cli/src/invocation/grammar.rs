@@ -145,9 +145,11 @@ pub(crate) struct TargetArgs {
 }
 
 fn target_actions() -> PossibleValuesParser {
-    PossibleValuesParser::new(std::iter::once("get")
-        .chain(Action::ALL.map(Action::as_str))
-        .chain(DiscussionAction::ALL.map(DiscussionAction::as_str)))
+    PossibleValuesParser::new(
+        std::iter::once("get")
+            .chain(Action::ALL.map(Action::as_str))
+            .chain(DiscussionAction::ALL.map(DiscussionAction::as_str)),
+    )
 }
 
 fn get_views() -> PossibleValuesParser {

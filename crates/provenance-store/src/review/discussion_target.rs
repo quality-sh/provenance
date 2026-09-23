@@ -4,7 +4,8 @@ use crate::{
     write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::{
-    review::JournalEntry, threads::DiscussionEntry, MessageRole, NodeType, ScopeId, StableId, ThreadParent,
+    review::JournalEntry, threads::DiscussionEntry, MessageRole, NodeType, ScopeId, StableId,
+    ThreadParent,
 };
 use serde::{Deserialize, Serialize};
 
