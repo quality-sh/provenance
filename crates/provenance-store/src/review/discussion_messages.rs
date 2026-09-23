@@ -203,17 +203,21 @@ fn message_cursor(
     allowed_parent_kinds: Option<&[provenance_core::NodeType]>,
 ) -> anyhow::Result<(Cursor, Position)> {
     allowed_parent_kinds.map_or_else(
-        || Cursor::open(
-            ctx,
-            "review-discussion-messages",
-            &(&query.parent, &query.selector, query.limit),
-            query.cursor.as_deref(),
-        ),
-        |kinds| Cursor::open(
-            ctx,
-            "discussion-conversation",
-            &(&query.parent, &query.selector, query.limit, kinds),
-            query.cursor.as_deref(),
-        ),
+        || {
+            Cursor::open(
+                ctx,
+                "review-discussion-messages",
+                &(&query.parent, &query.selector, query.limit),
+                query.cursor.as_deref(),
+            )
+        },
+        |kinds| {
+            Cursor::open(
+                ctx,
+                "discussion-conversation",
+                &(&query.parent, &query.selector, query.limit, kinds),
+                query.cursor.as_deref(),
+            )
+        },
     )
 }
