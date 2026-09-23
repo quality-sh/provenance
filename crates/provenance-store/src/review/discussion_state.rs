@@ -220,7 +220,8 @@ impl StateStore {
                     anyhow::anyhow!("request ID belongs to a Requirement save"),
                 ));
             };
-            crate::write_error::ensure!(DiscussionIntentChanged,
+            crate::write_error::ensure!(
+                DiscussionIntentChanged,
                 entry.scope_id == input.scope_id
                     && entry.request_id == input.request_id
                     && entry.actor == input.actor
@@ -237,7 +238,8 @@ impl StateStore {
         input: &super::WriteDiscussion,
     ) -> anyhow::Result<()> {
         anyhow::ensure!(!input.actor.trim().is_empty(), "invalid Discussion actor");
-        crate::write_error::ensure!(ResourceNotFound,
+        crate::write_error::ensure!(
+            ResourceNotFound,
             self.manifest()?
                 .scopes
                 .iter()
@@ -319,7 +321,8 @@ impl StateStore {
         scope: &ScopeId,
         parent: &ThreadParent,
     ) -> anyhow::Result<Option<String>> {
-        crate::write_error::ensure!(UnsupportedThreadParent,
+        crate::write_error::ensure!(
+            UnsupportedThreadParent,
             discussion_kind_word(parent.node_type).is_some(),
             "thread parent kind does not take Discussions: {parent:?}"
         );

@@ -1,6 +1,11 @@
 use super::{journal, DiscussionAction, WriteDiscussion};
-use crate::{state_store::StateStore, write_error::{SourceFailure, WriteFailure}};
-use provenance_core::{review::JournalEntry, threads::DiscussionEntry, MessageRole, ScopeId, StableId, ThreadParent};
+use crate::{
+    state_store::StateStore,
+    write_error::{SourceFailure, WriteFailure},
+};
+use provenance_core::{
+    review::JournalEntry, threads::DiscussionEntry, MessageRole, ScopeId, StableId, ThreadParent,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,14 +43,17 @@ impl StateStore {
         input: TargetDiscussionWrite,
     ) -> anyhow::Result<DiscussionEntry> {
         self.with_repository_publication(|| {
-            let receipt_path = journal::entry_path(&self.layout, &input.scope_id, &input.request_id);
+            let receipt_path =
+                journal::entry_path(&self.layout, &input.scope_id, &input.request_id);
             let receipt_parent = if receipt_path.try_exists()? {
                 match journal::read_journal_entry(&self.layout, &receipt_path)? {
                     JournalEntry::Discussion(entry) => Some(entry.parent),
-                    _ => return Err(SourceFailure::wrap(
-                        WriteFailure::DiscussionIntentChanged,
-                        anyhow::anyhow!("request ID belongs to another write"),
-                    )),
+                    _ => {
+                        return Err(SourceFailure::wrap(
+                            WriteFailure::DiscussionIntentChanged,
+                            anyhow::anyhow!("request ID belongs to another write"),
+                        ));
+                    }
                 }
             } else {
                 None
@@ -66,18 +74,23 @@ impl StateStore {
                         self.discussion_heads(&input.scope_id)?
                             .into_iter()
                             .find(|entry| entry.discussion_id == discussion_id)
-                            .ok_or_else(|| SourceFailure::wrap(
-                                WriteFailure::ResourceNotFound,
-                                anyhow::anyhow!("Discussion does not exist"),
-                            ))?
+                            .ok_or_else(|| {
+                                SourceFailure::wrap(
+                                    WriteFailure::ResourceNotFound,
+                                    anyhow::anyhow!("Discussion does not exist"),
+                                )
+                            })?
                             .parent
                     };
-                    (parent, DiscussionAction::Reply {
-                        discussion_id,
-                        expected_version,
-                        role,
-                        body,
-                    })
+                    (
+                        parent,
+                        DiscussionAction::Reply {
+                            discussion_id,
+                            expected_version,
+                            role,
+                            body,
+                        },
+                    )
                 }
             };
             self.write_discussion(WriteDiscussion {
