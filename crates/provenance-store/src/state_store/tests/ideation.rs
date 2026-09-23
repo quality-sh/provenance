@@ -74,18 +74,17 @@ fn landed_contribution_and_synthesis_replacements_obey_read_budget() {
         )
         .unwrap();
     let oversized = "x".repeat(crate::cache::read::page::RESOURCE_RECORD_BYTES);
-    let contribution_error = match store.upsert_contribution(contribution_input(&scope, &oversized))
-    {
-        Ok(_) => panic!("an oversized landed contribution must be refused"),
-        Err(error) => error,
+    let Err(contribution_error) = store.upsert_contribution(contribution_input(&scope, &oversized))
+    else {
+        panic!("an oversized landed contribution must be refused");
     };
     assert!(matches!(
         WriteError(contribution_error).safe(),
         WriteFailure::RecordTooLarge
     ));
-    let synthesis_error = match store.upsert_synthesis_packet(synthesis_input(&scope, &oversized)) {
-        Ok(_) => panic!("an oversized landed synthesis packet must be refused"),
-        Err(error) => error,
+    let Err(synthesis_error) = store.upsert_synthesis_packet(synthesis_input(&scope, &oversized))
+    else {
+        panic!("an oversized landed synthesis packet must be refused");
     };
     assert!(matches!(
         WriteError(synthesis_error).safe(),

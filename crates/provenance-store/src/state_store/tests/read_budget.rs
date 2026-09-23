@@ -400,7 +400,7 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
     .fetch_one(cache.pool())
     .await
     .unwrap();
-    for score in [0.0, 0.00001, 0.12345678901234566, 1.0] {
+    for score in [0.0, 0.00001, 0.123_456_789_012_345_66, 1.0] {
         let real_bytes: i64 = sqlx::query_scalar("SELECT length(CAST(? AS BLOB))")
             .bind(score)
             .fetch_one(cache.pool())
