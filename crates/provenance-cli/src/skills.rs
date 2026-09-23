@@ -77,7 +77,7 @@ pub struct InstallReport {
 }
 
 impl InstallReport {
-    pub(crate) fn files(&self) -> &[FileInstallReport] {
+    pub fn files(&self) -> &[FileInstallReport] {
         &self.files
     }
 }
@@ -90,9 +90,9 @@ pub struct SkillInstallStatus {
 }
 
 #[derive(Serialize)]
-pub(crate) struct FileInstallReport {
-    pub(crate) path: String,
-    pub(crate) status: FileStatus,
+pub struct FileInstallReport {
+    pub path: String,
+    pub status: FileStatus,
 }
 
 pub fn list() -> anyhow::Result<Vec<SkillSummary>> {
