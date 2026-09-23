@@ -21,6 +21,80 @@ fn validator(schema: &Value) -> JSONSchema {
 }
 
 #[cfg(feature = "test-fixture")]
+fn assert_get_schema_edges(input: &JSONSchema, output: &JSONSchema, valid: &Value) {
+    for invalid in [
+        json!({"target":""}),
+        json!({"target":"req_shared","view":"invented"}),
+        json!({"target":"req_shared","max_depth":0}),
+        json!({"target":"req_shared","limit":0}),
+        json!({"target":"req_shared","returned_kinds":["invented"]}),
+    ] {
+        assert!(!input.is_valid(&invalid), "invalid input {invalid}");
+    }
+    let mut missing_record = valid.clone();
+    missing_record.as_object_mut().unwrap().remove("record");
+    assert!(!output.is_valid(&missing_record));
+    let mut without_metadata = valid.clone();
+    without_metadata
+        .as_object_mut()
+        .unwrap()
+        .remove("record_metadata");
+    assert!(output.is_valid(&without_metadata));
+    let mut null_metadata = valid.clone();
+    null_metadata["record_metadata"] = Value::Null;
+    assert!(output.is_valid(&null_metadata));
+    let mut tagged_record = valid["record"]["value"].clone();
+    tagged_record["node_type"] = json!("requirement");
+    let record = serde_json::from_value(tagged_record).unwrap();
+    let continued = provenance_porcelain::get::GetOutcome {
+        record,
+        result: provenance_porcelain::get::ViewResult::Children(
+            provenance_porcelain::get::Traversal {
+                records: Vec::new(),
+                bounds: provenance_porcelain::get::Bounds {
+                    limit: 1,
+                    max_depth: Some(2),
+                    has_more: true,
+                    continuation: Some("next-page".into()),
+                    truncated: true,
+                },
+                response_metadata: Some(provenance_core::protocol::ResponseMeta {
+                    freshness_error: Some("catch-up failed".into()),
+                    ..Default::default()
+                }),
+            },
+        ),
+        record_metadata: None,
+    };
+    let continued = serde_json::to_value(continued).unwrap();
+    assert!(output.is_valid(&continued));
+    assert_eq!(continued["bounds"]["continuation"], "next-page");
+    assert_eq!(
+        continued["view_metadata"]["freshness_error"],
+        "catch-up failed"
+    );
+    assert!(continued.get("record_metadata").is_none());
+    for (field, bad) in [
+        (
+            "record",
+            json!({"id":"req_shared","kind":"requirement","value":42}),
+        ),
+        ("view", json!("invented")),
+        (
+            "related",
+            json!([{"id":"rule_shared","kind":"rule","value":7,"depth":1}]),
+        ),
+        ("detail", json!("not impact data")),
+        ("bounds", json!({"limit":"many"})),
+        ("record_metadata", json!(5)),
+    ] {
+        let mut invalid = valid.clone();
+        invalid[field] = bad;
+        assert!(!output.is_valid(&invalid), "invalid {field} was accepted");
+    }
+}
+
+#[cfg(feature = "test-fixture")]
 #[tokio::test]
 async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads() {
     use provenance_porcelain::get::{GetInput, View};
@@ -94,77 +168,7 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
         }
     }
 
-    for invalid in [
-        json!({"target":""}),
-        json!({"target":"req_shared","view":"invented"}),
-        json!({"target":"req_shared","max_depth":0}),
-        json!({"target":"req_shared","limit":0}),
-        json!({"target":"req_shared","returned_kinds":["invented"]}),
-    ] {
-        assert!(!input.is_valid(&invalid), "invalid input {invalid}");
-    }
-    let valid = record_value.unwrap();
-    let mut missing_record = valid.clone();
-    missing_record.as_object_mut().unwrap().remove("record");
-    assert!(!output.is_valid(&missing_record));
-    let mut without_metadata = valid.clone();
-    without_metadata
-        .as_object_mut()
-        .unwrap()
-        .remove("record_metadata");
-    assert!(output.is_valid(&without_metadata));
-    let mut null_metadata = valid.clone();
-    null_metadata["record_metadata"] = Value::Null;
-    assert!(output.is_valid(&null_metadata));
-    let mut tagged_record = valid["record"]["value"].clone();
-    tagged_record["node_type"] = json!("requirement");
-    let record = serde_json::from_value(tagged_record).unwrap();
-    let continued = provenance_porcelain::get::GetOutcome {
-        record,
-        result: provenance_porcelain::get::ViewResult::Children(
-            provenance_porcelain::get::Traversal {
-                records: Vec::new(),
-                bounds: provenance_porcelain::get::Bounds {
-                    limit: 1,
-                    max_depth: Some(2),
-                    has_more: true,
-                    continuation: Some("next-page".into()),
-                    truncated: true,
-                },
-                response_metadata: Some(provenance_core::protocol::ResponseMeta {
-                    freshness_error: Some("catch-up failed".into()),
-                    ..Default::default()
-                }),
-            },
-        ),
-        record_metadata: None,
-    };
-    let continued = serde_json::to_value(continued).unwrap();
-    assert!(output.is_valid(&continued));
-    assert_eq!(continued["bounds"]["continuation"], "next-page");
-    assert_eq!(
-        continued["view_metadata"]["freshness_error"],
-        "catch-up failed"
-    );
-    assert!(continued.get("record_metadata").is_none());
-    for (field, bad) in [
-        (
-            "record",
-            json!({"id":"req_shared","kind":"requirement","value":42}),
-        ),
-        ("view", json!("invented")),
-        (
-            "related",
-            json!([{"id":"rule_shared","kind":"rule","value":7,"depth":1}]),
-        ),
-        ("detail", json!("not impact data")),
-        ("bounds", json!({"limit":"many"})),
-        ("record_metadata", json!(5)),
-    ] {
-        let mut invalid = valid.clone();
-        invalid[field] = bad;
-        assert!(!output.is_valid(&invalid), "invalid {field} was accepted");
-    }
+    assert_get_schema_edges(&input, &output, &record_value.unwrap());
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
