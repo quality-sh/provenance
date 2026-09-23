@@ -39,6 +39,72 @@ fn is_bound(name: &str, route: &RequestBinding, query: &QueryRequestBinding) -> 
         || query.node_type.is_some() && matches!(name, "node_type" | "node_types")
 }
 
+/// The wire schema of one typed request field, for a bound route parameter.
+/// The same rendering rules as query parameters apply: optional wrappers and
+/// null variants collapse, and unsupported shapes stop catalog construction.
+/// Discussion writes carry the addressed discussion id inside the request's
+/// `action` payload, so the field is looked up there when the request has no
+/// direct property of that name.
+pub(super) fn bound_field_schema(root: &Value, field: &str) -> Value {
+    let field_schema = root
+        .get("properties")
+        .and_then(|properties| properties.get(field))
+        .map(|found| {
+            parameter_schema(root, found)
+                .unwrap_or_else(|| panic!("unsupported bound parameter field `{field}`: {found}"))
+        });
+    if let Some(found) = field_schema {
+        return found;
+    }
+    let action = root
+        .get("properties")
+        .and_then(|properties| properties.get("action"))
+        .unwrap_or_else(|| {
+            panic!("bound parameter field `{field}` is missing from the request type: {root}")
+        });
+    leaf_schema(root, action, field).unwrap_or_else(|| {
+        panic!("bound parameter field `{field}` is missing from the request type: {root}")
+    })
+}
+
+/// The wire schema of the id leaf inside a bound parent or selector field.
+/// The leaf names mirror the shared core shapes: `ThreadParent::node_id` and
+/// the `DiscussionSelector` variant ids.
+pub(super) fn bound_leaf_schema(root: &Value, field: &str, leaf: &str) -> Value {
+    let field_schema = root
+        .get("properties")
+        .and_then(|properties| properties.get(field))
+        .unwrap_or_else(|| {
+            panic!("bound parameter field `{field}` is missing from the request type: {root}")
+        });
+    leaf_schema(root, field_schema, leaf).unwrap_or_else(|| {
+        panic!(
+            "bound parameter field `{field}` has no `{leaf}` leaf to derive from: {field_schema}"
+        )
+    })
+}
+
+fn leaf_schema<'a>(root: &'a Value, field: &'a Value, leaf: &str) -> Option<Value> {
+    let field = resolve(root, field)?;
+    if let Some(found) = field
+        .get("properties")
+        .and_then(|properties| properties.get(leaf))
+    {
+        return parameter_schema(root, found);
+    }
+    for keyword in ["anyOf", "oneOf"] {
+        let Some(variants) = field.get(keyword).and_then(Value::as_array) else {
+            continue;
+        };
+        for variant in variants {
+            if let Some(found) = leaf_schema(root, variant, leaf) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
 fn parameter_schema(root: &Value, field: &Value) -> Option<Value> {
     let field = resolve(root, field)?;
     if let Some(types) = field.get("type").and_then(Value::as_array) {

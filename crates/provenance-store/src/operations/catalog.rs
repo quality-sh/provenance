@@ -26,6 +26,8 @@ mod routes;
 #[cfg(feature = "schema")]
 mod schema;
 #[cfg(feature = "schema")]
+mod schema_page;
+#[cfg(feature = "schema")]
 mod schema_values;
 mod scoped_list;
 mod statement;

@@ -83,7 +83,12 @@ pub struct CliBinding {
 
 #[derive(Clone)]
 pub struct RequestBinding {
+    /// The public request body projection, if the method carries one.
     pub schema: Option<Value>,
+    /// The full deserialize-direction schema of the bound request type. It
+    /// keeps every typed field, so parameter schemas derive from it before
+    /// the body projection hides bound fields.
+    pub raw: Option<Value>,
     pub adapter: RequestAdapter,
     pub path: Vec<PathBinding>,
     pub parent: Option<ParentBinding>,
@@ -98,6 +103,7 @@ impl Default for RequestBinding {
     fn default() -> Self {
         Self {
             schema: None,
+            raw: None,
             adapter: super::routes::request::DIRECT,
             path: Vec::new(),
             parent: None,
