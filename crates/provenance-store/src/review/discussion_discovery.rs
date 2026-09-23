@@ -18,6 +18,7 @@ use sqlx::{QueryBuilder, Sqlite};
 const EXCERPT_CHARS: usize = 240;
 // One Rust char uses at most four UTF-8 bytes.
 const EXCERPT_PREFIX_BYTES: usize = EXCERPT_CHARS * 4;
+type DiscussionListRow = (String, String, String, String, i64, Vec<u8>, i64);
 
 /// Lists addressed Discussions in one scope or under one parent.
 #[rule("rule_porcelain_discussions_list_scope_or_parent")]
@@ -128,7 +129,7 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     sql.push(" AND NOT EXISTS(SELECT 1 FROM review_journal newer WHERE newer.scope_id=j.scope_id AND newer.discussion_id=j.discussion_id AND newer.version>j.version) ORDER BY j.discussion_id LIMIT ")
         .push_bind(i64::try_from(query.limit + 1)?);
     let mut tx = ctx.snapshot().connection().await;
-    let rows: Vec<(String, String, String, String, i64, Vec<u8>, i64)> = sql
+    let rows: Vec<DiscussionListRow> = sql
         .build_query_as()
         .fetch_all(&mut **tx)
         .await
