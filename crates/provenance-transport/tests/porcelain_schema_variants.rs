@@ -46,7 +46,11 @@ fn assert_canonical_record(schema: &JSONSchema, value: &Value, node: &GraphNode)
     let mut bare = serde_json::to_value(node).unwrap();
     bare.as_object_mut().unwrap().remove("node_type");
     assert_eq!(record["value"], bare);
-    assert!(schema.is_valid(value), "{}: {value}", node.node_type().as_str());
+    assert!(
+        schema.is_valid(value),
+        "{}: {value}",
+        node.node_type().as_str()
+    );
 }
 
 fn assert_tagged_related(schema: &JSONSchema, nodes: &[GraphNode]) -> Value {
@@ -78,7 +82,10 @@ fn assert_tagged_related(schema: &JSONSchema, nodes: &[GraphNode]) -> Value {
     };
     let value = serde_json::to_value(outcome).unwrap();
     assert!(schema.is_valid(&value), "tagged related records: {value}");
-    assert_eq!(value["related"].as_array().unwrap().len(), NodeType::ALL.len());
+    assert_eq!(
+        value["related"].as_array().unwrap().len(),
+        NodeType::ALL.len()
+    );
     for (related, node) in value["related"].as_array().unwrap().iter().zip(nodes) {
         assert_eq!(related["id"], node.id().as_str());
         assert_eq!(related["kind"], node.node_type().as_str());
@@ -184,7 +191,10 @@ async fn emitted_get_schema_accepts_each_canonical_record_and_tagged_related_kin
     let tools = client.list_all_tools().await.unwrap();
     let get = tools.iter().find(|tool| tool.name == "get").unwrap();
     let emitted = json!(get.output_schema.as_ref().unwrap());
-    assert_eq!(emitted["$schema"], "https://json-schema.org/draft/2020-12/schema");
+    assert_eq!(
+        emitted["$schema"],
+        "https://json-schema.org/draft/2020-12/schema"
+    );
     let schema = JSONSchema::compile(&emitted).expect("emitted schema and refs resolve");
     let service = provenance_porcelain::Porcelain::new(
         provenance_transport::porcelain::HostGetPort::new(host),

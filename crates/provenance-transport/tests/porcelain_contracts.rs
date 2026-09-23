@@ -215,7 +215,7 @@ fn assert_check_context_edges(output: &JSONSchema) {
     wrong_base["categories"][0]["context"]["base_commit"] = json!(12);
     let mut unknown_policy = valid.clone();
     unknown_policy["categories"][1]["context"]["policy"] = json!("ignore");
-    let mut missing_message = valid.clone();
+    let mut missing_message = valid;
     missing_message["categories"][2]["findings"][0]
         .as_object_mut()
         .unwrap()
@@ -226,7 +226,10 @@ fn assert_check_context_edges(output: &JSONSchema) {
         ("unknown binding policy", unknown_policy),
         ("missing finding message", missing_message),
     ] {
-        assert!(!output.is_valid(&candidate), "accepted {label}: {candidate}");
+        assert!(
+            !output.is_valid(&candidate),
+            "accepted {label}: {candidate}"
+        );
     }
 }
 
