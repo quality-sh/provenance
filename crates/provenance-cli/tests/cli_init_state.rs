@@ -19,25 +19,26 @@ fn init(root: &Path, args: &[&str]) -> assert_cmd::assert::Assert {
     command
         .current_dir(root)
         .env("PROVENANCE_STE100_ASSET_DIR", asset_dir)
-        .env("PROVENANCE_STE100_INDEX_DIR", root.join("dictionary-indexes"))
+        .env(
+            "PROVENANCE_STE100_INDEX_DIR",
+            root.join("dictionary-indexes"),
+        )
         .arg("init")
         .args(args);
     command.assert()
 }
 
 fn manifest(root: &Path) -> Value {
-    serde_json::from_slice(
-        &std::fs::read(root.join(".provenance/state/manifest.json")).unwrap(),
-    )
-    .unwrap()
+    serde_json::from_slice(&std::fs::read(root.join(".provenance/state/manifest.json")).unwrap())
+        .unwrap()
 }
 
 #[test]
 fn bare_init_defaults_to_current_directory_and_default_scope() {
     let temporary = tempfile::tempdir().unwrap();
-    init(temporary.path(), &[])
-        .success()
-        .stdout(contains("Have your agent run provenance prime to get acclimated."));
+    init(temporary.path(), &[]).success().stdout(contains(
+        "Have your agent run provenance prime to get acclimated.",
+    ));
     let state = manifest(temporary.path());
     assert_eq!(state["scopes"][0]["id"], "default");
     assert!(!temporary.path().join("asset-cache/.provenance").exists());
@@ -51,7 +52,10 @@ fn explicit_path_and_scope_still_select_the_new_graph() {
         manifest(&temporary.path().join("child"))["scopes"][0]["id"],
         "review"
     );
-    assert!(!temporary.path().join(".provenance/state/manifest.json").exists());
+    assert!(!temporary
+        .path()
+        .join(".provenance/state/manifest.json")
+        .exists());
 }
 
 #[test]
@@ -63,7 +67,9 @@ fn bare_rerun_keeps_the_manifest_scope_and_actor_ids() {
     )
     .success();
     let before = std::fs::read(temporary.path().join(".provenance/state/manifest.json")).unwrap();
-    init(temporary.path(), &[]).success().stdout(contains("No change."));
+    init(temporary.path(), &[])
+        .success()
+        .stdout(contains("No change."));
     assert_eq!(
         std::fs::read(temporary.path().join(".provenance/state/manifest.json")).unwrap(),
         before
@@ -96,7 +102,10 @@ fn missing_manifest_gives_init_guidance_before_graph_reads_or_catalog_writes() {
     ] {
         let mut command = Command::cargo_bin("provenance").unwrap();
         command.current_dir(root).args(args);
-        command.assert().failure().stderr(contains("provenance init"));
+        command
+            .assert()
+            .failure()
+            .stderr(contains("provenance init"));
         assert!(!root.join(".provenance/state/scopes").exists());
     }
 }
