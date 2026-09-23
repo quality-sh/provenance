@@ -23,7 +23,7 @@ fn path_parameter(definition: &super::super::Definition, name: &str) -> serde_js
         .schema
 }
 
-/// The exported StableId schema, taken from the type itself. The catalog
+/// The exported `StableId` schema, taken from the type itself. The catalog
 /// keeps no title in parameter positions, so the replica drops it.
 fn stable_id_schema() -> serde_json::Value {
     let mut schema = type_schema::<provenance_core::StableId>(Contract::Deserialize);
