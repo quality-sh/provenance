@@ -126,15 +126,8 @@ fn init_summary_structure_stays_pinned_in_one_module() {
     let repo = fs::read_to_string(workspace.join("crates/provenance-cli/src/handlers/repo.rs"))
         .expect("read init handler");
 
-    assert_eq!(
-        summary
-            .matches("Never lose the why behind your decisions.")
-            .count(),
-        1,
-        "the tagline is the one what-Provenance-is line"
-    );
-    assert!(summary.contains("https://github.com/quality-sh/provenance/tree/main/docs"));
-    assert!(summary.contains("Next steps"));
+    assert!(summary.contains("Have your agent run provenance prime to get acclimated."));
+    assert!(!summary.contains("Next steps"));
     assert!(summary.contains("New"));
     assert!(summary.contains("Changed"));
 

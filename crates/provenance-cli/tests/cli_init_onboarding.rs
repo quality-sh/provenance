@@ -214,6 +214,7 @@ fn a_late_claude_conflict_leaves_every_existing_file_unchanged() {
 
     init(&repo)
         .failure()
+        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains("rerun with --force"));
 
     assert_eq!(
