@@ -3,6 +3,7 @@ use discussion_support::{fixture, scope};
 use provenance_core::threads::DiscussionStatus;
 use provenance_store::{
     layout::ProvenanceLayout,
+    operations::catalog::{invoke_typed, PreparedContext, PreparedScope, WriteTargetDiscussionV2},
     review::{TargetDiscussionAction, TargetDiscussionWrite},
     state_store::StateStore,
     write_error::{WriteError, WriteFailure},
@@ -114,6 +115,14 @@ fn replay_after_restart_returns_receipt_and_changed_intent_refuses() {
         failure(store.write_target_discussion(changed)),
         WriteFailure::DiscussionIntentChanged
     ));
+    let mut wrong_parent = start("a");
+    if let TargetDiscussionAction::Start { parent, .. } = &mut wrong_parent.action {
+        parent.node_id = provenance_core::StableId::new("missing").unwrap();
+    }
+    assert!(matches!(
+        failure(store.write_target_discussion(wrong_parent)),
+        WriteFailure::DiscussionIntentChanged
+    ));
     let first_reply = store.write_target_discussion(reply("r1", &first)).unwrap();
     let wrong_target = request(
         "r1",
@@ -212,5 +221,23 @@ fn closed_container_refuses_target_reply() {
         failure(store.write_target_discussion(reply("closed", &a))),
         WriteFailure::DiscussionClosed
     ));
+    assert_eq!(store.list_messages(&scope()).unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn catalog_operation_uses_the_target_write_path() {
+    let (temp, store) = fixture();
+    assert!(provenance_store::operations::catalog::contains(
+        "write-target-discussion-v2"
+    ));
+    let context = PreparedContext::for_scope(PreparedScope {
+        root: camino::Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap(),
+        scope: scope(),
+        requested_target: "selected".into(),
+    });
+    let receipt = invoke_typed::<WriteTargetDiscussionV2>(context, start("catalog"))
+        .await
+        .unwrap();
+    assert_eq!(receipt.version, 1);
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 1);
 }

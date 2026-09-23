@@ -60,6 +60,13 @@ impl StateStore {
             };
             let (parent, action) = match input.action {
                 TargetDiscussionAction::Start { parent, role, body } => {
+                    if let Some(saved) = receipt_parent {
+                        crate::write_error::ensure!(
+                            DiscussionIntentChanged,
+                            parent == saved,
+                            "Discussion request ID was reused with different intent"
+                        );
+                    }
                     (parent, DiscussionAction::Start { role, body })
                 }
                 TargetDiscussionAction::Reply {
