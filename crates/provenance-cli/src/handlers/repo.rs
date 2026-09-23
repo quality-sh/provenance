@@ -204,7 +204,7 @@ fn build_summary(
     if manifest_changed {
         let note = format!("manifest for {}", scope_phrase(scope_ids));
         if planned.manifest_before.bytes().is_none() {
-            summary.push_new(".provenance/state", note);
+            summary.push_new(".provenance/state/manifest.json", note);
         } else {
             summary.push_changed(".provenance/state/manifest.json", "updated the manifest");
         }

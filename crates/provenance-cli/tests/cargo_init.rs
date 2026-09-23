@@ -390,7 +390,7 @@ fn cargo_init_reports_only_published_changes_then_no_change() {
     let first = String::from_utf8(first.stdout).unwrap();
     assert!(first.contains("  Cargo.toml (added the Provenance SDK dependency)\n"));
     assert!(first.contains("  Cargo.lock (created by Cargo)\n"));
-    assert!(first.contains("  .provenance/state (manifest for scope \"default\")\n"));
+    assert!(first.contains("  .provenance/state/manifest.json (manifest for scope \"default\")\n"));
     assert!(!first.contains("Dictionary:"));
     assert!(first.ends_with("Have your agent run provenance prime to get acclimated.\n"));
     let manifest = std::fs::read(fixture.root().join(".provenance/state/manifest.json")).unwrap();
