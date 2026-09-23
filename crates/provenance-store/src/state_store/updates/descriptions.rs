@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     shards,
-    state_store::{RequirementReviewInput, StateStore},
+    state_store::{read_budget, RequirementReviewInput, StateStore},
 };
 use provenance_core::{Boundary, Domain, NodeType, Requirement};
 
@@ -109,7 +109,9 @@ impl StateStore {
                 input.color,
                 input.clear_fields.contains(&DomainClearField::Color),
             )?;
-            Ok(record.clone())
+            let record = record.clone();
+            read_budget::ensure_within_read_budget(&record)?;
+            Ok(record)
         })
     }
 
@@ -138,7 +140,9 @@ impl StateStore {
                     input.source_ref,
                     input.clear_fields.contains(&BoundaryClearField::SourceRef),
                 )?;
-                Ok(record.clone())
+                let record = record.clone();
+                read_budget::ensure_within_read_budget(&record)?;
+                Ok(record)
             })
         })
     }

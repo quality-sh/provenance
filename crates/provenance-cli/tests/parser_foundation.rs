@@ -139,6 +139,23 @@ fn help_and_unknown_options_have_clap_exit_codes_without_a_repository() {
 }
 
 #[test]
+fn root_help_lists_search_and_search_help_accepts_global_context() {
+    let directory = tempfile::tempdir().unwrap();
+    provenance()
+        .current_dir(directory.path())
+        .args(["--quiet", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("search"));
+    provenance()
+        .current_dir(directory.path())
+        .args(["--repo", "missing", "search", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("--cursor"));
+}
+
+#[test]
 fn command_keywords_are_refused_as_record_ids_on_both_cli_write_forms() {
     let (_directory, path) = repo();
     provenance()

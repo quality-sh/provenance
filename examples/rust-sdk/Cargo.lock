@@ -1571,6 +1571,7 @@ dependencies = [
  "fs2",
  "fs_at",
  "hmac",
+ "libsqlite3-sys",
  "provenance-core",
  "provenance-macros",
  "provenance-scanner",

@@ -42,13 +42,10 @@ impl Common {
     }
 }
 
-#[derive(Parser)]
-#[command(name = "provenance", about = "Search records in one scope")]
-pub(super) struct SearchArgs {
+#[derive(Args)]
+pub struct SearchArgs {
     #[command(flatten)]
     pub common: Common,
-    #[arg(value_parser = ["search"])]
-    pub command: String,
     #[arg(long, allow_hyphen_values = true)]
     pub text: Option<String>,
     #[arg(long, allow_hyphen_values = true)]
@@ -57,6 +54,15 @@ pub(super) struct SearchArgs {
     pub kind: Vec<NodeType>,
     #[arg(long)]
     pub limit: Option<usize>,
+}
+
+#[derive(Parser)]
+#[command(name = "provenance", about = "Search records in one scope")]
+pub(super) struct SearchCommand {
+    #[arg(value_parser = ["search"])]
+    pub command: String,
+    #[command(flatten)]
+    pub args: SearchArgs,
 }
 
 #[derive(Parser)]

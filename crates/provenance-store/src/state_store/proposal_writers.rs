@@ -163,6 +163,7 @@ impl StateStore {
                 assertions: &assertions,
                 dispositions: &self.list_dispositions(&input.scope_id)?,
             })?;
+            super::read_budget::ensure_within_read_budget(&assertion)?;
             records.push(assertion.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(assertion)
@@ -207,6 +208,7 @@ impl StateStore {
                     records[index].id.as_str()
                 );
             }
+            super::read_budget::ensure_within_read_budget(&candidate)?;
             records.push(candidate.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(candidate)
@@ -289,6 +291,7 @@ impl StateStore {
                     !records.iter().any(|record| record.id == disposition.id),
                     "disposition already exists"
                 );
+                super::read_budget::ensure_within_read_budget(&disposition)?;
                 records.push(disposition.clone());
                 records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
                 Ok(disposition)

@@ -35,6 +35,7 @@ fn backed<O: Operation>(
         request_schema,
         response,
     );
+    registration.request.raw = Some(raw.request_schema);
     registration.request.path = parameters
         .iter()
         .filter(|parameter| parameter.location == "path")
@@ -79,6 +80,7 @@ fn read<T: schemars::JsonSchema, O: Operation>(
         None,
         ResponseBinding::direct(kind, raw_response, schema::response_envelope(payload, kind)),
     );
+    registration.request.raw = Some(raw.request_schema);
     registration.request.path = parameters
         .iter()
         .filter(|parameter| parameter.location == "path")

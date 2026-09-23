@@ -1,3 +1,4 @@
+use super::read_budget::ensure_slice_within_read_budget;
 use super::{ensure_new_ids_assignable, read_ideation_landings, IdeationLandingBatch, StateStore};
 use crate::shards;
 use provenance_core::{
@@ -43,6 +44,11 @@ impl StateStore {
         replace: bool,
     ) -> anyhow::Result<()> {
         ensure_scope(scope, &incoming)?;
+        ensure_slice_within_read_budget(&incoming.contributions)?;
+        ensure_slice_within_read_budget(&incoming.synthesis_packets)?;
+        ensure_slice_within_read_budget(&incoming.proposals)?;
+        ensure_slice_within_read_budget(&incoming.assertions)?;
+        ensure_slice_within_read_budget(&incoming.dispositions)?;
         let path = shards::ideation_landings_path(&self.layout, scope);
         self.mutate_jsonl_records(&path, |landings: &mut Vec<IdeationLandingBatch>| {
             let mut contributions = self.list_contributions(scope)?;

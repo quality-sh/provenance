@@ -13,9 +13,10 @@ const stamp: Stamp = {
   live: ["canonical"],
 };
 
+// Trace answers always carry the page facts their producer requires.
 const stamped: GetResponse = {
   data: { id: "rule_a", max_depth: 1, nodes: [] },
-  meta: { stamp },
+  meta: { stamp, limit: 50, has_more: false },
 };
 
 const degraded: GetResponse = {
@@ -24,6 +25,8 @@ const degraded: GetResponse = {
     stamp: { ...stamp, policy: "catch_up_failed" },
     freshness_error: "catch-up failed; answer uses the stored projection",
     freshness_cause: "catch_up_failed",
+    limit: 50,
+    has_more: false,
   },
 };
 
