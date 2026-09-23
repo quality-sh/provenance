@@ -123,7 +123,23 @@ fn replay_after_restart_returns_receipt_and_changed_intent_refuses() {
         failure(store.write_target_discussion(wrong_parent)),
         WriteFailure::DiscussionIntentChanged
     ));
+    let other = store.write_target_discussion(start("b")).unwrap();
     let first_reply = store.write_target_discussion(reply("r1", &first)).unwrap();
+    let store = StateStore::new(ProvenanceLayout::new(
+        camino::Utf8Path::from_path(temp.path()).unwrap(),
+    ));
+    assert_eq!(
+        store.write_target_discussion(reply("r1", &first)).unwrap(),
+        first_reply
+    );
+    let different_target = request(
+        "r1",
+        json!({"kind":"reply","discussion_id":other.discussion_id,"expected_version":first.version,"role":"user","body":"r1"}),
+    );
+    assert!(matches!(
+        failure(store.write_target_discussion(different_target)),
+        WriteFailure::DiscussionIntentChanged
+    ));
     let wrong_target = request(
         "r1",
         json!({"kind":"reply","discussion_id":"missing","expected_version":first.version,"role":"user","body":"r1"}),
@@ -133,7 +149,7 @@ fn replay_after_restart_returns_receipt_and_changed_intent_refuses() {
         WriteFailure::DiscussionIntentChanged
     ));
     assert_eq!(first_reply.version, 2);
-    assert_eq!(store.list_messages(&scope()).unwrap().len(), 2);
+    assert_eq!(store.list_messages(&scope()).unwrap().len(), 3);
 }
 
 #[test]
