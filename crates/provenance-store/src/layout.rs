@@ -85,6 +85,18 @@ pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
     anyhow::bail!("could not locate repository root from {start}")
 }
 
+/// Require the manifest before a command reads or writes an existing graph.
+pub fn require_initialized_graph(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+    match std::fs::metadata(layout.manifest_path()) {
+        Ok(metadata) if metadata.is_file() => Ok(()),
+        Ok(_) => anyhow::bail!("Provenance graph manifest is not a file; run `provenance init`"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            anyhow::bail!("Provenance graph is not initialized; run `provenance init`")
+        }
+        Err(error) => Err(error.into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
