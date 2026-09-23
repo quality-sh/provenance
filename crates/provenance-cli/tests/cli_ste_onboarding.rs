@@ -184,7 +184,10 @@ fn new_projects_reuse_a_verified_index_and_reject_a_changed_asset() {
         .success();
     assert_eq!(server.requests().len(), 2);
     assert!(dictionary_support::reference_path(&third_repo).is_file());
-    assert_eq!(std::fs::read(asset).unwrap(), dictionary_support::dictionary_pdf());
+    assert_eq!(
+        std::fs::read(asset).unwrap(),
+        dictionary_support::dictionary_pdf()
+    );
 }
 
 #[test]
@@ -202,7 +205,10 @@ fn invalid_shared_indexes_are_rebuilt_from_the_cached_pdf() {
         let index = std::fs::read_dir(&fixture.index_dir)
             .unwrap()
             .map(|entry| entry.unwrap().path())
-            .find(|path| path.extension().is_some_and(|extension| extension == "json"))
+            .find(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "json")
+            })
             .expect("the first init stored an index");
         let mut stored: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&index).unwrap()).unwrap();

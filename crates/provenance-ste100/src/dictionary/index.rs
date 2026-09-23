@@ -367,7 +367,10 @@ mod tests {
         let error = super::load_dictionary_index_for_source(&directory, b"synthetic source bytes")
             .expect_err("an incomplete index must not load for a new project");
 
-        assert!(matches!(error, DictionaryIndexError::InvalidStructure { .. }));
+        assert!(matches!(
+            error,
+            DictionaryIndexError::InvalidStructure { .. }
+        ));
         std::fs::remove_dir_all(&directory).expect("remove the scratch directory");
     }
 }

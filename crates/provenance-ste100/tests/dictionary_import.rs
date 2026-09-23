@@ -133,8 +133,8 @@ fn a_verified_index_loads_for_the_same_source_bytes() {
     let directory = scratch_directory("matching-source");
     store_dictionary_index(&import, &directory).expect("store the index");
 
-    let loaded = load_dictionary_index_for_source(&directory, &pdf)
-        .expect("load the matching index");
+    let loaded =
+        load_dictionary_index_for_source(&directory, &pdf).expect("load the matching index");
 
     assert_eq!(loaded, import);
     std::fs::remove_dir_all(directory).expect("remove the scratch directory");
@@ -154,9 +154,7 @@ fn changed_source_or_extractor_version_cannot_reuse_an_index() {
         Err(DictionaryIndexError::NotFound { .. })
     ));
 
-    old_import.identity.extractor_version.truncate(
-        old_import.identity.extractor_version.len() - "-old".len(),
-    );
+    old_import.identity.extractor_version = env!("CARGO_PKG_VERSION").to_owned();
     store_dictionary_index(&old_import, &directory).expect("store the current index");
     let mut changed_pdf = pdf;
     changed_pdf.push(b' ');
