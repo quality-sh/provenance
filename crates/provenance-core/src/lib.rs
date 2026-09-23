@@ -32,6 +32,6 @@ pub use model::{
     UnsupportedSpeculation, VerificationBinding, VerificationMethod, VerificationRun,
     VerificationRunStatus, RESERVED_RECORD_IDS, SUPPORTED_SCHEMA_VERSION,
 };
-pub use protocol::{EngineInfo, SDK_PROTOCOL_VERSION};
+pub use protocol::{EngineInfo, TargetAction, SDK_PROTOCOL_VERSION};
 
 pub mod review;
