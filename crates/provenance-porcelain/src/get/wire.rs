@@ -2,7 +2,9 @@
 
 use super::{Bounds, GetInput, GetOutcome, View};
 use provenance_core::protocol::{GraphNode, ImpactResult, ResponseMeta};
-use provenance_core::{Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic};
+use provenance_core::{
+    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
+};
 use schemars::generate::{Contract, SchemaSettings};
 use serde::{Serialize, Serializer};
 use serde_json::Value;
@@ -77,12 +79,16 @@ impl GetOutcome {
                 value: RecordData::from(&self.record),
             },
             view: self.view(),
-            related: self.related().iter().map(|record| RelatedWire {
-                id: record.node.id(),
-                kind: record.node.node_type(),
-                value: &record.node,
-                depth: record.depth,
-            }).collect(),
+            related: self
+                .related()
+                .iter()
+                .map(|record| RelatedWire {
+                    id: record.node.id(),
+                    kind: record.node.node_type(),
+                    value: &record.node,
+                    depth: record.depth,
+                })
+                .collect(),
             detail: self.impact(),
             bounds: self.bounds(),
             record_metadata: self.record_metadata.as_ref(),
@@ -103,7 +109,8 @@ fn schema<T: schemars::JsonSchema>(contract: Contract) -> Value {
             .with(|settings| settings.contract = contract)
             .into_generator()
             .into_root_schema_for::<T>(),
-    ).expect("typed get schema is JSON")
+    )
+    .expect("typed get schema is JSON")
 }
 
 /// The MCP get request schema is generated from the deserialized request.
@@ -119,28 +126,55 @@ pub fn output_schema() -> Value {
 /// Render a get result for both terminal and MCP readers.
 pub fn render_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
     let mut sections = vec![
-        format!("{} {}", outcome.record.node_type().as_str(), outcome.record.id().as_str()),
+        format!(
+            "{} {}",
+            outcome.record.node_type().as_str(),
+            outcome.record.id().as_str()
+        ),
         format!("view: {}", outcome.view().as_str()),
-        format!("record:\n{}", serde_json::to_string_pretty(&RecordData::from(&outcome.record))?),
+        format!(
+            "record:\n{}",
+            serde_json::to_string_pretty(&RecordData::from(&outcome.record))?
+        ),
     ];
     if !outcome.related().is_empty() {
-        sections.push(format!("related:\n{}", outcome.related().iter().map(|record| format!(
-            "- {} {}: {}", record.node.node_type().as_str(), record.node.id().as_str(),
-            serde_json::to_string(&record.node).expect("record values are JSON")
-        )).collect::<Vec<_>>().join("\n")));
+        sections.push(format!(
+            "related:\n{}",
+            outcome
+                .related()
+                .iter()
+                .map(|record| format!(
+                    "- {} {}: {}",
+                    record.node.node_type().as_str(),
+                    record.node.id().as_str(),
+                    serde_json::to_string(&record.node).expect("record values are JSON")
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ));
     }
     if let Some(detail) = outcome.impact() {
-        sections.push(format!("detail:\n{}", serde_json::to_string_pretty(detail)?));
+        sections.push(format!(
+            "detail:\n{}",
+            serde_json::to_string_pretty(detail)?
+        ));
     }
     if let Some(bounds) = outcome.bounds() {
         sections.push(format!(
             "bounds: limit={} max_depth={} has_more={} truncated={} continuation={}",
             bounds.limit,
-            bounds.max_depth.map_or_else(|| "none".to_owned(), |depth| depth.to_string()),
-            bounds.has_more, bounds.truncated, bounds.continuation.as_deref().unwrap_or("none")
+            bounds
+                .max_depth
+                .map_or_else(|| "none".to_owned(), |depth| depth.to_string()),
+            bounds.has_more,
+            bounds.truncated,
+            bounds.continuation.as_deref().unwrap_or("none")
         ));
     }
-    for (label, metadata) in [("record", outcome.record_metadata.as_ref()), ("view", outcome.view_metadata())] {
+    for (label, metadata) in [
+        ("record", outcome.record_metadata.as_ref()),
+        ("view", outcome.view_metadata()),
+    ] {
         if let Some(error) = metadata.and_then(|value| value.freshness_error.as_deref()) {
             sections.push(format!("warning: {label} freshness: {error}"));
         }

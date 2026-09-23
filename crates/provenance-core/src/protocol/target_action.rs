@@ -11,7 +11,12 @@ pub enum TargetAction {
 
 impl TargetAction {
     pub const ALL: [Self; 6] = [
-        Self::Create, Self::Update, Self::Answer, Self::Claim, Self::Release, Self::Submit,
+        Self::Create,
+        Self::Update,
+        Self::Answer,
+        Self::Claim,
+        Self::Release,
+        Self::Submit,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -26,6 +31,8 @@ impl TargetAction {
     }
 
     pub fn parse(value: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|action| action.as_str() == value)
+        Self::ALL
+            .into_iter()
+            .find(|action| action.as_str() == value)
     }
 }

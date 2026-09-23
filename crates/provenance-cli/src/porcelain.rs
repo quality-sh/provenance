@@ -5,9 +5,9 @@ use provenance_porcelain::get::{GetInput, GetOutcome};
 use std::net::{Ipv4Addr, SocketAddr};
 
 mod search;
-pub use search::dispatch_search;
 pub use provenance_porcelain::check::render_readable as render_check;
 pub use provenance_porcelain::get::render_readable as render_get_readable;
+pub use search::dispatch_search;
 
 /// An explicit CLI output format.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

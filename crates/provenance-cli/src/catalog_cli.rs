@@ -2,8 +2,8 @@
 use crate::invocation::{grammar, GlobalContext};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
 use clap::{parser::ValueSource, ArgMatches, Command};
-use provenance_store::operations::catalog::{self, Definition, TargetAction};
 use provenance_porcelain::action::Action;
+use provenance_store::operations::catalog::{self, Definition, TargetAction};
 use serde_json::{json, Map, Value};
 use std::{
     collections::BTreeMap,
@@ -161,9 +161,7 @@ pub async fn dispatch_target(
     } else {
         println!(
             "{}",
-            provenance_porcelain::action::render_readable(
-                action, &target, route.kind, &value
-            )
+            provenance_porcelain::action::render_readable(action, &target, route.kind, &value)
         );
     }
     Ok(())

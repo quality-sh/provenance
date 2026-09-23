@@ -6,7 +6,9 @@ use std::sync::Arc;
 use std::{future::Future, pin::Pin};
 
 /// A distinct repository check category.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, schemars::JsonSchema)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Category {
     Graph,
@@ -22,14 +24,20 @@ impl Category {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CheckInput {
-    #[serde(rename = "categories", default, deserialize_with = "deserialize_categories")]
+    #[serde(
+        rename = "categories",
+        default,
+        deserialize_with = "deserialize_categories"
+    )]
     #[schemars(extend("uniqueItems" = true))]
     selectors: Vec<Category>,
     #[serde(skip)]
     scope: Option<String>,
 }
 
-fn deserialize_categories<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<Category>, D::Error> {
+fn deserialize_categories<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<Category>, D::Error> {
     let mut categories = Vec::<Category>::deserialize(deserializer)?;
     categories.sort_unstable();
     categories.dedup();
@@ -271,7 +279,8 @@ fn schema<T: schemars::JsonSchema>(contract: schemars::generate::Contract) -> se
             .with(|settings| settings.contract = contract)
             .into_generator()
             .into_root_schema_for::<T>(),
-    ).expect("typed check schema is JSON")
+    )
+    .expect("typed check schema is JSON")
 }
 
 /// The schema of the same request that the check service deserializes.
@@ -286,13 +295,29 @@ pub fn output_schema() -> serde_json::Value {
 
 /// Render category results for terminal and MCP readers.
 pub fn render_readable(outcome: &CheckOutcome) -> String {
-    outcome.categories.iter().flat_map(|report| {
-        let heading = format!("{:?}: {:?}", report.category, report.status).to_ascii_lowercase();
-        std::iter::once(heading)
-            .chain(report.findings.iter().map(|finding| format!("  - {}", finding.message)))
-            .chain(report.unavailable_reason.iter().map(|reason| format!("  - {reason}")))
-            .collect::<Vec<_>>()
-    }).collect::<Vec<_>>().join("\n")
+    outcome
+        .categories
+        .iter()
+        .flat_map(|report| {
+            let heading =
+                format!("{:?}: {:?}", report.category, report.status).to_ascii_lowercase();
+            std::iter::once(heading)
+                .chain(
+                    report
+                        .findings
+                        .iter()
+                        .map(|finding| format!("  - {}", finding.message)),
+                )
+                .chain(
+                    report
+                        .unavailable_reason
+                        .iter()
+                        .map(|reason| format!("  - {reason}")),
+                )
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 impl<P: CheckPort> crate::Porcelain<P> {

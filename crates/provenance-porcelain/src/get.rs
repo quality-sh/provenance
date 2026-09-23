@@ -22,7 +22,9 @@ pub struct RecordResolution {
 }
 
 /// The named view selected for a known record.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[derive(
+    Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum View {
     #[default]

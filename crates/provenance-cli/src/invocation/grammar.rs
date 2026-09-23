@@ -6,8 +6,8 @@ use clap::{
 };
 use provenance_cli::porcelain;
 use provenance_core::NodeType;
-use provenance_porcelain::get::View;
 use provenance_porcelain::action::Action;
+use provenance_porcelain::get::View;
 
 // Shared options for the Porcelain and catalog grammars.
 #[derive(Args)]

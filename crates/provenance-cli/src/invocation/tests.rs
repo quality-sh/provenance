@@ -30,19 +30,36 @@ fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
 #[test]
 fn target_grammar_uses_shared_action_and_view_values() {
     for action in Action::ALL {
-        assert!(super::grammar::TargetArgs::try_parse_from([
-            "provenance", "req_live", action.as_str()
-        ]).is_ok(), "{}", action.as_str());
+        assert!(
+            super::grammar::TargetArgs::try_parse_from(["provenance", "req_live", action.as_str()])
+                .is_ok(),
+            "{}",
+            action.as_str()
+        );
     }
     for view in View::ALL {
-        assert!(super::grammar::TargetArgs::try_parse_from([
-            "provenance", "req_live", "get", "--view", view.as_str()
-        ]).is_ok(), "{}", view.as_str());
+        assert!(
+            super::grammar::TargetArgs::try_parse_from([
+                "provenance",
+                "req_live",
+                "get",
+                "--view",
+                view.as_str()
+            ])
+            .is_ok(),
+            "{}",
+            view.as_str()
+        );
     }
+    assert!(
+        super::grammar::TargetArgs::try_parse_from(["provenance", "req_live", "invented"]).is_err()
+    );
     assert!(super::grammar::TargetArgs::try_parse_from([
-        "provenance", "req_live", "invented"
-    ]).is_err());
-    assert!(super::grammar::TargetArgs::try_parse_from([
-        "provenance", "req_live", "get", "--view", "invented"
-    ]).is_err());
+        "provenance",
+        "req_live",
+        "get",
+        "--view",
+        "invented"
+    ])
+    .is_err());
 }

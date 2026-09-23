@@ -58,7 +58,11 @@ impl Display for ActionError {
 impl std::error::Error for ActionError {}
 
 /// Check action options before a CLI opens a repository or a host resolves an ID.
-pub fn validate_target(action: Action, target: &str, create_kind: Option<NodeType>) -> Result<(), ActionError> {
+pub fn validate_target(
+    action: Action,
+    target: &str,
+    create_kind: Option<NodeType>,
+) -> Result<(), ActionError> {
     if target.is_empty() {
         return Err(ActionError::InvalidOptions);
     }
@@ -82,13 +86,23 @@ impl<P: GetPort> crate::Porcelain<P> {
         let kind = if let Some(kind) = create_kind {
             kind
         } else {
-            match self.port.resolve(target).await.map_err(map_read_error)?.result {
+            match self
+                .port
+                .resolve(target)
+                .await
+                .map_err(map_read_error)?
+                .result
+            {
                 RecordResolution::Found(record) => record.node_type(),
                 RecordResolution::Missing => return Err(ActionError::NotFound),
                 RecordResolution::Ambiguous => return Err(ActionError::AmbiguousIdentity),
             }
         };
-        Ok(Target { action, target: target.to_owned(), kind })
+        Ok(Target {
+            action,
+            target: target.to_owned(),
+            kind,
+        })
     }
 }
 
@@ -105,7 +119,9 @@ fn map_read_error(error: ReadError) -> ActionError {
 pub fn render_readable(action: Action, target: &str, kind: NodeType, value: &Value) -> String {
     format!(
         "{} {} {}\n\n{}",
-        action.as_str(), kind.as_str(), target,
+        action.as_str(),
+        kind.as_str(),
+        target,
         serde_json::to_string_pretty(value.get("data").unwrap_or(value))
             .expect("registered output is JSON")
     )

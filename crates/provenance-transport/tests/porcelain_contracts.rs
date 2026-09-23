@@ -4,7 +4,10 @@ use provenance_porcelain::check::{
     PortFuture, Refusal, StatementContext,
 };
 use serde_json::{json, Value};
-use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 #[cfg(feature = "test-fixture")]
 #[allow(dead_code)]
@@ -35,27 +38,49 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
     let output = validator(&json!(get.output_schema.as_ref().unwrap()));
 
     let mut record_value = None;
-    let cases = View::ALL.into_iter().map(|view| {
-        (if view == View::Grounding { "rule_shared" } else { "req_shared" }, view)
-    }).chain(std::iter::once(("rule_shared", View::Record)));
+    let cases = View::ALL
+        .into_iter()
+        .map(|view| {
+            (
+                if view == View::Grounding {
+                    "rule_shared"
+                } else {
+                    "req_shared"
+                },
+                view,
+            )
+        })
+        .chain(std::iter::once(("rule_shared", View::Record)));
     for (target, view) in cases {
         let arguments = json!({"target":target, "view":view.as_str()});
         assert!(input.is_valid(&arguments), "valid {view:?} input");
-        let result = client.call_tool(
-            CallToolRequestParams::new("get").with_arguments(arguments.as_object().unwrap().clone())
-        ).await.unwrap();
+        let result = client
+            .call_tool(
+                CallToolRequestParams::new("get")
+                    .with_arguments(arguments.as_object().unwrap().clone()),
+            )
+            .await
+            .unwrap();
         assert_ne!(result.is_error, Some(true), "{view:?}");
         let value = result.structured_content.as_ref().unwrap();
-        assert!(output.is_valid(value), "{view:?}: {:?}", output.validate(value).err()
-            .map(|errors| errors.map(|error| error.to_string()).collect::<Vec<_>>()));
+        assert!(
+            output.is_valid(value),
+            "{view:?}: {:?}",
+            output
+                .validate(value)
+                .err()
+                .map(|errors| errors.map(|error| error.to_string()).collect::<Vec<_>>())
+        );
 
         let service = provenance_porcelain::Porcelain::new(
-            provenance_transport::porcelain::HostGetPort::new(host.clone())
+            provenance_transport::porcelain::HostGetPort::new(host.clone()),
         );
         let shared = service.get(GetInput::new(target, view)).await.unwrap();
         assert_eq!(value, &serde_json::to_value(&shared).unwrap());
-        assert_eq!(result.content[0].as_text().unwrap().text,
-            provenance_porcelain::get::render_readable(&shared).unwrap());
+        assert_eq!(
+            result.content[0].as_text().unwrap().text,
+            provenance_porcelain::get::render_readable(&shared).unwrap()
+        );
         if view == View::Record {
             assert!(value["detail"].is_null());
             assert!(value["bounds"].is_null());
@@ -83,7 +108,10 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
     missing_record.as_object_mut().unwrap().remove("record");
     assert!(!output.is_valid(&missing_record));
     let mut without_metadata = valid.clone();
-    without_metadata.as_object_mut().unwrap().remove("record_metadata");
+    without_metadata
+        .as_object_mut()
+        .unwrap()
+        .remove("record_metadata");
     assert!(output.is_valid(&without_metadata));
     let mut null_metadata = valid.clone();
     null_metadata["record_metadata"] = Value::Null;
@@ -97,11 +125,15 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
             provenance_porcelain::get::Traversal {
                 records: Vec::new(),
                 bounds: provenance_porcelain::get::Bounds {
-                    limit: 1, max_depth: Some(2), has_more: true,
-                    continuation: Some("next-page".into()), truncated: true,
+                    limit: 1,
+                    max_depth: Some(2),
+                    has_more: true,
+                    continuation: Some("next-page".into()),
+                    truncated: true,
                 },
                 response_metadata: Some(provenance_core::protocol::ResponseMeta {
-                    freshness_error: Some("catch-up failed".into()), ..Default::default()
+                    freshness_error: Some("catch-up failed".into()),
+                    ..Default::default()
                 }),
             },
         ),
@@ -110,12 +142,21 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
     let continued = serde_json::to_value(continued).unwrap();
     assert!(output.is_valid(&continued));
     assert_eq!(continued["bounds"]["continuation"], "next-page");
-    assert_eq!(continued["view_metadata"]["freshness_error"], "catch-up failed");
+    assert_eq!(
+        continued["view_metadata"]["freshness_error"],
+        "catch-up failed"
+    );
     assert!(continued.get("record_metadata").is_none());
     for (field, bad) in [
-        ("record", json!({"id":"req_shared","kind":"requirement","value":42})),
+        (
+            "record",
+            json!({"id":"req_shared","kind":"requirement","value":42}),
+        ),
         ("view", json!("invented")),
-        ("related", json!([{"id":"rule_shared","kind":"rule","value":7,"depth":1}])),
+        (
+            "related",
+            json!([{"id":"rule_shared","kind":"rule","value":7,"depth":1}]),
+        ),
         ("detail", json!("not impact data")),
         ("bounds", json!({"limit":"many"})),
         ("record_metadata", json!(5)),
@@ -139,20 +180,26 @@ impl CheckPort for CategoryFixture {
         Box::pin(async move {
             Ok(match category {
                 Category::Graph => CategoryRun::Graph {
-                    findings: vec![Finding::with_detail("graph finding", json!({"edge": [1, true]}))],
+                    findings: vec![Finding::with_detail(
+                        "graph finding",
+                        json!({"edge": [1, true]}),
+                    )],
                     refusal: Refusal::Findings,
                 },
                 Category::Statements => CategoryRun::Statements {
                     findings: vec![Finding::new("statement finding")],
                     context: Some(StatementContext {
-                        candidate_commit: "candidate".into(), base_commit: None,
+                        candidate_commit: "candidate".into(),
+                        base_commit: None,
                     }),
                     refusal: Refusal::Findings,
                 },
                 Category::Bindings if unavailable => return Err("bindings are unavailable".into()),
                 Category::Bindings => CategoryRun::Bindings {
                     findings: Vec::new(),
-                    context: BindingContext { policy: BindingPolicy::Warning },
+                    context: BindingContext {
+                        policy: BindingPolicy::Warning,
+                    },
                     refusal: Refusal::None,
                 },
             })
@@ -164,7 +211,9 @@ impl CheckPort for CategoryFixture {
 async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_results() {
     use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 
-    let fixture = Arc::new(CategoryFixture { unavailable: AtomicBool::new(false) });
+    let fixture = Arc::new(CategoryFixture {
+        unavailable: AtomicBool::new(false),
+    });
     let port: Arc<dyn CheckPort> = fixture.clone();
     let host = provenance_transport::StatementHost::default().with_check_port(port.clone());
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
@@ -183,19 +232,43 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
     assert!(!input.is_valid(&json!({"scope":"other"})));
 
     let arguments = json!({});
-    let result = client.call_tool(CallToolRequestParams::new("check")
-        .with_arguments(arguments.as_object().unwrap().clone())).await.unwrap();
+    let result = client
+        .call_tool(
+            CallToolRequestParams::new("check")
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap();
     assert_ne!(result.is_error, Some(true));
     let value = result.structured_content.as_ref().unwrap();
-    assert!(output.is_valid(value), "{:?}", output.validate(value).err()
-        .map(|errors| errors.map(|error| error.to_string()).collect::<Vec<_>>()));
-    let shared = provenance_porcelain::Porcelain::new(port.clone()).check(CheckInput::default()).await;
+    assert!(
+        output.is_valid(value),
+        "{:?}",
+        output
+            .validate(value)
+            .err()
+            .map(|errors| errors.map(|error| error.to_string()).collect::<Vec<_>>())
+    );
+    let shared = provenance_porcelain::Porcelain::new(port.clone())
+        .check(CheckInput::default())
+        .await;
     assert_eq!(value, &serde_json::to_value(&shared).unwrap());
-    assert_eq!(result.content[0].as_text().unwrap().text,
-        provenance_porcelain::check::render_readable(&shared));
-    assert_eq!(value["categories"].as_array().unwrap().len(), Category::ALL.len());
-    assert_eq!(value["categories"][1]["context"]["base_commit"], Value::Null);
-    assert_eq!(value["categories"][0]["findings"][0]["detail"]["edge"], json!([1, true]));
+    assert_eq!(
+        result.content[0].as_text().unwrap().text,
+        provenance_porcelain::check::render_readable(&shared)
+    );
+    assert_eq!(
+        value["categories"].as_array().unwrap().len(),
+        Category::ALL.len()
+    );
+    assert_eq!(
+        value["categories"][1]["context"]["base_commit"],
+        Value::Null
+    );
+    assert_eq!(
+        value["categories"][0]["findings"][0]["detail"]["edge"],
+        json!([1, true])
+    );
     assert_eq!(value["categories"][2]["context"]["policy"], "warning");
 
     for (field, bad) in [
@@ -211,12 +284,20 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
 
     fixture.unavailable.store(true, Ordering::SeqCst);
     let arguments = json!({"categories":["bindings"]});
-    let unavailable = client.call_tool(CallToolRequestParams::new("check")
-        .with_arguments(arguments.as_object().unwrap().clone())).await.unwrap();
+    let unavailable = client
+        .call_tool(
+            CallToolRequestParams::new("check")
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap();
     let value = unavailable.structured_content.as_ref().unwrap();
     assert!(output.is_valid(value));
     assert_eq!(value["categories"][0]["status"], "unavailable");
-    assert_eq!(value["categories"][0]["unavailable_reason"], "bindings are unavailable");
+    assert_eq!(
+        value["categories"][0]["unavailable_reason"],
+        "bindings are unavailable"
+    );
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();

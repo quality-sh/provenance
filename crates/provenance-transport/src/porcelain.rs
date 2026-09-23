@@ -61,8 +61,13 @@ pub(crate) fn get_tool() -> rmcp::model::Tool {
         "Read one repository record by its repository-local ID.",
         schema.as_object().expect("get schema is an object").clone(),
     );
-    tool.output_schema = Some(provenance_porcelain::get::output_schema()
-        .as_object().expect("get output schema is an object").clone().into());
+    tool.output_schema = Some(
+        provenance_porcelain::get::output_schema()
+            .as_object()
+            .expect("get output schema is an object")
+            .clone()
+            .into(),
+    );
     tool
 }
 
@@ -71,10 +76,18 @@ pub(crate) fn check_tool() -> rmcp::model::Tool {
     let mut tool = rmcp::model::Tool::new(
         "check",
         "Check graph validity, statement quality, and binding coverage.",
-        schema.as_object().expect("check schema is an object").clone(),
+        schema
+            .as_object()
+            .expect("check schema is an object")
+            .clone(),
     );
-    tool.output_schema = Some(provenance_porcelain::check::output_schema()
-        .as_object().expect("check output schema is an object").clone().into());
+    tool.output_schema = Some(
+        provenance_porcelain::check::output_schema()
+            .as_object()
+            .expect("check output schema is an object")
+            .clone()
+            .into(),
+    );
     tool
 }
 

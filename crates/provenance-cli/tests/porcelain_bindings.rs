@@ -35,6 +35,60 @@ fn init_with_source(repo: &str) {
         .success();
 }
 
+async fn assert_get_readable(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    repo: &str,
+    name: &str,
+) {
+    use rmcp::model::CallToolRequestParams;
+
+    let cli = provenance()
+        .args(["source_live_inventory", name, "--repo", repo])
+        .output()
+        .unwrap();
+    assert!(cli.status.success());
+    let mcp = client
+        .call_tool(
+            CallToolRequestParams::new(name.to_owned()).with_arguments(
+                json!({"target":"source_live_inventory"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(cli.stdout).unwrap().trim_end(),
+        mcp.content[0].as_text().unwrap().text
+    );
+}
+
+async fn assert_check_readable(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    repo: &str,
+    name: &str,
+) {
+    use rmcp::model::CallToolRequestParams;
+
+    let cli = provenance()
+        .args([name, "--repo", repo, "--graph"])
+        .output()
+        .unwrap();
+    assert!(cli.status.success());
+    let mcp = client
+        .call_tool(
+            CallToolRequestParams::new(name.to_owned())
+                .with_arguments(json!({"categories":["graph"]}).as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(cli.stdout).unwrap().trim_end(),
+        mcp.content[0].as_text().unwrap().text
+    );
+}
+
 struct EmptyCheckPort;
 
 impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
@@ -106,7 +160,10 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         "record": {"id":"source_live_inventory", "kind":"source", "value":42},
         "view":"record", "related":[], "detail":null, "bounds":null
     });
-    assert!(!get_validator.is_valid(&invalid_record), "record payload must be typed");
+    assert!(
+        !get_validator.is_valid(&invalid_record),
+        "record payload must be typed"
+    );
     let check_name = tools
         .iter()
         .find(|tool| {
@@ -148,17 +205,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     for field in ["record", "view", "related", "detail", "bounds"] {
         assert_eq!(cli_get[field], mcp_get[field], "get field {field}");
     }
-    let cli_get_readable = provenance()
-        .args(["source_live_inventory", &get_name, "--repo", &repo])
-        .output().unwrap();
-    assert!(cli_get_readable.status.success());
-    let mcp_get_readable = client.call_tool(
-        CallToolRequestParams::new(get_name.clone()).with_arguments(
-            json!({"target":"source_live_inventory"}).as_object().unwrap().clone()
-        )
-    ).await.unwrap();
-    assert_eq!(String::from_utf8(cli_get_readable.stdout).unwrap().trim_end(),
-        mcp_get_readable.content[0].as_text().unwrap().text);
+    assert_get_readable(&client, &repo, &get_name).await;
 
     let cli_check = provenance()
         .args([&check_name, "--repo", &repo, "--graph", "--format", "json"])
@@ -176,17 +223,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         .structured_content
         .unwrap();
     assert_eq!(cli_check["categories"], mcp_check["categories"]);
-    let cli_check_readable = provenance()
-        .args([&check_name, "--repo", &repo, "--graph"])
-        .output().unwrap();
-    assert!(cli_check_readable.status.success());
-    let mcp_check_readable = client.call_tool(
-        CallToolRequestParams::new(check_name).with_arguments(
-            json!({"categories":["graph"]}).as_object().unwrap().clone()
-        )
-    ).await.unwrap();
-    assert_eq!(String::from_utf8(cli_check_readable.stdout).unwrap().trim_end(),
-        mcp_check_readable.content[0].as_text().unwrap().text);
+    assert_check_readable(&client, &repo, &check_name).await;
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

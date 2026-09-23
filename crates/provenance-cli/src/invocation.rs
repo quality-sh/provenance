@@ -98,7 +98,10 @@ impl Invocation {
             catalog_cli::ensure_only_fields(&matches, &["kind", "view", "depth", "limit"]);
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
-                args.view.as_deref().and_then(View::parse).unwrap_or_default(),
+                args.view
+                    .as_deref()
+                    .and_then(View::parse)
+                    .unwrap_or_default(),
             );
             input.max_depth = args.depth;
             input.returned_kinds = args.kind;
