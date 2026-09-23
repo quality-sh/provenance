@@ -217,5 +217,6 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::ReviewDiscussionMessagesV2>(),
         register::<super::ReviewDiscussionMessageV2>(),
         register::<super::WriteDiscussionV2>(),
+        register::<super::WriteTargetDiscussionV2>(),
     ]
 }

@@ -43,12 +43,28 @@ impl StateStore {
                                 anyhow::anyhow!("Discussion does not exist"),
                             )
                         })?;
-                    anyhow::ensure!(head.parent == input.parent, "Discussion parent membership mismatch");
-                    anyhow::ensure!(head.version == *expected_version, "stale Discussion version");
-                    let matching = self.list_threads(&input.scope_id)?.into_iter().filter(|t| t.parent == input.parent).collect::<Vec<_>>();
-                    let canonical = provenance_core::threads::choose_canonical_active_thread(&matching);
-                    anyhow::ensure!(canonical.is_some_and(|t| t.id == head.thread_id),
-                        "Discussion requires the canonical active Thread; closed containers refuse replies and reopening");
+                    crate::write_error::ensure!(
+                        DiscussionMembershipMismatch,
+                        head.parent == input.parent,
+                        "Discussion parent membership mismatch"
+                    );
+                    crate::write_error::ensure!(
+                        DiscussionVersionConflict,
+                        head.version == *expected_version,
+                        "stale Discussion version"
+                    );
+                    let matching = self
+                        .list_threads(&input.scope_id)?
+                        .into_iter()
+                        .filter(|t| t.parent == input.parent)
+                        .collect::<Vec<_>>();
+                    let canonical =
+                        provenance_core::threads::choose_canonical_active_thread(&matching);
+                    crate::write_error::ensure!(
+                        DiscussionClosed,
+                        canonical.is_some_and(|t| t.id == head.thread_id),
+                        "Discussion requires the canonical active Thread; closed containers refuse replies and reopening"
+                    );
                     Some(head)
                 }
             };
@@ -60,7 +76,11 @@ impl StateStore {
                         "message body must not be empty"
                     );
                     if let Some(head) = &head {
-                        anyhow::ensure!(head.status == DiscussionStatus::Active, "resolved Discussion refuses replies");
+                        crate::write_error::ensure!(
+                            DiscussionResolved,
+                            head.status == DiscussionStatus::Active,
+                            "resolved Discussion refuses replies"
+                        );
                     }
                 }
                 DiscussionAction::SetStatus { status, .. } => {
