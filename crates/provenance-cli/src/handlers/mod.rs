@@ -35,6 +35,7 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
     let _ = quiet;
     match command {
         Command::Search(args) => args.dispatch().await?,
+        Command::Discussions(args) => args.dispatch().await?,
         Command::CargoInit { package, ste_pdf } => {
             tokio::task::spawn_blocking(move || cargo_init::handle(package.as_deref(), ste_pdf))
                 .await??;

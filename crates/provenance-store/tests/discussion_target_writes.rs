@@ -14,7 +14,9 @@ use serde_json::json;
 fn request(id: &str, action: &serde_json::Value) -> TargetDiscussionWrite {
     serde_json::from_value(json!({
         "scope_id": "default", "request_id": id, "actor": "ben",
-        "declared_by": null, "action": action
+        "declared_by": null, "allowed_parent_kinds": [
+            "source", "requirement", "resolution", "rule", "topic", "question", "domain", "boundary"
+        ], "action": action
     }))
     .unwrap()
 }
@@ -57,6 +59,25 @@ fn target_reply_changes_only_its_discussion() {
     assert_eq!(changed.version, 2);
     assert_eq!(b.version, 1);
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 3);
+}
+
+#[test]
+fn target_write_checks_host_parent_grants_inside_publication() {
+    let (_temp, store) = fixture();
+    let original = store.write_target_discussion(start("first")).unwrap();
+    let mut denied_start = start("denied_start");
+    denied_start.allowed_parent_kinds = vec![provenance_core::NodeType::Source];
+    assert!(matches!(
+        failure(store.write_target_discussion(denied_start)),
+        WriteFailure::ResourceNotFound
+    ));
+    let mut denied_reply = reply("denied_reply", &original);
+    denied_reply.allowed_parent_kinds = vec![provenance_core::NodeType::Source];
+    assert!(matches!(
+        failure(store.write_target_discussion(denied_reply)),
+        WriteFailure::ResourceNotFound
+    ));
+    assert_eq!(store.list_messages(&scope()).unwrap().len(), 1);
 }
 
 #[test]
