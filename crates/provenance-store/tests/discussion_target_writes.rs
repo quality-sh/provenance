@@ -188,7 +188,6 @@ fn owner_and_parent_membership_refuse_without_publication() {
             }))
             .unwrap(),
         )
-        .unwrap()
         .unwrap();
     let mut wrong_parent = discussion_support::reply(&a, "wrong_parent");
     wrong_parent.parent.node_id = provenance_core::StableId::new("req_b").unwrap();
