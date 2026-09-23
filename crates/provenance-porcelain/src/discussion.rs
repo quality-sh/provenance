@@ -4,9 +4,9 @@ use provenance_core::{
     protocol::{Stamp, Stamped},
     threads::{
         DiscussionConversation, DiscussionEntry, DiscussionListPage, DiscussionStatus,
-        DiscussionStatusFilter, DiscussionSummary,
+        DiscussionStatusFilter,
     },
-    Message, MessageRole, ScopeId, StableId, ThreadParent,
+    MessageRole, ScopeId, StableId, ThreadParent,
 };
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, future::Future, pin::Pin};
@@ -106,22 +106,6 @@ pub struct ReplyInput {
     pub body: String,
 }
 
-/// The canonical selected page and its actual bound.
-#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
-pub struct Page<T> {
-    pub entries: Vec<T>,
-    pub limit: usize,
-    pub has_more: bool,
-    pub next_cursor: Option<String>,
-}
-
-/// One conversation head and its selected Message page.
-#[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
-pub struct ConversationResult {
-    pub head: DiscussionEntry,
-    pub messages: Page<Message>,
-}
-
 /// The shared structured result for CLI and MCP.
 #[derive(Clone, Debug, Deserialize, Serialize, schemars::JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -130,12 +114,16 @@ pub enum DiscussionOutcome {
         scope_id: ScopeId,
         parent: Option<ThreadParent>,
         status: DiscussionStatusFilter,
-        result: Page<DiscussionSummary>,
+        result: DiscussionListPage,
+        limit: usize,
+        has_more: bool,
         stamp: Option<Stamp>,
         freshness_error: Option<String>,
     },
     Conversation {
-        result: ConversationResult,
+        result: DiscussionConversation,
+        limit: usize,
+        has_more: bool,
         stamp: Option<Stamp>,
         freshness_error: Option<String>,
     },
@@ -145,7 +133,7 @@ pub enum DiscussionOutcome {
 }
 
 /// A refusal from validation, host grants, or a canonical operation.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DiscussionError {
     InvalidOptions,
     AccessDenied,
@@ -209,7 +197,9 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
             scope_id,
             parent,
             status,
-            result: page(result.entries, result.next_cursor, limit),
+            has_more: result.next_cursor.is_some(),
+            result,
+            limit,
             stamp: Some(stamp),
             freshness_error,
         })
@@ -227,10 +217,9 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
             freshness_error,
         } = self.port.conversation(input).await?;
         Ok(DiscussionOutcome::Conversation {
-            result: ConversationResult {
-                head: result.head,
-                messages: page(result.messages.entries, result.messages.next_cursor, limit),
-            },
+            has_more: result.messages.next_cursor.is_some(),
+            result,
+            limit,
             stamp: Some(stamp),
             freshness_error,
         })
@@ -259,15 +248,6 @@ fn checked_limit(limit: Option<usize>) -> Result<usize, DiscussionError> {
         .ok_or(DiscussionError::InvalidOptions)
 }
 
-fn page<T>(entries: Vec<T>, next_cursor: Option<String>, limit: usize) -> Page<T> {
-    Page {
-        entries,
-        has_more: next_cursor.is_some(),
-        next_cursor,
-        limit,
-    }
-}
-
 /// Render the fields that identify a Discussion and the bounds of its page.
 pub fn render_readable(outcome: &DiscussionOutcome) -> String {
     match outcome {
@@ -276,6 +256,8 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
             parent,
             status,
             result,
+            limit,
+            has_more,
             freshness_error,
             ..
         } => {
@@ -302,7 +284,7 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
                     entry.opening_excerpt
                 ));
             }
-            lines.push(bounds(result));
+            lines.push(bounds(*limit, *has_more, result.next_cursor.as_deref()));
             if let Some(error) = freshness_error {
                 lines.push(format!("warning: freshness: {error}"));
             }
@@ -310,6 +292,8 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
         }
         DiscussionOutcome::Conversation {
             result,
+            limit,
+            has_more,
             freshness_error,
             ..
         } => {
@@ -329,7 +313,7 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
                     message.body
                 ));
             }
-            lines.push(bounds(&result.messages));
+            lines.push(bounds(*limit, *has_more, result.messages.next_cursor.as_deref()));
             if let Some(error) = freshness_error {
                 lines.push(format!("warning: freshness: {error}"));
             }
@@ -349,12 +333,12 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
     }
 }
 
-fn bounds<T>(page: &Page<T>) -> String {
+fn bounds(limit: usize, has_more: bool, cursor: Option<&str>) -> String {
     format!(
         "bounds: limit={} has_more={} continuation={}",
-        page.limit,
-        page.has_more,
-        page.next_cursor.as_deref().unwrap_or("none")
+        limit,
+        has_more,
+        cursor.unwrap_or("none")
     )
 }
 
