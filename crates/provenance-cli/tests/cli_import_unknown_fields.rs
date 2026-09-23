@@ -153,6 +153,32 @@ fn import_accepts_the_same_document_without_the_unknown_field() {
 }
 
 #[test]
+fn import_refuses_trailing_input_and_leaves_the_stored_state_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    init(&repo);
+    create_source(&repo, "source_one");
+    let export_path = dir.path().join("export.json");
+    export(&repo, &export_path);
+
+    let mut document: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&export_path).unwrap()).unwrap();
+    document["sources"][0]["name"] = serde_json::json!("Renamed Policy");
+    let before = stored_state(&repo);
+    let incoming = dir.path().join("incoming.json");
+
+    for trailing in [" {}", " junk"] {
+        std::fs::write(&incoming, format!("{}{trailing}", document)).unwrap();
+        import(&repo, &incoming).failure();
+        assert_eq!(
+            stored_state(&repo),
+            before,
+            "trailing input {trailing:?} must leave every stored file unchanged"
+        );
+    }
+}
+
+#[test]
 fn import_still_accepts_the_legacy_disposition_alias() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");
