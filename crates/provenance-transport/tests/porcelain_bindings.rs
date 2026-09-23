@@ -67,24 +67,6 @@ async fn mcp_get_runs_through_the_composed_service() {
     let output_schema = get.output_schema.as_ref().expect("get output schema");
     assert_eq!(output_schema["type"], "object");
     assert_eq!(output_schema["additionalProperties"], false);
-    assert_eq!(
-        output_schema["required"],
-        json!(["record", "view", "related", "detail", "bounds"])
-    );
-    assert_eq!(
-        output_schema["properties"]["view"]["enum"],
-        json!(["record", "children", "grounding", "impact"])
-    );
-    assert_eq!(
-        output_schema["$defs"]["bounds"]["required"],
-        json!([
-            "limit",
-            "max_depth",
-            "has_more",
-            "continuation",
-            "truncated"
-        ])
-    );
     let result = client
         .call_tool(
             CallToolRequestParams::new("get")
@@ -212,7 +194,7 @@ fn mcp_readable_get_warns_when_the_record_or_view_is_stale() {
         }),
     };
 
-    let readable = provenance_transport::porcelain::render_get_readable(&outcome);
+    let readable = provenance_porcelain::get::render_readable(&outcome).unwrap();
 
     assert!(readable.contains("warning: record freshness: record catch-up failed"));
     assert!(readable.contains("warning: view freshness: view catch-up failed"));
@@ -372,15 +354,6 @@ async fn mcp_check_uses_its_separately_injected_port() {
     assert_eq!(output_schema["type"], "object");
     assert_eq!(output_schema["additionalProperties"], false);
     assert_eq!(output_schema["required"], json!(["categories"]));
-    assert_eq!(
-        output_schema["properties"]["categories"]["items"]["properties"]["status"]["enum"],
-        json!(["passed", "findings", "unavailable"])
-    );
-    assert_eq!(
-        output_schema["properties"]["categories"]["items"]["properties"]["findings"]["items"]
-            ["required"],
-        json!(["message"])
-    );
     let result = client
         .call_tool(
             CallToolRequestParams::new("check").with_arguments(

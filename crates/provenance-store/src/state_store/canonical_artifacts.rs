@@ -1,7 +1,8 @@
 use super::StateStore;
 use provenance_core::model::relations::kind_word;
 use provenance_core::{
-    CanonicalArtifact, CanonicalArtifactType, IdeationTarget, NodeType, Scope, ScopeId, StableId,
+    ensure_record_id_assignable, CanonicalArtifact, CanonicalArtifactType, IdeationTarget,
+    NodeType, Scope, ScopeId, StableId,
 };
 use provenance_macros::rule;
 use std::collections::HashSet;
@@ -167,13 +168,14 @@ impl StateStore {
         scope_id: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<()> {
-        self.ensure_canonical_replacement_ids_unique(scope_id, std::iter::once(id), &[])
+        ensure_record_id_assignable(id.as_str())?;
+        self.ensure_canonical_replacement_ids_unique(scope_id, std::iter::once((None, id)), &[])
     }
 
     pub(super) fn ensure_canonical_replacement_ids_unique<'a>(
         &self,
         scope_id: &ScopeId,
-        replacements: impl IntoIterator<Item = &'a StableId>,
+        replacements: impl IntoIterator<Item = (Option<NodeType>, &'a StableId)>,
         replaced_kinds: &[NodeType],
     ) -> anyhow::Result<()> {
         let manifest = self.manifest()?;
@@ -202,13 +204,13 @@ impl StateStore {
     pub(super) fn ensure_import_ids_unique<'a>(
         &self,
         scope_id: &ScopeId,
-        replacements: impl IntoIterator<Item = &'a StableId>,
+        replacements: impl IntoIterator<Item = (NodeType, &'a StableId)>,
         replaced_kinds: &[NodeType],
     ) -> anyhow::Result<()> {
         let manifest = super::manifest_from_bytes(&std::fs::read(self.layout.manifest_path())?)?;
         ensure_replacement_ids_unique(
             Some(scope_id),
-            replacements,
+            replacements.into_iter().map(|(kind, id)| (Some(kind), id)),
             replaced_kinds,
             manifest.scopes.into_iter().map(|scope| {
                 CanonicalArtifactIndex::load_unlocked(self, &scope.id)
@@ -220,7 +222,7 @@ impl StateStore {
 
 fn ensure_replacement_ids_unique<'a>(
     scope_id: Option<&ScopeId>,
-    replacements: impl IntoIterator<Item = &'a StableId>,
+    replacements: impl IntoIterator<Item = (Option<NodeType>, &'a StableId)>,
     replaced_kinds: &[NodeType],
     scopes: impl IntoIterator<Item = anyhow::Result<(ScopeId, CanonicalArtifactIndex)>>,
 ) -> anyhow::Result<()> {
@@ -229,9 +231,16 @@ fn ensure_replacement_ids_unique<'a>(
         .map(|kind| kind_word(*kind))
         .collect::<HashSet<_>>();
     let mut ids = HashSet::new();
+    let mut previous_keys = HashSet::new();
     for scope in scopes {
         let (current_scope, index) = scope?;
         for entry in index.entries {
+            if scope_id.is_some_and(|scope_id| current_scope == *scope_id) {
+                previous_keys.insert(RecordKey {
+                    kind: entry.kind,
+                    id: entry.id.clone(),
+                });
+            }
             if scope_id.is_some_and(|scope_id| current_scope == *scope_id)
                 && replaced_kinds.contains(entry.kind)
             {
@@ -245,7 +254,10 @@ fn ensure_replacement_ids_unique<'a>(
             );
         }
     }
-    for id in replacements {
+    for (kind, id) in replacements {
+        if !kind.is_some_and(|kind| previous_keys.contains(&key(kind, id))) {
+            ensure_record_id_assignable(id.as_str())?;
+        }
         crate::write_error::ensure!(
             AlreadyExists,
             ids.insert(id.as_str().to_owned()),

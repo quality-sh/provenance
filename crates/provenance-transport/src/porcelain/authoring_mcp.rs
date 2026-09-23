@@ -1,6 +1,6 @@
 //! MCP schemas and result rendering for target-first authoring.
 
-use super::authoring::{render_readable, Action, ActionError};
+use super::authoring::{description, render_readable, Action, ActionError};
 use provenance_core::NodeType;
 use provenance_store::operations::catalog::Definition;
 use rmcp::model::{CallToolResult, Content, Tool};
@@ -42,17 +42,6 @@ fn tool(host: &crate::StatementHost, action: Action) -> Option<Tool> {
             .into(),
     );
     Some(tool)
-}
-
-const fn description(action: Action) -> &'static str {
-    match action {
-        Action::Create => "Create the target ID as an explicit record type.",
-        Action::Update => "Update the existing target while preserving omitted fields.",
-        Action::Answer => "Answer the target Question.",
-        Action::Claim => "Claim the target Topic.",
-        Action::Release => "Release the target Topic claim.",
-        Action::Submit => "Submit the target Requirement for review.",
-    }
 }
 
 fn input_schema(action: Action, definitions: &[(NodeType, &'static Definition)]) -> Value {
@@ -235,13 +224,16 @@ pub async fn call(
 
 fn action_error(error: &ActionError) -> CallToolResult {
     let kind = match error {
-        ActionError::InvalidOptions => "invalid_options",
+        ActionError::InvalidOptions | ActionError::KindSelection => "invalid_options",
         ActionError::NotFound => "not_found",
         ActionError::AmbiguousIdentity => "ambiguous_identity",
         ActionError::AccessDenied => "access_denied",
         ActionError::Operation(_) => "operation_failed",
     };
-    CallToolResult::structured_error(json!({
-        "error":{"kind":kind,"message":error.to_string()}
-    }))
+    let message = if matches!(error, ActionError::KindSelection) {
+        "unsupported action options".to_owned()
+    } else {
+        error.to_string()
+    };
+    CallToolResult::structured_error(json!({"error":{"kind":kind,"message":message}}))
 }

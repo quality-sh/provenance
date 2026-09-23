@@ -100,6 +100,6 @@ fn catalog_commands_offer_help_at_each_address() {
             .args(command)
             .assert()
             .success()
-            .stdout(contains("Catalog commands for rules"));
+            .stdout(contains("rules create"));
     }
 }

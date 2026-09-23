@@ -68,9 +68,10 @@ pub use invoke::{
 };
 #[cfg(feature = "schema")]
 pub use schema::{
-    definitions, parse_parameter_value, parse_schema_value, parse_schema_value_in,
-    serialize_parameter_value, target_definition, target_definitions, Definition, HttpMethod,
-    Parameter, ParseValueError, QueryVariant, ResponseKind,
+    definitions, operation_request_schema, operation_success_schema, parse_parameter_value,
+    parse_schema_value, parse_schema_value_in, serialize_parameter_value, target_definition,
+    target_definitions, Definition, HttpMethod, Parameter, ParseValueError, QueryVariant,
+    ResponseKind,
 };
 pub use statement::CheckStatement;
 
