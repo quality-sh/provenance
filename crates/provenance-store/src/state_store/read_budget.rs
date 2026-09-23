@@ -36,15 +36,61 @@ pub trait ReadBudget: Serialize {
 }
 
 /// The byte count `length(CAST(column AS BLOB))` reports for one column
-/// value: SQLite renders a null as absent, an integer as its decimal text,
-/// and text as its UTF-8 bytes. No supported resource column holds a real.
-fn column_bytes(value: &ColumnValue) -> usize {
+/// value: `SQLite` renders a null as absent, an integer as its decimal text,
+/// text as its UTF-8 bytes, and a real through `SQLite`'s own conversion.
+fn column_bytes(value: &ColumnValue) -> anyhow::Result<usize> {
     match value {
-        ColumnValue::Null => 0,
-        ColumnValue::Text(text) => text.len(),
-        ColumnValue::Integer(integer) => integer.to_string().len(),
-        ColumnValue::Real(real) => real.to_string().len(),
+        ColumnValue::Null => Ok(0),
+        ColumnValue::Text(text) => Ok(text.len()),
+        ColumnValue::Integer(integer) => Ok(integer.to_string().len()),
+        ColumnValue::Real(real) => sqlite_real_bytes(*real),
     }
+}
+
+fn sqlite_real_bytes(real: f64) -> anyhow::Result<usize> {
+    use libsqlite3_sys as sqlite;
+
+    let mut connection = std::ptr::null_mut();
+    let mut statement = std::ptr::null_mut();
+    // Use the same REAL-to-BLOB conversion as the supported read. Formatting
+    // the number in Rust, or even with SQLite printf, can give another size.
+    let result = unsafe {
+        (|| {
+            anyhow::ensure!(
+                sqlite::sqlite3_open(c":memory:".as_ptr(), &raw mut connection)
+                    == sqlite::SQLITE_OK,
+                "cannot open SQLite for REAL byte accounting"
+            );
+            anyhow::ensure!(
+                sqlite::sqlite3_prepare_v2(
+                    connection,
+                    c"SELECT CAST(? AS BLOB)".as_ptr(),
+                    -1,
+                    &raw mut statement,
+                    std::ptr::null_mut(),
+                ) == sqlite::SQLITE_OK,
+                "cannot prepare SQLite REAL byte accounting"
+            );
+            anyhow::ensure!(
+                sqlite::sqlite3_bind_double(statement, 1, real) == sqlite::SQLITE_OK,
+                "cannot bind SQLite REAL for byte accounting"
+            );
+            anyhow::ensure!(
+                sqlite::sqlite3_step(statement) == sqlite::SQLITE_ROW,
+                "cannot read SQLite REAL byte count"
+            );
+            Ok(usize::try_from(sqlite::sqlite3_column_bytes(statement, 0))?)
+        })()
+    };
+    unsafe {
+        if !statement.is_null() {
+            sqlite::sqlite3_finalize(statement);
+        }
+        if !connection.is_null() {
+            sqlite::sqlite3_close(connection);
+        }
+    }
+    result
 }
 
 /// Refuses the mutation before publication when the record's stored byte
@@ -78,7 +124,7 @@ macro_rules! projection_budget {
         $(
             impl ReadBudget for $kind {
                 fn read_bytes(&self) -> anyhow::Result<usize> {
-                    Ok(self.row()?.iter().map(column_bytes).sum())
+                    self.row()?.iter().map(column_bytes).sum()
                 }
             }
         )+

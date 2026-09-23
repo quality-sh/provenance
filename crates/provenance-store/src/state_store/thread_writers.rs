@@ -3,8 +3,10 @@ use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
 use crate::shards;
 use crate::write_error::{publication_started, SourceFailure, WriteFailure};
 use provenance_core::{
-    Message, NodeType, StableId, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
+    Message, NodeType, ScopeId, StableId, Thread, ThreadParent, ThreadStatus,
+    SUPPORTED_SCHEMA_VERSION,
 };
+use std::collections::BTreeMap;
 
 impl StateStore {
     pub fn post_thread_message(
@@ -58,53 +60,45 @@ impl StateStore {
             }
         }
         let threads_path = shards::threads_path(&self.layout, &scope_id);
-        let thread = self.mutate_jsonl_records(&threads_path, |threads: &mut Vec<Thread>| {
-            let matching: Vec<_> = threads
-                .iter()
-                .filter(|thread| thread.parent == parent)
-                .cloned()
-                .collect();
-            let thread = if let Some(canonical) =
-                provenance_core::threads::choose_canonical_active_thread(&matching)
-            {
-                let canonical = canonical.clone();
-                provenance_core::threads::archive_non_canonical_siblings(
-                    threads,
-                    &parent,
-                    &canonical.id,
-                );
-                canonical
-            } else {
-                let base_id = format!(
-                    "thread_{}_{}",
-                    serde_name(&parent.node_type)?,
-                    parent.node_id.as_str()
-                );
-                let thread = Thread {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
-                    scope_id: scope_id.clone(),
-                    id: next_thread_id(threads, &base_id)?,
-                    parent: parent.clone(),
-                    status: ThreadStatus::Active,
-                    created_at: 1,
-                };
-                threads.push(thread.clone());
-                thread
-            };
-            threads.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
-            ensure_within_read_budget(&thread)?;
-            Ok(thread)
-        })?;
+        let before = self.list_threads(&scope_id)?;
+        let mut staged = before.clone();
+        let thread = prepare_thread(&mut staged, &scope_id, &parent)?;
+        let previous: BTreeMap<_, _> = before
+            .iter()
+            .map(|record| (record.id.as_str(), record))
+            .collect();
+        for record in &staged {
+            if previous.get(record.id.as_str()).copied() != Some(record) {
+                ensure_within_read_budget(record)?;
+            }
+        }
+        ensure_within_read_budget(&thread)?;
+        let message = self.prepare_discussion_message(&scope_id, &thread.id, role, body)?;
 
-        let message = self
-            .append_discussion_message(&scope_id, &thread.id, role, body)
+        self.mutate_jsonl_records(&threads_path, |threads: &mut Vec<Thread>| {
+            *threads = staged;
+            Ok(())
+        })?;
+        self.append_prepared_message(&scope_id, &message)
             .map_err(publication_started)?;
 
         Ok(PostMessageResult { thread, message })
     }
     pub(crate) fn append_discussion_message(
         &self,
-        scope_id: &provenance_core::ScopeId,
+        scope_id: &ScopeId,
+        thread_id: &StableId,
+        role: provenance_core::MessageRole,
+        body: String,
+    ) -> anyhow::Result<Message> {
+        let message = self.prepare_discussion_message(scope_id, thread_id, role, body)?;
+        self.append_prepared_message(scope_id, &message)?;
+        Ok(message)
+    }
+
+    fn prepare_discussion_message(
+        &self,
+        scope_id: &ScopeId,
         thread_id: &StableId,
         role: provenance_core::MessageRole,
         body: String,
@@ -138,6 +132,10 @@ impl StateStore {
         // write before the Message reaches the shard, so nothing has been
         // staged or published when the refusal returns.
         ensure_within_read_budget(&message)?;
+        Ok(message)
+    }
+
+    fn append_prepared_message(&self, scope_id: &ScopeId, message: &Message) -> anyhow::Result<()> {
         let messages_path = shards::messages_path(&self.layout, scope_id);
         self.mutate_jsonl_records(&messages_path, |messages: &mut Vec<Message>| {
             messages.push(message.clone());
@@ -146,9 +144,46 @@ impl StateStore {
                     .cmp(&b.created_at)
                     .then(a.id.as_str().cmp(b.id.as_str()))
             });
-            Ok(message.clone())
+            Ok(())
         })
     }
+}
+
+fn prepare_thread(
+    threads: &mut Vec<Thread>,
+    scope_id: &ScopeId,
+    parent: &ThreadParent,
+) -> anyhow::Result<Thread> {
+    let matching: Vec<_> = threads
+        .iter()
+        .filter(|thread| thread.parent == *parent)
+        .cloned()
+        .collect();
+    let thread = if let Some(canonical) =
+        provenance_core::threads::choose_canonical_active_thread(&matching)
+    {
+        let canonical = canonical.clone();
+        provenance_core::threads::archive_non_canonical_siblings(threads, parent, &canonical.id);
+        canonical
+    } else {
+        let base_id = format!(
+            "thread_{}_{}",
+            serde_name(&parent.node_type)?,
+            parent.node_id.as_str()
+        );
+        let thread = Thread {
+            schema_version: SUPPORTED_SCHEMA_VERSION,
+            scope_id: scope_id.clone(),
+            id: next_thread_id(threads, &base_id)?,
+            parent: parent.clone(),
+            status: ThreadStatus::Active,
+            created_at: 1,
+        };
+        threads.push(thread.clone());
+        thread
+    };
+    threads.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+    Ok(thread)
 }
 
 fn next_thread_id(threads: &[Thread], base_id: &str) -> anyhow::Result<StableId> {

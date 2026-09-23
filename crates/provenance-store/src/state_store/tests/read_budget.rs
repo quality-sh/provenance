@@ -2,20 +2,22 @@
 //! inside the byte budget the supported resource member and page reads
 //! enforce, and an oversized mutation is refused before publication.
 
-use super::initialized_store;
+use super::{initialized_store, seeded_requirement_store};
 use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
 use crate::operations::read_policy::ReadPolicy;
 use crate::state_store::{
-    read_budget::ReadBudget, CreateSourceInput, SourceClearField, UpdateSourceInput,
+    read_budget::ReadBudget, CreateResolutionInput, CreateSourceInput, PostMessageInput,
+    SourceClearField, UpdateSourceInput,
 };
-use crate::write_error::{SourceFailure, WriteFailure};
+use crate::write_error::{SourceFailure, WriteError, WriteFailure};
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::protocol::SDK_PROTOCOL_VERSION;
 use provenance_core::{
-    Message, MessageRole, ScopeId, Source, SourceType, StableId, SUPPORTED_SCHEMA_VERSION,
+    Message, MessageRole, NodeType, ResolutionStatus, ScopeId, Source, SourceType, StableId,
+    Thread, ThreadParent, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::verifies;
 use serde_json::json;
@@ -293,4 +295,146 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
         )
         .expect("a message at the message read budget is accepted");
     assert_eq!(message.id.as_str(), "msg_000001");
+}
+
+#[test]
+#[verifies("rule_accepted_writes_stay_readable", examples)]
+fn oversized_post_refuses_before_creating_or_archiving_threads() {
+    let (_dir, store, scope) = initialized_store();
+    let parent = ThreadParent {
+        node_type: NodeType::Requirement,
+        node_id: StableId::new("req_overtime").unwrap(),
+    };
+    let post = |body: String| PostMessageInput {
+        scope_id: scope.clone(),
+        parent: parent.clone(),
+        role: MessageRole::User,
+        body,
+    };
+    let error = store
+        .post_thread_message(post("x".repeat(READ_BUDGET)))
+        .expect_err("an oversized message is refused before thread creation");
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::RecordTooLarge
+    ));
+    assert!(store.list_threads(&scope).unwrap().is_empty());
+    assert!(store.list_messages(&scope).unwrap().is_empty());
+
+    let first = store.post_thread_message(post("small".into())).unwrap();
+    let sibling = Thread {
+        schema_version: SUPPORTED_SCHEMA_VERSION,
+        scope_id: scope.clone(),
+        id: StableId::new("thread_sibling").unwrap(),
+        parent: parent.clone(),
+        status: ThreadStatus::Active,
+        created_at: 2,
+    };
+    crate::jsonl::write_jsonl_atomic(
+        &crate::shards::threads_path(&store.layout, &scope),
+        &[first.thread.clone(), sibling],
+    )
+    .unwrap();
+    let before = std::fs::read(crate::shards::threads_path(&store.layout, &scope)).unwrap();
+    let error = store
+        .post_thread_message(post("x".repeat(READ_BUDGET)))
+        .expect_err("an oversized message is refused before changing an existing thread");
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::RecordTooLarge
+    ));
+    assert_eq!(
+        std::fs::read(crate::shards::threads_path(&store.layout, &scope)).unwrap(),
+        before
+    );
+    assert_eq!(store.list_messages(&scope).unwrap().len(), 1);
+    assert_eq!(first.message.id.as_str(), "msg_000001");
+}
+
+fn resolution_input(scope: &ScopeId, id: &str, title: String) -> CreateResolutionInput {
+    CreateResolutionInput {
+        scope_id: scope.clone(),
+        id: StableId::new(id).unwrap(),
+        title,
+        requirement_ids: vec![StableId::new("req_overtime").unwrap()],
+        supersedes: Vec::new(),
+        position: "Pay overtime".into(),
+        rationale: "The requirement says so".into(),
+        status: ResolutionStatus::Proposed,
+        context: None,
+        enforcement: None,
+        confidence: Some(1.0),
+        inputs: Vec::new(),
+        made_by: None,
+        approved_by: None,
+        approved_at: None,
+        origin_thread: None,
+        origin_message: None,
+    }
+}
+
+#[tokio::test]
+#[verifies("rule_accepted_writes_stay_readable", examples)]
+async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow() {
+    let (dir, store, scope) = seeded_requirement_store();
+    let baseline = store
+        .create_resolution(resolution_input(&scope, "res_base", String::new()))
+        .unwrap();
+    let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+    catalog::invoke_with(
+        "get-resolution-v2",
+        SDK_PROTOCOL_VERSION,
+        wire_call(json!({"id": "res_base"})),
+        Arc::new(Target(root)),
+    )
+    .await
+    .unwrap();
+    let cache = crate::cache::open_cache(&store.layout).await.unwrap();
+    let expression =
+        crate::cache::read::page::byte_expression(provenance_core::Resolution::COLUMNS);
+    let stored: i64 = sqlx::query_scalar(&format!(
+        "SELECT {expression} FROM resolutions WHERE scope_id = ? AND id = ?"
+    ))
+    .bind(scope.as_str())
+    .bind("res_base")
+    .fetch_one(cache.pool())
+    .await
+    .unwrap();
+    for score in [0.0, 0.00001, 0.12345678901234566, 1.0] {
+        let real_bytes: i64 = sqlx::query_scalar("SELECT length(CAST(? AS BLOB))")
+            .bind(score)
+            .fetch_one(cache.pool())
+            .await
+            .unwrap();
+        let mut candidate = baseline.clone();
+        candidate.confidence = Some(score);
+        assert_eq!(
+            ReadBudget::read_bytes(&candidate).unwrap(),
+            usize::try_from(stored - 3 + real_bytes).unwrap(),
+            "confidence {score:?} must use SQLite's REAL byte count"
+        );
+    }
+    cache.close().await.unwrap();
+    assert_eq!(
+        ReadBudget::read_bytes(&baseline).unwrap(),
+        usize::try_from(stored).unwrap()
+    );
+
+    let title_bytes = READ_BUDGET - usize::try_from(stored).unwrap() + 1;
+    let error = store
+        .create_resolution(resolution_input(
+            &scope,
+            "res_edge",
+            "x".repeat(title_bytes),
+        ))
+        .expect_err("the SQLite byte count exceeds the resource read budget");
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::RecordTooLarge
+    ));
+    assert!(store
+        .list_resolutions(&scope)
+        .unwrap()
+        .iter()
+        .all(|r| r.id.as_str() != "res_edge"));
 }
