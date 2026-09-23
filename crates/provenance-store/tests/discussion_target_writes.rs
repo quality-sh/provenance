@@ -10,7 +10,7 @@ use provenance_store::{
 };
 use serde_json::json;
 
-fn request(id: &str, action: serde_json::Value) -> TargetDiscussionWrite {
+fn request(id: &str, action: &serde_json::Value) -> TargetDiscussionWrite {
     serde_json::from_value(json!({
         "scope_id": "default", "request_id": id, "actor": "ben",
         "declared_by": null, "action": action
@@ -21,7 +21,7 @@ fn request(id: &str, action: serde_json::Value) -> TargetDiscussionWrite {
 fn start(id: &str) -> TargetDiscussionWrite {
     request(
         id,
-        json!({
+        &json!({
             "kind": "start",
             "parent": {"node_type": "requirement", "node_id": "req_a"},
             "role": "user", "body": id
@@ -35,7 +35,7 @@ fn reply(
 ) -> TargetDiscussionWrite {
     request(
         id,
-        json!({
+        &json!({
             "kind": "reply", "discussion_id": discussion.discussion_id,
             "expected_version": discussion.version, "role": "user", "body": id
         }),
@@ -64,7 +64,7 @@ fn target_refusals_do_not_append_messages() {
     let a = store.write_target_discussion(start("a")).unwrap();
     let missing = request(
         "missing",
-        json!({"kind":"reply","discussion_id":"missing","expected_version":1,"role":"user","body":"x"}),
+        &json!({"kind":"reply","discussion_id":"missing","expected_version":1,"role":"user","body":"x"}),
     );
     assert!(matches!(
         failure(store.write_target_discussion(missing)),
@@ -72,7 +72,7 @@ fn target_refusals_do_not_append_messages() {
     ));
     let unsupported = request(
         "unsupported",
-        json!({"kind":"start","parent":{"node_type":"domain","node_id":"req_a"},"role":"user","body":"x"}),
+        &json!({"kind":"start","parent":{"node_type":"domain","node_id":"req_a"},"role":"user","body":"x"}),
     );
     assert!(matches!(
         failure(store.write_target_discussion(unsupported)),
@@ -80,7 +80,7 @@ fn target_refusals_do_not_append_messages() {
     ));
     let parent_missing = request(
         "parent_missing",
-        json!({"kind":"start","parent":{"node_type":"requirement","node_id":"missing"},"role":"user","body":"x"}),
+        &json!({"kind":"start","parent":{"node_type":"requirement","node_id":"missing"},"role":"user","body":"x"}),
     );
     assert!(matches!(
         failure(store.write_target_discussion(parent_missing)),
@@ -88,7 +88,7 @@ fn target_refusals_do_not_append_messages() {
     ));
     let stale = request(
         "stale",
-        json!({"kind":"reply","discussion_id":a.discussion_id,"expected_version":0,"role":"user","body":"x"}),
+        &json!({"kind":"reply","discussion_id":a.discussion_id,"expected_version":0,"role":"user","body":"x"}),
     );
     assert!(matches!(
         failure(store.write_target_discussion(stale)),
@@ -132,7 +132,7 @@ fn replay_after_restart_returns_receipt_and_changed_intent_refuses() {
     );
     let different_target = request(
         "r1",
-        json!({"kind":"reply","discussion_id":other.discussion_id,"expected_version":first.version,"role":"user","body":"r1"}),
+        &json!({"kind":"reply","discussion_id":other.discussion_id,"expected_version":first.version,"role":"user","body":"r1"}),
     );
     assert!(matches!(
         failure(store.write_target_discussion(different_target)),
@@ -140,7 +140,7 @@ fn replay_after_restart_returns_receipt_and_changed_intent_refuses() {
     ));
     let wrong_target = request(
         "r1",
-        json!({"kind":"reply","discussion_id":"missing","expected_version":first.version,"role":"user","body":"r1"}),
+        &json!({"kind":"reply","discussion_id":"missing","expected_version":first.version,"role":"user","body":"r1"}),
     );
     assert!(matches!(
         failure(store.write_target_discussion(wrong_target)),
