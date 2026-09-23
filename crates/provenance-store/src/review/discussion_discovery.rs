@@ -185,8 +185,8 @@ fn summary(
         Err(error) => return Err(error.into()),
     };
     let opening_excerpt = prefix.chars().take(EXCERPT_CHARS).collect();
-    let excerpt_truncated = usize::try_from(body_bytes)? > opening.len()
-        || prefix.chars().nth(EXCERPT_CHARS).is_some();
+    let excerpt_truncated =
+        usize::try_from(body_bytes)? > opening.len() || prefix.chars().nth(EXCERPT_CHARS).is_some();
     Ok(DiscussionSummary {
         discussion_id: StableId::new(id)?,
         parent: ThreadParent {
