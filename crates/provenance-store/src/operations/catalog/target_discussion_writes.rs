@@ -1,7 +1,12 @@
 use super::{
     ContextKind, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
 };
-use crate::{layout::ProvenanceLayout, review, state_store::StateStore, write_error::WriteError};
+use crate::{
+    layout::ProvenanceLayout,
+    review,
+    state_store::StateStore,
+    write_error::{SourceFailure, WriteError, WriteFailure},
+};
 use provenance_core::threads::DiscussionEntry;
 
 pub struct WriteTargetDiscussionV2;
@@ -30,7 +35,11 @@ impl Operation for WriteTargetDiscussionV2 {
         Box::pin(async move {
             let context = context.scope()?;
             if request.scope_id != context.scope {
-                return Err(anyhow::anyhow!("request scope does not match selected scope").into());
+                return Err(SourceFailure::wrap(
+                    WriteFailure::ScopeMismatch,
+                    anyhow::anyhow!("request scope does not match selected scope"),
+                )
+                .into());
             }
             StateStore::new(ProvenanceLayout::new(context.root))
                 .write_target_discussion(request)
