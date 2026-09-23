@@ -7,8 +7,8 @@ use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
     threads::{
         DiscussionConversation, DiscussionConversationQuery, DiscussionGroup, DiscussionListPage,
-        DiscussionListQuery, DiscussionMessagesQuery, DiscussionSelector,
-        DiscussionStatusFilter, DiscussionSummary,
+        DiscussionListQuery, DiscussionMessagesQuery, DiscussionSelector, DiscussionStatusFilter,
+        DiscussionSummary,
     },
     NodeType, ScopeId, StableId, ThreadParent,
 };
@@ -26,10 +26,7 @@ pub async fn read_discussion_list(
     query: DiscussionListQuery,
 ) -> anyhow::Result<Stamped<DiscussionListPage>> {
     super::discussion_reads::check_limit(query.limit)?;
-    let answer = reader::answer(repo, scope, policy, move |ctx| {
-        Box::pin(list(ctx, query))
-    })
-    .await?;
+    let answer = reader::answer(repo, scope, policy, move |ctx| Box::pin(list(ctx, query))).await?;
     crate::operations::queries::page::checked("discussion-list", answer)
 }
 
@@ -139,7 +136,15 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
         if entries.len() == query.limit {
             break;
         }
-        let entry = summary(id.clone(), kind, parent_id, status, version, opening, truncated)?;
+        let entry = summary(
+            id.clone(),
+            kind,
+            parent_id,
+            status,
+            version,
+            opening,
+            truncated,
+        )?;
         let size = serde_json::to_vec(&entry)?.len();
         if bytes + size > PAGE_BYTES - 16_384 {
             break;

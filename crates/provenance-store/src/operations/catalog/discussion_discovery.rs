@@ -39,13 +39,9 @@ impl Operation for ListDiscussionsV2 {
         Box::pin(async move {
             let read = context.graph()?;
             let limit = request.limit;
-            let page = crate::review::read_discussion_list(
-                &read.root,
-                &read.scope,
-                read.policy,
-                request,
-            )
-            .await?;
+            let page =
+                crate::review::read_discussion_list(&read.root, &read.scope, read.policy, request)
+                    .await?;
             let next_cursor = page.result.next_cursor;
             Ok(ReadResult {
                 result: DiscussionResultPage {

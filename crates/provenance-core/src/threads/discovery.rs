@@ -1,7 +1,7 @@
 use super::{DiscussionEntry, DiscussionMessagesPage, DiscussionStatus};
 use crate::{NodeType, StableId, ThreadParent};
-use serde::{Deserialize, Serialize};
 use provenance_macros::rule;
+use serde::{Deserialize, Serialize};
 
 /// The status selection for an addressed Discussion list.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

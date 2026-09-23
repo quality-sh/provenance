@@ -1,5 +1,5 @@
-mod discussion_chain;
 mod discovery;
+mod discussion_chain;
 mod discussions;
 pub use discovery::*;
 pub use discussions::*;
