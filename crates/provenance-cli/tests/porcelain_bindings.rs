@@ -35,6 +35,60 @@ fn init_with_source(repo: &str) {
         .success();
 }
 
+async fn assert_get_readable(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    repo: &str,
+    name: &str,
+) {
+    use rmcp::model::CallToolRequestParams;
+
+    let cli = provenance()
+        .args(["source_live_inventory", name, "--repo", repo])
+        .output()
+        .unwrap();
+    assert!(cli.status.success());
+    let mcp = client
+        .call_tool(
+            CallToolRequestParams::new(name.to_owned()).with_arguments(
+                json!({"target":"source_live_inventory"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(cli.stdout).unwrap().trim_end(),
+        mcp.content[0].as_text().unwrap().text
+    );
+}
+
+async fn assert_check_readable(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    repo: &str,
+    name: &str,
+) {
+    use rmcp::model::CallToolRequestParams;
+
+    let cli = provenance()
+        .args([name, "--repo", repo, "--graph"])
+        .output()
+        .unwrap();
+    assert!(cli.status.success());
+    let mcp = client
+        .call_tool(
+            CallToolRequestParams::new(name.to_owned())
+                .with_arguments(json!({"categories":["graph"]}).as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(cli.stdout).unwrap().trim_end(),
+        mcp.content[0].as_text().unwrap().text
+    );
+}
+
 struct EmptyCheckPort;
 
 impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
@@ -99,6 +153,17 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         .unwrap()
         .name
         .to_string();
+    let get_tool = tools.iter().find(|tool| tool.name == get_name).unwrap();
+    let get_schema = json!(get_tool.output_schema.as_ref().unwrap());
+    let get_validator = jsonschema::JSONSchema::compile(&get_schema).unwrap();
+    let invalid_record = json!({
+        "record": {"id":"source_live_inventory", "kind":"source", "value":42},
+        "view":"record", "related":[], "detail":null, "bounds":null
+    });
+    assert!(
+        !get_validator.is_valid(&invalid_record),
+        "record payload must be typed"
+    );
     let check_name = tools
         .iter()
         .find(|tool| {
@@ -140,6 +205,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     for field in ["record", "view", "related", "detail", "bounds"] {
         assert_eq!(cli_get[field], mcp_get[field], "get field {field}");
     }
+    assert_get_readable(&client, &repo, &get_name).await;
 
     let cli_check = provenance()
         .args([&check_name, "--repo", &repo, "--graph", "--format", "json"])
@@ -149,7 +215,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     let cli_check: serde_json::Value = serde_json::from_slice(&cli_check.stdout).unwrap();
     let mcp_check = client
         .call_tool(
-            CallToolRequestParams::new(check_name)
+            CallToolRequestParams::new(check_name.clone())
                 .with_arguments(json!({"categories":["graph"]}).as_object().unwrap().clone()),
         )
         .await
@@ -157,47 +223,21 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         .structured_content
         .unwrap();
     assert_eq!(cli_check["categories"], mcp_check["categories"]);
+    assert_check_readable(&client, &repo, &check_name).await;
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
-}
-
-#[test]
-fn cli_and_mcp_get_bindings_translate_to_the_same_semantics() {
-    let cli = provenance_cli::porcelain::parse_get(&[
-        "req_alpha",
-        "get",
-        "--view",
-        "children",
-        "--depth",
-        "2",
-        "--kind",
-        "rule",
-        "--limit",
-        "25",
-    ])
-    .unwrap();
-    let mcp: provenance_transport::porcelain::GetArguments = serde_json::from_value(json!({
-        "target": "req_alpha",
-        "view": "children",
-        "max_depth": 2,
-        "returned_kinds": ["rule"],
-        "limit": 25
-    }))
-    .unwrap();
-
-    assert_eq!(cli, mcp.into_get_input());
 }
 
 #[test]
 #[verifies("rule_porcelain_check_selector_union", examples)]
 fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {
     let cli = provenance_cli::porcelain::check_input_from_selectors(true, false, true);
-    let mcp: provenance_transport::porcelain::CheckArguments = serde_json::from_value(json!({
+    let mcp: provenance_porcelain::check::CheckInput = serde_json::from_value(json!({
         "categories": ["graph", "bindings"]
     }))
     .unwrap();
 
-    assert_eq!(cli.categories(), mcp.into_check_input().categories());
+    assert_eq!(cli.categories(), mcp.categories());
 }
 
 #[test]

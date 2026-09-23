@@ -11,6 +11,7 @@ pub mod read_failure;
 pub mod repository;
 mod response;
 mod stamp;
+mod target_action;
 mod typed_spec;
 
 use camino::Utf8PathBuf;
@@ -30,6 +31,7 @@ pub use response::{
     TraceResult,
 };
 pub use stamp::{Stamp, StampPolicy, Stamped};
+pub use target_action::TargetAction;
 pub use typed_spec::{
     CheckStatementRequest, TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput,
     TypedRequirementInput, TypedRuleInput, TypedSourceInput, TypedSpecInput,

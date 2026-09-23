@@ -79,6 +79,7 @@ mod proposals;
 mod read_budget;
 mod read_budget_boundaries;
 mod references;
+mod reserved_ids;
 mod scope_ingestion;
 mod shaping;
 mod source_requirements;

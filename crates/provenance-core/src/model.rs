@@ -49,7 +49,7 @@ pub use ideation::{
     IdeationTargetType, IdentityType, PromotionState, ProposalType, SpeculationMarker,
     UncertaintyLevel,
 };
-pub use ids::{SchemaVersion, ScopeId, StableId};
+pub use ids::{ensure_record_id_assignable, SchemaVersion, ScopeId, StableId, RESERVED_RECORD_IDS};
 pub use integrations::{
     DeclarationAddress, ImplementationBinding, RequirementReview, VerificationBinding,
     VerificationMethod, VerificationRun, VerificationRunStatus,

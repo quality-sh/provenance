@@ -25,9 +25,17 @@ impl Replacement {
         let replacements = self
             .sources
             .iter()
-            .map(|record| &record.id)
-            .chain(self.requirements.iter().map(|record| &record.id))
-            .chain(self.rules.iter().map(|record| &record.id));
+            .map(|record| (Some(NodeType::Source), &record.id))
+            .chain(
+                self.requirements
+                    .iter()
+                    .map(|record| (Some(NodeType::Requirement), &record.id)),
+            )
+            .chain(
+                self.rules
+                    .iter()
+                    .map(|record| (Some(NodeType::Rule), &record.id)),
+            );
         store.ensure_canonical_replacement_ids_unique(
             scope,
             replacements,

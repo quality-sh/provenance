@@ -70,11 +70,11 @@ fn help_keeps_catalog_grammar_with_trailing_global_options() {
         .args(["sources", "--help", "--repo", &repo])
         .assert()
         .success()
-        .stdout(predicates::str::contains("Catalog commands for sources"));
+        .stdout(predicates::str::contains("sources create"));
 }
 
 #[test]
-fn explicit_get_reads_a_record_whose_id_is_get() {
+fn explicit_get_reads_an_ordinary_record_id() {
     let (_directory, repo) = initialized_repo();
     provenance()
         .args([
@@ -83,7 +83,7 @@ fn explicit_get_reads_a_record_whose_id_is_get() {
             "--repo",
             &repo,
             "--id",
-            "get",
+            "source_routing_get",
             "--name",
             "Get target",
         ])
@@ -91,7 +91,14 @@ fn explicit_get_reads_a_record_whose_id_is_get() {
         .success();
 
     let output = provenance()
-        .args(["get", "get", "--repo", &repo, "--format", "json"])
+        .args([
+            "source_routing_get",
+            "get",
+            "--repo",
+            &repo,
+            "--format",
+            "json",
+        ])
         .output()
         .unwrap();
     assert!(
@@ -100,7 +107,7 @@ fn explicit_get_reads_a_record_whose_id_is_get() {
         String::from_utf8_lossy(&output.stderr)
     );
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(value["record"]["id"], "get");
+    assert_eq!(value["record"]["id"], "source_routing_get");
 }
 
 #[test]
@@ -108,7 +115,9 @@ fn invalid_explicit_get_options_do_not_fall_back_to_the_catalog() {
     provenance()
         .args(["sources", "get", "--unknown-option", "value"])
         .assert()
-        .failure()
-        .stderr(predicates::str::contains("unsupported read options"))
+        .code(2)
+        .stderr(predicates::str::contains(
+            "unexpected argument '--unknown-option'",
+        ))
         .stderr(predicates::str::contains("catalog does not declare").not());
 }
