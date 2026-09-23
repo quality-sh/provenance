@@ -77,6 +77,7 @@ mod manifest;
 mod proposal_surfaces;
 mod proposals;
 mod read_budget;
+mod read_budget_boundaries;
 mod references;
 mod scope_ingestion;
 mod shaping;

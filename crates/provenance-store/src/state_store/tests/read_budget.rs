@@ -50,7 +50,7 @@ impl ContextResolver for Target {
     }
 }
 
-fn blank_source(scope: &ScopeId, id: &str) -> Source {
+pub(super) fn blank_source(scope: &ScopeId, id: &str) -> Source {
     Source {
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
@@ -74,7 +74,11 @@ fn blank_source(scope: &ScopeId, id: &str) -> Source {
 
 /// A write request whose stored record holds exactly `target` read-accounted
 /// bytes, measured the same way the supported reads measure it.
-fn source_of_stored_bytes(scope: &ScopeId, id: &str, target: usize) -> CreateSourceInput {
+pub(super) fn source_of_stored_bytes(
+    scope: &ScopeId,
+    id: &str,
+    target: usize,
+) -> CreateSourceInput {
     let base = ReadBudget::read_bytes(&blank_source(scope, id)).unwrap();
     CreateSourceInput {
         scope_id: scope.clone(),
@@ -98,7 +102,10 @@ fn wire_call(request: serde_json::Value) -> serde_json::Value {
     call
 }
 
-async fn member_read(root: &camino::Utf8Path, id: &str) -> Result<serde_json::Value, String> {
+pub(super) async fn member_read(
+    root: &camino::Utf8Path,
+    id: &str,
+) -> Result<serde_json::Value, String> {
     catalog::invoke_with(
         "get-source-v2",
         SDK_PROTOCOL_VERSION,
@@ -109,7 +116,7 @@ async fn member_read(root: &camino::Utf8Path, id: &str) -> Result<serde_json::Va
     .map_err(|failure| failure.error["kind"].as_str().unwrap_or("").to_string())
 }
 
-async fn list_read(root: &camino::Utf8Path) -> Result<serde_json::Value, String> {
+pub(super) async fn list_read(root: &camino::Utf8Path) -> Result<serde_json::Value, String> {
     catalog::invoke_with(
         "page-sources-v2",
         SDK_PROTOCOL_VERSION,
