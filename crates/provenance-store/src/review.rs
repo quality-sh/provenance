@@ -44,9 +44,11 @@ mod discussion_writes;
 mod create;
 pub use create::CreateReviewRequirement;
 mod authoring;
+mod discussion_discovery;
 mod discussion_messages;
 mod discussion_reads;
 mod typed_adoption;
+pub use discussion_discovery::{read_discussion_conversation, read_discussion_list};
 pub use discussion_messages::{read_discussion_message, read_discussion_messages};
 pub use discussion_reads::{read_discussion, read_discussions};
 #[cfg(test)]
