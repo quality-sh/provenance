@@ -193,7 +193,7 @@ fn operation_error<E: std::error::Error + serde::Serialize>(
     error: &OperationError<E>,
 ) -> DiscussionError {
     let detail =
-        serde_json::to_value(&error).unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));
+        serde_json::to_value(error).unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));
     DiscussionError::Operation {
         message: error.to_string(),
         detail,

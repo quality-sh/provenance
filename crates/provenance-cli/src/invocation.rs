@@ -180,7 +180,6 @@ impl SearchArgs {
     }
 }
 
-
 impl TargetInvocation {
     async fn dispatch(self) -> anyhow::Result<()> {
         catalog_cli::dispatch_target(

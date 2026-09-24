@@ -156,17 +156,29 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         replied.structured_content.as_ref().unwrap()["receipt"]["version"],
         2
     );
-    let other = call(&client, "discuss", json!({
-        "parent":{"node_type":"requirement","node_id":"req_shared"},
-        "request_id":"request_other", "actor":"ben", "role":"user", "body":"Other root"
-    })).await;
-    let other_id = other.structured_content.as_ref().unwrap()["receipt"]["discussion_id"].as_str().unwrap();
+    let other = call(
+        &client,
+        "discuss",
+        json!({
+            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "request_id":"request_other", "actor":"ben", "role":"user", "body":"Other root"
+        }),
+    )
+    .await;
+    let other_id = other.structured_content.as_ref().unwrap()["receipt"]["discussion_id"]
+        .as_str()
+        .unwrap();
     let first_page = call(&client, "discussion", json!({"discussion_id":id,"limit":1})).await;
     let cursor = first_page.structured_content.as_ref().unwrap()["result"]["messages"]
         ["next_cursor"]
         .as_str()
         .unwrap();
-    let wrong_selector = call(&client, "discussion", json!({"discussion_id":other_id,"limit":1,"cursor":cursor})).await;
+    let wrong_selector = call(
+        &client,
+        "discussion",
+        json!({"discussion_id":other_id,"limit":1,"cursor":cursor}),
+    )
+    .await;
     assert_eq!(wrong_selector.is_error, Some(true));
     let next_page = call(
         &client,
@@ -188,12 +200,22 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
     )
     .await;
     assert_eq!(stale.is_error, Some(true));
-    let later = call(&client, "reply", json!({
-        "discussion_id":id, "request_id":"request_later", "actor":"ben",
-        "expected_version":2, "role":"user", "body":"Later message"
-    })).await;
+    let later = call(
+        &client,
+        "reply",
+        json!({
+            "discussion_id":id, "request_id":"request_later", "actor":"ben",
+            "expected_version":2, "role":"user", "body":"Later message"
+        }),
+    )
+    .await;
     assert_ne!(later.is_error, Some(true), "{later:?}");
-    let stale_cursor = call(&client, "discussion", json!({"discussion_id":id,"limit":1,"cursor":cursor})).await;
+    let stale_cursor = call(
+        &client,
+        "discussion",
+        json!({"discussion_id":id,"limit":1,"cursor":cursor}),
+    )
+    .await;
     assert_eq!(stale_cursor.is_error, Some(true));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();

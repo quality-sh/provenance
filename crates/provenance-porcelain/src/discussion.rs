@@ -313,7 +313,11 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
                     message.body
                 ));
             }
-            lines.push(bounds(*limit, *has_more, result.messages.next_cursor.as_deref()));
+            lines.push(bounds(
+                *limit,
+                *has_more,
+                result.messages.next_cursor.as_deref(),
+            ));
             if let Some(error) = freshness_error {
                 lines.push(format!("warning: freshness: {error}"));
             }
