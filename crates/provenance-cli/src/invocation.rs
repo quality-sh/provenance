@@ -1,13 +1,17 @@
 use crate::{catalog_cli, cli::Cli, handlers};
-use clap::{CommandFactory as _, Parser as _};
+use clap::{CommandFactory as _, FromArgMatches as _, Parser as _};
 use provenance_cli::porcelain;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::get::View;
 
+mod discussion;
 pub mod grammar;
-use grammar::{CatalogArgs, SearchArgs, SearchCommand, TargetArgs};
+use grammar::{
+    CatalogArgs, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute, SearchArgs, SearchCommand,
+    TargetArgs, TargetVerb,
+};
 
 #[cfg(test)]
 mod tests;
@@ -18,6 +22,8 @@ pub enum Invocation {
     Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
     Search(SearchArgs),
+    DiscussionRoot(DiscussionsArgs, Box<clap::ArgMatches>),
+    DiscussionTarget(TargetArgs, Action, Box<clap::ArgMatches>),
     Target(TargetInvocation),
 }
 
@@ -55,6 +61,20 @@ impl Invocation {
             debug_assert_eq!(args.command, "search");
             return Ok(Self::Search(args.args));
         }
+        if word == "discussions" {
+            let target_command = catalog_cli::target_command()?;
+            if grammar::discussions_route(&arguments, &target_command)
+                == DiscussionsRoute::Addressed
+            {
+                let matches = grammar::discussions_command()?
+                    .try_get_matches_from(arguments)
+                    .unwrap_or_else(|error| error.exit());
+                let command = DiscussionsCommand::from_arg_matches(&matches)
+                    .unwrap_or_else(|error| error.exit());
+                debug_assert_eq!(command.command, "discussions");
+                return Ok(Self::DiscussionRoot(command.args, Box::new(matches)));
+            }
+        }
         if Cli::command()
             .get_subcommands()
             .any(|command| command.get_name() == word)
@@ -77,9 +97,14 @@ impl Invocation {
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
         let args = TargetArgs::from_matches(&matches);
+        if let Some(TargetVerb::Action(action)) = args.action {
+            if Action::DISCUSSION.contains(&action) {
+                return Ok(Self::DiscussionTarget(args, action, Box::new(matches)));
+            }
+        }
         let format = args.common.format();
         let context = args.common.context();
-        if args.action.as_deref().is_none_or(|action| action == "get") {
+        if matches!(args.action, None | Some(TargetVerb::Get)) {
             catalog_cli::ensure_only_fields(&matches, &["kind", "view", "depth", "limit"]);
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
@@ -97,11 +122,9 @@ impl Invocation {
                 input,
             }));
         }
-        let action = args
-            .action
-            .as_deref()
-            .and_then(Action::parse)
-            .ok_or_else(|| anyhow::anyhow!("unsupported target action"))?;
+        let Some(TargetVerb::Action(action)) = args.action else {
+            anyhow::bail!("unsupported target action");
+        };
         let kind = args.record_type;
         validate_target(action, &args.target, kind)
             .unwrap_or_else(|error| catalog_cli::usage_error(error));
@@ -129,6 +152,10 @@ impl Invocation {
                 .await
             }
             Self::Search(args) => args.dispatch().await,
+            Self::DiscussionRoot(args, matches) => discussion::dispatch_root(args, &matches).await,
+            Self::DiscussionTarget(args, action, matches) => {
+                discussion::dispatch_target(args, action, &matches).await
+            }
             Self::Target(invocation) => invocation.dispatch().await,
         }
     }

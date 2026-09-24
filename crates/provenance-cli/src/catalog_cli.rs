@@ -12,7 +12,7 @@ use std::{
 };
 
 mod address;
-mod fields;
+pub mod fields;
 
 pub struct Invocation {
     context: GlobalContext,
@@ -72,17 +72,24 @@ pub fn command(collection: &str) -> anyhow::Result<Command> {
 }
 
 pub fn target_command() -> anyhow::Result<Command> {
-    let definitions = TargetAction::ALL
+    let definitions = TargetAction::RECORD
         .into_iter()
         .flat_map(catalog::target_definitions)
         .map(|(_, definition)| definition)
         .collect::<Vec<_>>();
-    fields::augment(
+    let command = fields::augment_with_overrides(
         grammar::target_command(),
         definitions,
         &[
             "repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin",
         ],
+        &[],
+    )?;
+    fields::augment_schemas(
+        command,
+        provenance_porcelain::action::Action::DISCUSSION
+            .map(provenance_porcelain::discussion::input_schema),
+        &["parent", "discussion_id", "declared_by"],
     )
 }
 
@@ -177,13 +184,19 @@ pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
         "action",
         "collection",
         "address",
+        "command",
+        "discussion_id",
     ];
     for id in matches.ids() {
         let name = id.as_str();
         if matches.value_source(name) != Some(ValueSource::CommandLine) {
             continue;
         }
-        if !COMMON.contains(&name) && !allowed.contains(&name) {
+        let normalized = name.replace('_', "-");
+        if !COMMON.contains(&name)
+            && !allowed.contains(&name)
+            && !allowed.contains(&normalized.as_str())
+        {
             usage_error(anyhow::anyhow!(
                 "unsupported option --{}",
                 name.replace('_', "-")
@@ -243,7 +256,17 @@ fn input(
     let mut query = BTreeMap::new();
     let mut headers = HeaderMap::new();
     for field in declared {
-        let Some(value) = matches.get_one::<String>(&field.name) else {
+        let Some(value) = matches
+            .try_get_one::<String>(&field.name)
+            .ok()
+            .flatten()
+            .or_else(|| {
+                matches
+                    .try_get_one::<String>(&field.name.replace('-', "_"))
+                    .ok()
+                    .flatten()
+            })
+        else {
             continue;
         };
         match field.source {
@@ -309,13 +332,7 @@ fn input(
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("stdin must contain one JSON object"))?;
     }
-    for default in &definition.registration.cli.defaults {
-        data.entry(default.field)
-            .or_insert_with(|| match default.value {
-                catalog::CliDefaultValue::String(value) => json!(value),
-                catalog::CliDefaultValue::EmptyArray => json!([]),
-            });
-    }
+    apply_defaults(definition, &mut data);
     if definition.parameters().iter().any(|parameter| {
         parameter.location == "header" && parameter.required && parameter.name == "Idempotency-Key"
     }) && !headers.contains_key("Idempotency-Key")
@@ -326,4 +343,14 @@ fn input(
         );
     }
     Ok((Value::Object(data), query, headers))
+}
+
+fn apply_defaults(definition: &Definition, data: &mut Map<String, Value>) {
+    for default in &definition.registration.cli.defaults {
+        data.entry(default.field)
+            .or_insert_with(|| match default.value {
+                catalog::CliDefaultValue::String(value) => json!(value),
+                catalog::CliDefaultValue::EmptyArray => json!([]),
+            });
+    }
 }

@@ -28,7 +28,11 @@ pub enum PackageManager {
 }
 
 #[derive(Parser)]
-#[command(name = "provenance", version)]
+#[command(
+    name = "provenance",
+    version,
+    after_help = "Discussion actions: provenance discussions [<discussion-id> get], or provenance <record-id> discussions|discuss, or provenance <discussion-id> reply."
+)]
 pub struct Cli {
     /// Drop the advisory notes commands print alongside their output, such as
     /// the warning that this repository has no shaping skills installed.

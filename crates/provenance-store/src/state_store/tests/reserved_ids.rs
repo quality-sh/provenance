@@ -67,34 +67,36 @@ fn scope_import_refuses_a_new_command_keyword_id() {
 
 #[test]
 fn an_existing_keyword_id_survives_a_scope_import() {
-    let (_directory, store, scope) = initialized_store();
-    let source = provenance_core::Source {
-        created: None,
-        updated: None,
-        schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
-        scope_id: scope.clone(),
-        id: StableId::new("search").unwrap(),
-        declared_by: None,
-        declaration_address: None,
-        name: "Existing record".into(),
-        source_type: SourceType::Document,
-        url: None,
-        reference: None,
-        commit_pin: None,
-        effective_date: None,
-        review_date: None,
-        supersedes: Vec::new(),
-        origin_thread: None,
-        origin_message: None,
-    };
-    let path = crate::shards::sources_path(&store.layout, &scope);
-    crate::jsonl::write_jsonl_atomic(&path, std::slice::from_ref(&source)).unwrap();
-    let shards = ScopeShards {
-        sources: std::slice::from_ref(&source),
-        ..ScopeShards::default()
-    };
-    store.import_scope(&scope, &shards).unwrap();
-    assert_eq!(store.list_sources(&scope).unwrap()[0].id.as_str(), "search");
+    for keyword in ["search", "discussions", "discussion", "discuss", "reply"] {
+        let (_directory, store, scope) = initialized_store();
+        let source = provenance_core::Source {
+            created: None,
+            updated: None,
+            schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
+            scope_id: scope.clone(),
+            id: StableId::new(keyword).unwrap(),
+            declared_by: None,
+            declaration_address: None,
+            name: "Existing record".into(),
+            source_type: SourceType::Document,
+            url: None,
+            reference: None,
+            commit_pin: None,
+            effective_date: None,
+            review_date: None,
+            supersedes: Vec::new(),
+            origin_thread: None,
+            origin_message: None,
+        };
+        let path = crate::shards::sources_path(&store.layout, &scope);
+        crate::jsonl::write_jsonl_atomic(&path, std::slice::from_ref(&source)).unwrap();
+        let shards = ScopeShards {
+            sources: std::slice::from_ref(&source),
+            ..ScopeShards::default()
+        };
+        store.import_scope(&scope, &shards).unwrap();
+        assert_eq!(store.list_sources(&scope).unwrap()[0].id.as_str(), keyword);
+    }
 }
 
 #[test]

@@ -55,6 +55,7 @@ impl ServerHandler for StatementHost {
             tools.push(crate::porcelain::check_tool());
         }
         tools.extend(crate::porcelain::authoring_tools(self));
+        tools.extend(crate::porcelain::discussion_tools(self));
         std::future::ready(Ok(ListToolsResult {
             tools,
             ..Default::default()
@@ -71,6 +72,12 @@ impl ServerHandler for StatementHost {
         }
         if request.name == "search" && crate::porcelain::search_is_available(self) {
             return call_search(self, request.arguments).await;
+        }
+        if let Some(action) = crate::porcelain::Action::DISCUSSION
+            .into_iter()
+            .find(|action| action.as_str() == request.name)
+        {
+            return call_discussion(self, action, request.arguments).await;
         }
         if request.name == "check" {
             let Some(port) = self.check_port() else {
@@ -100,7 +107,10 @@ impl ServerHandler for StatementHost {
             }
             return Ok(crate::porcelain::call_check(self, port.clone(), arguments).await);
         }
-        if let Some(action) = crate::porcelain::Action::parse(&request.name) {
+        if let Some(action) = crate::porcelain::Action::RECORD
+            .into_iter()
+            .find(|action| action.as_str() == request.name)
+        {
             return call_authoring_action(self, action, request.arguments).await;
         }
         let Some(definition) = catalog::definitions()
@@ -148,6 +158,39 @@ impl ServerHandler for StatementHost {
             },
         )
     }
+}
+
+async fn call_discussion(
+    host: &StatementHost,
+    action: crate::porcelain::Action,
+    arguments: Option<serde_json::Map<String, Value>>,
+) -> Result<CallToolResult, ErrorData> {
+    if !crate::porcelain::discussion_is_available(host, action) {
+        return Err(ErrorData::new(
+            ErrorCode::METHOD_NOT_FOUND,
+            "Unknown tool",
+            None,
+        ));
+    }
+    let _admission = match host.admit() {
+        Ok(permit) => permit,
+        Err(failure) => return Ok(error(failure)),
+    };
+    let arguments = arguments.unwrap_or_default();
+    if serde_json::to_vec(&arguments)
+        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
+        .len()
+        > MAX_BODY_BYTES
+    {
+        return Ok(error(ErasedFailure::new(
+            None,
+            OperationFailure::InvalidInput {
+                field: None,
+                reason: InvalidInputReason::TooLarge,
+            },
+        )));
+    }
+    Ok(crate::porcelain::call_discussion(host, action, arguments).await)
 }
 
 async fn call_get(
