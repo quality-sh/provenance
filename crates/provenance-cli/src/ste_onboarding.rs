@@ -96,6 +96,9 @@ impl Plan {
             .context("no machine data directory is available")?;
         provenance_ste100::store_dictionary_index(import, &index_directory)
             .context("store the dictionary index")?;
+        if self.reference_change().is_none() {
+            return Ok(());
+        }
         let layout = ProvenanceLayout::new(repo.to_owned());
         rollback.replace(
             dictionary_reference::dictionary_reference_path(&layout).as_std_path(),

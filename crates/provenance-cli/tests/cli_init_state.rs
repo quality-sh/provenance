@@ -94,6 +94,58 @@ fn bare_rerun_keeps_the_manifest_scope_and_actor_ids() {
 }
 
 #[test]
+fn restoring_the_machine_dictionary_index_keeps_the_project_reference_untouched() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path();
+    init(root, &[]).success();
+
+    let reference = root.join(".provenance/state/dictionary.json");
+    let reference_bytes = std::fs::read(&reference).unwrap();
+    let reference_metadata = std::fs::metadata(&reference).unwrap();
+    let identity = serde_json::from_slice(&reference_bytes).unwrap();
+    let indexes = root.join("dictionary-indexes");
+    let index = std::fs::read_dir(&indexes)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.extension().is_some_and(|extension| extension == "json"))
+        .expect("the first init stored a machine index");
+    std::fs::remove_file(index).unwrap();
+    assert!(provenance_ste100::load_dictionary_index(&indexes, &identity).is_err());
+
+    init(root, &[]).success().stdout(contains("No change."));
+
+    assert_eq!(
+        &provenance_ste100::load_dictionary_index(&indexes, &identity).unwrap(),
+        dictionary_support::imported_dictionary()
+    );
+    assert_eq!(std::fs::read(&reference).unwrap(), reference_bytes);
+    let after = std::fs::metadata(&reference).unwrap();
+    assert_eq!(after.modified().unwrap(), reference_metadata.modified().unwrap());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        assert_eq!(after.ino(), reference_metadata.ino());
+    }
+}
+
+#[test]
+fn reinit_replaces_a_different_dictionary_reference() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path();
+    init(root, &[]).success();
+    let reference = root.join(".provenance/state/dictionary.json");
+    let original = std::fs::read(&reference).unwrap();
+    let mut different: Value = serde_json::from_slice(&original).unwrap();
+    different["source_sha256"] = "other-source".into();
+    std::fs::write(&reference, serde_json::to_vec_pretty(&different).unwrap()).unwrap();
+
+    init(root, &[])
+        .success()
+        .stdout(contains("dictionary.json (updated the dictionary reference)"));
+    assert_eq!(std::fs::read(&reference).unwrap(), original);
+}
+
+#[test]
 fn missing_manifest_gives_init_guidance_before_graph_reads_or_catalog_writes() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path();
