@@ -19,6 +19,12 @@ impl Store {
         Self { layout, state }
     }
 
+    pub fn open_required(repo: impl AsRef<Utf8Path>) -> anyhow::Result<Self> {
+        let store = Self::open(repo);
+        provenance_store::layout::require_initialized_graph(&store.layout)?;
+        Ok(store)
+    }
+
     pub const fn layout(&self) -> &ProvenanceLayout {
         &self.layout
     }

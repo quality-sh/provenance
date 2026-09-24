@@ -56,7 +56,7 @@ pub enum Command {
         ste_pdf: Option<Utf8PathBuf>,
     },
     Init {
-        #[arg(long)]
+        #[arg(long, default_value = ".")]
         path: Utf8PathBuf,
         #[arg(long)]
         scope: Option<String>,

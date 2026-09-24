@@ -4,6 +4,7 @@ mod cli;
 mod docs;
 mod gitignore;
 mod handlers;
+mod init_summary;
 mod invocation;
 mod legacy_cleanup;
 mod onboarding;

@@ -49,7 +49,7 @@ pub(super) fn import_scope(
         + exported.proposal_cards.len()
         + exported.assertion_records.len()
         + exported.dispositions.len();
-    let store = Store::open(repo);
+    let store = Store::open_required(repo)?;
     store.with_repository_publication(|| {
         store.ensure_review_portable(&scope_id)?;
         anyhow::ensure!(

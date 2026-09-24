@@ -210,6 +210,9 @@ pub fn usage_error(error: impl std::fmt::Display) -> ! {
 }
 
 fn local_host(context: &GlobalContext) -> anyhow::Result<provenance_transport::StatementHost> {
+    provenance_store::layout::require_initialized_graph(
+        &provenance_store::layout::ProvenanceLayout::new(context.repo.as_str()),
+    )?;
     let root = std::fs::canonicalize(&context.repo)?;
     let access = provenance_transport::LocalAccess::new(
         &root,
