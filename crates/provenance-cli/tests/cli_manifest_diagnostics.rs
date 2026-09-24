@@ -4,7 +4,10 @@ use assert_cmd::Command;
 fn requirements_list_identifies_the_selected_malformed_manifest() {
     let temporary = tempfile::tempdir().unwrap();
     let selected = temporary.path().join("selected");
-    let manifest = selected.join(".provenance/state/manifest.json");
+    let manifest = selected
+        .join(".provenance")
+        .join("state")
+        .join("manifest.json");
     std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
     let malformed = b"{bad";
     std::fs::write(&manifest, malformed).unwrap();
@@ -33,7 +36,10 @@ fn requirements_list_identifies_the_selected_malformed_manifest() {
 fn init_identifies_the_selected_malformed_manifest() {
     let temporary = tempfile::tempdir().unwrap();
     let selected = temporary.path().join("selected");
-    let manifest = selected.join(".provenance/state/manifest.json");
+    let manifest = selected
+        .join(".provenance")
+        .join("state")
+        .join("manifest.json");
     std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
     let malformed = b"{bad";
     std::fs::write(&manifest, malformed).unwrap();
