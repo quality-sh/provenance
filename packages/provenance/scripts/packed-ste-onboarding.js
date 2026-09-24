@@ -47,7 +47,7 @@ export function verifyPackedSteOnboarding({
       [typescriptManifest.name]: `file:../archives/${typescriptArchive}`,
     },
   }));
-  npm(npmCli, [
+  const installInitializer = () => npm(npmCli, [
     "install",
     "--offline",
     "--cache", isolatedCache,
@@ -56,6 +56,7 @@ export function verifyPackedSteOnboarding({
     "--no-save",
     join(archiveDirectory, initializerArchive),
   ], project);
+  installInitializer();
 
   const server = startFixtureServer(temporary);
   const sentinel = createStaleGlobal(temporary);
@@ -93,6 +94,7 @@ export function verifyPackedSteOnboarding({
       packageLocalEntry, "init", "--path", ".",
     ], { cwd: project, env: environment, stdio: "pipe" });
     assertSingleDictionaryRequest(server.requests());
+    installInitializer();
     const rerun = execFileSync(process.execPath, [initializer], {
       cwd: project,
       env: environment,
