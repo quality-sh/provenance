@@ -144,6 +144,7 @@ pub fn with_initialized_graph<R>(
                 }
                 Err(error) => return Err(error.into()),
             };
+            manifest.ensure_has_scopes()?;
             operation(manifest)
         },
     )
