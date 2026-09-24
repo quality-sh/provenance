@@ -125,8 +125,8 @@ fn planning_first_rule_is_grounded_before_code_exists() {
     let repo = dir.path().to_string_lossy().to_string();
 
     let record: Value = serde_json::from_str(&provenance(&[
-        "rules",
         "rule_second_approver",
+        "get",
         "--repo",
         &repo,
         "--scope",
@@ -135,7 +135,7 @@ fn planning_first_rule_is_grounded_before_code_exists() {
         "json",
     ]))
     .unwrap();
-    let rule = &record["data"];
+    let rule = &record["record"]["value"];
     assert_eq!(rule["status"], "active");
     assert!(rule.get("implementation").is_none());
 

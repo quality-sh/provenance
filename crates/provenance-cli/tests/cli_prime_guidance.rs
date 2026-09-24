@@ -50,6 +50,12 @@ fn prime_teaches_domain_without_reading_or_writing_repository_state() {
     );
     assert_eq!(std::fs::read_dir(repo.path()).unwrap().count(), 1);
     assert_eq!(
+        std::fs::read_dir(repo.path().join(".provenance"))
+            .unwrap()
+            .count(),
+        1
+    );
+    assert_eq!(
         std::fs::read_dir(repo.path().join(".provenance/state"))
             .unwrap()
             .count(),
@@ -79,8 +85,8 @@ async fn cli_and_mcp_share_the_same_guidance() {
         .args(["init", "--path", repo.path().to_str().unwrap()])
         .assert()
         .success();
-    let host = provenance_cli::porcelain::local_host(repo.path().to_str().unwrap(), "default")
-        .unwrap();
+    let host =
+        provenance_cli::porcelain::local_host(repo.path().to_str().unwrap(), "default").unwrap();
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
@@ -89,10 +95,21 @@ async fn cli_and_mcp_share_the_same_guidance() {
         Some(text.trim_end())
     );
     let tools = client.list_all_tools().await.unwrap();
-    for name in ["get", "search", "create", "update", "discussion", "discuss", "reply"] {
+    for name in [
+        "get",
+        "search",
+        "create",
+        "update",
+        "discussion",
+        "discuss",
+        "reply",
+    ] {
         let tool = tools.iter().find(|tool| tool.name == name).unwrap();
         let description = tool.description.as_deref().unwrap();
-        assert!(text.contains(description), "shared description missing: {name}");
+        assert!(
+            text.contains(description),
+            "shared description missing: {name}"
+        );
     }
     assert!(tools.iter().all(|tool| tool.name != "prime"));
     client.cancel().await.unwrap();
