@@ -81,7 +81,7 @@ npx provenance prime
 
 | Command | What it does |
 | --- | --- |
-| `provenance prime` | Bounded low-res graph frontier; proposals surface separately when evidence or claimed territory demands them |
+| `provenance prime` | Introduces Provenance domain concepts and agent actions |
 | `provenance check` | Validate the state files |
 | `provenance materialize` | Rebuild the SQLite query cache |
 | `provenance graph <requirement>` | Show the neighbourhood of a requirement |
