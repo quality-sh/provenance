@@ -10,7 +10,8 @@ use provenance_porcelain::get::View;
 mod discussion;
 pub mod grammar;
 use grammar::{
-    CatalogArgs, DiscussionsArgs, DiscussionsCommand, SearchArgs, SearchCommand, TargetArgs,
+    CatalogArgs, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute, SearchArgs, SearchCommand,
+    TargetArgs, TargetVerb,
 };
 
 #[cfg(test)]
@@ -62,17 +63,13 @@ impl Invocation {
             return Ok(Self::Search(args.args));
         }
         if word == "discussions" {
-            if let Ok(command) = DiscussionsCommand::try_parse_from(arguments.clone()) {
+            let target_command = catalog_cli::target_command()?;
+            if grammar::discussions_route(&arguments, &target_command) == DiscussionsRoute::Addressed
+            {
+                let command = DiscussionsCommand::try_parse_from(arguments)
+                    .unwrap_or_else(|error| error.exit());
                 debug_assert_eq!(command.command, "discussions");
-                let graph_action = command.args.action.is_none()
-                    && command.args.discussion_id.as_deref().is_some_and(|action| {
-                        action == "get"
-                            || Action::parse(action).is_some()
-                            || DiscussionAction::parse(action).is_some()
-                    });
-                if !graph_action {
-                    return Ok(Self::DiscussionRoot(command.args));
-                }
+                return Ok(Self::DiscussionRoot(command.args));
             }
         }
         if Cli::command()
@@ -97,12 +94,12 @@ impl Invocation {
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
         let args = TargetArgs::from_matches(&matches);
-        if let Some(action) = args.action.as_deref().and_then(DiscussionAction::parse) {
+        if let Some(TargetVerb::Discussion(action)) = args.action {
             return Ok(Self::DiscussionTarget(args, action, Box::new(matches)));
         }
         let format = args.common.format();
         let context = args.common.context();
-        if args.action.as_deref().is_none_or(|action| action == "get") {
+        if matches!(args.action, None | Some(TargetVerb::Get)) {
             catalog_cli::ensure_only_fields(&matches, &["kind", "view", "depth", "limit"]);
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
@@ -120,11 +117,9 @@ impl Invocation {
                 input,
             }));
         }
-        let action = args
-            .action
-            .as_deref()
-            .and_then(Action::parse)
-            .ok_or_else(|| anyhow::anyhow!("unsupported target action"))?;
+        let Some(TargetVerb::Record(action)) = args.action else {
+            anyhow::bail!("unsupported target action");
+        };
         let kind = args.record_type;
         validate_target(action, &args.target, kind)
             .unwrap_or_else(|error| catalog_cli::usage_error(error));

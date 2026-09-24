@@ -1,5 +1,5 @@
 use crate::operations::catalog::{
-    NullClearBinding, RequestAdapter, RequestAdapterError, RequestBinding,
+    DiscussionWriteKind, NullClearBinding, RequestAdapter, RequestAdapterError, RequestBinding,
 };
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -7,22 +7,27 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const DIRECT: RequestAdapter = RequestAdapter {
     object: true,
     adapt: direct,
+    discussion_write: None,
 };
 const PUBLIC_PATCH: RequestAdapter = RequestAdapter {
     object: true,
     adapt: public_patch,
+    discussion_write: None,
 };
 pub(super) const DISCUSSION_START: RequestAdapter = RequestAdapter {
     object: true,
     adapt: discussion_start,
+    discussion_write: Some(DiscussionWriteKind::Start),
 };
 pub(super) const DISCUSSION_REPLY: RequestAdapter = RequestAdapter {
     object: true,
     adapt: discussion_reply,
+    discussion_write: Some(DiscussionWriteKind::Reply),
 };
 pub(super) const DISCUSSION_STATUS: RequestAdapter = RequestAdapter {
     object: true,
     adapt: discussion_status,
+    discussion_write: Some(DiscussionWriteKind::Status),
 };
 
 #[allow(clippy::unnecessary_wraps)]

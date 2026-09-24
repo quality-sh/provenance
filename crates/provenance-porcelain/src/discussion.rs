@@ -269,7 +269,7 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
                 "discussions scope={} parent={} status={}: {} returned",
                 scope_id.as_str(),
                 selector,
-                status_filter_word(*status),
+                status.as_str(),
                 result.entries.len()
             )];
             for entry in &result.entries {
@@ -350,13 +350,5 @@ const fn status_word(status: DiscussionStatus) -> &'static str {
     match status {
         DiscussionStatus::Active => "active",
         DiscussionStatus::Resolved => "resolved",
-    }
-}
-
-const fn status_filter_word(status: DiscussionStatusFilter) -> &'static str {
-    match status {
-        DiscussionStatusFilter::Active => "active",
-        DiscussionStatusFilter::Resolved => "resolved",
-        DiscussionStatusFilter::All => "all",
     }
 }
