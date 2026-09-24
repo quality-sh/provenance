@@ -29,13 +29,7 @@ fn owned_requirement_discussions_require_the_owner_for_start_and_reply() {
         .to_string(),
     )
     .unwrap();
-    success(&[
-        "import",
-        "--repo",
-        repo,
-        "--input",
-        seed.to_str().unwrap(),
-    ]);
+    success(&["import", "--repo", repo, "--input", seed.to_str().unwrap()]);
 
     for owner in [None, Some("spec://other")] {
         let mut args = vec!["req_owned", "discuss", "--repo", repo, "--body", "Question"];
@@ -50,8 +44,14 @@ fn owned_requirement_discussions_require_the_owner_for_start_and_reply() {
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
-        assert!(json(&["req_owned", "discussions", "--repo", repo, "--format", "json"])
-            ["result"]["entries"]
+        assert!(json(&[
+            "req_owned",
+            "discussions",
+            "--repo",
+            repo,
+            "--format",
+            "json"
+        ])["result"]["entries"]
             .as_array()
             .unwrap()
             .is_empty());
@@ -198,11 +198,12 @@ fn topic_and_question_discussions_refuse_a_declared_owner() {
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
-        assert!(json(&[id, "discussions", "--repo", repo, "--format", "json"])
-            ["result"]["entries"]
-            .as_array()
-            .unwrap()
-            .is_empty());
+        assert!(
+            json(&[id, "discussions", "--repo", repo, "--format", "json"])["result"]["entries"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(
             json(&[id, "discuss", "--repo", repo, "--body", "Question", "--format", "json"])
                 ["receipt"]["version"],
