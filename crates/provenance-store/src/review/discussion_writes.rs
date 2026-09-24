@@ -83,8 +83,7 @@ impl StateStore {
                     .into_iter()
                     .filter(|t| t.parent == input.parent)
                     .collect::<Vec<_>>();
-                let canonical =
-                    provenance_core::threads::choose_canonical_active_thread(&matching);
+                let canonical = provenance_core::threads::choose_canonical_active_thread(&matching);
                 crate::write_error::ensure!(
                     DiscussionClosed,
                     canonical.is_some_and(|t| t.id == head.thread_id),

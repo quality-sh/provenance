@@ -7,7 +7,10 @@ use provenance_porcelain::{
 };
 use serde_json::{json, Value};
 
-pub async fn dispatch_root(args: DiscussionsArgs, matches: &clap::ArgMatches) -> anyhow::Result<()> {
+pub async fn dispatch_root(
+    args: DiscussionsArgs,
+    matches: &clap::ArgMatches,
+) -> anyhow::Result<()> {
     let (action, target) = if let Some(id) = args.discussion_id {
         anyhow::ensure!(
             args.action.as_deref() == Some("get"),
@@ -19,12 +22,9 @@ pub async fn dispatch_root(args: DiscussionsArgs, matches: &clap::ArgMatches) ->
         (Action::Discussions, None)
     };
     let schema = discussion::input_schema(action);
-    let mut input = crate::catalog_cli::fields::schema_input(
-        &schema,
-        matches,
-        &["parent", "discussion_id"],
-    )
-    .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
+    let mut input =
+        crate::catalog_cli::fields::schema_input(&schema, matches, &["parent", "discussion_id"])
+            .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     if let Some(target) = target {
         input.insert("discussion_id".into(), json!(target));
     }
@@ -32,7 +32,9 @@ pub async fn dispatch_root(args: DiscussionsArgs, matches: &clap::ArgMatches) ->
     let service = provenance_porcelain::Porcelain::new(
         provenance_transport::porcelain::HostDiscussionPort::new(host),
     );
-    let outcome = service.execute_discussion(action, Value::Object(input)).await?;
+    let outcome = service
+        .execute_discussion(action, Value::Object(input))
+        .await?;
     print(&outcome, args.common.format())
 }
 

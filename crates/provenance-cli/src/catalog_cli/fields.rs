@@ -238,17 +238,22 @@ mod tests {
     fn selected_schema_validates_shared_flag_in_either_declaration_order() {
         let first = json!({"properties": {"status": {"type": "string", "enum": ["alpha"]}}});
         let second = json!({"properties": {"status": {"type": "string", "enum": ["beta"]}}});
-        for schemas in [[first.clone(), second.clone()], [second.clone(), first.clone()]] {
+        for schemas in [
+            [first.clone(), second.clone()],
+            [second.clone(), first.clone()],
+        ] {
             let command = augment_schemas(Command::new("test"), schemas, &[]).unwrap();
-            for (schema, accepted, rejected) in [
-                (&first, "alpha", "beta"),
-                (&second, "beta", "alpha"),
-            ] {
+            for (schema, accepted, rejected) in
+                [(&first, "alpha", "beta"), (&second, "beta", "alpha")]
+            {
                 let matches = command
                     .clone()
                     .try_get_matches_from(["test", "--status", accepted])
                     .unwrap();
-                assert_eq!(schema_input(schema, &matches, &[]).unwrap()["status"], accepted);
+                assert_eq!(
+                    schema_input(schema, &matches, &[]).unwrap()["status"],
+                    accepted
+                );
                 let matches = command
                     .clone()
                     .try_get_matches_from(["test", "--status", rejected])
