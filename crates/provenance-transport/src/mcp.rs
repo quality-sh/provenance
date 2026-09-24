@@ -13,9 +13,12 @@ use serde_json::Value;
 use std::{collections::BTreeMap, future::Future};
 
 impl ServerHandler for StatementHost {
+    /// Supplies shared domain guidance through native MCP instructions.
+    #[provenance_macros::rule("rule_porcelain_mcp_guidance_native")]
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::default();
         info.capabilities = ServerCapabilities::builder().enable_tools().build();
+        info.instructions = Some(provenance_porcelain::guidance::guidance().guidance);
         info
     }
 

@@ -144,14 +144,6 @@ pub fn install_status(repo: &Path) -> anyhow::Result<SkillInstallStatus> {
     })
 }
 
-pub fn render_status_markdown(status: &SkillInstallStatus) -> String {
-    let installed = if status.installed { "yes" } else { "no" };
-    format!(
-        "\n## Skills\n- Installed: {installed}\n- Install command: `{}` from the repo root\n",
-        status.install_command
-    )
-}
-
 pub fn install_at(
     base: &Path,
     global: bool,
