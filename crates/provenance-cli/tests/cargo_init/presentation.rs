@@ -42,7 +42,8 @@ fn noisy_cargo_add_does_not_print_during_quiet_success() {
     assert!(output.status.success());
     assert!(output.stdout.is_empty(), "{:?}", output.stdout);
     let warning = String::from_utf8(output.stderr).unwrap();
-    assert!(warning.contains("Warning: the official Issue 9 asset is unavailable"));
+    assert!(warning.contains("Warning: the official Issue 9 dictionary could not be added"));
+    assert!(warning.contains("request the official Issue 9 PDF"));
     assert!(!warning.contains("FAKE_CARGO_STDERR"));
     assert!(fixture
         .root()

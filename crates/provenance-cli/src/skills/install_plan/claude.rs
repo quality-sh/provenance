@@ -30,6 +30,7 @@ impl ClaudeAction {
         claude_dir: &Path,
         force: bool,
         copy: bool,
+        guidance: &str,
     ) -> anyhow::Result<Self> {
         let name = skill_name(skill)?;
         let path = claude_dir.join(name);
@@ -43,9 +44,16 @@ impl ClaudeAction {
                 TargetEntry::Symlink(_) | TargetEntry::Other => TargetState::Foreign,
             };
             let verdict = classify_install(state, force);
-            refuse_claude(&path, &before, verdict, true)?;
+            refuse_claude(&path, &before, verdict, true, guidance)?;
             let prospective_missing = !matches!(before, TargetEntry::Directory);
-            let files = plan_copy_files(skill, canonical_dir, &path, force, prospective_missing)?;
+            let files = plan_copy_files(
+                skill,
+                canonical_dir,
+                &path,
+                force,
+                prospective_missing,
+                guidance,
+            )?;
             return Ok(Self::Copy {
                 path,
                 before,
@@ -62,7 +70,7 @@ impl ClaudeAction {
             TargetEntry::Symlink(_) | TargetEntry::Other => TargetState::Foreign,
         };
         let verdict = classify_install(state, force);
-        refuse_claude(&path, &before, verdict, false)?;
+        refuse_claude(&path, &before, verdict, false, guidance)?;
         let fallback = if verdict == InstallVerdict::Ours {
             Vec::new()
         } else {
@@ -72,6 +80,7 @@ impl ClaudeAction {
                 &path,
                 force,
                 !matches!(before, TargetEntry::Directory),
+                guidance,
             )?
         };
         Ok(Self::Symlink {
@@ -316,20 +325,23 @@ fn refuse_claude(
     entry: &TargetEntry,
     verdict: InstallVerdict,
     copy: bool,
+    guidance: &str,
 ) -> anyhow::Result<()> {
     if verdict != InstallVerdict::Refuse {
         return Ok(());
     }
     match entry {
         TargetEntry::Symlink(current) => anyhow::bail!(
-            "{} {} {}; rerun with --force to overwrite",
+            "{} {} {}; {}",
             path.display(),
             if copy { "is a symlink to" } else { "points at" },
-            current.display()
+            current.display(),
+            guidance
         ),
         _ => anyhow::bail!(
-            "{} exists and is not a skill directory; rerun with --force to overwrite",
-            path.display()
+            "{} exists and is not a skill directory; {}",
+            path.display(),
+            guidance
         ),
     }
 }
@@ -350,6 +362,7 @@ mod tests {
             &claude,
             false,
             false,
+            &super::super::conflict_guidance(base, false, false),
         )
         .unwrap();
         let mut rollback = FileRollbackJournal::within(base);

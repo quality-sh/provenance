@@ -136,8 +136,15 @@ impl StateStore {
     }
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_read(|| {
-            crate::test_probes::record_read(&self.layout.manifest_path());
-            manifest_from_bytes(&std::fs::read(self.layout.manifest_path())?)
+            let path = self.layout.manifest_path();
+            crate::test_probes::record_read(&path);
+            manifest_from_bytes(&std::fs::read(&path)?).map_err(|error| {
+                if error.is::<serde_json::Error>() {
+                    error.context(format!("failed to parse manifest {path}"))
+                } else {
+                    error
+                }
+            })
         })
     }
 

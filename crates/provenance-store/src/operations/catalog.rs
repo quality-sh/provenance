@@ -9,6 +9,7 @@ pub use actions::*;
 pub use relationships::*;
 mod context;
 mod creation;
+mod discussion_discovery;
 mod discussions;
 mod drafts;
 pub use drafts::*;
@@ -31,11 +32,13 @@ mod schema_page;
 mod schema_values;
 mod scoped_list;
 mod statement;
+mod target_discussion_writes;
 mod updates;
 mod v2_discussion_reads;
 mod v2_review;
 mod v2_review_reads;
 mod verification_resources;
+pub use discussion_discovery::*;
 pub use updates::*;
 pub use v2_discussion_reads::*;
 pub use v2_review::*;
@@ -44,10 +47,10 @@ pub use v2_review_reads::*;
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 #[cfg(feature = "schema")]
 pub use binding::{
-    ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, EtagBinding, HandlerBinding,
-    HeaderBinding, NullClearBinding, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
-    Registration, RequestAdapter, RequestAdapterError, RequestBinding, ResponseAdapter,
-    ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
+    ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, DiscussionWriteKind,
+    EtagBinding, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding, PathBinding,
+    QueryRequestBinding, QueryRoute, Registration, RequestAdapter, RequestAdapterError,
+    RequestBinding, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
 };
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
@@ -74,6 +77,7 @@ pub use schema::{
     ResponseKind,
 };
 pub use statement::CheckStatement;
+pub use target_discussion_writes::WriteTargetDiscussionV2;
 
 #[cfg(test)]
 mod tests;
