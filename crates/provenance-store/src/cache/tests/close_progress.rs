@@ -27,12 +27,10 @@ fn failed_freshness_close(setup_delay: Duration) {
         let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
         let layout = ProvenanceLayout::new(root.clone());
         let scope = provenance_core::ScopeId::new("default").unwrap();
-        let guard = tokio::time::timeout(
-            SETUP_LIMIT,
-            crate::publication::publication_guard(&layout),
-        )
-        .await
-        .context("the setup publication guard must open")??;
+        let guard =
+            tokio::time::timeout(SETUP_LIMIT, crate::publication::publication_guard(&layout))
+                .await
+                .context("the setup publication guard must open")??;
         let release_setup = tokio::spawn(async move {
             tokio::time::sleep(setup_delay).await;
             drop(guard);
