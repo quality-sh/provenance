@@ -39,7 +39,7 @@ The writable collections are `sources`, `requirements`, `resolutions`,
 A member uses its ID in the command address:
 
 ```text
-provenance <collection> <id>
+provenance <collection> <id> get
 provenance <collection> <id> update [scalar flags | --stdin]
 provenance <collection> <id> trace [--direction in|out|both] [--max-depth <count>]
 provenance <collection> <id> neighbors [--direction in|out|both] [--limit <count>]
@@ -61,12 +61,12 @@ provenance questions question_open answer --answer "Use the guarded path."
 Parent-owned resources keep their parent address:
 
 ```sh
-provenance requirements req_review document --limit 50
-provenance requirements req_review history
-provenance requirements req_review history entry_1 evidence before --field statement
+provenance requirements req_review document get --limit 50
+provenance requirements req_review history get
+provenance requirements req_review history entry_1 evidence before get --field statement
 provenance requirements req_review submit --idempotency-key request_1 --stdin
 provenance requirements req_review submissions proposal_review decide --idempotency-key request_2 --stdin
-provenance sources source_policy discussions list
+provenance sources source_policy discussions get
 provenance sources source_policy discussions create --idempotency-key request_3 --stdin
 provenance sources source_policy discussions discussion_1 messages create \
   --idempotency-key request_4 --if-match '"1"' --stdin
