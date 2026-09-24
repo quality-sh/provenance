@@ -42,7 +42,9 @@ impl HostDiscussionPort {
             DiscussionAction::Reply => DiscussionWriteKind::Reply,
             _ => return Vec::new(),
         };
-        write_parent_kinds(catalog::definitions(), kind, |name| self.host.advertises(name))
+        write_parent_kinds(catalog::definitions(), kind, |name| {
+            self.host.advertises(name)
+        })
     }
 
     fn scope(&self) -> Result<ScopeId, DiscussionError> {

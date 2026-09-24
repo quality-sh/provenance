@@ -119,7 +119,10 @@ fn discussion_words_are_reserved_for_new_records() {
 fn discussion_help_and_errors_keep_the_discussion_grammar() {
     let help = success(&["discussions", "--help"]);
     let text = String::from_utf8(help.stdout).unwrap();
-    assert!(text.contains("List or read addressed Discussions"), "{text}");
+    assert!(
+        text.contains("List or read addressed Discussions"),
+        "{text}"
+    );
     let invalid = run(&["discussions", "--status", "draft"]);
     assert!(!invalid.status.success());
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("possible values"));
@@ -292,9 +295,7 @@ fn cli_discussion_actions_use_one_scope_and_preserve_receipt_identity() {
     assert_eq!(all["has_more"], true);
     let parent = json(&["req_a", "discussions", "--repo", repo, "--format", "json"]);
     assert_eq!(parent["result"]["entries"][0]["discussion_id"], id);
-    let invalid_status = run(&[
-        "req_a", "discussions", "--repo", repo, "--status", "draft",
-    ]);
+    let invalid_status = run(&["req_a", "discussions", "--repo", repo, "--status", "draft"]);
     assert!(!invalid_status.status.success());
     assert!(String::from_utf8_lossy(&invalid_status.stderr).contains("status"));
     let conversation = json(&["discussions", id, "get", "--repo", repo, "--format", "json"]);

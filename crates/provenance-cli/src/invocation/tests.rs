@@ -1,8 +1,8 @@
 use crate::cli::Cli;
 use clap::{CommandFactory as _, Parser as _};
 use provenance_core::RESERVED_RECORD_IDS;
-use provenance_porcelain::{action::Action, get::View};
 use provenance_porcelain::discussion::DiscussionAction;
+use provenance_porcelain::{action::Action, get::View};
 use provenance_store::operations::catalog::{self, TargetAction};
 
 #[test]

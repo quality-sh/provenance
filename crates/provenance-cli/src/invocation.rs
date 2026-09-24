@@ -64,7 +64,8 @@ impl Invocation {
         }
         if word == "discussions" {
             let target_command = catalog_cli::target_command()?;
-            if grammar::discussions_route(&arguments, &target_command) == DiscussionsRoute::Addressed
+            if grammar::discussions_route(&arguments, &target_command)
+                == DiscussionsRoute::Addressed
             {
                 let command = DiscussionsCommand::try_parse_from(arguments)
                     .unwrap_or_else(|error| error.exit());

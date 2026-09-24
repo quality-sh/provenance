@@ -279,7 +279,10 @@ async fn reply_grant_does_not_admit_start() {
     )
     .await;
     assert_ne!(reply.is_error, Some(true), "{reply:?}");
-    assert_eq!(reply.structured_content.as_ref().unwrap()["receipt"]["version"], 2);
+    assert_eq!(
+        reply.structured_content.as_ref().unwrap()["receipt"]["version"],
+        2
+    );
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

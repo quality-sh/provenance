@@ -122,7 +122,7 @@ pub async fn dispatch_target(
 }
 
 fn status(status: Option<&str>) -> DiscussionStatusFilter {
-    status.map_or(DiscussionStatusFilter::default(), |word| {
+    status.map_or_else(DiscussionStatusFilter::default, |word| {
         DiscussionStatusFilter::parse(word).unwrap_or_else(|| {
             crate::catalog_cli::usage_error(format!("invalid Discussion status {word}"))
         })
