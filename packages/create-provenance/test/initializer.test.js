@@ -120,7 +120,7 @@ function verifyExactDevelopmentDependency(manager, command, args, environment) {
     {
       command: "/provenance-engine",
       args: [
-        "init", "--path", project,
+        "init", "--path", project, "--scope", "default",
         "--invocation-channel", "typescript", "--package-manager", manager,
       ],
       capture: false,
@@ -170,7 +170,7 @@ test("an engine without the current init surface receives only bare init flags",
     },
     {
       command: "/provenance-engine",
-      args: ["init", "--path", project],
+      args: ["init", "--path", project, "--scope", "default"],
       capture: false,
     },
   ]);

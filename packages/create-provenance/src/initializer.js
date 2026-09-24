@@ -69,12 +69,14 @@ export function initializeProject({
   const engine = enginePath === undefined
     ? resolveEngine(directory)
     : { command: enginePath, args: engineArguments };
-  // Let the engine create new scope defaults and preserve existing scope settings.
+  // Let the engine default a new scope's path and preserve an existing path.
   const initArgs = [
     ...engine.args,
     "init",
     "--path",
     directory,
+    "--scope",
+    "default",
   ];
   const help = run({
     command: engine.command,
