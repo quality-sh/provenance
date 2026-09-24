@@ -156,7 +156,9 @@ fn skills_install_copy_replaces_own_symlink_but_foreign_symlink_requires_force()
     std::os::unix::fs::symlink("../../elsewhere", &link).unwrap();
     install(dir.path(), &["--copy"])
         .failure()
-        .stderr(predicate::str::contains("provenance skills install --force"));
+        .stderr(predicate::str::contains(
+            "provenance skills install --copy --force",
+        ));
     assert_eq!(
         std::fs::read_link(&link).unwrap(),
         PathBuf::from("../../elsewhere")
@@ -177,12 +179,15 @@ fn skills_install_refuses_a_file_where_a_skill_directory_belongs() {
     std::fs::create_dir_all(occupied.parent().unwrap()).unwrap();
     std::fs::write(&occupied, "not a skill directory\n").unwrap();
 
-    for arguments in [vec![], vec!["--copy"]] {
+    for (arguments, recovery_command) in [
+        (vec![], "provenance skills install --force"),
+        (vec!["--copy"], "provenance skills install --copy --force"),
+    ] {
         install(dir.path(), &arguments)
             .failure()
-            .stderr(predicate::str::contains(
-                "exists and is not a skill directory; run `provenance skills install --force`",
-            ));
+            .stderr(predicate::str::contains(format!(
+                "exists and is not a skill directory; run `{recovery_command}`"
+            )));
         assert_eq!(
             std::fs::read_to_string(&occupied).unwrap(),
             "not a skill directory\n"
