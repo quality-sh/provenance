@@ -1,6 +1,6 @@
-use assert_cmd::Command;
 #[cfg(target_os = "linux")]
 use assert_cmd::prelude::CommandCargoExt;
+use assert_cmd::Command;
 use predicates::str::contains;
 use serde_json::Value;
 use std::path::Path;
@@ -139,7 +139,10 @@ fn init_reports_a_failed_summary_after_publishing_state() {
     command
         .current_dir(root)
         .env("PROVENANCE_STE100_ASSET_DIR", asset_dir)
-        .env("PROVENANCE_STE100_INDEX_DIR", root.join("dictionary-indexes"))
+        .env(
+            "PROVENANCE_STE100_INDEX_DIR",
+            root.join("dictionary-indexes"),
+        )
         .arg("init")
         .stdout(std::fs::File::create("/dev/full").unwrap());
 

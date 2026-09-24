@@ -12,10 +12,8 @@ fn planned_manifest_validation_runs_publication_recovery_before_reading_state() 
     std::fs::write(layout.manifest_path(), "not the planned manifest").unwrap();
     std::fs::create_dir_all(layout.cache_dir()).unwrap();
     std::fs::write(layout.publication_marker_path(), "not a publication marker").unwrap();
-    let manifest = Manifest::default_with_scope(
-        ScopeId::new("default").unwrap(),
-        RepoPathPrefix::new("."),
-    );
+    let manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
 
     let error = validate_repository_with_manifest(&repo, &manifest).unwrap_err();
 
@@ -37,10 +35,8 @@ fn planned_manifest_validation_refuses_a_symlinked_publication_cache() {
     std::fs::create_dir_all(layout.provenance_dir()).unwrap();
     std::fs::create_dir_all(&outside).unwrap();
     symlink(&outside, layout.cache_dir()).unwrap();
-    let manifest = Manifest::default_with_scope(
-        ScopeId::new("default").unwrap(),
-        RepoPathPrefix::new("."),
-    );
+    let manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
 
     let error = validate_repository_with_manifest(&repo, &manifest).unwrap_err();
 
@@ -53,10 +49,8 @@ fn planned_manifest_validation_locks_an_existing_state_tree() {
     let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
     let layout = ProvenanceLayout::new(repo.clone());
     std::fs::create_dir_all(layout.scopes_dir()).unwrap();
-    let manifest = Manifest::default_with_scope(
-        ScopeId::new("default").unwrap(),
-        RepoPathPrefix::new("."),
-    );
+    let manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
 
     validate_repository_with_manifest(&repo, &manifest).unwrap();
 
@@ -68,10 +62,8 @@ fn planned_manifest_validation_keeps_a_new_repository_read_only() {
     let directory = tempfile::tempdir().unwrap();
     let repo = Utf8PathBuf::from_path_buf(directory.path().join("repo")).unwrap();
     let layout = ProvenanceLayout::new(repo.clone());
-    let manifest = Manifest::default_with_scope(
-        ScopeId::new("default").unwrap(),
-        RepoPathPrefix::new("."),
-    );
+    let manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
 
     validate_repository_with_manifest(&repo, &manifest).unwrap();
 
@@ -84,10 +76,8 @@ async fn scoped_check_does_not_read_another_scope() {
     let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
     let layout = ProvenanceLayout::new(repo.clone());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
-    let mut manifest = Manifest::default_with_scope(
-        ScopeId::new("default").unwrap(),
-        RepoPathPrefix::new("."),
-    );
+    let mut manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
     manifest.scopes.push(provenance_core::Scope {
         id: ScopeId::new("other").unwrap(),
         path_prefix: RepoPathPrefix::new("other"),
@@ -120,14 +110,19 @@ async fn binding_check_refuses_an_absent_selected_scope() {
     let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
     let layout = ProvenanceLayout::new(repo.clone());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
-    let manifest = Manifest::default_with_scope(
-        ScopeId::new("default").unwrap(),
-        RepoPathPrefix::new("."),
-    );
-    std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
 
     let port = RepositoryCheckPort::new(repo, false, None);
-    let error = port.run(Category::Bindings, Some("absent")).await.unwrap_err();
+    let error = port
+        .run(Category::Bindings, Some("absent"))
+        .await
+        .unwrap_err();
 
     assert!(error.contains("scope absent does not exist"), "{error}");
 }
@@ -138,11 +133,13 @@ fn binding_check_reads_a_scope_published_after_the_code_scan() {
     let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
     let layout = ProvenanceLayout::new(repo.clone());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
-    let mut manifest = Manifest::default_with_scope(
-        ScopeId::new("default").unwrap(),
-        RepoPathPrefix::new("."),
-    );
-    std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let mut manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
     let scanned = provenance_scanner::scan_path_with_content(&repo).unwrap();
     provenance_store::publication::with_repository_publication(&layout, || {
         manifest.scopes.push(provenance_core::Scope {
@@ -168,5 +165,7 @@ fn binding_check_reads_a_scope_published_after_the_code_scan() {
     let CategoryRun::Bindings { findings, .. } = run else {
         panic!("binding run")
     };
-    assert!(findings.iter().any(|finding| finding.message.contains("rule_second")));
+    assert!(findings
+        .iter()
+        .any(|finding| finding.message.contains("rule_second")));
 }

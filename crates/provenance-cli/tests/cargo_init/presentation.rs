@@ -12,7 +12,10 @@ fn cargo_init_reports_a_failed_summary_after_publishing_state() {
         .unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("No space left on device"));
-    assert!(fixture.root().join(".provenance/state/manifest.json").is_file());
+    assert!(fixture
+        .root()
+        .join(".provenance/state/manifest.json")
+        .is_file());
 }
 
 #[test]

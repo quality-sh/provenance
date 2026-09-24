@@ -152,28 +152,31 @@ impl RepositoryCheckPort {
             .map_err(|error| format!("{error:#}"))?
             .coverage
             .binding_findings;
-        let warnings = provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
-            let scopes = manifest
-                .scopes
-                .into_iter()
-                .filter(|scope| selected_scope.is_none_or(|selected| scope.id.as_str() == selected))
-                .collect::<Vec<_>>();
-            if let Some(scope) = selected_scope {
-                anyhow::ensure!(!scopes.is_empty(), "scope {scope} does not exist");
-            }
-            let mut warnings = Vec::new();
-            for scope in scopes {
-                let report = super::coverage::coverage_scan_from_scanned(
-                    &self.repo,
-                    &self.repo,
-                    scope.id.as_str(),
-                    scanned,
-                )?;
-                warnings.extend(report.report.warnings);
-            }
-            Ok(warnings)
-        })
-        .map_err(|error| format!("{error:#}"))?;
+        let warnings =
+            provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
+                let scopes = manifest
+                    .scopes
+                    .into_iter()
+                    .filter(|scope| {
+                        selected_scope.is_none_or(|selected| scope.id.as_str() == selected)
+                    })
+                    .collect::<Vec<_>>();
+                if let Some(scope) = selected_scope {
+                    anyhow::ensure!(!scopes.is_empty(), "scope {scope} does not exist");
+                }
+                let mut warnings = Vec::new();
+                for scope in scopes {
+                    let report = super::coverage::coverage_scan_from_scanned(
+                        &self.repo,
+                        &self.repo,
+                        scope.id.as_str(),
+                        scanned,
+                    )?;
+                    warnings.extend(report.report.warnings);
+                }
+                Ok(warnings)
+            })
+            .map_err(|error| format!("{error:#}"))?;
         let refusal = if policy == provenance_store::settings::BindingFindingsSeverity::Error
             && warnings.iter().any(|warning| warning.binding_finding)
         {

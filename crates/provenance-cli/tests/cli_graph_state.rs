@@ -79,8 +79,7 @@ fn health_rejects_a_manifest_without_scopes() {
     std::fs::create_dir_all(&state).unwrap();
     std::fs::write(
         state.join("manifest.json"),
-        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scopes": []})
-            .to_string(),
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scopes": []}).to_string(),
     )
     .unwrap();
 

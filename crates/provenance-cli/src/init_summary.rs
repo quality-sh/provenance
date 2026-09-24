@@ -178,7 +178,10 @@ mod tests {
     fn completed_init_reports_output_failure() {
         let ending = InitEnding::already("No change.".to_owned(), None);
         assert_eq!(
-            ending.print(&mut FailingWriter, false).unwrap_err().to_string(),
+            ending
+                .print(&mut FailingWriter, false)
+                .unwrap_err()
+                .to_string(),
             "output failed"
         );
         ending.print(&mut FailingWriter, true).unwrap();
