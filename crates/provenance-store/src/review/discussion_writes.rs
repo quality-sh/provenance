@@ -25,16 +25,35 @@ impl StateStore {
     /// Creates a distinct Discussion root or changes one addressed Discussion.
     #[rule("rule_record_comments_have_separate_reply_threads")]
     pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<DiscussionEntry> {
+        self.with_repository_publication(|| self.write_discussion_in_publication(input, None))
+    }
+
+    pub(super) fn write_discussion_in_publication(
+        &self,
+        input: WriteDiscussion,
+        resolved_head: Option<DiscussionEntry>,
+    ) -> anyhow::Result<DiscussionEntry> {
         let digest = intent(&input)?;
-        self.with_repository_publication(|| {
-            self.authorize_discussion(&input)?;
-            if let Some(receipt) = self.discussion_receipt(&input)? { return Ok(receipt); }
-            let heads = self.discussion_heads(&input.scope_id)?;
-            let head = match &input.action {
-                DiscussionAction::Start { .. } => None,
-                DiscussionAction::Reply { discussion_id, expected_version, .. }
-                | DiscussionAction::SetStatus { discussion_id, expected_version, .. } => {
-                    let head = heads
+        self.authorize_discussion(&input)?;
+        if let Some(receipt) = self.discussion_receipt(&input)? {
+            return Ok(receipt);
+        }
+        let head = match &input.action {
+            DiscussionAction::Start { .. } => None,
+            DiscussionAction::Reply {
+                discussion_id,
+                expected_version,
+                ..
+            }
+            | DiscussionAction::SetStatus {
+                discussion_id,
+                expected_version,
+                ..
+            } => {
+                let head = if let Some(head) = resolved_head {
+                    head
+                } else {
+                    self.discussion_heads(&input.scope_id)?
                         .into_iter()
                         .find(|e| e.discussion_id == *discussion_id)
                         .ok_or_else(|| {
@@ -42,57 +61,65 @@ impl StateStore {
                                 crate::write_error::WriteFailure::ResourceNotFound,
                                 anyhow::anyhow!("Discussion does not exist"),
                             )
-                        })?;
+                        })?
+                };
+                crate::write_error::ensure!(
+                    ResourceNotFound,
+                    head.discussion_id == *discussion_id,
+                    "Discussion does not exist"
+                );
+                crate::write_error::ensure!(
+                    DiscussionMembershipMismatch,
+                    head.parent == input.parent,
+                    "Discussion parent membership mismatch"
+                );
+                crate::write_error::ensure!(
+                    DiscussionVersionConflict,
+                    head.version == *expected_version,
+                    "stale Discussion version"
+                );
+                let matching = self
+                    .list_threads(&input.scope_id)?
+                    .into_iter()
+                    .filter(|t| t.parent == input.parent)
+                    .collect::<Vec<_>>();
+                let canonical =
+                    provenance_core::threads::choose_canonical_active_thread(&matching);
+                crate::write_error::ensure!(
+                    DiscussionClosed,
+                    canonical.is_some_and(|t| t.id == head.thread_id),
+                    "Discussion requires the canonical active Thread; closed containers refuse replies and reopening"
+                );
+                Some(head)
+            }
+        };
+        match &input.action {
+            DiscussionAction::Start { body, .. } | DiscussionAction::Reply { body, .. } => {
+                crate::write_error::ensure!(
+                    EmptyMessageBody,
+                    !body.trim().is_empty(),
+                    "message body must not be empty"
+                );
+                if let Some(head) = &head {
                     crate::write_error::ensure!(
-                        DiscussionMembershipMismatch,
-                        head.parent == input.parent,
-                        "Discussion parent membership mismatch"
+                        DiscussionResolved,
+                        head.status == DiscussionStatus::Active,
+                        "resolved Discussion refuses replies"
                     );
-                    crate::write_error::ensure!(
-                        DiscussionVersionConflict,
-                        head.version == *expected_version,
-                        "stale Discussion version"
-                    );
-                    let matching = self
-                        .list_threads(&input.scope_id)?
-                        .into_iter()
-                        .filter(|t| t.parent == input.parent)
-                        .collect::<Vec<_>>();
-                    let canonical =
-                        provenance_core::threads::choose_canonical_active_thread(&matching);
-                    crate::write_error::ensure!(
-                        DiscussionClosed,
-                        canonical.is_some_and(|t| t.id == head.thread_id),
-                        "Discussion requires the canonical active Thread; closed containers refuse replies and reopening"
-                    );
-                    Some(head)
-                }
-            };
-            match &input.action {
-                DiscussionAction::Start { body, .. } | DiscussionAction::Reply { body, .. } => {
-                    crate::write_error::ensure!(
-                        EmptyMessageBody,
-                        !body.trim().is_empty(),
-                        "message body must not be empty"
-                    );
-                    if let Some(head) = &head {
-                        crate::write_error::ensure!(
-                            DiscussionResolved,
-                            head.status == DiscussionStatus::Active,
-                            "resolved Discussion refuses replies"
-                        );
-                    }
-                }
-                DiscussionAction::SetStatus { status, .. } => {
-                    anyhow::ensure!(head.as_ref().unwrap().status != *status, "Discussion already has this status");
                 }
             }
-            with_staged_state(&self.layout, false, |layout| {
-                let staged = Self::new(layout.clone());
-                guard::with_writer(&shards::threads_path(layout, &input.scope_id), "*", || {
-                    guard::with_writer(&shards::messages_path(layout, &input.scope_id), "*", || {
-                        staged.commit_discussion(input, head, digest)
-                    })
+            DiscussionAction::SetStatus { status, .. } => {
+                anyhow::ensure!(
+                    head.as_ref().unwrap().status != *status,
+                    "Discussion already has this status"
+                );
+            }
+        }
+        with_staged_state(&self.layout, false, |layout| {
+            let staged = Self::new(layout.clone());
+            guard::with_writer(&shards::threads_path(layout, &input.scope_id), "*", || {
+                guard::with_writer(&shards::messages_path(layout, &input.scope_id), "*", || {
+                    staged.commit_discussion(input, head, digest)
                 })
             })
         })

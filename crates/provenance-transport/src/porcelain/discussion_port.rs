@@ -15,7 +15,7 @@ use provenance_porcelain::{
 };
 use provenance_store::{
     operations::catalog::{self, DiscussionWriteKind, Operation as _},
-    review::{TargetDiscussionAction, TargetDiscussionWrite},
+    review::{DiscussionAction, TargetDiscussionWrite},
 };
 
 /// Bind shared Discussion actions to canonical typed operations and host grants.
@@ -149,14 +149,13 @@ impl DiscussionPort for HostDiscussionPort {
                 return Err(ActionError::AccessDenied);
             }
             self.host
-                .invoke_scope_typed::<catalog::WriteTargetDiscussionV2>(TargetDiscussionWrite {
+                .invoke_scope_typed::<catalog::WriteDiscussionV2>(catalog::WriteDiscussionRequest {
                     scope_id: self.scope()?,
+                    parent: input.parent,
                     request_id: input.request_id,
                     actor: input.actor,
                     declared_by: input.declared_by,
-                    allowed_parent_kinds: kinds,
-                    action: TargetDiscussionAction::Start {
-                        parent: input.parent,
+                    action: DiscussionAction::Start {
                         role: input.role,
                         body: input.body,
                     },
@@ -179,12 +178,10 @@ impl DiscussionPort for HostDiscussionPort {
                     actor: input.actor,
                     declared_by: input.declared_by,
                     allowed_parent_kinds: kinds,
-                    action: TargetDiscussionAction::Reply {
-                        discussion_id: input.discussion_id,
-                        expected_version: input.expected_version,
-                        role: input.role,
-                        body: input.body,
-                    },
+                    discussion_id: input.discussion_id,
+                    expected_version: input.expected_version,
+                    role: input.role,
+                    body: input.body,
                 })
                 .await
                 .map_err(|error| operation_error(&error))
@@ -218,7 +215,11 @@ pub(super) fn is_available(host: &crate::StatementHost, action: Action) -> bool 
                     .permitted_parent_kinds::<catalog::ReviewDiscussionV2>()
                     .is_empty()
         }
-        Action::Discuss | Action::Reply => {
+        Action::Discuss => {
+            host.advertises(catalog::WriteDiscussionV2::NAME)
+                && !port.permitted_write_parent_kinds(action).is_empty()
+        }
+        Action::Reply => {
             host.advertises(catalog::WriteTargetDiscussionV2::NAME)
                 && !port.permitted_write_parent_kinds(action).is_empty()
         }

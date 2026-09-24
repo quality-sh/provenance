@@ -136,6 +136,7 @@ impl HostAccess for LocalAccess {
             <catalog::Impact as catalog::Operation>::NAME,
             <catalog::ListDiscussionsV2 as catalog::Operation>::NAME,
             <catalog::GetDiscussionConversationV2 as catalog::Operation>::NAME,
+            <catalog::WriteDiscussionV2 as catalog::Operation>::NAME,
             <catalog::WriteTargetDiscussionV2 as catalog::Operation>::NAME,
         ]
         .contains(&operation)

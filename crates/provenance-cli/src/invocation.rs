@@ -1,5 +1,5 @@
 use crate::{catalog_cli, cli::Cli, handlers};
-use clap::{CommandFactory as _, Parser as _};
+use clap::{CommandFactory as _, FromArgMatches as _, Parser as _};
 use provenance_cli::porcelain;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
@@ -22,7 +22,7 @@ pub enum Invocation {
     Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
     Search(SearchArgs),
-    DiscussionRoot(DiscussionsArgs),
+    DiscussionRoot(DiscussionsArgs, Box<clap::ArgMatches>),
     DiscussionTarget(TargetArgs, Action, Box<clap::ArgMatches>),
     Target(TargetInvocation),
 }
@@ -66,10 +66,13 @@ impl Invocation {
             if grammar::discussions_route(&arguments, &target_command)
                 == DiscussionsRoute::Addressed
             {
-                let command = DiscussionsCommand::try_parse_from(arguments)
+                let matches = grammar::discussions_command()?
+                    .try_get_matches_from(arguments)
+                    .unwrap_or_else(|error| error.exit());
+                let command = DiscussionsCommand::from_arg_matches(&matches)
                     .unwrap_or_else(|error| error.exit());
                 debug_assert_eq!(command.command, "discussions");
-                return Ok(Self::DiscussionRoot(command.args));
+                return Ok(Self::DiscussionRoot(command.args, Box::new(matches)));
             }
         }
         if Cli::command()
@@ -149,7 +152,7 @@ impl Invocation {
                 .await
             }
             Self::Search(args) => args.dispatch().await,
-            Self::DiscussionRoot(args) => discussion::dispatch_root(args).await,
+            Self::DiscussionRoot(args, matches) => discussion::dispatch_root(args, &matches).await,
             Self::DiscussionTarget(args, action, matches) => {
                 discussion::dispatch_target(args, action, &matches).await
             }

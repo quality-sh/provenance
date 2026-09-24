@@ -257,12 +257,12 @@ async fn reply_grant_does_not_admit_start() {
     let store = provenance_store::state_store::StateStore::new(repository.layout.clone());
     let request = serde_json::from_value(json!({
         "scope_id":"default", "request_id":"initial_start", "actor":"ben",
-        "declared_by":null, "allowed_parent_kinds":["requirement"],
-        "action":{"kind":"start","parent":{"node_type":"requirement","node_id":"req_shared"},
-            "role":"user","body":"Opening text"}
+        "declared_by":null,
+        "parent":{"node_type":"requirement","node_id":"req_shared"},
+        "action":{"kind":"start","role":"user","body":"Opening text"}
     }))
     .unwrap();
-    let receipt = store.write_target_discussion(request).unwrap();
+    let receipt = store.write_discussion(request).unwrap();
     let host = StatementHost::with_fixture_access(
         access(&repository).deny_operation("requirements-create-discussion"),
     );
@@ -318,12 +318,12 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
     ] {
         let request = serde_json::from_value(json!({
             "scope_id":"default", "request_id":request_id, "actor":"ben",
-            "declared_by":null, "allowed_parent_kinds":["requirement","source"],
-            "action":{"kind":"start","parent":{"node_type":node_type,"node_id":node_id},
-                "role":"user","body":request_id}
+            "declared_by":null,
+            "parent":{"node_type":node_type,"node_id":node_id},
+            "action":{"kind":"start","role":"user","body":request_id}
         }))
         .unwrap();
-        let receipt = store.write_target_discussion(request).unwrap();
+        let receipt = store.write_discussion(request).unwrap();
         if node_type == "source" {
             source = Some(receipt);
         }

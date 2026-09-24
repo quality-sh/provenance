@@ -3,42 +3,36 @@ use provenance_cli::porcelain;
 use provenance_core::StableId;
 use provenance_porcelain::{
     action::Action,
-    discussion::{self, ConversationInput, DiscussionOutcome, ListInput},
+    discussion::{self, DiscussionOutcome},
 };
 use serde_json::{json, Value};
 
-pub async fn dispatch_root(args: DiscussionsArgs) -> anyhow::Result<()> {
-    let host = porcelain::local_host(&args.common.repo, &args.common.scope)?;
-    let service = provenance_porcelain::Porcelain::new(
-        provenance_transport::porcelain::HostDiscussionPort::new(host),
-    );
-    let outcome = if let Some(id) = args.discussion_id {
+pub async fn dispatch_root(args: DiscussionsArgs, matches: &clap::ArgMatches) -> anyhow::Result<()> {
+    let (action, target) = if let Some(id) = args.discussion_id {
         anyhow::ensure!(
             args.action.as_deref() == Some("get"),
             "an addressed Discussion requires get"
         );
-        anyhow::ensure!(
-            args.status.is_none(),
-            "a conversation does not select list status"
-        );
-        service
-            .conversation(ConversationInput {
-                discussion_id: StableId::new(id)?,
-                limit: args.limit,
-                cursor: args.cursor,
-            })
-            .await?
+        (Action::Discussion, Some(StableId::new(id)?))
     } else {
         anyhow::ensure!(args.action.is_none(), "get requires a Discussion ID");
-        service
-            .discussions(ListInput {
-                parent: None,
-                status: args.status.unwrap_or_default(),
-                limit: args.limit,
-                cursor: args.cursor,
-            })
-            .await?
+        (Action::Discussions, None)
     };
+    let schema = discussion::input_schema(action);
+    let mut input = crate::catalog_cli::fields::schema_input(
+        &schema,
+        matches,
+        &["parent", "discussion_id"],
+    )
+    .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
+    if let Some(target) = target {
+        input.insert("discussion_id".into(), json!(target));
+    }
+    let host = porcelain::local_host(&args.common.repo, &args.common.scope)?;
+    let service = provenance_porcelain::Porcelain::new(
+        provenance_transport::porcelain::HostDiscussionPort::new(host),
+    );
+    let outcome = service.execute_discussion(action, Value::Object(input)).await?;
     print(&outcome, args.common.format())
 }
 

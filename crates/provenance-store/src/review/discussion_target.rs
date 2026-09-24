@@ -5,7 +5,6 @@ use crate::{
 };
 use provenance_core::{
     review::JournalEntry, threads::DiscussionEntry, MessageRole, NodeType, ScopeId, StableId,
-    ThreadParent,
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,28 +18,14 @@ pub struct TargetDiscussionWrite {
     pub declared_by: Option<String>,
     /// Parent kinds granted by the host before this operation runs.
     pub allowed_parent_kinds: Vec<NodeType>,
-    pub action: TargetDiscussionAction,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum TargetDiscussionAction {
-    Start {
-        parent: ThreadParent,
-        role: MessageRole,
-        body: String,
-    },
-    Reply {
-        discussion_id: StableId,
-        expected_version: u64,
-        role: MessageRole,
-        body: String,
-    },
+    pub discussion_id: StableId,
+    pub expected_version: u64,
+    pub role: MessageRole,
+    pub body: String,
 }
 
 impl StateStore {
-    /// Resolves the target and writes its Discussion in one publication.
+    /// Resolves a reply target and writes it in one publication.
     pub fn write_target_discussion(
         &self,
         input: TargetDiscussionWrite,
@@ -61,61 +46,42 @@ impl StateStore {
             } else {
                 None
             };
-            let (parent, action) = match input.action {
-                TargetDiscussionAction::Start { parent, role, body } => {
-                    if let Some(saved) = receipt_parent {
-                        crate::write_error::ensure!(
-                            DiscussionIntentChanged,
-                            parent == saved,
-                            "Discussion request ID was reused with different intent"
-                        );
-                    }
-                    (parent, DiscussionAction::Start { role, body })
-                }
-                TargetDiscussionAction::Reply {
-                    discussion_id,
-                    expected_version,
-                    role,
-                    body,
-                } => {
-                    let parent = if let Some(parent) = receipt_parent {
-                        parent
-                    } else {
-                        self.discussion_heads(&input.scope_id)?
-                            .into_iter()
-                            .find(|entry| entry.discussion_id == discussion_id)
-                            .ok_or_else(|| {
-                                SourceFailure::wrap(
-                                    WriteFailure::ResourceNotFound,
-                                    anyhow::anyhow!("Discussion does not exist"),
-                                )
-                            })?
-                            .parent
-                    };
-                    (
-                        parent,
-                        DiscussionAction::Reply {
-                            discussion_id,
-                            expected_version,
-                            role,
-                            body,
-                        },
-                    )
-                }
+            let (parent, head) = if let Some(parent) = receipt_parent {
+                (parent, None)
+            } else {
+                let head = self
+                    .discussion_heads(&input.scope_id)?
+                    .into_iter()
+                    .find(|entry| entry.discussion_id == input.discussion_id)
+                    .ok_or_else(|| {
+                        SourceFailure::wrap(
+                            WriteFailure::ResourceNotFound,
+                            anyhow::anyhow!("Discussion does not exist"),
+                        )
+                    })?;
+                (head.parent.clone(), Some(head))
             };
             crate::write_error::ensure!(
                 ResourceNotFound,
                 input.allowed_parent_kinds.contains(&parent.node_type),
                 "Discussion parent is not available"
             );
-            self.write_discussion(WriteDiscussion {
-                scope_id: input.scope_id,
-                parent,
-                request_id: input.request_id,
-                actor: input.actor,
-                declared_by: input.declared_by,
-                action,
-            })
+            self.write_discussion_in_publication(
+                WriteDiscussion {
+                    scope_id: input.scope_id,
+                    parent,
+                    request_id: input.request_id,
+                    actor: input.actor,
+                    declared_by: input.declared_by,
+                    action: DiscussionAction::Reply {
+                        discussion_id: input.discussion_id,
+                        expected_version: input.expected_version,
+                        role: input.role,
+                        body: input.body,
+                    },
+                },
+                head,
+            )
         })
     }
 }
