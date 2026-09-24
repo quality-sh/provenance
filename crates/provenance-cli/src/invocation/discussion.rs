@@ -22,9 +22,13 @@ pub async fn dispatch_root(
         (Action::Discussions, None)
     };
     let schema = discussion::input_schema(action);
-    let mut input =
-        crate::catalog_cli::fields::schema_input(&schema, matches, &["parent", "discussion_id"], &[])
-            .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
+    let mut input = crate::catalog_cli::fields::schema_input(
+        &schema,
+        matches,
+        &["parent", "discussion_id"],
+        &[],
+    )
+    .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     if let Some(target) = target {
         input.insert("discussion_id".into(), json!(target));
     }
