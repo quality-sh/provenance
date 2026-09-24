@@ -23,7 +23,7 @@ pub(super) fn init(path: &Utf8Path, options: InitOptions) -> anyhow::Result<()> 
     let quiet = options.quiet;
     let plan = prepare_init(path, options)?;
     let ending = plan.apply()?;
-    ending.print(quiet);
+    ending.print(&mut std::io::stdout().lock(), quiet)?;
     Ok(())
 }
 

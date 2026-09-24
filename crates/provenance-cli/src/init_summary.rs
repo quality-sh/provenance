@@ -62,14 +62,14 @@ impl InitEnding {
         self
     }
 
-    pub fn print(&self, quiet: bool) {
+    pub fn print(&self, out: &mut impl Write, quiet: bool) -> std::io::Result<()> {
         if let Some(warning) = &self.warning {
             eprintln!("{warning}");
         }
         if !quiet {
-            let mut stdout = std::io::stdout().lock();
-            let _ignored = self.write_to(&mut stdout);
+            self.write_to(out)?;
         }
+        Ok(())
     }
 
     pub fn write_to(&self, out: &mut impl Write) -> std::io::Result<()> {
@@ -161,6 +161,28 @@ pub fn scope_phrase(scopes: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct FailingWriter;
+
+    impl Write for FailingWriter {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("output failed"))
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn completed_init_reports_output_failure() {
+        let ending = InitEnding::already("No change.".to_owned(), None);
+        assert_eq!(
+            ending.print(&mut FailingWriter, false).unwrap_err().to_string(),
+            "output failed"
+        );
+        ending.print(&mut FailingWriter, true).unwrap();
+    }
 
     #[test]
     fn scope_phrase_covers_one_and_many_scopes() {

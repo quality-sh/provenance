@@ -141,7 +141,12 @@ fn main() {
     }
 
     pub fn command(&self) -> Command {
-        let mut command = Command::cargo_bin("cargo-provenance").unwrap();
+        Command::from_std(self.std_command())
+    }
+
+    pub fn std_command(&self) -> std::process::Command {
+        use assert_cmd::prelude::CommandCargoExt;
+        let mut command = std::process::Command::cargo_bin("cargo-provenance").unwrap();
         let path = std::env::join_paths(std::iter::once(self.fake_bin.clone()).chain(
             std::env::split_paths(&std::env::var_os("PATH").expect("PATH is set")),
         ))

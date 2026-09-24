@@ -421,6 +421,7 @@ pub fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {
 pub(crate) fn manifest_from_bytes(bytes: &[u8]) -> anyhow::Result<Manifest> {
     let manifest: Manifest = serde_json::from_slice(bytes)?;
     ensure_supported_schema_version("manifest", manifest.schema_version)?;
+    manifest.ensure_has_scopes()?;
     Ok(manifest)
 }
 

@@ -120,22 +120,33 @@ pub fn with_initialized_graph<R>(
     {
         return Err(GraphNotInitialized.into());
     }
-    crate::publication::with_repository_publication(layout, || {
-        let manifest = match std::fs::metadata(layout.manifest_path()) {
-            Ok(metadata) if metadata.is_file() => {
-                crate::state_store::StateStore::new(layout.clone()).manifest()?
-            }
-            Ok(_) => anyhow::bail!("Provenance graph manifest is not a file"),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                if path_exists(&layout.manifest_path())? {
-                    anyhow::bail!("Provenance graph manifest is not a file");
-                }
+    crate::publication::with_repository_publication_checked(
+        layout,
+        || {
+            if !path_exists(&layout.manifest_path())?
+                && !path_exists(&layout.publication_marker_path())?
+            {
                 return Err(GraphNotInitialized.into());
             }
-            Err(error) => return Err(error.into()),
-        };
-        operation(manifest)
-    })
+            Ok(())
+        },
+        || {
+            let manifest = match std::fs::metadata(layout.manifest_path()) {
+                Ok(metadata) if metadata.is_file() => {
+                    crate::state_store::StateStore::new(layout.clone()).manifest()?
+                }
+                Ok(_) => anyhow::bail!("Provenance graph manifest is not a file"),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    if path_exists(&layout.manifest_path())? {
+                        anyhow::bail!("Provenance graph manifest is not a file");
+                    }
+                    return Err(GraphNotInitialized.into());
+                }
+                Err(error) => return Err(error.into()),
+            };
+            operation(manifest)
+        },
+    )
 }
 
 /// Require a valid manifest before a caller opens a graph operation.
