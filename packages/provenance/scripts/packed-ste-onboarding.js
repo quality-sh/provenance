@@ -75,11 +75,16 @@ export function verifyPackedSteOnboarding({
   );
 
   try {
-    execFileSync(process.execPath, [initializer], {
+    const first = execFileSync(process.execPath, [initializer], {
       cwd: project,
       env: environment,
-      stdio: "pipe",
+      encoding: "utf8",
     });
+    assert.match(first, /(?:^|\n)Initialized Provenance for scope "default" in /);
+    assert.equal(first.match(/Provenance records requirements, decisions, and the rules that connect them to code\./g)?.length, 1);
+    assert.match(first, /\nNew\n/);
+    assert.equal(first.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
+    assert.ok(first.endsWith("Have your agent run provenance prime to get acclimated.\n"));
     assertSingleDictionaryRequest(server.requests());
 
     const packageLocalEntry = join(
@@ -129,9 +134,13 @@ function assertRepeatedInitializationPreservesScope({
         "install", "--offline", "--cache", environment.npm_config_cache,
         "--no-audit", "--no-fund", "--no-save", initializerArchive,
       ], project);
-      execFileSync(process.execPath, [initializer], {
-        cwd: project, env: environment, stdio: "pipe",
+      const rerun = execFileSync(process.execPath, [initializer], {
+        cwd: project, env: environment, encoding: "utf8",
       });
+      assert.match(rerun, /(?:^|\n)Provenance is already set up for scope "default" in /);
+      assert.equal(rerun.match(/Provenance records requirements, decisions, and the rules that connect them to code\./g)?.length, 1);
+      assert.equal(rerun.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
+      assert.ok(rerun.endsWith("Have your agent run provenance prime to get acclimated.\n"));
       assert.deepEqual(JSON.parse(readFileSync(manifestPath, "utf8")).scopes, [
         { id: "default", path_prefix: prefix },
       ], "repeated npm initialization must preserve the configured scope");
