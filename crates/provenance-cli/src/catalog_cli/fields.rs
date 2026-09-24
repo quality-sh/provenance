@@ -212,7 +212,7 @@ pub fn schema_input(
         } else {
             matches
                 .try_get_one::<String>(&name)
-                .map(|value| value.cloned())
+                .map(Option::cloned)
         };
         let raw = raw.map_err(|_| anyhow::anyhow!("incompatible CLI storage for --{name}"))?;
         let parsed = raw
