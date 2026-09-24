@@ -115,7 +115,7 @@ pub(crate) fn search_tool() -> rmcp::model::Tool {
         .map(|object| object.remove("$schema"));
     let mut tool = rmcp::model::Tool::new(
         "search",
-        "Find records across the permitted kinds in the bound scope.",
+        provenance_porcelain::guidance::SEARCH_DESCRIPTION,
         input
             .as_object()
             .expect("search schema is an object")
@@ -135,7 +135,7 @@ pub(crate) fn get_tool() -> rmcp::model::Tool {
     let schema = provenance_porcelain::get::input_schema();
     let mut tool = rmcp::model::Tool::new(
         "get",
-        "Read one repository record by its repository-local ID.",
+        provenance_porcelain::guidance::GET_DESCRIPTION,
         schema.as_object().expect("get schema is an object").clone(),
     );
     tool.output_schema = Some(
@@ -152,7 +152,7 @@ pub(crate) fn check_tool() -> rmcp::model::Tool {
     let schema = provenance_porcelain::check::input_schema();
     let mut tool = rmcp::model::Tool::new(
         "check",
-        "Check graph validity, statement quality, and binding coverage.",
+        provenance_porcelain::guidance::CHECK_DESCRIPTION,
         schema
             .as_object()
             .expect("check schema is an object")

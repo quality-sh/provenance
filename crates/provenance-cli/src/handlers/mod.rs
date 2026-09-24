@@ -124,13 +124,8 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         Command::Gaps { repo, scope, .. } => {
             gaps::handle(repo, scope)?;
         }
-        Command::Prime {
-            repo,
-            scope,
-            format,
-            include_threads,
-        } => {
-            prime::handle(repo, scope, format, include_threads)?;
+        Command::Prime { format, .. } => {
+            prime::handle(format)?;
         }
         Command::Health { repo, scope, .. } => {
             health::handle(repo, scope)?;
