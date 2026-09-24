@@ -243,7 +243,9 @@ pub(crate) fn schema_input(
                 .flatten()
                 .map(|raw| {
                     provenance_store::operations::catalog::parse_schema_value_in(
-                        schema, declaration, raw,
+                        schema,
+                        declaration,
+                        raw,
                     )
                     .map_err(|_| anyhow::anyhow!("invalid value for --{name}"))
                 })

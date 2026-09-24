@@ -41,7 +41,10 @@ fn discussion_flags_follow_the_typed_input_contracts() {
                 continue;
             }
             let flag = field.replace('_', "-");
-            assert!(declared.contains(flag.as_str()), "{action:?} lacks --{flag}");
+            assert!(
+                declared.contains(flag.as_str()),
+                "{action:?} lacks --{flag}"
+            );
         }
     }
 }

@@ -81,16 +81,7 @@ pub fn target_command() -> anyhow::Result<Command> {
         grammar::target_command(),
         definitions,
         &[
-            "repo",
-            "scope",
-            "format",
-            "quiet",
-            "type",
-            "view",
-            "depth",
-            "kind",
-            "limit",
-            "stdin",
+            "repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin",
         ],
         &[],
     )?;

@@ -1,13 +1,10 @@
 use super::{
-    failures::ReadError,
-    v2_review_reads::ReadResult,
-    ContextKind, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
+    failures::ReadError, v2_review_reads::ReadResult, ContextKind, ExecutionNeed, ExecutionNeeds,
+    Operation, OperationFuture, PreparedContext,
 };
-use provenance_core::{
-    threads::{
-        DiscussionConversationQuery, DiscussionConversationResult, DiscussionListQuery,
-        DiscussionResultPage, DiscussionSummary,
-    },
+use provenance_core::threads::{
+    DiscussionConversationQuery, DiscussionConversationResult, DiscussionListQuery,
+    DiscussionResultPage, DiscussionSummary,
 };
 
 pub struct ListDiscussionsV2;

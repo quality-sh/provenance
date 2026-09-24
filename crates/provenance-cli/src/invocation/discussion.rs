@@ -75,9 +75,13 @@ pub async fn dispatch_target(
         }
     }
     if schema["properties"].get("request_id").is_some() {
-        input.entry("request_id").or_insert_with(|| json!(uuid::Uuid::new_v4().to_string()));
+        input
+            .entry("request_id")
+            .or_insert_with(|| json!(uuid::Uuid::new_v4().to_string()));
     }
-    let outcome = service.execute_discussion(action, Value::Object(input)).await?;
+    let outcome = service
+        .execute_discussion(action, Value::Object(input))
+        .await?;
     print(&outcome, args.common.format())
 }
 

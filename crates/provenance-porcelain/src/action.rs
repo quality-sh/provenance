@@ -42,10 +42,7 @@ pub enum ActionError {
     AmbiguousIdentity,
     AccessDenied,
     Operation(String),
-    OperationDetail {
-        message: String,
-        detail: Value,
-    },
+    OperationDetail { message: String, detail: Value },
 }
 
 impl Display for ActionError {
@@ -58,8 +55,9 @@ impl Display for ActionError {
             Self::NotFound => formatter.write_str("record does not exist"),
             Self::AmbiguousIdentity => formatter.write_str("record ID is not unique"),
             Self::AccessDenied => formatter.write_str("access denied"),
-            Self::Operation(message) => formatter.write_str(message),
-            Self::OperationDetail { message, .. } => formatter.write_str(message),
+            Self::Operation(message) | Self::OperationDetail { message, .. } => {
+                formatter.write_str(message)
+            }
         }
     }
 }

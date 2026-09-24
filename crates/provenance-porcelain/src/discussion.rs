@@ -1,14 +1,14 @@
 //! Shared Discussion actions and readable results.
 
+use crate::action::{Action, ActionError};
 use provenance_core::{
     protocol::{Stamp, Stamped},
     threads::{
-        DiscussionConversationResult, DiscussionEntry, DiscussionResultPage,
-        DiscussionStatus, DiscussionStatusFilter, DiscussionSummary,
+        DiscussionConversationResult, DiscussionEntry, DiscussionResultPage, DiscussionStatus,
+        DiscussionStatusFilter, DiscussionSummary,
     },
     MessageRole, ScopeId, StableId, ThreadParent,
 };
-use crate::action::{Action, ActionError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{future::Future, pin::Pin};
@@ -102,7 +102,7 @@ pub enum DiscussionOutcome {
         freshness_error: Option<String>,
     },
     Conversation {
-        result: DiscussionConversationResult,
+        result: Box<DiscussionConversationResult>,
         limit: usize,
         has_more: bool,
         stamp: Option<Stamp>,
@@ -112,7 +112,6 @@ pub enum DiscussionOutcome {
         receipt: DiscussionEntry,
     },
 }
-
 
 pub type PortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ActionError>> + Send + 'a>>;
 
@@ -151,10 +150,7 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
     }
 
     /// List addressed Discussions after the host selects permitted parent kinds.
-    pub async fn discussions(
-        &self,
-        input: ListInput,
-    ) -> Result<DiscussionOutcome, ActionError> {
+    pub async fn discussions(&self, input: ListInput) -> Result<DiscussionOutcome, ActionError> {
         let limit = checked_limit(input.limit)?;
         let parent = input.parent.clone();
         let status = input.status;
@@ -192,7 +188,7 @@ impl<P: DiscussionPort> crate::Porcelain<P> {
         } = self.port.conversation(input).await?;
         Ok(DiscussionOutcome::Conversation {
             has_more: result.messages.has_more,
-            result,
+            result: Box::new(result),
             limit,
             stamp: Some(stamp),
             freshness_error,

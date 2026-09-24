@@ -7,6 +7,7 @@ use crate::{
     layout::ProvenanceLayout, operations::read_policy::ReadPolicy, review, state_store::StateStore,
     write_error::WriteError,
 };
+pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
     review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryQuery},
     threads::{
@@ -15,7 +16,6 @@ use provenance_core::{
     },
     Message, ScopeId, StableId, ThreadParent,
 };
-pub use provenance_core::threads::DiscussionResultPage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]

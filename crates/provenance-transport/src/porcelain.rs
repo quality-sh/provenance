@@ -15,10 +15,7 @@ pub(super) use authoring_mcp::{call as call_authoring, tools as authoring_tools}
 pub use discussion_port::HostDiscussionPort;
 pub use get_port::HostGetPort;
 
-pub(crate) fn discussion_is_available(
-    host: &crate::StatementHost,
-    action: Action,
-) -> bool {
+pub(crate) fn discussion_is_available(host: &crate::StatementHost, action: Action) -> bool {
     discussion_port::is_available(host, action)
 }
 
