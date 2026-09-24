@@ -23,7 +23,7 @@ pub async fn dispatch_root(
     };
     let schema = discussion::input_schema(action);
     let mut input =
-        crate::catalog_cli::fields::schema_input(&schema, matches, &["parent", "discussion_id"])
+        crate::catalog_cli::fields::schema_input(&schema, matches, &["parent", "discussion_id"], &[])
             .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     if let Some(target) = target {
         input.insert("discussion_id".into(), json!(target));
@@ -48,6 +48,7 @@ pub async fn dispatch_target(
         &schema,
         matches,
         &["parent", "discussion_id", "declared_by"],
+        &["limit"],
     )
     .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     let target = StableId::new(args.target)?;
