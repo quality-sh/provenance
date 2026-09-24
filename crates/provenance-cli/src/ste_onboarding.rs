@@ -270,6 +270,6 @@ fn cache_directory() -> Option<PathBuf> {
 
 fn fallback_guidance(error: &anyhow::Error) -> String {
     format!(
-        "Warning: the official Issue 9 asset is unavailable after {DOWNLOAD_ATTEMPTS} attempts ({error}). Initialization continues without a dictionary. To add it later, rerun init, or run `provenance dictionary import --pdf <path>` with a local PDF file."
+        "Warning: the official Issue 9 dictionary could not be added ({error:#}). Initialization continues without a dictionary. To add it later, rerun init, or run `provenance dictionary import --pdf <path>` with a local PDF file."
     )
 }
