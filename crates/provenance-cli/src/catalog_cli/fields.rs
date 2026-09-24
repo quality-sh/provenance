@@ -155,7 +155,7 @@ fn schema_properties(schema: &Value) -> anyhow::Result<&Map<String, Value>> {
 }
 
 /// Register flags from the same typed contracts that declare the MCP inputs.
-pub(crate) fn augment_schemas(
+pub fn augment_schemas(
     mut command: Command,
     schemas: impl IntoIterator<Item = Value>,
     bound: &[&str],
@@ -210,7 +210,7 @@ fn enum_values(root: &Value, declaration: &Value) -> Option<Vec<String>> {
 }
 
 /// Bind supplied CLI flags using the typed input schema for one keyword.
-pub(crate) fn schema_input(
+pub fn schema_input(
     schema: &Value,
     matches: &clap::ArgMatches,
     bound: &[&str],

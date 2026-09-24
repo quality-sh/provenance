@@ -12,7 +12,7 @@ use std::{
 };
 
 mod address;
-pub(crate) mod fields;
+pub mod fields;
 
 pub struct Invocation {
     context: GlobalContext,
