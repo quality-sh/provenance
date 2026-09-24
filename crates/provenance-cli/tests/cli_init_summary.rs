@@ -318,10 +318,14 @@ fn existing_skill_parents_report_changed_child_paths_and_keep_unrelated_skills()
     }
     let output = init(&repo).success().get_output().stdout.clone();
     let output = String::from_utf8(output).unwrap();
+    let new_section = output.split_once("\nNew\n").expect("a New section").1;
+    assert!(!output.contains("\nChanged\n"));
     assert!(!output.contains("  .agents/skills ("));
     assert!(!output.contains("  .claude/skills ("));
-    assert!(output.contains("  .agents/skills/provenance-shaping/SKILL.md ("));
-    assert!(output.contains("  .claude/skills/provenance-shaping ("));
+    assert!(
+        new_section.contains("  .agents/skills/provenance-shaping/SKILL.md (added skill file)\n")
+    );
+    assert!(new_section.contains("  .claude/skills/provenance-shaping (added link)\n"));
     for parent in [".agents/skills", ".claude/skills"] {
         assert_eq!(
             std::fs::read_to_string(repo.join(parent).join("unrelated/SKILL.md")).unwrap(),
