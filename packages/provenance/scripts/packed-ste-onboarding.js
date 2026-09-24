@@ -74,11 +74,16 @@ export function verifyPackedSteOnboarding({
   );
 
   try {
-    execFileSync(process.execPath, [initializer], {
+    const first = execFileSync(process.execPath, [initializer], {
       cwd: project,
       env: environment,
-      stdio: "pipe",
+      encoding: "utf8",
     });
+    assert.match(first, /^Initialized Provenance for scope "default" in /);
+    assert.match(first, /Provenance records requirements, decisions, and the rules that connect them to code\./);
+    assert.match(first, /\nNew\n/);
+    assert.equal(first.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
+    assert.ok(first.endsWith("Have your agent run provenance prime to get acclimated.\n"));
     assertSingleDictionaryRequest(server.requests());
 
     const packageLocalEntry = join(
@@ -87,6 +92,16 @@ export function verifyPackedSteOnboarding({
     execFileSync(process.execPath, [
       packageLocalEntry, "init", "--path", ".",
     ], { cwd: project, env: environment, stdio: "pipe" });
+    assertSingleDictionaryRequest(server.requests());
+    const rerun = execFileSync(process.execPath, [initializer], {
+      cwd: project,
+      env: environment,
+      encoding: "utf8",
+    });
+    assert.match(rerun, /^Provenance is already set up for scope "default" in /);
+    assert.match(rerun, /Provenance records requirements, decisions, and the rules that connect them to code\./);
+    assert.equal(rerun.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
+    assert.ok(rerun.endsWith("Have your agent run provenance prime to get acclimated.\n"));
     assertSingleDictionaryRequest(server.requests());
 
     assertInitializedPackage(project, packedMainSpec, initializerManifest);

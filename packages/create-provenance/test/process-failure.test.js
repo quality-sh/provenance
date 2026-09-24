@@ -62,6 +62,7 @@ test("the command reports a real installed-engine init failure", () => {
 
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Provenance initialization failed with exit code 23/);
+    assert.doesNotMatch(result.stdout, /Provenance is ready|Have your agent run provenance prime/);
     const manifest = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
     assert.ok(manifest.devDependencies["@quality-sh/provenance"]);
   } finally {
