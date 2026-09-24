@@ -110,7 +110,7 @@ impl CatalogArgs {
 
 #[derive(Parser)]
 #[command(name = "provenance", about = "Read or change one record")]
-pub(crate) struct TargetArgs {
+pub struct TargetArgs {
     #[command(flatten)]
     pub common: Common,
     pub target: String,

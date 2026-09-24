@@ -17,13 +17,13 @@ use grammar::{
 mod tests;
 
 /// One command selected from a declared grammar.
-pub(crate) enum Invocation {
+pub enum Invocation {
     Builtin(Cli),
     Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
     Search(SearchArgs),
     DiscussionRoot(DiscussionsArgs),
-    DiscussionTarget(TargetArgs, DiscussionAction, clap::ArgMatches),
+    DiscussionTarget(TargetArgs, DiscussionAction, Box<clap::ArgMatches>),
     Target(TargetInvocation),
 }
 
@@ -98,7 +98,7 @@ impl Invocation {
             .unwrap_or_else(|error| error.exit());
         let args = TargetArgs::from_matches(&matches);
         if let Some(action) = args.action.as_deref().and_then(DiscussionAction::parse) {
-            return Ok(Self::DiscussionTarget(args, action, matches));
+            return Ok(Self::DiscussionTarget(args, action, Box::new(matches)));
         }
         let format = args.common.format();
         let context = args.common.context();

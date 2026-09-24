@@ -43,7 +43,7 @@ pub async fn dispatch_root(args: DiscussionsArgs) -> anyhow::Result<()> {
             })
             .await?
     };
-    print(outcome, args.common.format())
+    print(&outcome, args.common.format())
 }
 
 pub async fn dispatch_target(
@@ -118,7 +118,7 @@ pub async fn dispatch_target(
                 .await?
         }
     };
-    print(outcome, args.common.format())
+    print(&outcome, args.common.format())
 }
 
 fn status(status: Option<&str>) -> DiscussionStatusFilter {
@@ -154,15 +154,15 @@ async fn resolve_parent(
 }
 
 fn print(
-    outcome: DiscussionOutcome,
+    outcome: &DiscussionOutcome,
     format: Option<porcelain::OutputFormat>,
 ) -> anyhow::Result<()> {
     if format == Some(porcelain::OutputFormat::Json) {
-        println!("{}", serde_json::to_string_pretty(&outcome)?);
+        println!("{}", serde_json::to_string_pretty(outcome)?);
     } else {
         println!(
             "{}",
-            provenance_porcelain::discussion::render_readable(&outcome)
+            provenance_porcelain::discussion::render_readable(outcome)
         );
     }
     Ok(())

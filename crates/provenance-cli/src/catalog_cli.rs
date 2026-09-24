@@ -348,13 +348,7 @@ fn input(
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("stdin must contain one JSON object"))?;
     }
-    for default in &definition.registration.cli.defaults {
-        data.entry(default.field)
-            .or_insert_with(|| match default.value {
-                catalog::CliDefaultValue::String(value) => json!(value),
-                catalog::CliDefaultValue::EmptyArray => json!([]),
-            });
-    }
+    apply_defaults(definition, &mut data);
     if definition.parameters().iter().any(|parameter| {
         parameter.location == "header" && parameter.required && parameter.name == "Idempotency-Key"
     }) && !headers.contains_key("Idempotency-Key")
@@ -365,4 +359,14 @@ fn input(
         );
     }
     Ok((Value::Object(data), query, headers))
+}
+
+fn apply_defaults(definition: &Definition, data: &mut Map<String, Value>) {
+    for default in &definition.registration.cli.defaults {
+        data.entry(default.field)
+            .or_insert_with(|| match default.value {
+                catalog::CliDefaultValue::String(value) => json!(value),
+                catalog::CliDefaultValue::EmptyArray => json!([]),
+            });
+    }
 }
