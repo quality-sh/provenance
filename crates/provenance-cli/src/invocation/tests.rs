@@ -1,9 +1,8 @@
 use crate::cli::Cli;
 use clap::{CommandFactory as _, Parser as _};
 use provenance_core::RESERVED_RECORD_IDS;
-use provenance_porcelain::discussion::DiscussionAction;
 use provenance_porcelain::{action::Action, get::View};
-use provenance_store::operations::catalog::{self, TargetAction};
+use provenance_store::operations::catalog;
 
 #[test]
 fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
@@ -16,10 +15,7 @@ fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
     }
     assert!(RESERVED_RECORD_IDS.contains(&"search"));
     assert!(RESERVED_RECORD_IDS.contains(&"get"));
-    for action in TargetAction::ALL {
-        assert!(RESERVED_RECORD_IDS.contains(&action.as_str()));
-    }
-    for action in DiscussionAction::ALL {
+    for action in Action::ALL {
         assert!(RESERVED_RECORD_IDS.contains(&action.as_str()));
     }
     for definition in catalog::definitions() {
@@ -28,6 +24,25 @@ fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
             RESERVED_RECORD_IDS.contains(&collection),
             "{collection} is not reserved"
         );
+    }
+}
+
+#[test]
+fn discussion_flags_follow_the_typed_input_contracts() {
+    let command = crate::catalog_cli::target_command().unwrap();
+    let declared = command
+        .get_arguments()
+        .filter_map(|argument| argument.get_long())
+        .collect::<std::collections::BTreeSet<_>>();
+    for action in Action::DISCUSSION {
+        let schema = provenance_porcelain::discussion::input_schema(action);
+        for field in schema["properties"].as_object().unwrap().keys() {
+            if ["parent", "discussion_id", "declared_by"].contains(&field.as_str()) {
+                continue;
+            }
+            let flag = field.replace('_', "-");
+            assert!(declared.contains(flag.as_str()), "{action:?} lacks --{flag}");
+        }
     }
 }
 

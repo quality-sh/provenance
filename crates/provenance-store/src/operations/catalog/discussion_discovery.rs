@@ -1,15 +1,14 @@
 use super::{
     failures::ReadError,
-    v2_review_reads::{DiscussionResultPage, ReadResult},
+    v2_review_reads::ReadResult,
     ContextKind, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
 };
 use provenance_core::{
     threads::{
-        DiscussionConversationQuery, DiscussionEntry, DiscussionListQuery, DiscussionSummary,
+        DiscussionConversationQuery, DiscussionConversationResult, DiscussionListQuery,
+        DiscussionResultPage, DiscussionSummary,
     },
-    Message,
 };
-use serde::Serialize;
 
 pub struct ListDiscussionsV2;
 
@@ -55,13 +54,6 @@ impl Operation for ListDiscussionsV2 {
             })
         })
     }
-}
-
-#[derive(Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct DiscussionConversationResult {
-    pub head: DiscussionEntry,
-    pub messages: DiscussionResultPage<Message>,
 }
 
 pub struct GetDiscussionConversationV2;

@@ -7,7 +7,6 @@ use clap::{
 use provenance_cli::porcelain;
 use provenance_core::{threads::DiscussionStatusFilter, NodeType};
 use provenance_porcelain::action::Action;
-use provenance_porcelain::discussion::DiscussionAction;
 use provenance_porcelain::get::View;
 
 // Shared options for the Porcelain and catalog grammars.
@@ -128,37 +127,20 @@ pub struct TargetArgs {
     pub limit: Option<usize>,
     #[arg(long)]
     pub stdin: bool,
-    #[arg(long)]
-    pub status: Option<String>,
-    #[arg(long, allow_hyphen_values = true)]
-    pub cursor: Option<String>,
-    #[arg(long, allow_hyphen_values = true)]
-    pub body: Option<String>,
-    #[arg(long, allow_hyphen_values = true)]
-    pub actor: Option<String>,
-    #[arg(long, allow_hyphen_values = true)]
-    pub request_id: Option<String>,
-    #[arg(long)]
-    pub expected_version: Option<String>,
-    #[arg(long, value_parser = ["user", "assistant", "system"])]
-    pub role: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TargetVerb {
     Get,
-    Record(Action),
-    Discussion(DiscussionAction),
+    Action(Action),
 }
 
 impl TargetVerb {
     pub fn parse(word: &str) -> Option<Self> {
         if word == "get" {
             Some(Self::Get)
-        } else if let Some(action) = Action::parse(word) {
-            Some(Self::Record(action))
         } else {
-            DiscussionAction::parse(word).map(Self::Discussion)
+            Action::parse(word).map(Self::Action)
         }
     }
 }
@@ -170,19 +152,21 @@ pub(super) enum DiscussionsRoute {
 }
 
 pub(super) fn discussions_route(arguments: &[String], command: &Command) -> DiscussionsRoute {
-    match positional_word(arguments, command, 2).and_then(TargetVerb::parse) {
-        Some(TargetVerb::Get | TargetVerb::Record(_)) => DiscussionsRoute::LegacyRecord,
-        _ => DiscussionsRoute::Addressed,
+    let legacy = match positional_word(arguments, command, 2).and_then(TargetVerb::parse) {
+        Some(TargetVerb::Get) => true,
+        Some(TargetVerb::Action(action)) => Action::RECORD.contains(&action),
+        None => false,
+    };
+    if legacy {
+        DiscussionsRoute::LegacyRecord
+    } else {
+        DiscussionsRoute::Addressed
     }
 }
 
 fn target_actions() -> impl TypedValueParser<Value = TargetVerb> {
-    PossibleValuesParser::new(
-        std::iter::once("get")
-            .chain(Action::ALL.map(Action::as_str))
-            .chain(DiscussionAction::ALL.map(DiscussionAction::as_str)),
-    )
-    .map(|word| TargetVerb::parse(&word).expect("declared target verb"))
+    PossibleValuesParser::new(std::iter::once("get").chain(Action::ALL.map(Action::as_str)))
+        .map(|word| TargetVerb::parse(&word).expect("declared target verb"))
 }
 
 fn get_views() -> PossibleValuesParser {

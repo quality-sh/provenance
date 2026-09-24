@@ -123,6 +123,12 @@ fn discussion_help_and_errors_keep_the_discussion_grammar() {
         text.contains("List or read addressed Discussions"),
         "{text}"
     );
+    let target_help = String::from_utf8(success(&["req_a", "reply", "--help"]).stdout).unwrap();
+    assert!(target_help.contains("--expected-version"));
+    assert!(target_help.contains("--role"));
+    let wrong_field = run(&["req_a", "discussion", "--body", "not a read option"]);
+    assert!(!wrong_field.status.success());
+    assert!(String::from_utf8_lossy(&wrong_field.stderr).contains("unsupported option --body"));
     let invalid = run(&["discussions", "--status", "draft"]);
     assert!(!invalid.status.success());
     assert!(String::from_utf8_lossy(&invalid.stderr).contains("possible values"));

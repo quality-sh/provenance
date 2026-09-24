@@ -1,14 +1,17 @@
 use provenance_core::{
     protocol::{failure::OperationError, Stamped},
     threads::{
-        DiscussionConversation, DiscussionConversationQuery, DiscussionEntry, DiscussionListPage,
+        DiscussionConversationQuery, DiscussionConversationResult, DiscussionEntry,
         DiscussionListQuery,
     },
     NodeType, ScopeId,
 };
-use provenance_porcelain::discussion::{
-    ConversationInput, DiscussionAction, DiscussionError, DiscussionPort, ListAnswer, ListInput,
-    PortFuture, ReplyInput, StartInput,
+use provenance_porcelain::{
+    action::{Action, ActionError},
+    discussion::{
+        ConversationInput, DiscussionPort, ListAnswer, ListInput, PortFuture, ReplyInput,
+        StartInput,
+    },
 };
 use provenance_store::{
     operations::catalog::{self, DiscussionWriteKind, Operation as _},
@@ -36,10 +39,10 @@ impl HostDiscussionPort {
             .collect()
     }
 
-    fn permitted_write_parent_kinds(&self, action: DiscussionAction) -> Vec<NodeType> {
+    fn permitted_write_parent_kinds(&self, action: Action) -> Vec<NodeType> {
         let kind = match action {
-            DiscussionAction::Discuss => DiscussionWriteKind::Start,
-            DiscussionAction::Reply => DiscussionWriteKind::Reply,
+            Action::Discuss => DiscussionWriteKind::Start,
+            Action::Reply => DiscussionWriteKind::Reply,
             _ => return Vec::new(),
         };
         write_parent_kinds(catalog::definitions(), kind, |name| {
@@ -47,12 +50,12 @@ impl HostDiscussionPort {
         })
     }
 
-    fn scope(&self) -> Result<ScopeId, DiscussionError> {
+    fn scope(&self) -> Result<ScopeId, ActionError> {
         self.host
             .bound_identity()
             .map(|(_, scope)| scope)
-            .ok_or(DiscussionError::AccessDenied)
-            .and_then(|scope| ScopeId::new(scope).map_err(|_| DiscussionError::AccessDenied))
+            .ok_or(ActionError::AccessDenied)
+            .and_then(|scope| ScopeId::new(scope).map_err(|_| ActionError::AccessDenied))
     }
 }
 
@@ -78,14 +81,14 @@ impl DiscussionPort for HostDiscussionPort {
         Box::pin(async move {
             let kinds = self.permitted_parent_kinds::<catalog::ReviewDiscussionsV2>();
             if kinds.is_empty() {
-                return Err(DiscussionError::AccessDenied);
+                return Err(ActionError::AccessDenied);
             }
             if input
                 .parent
                 .as_ref()
                 .is_some_and(|parent| !kinds.contains(&parent.node_type))
             {
-                return Err(DiscussionError::AccessDenied);
+                return Err(ActionError::AccessDenied);
             }
             let response = self
                 .host
@@ -99,10 +102,7 @@ impl DiscussionPort for HostDiscussionPort {
                 .await
                 .map_err(|error| operation_error(&error))?;
             let page = Stamped {
-                result: DiscussionListPage {
-                    entries: response.result.entries,
-                    next_cursor: response.result.next_cursor,
-                },
+                result: response.result,
                 stamp: response.stamp,
                 freshness_error: response.freshness_error,
             };
@@ -116,11 +116,11 @@ impl DiscussionPort for HostDiscussionPort {
     fn conversation(
         &self,
         input: ConversationInput,
-    ) -> PortFuture<'_, Stamped<DiscussionConversation>> {
+    ) -> PortFuture<'_, Stamped<DiscussionConversationResult>> {
         Box::pin(async move {
             let kinds = self.permitted_parent_kinds::<catalog::ReviewDiscussionV2>();
             if kinds.is_empty() {
-                return Err(DiscussionError::AccessDenied);
+                return Err(ActionError::AccessDenied);
             }
             let response = self
                 .host
@@ -135,13 +135,7 @@ impl DiscussionPort for HostDiscussionPort {
                 .await
                 .map_err(|error| operation_error(&error))?;
             Ok(Stamped {
-                result: DiscussionConversation {
-                    head: response.result.head,
-                    messages: provenance_core::threads::DiscussionMessagesPage {
-                        entries: response.result.messages.entries,
-                        next_cursor: response.result.messages.next_cursor,
-                    },
-                },
+                result: response.result,
                 stamp: response.stamp,
                 freshness_error: response.freshness_error,
             })
@@ -150,9 +144,9 @@ impl DiscussionPort for HostDiscussionPort {
 
     fn start(&self, input: StartInput) -> PortFuture<'_, DiscussionEntry> {
         Box::pin(async move {
-            let kinds = self.permitted_write_parent_kinds(DiscussionAction::Discuss);
+            let kinds = self.permitted_write_parent_kinds(Action::Discuss);
             if !kinds.contains(&input.parent.node_type) {
-                return Err(DiscussionError::AccessDenied);
+                return Err(ActionError::AccessDenied);
             }
             self.host
                 .invoke_scope_typed::<catalog::WriteTargetDiscussionV2>(TargetDiscussionWrite {
@@ -174,9 +168,9 @@ impl DiscussionPort for HostDiscussionPort {
 
     fn reply(&self, input: ReplyInput) -> PortFuture<'_, DiscussionEntry> {
         Box::pin(async move {
-            let kinds = self.permitted_write_parent_kinds(DiscussionAction::Reply);
+            let kinds = self.permitted_write_parent_kinds(Action::Reply);
             if kinds.is_empty() {
-                return Err(DiscussionError::AccessDenied);
+                return Err(ActionError::AccessDenied);
             }
             self.host
                 .invoke_scope_typed::<catalog::WriteTargetDiscussionV2>(TargetDiscussionWrite {
@@ -200,34 +194,35 @@ impl DiscussionPort for HostDiscussionPort {
 
 fn operation_error<E: std::error::Error + serde::Serialize>(
     error: &OperationError<E>,
-) -> DiscussionError {
+) -> ActionError {
     let detail =
         serde_json::to_value(error).unwrap_or_else(|_| serde_json::json!({"kind":"internal"}));
-    DiscussionError::Operation {
+    ActionError::OperationDetail {
         message: error.to_string(),
         detail,
     }
 }
 
-pub(super) fn is_available(host: &crate::StatementHost, action: DiscussionAction) -> bool {
+pub(super) fn is_available(host: &crate::StatementHost, action: Action) -> bool {
     let port = HostDiscussionPort::new(host.clone());
     match action {
-        DiscussionAction::Discussions => {
+        Action::Discussions => {
             host.advertises(catalog::ListDiscussionsV2::NAME)
                 && !port
                     .permitted_parent_kinds::<catalog::ReviewDiscussionsV2>()
                     .is_empty()
         }
-        DiscussionAction::Discussion => {
+        Action::Discussion => {
             host.advertises(catalog::GetDiscussionConversationV2::NAME)
                 && !port
                     .permitted_parent_kinds::<catalog::ReviewDiscussionV2>()
                     .is_empty()
         }
-        DiscussionAction::Discuss | DiscussionAction::Reply => {
+        Action::Discuss | Action::Reply => {
             host.advertises(catalog::WriteTargetDiscussionV2::NAME)
                 && !port.permitted_write_parent_kinds(action).is_empty()
         }
+        _ => false,
     }
 }
 
