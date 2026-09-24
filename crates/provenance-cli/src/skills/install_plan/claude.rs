@@ -1,4 +1,4 @@
-use super::{auxiliary::plan_copy_files, FileAction};
+use super::{auxiliary::plan_copy_files, conflict_guidance, FileAction};
 use crate::atomic_file::FileRollbackJournal;
 use crate::skills::install_decision::{classify_install, InstallVerdict, TargetEntry, TargetState};
 use crate::skills::{file_report, skill_name, EmbeddedSkill, FileInstallReport, FileStatus};
@@ -322,14 +322,16 @@ fn refuse_claude(
     }
     match entry {
         TargetEntry::Symlink(current) => anyhow::bail!(
-            "{} {} {}; rerun with --force to overwrite",
+            "{} {} {}; {}",
             path.display(),
             if copy { "is a symlink to" } else { "points at" },
-            current.display()
+            current.display(),
+            conflict_guidance(path)
         ),
         _ => anyhow::bail!(
-            "{} exists and is not a skill directory; rerun with --force to overwrite",
-            path.display()
+            "{} exists and is not a skill directory; {}",
+            path.display(),
+            conflict_guidance(path)
         ),
     }
 }

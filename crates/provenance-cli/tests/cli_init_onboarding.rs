@@ -165,7 +165,7 @@ fn init_refuses_to_replace_an_edited_skill_from_a_prior_provenance_version() {
     init(&repo)
         .failure()
         .stderr(predicate::str::contains("exists and differs"))
-        .stderr(predicate::str::contains("rerun with --force"));
+        .stderr(predicate::str::contains("provenance skills install --force"));
 
     assert_eq!(std::fs::read_to_string(skill).unwrap(), edited);
 }
@@ -215,7 +215,7 @@ fn a_late_claude_conflict_leaves_every_existing_file_unchanged() {
     init(&repo)
         .failure()
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("rerun with --force"));
+        .stderr(predicate::str::contains("provenance skills install --force"));
 
     assert_eq!(
         std::fs::read_to_string(repo.join("keep.txt")).unwrap(),
@@ -305,7 +305,7 @@ fn existing_manifest_is_preserved_when_a_late_skill_conflicts() {
 
     init(&repo)
         .failure()
-        .stderr(predicate::str::contains("rerun with --force"));
+        .stderr(predicate::str::contains("provenance skills install --force"));
 
     assert_eq!(std::fs::read(manifest).unwrap(), before);
     assert_eq!(std::fs::read_to_string(conflict).unwrap(), "user-owned\n");
