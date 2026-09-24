@@ -268,7 +268,8 @@ impl InitPlan {
         self.dictionary.recheck(&self.path)?;
         let mut rollback = FileRollbackJournal::within(self.path.as_std_path());
         let result = (|| -> anyhow::Result<InstallReport> {
-            if self.planned.manifest_before.bytes() != Some(self.planned.manifest_bytes.as_slice()) {
+            if self.planned.manifest_before.bytes() != Some(self.planned.manifest_bytes.as_slice())
+            {
                 rollback.replace(
                     layout.manifest_path().as_std_path(),
                     &self.planned.manifest_before,

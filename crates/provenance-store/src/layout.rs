@@ -91,7 +91,10 @@ pub struct GraphNotInitialized;
 
 impl std::fmt::Display for GraphNotInitialized {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "Provenance graph is not initialized; run `provenance init`")
+        write!(
+            formatter,
+            "Provenance graph is not initialized; run `provenance init`"
+        )
     }
 }
 

@@ -80,7 +80,10 @@ fn bare_rerun_keeps_the_manifest_scope_and_actor_ids() {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        assert_eq!(std::fs::metadata(&manifest_path).unwrap().ino(), inode_before);
+        assert_eq!(
+            std::fs::metadata(&manifest_path).unwrap().ino(),
+            inode_before
+        );
     }
     assert_eq!(
         manifest(temporary.path())["disposition_actor_ids"][0],
