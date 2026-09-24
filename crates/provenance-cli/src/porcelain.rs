@@ -6,9 +6,9 @@ use std::net::{Ipv4Addr, SocketAddr};
 
 mod api;
 mod search;
+pub use api::dispatch_api;
 pub use provenance_porcelain::check::render_readable as render_check;
 pub use provenance_porcelain::get::render_readable as render_get_readable;
-pub use api::dispatch_api;
 pub use search::dispatch_search;
 
 /// An explicit CLI output format.

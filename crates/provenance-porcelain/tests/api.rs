@@ -1,6 +1,6 @@
 use provenance_porcelain::api::{
     render_discovery_readable, ApiArguments, ApiCatalog, ApiError, ApiErrorKind, ApiInput,
-    ApiMethod, ApiOutcome, ApiPort, ApiRequest, ApiRoute, ApiPortFuture,
+    ApiMethod, ApiOutcome, ApiPort, ApiPortFuture, ApiRequest, ApiRoute,
 };
 use provenance_porcelain::Porcelain;
 use serde_json::{json, Value};
@@ -174,7 +174,10 @@ async fn api_refuses_a_query_carrying_path_before_the_port() {
     let port = RecordingPort::default();
     let service = Porcelain::new(port.clone());
 
-    let error = service.execute_api(invoke("/requirements?limit=1")).await.unwrap_err();
+    let error = service
+        .execute_api(invoke("/requirements?limit=1"))
+        .await
+        .unwrap_err();
 
     assert_eq!(error.kind, ApiErrorKind::InvalidOptions);
     assert!(port.seen.lock().unwrap().is_none());
@@ -241,9 +244,7 @@ async fn api_forwards_the_port_refusal() {
     let expected = RecordingPort::unknown_path();
 
     let error = service
-        .execute_api(
-            ApiRequest::from(arguments("sources/source_missing")).expect("valid request"),
-        )
+        .execute_api(ApiRequest::from(arguments("sources/source_missing")).expect("valid request"))
         .await
         .unwrap_err();
 

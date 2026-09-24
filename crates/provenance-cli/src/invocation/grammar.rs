@@ -90,11 +90,15 @@ pub struct ApiArgs {
 }
 
 fn parse_api_method(value: &str) -> Result<provenance_porcelain::api::ApiMethod, String> {
-    provenance_porcelain::api::ApiMethod::parse(value).ok_or_else(|| "unsupported method".to_owned())
+    provenance_porcelain::api::ApiMethod::parse(value)
+        .ok_or_else(|| "unsupported method".to_owned())
 }
 
 #[derive(Parser)]
-#[command(name = "provenance", about = "Call one public API path or list the catalog routes")]
+#[command(
+    name = "provenance",
+    about = "Call one public API path or list the catalog routes"
+)]
 pub(super) struct ApiCommand {
     #[arg(value_parser = ["api"])]
     pub command: String,

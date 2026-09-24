@@ -37,7 +37,8 @@ async fn call_api_tool(
 ) -> rmcp::model::CallToolResult {
     client
         .call_tool(
-            CallToolRequestParams::new("api").with_arguments(arguments.as_object().unwrap().clone()),
+            CallToolRequestParams::new("api")
+                .with_arguments(arguments.as_object().unwrap().clone()),
         )
         .await
         .unwrap()
@@ -60,9 +61,10 @@ async fn api_read_returns_the_named_catalog_tool_result_on_the_same_path() {
     let client = ().serve(client_io).await.unwrap();
 
     let named = client
-        .call_tool(CallToolRequestParams::new("get-source").with_arguments(
-            json!({"id": "source_shared"}).as_object().unwrap().clone(),
-        ))
+        .call_tool(
+            CallToolRequestParams::new("get-source")
+                .with_arguments(json!({"id": "source_shared"}).as_object().unwrap().clone()),
+        )
         .await
         .unwrap();
     assert_ne!(named.is_error, Some(true), "{named:?}");
@@ -70,8 +72,7 @@ async fn api_read_returns_the_named_catalog_tool_result_on_the_same_path() {
 
     assert_ne!(shared.is_error, Some(true), "{shared:?}");
     assert_eq!(
-        shared.structured_content,
-        named.structured_content,
+        shared.structured_content, named.structured_content,
         "one public path gives one result"
     );
     assert_eq!(
@@ -198,8 +199,7 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
 async fn api_discovery_describes_the_live_catalog_routes() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
-    let bound =
-        StatementHost::with_fixture_access(access(&repository).allow_writes());
+    let bound = StatementHost::with_fixture_access(access(&repository).allow_writes());
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { bound.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
@@ -207,7 +207,10 @@ async fn api_discovery_describes_the_live_catalog_routes() {
     let tools = client.list_all_tools().await.unwrap();
     let tool = tools.iter().find(|tool| tool.name == "api").unwrap();
     for field in ["path", "method", "query", "headers", "body"] {
-        assert!(tool.input_schema["properties"][field].is_object(), "{tool:?}");
+        assert!(
+            tool.input_schema["properties"][field].is_object(),
+            "{tool:?}"
+        );
     }
 
     let discovery = call_api_tool(&client, json!({})).await;
@@ -231,7 +234,9 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         .expect("the source member route is described");
     let definition = catalog::definitions()
         .iter()
-        .find(|definition| definition.path == "/sources/{id}" && definition.method == catalog::HttpMethod::Get)
+        .find(|definition| {
+            definition.path == "/sources/{id}" && definition.method == catalog::HttpMethod::Get
+        })
         .unwrap();
     assert_eq!(member["description"], definition.description);
     assert_eq!(member["response_schema"], definition.mcp_output_schema());

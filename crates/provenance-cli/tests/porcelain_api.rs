@@ -88,8 +88,7 @@ fn api_get_reads_one_public_path_with_the_configured_context() {
     let target_first = json(&["source_api", "get", "--repo", &repo, "--format", "json"]);
     assert_eq!(shared["data"]["id"], "source_api");
     assert_eq!(
-        shared["data"]["name"],
-        target_first["record"]["value"]["name"],
+        shared["data"]["name"], target_first["record"]["value"]["name"],
         "one public path reads one record"
     );
     assert!(shared["meta"].is_object());
@@ -262,17 +261,14 @@ fn api_rejects_unsupported_methods_and_malformed_flags_before_any_call() {
         .failure()
         .stderr(predicates::str::contains("cannot be used multiple times"));
 
-    let body = directory_file(&repo, "body.json", json!({"name": "X"}).to_string().as_str());
+    let body = directory_file(
+        &repo,
+        "body.json",
+        json!({"name": "X"}).to_string().as_str(),
+    );
     provenance()
         .args([
-            "api",
-            "sources",
-            "--repo",
-            &repo,
-            "--method",
-            "get",
-            "--input",
-            &body,
+            "api", "sources", "--repo", &repo, "--method", "get", "--input", &body,
         ])
         .assert()
         .failure();

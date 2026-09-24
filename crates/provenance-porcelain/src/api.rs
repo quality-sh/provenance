@@ -7,7 +7,9 @@ use serde_json::Value;
 use std::{collections::BTreeMap, fmt::Display, future::Future, pin::Pin};
 
 /// One HTTP method a public route supports.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Deserialize, Serialize, schemars::JsonSchema)]
+#[derive(
+    Clone, Copy, Debug, Default, Eq, PartialEq, Deserialize, Serialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ApiMethod {
     #[default]
@@ -144,8 +146,7 @@ pub enum ApiOutcome {
 }
 
 /// One future returned by an injected api port.
-pub type ApiPortFuture<'a, T> =
-    Pin<Box<dyn Future<Output = Result<T, ApiError>> + Send + 'a>>;
+pub type ApiPortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ApiError>> + Send + 'a>>;
 
 /// What one api tool call offers a host client.
 pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. Omit the path to list the catalog routes with their methods, inputs, and response schemas.";
@@ -158,8 +159,7 @@ pub trait ApiPort: Send + Sync {
 
 /// The typed input schema of one api tool call.
 pub fn input_schema() -> Value {
-    serde_json::to_value(schemars::schema_for!(ApiArguments))
-        .expect("api input schema is JSON")
+    serde_json::to_value(schemars::schema_for!(ApiArguments)).expect("api input schema is JSON")
 }
 
 /// The output schema covering both api answers.
@@ -191,7 +191,10 @@ impl ApiRequest {
         if path.is_empty() || path.contains('?') {
             return Err(invalid());
         }
-        if arguments.method.is_none_or(|method| method == ApiMethod::Get) && arguments.body.is_some()
+        if arguments
+            .method
+            .is_none_or(|method| method == ApiMethod::Get)
+            && arguments.body.is_some()
         {
             return Err(invalid());
         }
@@ -238,7 +241,11 @@ impl<P: ApiPort> crate::Porcelain<P> {
 pub fn render_discovery_readable(catalog: &ApiCatalog) -> String {
     let mut lines = vec![format!("api routes: {}", catalog.routes.len())];
     for route in &catalog.routes {
-        lines.push(format!("- {} {}", route.method.as_str().to_uppercase(), route.path));
+        lines.push(format!(
+            "- {} {}",
+            route.method.as_str().to_uppercase(),
+            route.path
+        ));
         lines.push(format!("  {}", route.description));
         if route.request_schema.is_some() {
             lines.push("  The request carries one JSON body.".to_owned());

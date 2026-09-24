@@ -32,7 +32,10 @@ fn pairs(raw: &[String], separator: char, usage: &str) -> BTreeMap<String, Strin
         if name.is_empty() {
             usage_error(anyhow::anyhow!("{usage}"));
         }
-        if pairs.insert(name.to_owned(), value.trim_start().to_owned()).is_some() {
+        if pairs
+            .insert(name.to_owned(), value.trim_start().to_owned())
+            .is_some()
+        {
             usage_error(anyhow::anyhow!("{usage}"));
         }
     }

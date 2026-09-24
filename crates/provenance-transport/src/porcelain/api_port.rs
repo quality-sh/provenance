@@ -27,10 +27,7 @@ impl ApiPort for HostApiPort {
                     .map_err(|_| ApiError::invalid_options())?;
                 headers.insert(name, value);
             }
-            let data = input
-                .body
-                .clone()
-                .map_or_else(|| json!({}), Value::Object);
+            let data = input.body.clone().map_or_else(|| json!({}), Value::Object);
             let method = match input.method {
                 ApiMethod::Get => axum::http::Method::GET,
                 ApiMethod::Post => axum::http::Method::POST,
@@ -98,9 +95,7 @@ fn route(definition: &Definition) -> ApiRoute {
 
 /// Map one canonical transport refusal to the semantic api failure,
 /// keeping the refusal envelope unchanged for structured output.
-pub(crate) fn api_error(
-    failure: &provenance_core::protocol::failure::ErasedFailure,
-) -> ApiError {
+pub(crate) fn api_error(failure: &provenance_core::protocol::failure::ErasedFailure) -> ApiError {
     let kind = match failure.error.get("kind").and_then(Value::as_str) {
         Some("unknown_operation") => ApiErrorKind::UnknownPath,
         Some("method_not_allowed") => ApiErrorKind::MethodNotAllowed,
@@ -109,7 +104,8 @@ pub(crate) fn api_error(
     };
     ApiError {
         kind,
-        failure: serde_json::to_value(failure).unwrap_or_else(|_| json!({"error": {"kind": "internal"}, "meta": {}})),
+        failure: serde_json::to_value(failure)
+            .unwrap_or_else(|_| json!({"error": {"kind": "internal"}, "meta": {}})),
     }
 }
 

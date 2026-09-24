@@ -64,7 +64,8 @@ impl Invocation {
             return Ok(Self::Search(args.args));
         }
         if word == "api" {
-            let command = ApiCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
+            let command =
+                ApiCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
             debug_assert_eq!(command.command, "api");
             return Ok(Self::Api(command.args));
         }
