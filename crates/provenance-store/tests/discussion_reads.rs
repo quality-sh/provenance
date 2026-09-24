@@ -174,7 +174,7 @@ async fn missing_membership_is_a_conflict_instead_of_a_legacy_group() {
     let error = store
         .write_discussion(write(
             "new",
-            json!({"kind":"start","role":"user","body":"Should refuse"})
+            json!({"kind":"start","role":"user","body":"Should refuse"}),
         ))
         .unwrap_err();
     assert!(format!("{error:#}").contains("no Discussion membership"));
