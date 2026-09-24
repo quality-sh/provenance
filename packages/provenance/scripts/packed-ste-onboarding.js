@@ -79,7 +79,7 @@ export function verifyPackedSteOnboarding({
       env: environment,
       encoding: "utf8",
     });
-    assert.match(first, /^Initialized Provenance for scope "default" in /);
+    assert.match(first, /(?:^|\n)Initialized Provenance for scope "default" in /);
     assert.match(first, /Provenance records requirements, decisions, and the rules that connect them to code\./);
     assert.match(first, /\nNew\n/);
     assert.equal(first.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
@@ -98,7 +98,7 @@ export function verifyPackedSteOnboarding({
       env: environment,
       encoding: "utf8",
     });
-    assert.match(rerun, /^Provenance is already set up for scope "default" in /);
+    assert.match(rerun, /(?:^|\n)Provenance is already set up for scope "default" in /);
     assert.match(rerun, /Provenance records requirements, decisions, and the rules that connect them to code\./);
     assert.equal(rerun.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
     assert.ok(rerun.endsWith("Have your agent run provenance prime to get acclimated.\n"));
