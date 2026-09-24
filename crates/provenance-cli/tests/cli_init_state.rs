@@ -107,7 +107,10 @@ fn restoring_the_machine_dictionary_index_keeps_the_project_reference_untouched(
     let index = std::fs::read_dir(&indexes)
         .unwrap()
         .map(|entry| entry.unwrap().path())
-        .find(|path| path.extension().is_some_and(|extension| extension == "json"))
+        .find(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
         .expect("the first init stored a machine index");
     std::fs::remove_file(index).unwrap();
     assert!(provenance_ste100::load_dictionary_index(&indexes, &identity).is_err());
@@ -120,7 +123,10 @@ fn restoring_the_machine_dictionary_index_keeps_the_project_reference_untouched(
     );
     assert_eq!(std::fs::read(&reference).unwrap(), reference_bytes);
     let after = std::fs::metadata(&reference).unwrap();
-    assert_eq!(after.modified().unwrap(), reference_metadata.modified().unwrap());
+    assert_eq!(
+        after.modified().unwrap(),
+        reference_metadata.modified().unwrap()
+    );
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
@@ -139,9 +145,9 @@ fn reinit_replaces_a_different_dictionary_reference() {
     different["source_sha256"] = "other-source".into();
     std::fs::write(&reference, serde_json::to_vec_pretty(&different).unwrap()).unwrap();
 
-    init(root, &[])
-        .success()
-        .stdout(contains("dictionary.json (updated the dictionary reference)"));
+    init(root, &[]).success().stdout(contains(
+        "dictionary.json (updated the dictionary reference)",
+    ));
     assert_eq!(std::fs::read(&reference).unwrap(), original);
 }
 
