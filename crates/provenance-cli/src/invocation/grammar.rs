@@ -1,8 +1,8 @@
 use super::GlobalContext;
 use crate::output::JsonFormat;
 use clap::{
-    builder::PossibleValuesParser, ArgAction, ArgMatches, Args, Command, CommandFactory,
-    FromArgMatches, Parser,
+    builder::{PossibleValuesParser, TypedValueParser},
+    ArgAction, ArgMatches, Args, Command, CommandFactory, FromArgMatches, Parser,
 };
 use provenance_cli::porcelain;
 use provenance_core::NodeType;
@@ -65,6 +65,24 @@ pub(super) struct SearchCommand {
     pub args: SearchArgs,
 }
 
+#[derive(Args)]
+pub struct DiscussionsArgs {
+    pub discussion_id: Option<String>,
+    #[arg(value_parser = ["get"])]
+    pub action: Option<String>,
+    #[command(flatten)]
+    pub common: Common,
+}
+
+#[derive(Parser)]
+#[command(name = "provenance", about = "List or read addressed Discussions")]
+pub(super) struct DiscussionsCommand {
+    #[arg(value_parser = ["discussions"])]
+    pub command: String,
+    #[command(flatten)]
+    pub args: DiscussionsArgs,
+}
+
 #[derive(Parser)]
 #[command(name = "provenance", about = "Work with records in one scope")]
 pub struct CatalogArgs {
@@ -85,12 +103,12 @@ impl CatalogArgs {
 
 #[derive(Parser)]
 #[command(name = "provenance", about = "Read or change one record")]
-pub(super) struct TargetArgs {
+pub struct TargetArgs {
     #[command(flatten)]
     pub common: Common,
     pub target: String,
     #[arg(value_parser = target_actions())]
-    pub action: Option<String>,
+    pub action: Option<TargetVerb>,
     #[arg(long = "type", value_parser = parse_kind)]
     pub record_type: Option<NodeType>,
     #[arg(long, value_parser = get_views())]
@@ -105,8 +123,44 @@ pub(super) struct TargetArgs {
     pub stdin: bool,
 }
 
-fn target_actions() -> PossibleValuesParser {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TargetVerb {
+    Get,
+    Action(Action),
+}
+
+impl TargetVerb {
+    pub fn parse(word: &str) -> Option<Self> {
+        if word == "get" {
+            Some(Self::Get)
+        } else {
+            Action::parse(word).map(Self::Action)
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum DiscussionsRoute {
+    Addressed,
+    LegacyRecord,
+}
+
+pub(super) fn discussions_route(arguments: &[String], command: &Command) -> DiscussionsRoute {
+    let legacy = match positional_word(arguments, command, 2).and_then(TargetVerb::parse) {
+        Some(TargetVerb::Get) => true,
+        Some(TargetVerb::Action(action)) => Action::RECORD.contains(&action),
+        None => false,
+    };
+    if legacy {
+        DiscussionsRoute::LegacyRecord
+    } else {
+        DiscussionsRoute::Addressed
+    }
+}
+
+fn target_actions() -> impl TypedValueParser<Value = TargetVerb> {
     PossibleValuesParser::new(std::iter::once("get").chain(Action::ALL.map(Action::as_str)))
+        .map(|word| TargetVerb::parse(&word).expect("declared target verb"))
 }
 
 fn get_views() -> PossibleValuesParser {
@@ -126,16 +180,26 @@ fn parse_kind(value: &str) -> Result<NodeType, String> {
 /// Find the first command word using only the declared shared option arity.
 pub(super) fn command_word(arguments: &[String]) -> Option<&str> {
     let common = Common::augment_args(Command::new("provenance"));
+    positional_word(arguments, &common, 1)
+}
+
+/// Read a positional word using the selected command's declared option arity.
+pub(super) fn positional_word<'a>(
+    arguments: &'a [String],
+    command: &Command,
+    position: usize,
+) -> Option<&'a str> {
     let mut index = 1;
+    let mut seen = 0;
     while let Some(word) = arguments.get(index) {
         if word == "--" {
-            return arguments.get(index + 1).map(String::as_str);
+            return arguments.get(index + position - seen).map(String::as_str);
         }
         if let Some(option) = word.strip_prefix("--") {
             let (name, assigned) = option
                 .split_once('=')
                 .map_or((option, false), |(name, _)| (name, true));
-            let declaration = common
+            let declaration = command
                 .get_arguments()
                 .find(|arg| arg.get_long() == Some(name))?;
             let takes_value = !matches!(declaration.get_action(), &ArgAction::SetTrue);
@@ -145,7 +209,11 @@ pub(super) fn command_word(arguments: &[String]) -> Option<&str> {
         if word.starts_with('-') {
             return None;
         }
-        return Some(word);
+        seen += 1;
+        if seen == position {
+            return Some(word);
+        }
+        index += 1;
     }
     None
 }
@@ -156,4 +224,15 @@ pub fn target_command() -> Command {
 
 pub fn catalog_command() -> Command {
     CatalogArgs::command()
+}
+
+pub fn discussions_command() -> anyhow::Result<Command> {
+    crate::catalog_cli::fields::augment_schemas(
+        DiscussionsCommand::command(),
+        [
+            provenance_porcelain::discussion::input_schema(Action::Discussions),
+            provenance_porcelain::discussion::input_schema(Action::Discussion),
+        ],
+        &["parent", "discussion_id"],
+    )
 }

@@ -215,9 +215,13 @@ impl StateStore {
             }
             let JournalEntry::Discussion(entry) = journal::read_journal_entry(&self.layout, &path)?
             else {
-                anyhow::bail!("request ID belongs to a Requirement save");
+                return Err(crate::write_error::SourceFailure::wrap(
+                    crate::write_error::WriteFailure::DiscussionIntentChanged,
+                    anyhow::anyhow!("request ID belongs to a Requirement save"),
+                ));
             };
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                DiscussionIntentChanged,
                 entry.scope_id == input.scope_id
                     && entry.request_id == input.request_id
                     && entry.actor == input.actor
@@ -234,7 +238,8 @@ impl StateStore {
         input: &super::WriteDiscussion,
     ) -> anyhow::Result<()> {
         anyhow::ensure!(!input.actor.trim().is_empty(), "invalid Discussion actor");
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            ResourceNotFound,
             self.manifest()?
                 .scopes
                 .iter()
@@ -252,10 +257,7 @@ impl StateStore {
             NodeType::Source | NodeType::Requirement | NodeType::Resolution | NodeType::Rule => {
                 parent_owner_matches(owner.as_deref(), input.declared_by.as_deref())?;
             }
-            NodeType::Domain | NodeType::Boundary => anyhow::bail!(
-                "thread parent kind `{}` does not take Discussions",
-                discussion_kind_word(input.parent.node_type).unwrap_or("unsupported")
-            ),
+            NodeType::Domain | NodeType::Boundary => unreachable!(),
         }
         let mut ids = BTreeSet::new();
         for thread in self.list_threads(&input.scope_id)? {
@@ -319,7 +321,8 @@ impl StateStore {
         scope: &ScopeId,
         parent: &ThreadParent,
     ) -> anyhow::Result<Option<String>> {
-        anyhow::ensure!(
+        crate::write_error::ensure!(
+            UnsupportedThreadParent,
             discussion_kind_word(parent.node_type).is_some(),
             "thread parent kind does not take Discussions: {parent:?}"
         );
@@ -358,9 +361,12 @@ impl StateStore {
             matches.len() <= 1,
             "Discussion parent identity is not unique"
         );
-        let record = matches
-            .first()
-            .ok_or_else(|| anyhow::anyhow!("Discussion parent does not exist in this scope"))?;
+        let record = matches.first().ok_or_else(|| {
+            crate::write_error::SourceFailure::wrap(
+                crate::write_error::WriteFailure::ResourceNotFound,
+                anyhow::anyhow!("Discussion parent does not exist in this scope"),
+            )
+        })?;
         anyhow::ensure!(
             record.parent_scope() == scope,
             "Discussion parent scope mismatch"

@@ -1,6 +1,6 @@
 use crate::operations::{
     read_policy::ReadPolicy,
-    reader::{self, Cursor, ReadContext, PAGE_BYTES, RECORD_BYTES},
+    reader::{self, Cursor, Position, ReadContext, PAGE_BYTES, RECORD_BYTES},
 };
 use camino::Utf8Path;
 use provenance_core::{
@@ -17,7 +17,7 @@ pub async fn read_discussion_messages(
 ) -> anyhow::Result<Stamped<DiscussionMessagesPage>> {
     super::discussion_reads::check_limit(query.limit)?;
     let answer = reader::answer(repo, scope, policy, move |ctx| {
-        Box::pin(messages(ctx, query))
+        Box::pin(messages(ctx, query, None))
     })
     .await?;
     crate::operations::queries::page::checked("review-discussion-messages", answer)
@@ -100,16 +100,12 @@ async fn message(
     })
 }
 
-async fn messages(
+pub(super) async fn messages(
     ctx: &ReadContext,
     query: DiscussionMessagesQuery,
+    allowed_parent_kinds: Option<&[provenance_core::NodeType]>,
 ) -> anyhow::Result<DiscussionMessagesPage> {
-    let (cursor, mut position) = Cursor::open(
-        ctx,
-        "review-discussion-messages",
-        &(&query.parent, &query.selector, query.limit),
-        query.cursor.as_deref(),
-    )?;
+    let (cursor, mut position) = message_cursor(ctx, &query, allowed_parent_kinds)?;
     ctx.snapshot().bound_page_work().await?;
     super::discussion_reads::check_parent(ctx, &query.parent).await?;
     for family in ["review_journal", "messages", "threads"] {
@@ -199,4 +195,29 @@ async fn messages(
         entries,
         next_cursor: None,
     })
+}
+
+fn message_cursor(
+    ctx: &ReadContext,
+    query: &DiscussionMessagesQuery,
+    allowed_parent_kinds: Option<&[provenance_core::NodeType]>,
+) -> anyhow::Result<(Cursor, Position)> {
+    allowed_parent_kinds.map_or_else(
+        || {
+            Cursor::open(
+                ctx,
+                "review-discussion-messages",
+                &(&query.parent, &query.selector, query.limit),
+                query.cursor.as_deref(),
+            )
+        },
+        |kinds| {
+            Cursor::open(
+                ctx,
+                "discussion-conversation",
+                &(&query.parent, &query.selector, query.limit, kinds),
+                query.cursor.as_deref(),
+            )
+        },
+    )
 }

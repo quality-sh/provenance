@@ -194,6 +194,35 @@ test('declared statuses cover every live failure variant status', () => {
   assert.ok(documentGrammarErrors(doc).some(error => /file_unavailable.*503|503.*file_unavailable/.test(error)));
 });
 
+test('Discussion refusal statuses match the write runtime', () => {
+  const doc = document([{ path: '/requirements/{id}/discussions', method: 'post' }]);
+  const response = doc.paths['/requirements/{id}/discussions'].post.responses['400'];
+  response.content['application/json'].schema = {
+    ...failureEnvelope,
+    properties: {
+      ...failureEnvelope.properties,
+      error: { $ref: '#/components/schemas/WriteFailure' },
+    },
+  };
+  const kinds = [
+    'discussion_version_conflict', 'discussion_membership_mismatch',
+    'discussion_closed', 'discussion_resolved', 'discussion_intent_changed',
+  ];
+  doc.components.schemas.WriteFailure = {
+    oneOf: kinds.map(kind => ({ properties: { kind: { const: kind } } })),
+  };
+  assert.deepEqual(documentGrammarErrors(doc), []);
+  delete doc.paths['/requirements/{id}/discussions'].post.responses['409'];
+  const errors = documentGrammarErrors(doc);
+  for (const kind of kinds.filter(kind => kind !== 'discussion_membership_mismatch')) {
+    assert.ok(errors.some(error => error.includes(kind) && error.includes('409')));
+  }
+  doc.paths['/requirements/{id}/discussions'].post.responses['401'] = response;
+  delete doc.paths['/requirements/{id}/discussions'].post.responses['400'];
+  assert.ok(documentGrammarErrors(doc).some(error =>
+    error.includes('discussion_membership_mismatch') && error.includes('400')));
+});
+
 test('method errors have the declared envelope status', () => {
   const doc = document([{ path: '/requirements/{id}', method: 'get' }]);
   doc.paths['/requirements/{id}'].get.responses['400'].content['application/json'].schema = {

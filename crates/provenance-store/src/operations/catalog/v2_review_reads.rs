@@ -7,6 +7,7 @@ use crate::{
     layout::ProvenanceLayout, operations::read_policy::ReadPolicy, review, state_store::StateStore,
     write_error::WriteError,
 };
+pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
     review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryQuery},
     threads::{
@@ -23,15 +24,6 @@ pub struct ReadResult<T> {
     pub result: T,
     pub stamp: provenance_core::protocol::Stamp,
     pub freshness_error: Option<String>,
-}
-
-#[derive(Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct DiscussionResultPage<T> {
-    pub entries: Vec<T>,
-    pub limit: usize,
-    pub has_more: bool,
-    pub next_cursor: Option<String>,
 }
 
 const fn discussion_result<T>(

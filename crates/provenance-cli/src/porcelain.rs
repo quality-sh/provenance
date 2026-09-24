@@ -46,7 +46,7 @@ pub async fn dispatch_get(
     Ok(())
 }
 
-fn local_host(repo: &str, scope: &str) -> anyhow::Result<provenance_transport::StatementHost> {
+pub fn local_host(repo: &str, scope: &str) -> anyhow::Result<provenance_transport::StatementHost> {
     provenance_store::layout::require_initialized_graph(
         &provenance_store::layout::ProvenanceLayout::new(repo),
     )?;
