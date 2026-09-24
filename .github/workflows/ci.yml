@@ -601,7 +601,7 @@ jobs:
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
         with:
           deno-version: 2.9.3
-      - uses: nubjs/setup-nub@47e5e7393d50f4e9544ddaf756aa277972afba2d # v0.4.0
+      - uses: nubjs/setup-nub@21b317c170eee658503996209cf87b63481be35a # v0.5.0
         with:
           nub-version: 0.7.5
       - name: Enable Corepack package managers
