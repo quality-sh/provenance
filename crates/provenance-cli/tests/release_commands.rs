@@ -24,8 +24,10 @@ fn release_gate_checks_command_support() {
     );
     if cfg!(feature = "dogfood") {
         let stderr = String::from_utf8_lossy(&output.stderr);
+        // Windows prints the executable name with its `.exe` suffix.
         assert!(
-            stderr.contains("Usage: provenance dogfood note"),
+            stderr.contains("Usage: provenance dogfood note")
+                || stderr.contains("Usage: provenance.exe dogfood note"),
             "{stderr}"
         );
         assert!(stderr.contains("dogfood note was not rejected by the record parser"));
