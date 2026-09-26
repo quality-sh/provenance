@@ -126,7 +126,10 @@ fn addressed_update_help_excludes_other_operations_inputs() {
     assert!(!output.contains("--depends-on"), "{output}");
     assert!(!output.contains("--max-depth"), "{output}");
     assert!(!output.contains("--direction"), "{output}");
-    assert!(!output.contains("provenance requirements create"), "{output}");
+    assert!(
+        !output.contains("provenance requirements create"),
+        "{output}"
+    );
     assert!(!output.contains("provenance requirements list"), "{output}");
     assert!(!output.contains("Catalog commands for"), "{output}");
 }
@@ -136,9 +139,15 @@ fn addressed_query_help_shows_only_the_selected_query() {
     let neighbors = help(&["requirements", "req_example", "neighbors", "--help"]);
     let trace = help(&["requirements", "req_example", "trace", "--help"]);
 
-    assert!(neighbors.contains("--direction <out|in|both>"), "{neighbors}");
+    assert!(
+        neighbors.contains("--direction <out|in|both>"),
+        "{neighbors}"
+    );
     assert!(neighbors.contains("--limit <integer>"), "{neighbors}");
-    assert!(neighbors.contains("--relations <array<string>>"), "{neighbors}");
+    assert!(
+        neighbors.contains("--relations <array<string>>"),
+        "{neighbors}"
+    );
     assert!(!neighbors.contains("--max-depth"), "{neighbors}");
     assert!(trace.contains("--max-depth <integer>"), "{trace}");
     assert!(!trace.contains("--limit"), "{trace}");
@@ -150,7 +159,10 @@ fn addressed_query_help_shows_only_the_selected_query() {
 fn addressed_create_help_excludes_update_only_controls() {
     let create = help(&["requirements", "create", "--help"]);
 
-    assert!(create.contains("provenance requirements create"), "{create}");
+    assert!(
+        create.contains("provenance requirements create"),
+        "{create}"
+    );
     assert!(create.contains("--id <string>"), "{create}");
     assert!(
         create.contains("--depends-on <string> (repeatable)"),
@@ -162,13 +174,22 @@ fn addressed_create_help_excludes_update_only_controls() {
 
 #[test]
 fn nested_addressed_help_is_specific_to_the_nested_operation() {
-    let output = help(&["proposals", "prop_example", "assertions", "create", "--help"]);
+    let output = help(&[
+        "proposals",
+        "prop_example",
+        "assertions",
+        "create",
+        "--help",
+    ]);
 
     assert!(
         output.contains("provenance proposals <id> assertions create"),
         "{output}"
     );
-    assert!(output.contains("--synthesis-packet-id <string>"), "{output}");
+    assert!(
+        output.contains("--synthesis-packet-id <string>"),
+        "{output}"
+    );
     assert!(!output.contains("dispositions"), "{output}");
     assert!(!output.contains("--if-match"), "{output}");
     assert!(!output.contains("Catalog commands for"), "{output}");
@@ -176,7 +197,14 @@ fn nested_addressed_help_is_specific_to_the_nested_operation() {
 
 #[test]
 fn addressed_help_honors_global_options_and_stays_repo_free() {
-    let output = help(&["--repo", ".", "requirements", "req_example", "update", "--help"]);
+    let output = help(&[
+        "--repo",
+        ".",
+        "requirements",
+        "req_example",
+        "update",
+        "--help",
+    ]);
     assert!(output.contains("--if-match <string>"), "{output}");
     let quiet = help(&["requirements", "--quiet", "req_example", "update", "--help"]);
     assert!(quiet.contains("--statement <string>"), "{quiet}");

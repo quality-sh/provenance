@@ -62,15 +62,13 @@ pub fn is_collection(word: &str) -> bool {
 
 pub fn command(collection: &str) -> anyhow::Result<Command> {
     let registrations = address::registrations(collection);
-    let mut command = grammar::catalog_command()
-        .disable_help_flag(true)
-        .arg(
-            Arg::new("help")
-                .long("help")
-                .short('h')
-                .action(ArgAction::SetTrue)
-                .help("Print help for the addressed operation, or the collection overview"),
-        );
+    let mut command = grammar::catalog_command().disable_help_flag(true).arg(
+        Arg::new("help")
+            .long("help")
+            .short('h')
+            .action(ArgAction::SetTrue)
+            .help("Print help for the addressed operation, or the collection overview"),
+    );
     let mut help = help::collection(collection);
     if collection == "questions" {
         help.push_str(help::question_guidance());
