@@ -81,6 +81,8 @@ pub struct ApiArgs {
     pub path: Option<String>,
     #[arg(long, value_parser = parse_api_method)]
     pub method: Option<provenance_porcelain::api::ApiMethod>,
+    /// Read the JSON body from this file, or from standard input with "-".
+    /// The body is the data object, without the HTTP {"data": ...} wrapper.
     #[arg(long = "input", allow_hyphen_values = true)]
     pub input: Option<String>,
     #[arg(long = "header")]

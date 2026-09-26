@@ -144,6 +144,8 @@ pub struct ApiRoute {
     pub method: ApiMethod,
     pub path: String,
     pub description: String,
+    /// The JSON body schema: the data object, without the HTTP
+    /// `{"data": ...}` wrapper.
     pub request_schema: Option<Value>,
     pub queries: Vec<ApiQuery>,
 }
@@ -178,7 +180,11 @@ pub enum ApiOutcome {
 pub type ApiPortFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ApiError>> + Send + 'a>>;
 
 /// What one api tool call offers a host client.
-pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. Omit the path to list the catalog routes with their methods, inputs, and response schemas.";
+pub const API_DESCRIPTION: &str = "Call one public API path with an optional method, query, headers, and JSON body. The body is the data object, without the HTTP {\"data\": ...} wrapper. Omit the path to list the catalog routes with their methods, inputs, and response schemas.";
+
+/// How an api call carries its JSON body.
+pub const BODY_NOTE: &str =
+    "The JSON body is the data object, without the HTTP {\"data\": ...} wrapper.";
 
 /// Public-path invocation and catalog discovery provided by the bound host.
 pub trait ApiPort: Send + Sync {
@@ -322,7 +328,7 @@ pub fn render_discovery_readable(catalog: &ApiCatalog) -> String {
             ));
         }
         if route.request_schema.is_some() {
-            lines.push("  The request carries one JSON body.".to_owned());
+            lines.push(format!("  {BODY_NOTE}"));
         }
     }
     lines.join("\n")

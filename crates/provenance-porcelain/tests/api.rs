@@ -384,7 +384,7 @@ fn readable_discovery_lists_routes_with_their_inputs() {
             "depth (query, optional)\n",
             "- POST /requirements\n  Create one requirement.\n",
             "  inputs: Idempotency-Key (header, required)\n",
-            "  The request carries one JSON body."
+            "  The JSON body is the data object, without the HTTP {\"data\": ...} wrapper."
         )
     );
 }
