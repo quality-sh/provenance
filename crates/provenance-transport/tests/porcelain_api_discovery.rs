@@ -245,8 +245,8 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
     );
     // Compilation resolves every #/$defs/ reference in the published schema;
     // a dangling reference fails here before any output is validated.
-    let published = JSONSchema::compile(&published_schema)
-        .expect("the published api output schema compiles");
+    let published =
+        JSONSchema::compile(&published_schema).expect("the published api output schema compiles");
 
     let discovery = session.call(json!({})).await;
     let structured = discovery.structured_content.as_ref().unwrap();
@@ -255,9 +255,7 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
         "discovery output violates the published schema: {discovery:?}"
     );
 
-    let invoked = session
-        .call(json!({"path": "sources/source_shared"}))
-        .await;
+    let invoked = session.call(json!({"path": "sources/source_shared"})).await;
     let structured = invoked.structured_content.as_ref().unwrap();
     assert!(
         published.is_valid(structured),
@@ -283,8 +281,8 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
         .find(|variant| variant["selector"].is_null())
         .expect("the base variant is described")["success_schema"]
         .clone();
-    let base_contract = JSONSchema::compile(&base_schema)
-        .expect("the described base variant schema compiles");
+    let base_contract =
+        JSONSchema::compile(&base_schema).expect("the described base variant schema compiles");
     assert!(
         base_contract.is_valid(named.structured_content.as_ref().unwrap()),
         "named tool output violates the described route schema: {named:?}"

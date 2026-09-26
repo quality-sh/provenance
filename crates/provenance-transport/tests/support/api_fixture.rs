@@ -66,9 +66,8 @@ impl ApiSession {
     pub async fn call_named(&self, name: &str, arguments: Value) -> CallToolResult {
         self.client
             .call_tool(
-                CallToolRequestParams::new(name.to_owned()).with_arguments(
-                    arguments.as_object().cloned().unwrap_or_default(),
-                ),
+                CallToolRequestParams::new(name.to_owned())
+                    .with_arguments(arguments.as_object().cloned().unwrap_or_default()),
             )
             .await
             .unwrap()

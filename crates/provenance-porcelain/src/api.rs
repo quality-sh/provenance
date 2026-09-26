@@ -179,8 +179,8 @@ pub fn input_schema() -> Value {
 /// Both arms are generated from typed contracts, so their shared definitions
 /// are hoisted to one root document and every `#/$defs/` reference resolves.
 pub fn output_schema() -> Value {
-    let mut catalog = serde_json::to_value(schemars::schema_for!(ApiCatalog))
-        .expect("catalog schema is JSON");
+    let mut catalog =
+        serde_json::to_value(schemars::schema_for!(ApiCatalog)).expect("catalog schema is JSON");
     let mut envelope = serde_json::to_value(schemars::schema_for!(
         provenance_core::protocol::SuccessEnvelope<Value>
     ))

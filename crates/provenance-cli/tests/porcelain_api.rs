@@ -300,7 +300,14 @@ fn api_query_selectors_follow_the_variant_contracts() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "sources", "create", "--repo", &repo, "--id", "source_q", "--name", "Needle source",
+            "sources",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "source_q",
+            "--name",
+            "Needle source",
         ])
         .assert()
         .success();

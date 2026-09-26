@@ -102,11 +102,7 @@ async fn api_refuses_a_supported_path_with_an_unsupported_method() {
 
     // The refusal is per-call dispatch, not a missing tool: the api tool is
     // listed, and the path exists under POST only.
-    let listed = session
-        .tools()
-        .await
-        .iter()
-        .any(|tool| tool.name == "api");
+    let listed = session.tools().await.iter().any(|tool| tool.name == "api");
     assert!(listed, "the api tool is listed");
 
     let refused = session
@@ -128,7 +124,8 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
     .await;
 
     // create-requirement requires an Idempotency-Key header.
-    let no_idempotency = session        .call(json!({
+    let no_idempotency = session
+        .call(json!({
             "path": "requirements",
             "method": "post",
             "body": {"id": "req_api", "statement": "One statement.", "actor": "api",
@@ -168,7 +165,9 @@ async fn host_api_port_and_the_mcp_api_tool_produce_one_result() {
         .execute_api(ApiRequest::from(arguments).expect("valid request"))
         .await;
     let session = ApiSession::start(bound).await;
-    let through_mcp = session.call(json!({"path": "requirements/req_shared"})).await;
+    let through_mcp = session
+        .call(json!({"path": "requirements/req_shared"}))
+        .await;
 
     let ApiOutcome::Invoked(value) = direct.unwrap() else {
         panic!("a path selects one invocation");
