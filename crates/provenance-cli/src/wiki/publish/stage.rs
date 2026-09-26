@@ -4,6 +4,7 @@ use super::{
     PublicationOutput, PublishError, PublishReport, PublishedPage, GENERATOR, MANIFEST_VERSION,
     OWNERSHIP_MANIFEST,
 };
+use crate::safe_fs::Directory;
 use crate::wiki::model::WikiCorpus;
 use crate::wiki::{render, theme};
 use camino::Utf8Path;
@@ -12,7 +13,7 @@ use std::fs::File;
 use std::io::Write;
 
 pub(super) struct StageDirectory {
-    root: File,
+    root: Directory,
     identity: StageIdentity,
 }
 
@@ -29,18 +30,21 @@ impl StageDirectory {
             .map_err(|error| PublishError::io("record staging directory identity", path, error))?;
         #[cfg(windows)]
         let identity = {
-            let handle = super::transaction::open_directory_no_follow(path.as_std_path()).map_err(
-                |error| PublishError::io("open staging directory identity", path, error),
-            )?;
-            StageIdentity::from_file(&handle).map_err(|error| {
+            let handle = crate::safe_fs::Directory::open(path.as_std_path()).map_err(|error| {
+                PublishError::io("open staging directory identity", path, error)
+            })?;
+            StageIdentity::from_file(handle.as_file()).map_err(|error| {
                 PublishError::io("record staging directory identity", path, error)
             })?
         };
-        Ok(Self { root, identity })
+        Ok(Self {
+            root: Directory::from_file(root, path.as_std_path().to_path_buf()),
+            identity,
+        })
     }
 
     pub(super) fn into_parts(self) -> (File, StageIdentity) {
-        (self.root, self.identity)
+        (self.root.into_file(), self.identity)
     }
 
     fn write_file(
@@ -53,15 +57,14 @@ impl StageDirectory {
             PublishError::io("clone staging directory handle", display_path, error)
         })?;
         for segment in &relative[..relative.len() - 1] {
-            directory = match fs_at::OpenOptions::default().mkdir_at(&directory, *segment) {
+            directory = match directory.create_child(segment) {
                 Ok(created) => created,
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                     // The attribute-bit check inside this open independently
                     // refuses a reparse point planted at the segment.
-                    super::transaction::open_child_directory_no_follow(&directory, segment)
-                        .map_err(|error| {
-                            PublishError::io("open staged directory", display_path, error)
-                        })?
+                    directory.open_child(segment).map_err(|error| {
+                        PublishError::io("open staged directory", display_path, error)
+                    })?
                 }
                 Err(error) => {
                     return Err(PublishError::io(
@@ -78,7 +81,7 @@ impl StageDirectory {
             .create_new(true)
             .follow(false);
         let mut file = options
-            .open_at(&directory, relative[relative.len() - 1])
+            .open_at(directory.as_file(), relative[relative.len() - 1])
             .map_err(|error| PublishError::io("create staged file", display_path, error))?;
         file.write_all(contents)
             .map_err(|error| PublishError::io("write staged file", display_path, error))
@@ -141,7 +144,8 @@ pub(super) fn generate_and_replace(
 
 #[cfg(test)]
 pub(super) fn write_page(stage: &Utf8Path, route: &str, html: &str) -> Result<(), PublishError> {
-    let root = super::transaction::open_directory_no_follow(stage.as_std_path())
+    let root = crate::safe_fs::Directory::open(stage.as_std_path())
+        .map(crate::safe_fs::Directory::into_file)
         .map_err(|error| PublishError::io("open staging directory", stage, error))?;
     let stage_directory = StageDirectory::from_file(root, stage)?;
     write_page_in(&stage_directory, stage, route, html)

@@ -10,6 +10,7 @@ mod legacy_cleanup;
 mod onboarding;
 mod output;
 mod review;
+mod safe_fs;
 mod skills;
 mod ste_onboarding;
 mod store;

@@ -1,20 +1,18 @@
 use super::{manifest, PublicationOutput, PublishError};
+use crate::safe_fs::Directory;
 use camino::{Utf8Path, Utf8PathBuf};
 use std::fs::File;
 
 mod cleanup;
-mod ownership;
-mod replacement;
+mod lock;
+mod stage;
+mod swap;
 
-pub(super) use ownership::open_child_directory_no_follow;
-pub(super) use ownership::{acquire_lock, preflight};
-// Stage identity reads through a path on Windows only; the test helper uses
-// it on every platform.
-#[cfg(any(windows, test))]
-pub(super) use ownership::open_directory_no_follow;
-pub(super) use replacement::replace_output;
+pub(super) use lock::acquire_lock;
+pub(super) use stage::preflight;
+pub(super) use swap::replace_output;
 #[cfg(test)]
-pub(super) use replacement::replace_output_with;
+pub(super) use swap::replace_output_with;
 
 pub(super) enum OutputState {
     Absent,
@@ -37,7 +35,7 @@ pub(super) struct PublicationLock {
 }
 
 pub(super) struct TransactionDirectory {
-    parent: File,
+    parent: Directory,
     pub paths: TransactionPaths,
     output_leaf: String,
     leaves: ArtifactLeaves,
@@ -50,7 +48,7 @@ impl TransactionDirectory {
             .parent()
             .filter(|path| !path.as_str().is_empty())
             .unwrap_or_else(|| Utf8Path::new("."));
-        let parent = ownership::open_or_create_parent(parent_path, output)?;
+        let parent = stage::open_or_create_parent(parent_path, output)?;
         let output_leaf = output
             .file_name()
             .expect("validated output leaf")
@@ -67,7 +65,7 @@ impl TransactionDirectory {
         // mkdir_at hardcodes its access mask (no read-attributes right on
         // Windows), which is why the stage identity comes from a separate
         // no-follow reopen rather than this handle.
-        fs_at::OpenOptions::default().mkdir_at(&self.parent, &self.leaves.stage)
+        fs_at::OpenOptions::default().mkdir_at(self.parent.as_file(), &self.leaves.stage)
     }
 
     fn create_file(&self, leaf: &str) -> std::io::Result<File> {
@@ -80,18 +78,18 @@ impl TransactionDirectory {
             .write(fs_at::OpenOptionsWriteMode::Write)
             .create_new(true)
             .follow(false);
-        options.open_at(&self.parent, leaf)
+        options.open_at(self.parent.as_file(), leaf)
     }
 
     fn open_dir(&self, leaf: &str) -> std::io::Result<File> {
-        ownership::open_child_directory_no_follow(&self.parent, leaf)
+        self.parent.open_child(leaf).map(Directory::into_file)
     }
 
     fn child_identity(&self, leaf: &str) -> std::io::Result<same_file::Handle> {
         let file = if leaf == self.leaves.lock || leaf == self.leaves.lock_cleanup {
             let mut options = fs_at::OpenOptions::default();
             options.read(true).follow(false);
-            options.open_at(&self.parent, leaf)?
+            options.open_at(self.parent.as_file(), leaf)?
         } else {
             self.open_dir(leaf)?
         };
@@ -99,19 +97,11 @@ impl TransactionDirectory {
     }
 
     fn rename(&self, from: &str, to: &str) -> std::io::Result<()> {
-        replacement::rename_no_replace_at(&self.parent, self.parent_path(), from, to)
-    }
-
-    /// The directory every transaction artifact sits in, as a path.
-    fn parent_path(&self) -> &Utf8Path {
-        self.paths
-            .lock
-            .parent()
-            .expect("transaction artifacts have a parent directory")
+        self.parent.rename_no_replace(from, to)
     }
 
     fn remove_file(&self, leaf: &str) -> std::io::Result<()> {
-        fs_at::OpenOptions::default().unlink_at(&self.parent, leaf)
+        fs_at::OpenOptions::default().unlink_at(self.parent.as_file(), leaf)
     }
 
     pub(super) fn validate_output(

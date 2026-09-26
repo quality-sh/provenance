@@ -212,7 +212,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
         }
     };
 
-    if let Err(error) = commit::rename_no_replace(temporary, path) {
+    if let Err(error) = crate::safe_fs::rename_no_replace(temporary, path) {
         if let Some(backup) = &backup {
             restore_displaced(backup, path)?;
         }
@@ -227,7 +227,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
 }
 
 fn restore_displaced(backup: &Path, path: &Path) -> anyhow::Result<()> {
-    commit::rename_no_replace(backup, path).with_context(|| {
+    crate::safe_fs::rename_no_replace(backup, path).with_context(|| {
         format!(
             "could not restore concurrently changed {}; displaced bytes remain at {}",
             path.display(),
