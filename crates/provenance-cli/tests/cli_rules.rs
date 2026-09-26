@@ -91,15 +91,18 @@ fn missing_rule_returns_the_typed_read_failure() {
 
 #[test]
 fn catalog_commands_offer_help_at_each_address() {
-    for command in [
-        vec!["rules", "--help"],
-        vec!["rules", "create", "--help"],
-        vec!["rules", "rule_a", "update", "--help"],
+    for (command, usage) in [
+        (&["rules", "--help"][..], "rules create"),
+        (&["rules", "create", "--help"][..], "provenance rules create"),
+        (
+            &["rules", "rule_a", "update", "--help"][..],
+            "provenance rules <id> update",
+        ),
     ] {
         provenance()
             .args(command)
             .assert()
             .success()
-            .stdout(contains("rules create"));
+            .stdout(contains(usage));
     }
 }

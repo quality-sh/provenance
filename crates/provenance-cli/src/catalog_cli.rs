@@ -1,7 +1,7 @@
 //! CLI dispatch over the registered resource catalog.
 use crate::invocation::{grammar, GlobalContext};
 use axum::http::{HeaderMap, Method};
-use clap::{parser::ValueSource, ArgMatches, Command};
+use clap::{parser::ValueSource, Arg, ArgAction, ArgMatches, Command};
 use provenance_porcelain::action::Action;
 use provenance_store::operations::catalog::{self, Definition, TargetAction};
 use serde_json::Value;
@@ -26,6 +26,9 @@ pub struct Invocation {
 
 impl Invocation {
     pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
+        if matches.get_flag("help") {
+            help::print_selection(&args.collection, &args.address);
+        }
         let resolved = address::resolve(&args.collection, &args.address)
             .unwrap_or_else(|error| usage_error(error));
         let (data, query, headers) = input::parse(
@@ -59,10 +62,18 @@ pub fn is_collection(word: &str) -> bool {
 
 pub fn command(collection: &str) -> anyhow::Result<Command> {
     let registrations = address::registrations(collection);
-    let mut command = grammar::catalog_command();
+    let mut command = grammar::catalog_command()
+        .disable_help_flag(true)
+        .arg(
+            Arg::new("help")
+                .long("help")
+                .short('h')
+                .action(ArgAction::SetTrue)
+                .help("Print help for the addressed operation, or the collection overview"),
+        );
     let mut help = help::collection(collection);
     if collection == "questions" {
-        help.push_str("\nA question should be resolvable in one agent session;\notherwise it is fog or needs decomposition.");
+        help.push_str(help::question_guidance());
     }
     command = command.after_help(help);
     fields::augment(

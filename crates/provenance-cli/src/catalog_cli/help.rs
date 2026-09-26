@@ -23,6 +23,39 @@ pub(super) fn collection(collection: &str) -> String {
     help
 }
 
+/// Print help for the parsed selection: the addressed operation when the
+/// address words resolve, the collection overview otherwise. Unknown
+/// addresses report the address error as a usage failure.
+pub(super) fn print_selection(collection: &str, words: &[String]) -> ! {
+    if words.is_empty() {
+        println!("{}", overview(collection));
+        std::process::exit(0);
+    }
+    let address::Resolved { address, .. } = match address::resolve(collection, words) {
+        Ok(resolved) => resolved,
+        Err(error) => super::usage_error(error),
+    };
+    let mut rendered = String::new();
+    operation(&mut rendered, collection, address);
+    if collection == "questions" {
+        rendered.push_str(question_guidance());
+    }
+    println!("{rendered}");
+    std::process::exit(0);
+}
+
+/// The full Clap help for the collection command, including the overview.
+fn overview(collection: &str) -> String {
+    super::command(collection)
+        .expect("catalog command compiles")
+        .render_help()
+        .to_string()
+}
+
+pub(super) fn question_guidance() -> &'static str {
+    "\nA question should be resolvable in one agent session;\notherwise it is fog or needs decomposition."
+}
+
 fn operation(help: &mut String, collection: &str, address: &address::Address) {
     let definition = address.definition;
     writeln!(help, "\n  {}", usage(collection, address)).expect("writing to a String cannot fail");

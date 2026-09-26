@@ -111,6 +111,95 @@ fn operation_help_is_specific_to_the_selected_registration() {
 }
 
 #[test]
+fn addressed_update_help_excludes_other_operations_inputs() {
+    let output = help(&["requirements", "req_example", "update", "--help"]);
+
+    assert!(
+        output.contains("provenance requirements <id> update"),
+        "{output}"
+    );
+    assert!(output.contains("--statement <string>"), "{output}");
+    assert!(output.contains("--relationships-json <json>"), "{output}");
+    assert!(output.contains("--if-match <string>"), "{output}");
+    assert!(output.contains("--idempotency-key <string>"), "{output}");
+    assert!(!output.contains("--id <string>"), "{output}");
+    assert!(!output.contains("--depends-on"), "{output}");
+    assert!(!output.contains("--max-depth"), "{output}");
+    assert!(!output.contains("--direction"), "{output}");
+    assert!(!output.contains("provenance requirements create"), "{output}");
+    assert!(!output.contains("provenance requirements list"), "{output}");
+    assert!(!output.contains("Catalog commands for"), "{output}");
+}
+
+#[test]
+fn addressed_query_help_shows_only_the_selected_query() {
+    let neighbors = help(&["requirements", "req_example", "neighbors", "--help"]);
+    let trace = help(&["requirements", "req_example", "trace", "--help"]);
+
+    assert!(neighbors.contains("--direction <out|in|both>"), "{neighbors}");
+    assert!(neighbors.contains("--limit <integer>"), "{neighbors}");
+    assert!(neighbors.contains("--relations <array<string>>"), "{neighbors}");
+    assert!(!neighbors.contains("--max-depth"), "{neighbors}");
+    assert!(trace.contains("--max-depth <integer>"), "{trace}");
+    assert!(!trace.contains("--limit"), "{trace}");
+    assert!(!trace.contains("--text"), "{trace}");
+    assert!(!trace.contains("Catalog commands for"), "{trace}");
+}
+
+#[test]
+fn addressed_create_help_excludes_update_only_controls() {
+    let create = help(&["requirements", "create", "--help"]);
+
+    assert!(create.contains("provenance requirements create"), "{create}");
+    assert!(create.contains("--id <string>"), "{create}");
+    assert!(
+        create.contains("--depends-on <string> (repeatable)"),
+        "{create}"
+    );
+    assert!(!create.contains("--if-match"), "{create}");
+    assert!(!create.contains("--relationships-json"), "{create}");
+}
+
+#[test]
+fn nested_addressed_help_is_specific_to_the_nested_operation() {
+    let output = help(&["proposals", "prop_example", "assertions", "create", "--help"]);
+
+    assert!(
+        output.contains("provenance proposals <id> assertions create"),
+        "{output}"
+    );
+    assert!(output.contains("--synthesis-packet-id <string>"), "{output}");
+    assert!(!output.contains("dispositions"), "{output}");
+    assert!(!output.contains("--if-match"), "{output}");
+    assert!(!output.contains("Catalog commands for"), "{output}");
+}
+
+#[test]
+fn addressed_help_honors_global_options_and_stays_repo_free() {
+    let output = help(&["--repo", ".", "requirements", "req_example", "update", "--help"]);
+    assert!(output.contains("--if-match <string>"), "{output}");
+    let quiet = help(&["requirements", "--quiet", "req_example", "update", "--help"]);
+    assert!(quiet.contains("--statement <string>"), "{quiet}");
+}
+
+#[test]
+fn addressed_help_reports_unknown_addresses_as_usage_errors() {
+    let empty = tempfile::tempdir().expect("create empty working directory");
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+        .current_dir(empty.path())
+        .args(["requirements", "bogus", "--help"])
+        .output()
+        .expect("run provenance help");
+
+    assert!(
+        !output.status.success(),
+        "unknown addresses must not render help"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does not declare"), "{stderr}");
+}
+
+#[test]
 fn a_declared_flag_value_can_be_the_literal_help_word() {
     let empty = tempfile::tempdir().expect("create empty working directory");
     let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
