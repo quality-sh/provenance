@@ -4,7 +4,7 @@ use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
 use clap::{parser::ValueSource, ArgMatches, Command};
 use provenance_porcelain::action::Action;
 use provenance_store::operations::catalog::{self, Definition, TargetAction};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
     collections::BTreeMap,
     net::{Ipv4Addr, SocketAddr},
