@@ -86,6 +86,7 @@ scoped_write_operation!(
     RequirementResource,
     &[409],
     &[ExecutionNeed::GraphStorage, ExecutionNeed::Dictionary],
+    scope = none,
     |store, scope, request| {
         let snapshot = store.create_review_requirement_resource(
             review::CreateReviewRequirement {
@@ -138,6 +139,7 @@ scoped_write_operation!(
     RequirementResource,
     &[409],
     &[ExecutionNeed::GraphStorage, ExecutionNeed::Dictionary],
+    scope = none,
     |store, scope, request| {
         let snapshot = store.save_requirement_resource(review::SaveRequirement {
                 request_id: request.request_id,
@@ -164,6 +166,7 @@ macro_rules! decision {
     ($name:ident, $wire:literal, $request:ty, $method:ident) => {
         scoped_write_operation!(
             pub $name, $wire, $request, CycleEntry, &[409], &[ExecutionNeed::GraphStorage],
+            scope = scope_id,
             |store, _scope, request| store.$method(request)
         );
     };
@@ -209,6 +212,7 @@ macro_rules! addressed_decision {
     ($name:ident, $wire:literal, $request:ty, $input:ty, $method:ident, $convert:expr) => {
         scoped_write_operation!(
             pub $name, $wire, $request, CycleEntry, &[409], &[ExecutionNeed::GraphStorage],
+            scope = scope_id,
             |store, _scope, request| {
                 let requirement_id = request.requirement_id.clone();
                 let input: $input = ($convert)(request);

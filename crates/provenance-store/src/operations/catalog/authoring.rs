@@ -33,7 +33,7 @@ macro_rules! operation {
     ($name:ident, $wire:literal, $request:ty, $success:ty, $mutates:literal, $validate:expr, $handler:expr, [$($need:ident),*]) => {
         scoped_command_operation!(
             pub $name, $wire, $request, $success, mutates = $mutates, &[409],
-            &[$(ExecutionNeed::$need),*], validate = $validate,
+            &[$(ExecutionNeed::$need),*], scope = none, validate = $validate,
             |context, request| ($handler)(context, request)
         );
     };
