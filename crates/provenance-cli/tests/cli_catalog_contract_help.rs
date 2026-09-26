@@ -150,8 +150,8 @@ fn addressed_query_help_shows_only_the_selected_query() {
     );
     assert!(!neighbors.contains("--max-depth"), "{neighbors}");
     assert!(trace.contains("--max-depth <integer>"), "{trace}");
-    assert!(!trace.contains("--limit"), "{trace}");
     assert!(!trace.contains("--text"), "{trace}");
+    assert!(!trace.contains("--base"), "{trace}");
     assert!(!trace.contains("Catalog commands for"), "{trace}");
 }
 

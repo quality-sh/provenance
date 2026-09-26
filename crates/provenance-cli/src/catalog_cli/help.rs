@@ -52,7 +52,7 @@ fn overview(collection: &str) -> String {
         .to_string()
 }
 
-pub(super) fn question_guidance() -> &'static str {
+pub(super) const fn question_guidance() -> &'static str {
     "\nA question should be resolvable in one agent session;\notherwise it is fog or needs decomposition."
 }
 
