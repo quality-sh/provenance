@@ -1,4 +1,5 @@
 use super::{ContextKind, Parameter, ResponseKind};
+use provenance_core::NodeType;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -40,6 +41,14 @@ pub enum SelectorBinding {
 pub struct RequestAdapter {
     pub object: bool,
     pub adapt: RequestAdapterFn,
+    pub discussion_write: Option<DiscussionWriteKind>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiscussionWriteKind {
+    Start,
+    Reply,
+    Status,
 }
 
 pub type RequestAdapterFn =
@@ -82,7 +91,12 @@ pub struct CliBinding {
 
 #[derive(Clone)]
 pub struct RequestBinding {
+    /// The public request body projection, if the method carries one.
     pub schema: Option<Value>,
+    /// The full deserialize-direction schema of the bound request type. It
+    /// keeps every typed field, so parameter schemas derive from it before
+    /// the body projection hides bound fields.
+    pub raw: Option<Value>,
     pub adapter: RequestAdapter,
     pub path: Vec<PathBinding>,
     pub parent: Option<ParentBinding>,
@@ -97,6 +111,7 @@ impl Default for RequestBinding {
     fn default() -> Self {
         Self {
             schema: None,
+            raw: None,
             adapter: super::routes::request::DIRECT,
             path: Vec::new(),
             parent: None,
@@ -131,22 +146,8 @@ pub struct EtagBinding {
 }
 
 #[derive(Clone)]
-pub enum ResponseSelection {
-    Direct,
-    ArrayItems {
-        owner_parameter: &'static str,
-        owner_field: &'static str,
-    },
-    ArrayMember {
-        id_parameter: &'static str,
-        owner_parameter: Option<(&'static str, &'static str)>,
-    },
-}
-
-#[derive(Clone)]
 pub struct ResponseBinding {
     pub kind: ResponseKind,
-    pub selection: ResponseSelection,
     pub adapter: ResponseAdapter,
     pub raw_schema: Value,
     pub schema: Value,
@@ -165,7 +166,6 @@ impl ResponseBinding {
     pub const fn direct(kind: ResponseKind, raw_schema: Value, schema: Value) -> Self {
         Self {
             kind,
-            selection: ResponseSelection::Direct,
             adapter: match kind {
                 ResponseKind::Resource | ResponseKind::Result => ResponseAdapter::Direct,
                 ResponseKind::Items => ResponseAdapter::ArrayItems,
@@ -202,6 +202,15 @@ pub struct QueryRoute {
     pub response: ResponseBinding,
 }
 
+pub use provenance_core::TargetAction;
+
+/// The porcelain action and record kind owned by one registration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TargetBinding {
+    pub action: TargetAction,
+    pub kind: NodeType,
+}
+
 #[derive(Clone)]
 pub struct Registration {
     pub handler: HandlerBinding,
@@ -210,6 +219,7 @@ pub struct Registration {
     pub response: ResponseBinding,
     pub queries: Vec<QueryRoute>,
     pub cli: CliBinding,
+    pub target: Option<TargetBinding>,
 }
 
 impl Registration {
@@ -228,6 +238,7 @@ impl Registration {
             response,
             queries: Vec::new(),
             cli: CliBinding::default(),
+            target: None,
         }
     }
 }

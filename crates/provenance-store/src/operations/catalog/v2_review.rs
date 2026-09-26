@@ -33,11 +33,15 @@ fn resource(
     id: &StableId,
 ) -> anyhow::Result<RequirementResource> {
     let snapshot = store.requirement_resource_snapshot(scope, id)?;
-    Ok(RequirementResource {
+    Ok(resource_from(snapshot))
+}
+
+fn resource_from(snapshot: review::RequirementResourceSnapshot) -> RequirementResource {
+    RequirementResource {
         record: snapshot.record,
         edit: snapshot.edit,
         decision: snapshot.decision,
-    })
+    }
 }
 
 #[derive(Deserialize)]
@@ -119,28 +123,28 @@ impl Operation for CreateRequirementV2 {
         Box::pin(async move {
             let context = context.scope()?;
             let scope = context.scope;
-            let id = request.id.clone();
             let store = StateStore::new(ProvenanceLayout::new(context.root));
-            store.create_review_requirement(review::CreateReviewRequirement {
-                request_id: request.request_id,
-                actor: request.actor,
-                origin: request.origin,
-                create: CreateRequirementInput {
-                    scope_id: scope.clone(),
-                    id: request.id,
-                    statement: request.statement,
-                    description: request.description,
-                    status: request.status,
-                    domain_id: request.domain_id,
-                    refines: request.refines,
-                    depends_on: request.depends_on,
-                    supersedes: request.supersedes,
-                    spawned_by: request.spawned_by,
-                    origin_thread: request.origin_thread,
-                    origin_message: request.origin_message,
-                },
-            })?;
-            resource(&store, &scope, &id).map_err(Into::into)
+            let snapshot =
+                store.create_review_requirement_resource(review::CreateReviewRequirement {
+                    request_id: request.request_id,
+                    actor: request.actor,
+                    origin: request.origin,
+                    create: CreateRequirementInput {
+                        scope_id: scope,
+                        id: request.id,
+                        statement: request.statement,
+                        description: request.description,
+                        status: request.status,
+                        domain_id: request.domain_id,
+                        refines: request.refines,
+                        depends_on: request.depends_on,
+                        supersedes: request.supersedes,
+                        spawned_by: request.spawned_by,
+                        origin_thread: request.origin_thread,
+                        origin_message: request.origin_message,
+                    },
+                })?;
+            Ok(resource_from(snapshot))
         })
     }
 }
@@ -186,15 +190,14 @@ impl Operation for UpdateRequirementV2 {
         Box::pin(async move {
             let context = context.scope()?;
             let scope = context.scope;
-            let id = request.id.clone();
             let store = StateStore::new(ProvenanceLayout::new(context.root));
-            store.save_requirement(review::SaveRequirement {
+            let snapshot = store.save_requirement_resource(review::SaveRequirement {
                 request_id: request.request_id,
                 actor: request.actor,
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,
                 update: UpdateRequirementInput {
-                    scope_id: scope.clone(),
+                    scope_id: scope,
                     id: request.id,
                     declared_by: request.declared_by,
                     statement: request.statement,
@@ -205,7 +208,7 @@ impl Operation for UpdateRequirementV2 {
                     clear_fields: request.clear_fields,
                 },
             })?;
-            resource(&store, &scope, &id).map_err(Into::into)
+            Ok(resource_from(snapshot))
         })
     }
 }
@@ -328,6 +331,10 @@ addressed_decision!(
         declared_by: request.declared_by,
     }
 );
+
+#[cfg(test)]
+#[path = "v2_review_tests.rs"]
+mod v2_review_tests;
 addressed_decision!(
     WithdrawRequirementReviewV2,
     "withdraw-requirement-review-v2",

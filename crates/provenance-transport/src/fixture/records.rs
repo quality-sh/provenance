@@ -29,15 +29,18 @@ impl Repository {
         )
         .unwrap();
         let result = Self { dir, layout };
-        result.seed(scope, statement);
+        result.seed(scope, statement, "");
         result
     }
-    pub fn seed(&self, scope: ScopeId, statement: &str) {
+    pub fn seed(&self, scope: ScopeId, statement: &str, id_suffix: &str) {
         let store = StateStore::new(self.layout.clone());
+        let domain_id = sid(&format!("domain_shared{id_suffix}"));
+        let requirement_id = sid(&format!("req_shared{id_suffix}"));
+        let rule_id = sid(&format!("rule_shared{id_suffix}"));
         store
             .create_domain(CreateDomainInput {
                 scope_id: scope.clone(),
-                id: sid("domain_shared"),
+                id: domain_id.clone(),
                 name: "Shared domain".into(),
                 description: None,
                 color: None,
@@ -46,11 +49,11 @@ impl Repository {
         store
             .create_requirement(CreateRequirementInput {
                 scope_id: scope.clone(),
-                id: sid("req_shared"),
+                id: requirement_id.clone(),
                 statement: "The graph is readable.".into(),
                 description: None,
                 status: RequirementStatus::Active,
-                domain_id: Some(sid("domain_shared")),
+                domain_id: Some(domain_id),
                 refines: None,
                 depends_on: vec![],
                 supersedes: vec![],
@@ -63,10 +66,10 @@ impl Repository {
             .create_rule(CreateRuleInput {
                 archived_in_commit: None,
                 scope_id: scope,
-                id: sid("rule_shared"),
+                id: rule_id,
                 name: None,
                 description: None,
-                requirement_ids: vec![sid("req_shared")],
+                requirement_ids: vec![requirement_id],
                 resolution_ids: vec![],
                 statement: statement.into(),
                 status: RuleStatus::Active,
@@ -91,7 +94,7 @@ impl Repository {
             serde_json::to_vec(&manifest).unwrap(),
         )
         .unwrap();
-        self.seed(scope, statement);
+        self.seed(scope, statement, &format!("_{name}"));
     }
     pub fn all_kinds(&self) {
         use provenance_core::{

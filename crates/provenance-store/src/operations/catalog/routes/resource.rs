@@ -24,15 +24,20 @@ macro_rules! collection {
     (plain, $ty:ty, $list:ty, $plural:literal, $plural_id:literal, $singular:literal) => {
         read::<$ty, $list>(
             concat!("list-", $plural), concat!("list", $plural_id), concat!("/", $plural),
-            concat!("List ", $plural, " in the bound scope."), ResponseKind::Items, Vec::new(),
-        ).adapter(request::NULL)
+            concat!("List ", $plural, " in the bound scope."), ResponseKind::Items,
+            list_parameters(false, false),
+        ).items_field("items").pagination()
     };
     (verification, $ty:ty, $list:ty, $plural:literal, $plural_id:literal, $singular:literal) => {
         read::<$ty, $list>(
             concat!("list-", $plural), concat!("list", $plural_id), concat!("/", $plural),
             concat!("List ", $plural, " in the bound scope."), ResponseKind::Items,
-            vec![schema::query("rule", json!({"type":"string","minLength":1}))],
-        )
+            vec![
+                schema::query("rule", json!({"type":"string","minLength":1})),
+                schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
+                schema::query("cursor", json!({"type":"string"})),
+            ],
+        ).items_field("items").pagination()
     };
 }
 
@@ -79,15 +84,11 @@ macro_rules! resource {
             ResponseKind::Resource,
             member_parameters_for!($mode),
         )
-        .adapter(request::NULL)
-        .response_selection(ResponseSelection::ArrayMember {
-            id_parameter: "id",
-            owner_parameter: None,
-        });
+        .result();
         let queries = registered_member_queries!($mode, &definition, $singular);
         $out.push(with_query_results(definition, queries));
     }};
-    ($out:ident, $mode:ident, $ty:ty, $list:ty, $member:ty, $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal, $create:ty, $update:ty, $create_defaults:expr, $create_aliases:expr, $update_defaults:expr, $update_aliases:expr, $nullable:expr) => {{
+    ($out:ident, $mode:ident, $ty:ty, $list:ty, $member:ty, $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal, $create:ty, $update:ty, $create_defaults:expr, $create_aliases:expr, $update_defaults:expr, $update_aliases:expr, $nullable:expr, $target_kind:expr) => {{
         resource!(
             $out,
             $mode,
@@ -111,7 +112,8 @@ macro_rules! resource {
             )
             .scope("scope_id")
             .cli_defaults($create_defaults)
-            .argument_aliases($create_aliases),
+            .argument_aliases($create_aliases)
+            .target(TargetAction::Create, $target_kind),
         );
         $out.push(
             backed::<$update>(
@@ -126,7 +128,8 @@ macro_rules! resource {
             .scope("scope_id")
             .cli_defaults($update_defaults)
             .argument_aliases($update_aliases)
-            .null_clears($nullable),
+            .public_patch($nullable)
+            .target(TargetAction::Update, $target_kind),
         );
     }};
 }

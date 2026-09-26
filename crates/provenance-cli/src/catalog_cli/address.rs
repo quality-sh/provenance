@@ -4,7 +4,6 @@ use std::{collections::BTreeMap, sync::OnceLock};
 pub(super) struct Resolved {
     pub address: &'static Address,
     pub path: String,
-    pub flags: Vec<String>,
     pub query: Option<&'static str>,
 }
 
@@ -21,12 +20,7 @@ pub(super) struct Address {
     pub(super) query: Option<&'static str>,
 }
 
-pub(super) fn resolve(collection: &str, words: &[String]) -> anyhow::Result<Resolved> {
-    let address_len = words
-        .iter()
-        .position(|word| word.starts_with("--"))
-        .unwrap_or(words.len());
-    let supplied = &words[..address_len];
+pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<Resolved> {
     let candidates = registrations(collection)
         .into_iter()
         .filter(|address| address.words.len() == supplied.len())
@@ -41,9 +35,13 @@ pub(super) fn resolve(collection: &str, words: &[String]) -> anyhow::Result<Reso
     Ok(Resolved {
         address,
         path: render_path(address.definition.path, &values)?,
-        flags: words[address_len..].to_vec(),
         query: address.query,
     })
+}
+
+fn addresses() -> &'static [Address] {
+    static ADDRESSES: OnceLock<Vec<Address>> = OnceLock::new();
+    ADDRESSES.get_or_init(build)
 }
 
 pub(super) fn registrations(collection: &str) -> Vec<&'static Address> {
@@ -51,11 +49,6 @@ pub(super) fn registrations(collection: &str) -> Vec<&'static Address> {
         .iter()
         .filter(|address| address.collection == collection)
         .collect()
-}
-
-fn addresses() -> &'static [Address] {
-    static ADDRESSES: OnceLock<Vec<Address>> = OnceLock::new();
-    ADDRESSES.get_or_init(build)
 }
 
 fn build() -> Vec<Address> {
@@ -87,25 +80,14 @@ fn build() -> Vec<Address> {
                 );
             }
             HttpMethod::Get => {
-                push(&mut addresses, collection, route.clone(), definition, None);
                 let mut suffixed = route.clone();
                 suffixed.push(literal("get"));
                 push(&mut addresses, collection, suffixed, definition, None);
-                if route.len() == 1 && matches!(route[0], Segment::Parameter(_)) {
-                    let mut prefixed = vec![literal("get")];
-                    prefixed.extend(route.clone());
-                    push(&mut addresses, collection, prefixed, definition, None);
-                }
             }
             HttpMethod::Patch => {
                 let mut suffixed = route.clone();
                 suffixed.push(literal("update"));
                 push(&mut addresses, collection, suffixed, definition, None);
-                if route.len() == 1 && matches!(route[0], Segment::Parameter(_)) {
-                    let mut prefixed = vec![literal("update")];
-                    prefixed.extend(route.clone());
-                    push(&mut addresses, collection, prefixed, definition, None);
-                }
             }
             HttpMethod::Post => {
                 let mut form = route.clone();
@@ -147,24 +129,20 @@ fn push(
 }
 
 fn reject_ambiguous(addresses: &[Address]) {
-    let mut seen = BTreeMap::new();
-    for address in addresses {
-        let key = (
-            address.collection,
-            address
-                .words
-                .iter()
-                .map(|segment| match segment {
-                    Segment::Literal(word) => *word,
-                    Segment::Parameter(_) => "{}",
+    for (index, address) in addresses.iter().enumerate() {
+        for other in &addresses[index + 1..] {
+            if address.collection == other.collection
+                && address.words.len() == other.words.len()
+                && address.words.iter().zip(&other.words).all(|(left, right)| {
+                    !matches!((left, right),
+                        (Segment::Literal(left), Segment::Literal(right)) if left != right)
                 })
-                .collect::<Vec<_>>(),
-        );
-        if let Some(previous) = seen.insert(key, address.definition.name) {
-            panic!(
-                "ambiguous CLI registrations: {previous} and {}",
-                address.definition.name
-            );
+            {
+                panic!(
+                    "ambiguous CLI registrations: {} and {}",
+                    address.definition.name, other.definition.name
+                );
+            }
         }
     }
 }
@@ -185,20 +163,12 @@ const fn literal(word: &'static str) -> Segment {
     Segment::Literal(word)
 }
 
-fn select_address<'a>(
-    mut candidates: Vec<&'a Address>,
-    supplied: &[String],
-) -> Option<&'a Address> {
-    for (index, actual) in supplied.iter().enumerate() {
-        let literal = candidates.iter().any(
-            |address| matches!(address.words[index], Segment::Literal(word) if word == actual),
-        );
-        candidates.retain(|address| match address.words[index] {
-            Segment::Literal(word) => word == actual,
-            Segment::Parameter(_) => !literal && !actual.is_empty(),
-        });
-    }
-    (candidates.len() == 1).then(|| candidates[0])
+fn select_address<'a>(candidates: Vec<&'a Address>, supplied: &[String]) -> Option<&'a Address> {
+    let mut matches = candidates
+        .into_iter()
+        .filter(|address| address_values(address, supplied).is_some());
+    let selected = matches.next()?;
+    matches.next().is_none().then_some(selected)
 }
 
 fn address_values(
@@ -245,18 +215,18 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "ambiguous CLI registrations")]
-    fn construction_rejects_duplicate_address_grammars() {
+    fn construction_rejects_intersecting_address_grammars() {
         let definition = &catalog::definitions()[0];
         reject_ambiguous(&[
             Address {
                 collection: "sources",
-                words: vec![literal("list")],
+                words: vec![Segment::Parameter("id"), literal("get")],
                 definition,
                 query: None,
             },
             Address {
                 collection: "sources",
-                words: vec![literal("list")],
+                words: vec![literal("get"), Segment::Parameter("id")],
                 definition,
                 query: None,
             },

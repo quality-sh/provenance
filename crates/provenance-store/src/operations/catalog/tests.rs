@@ -4,6 +4,8 @@ use provenance_core::SDK_PROTOCOL_VERSION;
 use serde_json::json;
 
 mod ideation;
+#[cfg(feature = "schema")]
+mod schema_precision;
 
 #[tokio::test]
 async fn statements_return_the_exact_data_free_analyzer_report() {
@@ -72,6 +74,38 @@ fn mcp_schema_resolves_definitions_at_the_document_root() {
         .compile(&schema)
         .unwrap();
     assert!(validator.is_valid(&json!({"data":{"statement":"Stop; wait."}})));
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn mcp_query_schema_validates_only_the_selected_request_shape() {
+    let definition: &super::Definition = super::definitions()
+        .iter()
+        .find(|entry| entry.name == "list-rules")
+        .unwrap();
+    let schema: serde_json::Value = definition.mcp_input_schema();
+    let validator: jsonschema::JSONSchema = jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft202012)
+        .compile(&schema)
+        .unwrap();
+
+    for value in [
+        json!({}),
+        json!({"query":"search"}),
+        json!({"query":"search", "text":"bounded"}),
+        json!({"query":"stale", "base":"main"}),
+        json!({"query":"resolve-symbol", "file":"src/lib.rs"}),
+    ] {
+        assert!(validator.is_valid(&value), "valid query shape: {value}");
+    }
+    for value in [
+        json!({"query":"stale"}),
+        json!({"query":"resolve-symbol"}),
+        json!({"query":"search", "text":"bounded", "base":"main"}),
+        json!({"text":"bounded"}),
+    ] {
+        assert!(!validator.is_valid(&value), "invalid query shape: {value}");
+    }
 }
 
 #[derive(Debug, serde::Serialize, thiserror::Error)]
@@ -234,6 +268,101 @@ fn query_registrations_keep_typed_scalar_parameters() {
         .parameters
         .iter()
         .any(|parameter| parameter.name == "limit"));
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn relation_filters_are_typed_array_query_parameters() {
+    let definition = super::definitions()
+        .iter()
+        .find(|definition| definition.name == "get-source")
+        .unwrap();
+    for name in ["neighbors", "trace"] {
+        let route = definition
+            .registration
+            .queries
+            .iter()
+            .find(|query| query.name == name)
+            .unwrap();
+        let relations = route
+            .parameters
+            .iter()
+            .find(|parameter| parameter.name == "relations")
+            .unwrap_or_else(|| panic!("{name} omitted relations"));
+        assert_eq!(relations.schema["type"], "array");
+        assert_eq!(
+            super::parse_parameter_value(relations, "supersedes,depends_on").unwrap(),
+            json!(["supersedes", "depends_on"])
+        );
+        assert_eq!(
+            super::serialize_parameter_value(relations, &json!(["supersedes", "depends_on"]))
+                .unwrap(),
+            "supersedes,depends_on"
+        );
+    }
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn proposal_fact_members_declare_object_success_payloads() {
+    for name in ["get-proposal-assertion", "get-proposal-disposition"] {
+        let definition = super::definitions()
+            .iter()
+            .find(|definition| definition.name == name)
+            .unwrap();
+        let schema = definition.success_schema();
+        let data = &schema["properties"]["data"];
+        let data = data
+            .get("$ref")
+            .and_then(serde_json::Value::as_str)
+            .and_then(|reference| reference.strip_prefix("#/$defs/"))
+            .and_then(|definition| schema["$defs"].get(definition))
+            .unwrap_or(data);
+        assert_eq!(data["type"], "object", "{name}: {schema}");
+    }
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn every_public_collection_declares_bounded_paging() {
+    for definition in super::definitions().iter().filter(|definition| {
+        definition.method == super::HttpMethod::Get
+            && definition.registration.response.kind == super::ResponseKind::Items
+    }) {
+        let parameters = definition.parameters();
+        for name in ["limit", "cursor"] {
+            assert!(
+                parameters
+                    .iter()
+                    .any(|parameter| parameter.location == "query" && parameter.name == name),
+                "{} omitted {name}",
+                definition.name
+            );
+        }
+        assert!(
+            definition.registration.controls.pagination,
+            "{} does not move page controls into response metadata",
+            definition.name
+        );
+    }
+}
+
+#[cfg(feature = "schema")]
+#[test]
+fn public_member_reads_do_not_use_collection_response_adapters() {
+    for definition in super::definitions().iter().filter(|definition| {
+        definition.method == super::HttpMethod::Get
+            && definition.registration.response.kind == super::ResponseKind::Resource
+    }) {
+        assert!(
+            matches!(
+                definition.registration.response.adapter,
+                super::ResponseAdapter::Direct | super::ResponseAdapter::Result
+            ),
+            "{} adapts one member from a collection response",
+            definition.name
+        );
+    }
 }
 
 #[cfg(feature = "schema")]

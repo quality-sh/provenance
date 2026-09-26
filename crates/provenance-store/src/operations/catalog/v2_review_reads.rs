@@ -7,9 +7,9 @@ use crate::{
     layout::ProvenanceLayout, operations::read_policy::ReadPolicy, review, state_store::StateStore,
     write_error::WriteError,
 };
+pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
-    protocol::failure::{InvalidInputReason, OperationFailure},
-    review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryPage, ReviewHistoryQuery},
+    review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryQuery},
     threads::{
         DiscussionEntry, DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery,
         DiscussionSelector,
@@ -24,15 +24,6 @@ pub struct ReadResult<T> {
     pub result: T,
     pub stamp: provenance_core::protocol::Stamp,
     pub freshness_error: Option<String>,
-}
-
-#[derive(Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct DiscussionResultPage<T> {
-    pub entries: Vec<T>,
-    pub limit: usize,
-    pub has_more: bool,
-    pub next_cursor: Option<String>,
 }
 
 const fn discussion_result<T>(
@@ -100,7 +91,7 @@ const fn limit() -> usize {
 pub struct ReviewHistoryV2;
 impl Operation for ReviewHistoryV2 {
     type Request = HistoryRequest;
-    type Success = ReadResult<ReviewHistoryPage>;
+    type Success = ReadResult<DiscussionResultPage<ReviewEntry>>;
     type Failure = ReadError;
     const NAME: &'static str = "review-history-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
@@ -120,7 +111,8 @@ impl Operation for ReviewHistoryV2 {
     ) -> OperationFuture<Self::Success, Self::Failure> {
         Box::pin(async move {
             let read = context.graph()?;
-            Ok(review::read_history(
+            let limit = request.limit;
+            let page = review::read_history(
                 &read.root,
                 &read.scope,
                 read.policy,
@@ -130,8 +122,12 @@ impl Operation for ReviewHistoryV2 {
                     cursor: request.cursor,
                 },
             )
-            .await?
-            .into())
+            .await?;
+            Ok(ReadResult {
+                result: discussion_result(page.result.entries, page.result.next_cursor, limit),
+                stamp: page.stamp,
+                freshness_error: page.freshness_error,
+            })
         })
     }
 }
@@ -202,13 +198,24 @@ impl Operation for ReviewHistoryEntryV2 {
     }
 }
 
+/// The published evidence side of a review outcome. The enum is the whole
+/// contract: wire values outside `before` and `after` are unrepresentable, so
+/// the request carries no second string validation.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReviewEvidenceSide {
+    Before,
+    After,
+}
+
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct HistoryEvidenceRequest {
     pub requirement_id: StableId,
     pub entry_id: StableId,
-    pub side: String,
+    pub side: ReviewEvidenceSide,
     pub field: Option<String>,
     #[serde(default)]
     pub offset: u64,
@@ -222,16 +229,6 @@ impl Operation for ReviewEvidenceV2 {
     const NAME: &'static str = "review-evidence-v2";
     const CONTEXT: ContextKind = ContextKind::Scoped;
     const FAILURE_STATUSES: &'static [u16] = &[409];
-    fn validate_external(request: &Self::Request) -> Result<(), OperationFailure> {
-        if matches!(request.side.as_str(), "before" | "after") {
-            Ok(())
-        } else {
-            Err(OperationFailure::InvalidInput {
-                field: Some("side".into()),
-                reason: InvalidInputReason::InvalidValue,
-            })
-        }
-    }
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[
             ExecutionNeed::GraphStorage,
@@ -254,7 +251,7 @@ impl Operation for ReviewEvidenceV2 {
                 EvidenceQuery {
                     requirement_id: request.requirement_id,
                     entry_id: request.entry_id,
-                    before: request.side == "before",
+                    before: request.side == ReviewEvidenceSide::Before,
                     field: request.field,
                     offset: request.offset,
                 },

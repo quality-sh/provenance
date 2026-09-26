@@ -1,6 +1,9 @@
 use crate::operations::reader::ReadContext;
-use provenance_core::protocol::{GetQuery, GetResult, SearchQuery, SearchResult};
+use provenance_core::protocol::{
+    GetQuery, GetResult, ResolveRecordQuery, ResolveRecordResult, SearchQuery, SearchResult,
+};
 use provenance_core::{NodeType, StableId};
+use provenance_macros::rule;
 
 use super::nodes;
 
@@ -16,7 +19,20 @@ pub(super) async fn get(ctx: &ReadContext, request: GetQuery) -> anyhow::Result<
     })
 }
 
+pub(super) async fn resolve_record(
+    ctx: &ReadContext,
+    request: ResolveRecordQuery,
+) -> anyhow::Result<ResolveRecordResult> {
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
+    let id = StableId::new(request.id)?;
+    let resolution = nodes::resolve(ctx.snapshot(), &id, &request.allowed_node_types).await?;
+    Ok(ResolveRecordResult { resolution })
+}
+
 /// Search keeps canonical kind and ID order within the engine page budgets.
+#[rule("rule_porcelain_search_crosses_kinds")]
 pub(super) async fn search(
     ctx: &ReadContext,
     request: SearchQuery,
@@ -28,13 +44,16 @@ pub(super) async fn search(
 }
 
 async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<SearchResult> {
+    use crate::operations::reader::PAGE_BYTES;
     use crate::operations::reader::{Cursor, Position};
-    use crate::operations::reader::{PAGE_BYTES, RECORD_BYTES};
-    use provenance_core::protocol::read_failure::ReadFailure;
     request
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
-    let needle = request.text.trim().to_lowercase();
+    let needle = request
+        .text
+        .as_deref()
+        .map(str::trim)
+        .map(str::to_lowercase);
     let mut wanted = if request.node_types.is_empty() {
         PROTOCOL_FIVE_DEFAULT_KINDS.to_vec()
     } else {
@@ -71,15 +90,13 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
                     .ok_or_else(|| {
                         anyhow::anyhow!("search candidate disappeared inside snapshot")
                     })?;
-                let contains_text = node
-                    .searchable_text()
-                    .iter()
-                    .any(|text| text.to_lowercase().contains(&needle));
+                let contains_text = needle.as_ref().is_none_or(|needle| {
+                    node.searchable_text()
+                        .iter()
+                        .any(|text| text.to_lowercase().contains(needle))
+                });
                 if contains_text {
                     let size = serde_json::to_vec(&node)?.len();
-                    if size > RECORD_BYTES {
-                        return Err(ReadFailure::PageRecordTooLarge.into());
-                    }
                     if matched.len() == request.limit || bytes + size > PAGE_BYTES {
                         has_more = true;
                         break 'kinds;

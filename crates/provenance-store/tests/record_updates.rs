@@ -3,6 +3,8 @@ mod record_updates {
     mod descriptions;
     mod drafts;
     mod lifecycle;
+    mod preservation;
+    mod relationships;
     mod resolutions;
     mod sources;
     mod support;

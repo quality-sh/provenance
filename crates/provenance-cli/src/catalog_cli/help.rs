@@ -1,46 +1,40 @@
-//! Help for the catalog-derived CLI dialect.
-use super::address::{self, Address, Segment};
-use provenance_store::operations::catalog::{CliDefaultValue, Definition, Parameter, QueryRoute};
+//! Help rendered from the registered catalog contracts.
+//!
+//! One block per registered address: the real nested usage line, the
+//! operation description, the body fields with their types, enums, aliases
+//! and defaults, the selected query parameters, and the request controls.
+use super::address::{self, Segment};
+use super::fields::{self, Source};
+use provenance_store::operations::catalog::{CliDefaultValue, Definition, Parameter};
 use serde_json::Value;
+use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 mod schema;
 
-pub(super) fn print_collection(collection: &str) {
+/// Render the help block that lists every registered operation.
+pub(super) fn collection(collection: &str) -> String {
     let mut registrations = address::registrations(collection);
-    registrations.sort_unstable_by_key(|address| command(address));
-
-    println!("Catalog commands for {collection}:\n");
-    println!("Usage:");
+    registrations.sort_unstable_by_key(|address| usage(collection, address));
+    let mut help = format!("Catalog commands for {collection}:");
     for address in registrations {
-        println!("  {} [options]", command(address));
-        println!("      {}", description(collection, address));
-        let options = concise_options(address);
-        if !options.is_empty() {
-            println!("      Options: {}", options.join(", "));
-        }
+        operation(&mut help, collection, address);
     }
-    println!("\nRun `provenance {collection} <command> --help` for operation inputs.");
-    question_guidance(collection);
+    help
 }
 
-pub(super) fn print_operation(collection: &str, address: &Address) {
-    println!("Catalog commands for {collection}:\n");
-    println!("{}\n", description(collection, address));
-    println!("Usage:\n  {} [options]", command(address));
-
+fn operation(help: &mut String, collection: &str, address: &address::Address) {
     let definition = address.definition;
-    if let Some(request) = definition.request_schema() {
-        print_body_fields(definition, request);
-        print_input_forms();
-    }
-    print_parameters(address);
-    println!("\nHelp is selected only when --help is the operation's sole option.");
-    println!("A declared flag value can be the literal string --help.");
-    question_guidance(collection);
+    writeln!(help, "\n  {}", usage(collection, address))
+        .expect("writing to a String cannot fail");
+    writeln!(help, "      {}", description(collection, address))
+        .expect("writing to a String cannot fail");
+    let declared = fields::declared(definition).expect("catalog fields compile");
+    print_body_fields(help, definition, &declared);
+    print_options(help, address);
 }
 
-fn command(address: &Address) -> String {
+fn usage(collection: &str, address: &address::Address) -> String {
     let words = address
         .words
         .iter()
@@ -49,117 +43,125 @@ fn command(address: &Address) -> String {
             Segment::Parameter(name) => format!("<{name}>"),
         })
         .collect::<Vec<_>>();
-    if words.is_empty() {
-        format!("provenance {}", address.collection)
-    } else {
-        format!("provenance {} {}", address.collection, words.join(" "))
-    }
+    format!("provenance {collection} {}", words.join(" "))
 }
 
-fn description(collection: &str, address: &Address) -> String {
+fn description(collection: &str, address: &address::Address) -> String {
     address.query.map_or_else(
         || address.definition.description.to_owned(),
         |query| format!("Run the {query} query on the selected {collection} resource."),
     )
 }
 
-fn concise_options(address: &Address) -> Vec<String> {
-    let mut options = selected_parameters(address)
-        .iter()
-        .filter(|parameter| parameter.location != "path")
-        .map(parameter_usage)
-        .collect::<Vec<_>>();
-    if address.definition.request_schema().is_some() {
-        options.push("body flags or --stdin".into());
-    }
-    options
-}
-
-fn print_body_fields(definition: &Definition, request: &Value) {
-    let fields = schema::body_fields(request);
-    if fields.is_empty() {
+fn print_body_fields(help: &mut String, definition: &Definition, declared: &[fields::Field]) {
+    let Some(request) = definition.request_schema() else {
         return;
-    }
-    println!("\nBody fields:");
-    for field in fields {
-        let flag = cli_name(field.name);
-        let cli_default = cli_default(definition, field.name);
-        let schema_default = schema::default(field.schema);
-        let required = field.required && cli_default.is_none() && schema_default.is_none();
-        if let Some(item) = schema::array_item_label(request, field.schema) {
-            println!(
-                "  --{flag} <{item}> (repeatable){}",
-                qualifiers(required, cli_default.as_deref(), schema_default)
-            );
-            println!(
-                "  --{flag}-json <json>{}",
-                qualifiers(required, cli_default.as_deref(), schema_default)
-            );
-        } else if schema::accepts_plain(request, field.schema) {
-            let kind = schema::type_label(request, field.schema);
-            println!(
-                "  --{flag} <{kind}>{}",
-                qualifiers(required, cli_default.as_deref(), schema_default)
-            );
-        } else {
-            println!(
-                "  --{flag}-json <json>{}",
-                qualifiers(required, cli_default.as_deref(), schema_default)
-            );
-        }
-    }
-    print_aliases(definition, request);
-}
-
-fn print_aliases(definition: &Definition, request: &Value) {
+    };
     let aliases = &definition.registration.request.argument_aliases;
-    if aliases.is_empty() {
+    let alias_names = aliases
+        .iter()
+        .map(|alias| fields::cli_name(alias.argument))
+        .collect::<BTreeSet<_>>();
+    let canonical = declared
+        .iter()
+        .filter(|field| !alias_names.contains(&field.name))
+        .collect::<Vec<_>>();
+    let body = canonical
+        .iter()
+        .filter(|field| matches!(field.source, Source::Body { .. }))
+        .collect::<Vec<_>>();
+    if body.is_empty() {
         return;
     }
-    println!("\nAliases:");
-    for alias in aliases {
-        let Some(field) = schema::body_fields(request)
-            .into_iter()
-            .find(|field| field.name == alias.field)
+    writeln!(help, "\n      Body fields:").expect("writing to a String cannot fail");
+    let mut json_fields = BTreeSet::new();
+    for field in body {
+        let Source::Body {
+            wire_field,
+            value_schema,
+            wrap_array,
+        } = &field.source
         else {
             continue;
         };
-        let kind = if alias.wrap_array {
-            schema::array_item_label(request, field.schema).unwrap_or_else(|| "json".into())
-        } else {
-            schema::type_label(request, field.schema)
+        let details = field_details(request, definition, wire_field, value_schema);
+        if let Some((kind, repeatable)) = plain_usage(request, value_schema, *wrap_array) {
+            writeln!(
+                help,
+                "        --{} <{kind}>{repeatable}{}",
+                field.name,
+                bracketed(&details)
+            )
+            .expect("writing to a String cannot fail");
+        }
+        if json_fields.insert(wire_field.clone()) {
+            writeln!(
+                help,
+                "        --{} <json>{}",
+                json_flag(wire_field),
+                bracketed(&details)
+            )
+            .expect("writing to a String cannot fail");
+        }
+    }
+    print_aliases(help, request, definition, declared);
+    writeln!(
+        help,
+        "\n      --<field>-json carries one whole JSON value; --stdin fills only the body fields that no flag assigned."
+    )
+    .expect("writing to a String cannot fail");
+}
+
+fn print_aliases(
+    help: &mut String,
+    request: &Value,
+    definition: &Definition,
+    declared: &[fields::Field],
+) {
+    for alias in &definition.registration.request.argument_aliases {
+        let Some(field) = declared
+            .iter()
+            .find(|field| field.name == fields::cli_name(alias.argument))
+        else {
+            continue;
         };
-        let repeatable = if alias.wrap_array {
-            " (repeatable)"
-        } else {
-            ""
+        let Source::Body {
+            value_schema,
+            wrap_array,
+            ..
+        } = &field.source
+        else {
+            continue;
         };
-        println!(
-            "  --{} <{kind}>{repeatable} [alias for --{}]",
-            cli_name(alias.argument),
-            cli_name(alias.field)
-        );
+        let kind = schema::type_label(request, value_schema);
+        let repeatable = if *wrap_array { " (repeatable)" } else { "" };
+        writeln!(
+            help,
+            "        --{} <{kind}>{repeatable} [alias for --{}]",
+            field.name,
+            fields::cli_name(alias.field)
+        )
+        .expect("writing to a String cannot fail");
     }
 }
 
-fn print_input_forms() {
-    println!("\nStructured input:");
-    println!("  --<field>-json <json>  Set one canonical field to a complete JSON value.");
-    println!("  --stdin                Read one complete data object from standard input.");
-    println!("  Standard input can combine with flags for different fields.");
-}
-
-fn print_parameters(address: &Address) {
-    let parameters = selected_parameters(address)
+fn print_options(help: &mut String, address: &address::Address) {
+    let definition = address.definition;
+    let mut seen = BTreeSet::new();
+    let parameters = variant_parameters(definition, address.query)
         .into_iter()
-        .filter(|parameter| parameter.location != "path")
+        .filter(|parameter| {
+            parameter.location != "path"
+                && parameter.name != "query"
+                && seen.insert(parameter.name)
+        })
         .collect::<Vec<_>>();
     if parameters.is_empty() {
         return;
     }
-    println!("\nOptions:");
+    writeln!(help, "\n      Options:").expect("writing to a String cannot fail");
     for parameter in parameters {
-        let flag = cli_name(parameter.name);
+        let flag = fields::cli_name(parameter.name);
         let kind = schema::type_label(&parameter.schema, &parameter.schema);
         let mut details = Vec::new();
         if parameter.location == "header" && parameter.name == "Idempotency-Key" {
@@ -173,43 +175,57 @@ fn print_parameters(address: &Address) {
         if let Some(constraints) = schema::constraints(&parameter.schema) {
             details.push(constraints);
         }
-        println!("  --{flag} <{kind}>{}", bracketed(&details));
+        writeln!(help, "        --{flag} <{kind}>{}", bracketed(&details))
+            .expect("writing to a String cannot fail");
     }
 }
 
-fn selected_parameters(address: &Address) -> Vec<Parameter> {
-    let definition = address.definition;
-    let mut parameters = selected_query(definition, address.query).map_or_else(
-        || definition.registration.request.parameters.clone(),
-        |query| query.parameters.clone(),
-    );
-    parameters.extend(
-        definition
-            .parameters()
-            .into_iter()
-            .filter(|parameter| parameter.location == "header"),
-    );
-    parameters
-}
-
-fn selected_query<'a>(
-    definition: &'a Definition,
-    selected: Option<&str>,
-) -> Option<&'a QueryRoute> {
-    let selected = selected?;
+/// The parameter set of the selected query variant, from the typed contracts.
+fn variant_parameters(definition: &Definition, selected: Option<&str>) -> Vec<Parameter> {
     definition
-        .registration
-        .queries
-        .iter()
-        .find(|query| query.name == selected)
+        .query_variants()
+        .into_iter()
+        .find(|variant| variant.selector == selected)
+        .map_or_else(|| definition.parameters(), |variant| variant.parameters)
 }
 
-fn parameter_usage(parameter: &Parameter) -> String {
-    format!(
-        "--{} <{}>",
-        cli_name(parameter.name),
-        schema::type_label(&parameter.schema, &parameter.schema)
-    )
+fn plain_usage(
+    request: &Value,
+    value_schema: &Value,
+    wrap_array: bool,
+) -> Option<(String, &'static str)> {
+    if wrap_array {
+        return Some((schema::type_label(request, value_schema), " (repeatable)"));
+    }
+    if let Some(item) = schema::array_item_label(request, value_schema) {
+        return Some((item, " (repeatable)"));
+    }
+    if schema::object_only(request, value_schema) {
+        return None;
+    }
+    Some((schema::type_label(request, value_schema), ""))
+}
+
+fn field_details(
+    request: &Value,
+    definition: &Definition,
+    wire_field: &str,
+    value_schema: &Value,
+) -> Vec<String> {
+    let mut details = Vec::new();
+    let schema_default = schema::default(value_schema).map(Value::to_owned);
+    let required = schema::required(request, wire_field)
+        && cli_default(definition, wire_field).is_none()
+        && schema_default.is_none();
+    if required {
+        details.push("required".into());
+    }
+    if let Some(default) = cli_default(definition, wire_field) {
+        details.push(format!("CLI default: {default}"));
+    } else if let Some(default) = schema_default {
+        details.push(format!("schema default: {default}"));
+    }
+    details
 }
 
 fn cli_default(definition: &Definition, field: &str) -> Option<String> {
@@ -225,17 +241,8 @@ fn cli_default(definition: &Definition, field: &str) -> Option<String> {
         })
 }
 
-fn qualifiers(required: bool, cli_default: Option<&str>, schema_default: Option<&Value>) -> String {
-    let mut details = Vec::new();
-    if required {
-        details.push("required".into());
-    }
-    if let Some(default) = cli_default {
-        details.push(format!("CLI default: {default}"));
-    } else if let Some(default) = schema_default {
-        details.push(format!("schema default: {default}"));
-    }
-    bracketed(&details)
+fn json_flag(wire_field: &str) -> String {
+    format!("{}-json", fields::cli_name(wire_field))
 }
 
 fn bracketed(details: &[String]) -> String {
@@ -244,15 +251,4 @@ fn bracketed(details: &[String]) -> String {
         write!(rendered, " [{detail}]").expect("writing to a String cannot fail");
     }
     rendered
-}
-
-fn cli_name(name: &str) -> String {
-    name.to_ascii_lowercase().replace('_', "-")
-}
-
-fn question_guidance(collection: &str) {
-    if collection == "questions" {
-        println!("\nA question should be resolvable in one agent session;");
-        println!("otherwise it is fog or needs decomposition.");
-    }
 }

@@ -156,7 +156,9 @@ fn skills_install_copy_replaces_own_symlink_but_foreign_symlink_requires_force()
     std::os::unix::fs::symlink("../../elsewhere", &link).unwrap();
     install(dir.path(), &["--copy"])
         .failure()
-        .stderr(predicate::str::contains("rerun with --force"));
+        .stderr(predicate::str::contains(
+            "provenance skills install --copy --force",
+        ));
     assert_eq!(
         std::fs::read_link(&link).unwrap(),
         PathBuf::from("../../elsewhere")
@@ -177,12 +179,15 @@ fn skills_install_refuses_a_file_where_a_skill_directory_belongs() {
     std::fs::create_dir_all(occupied.parent().unwrap()).unwrap();
     std::fs::write(&occupied, "not a skill directory\n").unwrap();
 
-    for arguments in [vec![], vec!["--copy"]] {
+    for (arguments, recovery_command) in [
+        (vec![], "provenance skills install --force"),
+        (vec!["--copy"], "provenance skills install --copy --force"),
+    ] {
         install(dir.path(), &arguments)
             .failure()
-            .stderr(predicate::str::contains(
-                "exists and is not a skill directory; rerun with --force to overwrite",
-            ));
+            .stderr(predicate::str::contains(format!(
+                "exists and is not a skill directory; run `{recovery_command}`"
+            )));
         assert_eq!(
             std::fs::read_to_string(&occupied).unwrap(),
             "not a skill directory\n"
@@ -263,7 +268,7 @@ fn init_does_not_write_an_agents_md_skills_section() {
 }
 
 #[test]
-fn prime_reports_skill_install_status_and_install_command() {
+fn graph_read_reports_missing_skills_and_install_command() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
     init_repo(&repo);
@@ -272,7 +277,8 @@ fn prime_reports_skill_install_status_and_install_command() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "prime",
+            "questions",
+            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -282,16 +288,15 @@ fn prime_reports_skill_install_status_and_install_command() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains(r#""skills""#))
-        .stdout(predicate::str::contains(r#""installed": false"#))
-        .stdout(predicate::str::contains("provenance skills install"));
+        .stderr(predicate::str::contains("provenance skills install"));
 
     install(&repo, &["--copy"]).success();
 
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "prime",
+            "questions",
+            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -301,7 +306,7 @@ fn prime_reports_skill_install_status_and_install_command() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains(r#""installed": true"#));
+        .stderr(predicate::str::is_empty());
 }
 
 #[test]
@@ -319,7 +324,8 @@ fn install_status_uses_canonical_agents_skill_files_as_source_of_truth() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "prime",
+            "questions",
+            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -329,8 +335,7 @@ fn install_status_uses_canonical_agents_skill_files_as_source_of_truth() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains(r#""installed": false"#))
-        .stdout(predicate::str::contains("provenance-fork-tournament"));
+        .stderr(predicate::str::contains("provenance skills install"));
 }
 
 #[test]

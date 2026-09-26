@@ -163,9 +163,9 @@ Requirement, a ratified Resolution, or explicit human ratification can ground th
 verification are separate code bindings, evaluated only by the canonical coverage scan
 described above.
 
-`prime` and `traceability` are graph reads and do not scan code. They may explain that an
-active Rule is allowed to precede its implementation, but absence of a binding in those
-views is not an implementation verdict. Never call a Rule invented, invalid, or unsupported
+`prime` explains the Provenance domain. `traceability` reads the graph. Neither scans
+code. An active Rule can precede its implementation; absence of a binding in a graph
+view is not an implementation verdict. Never call a Rule invented, invalid, or unsupported
 because no code implements it. This repository plans first, so a Rule can be unimplemented
 until somebody writes the code. Where agent-authored behaviour has no source, Requirement,
 ratified Resolution, or explicit human ratification behind it, leave the Rule `draft` or

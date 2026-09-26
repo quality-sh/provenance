@@ -1,10 +1,21 @@
-use super::Operation;
-use provenance_core::protocol::{failure::OperationError, ResponseMeta};
+use super::{Operation, TargetAction};
+use provenance_core::protocol::failure::OperationError;
+use provenance_core::NodeType;
 use schemars::{
     generate::{Contract, SchemaSettings},
     JsonSchema,
 };
 use serde_json::{json, Value};
+
+mod envelope;
+pub(super) use envelope::{hide_bound_request_field, request_envelope, response_envelope};
+
+pub use super::schema_values::{
+    parse_parameter_value, parse_schema_value, parse_schema_value_in, serialize_parameter_value,
+    ParseValueError,
+};
+
+pub(super) use super::schema_page::stamp_page_metadata;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HttpMethod {
@@ -48,6 +59,31 @@ pub struct Definition {
 }
 
 #[derive(Clone)]
+pub struct QueryVariant {
+    pub selector: Option<&'static str>,
+    pub parameters: Vec<Parameter>,
+    pub success_schema: Value,
+    pub failure_schema: Value,
+}
+
+pub fn target_definition(action: TargetAction, kind: NodeType) -> Option<&'static Definition> {
+    target_definitions(action)
+        .find_map(|(registered_kind, definition)| (registered_kind == kind).then_some(definition))
+}
+
+pub fn target_definitions(
+    action: TargetAction,
+) -> impl Iterator<Item = (NodeType, &'static Definition)> {
+    definitions().iter().filter_map(move |definition| {
+        definition
+            .registration
+            .target
+            .filter(|binding| binding.action == action)
+            .map(|binding| (binding.kind, definition))
+    })
+}
+
+#[derive(Clone)]
 pub(super) struct RawDefinition {
     pub request_schema: Value,
     pub success_schema: Value,
@@ -55,6 +91,16 @@ pub(super) struct RawDefinition {
     pub mutates: bool,
     pub http_statuses: Vec<u16>,
     pub context: super::ContextKind,
+}
+
+/// Return the canonical request schema for one registered operation type.
+pub fn operation_request_schema<O: Operation>() -> Value {
+    raw_definition::<O>().request_schema
+}
+
+/// Return the canonical success schema for one registered operation type.
+pub fn operation_success_schema<O: Operation>() -> Value {
+    raw_definition::<O>().success_schema
 }
 
 impl Definition {
@@ -118,28 +164,79 @@ impl Definition {
         );
         parameters
     }
+    pub fn query_variants(&self) -> Vec<QueryVariant> {
+        if self.registration.queries.is_empty() {
+            return Vec::new();
+        }
+        let headers = self
+            .registration
+            .controls
+            .headers
+            .iter()
+            .map(|binding| header(binding.name))
+            .collect::<Vec<_>>();
+        let base = QueryVariant {
+            selector: None,
+            parameters: self
+                .registration
+                .request
+                .parameters
+                .iter()
+                .cloned()
+                .chain(headers.iter().cloned())
+                .collect(),
+            success_schema: self.registration.response.schema.clone(),
+            failure_schema: self.registration.handler.failure_schema.clone(),
+        };
+        std::iter::once(base)
+            .chain(self.registration.queries.iter().map(|route| {
+                let mut parameters = self
+                    .registration
+                    .request
+                    .parameters
+                    .iter()
+                    .filter(|parameter| parameter.location == "path")
+                    .cloned()
+                    .collect::<Vec<_>>();
+                parameters.push(Parameter {
+                    name: "query",
+                    location: "query",
+                    required: true,
+                    schema: json!({"type":"string","const":route.name}),
+                });
+                parameters.extend(route.parameters.iter().cloned());
+                parameters.extend(headers.iter().cloned());
+                QueryVariant {
+                    selector: Some(route.name),
+                    parameters,
+                    success_schema: route.response.schema.clone(),
+                    failure_schema: route.handler.failure_schema.clone(),
+                }
+            }))
+            .collect()
+    }
     pub fn mcp_output_schema(&self) -> Value {
         self.success_schema()
     }
     pub fn mcp_input_schema(&self) -> Value {
-        let mut properties = serde_json::Map::new();
-        let mut required = Vec::new();
-        if let Some(body) = self.request_schema() {
-            properties.insert("data".into(), body["properties"]["data"].clone());
-            required.push(json!("data"));
-        }
-        for parameter in self.parameters() {
-            let name = if parameter.location == "header" {
-                parameter.name.to_ascii_lowercase().replace('-', "_")
-            } else {
-                parameter.name.to_owned()
-            };
-            properties.insert(name.clone(), parameter.schema.clone());
-            if parameter.required {
-                required.push(json!(name));
-            }
-        }
-        let mut result = json!({"type":"object","additionalProperties":false,"properties":properties,"required":required});
+        let variants: Vec<QueryVariant> = self.query_variants();
+        let parameter_sets: Vec<Vec<Parameter>> = if variants.is_empty() {
+            vec![self.parameters()]
+        } else {
+            variants
+                .into_iter()
+                .map(|variant| variant.parameters)
+                .collect()
+        };
+        let mut schemas: Vec<Value> = parameter_sets
+            .iter()
+            .map(|parameters| mcp_input_variant_schema(self.request_schema(), parameters))
+            .collect();
+        let mut result: Value = if schemas.len() == 1 {
+            schemas.pop().unwrap()
+        } else {
+            json!({"oneOf":schemas})
+        };
         if let Some(defs) = self.request_schema().and_then(|schema| schema.get("$defs")) {
             result["$defs"] = defs.clone();
         }
@@ -147,7 +244,38 @@ impl Definition {
     }
 }
 
-fn merge_variants(mut variants: Vec<Value>) -> Value {
+fn mcp_input_variant_schema(body: Option<&Value>, parameters: &[Parameter]) -> Value {
+    let mut properties: serde_json::Map<String, Value> = serde_json::Map::new();
+    let mut required: Vec<Value> = Vec::new();
+    if let Some(body) = body {
+        properties.insert("data".into(), body["properties"]["data"].clone());
+        required.push(json!("data"));
+    }
+    for parameter in parameters {
+        let name: String = if parameter.location == "header" {
+            parameter.name.to_ascii_lowercase().replace('-', "_")
+        } else {
+            parameter.name.to_owned()
+        };
+        properties.insert(name.clone(), parameter.schema.clone());
+        if parameter.required {
+            required.push(json!(name));
+        }
+    }
+    json!({"type":"object","additionalProperties":false,"properties":properties,"required":required})
+}
+
+fn merge_variants(variants: Vec<Value>) -> Value {
+    let mut unique = Vec::new();
+    for variant in variants {
+        if !unique.contains(&variant) {
+            unique.push(variant);
+        }
+    }
+    let mut variants = unique;
+    if variants.len() == 1 {
+        return variants.pop().unwrap();
+    }
     let mut defs = serde_json::Map::new();
     for schema in &mut variants {
         if let Some(Value::Object(found)) = schema
@@ -199,50 +327,6 @@ fn statuses(mutates: bool, declared: &[u16]) -> Vec<u16> {
         .collect()
 }
 
-pub(super) fn response_envelope(mut payload: Value, kind: ResponseKind) -> Value {
-    if kind != ResponseKind::Items {
-        remove_response_metadata(
-            &mut payload,
-            &[
-                "protocol_version",
-                "operation",
-                "stamp",
-                "freshness_error",
-                "freshness_cause",
-                "limit",
-                "has_more",
-                "next_cursor",
-            ],
-        );
-    }
-    let defs = payload.as_object_mut().and_then(|o| o.remove("$defs"));
-    payload.as_object_mut().map(|o| o.remove("$schema"));
-    let mut meta = schema::<ResponseMeta>(Contract::Serialize);
-    namespace_defs(&mut meta, "ResponseMeta");
-    let meta_defs = meta.as_object_mut().and_then(|o| o.remove("$defs"));
-    meta.as_object_mut().map(|o| o.remove("$schema"));
-    let data = match kind {
-        ResponseKind::Items => {
-            json!({"type":"object","additionalProperties":false,"required":["items"],"properties":{"items":payload}})
-        }
-        ResponseKind::Resource | ResponseKind::Result => payload,
-    };
-    let mut result = json!({"type":"object","additionalProperties":false,"required":["data","meta"],"properties":{"data":data,"meta":meta}});
-    let mut merged = serde_json::Map::new();
-    if let Some(Value::Object(defs)) = defs {
-        merged.extend(defs);
-    }
-    if let Some(Value::Object(defs)) = meta_defs {
-        for (name, value) in defs {
-            merged.entry(name).or_insert(value);
-        }
-    }
-    if !merged.is_empty() {
-        result["$defs"] = Value::Object(merged);
-    }
-    result
-}
-
 pub(super) fn property_schema(root: &Value, path: &[&str]) -> Value {
     let mut current = root;
     for name in path {
@@ -259,83 +343,13 @@ pub(super) fn property_schema(root: &Value, path: &[&str]) -> Value {
     selected
 }
 
-fn resolve_schema<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
+pub(super) fn resolve_schema<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
     schema
         .get("$ref")
         .and_then(Value::as_str)
         .and_then(|reference| reference.strip_prefix("#/$defs/"))
         .and_then(|name| root.get("$defs").and_then(|defs| defs.get(name)))
         .unwrap_or(schema)
-}
-
-pub(super) fn namespace_defs(value: &mut Value, prefix: &str) {
-    match value {
-        Value::Object(object) => {
-            if let Some(Value::String(reference)) = object.get_mut("$ref") {
-                if let Some(name) = reference.strip_prefix("#/$defs/") {
-                    *reference = format!("#/$defs/{prefix}{name}");
-                }
-            }
-            if let Some(Value::Object(defs)) = object.remove("$defs") {
-                object.insert(
-                    "$defs".into(),
-                    Value::Object(
-                        defs.into_iter()
-                            .map(|(name, schema)| (format!("{prefix}{name}"), schema))
-                            .collect(),
-                    ),
-                );
-            }
-            for child in object.values_mut() {
-                namespace_defs(child, prefix);
-            }
-        }
-        Value::Array(array) => {
-            for child in array {
-                namespace_defs(child, prefix);
-            }
-        }
-        _ => {}
-    }
-}
-
-pub(super) fn request_envelope(mut request: Value) -> Value {
-    let defs = request.as_object_mut().and_then(|o| o.remove("$defs"));
-    request.as_object_mut().map(|o| o.remove("$schema"));
-    let mut result = json!({"type":"object","additionalProperties":false,"required":["data"],"properties":{"data":request}});
-    if let Some(defs) = defs {
-        result["$defs"] = defs;
-    }
-    result
-}
-
-pub(super) fn hide_bound_request_field(request: &mut Option<Value>, field: &str) {
-    let Some(data) = request
-        .as_mut()
-        .and_then(|schema| schema.pointer_mut("/properties/data"))
-    else {
-        return;
-    };
-    data.pointer_mut("/properties")
-        .and_then(Value::as_object_mut)
-        .map(|properties| properties.remove(field));
-    if let Some(required) = data.pointer_mut("/required").and_then(Value::as_array_mut) {
-        required.retain(|name| name.as_str() != Some(field));
-    }
-}
-
-fn remove_response_metadata(value: &mut Value, fields: &[&str]) {
-    let Some(object) = value.as_object_mut() else {
-        return;
-    };
-    if let Some(Value::Object(properties)) = object.get_mut("properties") {
-        for field in fields {
-            properties.remove(*field);
-        }
-    }
-    if let Some(Value::Array(required)) = object.get_mut("required") {
-        required.retain(|field| !fields.iter().any(|name| field == *name));
-    }
 }
 
 pub fn definitions() -> &'static [Definition] {
@@ -347,13 +361,16 @@ pub(super) fn type_schema<T: JsonSchema>(contract: Contract) -> Value {
     schema::<T>(contract)
 }
 
+/// A path parameter starts without a schema. The finalize step derives the
+/// published schema from the parameter's typed request field, so no manual
+/// route-wide placeholder survives into the exported contract.
 #[allow(clippy::missing_const_for_fn)]
 pub(super) fn path(name: &'static str) -> Parameter {
     Parameter {
         name,
         location: "path",
         required: true,
-        schema: json!({"type":"string","minLength":1}),
+        schema: Value::Null,
     }
 }
 pub(super) const fn query(name: &'static str, schema: Value) -> Parameter {
@@ -371,98 +388,5 @@ pub(super) fn header(name: &'static str) -> Parameter {
         location: "header",
         required: true,
         schema: json!({"type":"string","minLength":1}),
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ParseValueError;
-
-pub fn parse_parameter_value(parameter: &Parameter, raw: &str) -> Result<Value, ParseValueError> {
-    parse_schema_value(&parameter.schema, raw)
-}
-
-pub fn parse_schema_value(schema: &Value, raw: &str) -> Result<Value, ParseValueError> {
-    parse_schema_value_in(schema, schema, raw)
-}
-
-pub fn parse_schema_value_in(
-    root: &Value,
-    schema: &Value,
-    raw: &str,
-) -> Result<Value, ParseValueError> {
-    if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
-        let name = reference.strip_prefix("#/$defs/").ok_or(ParseValueError)?;
-        let resolved = root
-            .get("$defs")
-            .and_then(|defs| defs.get(name))
-            .ok_or(ParseValueError)?;
-        return parse_schema_value_in(root, resolved, raw);
-    }
-    if let Some(variants) = schema
-        .get("anyOf")
-        .or_else(|| schema.get("oneOf"))
-        .and_then(Value::as_array)
-    {
-        if raw == "null"
-            && variants
-                .iter()
-                .any(|variant| variant.get("type") == Some(&json!("null")))
-        {
-            return Ok(Value::Null);
-        }
-        return variants
-            .iter()
-            .filter(|variant| variant.get("type") != Some(&json!("null")))
-            .find_map(|variant| parse_schema_value_in(root, variant, raw).ok())
-            .ok_or(ParseValueError);
-    }
-    if let Some(values) = schema.get("enum").and_then(Value::as_array) {
-        let value = Value::String(raw.to_owned());
-        return values
-            .contains(&value)
-            .then_some(value)
-            .ok_or(ParseValueError);
-    }
-    if let Some(types) = schema.get("type").and_then(Value::as_array) {
-        if raw == "null" && types.iter().any(|kind| kind == "null") {
-            return Ok(Value::Null);
-        }
-        return types
-            .iter()
-            .filter_map(Value::as_str)
-            .filter(|kind| *kind != "null")
-            .find_map(|kind| {
-                let mut variant = schema.clone();
-                variant["type"] = json!(kind);
-                parse_schema_value_in(root, &variant, raw).ok()
-            })
-            .ok_or(ParseValueError);
-    }
-    match schema.get("type").and_then(Value::as_str) {
-        Some("string") => Ok(Value::String(raw.to_owned())),
-        Some("boolean") => match raw {
-            "true" => Ok(Value::Bool(true)),
-            "false" => Ok(Value::Bool(false)),
-            _ => Err(ParseValueError),
-        },
-        Some("integer") => {
-            let value = raw.parse::<i64>().map_err(|_| ParseValueError)?;
-            let minimum = schema.get("minimum").and_then(Value::as_i64);
-            let maximum = schema.get("maximum").and_then(Value::as_i64);
-            if minimum.is_some_and(|minimum| value < minimum)
-                || maximum.is_some_and(|maximum| value > maximum)
-            {
-                return Err(ParseValueError);
-            }
-            Ok(Value::from(value))
-        }
-        Some("number") => {
-            let value = raw.parse::<f64>().map_err(|_| ParseValueError)?;
-            serde_json::Number::from_f64(value)
-                .map(Value::Number)
-                .ok_or(ParseValueError)
-        }
-        Some("null") if raw == "null" => Ok(Value::Null),
-        _ => Err(ParseValueError),
     }
 }

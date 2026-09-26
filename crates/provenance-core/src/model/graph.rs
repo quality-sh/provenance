@@ -24,6 +24,32 @@ pub enum NodeType {
 }
 
 impl NodeType {
+    /// Every canonical graph record kind in stable contract order.
+    pub const ALL: [Self; 8] = [
+        Self::Source,
+        Self::Requirement,
+        Self::Resolution,
+        Self::Rule,
+        Self::Topic,
+        Self::Question,
+        Self::Domain,
+        Self::Boundary,
+    ];
+
+    /// The canonical wire word for this graph record kind.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Source => "source",
+            Self::Requirement => "requirement",
+            Self::Resolution => "resolution",
+            Self::Rule => "rule",
+            Self::Topic => "topic",
+            Self::Question => "question",
+            Self::Domain => "domain",
+            Self::Boundary => "boundary",
+        }
+    }
+
     /// The contract ordering of node kinds: results order by this rank and
     /// then by canonical id. The rank is declared, never derived from an
     /// `Ord` implementation, and the two newest kinds append after the six

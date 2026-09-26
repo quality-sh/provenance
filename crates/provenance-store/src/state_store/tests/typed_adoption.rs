@@ -1,7 +1,7 @@
 use super::initialized_store;
 use crate::state_store::{
-    CreateRequirementInput, CreateResolutionInput, CreateRuleInput, CreateSourceInput,
-    MaterializeImplementationBindingInput, ReconcileState, StateStore,
+    CreateDomainInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+    CreateSourceInput, MaterializeImplementationBindingInput, ReconcileState, StateStore,
 };
 use provenance_core::protocol::{
     TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput, TypedRequirementInput,
@@ -11,6 +11,7 @@ use provenance_core::{
     Requirement, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
     SourceReference, SourceType, StableId, SUPPORTED_SCHEMA_VERSION,
 };
+use provenance_macros::verifies;
 
 mod metadata;
 mod noscope;
@@ -20,6 +21,35 @@ mod source_kind;
 
 const OWNER: &str = "spec://rust/migration";
 const STATEMENT: &str = "The canonical Requirement keeps its identity";
+
+#[test]
+#[verifies("rule_porcelain_id_unique_in_repository", examples)]
+fn typed_spec_cannot_reuse_another_canonical_kind_id() {
+    let (_dir, store, scope) = initialized_store();
+    store
+        .create_domain(CreateDomainInput {
+            scope_id: scope.clone(),
+            id: StableId::new("shared_typed_spec_id").unwrap(),
+            name: "Existing domain".to_owned(),
+            description: None,
+            color: None,
+        })
+        .unwrap();
+    let input = document(
+        OWNER,
+        vec![requirement(
+            "canonical",
+            Some("shared_typed_spec_id"),
+            STATEMENT,
+        )],
+        Vec::new(),
+    );
+
+    let error = store.apply_typed_spec(&scope, input).unwrap_err();
+
+    assert!(error.to_string().contains("record ID already exists"));
+    assert!(store.list_requirements(&scope).unwrap().is_empty());
+}
 
 fn target(kind: TypedDeclarationKind, id: &str) -> TypedAdoptionTarget {
     TypedAdoptionTarget {

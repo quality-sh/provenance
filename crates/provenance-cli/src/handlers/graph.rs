@@ -9,7 +9,7 @@ pub(super) fn handle(
     repo: Utf8PathBuf,
     scope: String,
 ) -> anyhow::Result<()> {
-    let store = Store::open(repo);
+    let store = Store::open_required(repo)?;
     let graph = cache::get_requirement_graph(
         store.layout(),
         &ScopeId::new(scope)?,

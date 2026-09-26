@@ -39,7 +39,7 @@ The writable collections are `sources`, `requirements`, `resolutions`,
 A member uses its ID in the command address:
 
 ```text
-provenance <collection> <id>
+provenance <collection> <id> get
 provenance <collection> <id> update [scalar flags | --stdin]
 provenance <collection> <id> trace [--direction in|out|both] [--max-depth <count>]
 provenance <collection> <id> neighbors [--direction in|out|both] [--limit <count>]
@@ -61,12 +61,12 @@ provenance questions question_open answer --answer "Use the guarded path."
 Parent-owned resources keep their parent address:
 
 ```sh
-provenance requirements req_review document --limit 50
-provenance requirements req_review history
-provenance requirements req_review history entry_1 evidence before --field statement
+provenance requirements req_review document get --limit 50
+provenance requirements req_review history get
+provenance requirements req_review history entry_1 evidence before get --field statement
 provenance requirements req_review submit --idempotency-key request_1 --stdin
 provenance requirements req_review submissions proposal_review decide --idempotency-key request_2 --stdin
-provenance sources source_policy discussions list
+provenance sources source_policy discussions get
 provenance sources source_policy discussions create --idempotency-key request_3 --stdin
 provenance sources source_policy discussions discussion_1 messages create \
   --idempotency-key request_4 --if-match '"1"' --stdin
@@ -110,6 +110,23 @@ return a nonzero exit status.
 The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
 complete scope. They remain separate from resource writes.
+
+## Agent guidance
+
+`provenance prime` introduces the Provenance domain. It explains Requirements,
+Rules, Resolutions, Sources, and code bindings. It does not read project records,
+inspect installed skills, scan code, or update a cache.
+
+The default output is Markdown. `provenance prime --format json` returns an
+object with a `guidance` string that contains the same text. This replaces the
+former project-state JSON fields, including `rules`, `requirements`, `threads`,
+and `skills`. Use resource reads for project records and `coverage scan` for
+code bindings. The SDK prime state query keeps its existing contract.
+
+The old `--repo`, `--scope`, and `--include-threads` options remain accepted for
+compatibility but have no effect on guidance. MCP supplies the same domain
+content in server instructions and shared tool descriptions. MCP has no prime
+tool. Each MCP client controls how it presents server instructions.
 
 ## Dictionary setup
 

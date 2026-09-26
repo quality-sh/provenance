@@ -10,7 +10,8 @@ fn seed_targets(store: &provenance_store::state_store::StateStore) {
         ("req_b", vec![]),
         ("req_c", vec![]),
         ("req_d", vec![]),
-        ("req_cycle", vec!["req_a"]),
+        ("req_cycle_middle", vec!["req_a"]),
+        ("req_cycle", vec!["req_cycle_middle"]),
     ] {
         store
             .create_requirement(
@@ -180,6 +181,117 @@ fn cite_deltas_add_citations_and_remove_every_clause_of_one_source() {
     let record = record(&store);
     assert_eq!(record.source_refs.len(), 1);
     assert_eq!(record.source_refs[0].source_id.as_str(), "source_two");
+}
+
+#[test]
+#[provenance_macros::verifies("rule_porcelain_relationship_membership_noop", examples)]
+fn valid_absent_removals_keep_requirement_content_and_edit_preconditions() {
+    let (_temp, store) = fixture();
+    seed_targets(&store);
+    save_ok(
+        &store,
+        "link",
+        json!({
+            "depends_on": {"add": ["req_b"]},
+            "cites": {"add": [{"source_id": "source_one", "clause": "4.2"}]}
+        }),
+    );
+    save_ok(
+        &store,
+        "unlink",
+        json!({
+            "depends_on": {"remove": ["req_b"]},
+            "cites": {"remove": ["source_one"]}
+        }),
+    );
+    let before = record(&store);
+    let head = store.requirement_edit_state(&scope(), &id()).unwrap();
+
+    let repeated = save_ok(
+        &store,
+        "repeat_unlink",
+        json!({
+            "depends_on": {"remove": ["req_b"]},
+            "cites": {"remove": ["source_one"]}
+        }),
+    );
+    assert_eq!(repeated.outcome, SaveOutcome::NoChange);
+    assert_eq!(record(&store), before);
+    assert_eq!(repeated.etag, head.etag);
+
+    let never_linked = save_ok(
+        &store,
+        "never_linked",
+        json!({
+            "depends_on": {"remove": ["req_c"]},
+            "cites": {"remove": ["source_two"]}
+        }),
+    );
+    assert_eq!(never_linked.outcome, SaveOutcome::NoChange);
+    assert_eq!(record(&store), before);
+    assert_eq!(never_linked.etag, head.etag);
+}
+
+#[test]
+#[provenance_macros::verifies("rule_porcelain_relationship_noop_validates", examples)]
+fn absent_removals_still_validate_missing_wrong_kind_and_forbidden_targets() {
+    let (_temp, store) = fixture();
+    seed_targets(&store);
+    let before = record(&store);
+    let etag = store.requirement_edit_state(&scope(), &id()).unwrap().etag;
+
+    for (request, edit, expected) in [
+        (
+            "missing_list_target",
+            json!({"depends_on": {"remove": ["req_missing"]}}),
+            provenance_store::write_error::WriteFailure::MissingReference,
+        ),
+        (
+            "wrong_list_target_kind",
+            json!({"depends_on": {"remove": ["source_one"]}}),
+            provenance_store::write_error::WriteFailure::MissingReference,
+        ),
+        (
+            "forbidden_list_target",
+            json!({"depends_on": {"remove": ["req_cycle"]}}),
+            provenance_store::write_error::WriteFailure::InvalidUpdate,
+        ),
+        (
+            "missing_citation_target",
+            json!({"cites": {"remove": ["source_missing"]}}),
+            provenance_store::write_error::WriteFailure::MissingReference,
+        ),
+        (
+            "wrong_citation_target_kind",
+            json!({"cites": {"remove": ["req_b"]}}),
+            provenance_store::write_error::WriteFailure::MissingReference,
+        ),
+    ] {
+        let error = store
+            .save_requirement(relations(&store, request, edit))
+            .unwrap_err();
+        assert_eq!(
+            std::mem::discriminant(&provenance_store::write_error::WriteError(error).safe()),
+            std::mem::discriminant(&expected)
+        );
+        assert_eq!(record(&store), before);
+        assert_eq!(
+            store.requirement_edit_state(&scope(), &id()).unwrap().etag,
+            etag
+        );
+    }
+
+    let error = store
+        .save_requirement(relations(
+            &store,
+            "cycle_path",
+            json!({"depends_on": {"remove": ["req_cycle"]}}),
+        ))
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "depends_on forms a cycle: req_cycle -> req_cycle_middle -> req_a -> req_cycle"
+    );
 }
 
 #[test]

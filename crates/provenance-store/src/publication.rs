@@ -41,18 +41,29 @@ pub fn with_repository_publication<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
+    with_repository_publication_checked(layout, || Ok(()), operation)
+}
+
+pub(crate) fn with_repository_publication_checked<R>(
+    layout: &ProvenanceLayout,
+    check: impl FnOnce() -> anyhow::Result<()>,
+    operation: impl FnOnce() -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
     let key = layout.publication_lock_path().to_string();
     if read_only::active(&key) {
+        check()?;
         return operation();
     }
     prepare_publication_lock(layout)?;
     let lock_path = layout.publication_lock_path();
     let key = lock_path.to_string();
     if HELD_LOCKS.with(|locks| locks.borrow().contains(&key)) {
+        check()?;
         return operation();
     }
     let _lock = guard::LockedPublicationFile::acquire(&lock_path)?;
     let _held_lock = HeldPublicationLock::new(key);
+    check()?;
     prepare_import_transactions_dir(layout)?;
     recover_pending_publication(layout).and_then(|()| operation())
 }

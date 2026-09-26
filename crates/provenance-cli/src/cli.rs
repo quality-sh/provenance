@@ -28,7 +28,11 @@ pub enum PackageManager {
 }
 
 #[derive(Parser)]
-#[command(name = "provenance", version)]
+#[command(
+    name = "provenance",
+    version,
+    after_help = "Discussion actions: provenance discussions [<discussion-id> get], or provenance <record-id> discussions|discuss, or provenance <discussion-id> reply."
+)]
 pub struct Cli {
     /// Drop the advisory notes commands print alongside their output, such as
     /// the warning that this repository has no shaping skills installed.
@@ -40,6 +44,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
+    /// Search records in one scope.
+    Search(crate::invocation::grammar::SearchArgs),
     #[command(name = "__cargo-init", hide = true)]
     CargoInit {
         #[arg(long)]
@@ -50,7 +56,7 @@ pub enum Command {
         ste_pdf: Option<Utf8PathBuf>,
     },
     Init {
-        #[arg(long)]
+        #[arg(long, default_value = ".")]
         path: Utf8PathBuf,
         #[arg(long)]
         scope: Option<String>,
@@ -81,8 +87,17 @@ pub enum Command {
         /// Compare Git HEAD with this commit instead of its first parent.
         #[arg(long, requires = "strict")]
         base: Option<String>,
-        #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
-        format: JsonFormat,
+        /// Run only graph validity checks. Combine with other check selectors.
+        #[arg(long)]
+        graph: bool,
+        /// Run only statement quality checks. Combine with other check selectors.
+        #[arg(long)]
+        statements: bool,
+        /// Run only repository-wide Rule binding checks.
+        #[arg(long)]
+        bindings: bool,
+        #[arg(long, value_enum)]
+        format: Option<JsonFormat>,
     },
     Docs {
         #[command(subcommand)]
@@ -134,13 +149,17 @@ pub enum Command {
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
+    /// Introduce Provenance domain concepts and actions.
     Prime {
+        /// Deprecated: accepted for compatibility; guidance does not use a repository.
         #[arg(long, default_value = ".")]
         repo: Utf8PathBuf,
+        /// Deprecated: accepted for compatibility; guidance does not use a scope.
         #[arg(long, default_value = "default")]
         scope: String,
         #[arg(long, value_enum, default_value_t = ReportFormat::Markdown)]
         format: ReportFormat,
+        /// Deprecated: accepted for compatibility; guidance does not include project threads.
         #[arg(long)]
         include_threads: bool,
     },

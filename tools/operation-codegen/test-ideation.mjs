@@ -30,9 +30,33 @@ async function seedEvidence(root) {
   }
 }
 
+async function seedLargeProposals(root) {
+  const summary = 'x'.repeat(850_000);
+  const records = Array.from({ length: 20 }, (_, index) => ({
+    schema_version: 2, scope_id: 'default', id: `proposal_large_${String(index).padStart(2, '0')}`,
+    proposal_key: `large-${index}`, proposal_type: 'requirement_candidate',
+    title: `Large proposal ${index}`, summary,
+    traceability: {
+      target: { artifact_type: 'requirement', artifact_id: 'req_overtime' },
+      source_ids: [], evidence_references: [], supporting_claim_ids: [],
+    },
+    builds_on: [], promotion_state: 'proposed',
+  }));
+  const { appendFile } = await import('node:fs/promises');
+  await appendFile(join(ideationDir(root), 'proposal_cards.jsonl'), `${records.map(JSON.stringify).join('\n')}\n`);
+  return records.map(record => record.id);
+}
+
 export async function checkIdeation({ HttpClient, OperationError }, fixture) {
   const client = await HttpClient.connectWithBearer(fixture.url, 'fixture-secret', undefined, {
     repository: 'fixture', scope: 'default',
+  });
+  await client.createRequirement({
+    idempotency_key: 'create-ideation-target',
+    data: {
+      actor: 'fixture', id: 'req_overtime', statement: 'The system defines overtime.',
+      status: 'active', depends_on: [], supersedes: [],
+    },
   });
   const proposal = {
     id: 'proposal_ts', proposal_key: 'overtime', proposal_type: 'requirement_candidate',
@@ -57,6 +81,7 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
     data: { id: 'assertion_ts', synthesis_packet_id: 'synthesis_ts', supporting_claim_ids: ['claim_ts'] },
   });
   assert.equal(assertion.data.proposal_id, proposal.id);
+  assert.equal((await client.getProposalAssertion({ id: proposal.id, fact_id: assertion.data.id })).data.id, assertion.data.id);
   assert.equal((await client.listProposalAssertions({ id: proposal.id })).data.items.length, 1);
   assert.equal((await client.listAssertions({})).data.items.length, 1);
 
@@ -68,8 +93,26 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
     },
   });
   assert.equal(disposition.data.proposal_id, proposal.id);
+  assert.equal((await client.getProposalDisposition({ id: proposal.id, fact_id: disposition.data.id })).data.id, disposition.data.id);
   assert.equal((await client.listDispositions({})).data.items.length, 1);
   assert.equal((await client.listProposals({})).data.items[0].promotion_state, 'rejected');
+
+  const largeIds = await seedLargeProposals(fixture.root);
+  const seen = new Set();
+  let cursor;
+  do {
+    const page = await client.listProposals({ limit: 200, ...(cursor === undefined ? {} : { cursor }) });
+    assert.equal(page.meta.limit, 200);
+    assert.ok(page.data.items.length > 0);
+    assert.ok(page.data.items.length < largeIds.length);
+    for (const item of page.data.items) {
+      assert.ok(!seen.has(item.id), `duplicate proposal ${item.id}`);
+      seen.add(item.id);
+    }
+    cursor = page.meta.next_cursor ?? undefined;
+    assert.equal(page.meta.has_more, cursor !== undefined);
+  } while (cursor !== undefined);
+  for (const id of largeIds) assert.ok(seen.has(id), `missing proposal ${id}`);
 
   await assert.rejects(client.createProposalDisposition({
     id: proposal.id,

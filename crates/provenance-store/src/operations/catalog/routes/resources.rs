@@ -1,7 +1,9 @@
 #![allow(clippy::too_many_lines, clippy::wildcard_imports)]
 
 use super::*;
-use crate::operations::catalog::{resource_lists as lists, resource_pages as pages};
+use crate::operations::catalog::{
+    resource_members as members, resource_pages as pages, verification_resources as verification,
+};
 
 const NONE: &[CliDefault] = &[];
 const NO_ALIASES: &[ArgumentAlias] = &[];
@@ -23,16 +25,10 @@ const CREATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[
         value: CliDefaultValue::EmptyArray,
     },
 ];
-const UPDATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[
-    CliDefault {
-        field: "actor",
-        value: CliDefaultValue::String("cli"),
-    },
-    CliDefault {
-        field: "clear_fields",
-        value: CliDefaultValue::EmptyArray,
-    },
-];
+const UPDATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[CliDefault {
+    field: "actor",
+    value: CliDefaultValue::String("cli"),
+}];
 const CREATE_SOURCE_DEFAULTS: &[CliDefault] = &[
     CliDefault {
         field: "source_type",
@@ -118,7 +114,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         searchable,
         provenance_core::Source,
         pages::PageSourcesV2,
-        lists::ListSourcesV2,
+        members::GetSourceV2,
         "sources",
         "source",
         "Source",
@@ -135,7 +131,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             ("commit_pin", "commit_pin"),
             ("effective_date", "effective_date"),
             ("review_date", "review_date")
-        ]
+        ],
+        Some(NodeType::Source)
     );
     requirements(out);
     resource!(
@@ -143,7 +140,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         searchable,
         provenance_core::Resolution,
         pages::PageResolutionsV2,
-        lists::ListResolutionsV2,
+        members::GetResolutionV2,
         "resolutions",
         "resolution",
         "Resolution",
@@ -162,14 +159,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             ("approved_by", "approved_by"),
             ("approved_at", "approved_at"),
             ("review_on", "review_on")
-        ]
+        ],
+        Some(NodeType::Resolution)
     );
     resource!(
         out,
         rules,
         provenance_core::Rule,
         pages::PageRulesV2,
-        lists::ListRulesV2,
+        members::GetRuleV2,
         "rules",
         "rule",
         "Rule",
@@ -185,14 +183,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
             ("description", "description"),
             ("source_document", "source_document"),
             ("source_section", "source_section")
-        ]
+        ],
+        Some(NodeType::Rule)
     );
     resource!(
         out,
         searchable,
         provenance_core::Domain,
         pages::PageDomainsV2,
-        lists::ListDomainsV2,
+        members::GetDomainV2,
         "domains",
         "domain",
         "Domain",
@@ -203,14 +202,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[("description", "description"), ("color", "color")]
+        &[("description", "description"), ("color", "color")],
+        Some(NodeType::Domain)
     );
     resource!(
         out,
         searchable,
         provenance_core::Boundary,
         pages::PageBoundariesV2,
-        lists::ListBoundariesV2,
+        members::GetBoundaryV2,
         "boundaries",
         "boundary",
         "Boundary",
@@ -221,14 +221,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[("source_ref", "source_ref")]
+        &[("source_ref", "source_ref")],
+        Some(NodeType::Boundary)
     );
     resource!(
         out,
         searchable,
         provenance_core::Topic,
         pages::PageTopicsV2,
-        lists::ListTopicsV2,
+        members::GetTopicV2,
         "topics",
         "topic",
         "Topic",
@@ -239,14 +240,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[]
+        &[],
+        Some(NodeType::Topic)
     );
     resource!(
         out,
         searchable,
         provenance_core::Question,
         pages::PageQuestionsV2,
-        lists::ListQuestionsV2,
+        members::GetQuestionV2,
         "questions",
         "question",
         "Question",
@@ -260,14 +262,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         &[
             ("resolution_id", "resolution_id"),
             ("contradicts", "contradicts")
-        ]
+        ],
+        Some(NodeType::Question)
     );
     resource!(
         out,
         plain,
         provenance_core::Contribution,
-        lists::ListContributionsV2,
-        lists::ListContributionsV2,
+        pages::PageContributionsV2,
+        members::GetContributionV2,
         "contributions",
         "contribution",
         "Contribution",
@@ -278,14 +281,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[]
+        &[],
+        None
     );
     resource!(
         out,
         plain,
         provenance_core::SynthesisPacket,
-        lists::ListSynthesisPacketsV2,
-        lists::ListSynthesisPacketsV2,
+        pages::PageSynthesisPacketsV2,
+        members::GetSynthesisPacketV2,
         "synthesis-packets",
         "synthesis-packet",
         "SynthesisPacket",
@@ -296,14 +300,15 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         NO_ALIASES,
         NONE,
         NO_ALIASES,
-        &[]
+        &[],
+        None
     );
     resource!(
         out,
         plain,
         provenance_core::ProposalCard,
-        super::super::ListProposals,
-        super::super::ListProposals,
+        pages::PageProposalsV2,
+        members::GetProposalV2,
         "proposals",
         "proposal",
         "Proposal",
@@ -325,8 +330,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         out,
         verification,
         provenance_core::VerificationRun,
-        super::super::VerificationRuns,
-        lists::ListVerificationRunsV2,
+        verification::PageVerificationRunsV2,
+        verification::GetVerificationRunV2,
         "verification-runs",
         "verification-run",
         "VerificationRun",
@@ -336,8 +341,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         out,
         verification,
         provenance_core::VerificationBinding,
-        super::super::VerificationBindings,
-        lists::ListVerificationBindingsV2,
+        pages::PageVerificationBindingsV2,
+        members::GetVerificationBindingV2,
         "verification-bindings",
         "verification-binding",
         "VerificationBinding",
@@ -383,6 +388,7 @@ fn requirements(out: &mut Vec<Definition>) {
         )
         .header("Idempotency-Key", "request_id", false)
         .cli_defaults(CREATE_REQUIREMENT_DEFAULTS)
+        .target(TargetAction::Create, Some(NodeType::Requirement))
         .with_etag("/edit/etag", false),
     );
     out.push(
@@ -398,11 +404,12 @@ fn requirements(out: &mut Vec<Definition>) {
         .header("Idempotency-Key", "request_id", false)
         .header("If-Match", "expected_etag", true)
         .cli_defaults(UPDATE_REQUIREMENT_DEFAULTS)
-        .null_clears(&[
+        .public_patch(&[
             ("description", "description"),
             ("fog", "fog"),
             ("domain_id", "domain_id"),
         ])
+        .target(TargetAction::Update, Some(NodeType::Requirement))
         .with_etag("/edit/etag", false),
     );
 }
@@ -412,8 +419,8 @@ fn indexes(out: &mut Vec<Definition>) {
         out,
         plain,
         provenance_core::Thread,
-        lists::ListDiscussionContainersV2,
-        lists::ListDiscussionContainersV2,
+        pages::PageDiscussionContainersV2,
+        members::GetDiscussionContainerV2,
         "discussion-containers",
         "discussion-container",
         "DiscussionContainer",
@@ -423,8 +430,8 @@ fn indexes(out: &mut Vec<Definition>) {
         out,
         plain,
         provenance_core::Message,
-        super::super::ListMessages,
-        super::super::ListMessages,
+        pages::PageMessagesV2,
+        members::GetMessageV2,
         "messages",
         "message",
         "Message",
@@ -434,8 +441,8 @@ fn indexes(out: &mut Vec<Definition>) {
         out,
         plain,
         provenance_core::AssertionRecord,
-        super::super::ListAssertions,
-        super::super::ListAssertions,
+        pages::PageAssertionsV2,
+        members::GetAssertionV2,
         "assertions",
         "assertion",
         "Assertion",
@@ -445,8 +452,8 @@ fn indexes(out: &mut Vec<Definition>) {
         out,
         plain,
         provenance_core::DispositionRecord,
-        super::super::ListDispositions,
-        super::super::ListDispositions,
+        pages::PageDispositionsV2,
+        members::GetDispositionV2,
         "dispositions",
         "disposition",
         "Disposition",

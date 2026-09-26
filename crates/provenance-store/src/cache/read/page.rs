@@ -9,6 +9,7 @@ use sqlx::Row;
 
 pub const RECORD_BYTES: usize = 65_536;
 pub const PAGE_BYTES: usize = 1_048_576;
+pub const RESOURCE_RECORD_BYTES: usize = PAGE_BYTES - 16_384;
 
 impl ReadSnapshot {
     /// Limits `SQLite` work in this page transaction, including joins and sorts.
@@ -45,6 +46,22 @@ pub fn byte_expression(columns: &[&str]) -> String {
         .join(" + ")
 }
 
+/// Returns the SQL text for one keyset page of at most `LIMIT` IDs after a
+/// key, in primary-key order. An ID over 1024 bytes comes back as NULL.
+///
+/// Bind the scope, the previous key, the filter value when `filter` is not
+/// empty, and the limit, in that order. `filter` is trusted SQL text from a
+/// fixed set of literals and never holds caller input. `ORDER BY` names the
+/// table column: a bare `id` binds to the guarded output alias, and `SQLite`
+/// then sorts every remaining row for each page.
+pub fn id_page_sql(table: &str, filter: &str) -> String {
+    let table = quoted(table);
+    format!(
+        "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id \
+         FROM {table} WHERE scope_id = ? AND id > ?{filter} ORDER BY {table}.id LIMIT ?"
+    )
+}
+
 impl<K: ProjectionRow> Table<'_, K> {
     /// Reads one canonical row only after its stored byte count passes the cap.
     pub(crate) async fn page_record(&self, id: &str) -> anyhow::Result<Option<K>> {
@@ -75,16 +92,42 @@ impl<K: ProjectionRow> Table<'_, K> {
         row.as_ref().map(decode::<K>).transpose()
     }
 
+    /// Reads one public resource within the resource-page byte ceiling.
+    pub(crate) async fn resource_record(&self, id: &str) -> anyhow::Result<Option<K>> {
+        let mut tx = self.snapshot().connection().await;
+        let maximum = i64::try_from(RESOURCE_RECORD_BYTES)?;
+        let size: Option<i64> = sqlx::query_scalar(&format!(
+            "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
+            byte_expression(K::COLUMNS),
+            quoted(K::TABLE)
+        ))
+        .bind(self.snapshot().scope().as_str())
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        if size.is_some_and(|size| size > maximum) {
+            return Err(ReadFailure::PageRecordTooLarge.into());
+        }
+        let row = sqlx::query(&format!(
+            "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
+            select_columns::<K>(),
+            quoted(K::TABLE)
+        ))
+        .bind(self.snapshot().scope().as_str())
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        drop(tx);
+        row.as_ref().map(decode::<K>).transpose()
+    }
+
     /// Reads at most `limit` candidate IDs strictly after the previous key.
     pub(crate) async fn search_ids(
         &self,
         after: &str,
         limit: usize,
     ) -> anyhow::Result<Vec<String>> {
-        let sql = format!(
-            "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id FROM {} WHERE scope_id = ? AND id > ? ORDER BY id LIMIT ?",
-            quoted(K::TABLE)
-        );
+        let sql = id_page_sql(K::TABLE, "");
         let mut tx = self.snapshot().connection().await;
         let rows = sqlx::query(&sql)
             .bind(self.snapshot().scope().as_str())
@@ -92,6 +135,34 @@ impl<K: ProjectionRow> Table<'_, K> {
             .bind(i64::try_from(limit)?)
             .fetch_all(&mut **tx)
             .await?;
+        drop(tx);
+        rows.iter()
+            .map(|row| {
+                row.try_get::<Option<String>, _>("id")?
+                    .ok_or_else(|| ReadFailure::PageRecordTooLarge.into())
+            })
+            .collect()
+    }
+}
+
+impl Table<'_, provenance_core::VerificationBinding> {
+    pub(crate) async fn resource_ids_for_rule(
+        &self,
+        after: &str,
+        limit: usize,
+        rule: Option<&provenance_core::StableId>,
+    ) -> anyhow::Result<Vec<String>> {
+        let filter = rule.map_or("", |_| " AND rule_id = ?");
+        let sql = id_page_sql("verification_bindings", filter);
+        let mut query = sqlx::query(&sql)
+            .bind(self.snapshot().scope().as_str())
+            .bind(after);
+        if let Some(rule) = rule {
+            query = query.bind(rule.as_str());
+        }
+        query = query.bind(i64::try_from(limit)?);
+        let mut tx = self.snapshot().connection().await;
+        let rows = query.fetch_all(&mut **tx).await?;
         drop(tx);
         rows.iter()
             .map(|row| {

@@ -2,6 +2,7 @@ use super::input::{CitesEdit, ListEdit, RequirementRelations, SaveRequirement, S
 use crate::{shards, state_store::StateStore};
 use provenance_core::model::relations::RelationOwner;
 use provenance_core::{Requirement, ScopeId, SourceReference, StableId};
+use provenance_macros::rule;
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct FinalRelations {
@@ -31,7 +32,26 @@ impl RequirementRelations {
         sort_cites(self.cites.as_mut());
     }
 
-    pub(super) fn expand(&self, before: &Requirement) -> anyhow::Result<FinalRelations> {
+    pub(super) fn validate(
+        &self,
+        store: &StateStore,
+        scope: &ScopeId,
+        records: &[Requirement],
+        owner: &StableId,
+    ) -> anyhow::Result<()> {
+        store.validate_relation_targets(
+            scope,
+            records,
+            owner,
+            &[
+                ("depends_on", removal_targets(self.depends_on.as_ref())),
+                ("supersedes", removal_targets(self.supersedes.as_ref())),
+                ("cites", citation_removals(self.cites.as_ref())),
+            ],
+        )
+    }
+
+    pub(super) fn expand(&self, before: &Requirement) -> FinalRelations {
         let mut final_sets = FinalRelations {
             refines: before.refines.clone(),
             depends_on: before.depends_on.clone(),
@@ -45,28 +65,16 @@ impl RequirementRelations {
                 SingleEdit::Clear => None,
             };
         }
-        expand_list(
-            &mut final_sets.depends_on,
-            "depends_on",
-            "requirement",
-            &before.id,
-            self.depends_on.as_ref(),
-        )?;
-        expand_list(
-            &mut final_sets.supersedes,
-            "supersedes",
-            "requirement",
-            &before.id,
-            self.supersedes.as_ref(),
-        )?;
+        expand_list(&mut final_sets.depends_on, self.depends_on.as_ref());
+        expand_list(&mut final_sets.supersedes, self.supersedes.as_ref());
         if let Some(edit) = &self.spawned_by {
             final_sets.spawned_by = match edit {
                 SingleEdit::Set(id) => Some(id.clone()),
                 SingleEdit::Clear => None,
             };
         }
-        expand_cites(&mut final_sets.cites, before, self.cites.as_ref())?;
-        Ok(final_sets)
+        expand_cites(&mut final_sets.cites, self.cites.as_ref());
+        final_sets
     }
 }
 
@@ -102,6 +110,20 @@ pub(super) fn sorted_ids(mut ids: Vec<StableId>) -> Vec<StableId> {
     ids
 }
 
+pub fn removal_targets(edit: Option<&ListEdit>) -> &[StableId] {
+    match edit {
+        Some(ListEdit::Delta { remove, .. }) => remove,
+        _ => &[],
+    }
+}
+
+fn citation_removals(edit: Option<&CitesEdit>) -> &[StableId] {
+    match edit {
+        Some(CitesEdit::Delta { remove, .. }) => remove,
+        _ => &[],
+    }
+}
+
 fn sorted_citations(mut refs: Vec<SourceReference>) -> Vec<SourceReference> {
     refs.sort_by(|a, b| {
         a.source_id
@@ -122,14 +144,10 @@ fn sort_citations(entries: &mut [SourceReference]) {
     });
 }
 
-pub fn expand_list(
-    target: &mut Vec<StableId>,
-    name: &str,
-    owner_kind: &str,
-    owner_id: &StableId,
-    edit: Option<&ListEdit>,
-) -> anyhow::Result<()> {
-    let Some(edit) = edit else { return Ok(()) };
+/// Applies list deltas without requiring the requested membership to change.
+#[rule("rule_porcelain_relationship_membership_noop")]
+pub fn expand_list(target: &mut Vec<StableId>, edit: Option<&ListEdit>) {
+    let Some(edit) = edit else { return };
     match edit {
         ListEdit::Set(entries) => *target = sorted_ids(entries.clone()),
         ListEdit::Delta { add, remove } => {
@@ -138,27 +156,14 @@ pub fn expand_list(
                     target.push(entry.clone());
                 }
             }
-            for entry in remove {
-                anyhow::ensure!(
-                    target.contains(entry),
-                    "{owner_kind} {} does not name a record under {name}: {}",
-                    owner_id.as_str(),
-                    entry.as_str()
-                );
-            }
             target.retain(|entry| !remove.contains(entry));
             *target = sorted_ids(std::mem::take(target));
         }
     }
-    Ok(())
 }
 
-fn expand_cites(
-    target: &mut Vec<SourceReference>,
-    before: &Requirement,
-    edit: Option<&CitesEdit>,
-) -> anyhow::Result<()> {
-    let Some(edit) = edit else { return Ok(()) };
+fn expand_cites(target: &mut Vec<SourceReference>, edit: Option<&CitesEdit>) {
+    let Some(edit) = edit else { return };
     match edit {
         CitesEdit::Set(entries) => *target = sorted_citations(entries.clone()),
         CitesEdit::Delta { add, remove } => {
@@ -167,19 +172,10 @@ fn expand_cites(
                     target.push(citation.clone());
                 }
             }
-            for source in remove {
-                anyhow::ensure!(
-                    target.iter().any(|entry| &entry.source_id == source),
-                    "requirement {} does not name source {} under cites",
-                    before.id.as_str(),
-                    source.as_str()
-                );
-            }
             target.retain(|entry| !remove.contains(&entry.source_id));
             *target = sorted_citations(std::mem::take(target));
         }
     }
-    Ok(())
 }
 
 impl StateStore {
@@ -187,11 +183,17 @@ impl StateStore {
         &self,
         scope: &ScopeId,
         id: &StableId,
-        final_sets: FinalRelations,
+        relationships: &RequirementRelations,
     ) -> anyhow::Result<()> {
         let path = shards::requirements_path(&self.layout, scope);
         self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
-            let record = records.iter_mut().find(|r| r.id == *id).unwrap();
+            let position = records
+                .iter()
+                .position(|record| record.id == *id)
+                .expect("the guarded Requirement remains present");
+            relationships.validate(self, scope, records, id)?;
+            let final_sets = relationships.expand(&records[position]);
+            let record = &mut records[position];
             record.refines = final_sets.refines;
             record.depends_on = final_sets.depends_on;
             record.supersedes = final_sets.supersedes;

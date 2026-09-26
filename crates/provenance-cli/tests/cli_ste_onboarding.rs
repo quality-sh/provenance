@@ -49,7 +49,11 @@ fn onboarding_downloads_and_imports_the_official_asset() {
 
     assert!(dictionary_support::reference_path(&fixture.repo).is_file());
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    assert!(stdout.contains("Imported the Issue 9 dictionary from the official asset."));
+    assert!(!stdout.contains("Imported the Issue 9 dictionary"));
+    assert!(
+        stdout.contains("  .provenance/state/dictionary.json (added the dictionary reference)\n")
+    );
+    assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
     let requests = server.requests();
     assert_eq!(
         requests.len(),
@@ -77,8 +81,9 @@ fn onboarding_imports_a_selected_pdf_without_network_access() {
         .args(["--ste-pdf", pdf.to_str().unwrap()])
         .assert()
         .success()
+        .stdout(predicate::str::contains("Imported the Issue 9 dictionary").not())
         .stdout(predicate::str::contains(
-            "Imported the Issue 9 dictionary from",
+            "  .provenance/state/dictionary.json (added the dictionary reference)\n",
         ));
 
     assert!(dictionary_support::reference_path(&fixture.repo).is_file());
@@ -143,6 +148,99 @@ fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
 }
 
 #[test]
+#[verifies("rule_ste_dictionary_import_reuse", examples)]
+fn new_projects_reuse_a_verified_index_and_reject_a_changed_asset() {
+    let _serial = serial();
+    let server = TestServer::new(200, dictionary_support::dictionary_pdf());
+    let fixture = Fixture::new();
+    fixture
+        .init()
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+    let another_repo = fixture.temporary.path().join("another-repo");
+
+    fixture
+        .command()
+        .args(init_args(&another_repo))
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+
+    assert_eq!(server.requests().len(), 1);
+    assert_eq!(
+        std::fs::read(dictionary_support::reference_path(&fixture.repo)).unwrap(),
+        std::fs::read(dictionary_support::reference_path(&another_repo)).unwrap()
+    );
+
+    let asset = fixture.asset_dir.join("ASD-STE100_ISSUE9.pdf");
+    std::fs::write(&asset, b"not a PDF").unwrap();
+    let third_repo = fixture.temporary.path().join("third-repo");
+    fixture
+        .command()
+        .args(init_args(&third_repo))
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+    assert_eq!(server.requests().len(), 2);
+    assert!(dictionary_support::reference_path(&third_repo).is_file());
+    assert_eq!(
+        std::fs::read(asset).unwrap(),
+        dictionary_support::dictionary_pdf()
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_index_digest_verification", examples)]
+fn invalid_shared_indexes_are_rebuilt_from_the_cached_pdf() {
+    let _serial = serial();
+    for corruption in ["truncated", "digest", "identity"] {
+        let server = TestServer::new(200, dictionary_support::dictionary_pdf());
+        let fixture = Fixture::new();
+        fixture
+            .init()
+            .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+            .assert()
+            .success();
+        let index = std::fs::read_dir(&fixture.index_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "json")
+            })
+            .expect("the first init stored an index");
+        let mut stored: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&index).unwrap()).unwrap();
+        match corruption {
+            "digest" => stored["entries"][0]["headword"] = "CHANGED".into(),
+            "identity" => stored["identity"]["source_sha256"] = "wrong".into(),
+            _ => {}
+        }
+        let damaged = if corruption == "truncated" {
+            b"{\"identity\":".to_vec()
+        } else {
+            serde_json::to_vec(&stored).unwrap()
+        };
+        std::fs::write(&index, damaged).unwrap();
+        let another_repo = fixture.temporary.path().join("another-repo");
+
+        fixture
+            .command()
+            .args(init_args(&another_repo))
+            .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+            .assert()
+            .success();
+
+        assert_eq!(server.requests().len(), 1, "corruption: {corruption}");
+        assert!(dictionary_support::reference_path(&another_repo).is_file());
+        let restored: provenance_ste100::DictionaryImport =
+            serde_json::from_slice(&std::fs::read(&index).unwrap()).unwrap();
+        assert_eq!(&restored, dictionary_support::imported_dictionary());
+    }
+}
+
+#[test]
 #[verifies("rule_ste_dictionary_download_concurrency", examples)]
 fn concurrent_onboarding_shares_one_download() {
     let _serial = serial();
@@ -198,13 +296,16 @@ fn exhausted_download_retries_fall_back_to_a_loud_warning() {
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(output.status.success(), "init failed: {stdout}");
-    assert!(stdout.contains("Warning:"), "stdout: {stdout}");
-    assert!(stdout.contains("rerun init"), "stdout: {stdout}");
-    assert!(stdout.contains("dictionary import"), "stdout: {stdout}");
+    assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
+    assert!(!stdout.contains("Warning:"), "stdout: {stdout}");
+    assert!(stderr.contains("Warning:"), "stderr: {stderr}");
+    assert!(stderr.contains("rerun init"), "stderr: {stderr}");
+    assert!(stderr.contains("dictionary import"), "stderr: {stderr}");
     assert!(
-        !stdout.to_ascii_lowercase().contains("asd-ste100.org"),
-        "the warning carries no ASD link: {stdout}"
+        !stderr.to_ascii_lowercase().contains("asd-ste100.org"),
+        "the warning carries no ASD link: {stderr}"
     );
     assert!(!stdout.contains("ASD owns"), "stdout: {stdout}");
 

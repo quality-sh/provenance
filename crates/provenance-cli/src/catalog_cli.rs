@@ -1,6 +1,9 @@
-//! Generated-dialect CLI dispatch over the registered resource catalog.
+//! CLI dispatch over the registered resource catalog.
+use crate::invocation::{grammar, GlobalContext};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
-use provenance_store::operations::catalog::{self, Definition};
+use clap::{parser::ValueSource, ArgMatches, Command};
+use provenance_porcelain::action::Action;
+use provenance_store::operations::catalog::{self, Definition, TargetAction};
 use serde_json::{json, Map, Value};
 use std::{
     collections::BTreeMap,
@@ -9,58 +12,208 @@ use std::{
 };
 
 mod address;
+pub mod fields;
 mod help;
 
-const COLLECTIONS: &[&str] = &[
-    "sources",
-    "requirements",
-    "resolutions",
-    "rules",
-    "domains",
-    "boundaries",
-    "topics",
-    "questions",
-    "contributions",
-    "synthesis-packets",
-    "proposals",
-    "verification-runs",
-    "verification-bindings",
-    "statement-checks",
-    "authoring-plans",
-    "authoring-changes",
-    "discussion-containers",
-    "messages",
-    "assertions",
-    "dispositions",
-];
+pub struct Invocation {
+    context: GlobalContext,
+    path: String,
+    definition: &'static Definition,
+    data: Value,
+    query: BTreeMap<String, String>,
+    headers: HeaderMap,
+}
 
-pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
-    let Some((context, mut words)) = split_global(arguments)? else {
-        return Ok(false);
-    };
-    let collection = words.remove(0);
-    if words.as_slice() == ["--help"] {
-        help::print_collection(&collection);
-        return Ok(true);
+impl Invocation {
+    pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
+        let resolved = address::resolve(&args.collection, &args.address)
+            .unwrap_or_else(|error| usage_error(error));
+        let (data, query, headers) = input(
+            resolved.address.definition,
+            matches,
+            args.stdin,
+            resolved.query,
+            &["stdin"],
+        )
+        .unwrap_or_else(|error| usage_error(error));
+        if resolved.address.definition.method == catalog::HttpMethod::Post {
+            if let Some(id) = data.get("id").and_then(Value::as_str) {
+                provenance_core::ensure_record_id_assignable(id)
+                    .unwrap_or_else(|error| usage_error(error));
+            }
+        }
+        Self {
+            context: args.common.context(),
+            path: resolved.path,
+            definition: resolved.address.definition,
+            data,
+            query,
+            headers,
+        }
     }
-    let resolved = address::resolve(&collection, &words)?;
-    if resolved.flags.as_slice() == ["--help"] {
-        help::print_operation(&collection, resolved.address);
-        return Ok(true);
+}
+
+pub fn is_collection(word: &str) -> bool {
+    !address::registrations(word).is_empty()
+}
+
+pub fn command(collection: &str) -> anyhow::Result<Command> {
+    let registrations = address::registrations(collection);
+    let mut command = grammar::catalog_command();
+    let mut help = help::collection(collection);
+    if collection == "questions" {
+        help.push_str("\nA question should be resolvable in one agent session;\notherwise it is fog or needs decomposition.");
     }
-    let definition = resolved.address.definition;
+    command = command.after_help(help);
+    fields::augment(
+        command,
+        registrations.into_iter().map(|address| address.definition),
+        &["repo", "scope", "format", "quiet", "stdin"],
+    )
+}
+
+pub fn target_command() -> anyhow::Result<Command> {
+    let definitions = TargetAction::RECORD
+        .into_iter()
+        .flat_map(catalog::target_definitions)
+        .map(|(_, definition)| definition)
+        .collect::<Vec<_>>();
+    let command = fields::augment_with_overrides(
+        grammar::target_command(),
+        definitions,
+        &[
+            "repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin",
+        ],
+        &[],
+    )?;
+    fields::augment_schemas(
+        command,
+        provenance_porcelain::action::Action::DISCUSSION
+            .map(provenance_porcelain::discussion::input_schema),
+        &["parent", "discussion_id", "declared_by"],
+    )
+}
+
+/// Dispatch one catalog request through the local in-process host.
+pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
+    let Invocation {
+        context,
+        path,
+        definition,
+        data,
+        query,
+        headers,
+    } = invocation;
     let method = match definition.method {
         catalog::HttpMethod::Get => Method::GET,
         catalog::HttpMethod::Post => Method::POST,
         catalog::HttpMethod::Patch => Method::PATCH,
     };
-    let (data, query, headers) = input(definition, &resolved.flags, resolved.query)?;
     if matches!(
-        collection.as_str(),
-        "questions" | "contributions" | "synthesis-packets" | "proposals"
+        path.split('/').nth(1),
+        Some("questions" | "contributions" | "synthesis-packets" | "proposals")
     ) {
         warn_if_skills_missing(&context.repo, context.quiet)?;
     }
+    let host = local_host(&context)?;
+    match host
+        .invoke_resource(method, &path, data, query, headers)
+        .await
+    {
+        Ok(value) => crate::output::print_json(&value)?,
+        Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
+    }
+    Ok(())
+}
+
+pub async fn dispatch_target(
+    context: GlobalContext,
+    format: Option<provenance_cli::porcelain::OutputFormat>,
+    target: String,
+    action: Action,
+    kind: Option<provenance_core::NodeType>,
+    matches: ArgMatches,
+) -> anyhow::Result<()> {
+    if action == Action::Create {
+        provenance_core::ensure_record_id_assignable(&target)
+            .unwrap_or_else(|error| usage_error(error));
+    }
+    let host = local_host(&context)?;
+    let route = host
+        .target_route(action, &target, kind)
+        .await
+        .map_err(anyhow::Error::new)?;
+    if route.kind == provenance_core::NodeType::Question {
+        warn_if_skills_missing(&context.repo, context.quiet)?;
+    }
+    let stdin = matches.get_flag("stdin");
+    let (data, query, headers) = input(
+        route.definition,
+        &matches,
+        stdin,
+        None,
+        &["record_type", "stdin"],
+    )
+    .unwrap_or_else(|error| usage_error(error));
+    if !query.is_empty() {
+        usage_error(anyhow::anyhow!(
+            "target actions do not accept query options"
+        ));
+    }
+    let value = host
+        .invoke_target(&route, data, headers)
+        .await
+        .map_err(|failure| anyhow::anyhow!(serde_json::to_string(&failure).unwrap()))?;
+    if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
+        crate::output::print_json(&value)?;
+    } else {
+        println!(
+            "{}",
+            provenance_porcelain::action::render_readable(action, &target, route.kind, &value)
+        );
+    }
+    Ok(())
+}
+
+pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
+    const COMMON: &[&str] = &[
+        "repo",
+        "scope",
+        "format",
+        "quiet",
+        "target",
+        "action",
+        "collection",
+        "address",
+        "command",
+        "discussion_id",
+    ];
+    for id in matches.ids() {
+        let name = id.as_str();
+        if matches.value_source(name) != Some(ValueSource::CommandLine) {
+            continue;
+        }
+        let normalized = name.replace('_', "-");
+        if !COMMON.contains(&name)
+            && !allowed.contains(&name)
+            && !allowed.contains(&normalized.as_str())
+        {
+            usage_error(anyhow::anyhow!(
+                "unsupported option --{}",
+                name.replace('_', "-")
+            ));
+        }
+    }
+}
+
+pub fn usage_error(error: impl std::fmt::Display) -> ! {
+    clap::Error::raw(clap::error::ErrorKind::InvalidValue, error.to_string()).exit()
+}
+
+fn local_host(context: &GlobalContext) -> anyhow::Result<provenance_transport::StatementHost> {
+    provenance_store::layout::require_initialized_graph(
+        &provenance_store::layout::ProvenanceLayout::new(context.repo.as_str()),
+    )?;
     let root = std::fs::canonicalize(&context.repo)?;
     let access = provenance_transport::LocalAccess::new(
         &root,
@@ -70,15 +223,9 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
         SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
     )
     .map_err(|failure| anyhow::anyhow!(failure))?;
-    let host = provenance_transport::StatementHost::with_access(std::sync::Arc::new(access));
-    match host
-        .invoke_resource(method, &resolved.path, data, query, headers)
-        .await
-    {
-        Ok(value) => crate::output::print_json(&value)?,
-        Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
-    }
-    Ok(true)
+    Ok(provenance_transport::StatementHost::with_access(
+        std::sync::Arc::new(access),
+    ))
 }
 
 fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
@@ -95,109 +242,45 @@ fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-struct Context {
-    repo: String,
-    scope: String,
-    quiet: bool,
-}
-
-fn split_global(arguments: &[String]) -> anyhow::Result<Option<(Context, Vec<String>)>> {
-    if !begins_catalog_command(arguments) {
-        return Ok(None);
-    }
-    let mut repo = ".".to_owned();
-    let mut scope = "default".to_owned();
-    let mut format = None;
-    let mut quiet = false;
-    let mut rest = Vec::new();
-    let mut index = 1;
-    while index < arguments.len() {
-        match arguments[index].as_str() {
-            "--quiet" => {
-                quiet = true;
-                index += 1;
-            }
-            "--repo" | "--scope" | "--format" => {
-                let value = arguments
-                    .get(index + 1)
-                    .ok_or_else(|| anyhow::anyhow!("{} requires a value", arguments[index]))?;
-                match arguments[index].as_str() {
-                    "--repo" => repo.clone_from(value),
-                    "--scope" => scope.clone_from(value),
-                    _ => format = Some(value.clone()),
-                }
-                index += 2;
-            }
-            word if word.starts_with("--") && word != "--stdin" && word != "--help" => {
-                rest.push(word.to_owned());
-                let value = arguments
-                    .get(index + 1)
-                    .ok_or_else(|| anyhow::anyhow!("{word} requires a value"))?;
-                rest.push(value.clone());
-                index += 2;
-            }
-            word => {
-                rest.push(word.to_owned());
-                index += 1;
-            }
-        }
-    }
-    if rest
-        .first()
-        .is_none_or(|word| !COLLECTIONS.contains(&word.as_str()))
-    {
-        return Ok(None);
-    }
-    anyhow::ensure!(
-        format.as_deref().is_none_or(|format| format == "json"),
-        "catalog commands support --format json"
-    );
-    Ok(Some((Context { repo, scope, quiet }, rest)))
-}
-
-fn begins_catalog_command(arguments: &[String]) -> bool {
-    let mut index = 1;
-    while index < arguments.len() {
-        match arguments[index].as_str() {
-            "--quiet" => index += 1,
-            "--repo" | "--scope" | "--format" => index += 2,
-            word => return COLLECTIONS.contains(&word),
-        }
-    }
-    false
-}
-
-#[allow(clippy::too_many_lines)]
 fn input(
     definition: &Definition,
-    words: &[String],
+    matches: &ArgMatches,
+    stdin: bool,
     query_action: Option<&'static str>,
+    extra: &[&str],
 ) -> anyhow::Result<(Value, BTreeMap<String, String>, HeaderMap)> {
+    let declared = fields::declared(definition)?;
+    let mut allowed = declared
+        .iter()
+        .map(|field| field.name.as_str())
+        .collect::<Vec<_>>();
+    allowed.extend(extra.iter().copied());
+    ensure_only_fields(matches, &allowed);
     let mut data = Map::new();
     let mut query = BTreeMap::new();
     let mut headers = HeaderMap::new();
-    let mut stdin = false;
-    let mut index = 0;
-    while index < words.len() {
-        if words[index] == "--stdin" {
-            stdin = true;
-            index += 1;
+    for field in declared {
+        let Some(value) = matches
+            .try_get_one::<String>(&field.name)
+            .ok()
+            .flatten()
+            .or_else(|| {
+                matches
+                    .try_get_one::<String>(&field.name.replace('-', "_"))
+                    .ok()
+                    .flatten()
+            })
+        else {
             continue;
-        }
-        let flag = words[index]
-            .strip_prefix("--")
-            .ok_or_else(|| anyhow::anyhow!("unexpected argument: {}", words[index]))?;
-        let value = words
-            .get(index + 1)
-            .ok_or_else(|| anyhow::anyhow!("--{flag} requires a value"))?;
-        if let Some(parameter) = definition
-            .parameters()
-            .iter()
-            .find(|parameter| cli_name(parameter.name) == flag)
-        {
-            match parameter.location {
+        };
+        match field.source {
+            fields::Source::Parameter(parameter) => match parameter.location {
                 "query" => {
-                    query.insert(parameter.name.to_owned(), value.clone());
+                    let parsed = catalog::parse_parameter_value(&parameter, value)
+                        .map_err(|_| anyhow::anyhow!("invalid value for --{}", field.name))?;
+                    let encoded = catalog::serialize_parameter_value(&parameter, &parsed)
+                        .map_err(|_| anyhow::anyhow!("invalid value for --{}", field.name))?;
+                    query.insert(parameter.name.to_owned(), encoded);
                 }
                 "header" => {
                     headers.insert(
@@ -205,48 +288,40 @@ fn input(
                         HeaderValue::from_str(value)?,
                     );
                 }
-                "path" => anyhow::bail!("path identity comes from the command address"),
                 _ => anyhow::bail!("unknown catalog parameter location"),
+            },
+            fields::Source::Body {
+                wire_field,
+                value_schema,
+                wrap_array,
+            } => {
+                if !wrap_array
+                    && matches!(
+                        value_schema.get("type").and_then(Value::as_str),
+                        Some("array" | "object")
+                    )
+                {
+                    anyhow::bail!("arrays and objects must come from --stdin");
+                }
+                let request = definition.request_schema().expect("declared body field");
+                let parsed = catalog::parse_schema_value_in(request, &value_schema, value)
+                    .map_err(|_| anyhow::anyhow!("invalid value for --{}", field.name))?;
+                anyhow::ensure!(
+                    data.insert(
+                        wire_field,
+                        if wrap_array { json!([parsed]) } else { parsed }
+                    )
+                    .is_none(),
+                    "body field is supplied by more than one option"
+                );
             }
-        } else if let Some(request_schema) = definition.request_schema() {
-            let field = flag.replace('-', "_");
-            let alias = definition
-                .registration
-                .request
-                .argument_aliases
-                .iter()
-                .find(|alias| alias.argument == field);
-            let wire_field = alias.map_or(field.as_str(), |alias| alias.field);
-            let field_schema = body_field_schema(request_schema, wire_field)
-                .ok_or_else(|| anyhow::anyhow!("unknown body field: --{flag}"))?;
-            let value_schema = alias
-                .filter(|alias| alias.wrap_array)
-                .and_then(|_| field_schema.get("items"))
-                .unwrap_or(field_schema);
-            if alias.is_none_or(|alias| !alias.wrap_array)
-                && matches!(
-                    field_schema.get("type").and_then(Value::as_str),
-                    Some("array" | "object")
-                )
-            {
-                anyhow::bail!("arrays and objects must come from --stdin");
-            }
-            let parsed = catalog::parse_schema_value_in(request_schema, value_schema, value)
-                .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
-            data.insert(
-                wire_field.to_owned(),
-                if alias.is_some_and(|alias| alias.wrap_array) {
-                    json!([parsed])
-                } else {
-                    parsed
-                },
-            );
-        } else {
-            query.insert(flag.replace('-', "_"), value.clone());
         }
-        index += 2;
     }
     if let Some(action) = query_action {
+        anyhow::ensure!(
+            !query.contains_key("query"),
+            "query action is supplied twice"
+        );
         query.insert("query".into(), action.to_owned());
     }
     if stdin {
@@ -261,13 +336,7 @@ fn input(
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("stdin must contain one JSON object"))?;
     }
-    for default in &definition.registration.cli.defaults {
-        data.entry(default.field)
-            .or_insert_with(|| match default.value {
-                catalog::CliDefaultValue::String(value) => json!(value),
-                catalog::CliDefaultValue::EmptyArray => json!([]),
-            });
-    }
+    apply_defaults(definition, &mut data);
     if definition.parameters().iter().any(|parameter| {
         parameter.location == "header" && parameter.required && parameter.name == "Idempotency-Key"
     }) && !headers.contains_key("Idempotency-Key")
@@ -280,13 +349,12 @@ fn input(
     Ok((Value::Object(data), query, headers))
 }
 
-fn body_field_schema<'a>(request: &'a Value, field: &str) -> Option<&'a Value> {
-    let properties = request
-        .pointer("/properties/data/properties")?
-        .as_object()?;
-    properties.get(field)
-}
-
-fn cli_name(name: &str) -> String {
-    name.to_ascii_lowercase().replace('_', "-")
+fn apply_defaults(definition: &Definition, data: &mut Map<String, Value>) {
+    for default in &definition.registration.cli.defaults {
+        data.entry(default.field)
+            .or_insert_with(|| match default.value {
+                catalog::CliDefaultValue::String(value) => json!(value),
+                catalog::CliDefaultValue::EmptyArray => json!([]),
+            });
+    }
 }

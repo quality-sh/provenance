@@ -80,7 +80,8 @@ async function readsTheEnginesBoundedAnswers(): Promise<void> {
 
     const fetched = await get({ node_type: "rule", id: expiry.id });
     assert.equal(fetched.data.id, expiry.id);
-    assert.deepEqual(fetched.meta, {});
+    assert.ok(fetched.meta.stamp);
+    assert.equal(fetched.meta.freshness_error, null);
 
     const matched = await search({ collection: "requirements", text: "time bounded" });
     assert.equal(matched.meta.has_more, false);

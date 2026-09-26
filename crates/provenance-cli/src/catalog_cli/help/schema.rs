@@ -1,35 +1,34 @@
 use serde_json::Value;
 
-pub(super) struct BodyField<'a> {
-    pub name: &'a str,
-    pub schema: &'a Value,
-    pub required: bool,
+/// Whether one body wire field is required by the request schema.
+pub(super) fn required(request: &Value, wire_field: &str) -> bool {
+    request
+        .pointer("/properties/data/required")
+        .and_then(Value::as_array)
+        .is_some_and(|names| names.iter().any(|name| name.as_str() == Some(wire_field)))
 }
 
-pub(super) fn body_fields(request: &Value) -> Vec<BodyField<'_>> {
-    let Some(data) = request.pointer("/properties/data") else {
-        return Vec::new();
-    };
-    let required = data
-        .get("required")
+/// Whether one schema names only objects, following references and unions.
+pub(super) fn object_only(root: &Value, schema: &Value) -> bool {
+    let schema = resolve(root, schema);
+    if let Some(list) = schema
+        .get("anyOf")
+        .or_else(|| schema.get("oneOf"))
         .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .collect::<Vec<_>>();
-    let mut fields = data
-        .get("properties")
-        .and_then(Value::as_object)
-        .into_iter()
-        .flat_map(|properties| properties.iter())
-        .map(|(name, schema)| BodyField {
-            name,
-            schema,
-            required: required.contains(&name.as_str()),
-        })
-        .collect::<Vec<_>>();
-    fields.sort_unstable_by_key(|field| field.name);
-    fields
+    {
+        let mut any = false;
+        for variant in list {
+            if is_null(root, variant) {
+                continue;
+            }
+            if !object_only(root, variant) {
+                return false;
+            }
+            any = true;
+        }
+        return any;
+    }
+    has_type(schema, "object")
 }
 
 pub(super) fn type_label(root: &Value, schema: &Value) -> String {
@@ -77,13 +76,6 @@ pub(super) fn array_item_label(root: &Value, schema: &Value) -> Option<String> {
         .then(|| schema.get("items"))
         .flatten()
         .map(|items| type_label(root, items))
-}
-
-pub(super) fn accepts_plain(root: &Value, schema: &Value) -> bool {
-    let schema = effective(root, schema);
-    ["string", "boolean", "integer", "number"]
-        .into_iter()
-        .any(|kind| has_type(schema, kind))
 }
 
 pub(super) fn default(schema: &Value) -> Option<&Value> {

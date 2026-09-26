@@ -26,7 +26,8 @@ const missingCuts: EvidenceResponse = {
   data: { rule_id: "rule_a",
     implementation_bindings: [], verification_bindings: [], verification_runs: [],
     latest_verification_run: null, review_required: false, reviews: [], stale: null },
-  meta: { stamp },
+  // Evidence answers always carry the page facts their producer requires.
+  meta: { stamp, limit: 50, has_more: false },
 };
 
 // Generated record variants expose the tag and narrow to their real fields.

@@ -16,6 +16,20 @@ fn help(arguments: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("help output is UTF-8")
 }
 
+/// One rendered operation block: a usage line through the next usage line.
+fn block(output: &str, usage: &str) -> String {
+    let lines: Vec<&str> = output.lines().collect();
+    let start = lines
+        .iter()
+        .position(|line| line.trim() == usage)
+        .unwrap_or_else(|| panic!("help lists no {usage} usage: {output}"));
+    let end = lines[start + 1..]
+        .iter()
+        .position(|line| line.trim_start().starts_with("provenance "))
+        .map_or(lines.len(), |offset| start + 1 + offset);
+    lines[start..end].join("\n")
+}
+
 #[test]
 fn immutable_collection_help_lists_only_registered_operations() {
     let output = help(&["verification-bindings", "--help"]);
@@ -30,27 +44,25 @@ fn immutable_collection_help_lists_only_registered_operations() {
 
 #[test]
 fn guarded_requirement_update_help_describes_real_inputs_and_controls() {
-    let output = help(&["requirements", "req_example", "update", "--help"]);
+    let output = help(&["requirements", "--help"]);
+    let update = block(&output, "provenance requirements <id> update");
     let description = catalog::definitions()
         .iter()
         .find(|definition| definition.operation_id == "updateRequirement")
         .expect("registered Requirement update")
         .description;
 
-    assert!(output.contains(description));
-    assert!(output.contains("provenance requirements <id> update"));
-    assert!(output.contains("--statement <string>"), "{output}");
-    assert!(output.contains("--status <"));
-    assert!(output.contains("--relationships-json <json>"));
-    assert!(output.contains("--actor <string>"));
-    assert!(output.contains("default: \"cli\""));
-    assert!(output.contains("--clear-fields-json <json>"));
-    assert!(output.contains("default: []"));
-    assert!(output.contains("--if-match <string>"));
-    assert!(output.contains("required"));
-    assert!(output.contains("--idempotency-key <string>"));
-    assert!(output.contains("generated if omitted"));
-    assert!(output.contains("--stdin"));
+    assert!(update.contains(description), "{update}");
+    assert!(update.contains("--statement <string>"), "{update}");
+    assert!(update.contains("--status <"), "{update}");
+    assert!(update.contains("--relationships-json <json>"), "{update}");
+    assert!(update.contains("--actor <string>"), "{update}");
+    assert!(update.contains("default: \"cli\""), "{update}");
+    assert!(update.contains("--if-match <string>"), "{update}");
+    assert!(update.contains("required"), "{update}");
+    assert!(update.contains("--idempotency-key <string>"), "{update}");
+    assert!(update.contains("generated if omitted"), "{update}");
+    assert!(update.contains("--stdin"), "{update}");
 }
 
 #[test]
@@ -66,26 +78,62 @@ fn nested_resources_use_parent_owned_registered_addresses() {
 
 #[test]
 fn query_help_shows_only_the_selected_query_options() {
-    let output = help(&["requirements", "req_example", "neighbors", "--help"]);
-    let trace = help(&["requirements", "req_example", "trace", "--help"]);
+    let output = help(&["requirements", "--help"]);
+    let neighbors = block(&output, "provenance requirements <id> neighbors");
+    let trace = block(&output, "provenance requirements <id> trace");
 
-    assert!(output.contains("--direction <out|in|both>"), "{output}");
-    assert!(output.contains("--limit <integer>"));
-    assert!(!output.contains("--max-depth"));
-    assert!(!output.contains("--text"));
-    assert!(!output.contains("--base"));
-    assert!(!output.contains("--head"));
-    assert!(trace.contains("--max-depth <integer>"));
+    assert!(neighbors.contains("--direction <in|out|both>"), "{neighbors}");
+    assert!(neighbors.contains("--limit <integer>"), "{neighbors}");
+    assert!(!neighbors.contains("--max-depth"), "{neighbors}");
+    assert!(!neighbors.contains("--text"), "{neighbors}");
+    assert!(!neighbors.contains("--base"), "{neighbors}");
+    assert!(!neighbors.contains("--head"), "{neighbors}");
+    assert!(trace.contains("--max-depth <integer>"), "{trace}");
 }
 
 #[test]
 fn operation_help_is_specific_to_the_selected_registration() {
-    let create = help(&["requirements", "create", "--help"]);
-    let update = help(&["requirements", "req_example", "update", "--help"]);
+    let output = help(&["requirements", "--help"]);
+    let create = block(&output, "provenance requirements create");
+    let update = block(&output, "provenance requirements <id> update");
 
-    assert!(create.contains("--id <string>"));
-    assert!(create.contains("--depends-on <string> (repeatable)"));
-    assert!(!create.contains("--if-match"));
-    assert!(!create.contains("--relationships-json"));
-    assert!(!update.contains("--id <string>"));
+    assert!(create.contains("--id <string>"), "{create}");
+    assert!(
+        create.contains("--depends-on <string> (repeatable)"),
+        "{create}"
+    );
+    assert!(!create.contains("--if-match"), "{create}");
+    assert!(!create.contains("--relationships-json"), "{create}");
+    assert!(!update.contains("--id <string>"), "{update}");
+}
+
+#[test]
+fn a_declared_flag_value_can_be_the_literal_help_word() {
+    let empty = tempfile::tempdir().expect("create empty working directory");
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+        .current_dir(empty.path())
+        .args(["requirements", "create", "--id", "req_example", "--statement", "--help"])
+        .output()
+        .expect("run provenance create");
+
+    assert!(!output.status.success(), "the guarded write must not run");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not initialized"), "{stderr}");
+    let stdout = String::from_utf8(output.stdout).expect("create output is UTF-8");
+    assert!(!stdout.contains("Catalog commands for requirements"), "{stdout}");
+}
+
+#[test]
+fn global_options_work_in_every_help_position() {
+    for arguments in [
+        vec!["--repo", ".", "requirements", "--help"],
+        vec!["requirements", "--quiet", "--help"],
+        vec!["--scope", "default", "--format", "json", "requirements", "--help"],
+    ] {
+        let output = help(&arguments);
+        assert!(
+            output.contains("Catalog commands for requirements"),
+            "{arguments:?}: {output}"
+        );
+    }
 }
