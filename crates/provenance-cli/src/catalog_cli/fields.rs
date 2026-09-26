@@ -254,6 +254,12 @@ pub fn schema_input(
             continue;
         }
         let name = cli_name(field);
+        if let Some(values) = matches
+            .try_get_raw(&name)
+            .map_err(|_| anyhow::anyhow!("incompatible CLI storage for --{name}"))?
+        {
+            anyhow::ensure!(values.len() == 1, "--{name} is supplied more than once");
+        }
         let raw = if usize_flags.contains(&field.as_str()) {
             matches
                 .try_get_one::<usize>(&name)

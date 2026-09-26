@@ -297,14 +297,15 @@ fn parse_plain_value(
     raw: &str,
 ) -> anyhow::Result<Value> {
     if let Some(item) = field.item_schema {
-        if is_structured_json(raw) {
+        let parsed = parse_typed(request, item, flag, raw);
+        if parsed.is_err() && is_structured_json(raw) {
             anyhow::bail!(
                 "arrays and objects must come from --stdin or --{}; \
                  --{flag} accepts one item per use",
                 fields::json_flag(field.wire_name)
             );
         }
-        return parse_typed(request, item, flag, raw);
+        return parsed;
     }
     if schema_kind(request, field.schema, 0) == Some("object") {
         anyhow::bail!(
