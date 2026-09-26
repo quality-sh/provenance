@@ -204,24 +204,46 @@ def _linux_excludes(attribute):
     return value is False and not tokens
 
 
+def _attributes_above(lines, line):
+    """Return the attributes written between the previous item and a function."""
+    block = []
+    index = line - 2
+    while index >= 0:
+        text = lines[index].strip()
+        if text.startswith("//"):
+            index -= 1
+            continue
+        if not text or text.endswith(("}", ";", "{")):
+            break
+        block.insert(0, text)
+        index -= 1
+    joined = " ".join(block)
+    attributes = []
+    start = joined.find("#[")
+    while start != -1:
+        depth = 0
+        for end in range(start + 1, len(joined)):
+            depth += {"[": 1, "]": -1}.get(joined[end], 0)
+            if depth == 0:
+                attributes.append(joined[start : end + 1])
+                break
+        else:
+            break
+        start = joined.find("#[", end + 1)
+    return attributes
+
+
 def _is_platform_only(row):
     try:
         lines = Path(row["file"]).read_text().splitlines()
     except OSError as error:
         raise GateInputError(f"cannot read source {row['file']}: {error}") from error
-    index = row["line"] - 2
-    while index >= 0:
-        text = lines[index].strip()
-        if _linux_excludes(text):
-            return True
-        if not (text.startswith("#[") or text.startswith("//")):
-            return False
-        index -= 1
-    return False
+    return any(_linux_excludes(text) for text in _attributes_above(lines, row["line"]))
 
 
 def _validate_perfect_coverage(entries, lcov, allow_platform_only):
     platform_only = []
+    unexecuted = []
     for row in entries:
         if row["coverage"] != 100:
             continue
@@ -231,10 +253,12 @@ def _validate_perfect_coverage(entries, lcov, allow_platform_only):
             continue
         if allow_platform_only and _is_platform_only(row):
             platform_only.append(row)
-            continue
+        else:
+            unexecuted.append(f"{row['function']} at {row['file']}:{row['line']}")
+    if unexecuted:
         raise GateInputError(
-            f"{row['function']} at {row['file']}:{row['line']} reports 100% coverage "
-            "but has no executed LCOV function record"
+            f"{len(unexecuted)} function(s) report 100% coverage but have no executed "
+            "LCOV function record: " + "; ".join(unexecuted)
         )
     return platform_only
 
