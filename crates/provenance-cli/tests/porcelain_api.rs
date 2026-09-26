@@ -368,7 +368,7 @@ fn api_query_selectors_follow_the_variant_contracts() {
     ]);
     assert!(neighbors["data"].is_object(), "{neighbors}");
 
-    let unknown_selector = output(&[
+    let unknown_selector = refusal(&[
         "api",
         "requirements/req_q",
         "--repo",
@@ -376,7 +376,8 @@ fn api_query_selectors_follow_the_variant_contracts() {
         "--query",
         "query=stale",
     ]);
-    assert!(!unknown_selector.status.success());
+    assert_eq!(unknown_selector["error"]["kind"], "invalid_input");
+    assert_eq!(unknown_selector["error"]["field"], "query");
 }
 
 fn directory_file(repo: &str, name: &str, content: &str) -> String {

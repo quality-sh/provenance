@@ -243,8 +243,9 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
             .as_ref()
             .clone(),
     );
-    // Compilation resolves every #/$defs/ reference in the published schema;
-    // a dangling reference fails here before any output is validated.
+    // jsonschema resolves #/$defs/ references lazily, so a dangling reference
+    // compiles and only fails validation of an output that reaches it; the
+    // discovery output below carries routes, which reach the route defs.
     let published =
         JSONSchema::compile(&published_schema).expect("the published api output schema compiles");
 
