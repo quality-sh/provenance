@@ -98,7 +98,7 @@ impl TransactionDirectory {
                 })?,
         )
         .map_err(|error| PublishError::io("record output parent identity", parent_path, error))?;
-        let current = Directory::open(parent_path.as_std_path())
+        let current = Directory::open(parent_path.as_std_path(), "output parent")
             .map(Directory::into_file)
             .and_then(same_file::Handle::from_file)
             .map_err(|error| PublishError::OutputChanged {
@@ -233,18 +233,18 @@ pub(super) fn open_or_create_parent(
                     detail: "drive-relative output paths are unsupported".to_string(),
                 });
             }
-            Directory::open(&current_path)
+            Directory::open(&current_path, "output parent")
                 .map_err(|error| PublishError::io("open output parent root", parent, error))?
         }
         Some(Component::RootDir) => {
             current_path.push(std::path::MAIN_SEPARATOR_STR);
             components.next();
-            Directory::open(&current_path)
+            Directory::open(&current_path, "output parent")
                 .map_err(|error| PublishError::io("open output parent root", parent, error))?
         }
         _ => {
             current_path.push(".");
-            Directory::open(&current_path)
+            Directory::open(&current_path, "output parent")
                 .map_err(|error| PublishError::io("open current directory", parent, error))?
         }
     };

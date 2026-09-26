@@ -32,9 +32,10 @@ pub(in crate::wiki::publish) fn replace_output_with(
     // A plain File::open on a directory fails ERROR_ACCESS_DENIED on Windows
     // (no backup semantics); the no-follow directory open is also the right
     // semantics for a transaction-owned stage.
-    let stage = crate::safe_fs::Directory::open(paths.stage.as_std_path()).map_err(|error| {
-        PublishError::io("open staging directory identity", &paths.stage, error)
-    })?;
+    let stage = crate::safe_fs::Directory::open(paths.stage.as_std_path(), "output parent")
+        .map_err(|error| {
+            PublishError::io("open staging directory identity", &paths.stage, error)
+        })?;
     let stage_identity = StageIdentity::from_file(stage.as_file()).map_err(|error| {
         PublishError::io("record staging directory identity", &paths.stage, error)
     })?;
