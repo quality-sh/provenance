@@ -54,6 +54,9 @@ impl ServerHandler for StatementHost {
         if crate::porcelain::search_is_available(self) {
             tools.push(crate::porcelain::search_tool());
         }
+        if crate::porcelain::api_is_available(self) {
+            tools.push(crate::porcelain::api_tool());
+        }
         if self.check_port().is_some() {
             tools.push(crate::porcelain::check_tool());
         }
@@ -75,6 +78,16 @@ impl ServerHandler for StatementHost {
         }
         if request.name == "search" && crate::porcelain::search_is_available(self) {
             return call_search(self, request.arguments).await;
+        }
+        if request.name == "api" {
+            if !crate::porcelain::api_is_available(self) {
+                return Err(ErrorData::new(
+                    ErrorCode::METHOD_NOT_FOUND,
+                    "Unknown tool",
+                    None,
+                ));
+            }
+            return call_api_tool(self, request.arguments).await;
         }
         if let Some(action) = crate::porcelain::Action::DISCUSSION
             .into_iter()
@@ -116,51 +129,59 @@ impl ServerHandler for StatementHost {
         {
             return call_authoring_action(self, action, request.arguments).await;
         }
-        let Some(definition) = catalog::definitions()
+        if let Some(definition) = catalog::definitions()
             .iter()
             .find(|d| d.name == request.name)
-        else {
-            return Err(ErrorData::new(
-                ErrorCode::METHOD_NOT_FOUND,
-                "Unknown tool",
-                None,
-            ));
-        };
-        if !self.advertises(definition.name) {
-            return Ok(error(ErasedFailure::new(
-                None,
-                OperationFailure::AccessDenied,
-            )));
-        }
-        let _admission = match self.admit() {
-            Ok(permit) => permit,
-            Err(failure) => return Ok(error(failure)),
-        };
-        let arguments = Value::Object(request.arguments.unwrap_or_default());
-        if serde_json::to_vec(&arguments)
-            .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-            .len()
-            > MAX_BODY_BYTES
         {
-            return Ok(error(ErasedFailure::new(
-                None,
-                OperationFailure::InvalidInput {
-                    field: None,
-                    reason: InvalidInputReason::TooLarge,
-                },
-            )));
+            return call_catalog_tool(self, definition, request.arguments).await;
         }
-        let (matched, data, query, headers) = match mcp_call(definition, &arguments) {
-            Ok(call) => call,
-            Err(failure) => return Ok(error(failure)),
-        };
-        Ok(
-            match routing::invoke(self, &matched, data, query, &headers).await {
-                Ok((value, _)) => CallToolResult::structured(value.into_value()),
-                Err(failure) => error(failure),
-            },
-        )
+        Err(ErrorData::new(
+            ErrorCode::METHOD_NOT_FOUND,
+            "Unknown tool",
+            None,
+        ))
     }
+}
+
+async fn call_catalog_tool(
+    host: &StatementHost,
+    definition: &'static catalog::Definition,
+    arguments: Option<serde_json::Map<String, Value>>,
+) -> Result<CallToolResult, ErrorData> {
+    if !host.advertises(definition.name) {
+        return Ok(error(ErasedFailure::new(
+            None,
+            OperationFailure::AccessDenied,
+        )));
+    }
+    let _admission = match host.admit() {
+        Ok(permit) => permit,
+        Err(failure) => return Ok(error(failure)),
+    };
+    let arguments = Value::Object(arguments.unwrap_or_default());
+    if serde_json::to_vec(&arguments)
+        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
+        .len()
+        > MAX_BODY_BYTES
+    {
+        return Ok(error(ErasedFailure::new(
+            None,
+            OperationFailure::InvalidInput {
+                field: None,
+                reason: InvalidInputReason::TooLarge,
+            },
+        )));
+    }
+    let (matched, data, query, headers) = match mcp_call(definition, &arguments) {
+        Ok(call) => call,
+        Err(failure) => return Ok(error(failure)),
+    };
+    Ok(
+        match routing::invoke(host, &matched, data, query, &headers).await {
+            Ok((value, _)) => CallToolResult::structured(value.into_value()),
+            Err(failure) => error(failure),
+        },
+    )
 }
 
 async fn call_discussion(
@@ -219,6 +240,31 @@ async fn call_get(
         )));
     }
     Ok(crate::porcelain::call_get(host, arguments).await)
+}
+
+async fn call_api_tool(
+    host: &StatementHost,
+    arguments: Option<serde_json::Map<String, Value>>,
+) -> Result<CallToolResult, ErrorData> {
+    let _admission = match host.admit() {
+        Ok(permit) => permit,
+        Err(failure) => return Ok(error(failure)),
+    };
+    let arguments = arguments.unwrap_or_default();
+    if serde_json::to_vec(&arguments)
+        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
+        .len()
+        > MAX_BODY_BYTES
+    {
+        return Ok(error(ErasedFailure::new(
+            None,
+            OperationFailure::InvalidInput {
+                field: None,
+                reason: InvalidInputReason::TooLarge,
+            },
+        )));
+    }
+    Ok(crate::porcelain::call_api(host, Some(arguments)).await)
 }
 
 async fn call_search(

@@ -5,6 +5,7 @@
 //! Record actions use catalog registrations. Discussion actions use typed inputs.
 
 pub mod action;
+pub mod api;
 pub mod check;
 pub mod discussion;
 pub mod get;

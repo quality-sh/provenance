@@ -44,6 +44,7 @@ Available actions depend on the selected surface and its access. Use CLI help or
         ("get", GET_DESCRIPTION),
         ("search", SEARCH_DESCRIPTION),
         ("check", CHECK_DESCRIPTION),
+        ("api", crate::api::API_DESCRIPTION),
     ] {
         writeln!(text, "- {name}: {description}").expect("writing to a String cannot fail");
     }

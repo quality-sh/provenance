@@ -13,7 +13,13 @@ fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
             command.get_name()
         );
     }
-    assert!(RESERVED_RECORD_IDS.contains(&"search"));
+    for word in super::grammar::RootWord::ALL {
+        assert!(
+            RESERVED_RECORD_IDS.contains(&word.as_str()),
+            "root word {} is not reserved",
+            word.as_str()
+        );
+    }
     assert!(RESERVED_RECORD_IDS.contains(&"get"));
     for action in Action::ALL {
         assert!(RESERVED_RECORD_IDS.contains(&action.as_str()));

@@ -166,6 +166,13 @@ fn command_keywords_are_refused_as_record_ids_on_both_cli_write_forms() {
         .failure()
         .stderr(contains("reserved record ID search"));
     provenance()
+        .args([
+            "sources", "create", "--repo", &path, "--id", "api", "--name", "Api",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("reserved record ID api"));
+    provenance()
         .args(["sources", "create", "--repo", &path, "--stdin"])
         .write_stdin(r#"{"id":"check","name":"Check"}"#)
         .assert()

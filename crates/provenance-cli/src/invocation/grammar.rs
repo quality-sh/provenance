@@ -74,6 +74,63 @@ pub struct DiscussionsArgs {
     pub common: Common,
 }
 
+#[derive(Args)]
+pub struct ApiArgs {
+    #[command(flatten)]
+    pub common: Common,
+    pub path: Option<String>,
+    #[arg(long, value_parser = parse_api_method)]
+    pub method: Option<provenance_porcelain::api::ApiMethod>,
+    /// Read the JSON body from this file, or from standard input with "-".
+    /// The body is the data object, without the HTTP {"data": ...} wrapper.
+    #[arg(long = "input", allow_hyphen_values = true)]
+    pub input: Option<String>,
+    #[arg(long = "header")]
+    pub headers: Vec<String>,
+    #[arg(long = "query")]
+    pub queries: Vec<String>,
+}
+
+fn parse_api_method(value: &str) -> Result<provenance_porcelain::api::ApiMethod, String> {
+    provenance_porcelain::api::ApiMethod::parse(value)
+        .ok_or_else(|| "unsupported method".to_owned())
+}
+
+/// Root words that select their own grammar before target-first parsing.
+/// They name commands, so no record ID may take them.
+#[derive(Clone, Copy)]
+pub enum RootWord {
+    Api,
+    Search,
+}
+
+impl RootWord {
+    pub const ALL: [Self; 2] = [Self::Api, Self::Search];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Api => "api",
+            Self::Search => "search",
+        }
+    }
+
+    pub fn parse(word: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|root| root.as_str() == word)
+    }
+}
+
+#[derive(Parser)]
+#[command(
+    name = "provenance",
+    about = "Call one public API path or list the catalog routes"
+)]
+pub(super) struct ApiCommand {
+    #[arg(value_parser = ["api"])]
+    pub command: String,
+    #[command(flatten)]
+    pub args: ApiArgs,
+}
+
 #[derive(Parser)]
 #[command(name = "provenance", about = "List or read addressed Discussions")]
 pub(super) struct DiscussionsCommand {
