@@ -50,7 +50,7 @@ pub fn byte_expression(columns: &[&str]) -> String {
 ///
 /// `ORDER BY` names the table column. A bare `id` binds to the guarded
 /// output alias, and `SQLite` then sorts every remaining row for each page.
-pub(crate) fn id_page_sql(table: &str, filter: &str) -> String {
+pub fn id_page_sql(table: &str, filter: &str) -> String {
     let table = quoted(table);
     format!(
         "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id \
