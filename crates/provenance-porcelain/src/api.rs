@@ -4,7 +4,12 @@ use provenance_core::protocol::failure::{FailureEnvelope, InvalidInputReason, Op
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeMap, fmt::Display, future::Future, pin::Pin};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Display,
+    future::Future,
+    pin::Pin,
+};
 
 /// One HTTP method a public route supports.
 #[derive(
@@ -27,8 +32,10 @@ impl ApiMethod {
         }
     }
 
+    /// Parse one method name in any letter case, as discovery prints
+    /// uppercase names and HTTP tools accept either case.
     pub fn parse(value: &str) -> Option<Self> {
-        match value {
+        match value.to_ascii_lowercase().as_str() {
             "get" => Some(Self::Get),
             "post" => Some(Self::Post),
             "patch" => Some(Self::Patch),
@@ -83,13 +90,23 @@ pub struct ApiError {
 }
 
 impl ApiError {
-    pub fn invalid_options() -> Self {
+    /// Refuse one api option with the canonical invalid-input envelope
+    /// naming the argument that caused the refusal.
+    pub fn invalid_options(field: Option<&str>) -> Self {
         Self {
             kind: ApiErrorKind::InvalidOptions,
             failure: refusal(OperationFailure::InvalidInput {
-                field: None,
+                field: field.map(str::to_owned),
                 reason: InvalidInputReason::InvalidValue,
             }),
+        }
+    }
+
+    /// Refuse a path that no public route can match, as the HTTP router does.
+    fn unknown_path() -> Self {
+        Self {
+            kind: ApiErrorKind::UnknownPath,
+            failure: refusal(OperationFailure::UnknownOperation),
         }
     }
 }
@@ -206,35 +223,55 @@ impl ApiRequest {
     /// Select discovery or one validated invocation from shared arguments.
     pub fn from(arguments: ApiArguments) -> Result<Self, ApiError> {
         let Some(path) = arguments.path else {
-            let call_options = arguments.method.is_some()
-                || !arguments.query.is_empty()
-                || !arguments.headers.is_empty()
-                || arguments.body.is_some();
-            if call_options {
-                return Err(ApiError::invalid_options());
-            }
-            return Ok(Self::Discover);
+            let call_option = [
+                ("method", arguments.method.is_some()),
+                ("query", !arguments.query.is_empty()),
+                ("headers", !arguments.headers.is_empty()),
+                ("body", arguments.body.is_some()),
+            ]
+            .into_iter()
+            .find_map(|(field, given)| given.then_some(field));
+            return call_option.map_or(Ok(Self::Discover), |field| {
+                Err(ApiError::invalid_options(Some(field)))
+            });
         };
-        let path = path.trim().trim_matches('/');
-        let invalid = || ApiError::invalid_options();
-        if path.is_empty() || path.contains('?') {
-            return Err(invalid());
-        }
-        if arguments
-            .method
-            .is_none_or(|method| method == ApiMethod::Get)
-            && arguments.body.is_some()
-        {
-            return Err(invalid());
-        }
-        Ok(Self::Invoke(ApiInput {
+        validated(ApiInput {
             method: arguments.method.unwrap_or_default(),
-            path: path.to_owned(),
+            path,
             query: arguments.query,
             headers: arguments.headers,
             body: arguments.body,
-        }))
+        })
+        .map(Self::Invoke)
     }
+}
+
+/// Check one invocation against the shared public-path contract.
+///
+/// The path takes at most one leading slash and no empty segment, as on the
+/// HTTP router, and the returned input carries it with exactly one leading
+/// slash. Header names compare without letter case, as HTTP compares them.
+fn validated(input: ApiInput) -> Result<ApiInput, ApiError> {
+    let relative = input.path.strip_prefix('/').unwrap_or(&input.path);
+    if relative.is_empty() || relative.contains('?') {
+        return Err(ApiError::invalid_options(Some("path")));
+    }
+    if relative.split('/').any(str::is_empty) {
+        return Err(ApiError::unknown_path());
+    }
+    if input.method == ApiMethod::Get && input.body.is_some() {
+        return Err(ApiError::invalid_options(Some("body")));
+    }
+    let mut names = BTreeSet::new();
+    if !input
+        .headers
+        .keys()
+        .all(|name| names.insert(name.to_ascii_lowercase()))
+    {
+        return Err(ApiError::invalid_options(Some("headers")));
+    }
+    let path = format!("/{relative}");
+    Ok(ApiInput { path, ..input })
 }
 
 impl<P: ApiPort> crate::Porcelain<P> {
@@ -248,25 +285,17 @@ impl<P: ApiPort> crate::Porcelain<P> {
         match request {
             ApiRequest::Discover => Ok(ApiOutcome::Catalog(self.port.discover())),
             ApiRequest::Invoke(input) => {
-                let invalid = || ApiError::invalid_options();
-                let path = input.path.trim().trim_matches('/');
-                if path.is_empty() || path.contains('?') {
-                    return Err(invalid());
-                }
-                if input.method == ApiMethod::Get && input.body.is_some() {
-                    return Err(invalid());
-                }
-                let bound = ApiInput {
-                    path: path.to_owned(),
-                    ..input
-                };
-                Ok(ApiOutcome::Invoked(self.port.invoke(bound).await?))
+                let input = validated(input)?;
+                Ok(ApiOutcome::Invoked(self.port.invoke(input).await?))
             }
         }
     }
 }
 
 /// Render the route inventory as one bounded readable summary.
+///
+/// Each route lists the inputs of its base form and of each `query` form;
+/// the JSON form keeps the full request and response schemas.
 pub fn render_discovery_readable(catalog: &ApiCatalog) -> String {
     let mut lines = vec![format!("api routes: {}", catalog.routes.len())];
     for route in &catalog.routes {

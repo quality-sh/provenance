@@ -5,12 +5,20 @@ mod support {
     pub mod records;
 }
 
+use provenance_macros::verifies;
 use provenance_porcelain::api::{ApiArguments, ApiMethod, ApiOutcome, ApiRequest};
 use provenance_porcelain::Porcelain;
 use provenance_transport::porcelain::HostApiPort;
 use provenance_transport::StatementHost;
-use serde_json::json;
+use rmcp::model::CallToolResult;
+use serde_json::{json, Value};
 use support::api_fixture::{access, error_kind, host, ApiSession, Repository};
+
+/// The canonical refusal of one refused tool result.
+fn refusal(result: &CallToolResult) -> Value {
+    assert_eq!(result.is_error, Some(true), "{result:?}");
+    result.structured_content.as_ref().unwrap()["error"].clone()
+}
 
 #[tokio::test]
 async fn api_read_returns_the_named_catalog_tool_result_on_the_same_path() {
@@ -41,6 +49,7 @@ async fn api_read_returns_the_named_catalog_tool_result_on_the_same_path() {
 }
 
 #[tokio::test]
+#[verifies("rule_porcelain_mcp_api_arguments", examples)]
 async fn api_selects_methods_bodies_and_headers_for_one_public_mutation() {
     let repository = Repository::new("The shared graph is readable.");
     let session = ApiSession::start(StatementHost::with_fixture_access(
@@ -132,8 +141,9 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
                      "status": "active", "depends_on": [], "supersedes": []}
         }))
         .await;
-    assert_eq!(no_idempotency.is_error, Some(true));
-    assert_eq!(error_kind(&no_idempotency), "invalid_input");
+    let refused = refusal(&no_idempotency);
+    assert_eq!(refused["kind"], "invalid_input");
+    assert_eq!(refused["field"], "Idempotency-Key");
 
     // update-requirement requires If-Match and an Idempotency-Key.
     let no_version = session
@@ -144,8 +154,118 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
             "body": {"description": "One description."}
         }))
         .await;
-    assert_eq!(no_version.is_error, Some(true));
-    assert_eq!(error_kind(&no_version), "invalid_input");
+    let refused = refusal(&no_version);
+    assert_eq!(refused["kind"], "invalid_input");
+    assert_eq!(refused["field"], "If-Match");
+
+    let read = session
+        .call(json!({"path": "requirements/req_shared"}))
+        .await;
+    let etag = read.structured_content.as_ref().unwrap()["data"]["edit"]["etag"]
+        .as_str()
+        .expect("the requirement read carries its etag")
+        .to_owned();
+    let edit = |key: &str, description: &str| {
+        json!({
+            "path": "requirements/req_shared",
+            "method": "patch",
+            "headers": {"Idempotency-Key": key, "If-Match": etag},
+            "body": {"actor": "api", "description": description}
+        })
+    };
+
+    let current = session
+        .call(edit("api-patch-current", "Edited through api."))
+        .await;
+    assert_ne!(current.is_error, Some(true), "{current:?}");
+    assert_eq!(
+        current.structured_content.as_ref().unwrap()["data"]["description"],
+        "Edited through api."
+    );
+
+    let stale = session.call(edit("api-patch-stale", "A stale edit.")).await;
+    let named = session
+        .call_named(
+            "update-requirement",
+            json!({
+                "id": "req_shared",
+                "idempotency_key": "named-patch-stale",
+                "if_match": etag,
+                "data": {"actor": "api", "description": "A stale edit."}
+            }),
+        )
+        .await;
+    assert_eq!(
+        refusal(&stale),
+        refusal(&named),
+        "a stale If-Match refuses as the named tool refuses"
+    );
+
+    session.shutdown().await;
+}
+
+#[tokio::test]
+async fn api_refuses_header_names_that_differ_only_in_case() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let session = ApiSession::start(StatementHost::with_fixture_access(
+        access(&repository).allow_writes(),
+    ))
+    .await;
+
+    let refused = session
+        .call(json!({
+            "path": "requirements/req_shared",
+            "method": "patch",
+            "headers": {"Idempotency-Key": "api-patch-case", "If-Match": "\"1\"", "if-match": "\"2\""},
+            "body": {"actor": "api", "description": "One description."}
+        }))
+        .await;
+    let refused = refusal(&refused);
+    assert_eq!(refused["kind"], "invalid_input");
+    assert_eq!(refused["field"], "headers");
+
+    session.shutdown().await;
+}
+
+#[tokio::test]
+async fn api_arguments_follow_the_http_router() {
+    let repository = Repository::new("The shared graph is readable.");
+    repository.all_kinds();
+    let session = ApiSession::start(StatementHost::with_fixture_access(
+        access(&repository).allow_writes(),
+    ))
+    .await;
+
+    let upper = session
+        .call(json!({"path": "sources/source_shared", "method": "GET"}))
+        .await;
+    assert_ne!(upper.is_error, Some(true), "{upper:?}");
+
+    for path in ["sources/", "//sources", "requirements/req_shared/submit/"] {
+        let refused = session.call(json!({"path": path, "method": "post"})).await;
+        assert_eq!(refusal(&refused)["kind"], "unknown_operation", "{path}");
+    }
+
+    let no_body = session
+        .call(json!({
+            "path": "sources",
+            "method": "post",
+            "headers": {"Idempotency-Key": "api-no-body"}
+        }))
+        .await;
+    let refused = refusal(&no_body);
+    assert_eq!(refused["kind"], "invalid_input");
+    assert_eq!(refused["reason"], "malformed_json");
+
+    let unknown_argument = session
+        .call(json!({"path": "sources", "extra": true}))
+        .await;
+    assert_eq!(refusal(&unknown_argument)["field"], "extra");
+    let unknown_method = session
+        .call(json!({"path": "sources", "method": "delete"}))
+        .await;
+    assert_eq!(refusal(&unknown_method)["field"], "method");
 
     session.shutdown().await;
 }

@@ -20,20 +20,14 @@ impl HostApiPort {
 impl ApiPort for HostApiPort {
     fn invoke(&self, input: provenance_porcelain::api::ApiInput) -> ApiPortFuture<'_, Value> {
         Box::pin(async move {
-            let mut headers = axum::http::HeaderMap::new();
-            for (name, value) in &input.headers {
-                let name = axum::http::HeaderName::from_bytes(name.as_bytes())
-                    .map_err(|_| ApiError::invalid_options())?;
-                let value = axum::http::HeaderValue::from_str(value)
-                    .map_err(|_| ApiError::invalid_options())?;
-                headers.insert(name, value);
-            }
-            let data = input.body.clone().map_or_else(|| json!({}), Value::Object);
+            let headers = header_map(&input.headers)?;
             let method = match input.method {
                 ApiMethod::Get => axum::http::Method::GET,
                 ApiMethod::Post => axum::http::Method::POST,
                 ApiMethod::Patch => axum::http::Method::PATCH,
             };
+            self.check_body(&method, &input)?;
+            let data = input.body.clone().map_or_else(|| json!({}), Value::Object);
             self.host
                 .invoke_resource(method, &input.path, data, input.query, headers)
                 .await
@@ -44,6 +38,48 @@ impl ApiPort for HostApiPort {
     fn discover(&self) -> ApiCatalog {
         routes(&self.host)
     }
+}
+
+impl HostApiPort {
+    /// Refuse a missing or unexpected body as the HTTP router does: a route
+    /// that expects a body and gets none reports `malformed_json`.
+    fn check_body(
+        &self,
+        method: &axum::http::Method,
+        input: &provenance_porcelain::api::ApiInput,
+    ) -> Result<(), ApiError> {
+        let Some(matched) = crate::routing::find(method, &input.path) else {
+            return Ok(());
+        };
+        if !self.host.advertises(matched.definition.name) {
+            return Ok(());
+        }
+        match (
+            matched.definition.request_schema().is_some(),
+            input.body.is_some(),
+        ) {
+            (true, false) => Err(api_error(&crate::routing::malformed_json())),
+            (false, true) => Err(ApiError::invalid_options(Some("body"))),
+            _ => Ok(()),
+        }
+    }
+}
+
+/// Build the request headers, refusing names that differ only in letter
+/// case so one header never silently replaces another.
+fn header_map(
+    headers: &std::collections::BTreeMap<String, String>,
+) -> Result<axum::http::HeaderMap, ApiError> {
+    let invalid = || ApiError::invalid_options(Some("headers"));
+    let mut map = axum::http::HeaderMap::new();
+    for (name, value) in headers {
+        let name = axum::http::HeaderName::from_bytes(name.as_bytes()).map_err(|_| invalid())?;
+        let value = axum::http::HeaderValue::from_str(value).map_err(|_| invalid())?;
+        if map.insert(name, value).is_some() {
+            return Err(invalid());
+        }
+    }
+    Ok(map)
 }
 
 /// Describe the advertised public routes from the live operation catalog,

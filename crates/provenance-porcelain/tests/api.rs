@@ -96,7 +96,7 @@ fn api_arguments_default_to_get_on_the_given_path() {
         panic!("a path selects one invocation");
     };
     assert_eq!(input.method, ApiMethod::Get);
-    assert_eq!(input.path, "requirements");
+    assert_eq!(input.path, "/requirements");
     assert!(input.query.is_empty());
     assert!(input.headers.is_empty());
     assert!(input.body.is_none());
@@ -130,40 +130,71 @@ fn arguments_without_a_path_select_discovery() {
 
 #[test]
 fn arguments_refuse_call_options_without_a_path() {
-    let without_path = |mut arguments: ApiArguments| {
-        arguments.path = None;
-        ApiRequest::from(arguments)
-            .expect_err("call options need a path")
-            .kind
+    let refused_field = |arguments: ApiArguments| {
+        let error = ApiRequest::from(arguments).expect_err("call options need a path");
+        assert_eq!(error.kind, ApiErrorKind::InvalidOptions);
+        assert_eq!(error.failure["error"]["kind"], "invalid_input");
+        error.failure["error"]["field"].clone()
     };
     assert_eq!(
-        without_path(ApiArguments {
+        refused_field(ApiArguments {
             method: Some(ApiMethod::Patch),
             ..Default::default()
         }),
-        ApiErrorKind::InvalidOptions
+        "method"
     );
     assert_eq!(
-        without_path(ApiArguments {
+        refused_field(ApiArguments {
             query: BTreeMap::from([("limit".into(), "1".into())]),
             ..Default::default()
         }),
-        ApiErrorKind::InvalidOptions
+        "query"
     );
     assert_eq!(
-        without_path(ApiArguments {
+        refused_field(ApiArguments {
             headers: BTreeMap::from([("Accept".into(), "json".into())]),
             ..Default::default()
         }),
-        ApiErrorKind::InvalidOptions
+        "headers"
     );
     assert_eq!(
-        without_path(ApiArguments {
+        refused_field(ApiArguments {
             body: body(&json!({})),
             ..Default::default()
         }),
-        ApiErrorKind::InvalidOptions
+        "body"
     );
+}
+
+#[test]
+fn methods_parse_in_any_letter_case() {
+    for (name, method) in [
+        ("get", ApiMethod::Get),
+        ("GET", ApiMethod::Get),
+        ("Post", ApiMethod::Post),
+        ("PATCH", ApiMethod::Patch),
+    ] {
+        assert_eq!(ApiMethod::parse(name), Some(method), "{name}");
+    }
+    assert_eq!(ApiMethod::parse("DELETE"), None);
+}
+
+#[test]
+fn header_names_that_differ_only_in_case_refuse() {
+    let arguments = ApiArguments {
+        path: Some("requirements/req_one".into()),
+        method: Some(ApiMethod::Patch),
+        headers: BTreeMap::from([
+            ("If-Match".into(), "\"1\"".into()),
+            ("if-match".into(), "\"2\"".into()),
+        ]),
+        body: body(&json!({"description": "One description."})),
+        ..Default::default()
+    };
+    let error = ApiRequest::from(arguments).expect_err("one header name, two values");
+    assert_eq!(error.kind, ApiErrorKind::InvalidOptions);
+    assert_eq!(error.failure["error"]["kind"], "invalid_input");
+    assert_eq!(error.failure["error"]["field"], "headers");
 }
 
 #[tokio::test]
@@ -171,9 +202,33 @@ async fn api_refuses_an_empty_path_before_the_port() {
     let port = RecordingPort::default();
     let service = Porcelain::new(port.clone());
 
-    let error = service.execute_api(invoke("///")).await.unwrap_err();
+    for path in ["", "/"] {
+        let error = service.execute_api(invoke(path)).await.unwrap_err();
+        assert_eq!(error.kind, ApiErrorKind::InvalidOptions, "{path}");
+        assert_eq!(error.failure["error"]["field"], "path", "{path}");
+    }
+    assert!(port.seen.lock().unwrap().is_none());
+}
 
-    assert_eq!(error.kind, ApiErrorKind::InvalidOptions);
+#[tokio::test]
+async fn api_refuses_paths_the_http_router_cannot_match() {
+    let port = RecordingPort::default();
+    let service = Porcelain::new(port.clone());
+
+    for path in [
+        "///",
+        "//requirements",
+        "requirements/",
+        "/requirements/req_one/",
+        "requirements//req_one",
+    ] {
+        let error = service.execute_api(invoke(path)).await.unwrap_err();
+        assert_eq!(error.kind, ApiErrorKind::UnknownPath, "{path}");
+        assert_eq!(
+            error.failure["error"]["kind"], "unknown_operation",
+            "{path}"
+        );
+    }
     assert!(port.seen.lock().unwrap().is_none());
 }
 
@@ -188,6 +243,7 @@ async fn api_refuses_a_query_carrying_path_before_the_port() {
         .unwrap_err();
 
     assert_eq!(error.kind, ApiErrorKind::InvalidOptions);
+    assert_eq!(error.failure["error"]["field"], "path");
     assert!(port.seen.lock().unwrap().is_none());
 }
 
@@ -206,6 +262,7 @@ async fn api_refuses_a_get_body_before_the_port() {
     let error = service.execute_api(request).await.unwrap_err();
 
     assert_eq!(error.kind, ApiErrorKind::InvalidOptions);
+    assert_eq!(error.failure["error"]["field"], "body");
     assert!(port.seen.lock().unwrap().is_none());
 }
 
@@ -218,6 +275,7 @@ async fn invalid_options_carries_the_canonical_refusal_envelope() {
 
     assert_eq!(error.failure["error"]["kind"], "invalid_input");
     assert_eq!(error.failure["error"]["reason"], "invalid_value");
+    assert_eq!(error.failure["error"]["field"], "path");
     assert!(error.failure["meta"].is_object());
 }
 
@@ -230,12 +288,12 @@ async fn api_sends_the_normalized_input_to_the_port_and_returns_its_value() {
     let service = Porcelain::new(port.clone());
 
     let outcome = service
-        .execute_api(ApiRequest::from(arguments("/requirements/req_one/")).expect("valid request"))
+        .execute_api(ApiRequest::from(arguments("requirements/req_one")).expect("valid request"))
         .await
         .unwrap();
 
     let sent = port.seen.lock().unwrap().clone().unwrap();
-    assert_eq!(sent.path, "requirements/req_one");
+    assert_eq!(sent.path, "/requirements/req_one");
     assert_eq!(
         outcome,
         ApiOutcome::Invoked(json!({"data": {"id": "req_one"}, "meta": {}}))

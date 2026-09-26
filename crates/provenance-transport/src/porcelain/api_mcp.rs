@@ -40,10 +40,16 @@ pub async fn call(
     host: &StatementHost,
     arguments: Option<serde_json::Map<String, Value>>,
 ) -> CallToolResult {
-    let arguments = arguments.unwrap_or_default();
-    let parsed: ApiArguments = match serde_json::from_value(Value::Object(arguments)) {
+    let mut arguments = arguments.unwrap_or_default();
+    if let Some(Value::String(method)) = arguments.get_mut("method") {
+        method.make_ascii_lowercase();
+    }
+    let parsed: ApiArguments = match serde_json::from_value(Value::Object(arguments.clone())) {
         Ok(value) => value,
-        Err(_) => return refused(&ApiError::invalid_options()),
+        Err(_) => {
+            let field = rejected_field(&arguments);
+            return refused(&ApiError::invalid_options(field.as_deref()));
+        }
     };
     let request = match ApiRequest::from(parsed) {
         Ok(request) => request,
@@ -61,6 +67,18 @@ pub async fn call(
         Ok(ApiOutcome::Invoked(value)) => CallToolResult::structured(value),
         Err(error) => refused(&error),
     }
+}
+
+/// Name the first argument that the typed contract refuses on its own.
+fn rejected_field(arguments: &serde_json::Map<String, Value>) -> Option<String> {
+    arguments
+        .iter()
+        .find(|(name, value)| {
+            let mut single = serde_json::Map::new();
+            single.insert((*name).clone(), (*value).clone());
+            serde_json::from_value::<ApiArguments>(Value::Object(single)).is_err()
+        })
+        .map(|(name, _)| name.clone())
 }
 
 fn refused(error: &ApiError) -> CallToolResult {
