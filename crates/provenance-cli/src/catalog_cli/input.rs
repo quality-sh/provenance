@@ -16,10 +16,9 @@ use std::io::Read as _;
 
 pub(super) type Parsed = (Value, BTreeMap<String, String>, HeaderMap);
 
-/// One request body field that a flag or stdin already assigned.
+/// One request body field that a flag already assigned.
 struct Assignment {
     flag: String,
-    repeatable: bool,
 }
 
 /// One request body field with the item schema that plain flags carry.
@@ -218,7 +217,6 @@ fn assign_plain(
         field.wire_name.to_owned(),
         Assignment {
             flag: flag.to_owned(),
-            repeatable,
         },
     );
     data.insert(field.wire_name.to_owned(), value);
@@ -254,10 +252,7 @@ fn bind_json_fields(
         let parsed = parse_json(request, schema, &flag, &values[0])?;
         assignments.insert(
             wire_field.clone(),
-            Assignment {
-                flag,
-                repeatable: false,
-            },
+            Assignment { flag },
         );
         data.insert(wire_field.clone(), parsed);
     }
