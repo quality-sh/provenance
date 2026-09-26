@@ -9,7 +9,7 @@ pub(super) mod synthesis;
 
 use super::graph::NodeType;
 use super::ids::StableId;
-use super::parsing::normalize_enum_value;
+use super::parsing::parse_enum_word;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -30,25 +30,6 @@ pub enum IdeationTargetType {
     Domain,
     #[serde(rename = "boundary")]
     Boundary,
-}
-
-impl IdeationTargetType {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "source" => Ok(Self::Source),
-            "requirement" => Ok(Self::Requirement),
-            "resolution" => Ok(Self::Resolution),
-            "rule" => Ok(Self::Rule),
-            "topic" => Ok(Self::Topic),
-            "question" => Ok(Self::Question),
-            "domain" => Ok(Self::Domain),
-            "boundary" => Ok(Self::Boundary),
-            _ => anyhow::bail!(
-                "target type must be source, requirement, resolution, rule, topic, question, \
-                 domain, or boundary"
-            ),
-        }
-    }
 }
 
 /// An ideation target names a graph record; this is the kind it names.
@@ -82,15 +63,7 @@ pub enum CanonicalArtifactType {
 
 impl CanonicalArtifactType {
     pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "source" => Ok(Self::Source),
-            "requirement" => Ok(Self::Requirement),
-            "resolution" => Ok(Self::Resolution),
-            "rule" => Ok(Self::Rule),
-            _ => anyhow::bail!(
-                "canonical artifact type must be source, requirement, resolution, or rule"
-            ),
-        }
+        parse_enum_word(value)
     }
 }
 
@@ -103,17 +76,6 @@ pub enum IdentityType {
     Agent,
     #[serde(rename = "service")]
     Service,
-}
-
-impl IdentityType {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "human" => Ok(Self::Human),
-            "agent" => Ok(Self::Agent),
-            "service" => Ok(Self::Service),
-            _ => anyhow::bail!("identity type must be human, agent, or service"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,18 +106,6 @@ pub enum ContributionStance {
     Mixed,
     #[serde(rename = "needs_more_evidence")]
     NeedsMoreEvidence,
-}
-
-impl ContributionStance {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "support" => Ok(Self::Support),
-            "oppose" => Ok(Self::Oppose),
-            "mixed" => Ok(Self::Mixed),
-            "needs_more_evidence" => Ok(Self::NeedsMoreEvidence),
-            _ => anyhow::bail!("stance must be support, oppose, mixed, or needs_more_evidence"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,17 +141,6 @@ pub enum UncertaintyLevel {
     High,
 }
 
-impl UncertaintyLevel {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "low" => Ok(Self::Low),
-            "medium" => Ok(Self::Medium),
-            "high" => Ok(Self::High),
-            _ => anyhow::bail!("uncertainty level must be low, medium, or high"),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum EvidenceQuality {
@@ -234,21 +173,6 @@ pub enum ProposalType {
     RecordRevision,
 }
 
-impl ProposalType {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "requirement_candidate" => Ok(Self::RequirementCandidate),
-            "resolution_candidate" => Ok(Self::ResolutionCandidate),
-            "rule_candidate" => Ok(Self::RuleCandidate),
-            "source_gap" => Ok(Self::SourceGap),
-            "question" => Ok(Self::Question),
-            "no_action" => Ok(Self::NoAction),
-            "record_revision" => Ok(Self::RecordRevision),
-            _ => anyhow::bail!("proposal type must be requirement_candidate, resolution_candidate, rule_candidate, source_gap, question, no_action, or record_revision"),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum PromotionState {
@@ -268,23 +192,6 @@ pub enum PromotionState {
     Superseded,
 }
 
-impl PromotionState {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "proposed" => Ok(Self::Proposed),
-            "asserted" => Ok(Self::Asserted),
-            "accepted" => Ok(Self::Accepted),
-            "rejected" => Ok(Self::Rejected),
-            "deferred" => Ok(Self::Deferred),
-            "duplicate" => Ok(Self::Duplicate),
-            "superseded" => Ok(Self::Superseded),
-            _ => anyhow::bail!(
-                "promotion state must be proposed, asserted, accepted, rejected, deferred, duplicate, or superseded"
-            ),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum DispositionDecision {
@@ -294,17 +201,6 @@ pub enum DispositionDecision {
     Rejected,
     #[serde(rename = "deferred")]
     Deferred,
-}
-
-impl DispositionDecision {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "accepted" => Ok(Self::Accepted),
-            "rejected" => Ok(Self::Rejected),
-            "deferred" => Ok(Self::Deferred),
-            _ => anyhow::bail!("disposition decision must be accepted, rejected, or deferred"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

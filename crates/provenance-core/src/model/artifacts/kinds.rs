@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::super::parsing::normalize_enum_value;
+use super::super::parsing::parse_enum_word;
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,19 +31,7 @@ pub enum SourceType {
 
 impl SourceType {
     pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "policy" => Ok(Self::Policy),
-            "document" => Ok(Self::Document),
-            "legislation" => Ok(Self::Legislation),
-            "company_agreement" => Ok(Self::CompanyAgreement),
-            "system_state" => Ok(Self::SystemState),
-            "external_integration" => Ok(Self::ExternalIntegration),
-            "domain_knowledge" => Ok(Self::DomainKnowledge),
-            "project_artifact" => Ok(Self::ProjectArtifact),
-            "incident" => Ok(Self::Incident),
-            "api_spec" => Ok(Self::ApiSpec),
-            _ => anyhow::bail!("source type must be a supported provenance source type"),
-        }
+        parse_enum_word(value)
     }
 
     /// The wire value that the typed-spec protocol carries for this type.
@@ -78,20 +66,6 @@ pub enum RequirementStatus {
     Resolved,
 }
 
-impl RequirementStatus {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "active" => Ok(Self::Active),
-            "discovery" => Ok(Self::Discovery),
-            "refinement" => Ok(Self::Refinement),
-            "resolved" => Ok(Self::Resolved),
-            _ => anyhow::bail!(
-                "requirement status must be active, discovery, refinement, or resolved"
-            ),
-        }
-    }
-}
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResolutionStatus {
@@ -113,22 +87,6 @@ pub enum ResolutionStatus {
     Abandoned,
 }
 
-impl ResolutionStatus {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "draft" => Ok(Self::Draft),
-            "review" => Ok(Self::Review),
-            "proposed" => Ok(Self::Proposed),
-            "approved" => Ok(Self::Approved),
-            "rejected" => Ok(Self::Rejected),
-            "revised" => Ok(Self::Revised),
-            "superseded" => Ok(Self::Superseded),
-            "abandoned" => Ok(Self::Abandoned),
-            _ => anyhow::bail!("resolution status must be draft, review, proposed, approved, rejected, revised, superseded, or abandoned"),
-        }
-    }
-}
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResolutionInputType {
@@ -148,21 +106,6 @@ pub enum ResolutionInputType {
     SourceMaterial,
 }
 
-impl ResolutionInputType {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "regulatory" => Ok(Self::Regulatory),
-            "legal_advice" => Ok(Self::LegalAdvice),
-            "commercial" => Ok(Self::Commercial),
-            "benchmark" => Ok(Self::Benchmark),
-            "technical" => Ok(Self::Technical),
-            "incident" => Ok(Self::Incident),
-            "source_material" => Ok(Self::SourceMaterial),
-            _ => anyhow::bail!("resolution input type must be regulatory, legal_advice, commercial, benchmark, technical, incident, or source_material"),
-        }
-    }
-}
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RuleStatus {
@@ -178,21 +121,6 @@ pub enum RuleStatus {
     Archived,
 }
 
-impl RuleStatus {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "draft" => Ok(Self::Draft),
-            "review" => Ok(Self::Review),
-            "active" => Ok(Self::Active),
-            "deprecated" => Ok(Self::Deprecated),
-            "archived" => Ok(Self::Archived),
-            _ => {
-                anyhow::bail!("rule status must be draft, review, active, deprecated, or archived")
-            }
-        }
-    }
-}
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RuleSeverity {
@@ -204,16 +132,4 @@ pub enum RuleSeverity {
     High,
     #[serde(rename = "critical")]
     Critical,
-}
-
-impl RuleSeverity {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match normalize_enum_value(value).as_str() {
-            "low" => Ok(Self::Low),
-            "medium" => Ok(Self::Medium),
-            "high" => Ok(Self::High),
-            "critical" => Ok(Self::Critical),
-            _ => anyhow::bail!("severity must be low, medium, high, or critical"),
-        }
-    }
 }
