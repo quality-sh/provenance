@@ -1,9 +1,7 @@
 //! Evidence reads preserve the native result and conditional live dependencies.
 use super::records::query;
-use super::{
-    failures::ReadError, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
-};
-use provenance_core::protocol::{self, failure::OperationFailure, QueryResponse};
+use super::{shapes::scoped_read_operation, ExecutionNeed, ExecutionNeeds};
+use provenance_core::protocol::{self, QueryResponse};
 
 query!(
     Impact,
@@ -74,34 +72,24 @@ const fn evidence_needs(request: &protocol::EvidenceQuery) -> ExecutionNeeds {
 }
 macro_rules! list {
     ($name:ident, $wire:literal, $result:ident, $handler:ident, $need:ident) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = protocol::repository::VerificationListRequest;
-            type Success = Vec<provenance_core::$result>;
-            type Failure = ReadError;
-            const NAME: &'static str = $wire;
-            const CONTEXT: super::ContextKind = super::ContextKind::Scope;
-            const FAILURE_STATUSES: &'static [u16] = &[409];
-            fn needs(_: &Self::Request) -> ExecutionNeeds {
-                &[ExecutionNeed::GraphStorage, ExecutionNeed::$need]
+        scoped_read_operation!(
+            pub $name,
+            $wire,
+            protocol::repository::VerificationListRequest,
+            Vec<provenance_core::$result>,
+            &[409],
+            &[
+                ExecutionNeed::GraphStorage,
+                ExecutionNeed::$need,
+            ],
+            |store, scope, request| {
+                crate::operations::$handler(
+                    Some(store.layout.root().to_path_buf()),
+                    scope,
+                    request.rule.as_ref(),
+                )
             }
-            fn failure_status(error: &ReadError) -> u16 {
-                error.status()
-            }
-            fn run(
-                context: PreparedContext,
-                request: Self::Request,
-            ) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let context = context.scope()?;
-                    Ok(crate::operations::$handler(
-                        Some(context.root),
-                        &context.scope,
-                        request.rule.as_ref(),
-                    )?)
-                })
-            }
-        }
+        );
     };
 }
 list!(

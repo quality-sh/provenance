@@ -4,7 +4,6 @@ use super::{
 };
 use provenance_core::protocol::{
     self,
-    failure::OperationFailure,
     repository::{InfoRequest, RepositoryInfo},
     QueryResponse,
 };
@@ -19,65 +18,49 @@ macro_rules! query {
         $answer:ident,
         $needs:expr
     ) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = protocol::$request;
-            type Success = QueryResponse<protocol::$result>;
-            type Failure = ReadError;
-            fn failure_status(error: &ReadError) -> u16 {
-                error.status()
-            }
-            const NAME: &'static str = $wire;
-            const CONTEXT: super::ContextKind = super::ContextKind::Scoped;
-            const FAILURE_STATUSES: &'static [u16] = &[409, 500];
-            fn needs(request: &Self::Request) -> ExecutionNeeds {
-                ($needs)(request)
-            }
-            fn validate_external(request: &Self::Request) -> Result<(), OperationFailure> {
+        $crate::operations::catalog::shapes::graph_read_operation!(
+            pub $name,
+            $wire,
+            protocol::$request,
+            QueryResponse<protocol::$result>,
+            &[409, 500],
+            $needs,
+            validate = |request: &protocol::$request| {
                 request
                     .validate()
                     .map_err(provenance_core::protocol::QueryValidation::into_failure)
+            },
+            |context, request| async move {
+                let mut answer = if context.external {
+                    crate::operations::queries::$answer(
+                        Some(context.root),
+                        &context.scope,
+                        context.policy,
+                        request,
+                    )
+                    .await?
+                } else {
+                    crate::operations::queries::$handler(
+                        Some(context.root),
+                        &context.scope,
+                        context.policy,
+                        request,
+                    )
+                    .await?
+                };
+                if context.external && answer.stamp.policy == protocol::StampPolicy::CatchUpFailed {
+                    answer.freshness_error =
+                        Some("catch-up failed; answer uses the stored projection".to_owned());
+                }
+                let mut response = QueryResponse::new($wire, answer);
+                if context.external && response.stamp.policy == protocol::StampPolicy::CatchUpFailed
+                {
+                    response.freshness_cause =
+                        Some(protocol::read_failure::FreshnessCause::CatchUpFailed);
+                }
+                Ok(response)
             }
-            fn run(
-                context: PreparedContext,
-                request: Self::Request,
-            ) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let context = context.graph()?;
-                    let mut answer = if context.external {
-                        crate::operations::queries::$answer(
-                            Some(context.root),
-                            &context.scope,
-                            context.policy,
-                            request,
-                        )
-                        .await?
-                    } else {
-                        crate::operations::queries::$handler(
-                            Some(context.root),
-                            &context.scope,
-                            context.policy,
-                            request,
-                        )
-                        .await?
-                    };
-                    if context.external
-                        && answer.stamp.policy == protocol::StampPolicy::CatchUpFailed
-                    {
-                        answer.freshness_error =
-                            Some("catch-up failed; answer uses the stored projection".to_owned());
-                    }
-                    let mut response = QueryResponse::new(Self::NAME, answer);
-                    if context.external
-                        && response.stamp.policy == protocol::StampPolicy::CatchUpFailed
-                    {
-                        response.freshness_cause =
-                            Some(protocol::read_failure::FreshnessCause::CatchUpFailed);
-                    }
-                    Ok(response)
-                })
-            }
-        }
+        );
     };
 }
 query!(
