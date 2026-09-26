@@ -6,6 +6,7 @@ mod support {
 }
 
 use jsonschema::JSONSchema;
+use provenance_macros::verifies;
 use provenance_porcelain::api::{ApiMethod, ApiOutcome, ApiParameter, ApiRequest};
 use provenance_porcelain::Porcelain;
 use provenance_store::operations::catalog;
@@ -22,6 +23,7 @@ fn names_of(parameters: &[ApiParameter]) -> Vec<&str> {
 }
 
 #[tokio::test]
+#[verifies("rule_porcelain_api_catalog_discovery", examples)]
 async fn api_discovery_describes_the_live_catalog_routes() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
@@ -129,6 +131,7 @@ async fn api_discovery_hides_denied_operations() {
 }
 
 #[tokio::test]
+#[verifies("rule_porcelain_api_catalog_discovery", examples)]
 async fn api_discovery_preserves_query_variant_contracts() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();

@@ -20,6 +20,7 @@ pub async fn dispatch_api(
                 println!("{}", serde_json::to_string_pretty(&catalog)?);
             } else {
                 println!("{}", render_discovery_readable(&catalog));
+                println!("Use --format json for the full request and response schemas.");
             }
         }
         Ok(ApiOutcome::Invoked(value)) => println!("{}", serde_json::to_string_pretty(&value)?),

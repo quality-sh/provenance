@@ -209,7 +209,13 @@ pub fn output_schema() -> Value {
             .and_then(|object| object.remove("$defs"))
             .and_then(|definitions| definitions.as_object().cloned())
         {
-            defs.extend(definitions);
+            for (name, definition) in definitions {
+                debug_assert!(
+                    !defs.contains_key(&name),
+                    "api output schema definitions collide on {name}"
+                );
+                defs.insert(name, definition);
+            }
         }
     }
     let mut schema = serde_json::json!({"anyOf": [catalog, envelope]});
@@ -305,9 +311,70 @@ pub fn render_discovery_readable(catalog: &ApiCatalog) -> String {
             route.path
         ));
         lines.push(format!("  {}", route.description));
+        for variant in &route.variants {
+            let label = variant.selector.as_ref().map_or_else(
+                || "inputs".to_owned(),
+                |name| format!("inputs with query={name}"),
+            );
+            lines.push(format!(
+                "  {label}: {}",
+                render_parameters(&variant.parameters)
+            ));
+        }
         if route.request_schema.is_some() {
             lines.push("  The request carries one JSON body.".to_owned());
         }
     }
     lines.join("\n")
+}
+
+fn render_parameters(parameters: &[ApiParameter]) -> String {
+    if parameters.is_empty() {
+        return "none".to_owned();
+    }
+    parameters
+        .iter()
+        .map(|parameter| {
+            let need = if parameter.required {
+                "required"
+            } else {
+                "optional"
+            };
+            format!("{} ({}, {need})", parameter.name, parameter.location)
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+    use std::collections::BTreeSet;
+
+    fn definition_names(schema: &Value) -> BTreeSet<String> {
+        schema["$defs"]
+            .as_object()
+            .map(|defs| defs.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn output_schema_arms_share_no_definition_name() {
+        let catalog = definition_names(
+            &serde_json::to_value(schemars::schema_for!(super::ApiCatalog)).unwrap(),
+        );
+        let envelope = definition_names(
+            &serde_json::to_value(schemars::schema_for!(
+                provenance_core::protocol::SuccessEnvelope<Value>
+            ))
+            .unwrap(),
+        );
+        assert!(
+            catalog.is_disjoint(&envelope),
+            "shared names: {:?}",
+            catalog.intersection(&envelope).collect::<Vec<_>>()
+        );
+        let merged = definition_names(&super::output_schema());
+        assert_eq!(merged.len(), catalog.len() + envelope.len());
+    }
 }

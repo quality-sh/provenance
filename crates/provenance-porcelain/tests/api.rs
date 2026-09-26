@@ -1,6 +1,6 @@
 use provenance_porcelain::api::{
     render_discovery_readable, ApiArguments, ApiCatalog, ApiError, ApiErrorKind, ApiInput,
-    ApiMethod, ApiOutcome, ApiPort, ApiPortFuture, ApiRequest, ApiRoute, ApiVariant,
+    ApiMethod, ApiOutcome, ApiParameter, ApiPort, ApiPortFuture, ApiRequest, ApiRoute, ApiVariant,
 };
 use provenance_porcelain::Porcelain;
 use serde_json::{json, Value};
@@ -332,28 +332,59 @@ async fn discovery_returns_the_port_catalog() {
     assert_eq!(catalog.routes[0].method, ApiMethod::Get);
 }
 
+fn parameter(name: &str, location: &str, required: bool) -> ApiParameter {
+    ApiParameter {
+        name: name.into(),
+        location: location.into(),
+        required,
+        schema: json!({"type": "string"}),
+    }
+}
+
 #[test]
-fn readable_discovery_lists_method_path_and_description() {
+fn readable_discovery_lists_routes_with_their_inputs() {
+    let mut member = route(
+        ApiMethod::Get,
+        "/requirements/{id}",
+        "Read one requirement.",
+        None,
+    );
+    member.variants[0].parameters = vec![parameter("id", "path", true)];
+    member.variants.push(ApiVariant {
+        parameters: vec![
+            parameter("id", "path", true),
+            parameter("query", "query", true),
+            parameter("depth", "query", false),
+        ],
+        ..variant(Some("neighbors"))
+    });
+    let mut create = route(
+        ApiMethod::Post,
+        "/requirements",
+        "Create one requirement.",
+        Some(json!({"type": "object"})),
+    );
+    create.variants[0].parameters = vec![parameter("Idempotency-Key", "header", true)];
     let catalog = ApiCatalog {
         routes: vec![
             route(ApiMethod::Get, "/requirements", "List requirements.", None),
-            route(
-                ApiMethod::Post,
-                "/requirements",
-                "Create one requirement.",
-                Some(json!({"type": "object"})),
-            ),
+            member,
+            create,
         ],
     };
-    assert_eq!(catalog.routes[0].variants.len(), 1);
-    assert_eq!(catalog.routes[0].variants[0].selector, None);
 
     assert_eq!(
         render_discovery_readable(&catalog),
         concat!(
-            "api routes: 2\n",
-            "- GET /requirements\n  List requirements.\n",
-            "- POST /requirements\n  Create one requirement.\n  The request carries one JSON body."
+            "api routes: 3\n",
+            "- GET /requirements\n  List requirements.\n  inputs: none\n",
+            "- GET /requirements/{id}\n  Read one requirement.\n",
+            "  inputs: id (path, required)\n",
+            "  inputs with query=neighbors: id (path, required), query (query, required), ",
+            "depth (query, optional)\n",
+            "- POST /requirements\n  Create one requirement.\n",
+            "  inputs: Idempotency-Key (header, required)\n",
+            "  The request carries one JSON body."
         )
     );
 }

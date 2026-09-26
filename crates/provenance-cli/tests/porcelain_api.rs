@@ -193,6 +193,7 @@ fn api_stdin_body_creates_from_standard_input() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_catalog_discovery", examples)]
 fn api_discovery_describes_the_live_catalog() {
     let (_directory, repo) = init();
     seed_source(&repo);
@@ -201,6 +202,25 @@ fn api_discovery_describes_the_live_catalog() {
     assert!(readable.starts_with("api routes: "), "{readable}");
     assert!(readable.contains("GET /requirements"), "{readable}");
     assert!(readable.contains("POST /sources"), "{readable}");
+    assert!(readable.contains("- GET /sources/{id}\n"), "{readable}");
+    assert!(
+        readable.contains("  inputs: id (path, required)\n"),
+        "{readable}"
+    );
+    assert!(
+        readable.contains("Idempotency-Key (header, required)"),
+        "{readable}"
+    );
+    assert!(
+        readable.contains("  inputs with query=neighbors: "),
+        "{readable}"
+    );
+    assert!(
+        readable
+            .trim_end()
+            .ends_with("Use --format json for the full request and response schemas."),
+        "{readable}"
+    );
 
     let structured = json(&["api", "--repo", &repo, "--format", "json"]);
     let routes = structured["routes"].as_array().unwrap();
