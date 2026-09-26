@@ -3,26 +3,12 @@
 //! bindings, a removed verification site, recovery after a prior
 //! finding, and a Requirement restatement with untouched bindings.
 
-use assert_cmd::Command;
+use provenance_report::{render_envelope, RenderFormat};
 use serde_json::{json, Value};
-use tempfile::TempDir;
 
 fn render_markdown(envelope: &Value) -> String {
-    let dir = TempDir::new().unwrap();
-    let input = dir.path().join("envelope.json");
-    std::fs::write(&input, serde_json::to_vec_pretty(envelope).unwrap()).unwrap();
-    let output = Command::cargo_bin("provenance")
-        .unwrap()
-        .args(["report", "render", "--input"])
-        .arg(&input)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "render failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap()
+    let raw = serde_json::to_string(envelope).unwrap();
+    render_envelope(&raw, RenderFormat::Markdown).unwrap()
 }
 
 /// Scenario B: an active Rule without current verification under an error
