@@ -206,6 +206,16 @@ fn active_rule_without_verification_is_reported_and_no_run_is_invented() {
     );
 
     let findings = envelope["findings"].as_array().unwrap();
+    let missing_implementation = findings
+        .iter()
+        .find(|finding| {
+            finding["code"] == "active_rule_missing_implementation"
+                && finding["subject"]["id"] == "rule_added"
+        })
+        .expect("the new unimplemented rule must carry an absence finding");
+    assert_eq!(missing_implementation["binding_presence"], "absent");
+    assert_eq!(missing_implementation["comparison"], "new");
+
     let absence = findings
         .iter()
         .find(|finding| {
