@@ -1,4 +1,5 @@
 use axum::{body::Body, http::Request};
+use provenance_store::operations::catalog;
 use provenance_transport::StatementHost;
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
@@ -70,10 +71,9 @@ async fn metadata_carries_the_tuple_in_an_envelope() {
             "wire": 9, "state": 2, "review_journal": 3, "read_derivation": 3
         })
     );
-    assert!(value["data"]["contract_digest"]
-        .as_str()
-        .unwrap()
-        .starts_with("sha256:"));
+    // No contract digest: the tuple, the package identity, and the bound
+    // repository and scope are the whole advertisement.
+    assert!(value["data"].get("contract_digest").is_none());
     assert_eq!(value["meta"], json!({}));
 }
 
@@ -85,6 +85,11 @@ async fn mcp_projects_the_same_resource_operation() {
     let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
+    assert!(tools.iter().any(|tool| {
+        catalog::definitions()
+            .iter()
+            .any(|definition| definition.name == tool.name)
+    }));
     let tool = tools
         .iter()
         .find(|tool| tool.name == "check-statement")

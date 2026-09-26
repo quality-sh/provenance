@@ -74,6 +74,84 @@ impl<'de> Deserialize<'de> for ScopeId {
 #[verifies("rule_id_charset", construction)]
 pub struct StableId(String);
 
+/// Words that name a CLI command or command slot cannot name new records.
+/// Keep this policy in the domain model so every writer applies one list.
+pub const RESERVED_RECORD_IDS: &[&str] = &[
+    "__cargo-init",
+    "answer",
+    "api",
+    "assertions",
+    "authoring-changes",
+    "authoring-plans",
+    "begin-verification",
+    "boundaries",
+    "check",
+    "claim",
+    "complete-verification",
+    "contributions",
+    "coverage",
+    "create",
+    "dictionary",
+    "discuss",
+    "discussion",
+    "discussion-containers",
+    "discussions",
+    "dispositions",
+    "docs",
+    "dogfood",
+    "domains",
+    "export",
+    "gaps",
+    "get",
+    "graph",
+    "graph-reference",
+    "health",
+    "impact",
+    "import",
+    "init",
+    "list",
+    "materialize",
+    "merge-jsonl",
+    "messages",
+    "neighbors",
+    "orphans",
+    "prime",
+    "proposals",
+    "questions",
+    "release",
+    "reply",
+    "report",
+    "requirements",
+    "resolutions",
+    "review",
+    "rules",
+    "schema",
+    "search",
+    "skills",
+    "sources",
+    "statement-checks",
+    "submit",
+    "swarm-backtrace",
+    "synthesis-packets",
+    "topics",
+    "trace",
+    "traceability",
+    "update",
+    "validate",
+    "verification-bindings",
+    "verification-runs",
+    "wiki",
+];
+
+/// Refuse a command keyword when a writer assigns a new record ID.
+#[rule("rule_record_id_excludes_command_keywords")]
+pub fn ensure_record_id_assignable(id: &str) -> anyhow::Result<()> {
+    if RESERVED_RECORD_IDS.contains(&id) {
+        anyhow::bail!("reserved record ID {id} cannot be assigned");
+    }
+    Ok(())
+}
+
 impl StableId {
     pub fn new(value: impl Into<String>) -> anyhow::Result<Self> {
         let value = value.into();

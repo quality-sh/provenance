@@ -490,7 +490,7 @@ jobs:
           rule_id=$(target/debug/provenance rules list \
             --repo "$fixture_repo" --scope default --format json \
             | jq -er '.data.items | select(length == 1) | .[0].id')
-          target/debug/provenance rules get "$rule_id" \
+          target/debug/provenance rules "$rule_id" get \
             --repo "$fixture_repo" --scope default --format json
           target/debug/provenance verification-runs list \
             --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \
@@ -572,7 +572,7 @@ jobs:
           rule_id=$(target/debug/provenance rules list \
             --repo "$fixture_repo" --scope default --format json \
             | jq -er '.data.items | select(length == 1) | .[0].id')
-          target/debug/provenance rules get "$rule_id" \
+          target/debug/provenance rules "$rule_id" get \
             --repo "$fixture_repo" --scope default --format json
           target/debug/provenance verification-runs list \
             --repo "$fixture_repo" --scope default --rule "$rule_id" --format json \

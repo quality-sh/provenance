@@ -5,8 +5,8 @@
 use crate::operations::reader::{kind_of, ReadContext, ReadSnapshot, SqlFront};
 use provenance_core::model::relations::{related_nodes, RelatedNode, RelationDirection};
 use provenance_core::protocol::{
-    take_page, Direction, GraphNode, Neighbor, NeighborsQuery, NeighborsResult, TraceQuery,
-    TraceResult, TracedNode,
+    Direction, GraphNode, Neighbor, NeighborsQuery, NeighborsResult, TraceQuery, TraceResult,
+    TracedNode,
 };
 use provenance_core::{NodeType, StableId};
 use std::collections::BTreeSet;
@@ -62,19 +62,20 @@ async fn origin_kind(
     }
 }
 
-/// The records behind the steps that count, in step order. The steps
-/// arrive sorted by kind rank, so each kind is read once, and the read
-/// stops once `limit + 1` records are in hand: the page and its cut flag
-/// are decided, and no later table is touched.
+/// The records behind the steps that count, in step order, bounded by
+/// the page. Each kind group is probed by id first, so only the first
+/// `limit` present records decode, and the flag says whether a further
+/// record exists past the page; no off-page record is read whole.
 async fn hydrate(
     snapshot: &ReadSnapshot,
     steps: &[RelatedNode],
 
     limit: usize,
-) -> anyhow::Result<Vec<(RelatedNode, GraphNode)>> {
-    let mut found = Vec::new();
+) -> anyhow::Result<(Vec<(RelatedNode, GraphNode)>, bool)> {
+    let mut selected: Vec<RelatedNode> = Vec::new();
+    let mut more = false;
     let mut start = 0;
-    while start < steps.len() && found.len() <= limit {
+    while start < steps.len() {
         let kind = steps[start].endpoint.node_type;
         let end = steps[start..]
             .iter()
@@ -84,25 +85,51 @@ async fn hydrate(
             .iter()
             .map(|step| (kind, step.endpoint.id.clone()))
             .collect();
-        let records = nodes::nodes(snapshot, &wanted).await?;
+        let counting: BTreeSet<Key> = nodes::counting(snapshot, &wanted)
+            .await?
+            .into_iter()
+            .map(|(node_type, id)| nodes::key(node_type, &id))
+            .collect();
         for step in &steps[start..end] {
-            if let Some(node) = records.get(&nodes::key(kind, &step.endpoint.id)) {
-                found.push((step.clone(), node.clone()));
+            if !counting.contains(&nodes::key(kind, &step.endpoint.id)) {
+                continue;
             }
+            if selected.len() == limit {
+                more = true;
+                break;
+            }
+            selected.push(step.clone());
+        }
+        if more {
+            break;
         }
         start = end;
     }
-    Ok(found)
+    let wanted: Vec<(NodeType, StableId)> = selected
+        .iter()
+        .map(|step| (step.endpoint.node_type, step.endpoint.id.clone()))
+        .collect();
+    let records = nodes::nodes(snapshot, &wanted).await?;
+    let found = selected
+        .into_iter()
+        .filter_map(|step| {
+            let node = records
+                .get(&nodes::key(step.endpoint.node_type, &step.endpoint.id))?
+                .clone();
+            Some((step, node))
+        })
+        .collect();
+    Ok((found, more))
 }
 
 /// The neighbours of one record of a known kind, in served order, up to
-/// one past the limit.
+/// the limit, with whether more neighbours exist.
 async fn around(
     snapshot: &ReadSnapshot,
     node_type: NodeType,
     id: &StableId,
     request: &NeighborsQuery,
-) -> anyhow::Result<Vec<Neighbor>> {
+) -> anyhow::Result<(Vec<Neighbor>, bool)> {
     let follows_out = follows_out(snapshot, node_type, id).await?;
     let front = SqlFront::hop(&snapshot.relations(), &[(node_type, id.clone())]).await?;
     let steps = steps(
@@ -113,15 +140,16 @@ async fn around(
         &request.relations,
         follows_out,
     );
-    Ok(hydrate(snapshot, &steps, request.limit)
-        .await?
+    let (found, more) = hydrate(snapshot, &steps, request.limit).await?;
+    let neighbors = found
         .into_iter()
         .map(|(step, node)| Neighbor {
             relation: step.relation.to_string(),
             direction: direction_of(step.direction),
             node,
         })
-        .collect())
+        .collect();
+    Ok((neighbors, more))
 }
 
 pub(super) async fn neighbors(
@@ -133,11 +161,10 @@ pub(super) async fn neighbors(
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
     let id = StableId::new(request.id.clone())?;
     let snapshot = ctx.snapshot();
-    let found = match origin_kind(snapshot, request.node_type, &id).await? {
+    let (neighbors, has_more) = match origin_kind(snapshot, request.node_type, &id).await? {
         Some(node_type) => around(snapshot, node_type, &id, &request).await?,
-        None => Vec::new(),
+        None => (Vec::new(), false),
     };
-    let (neighbors, has_more) = take_page(found, request.limit);
     Ok(NeighborsResult {
         id: request.id,
         limit: request.limit,
@@ -166,7 +193,8 @@ pub(super) async fn trace(ctx: &ReadContext, request: TraceQuery) -> anyhow::Res
         .iter()
         .map(|(node_type, id)| nodes::key(*node_type, id))
         .collect();
-    let mut reached = Vec::new();
+    let mut reached: Vec<TracedNode> = Vec::new();
+    let mut more = false;
     for depth in 1..=request.max_depth {
         if frontier.is_empty() {
             break;
@@ -190,29 +218,30 @@ pub(super) async fn trace(ctx: &ReadContext, request: TraceQuery) -> anyhow::Res
             }
         }
         follows_out = true;
-        // The map is keyed by rank and id, which is the served depth order.
-        let next: Vec<GraphNode> = nodes::nodes(snapshot, &candidates)
-            .await?
-            .into_values()
-            .collect();
-        if next.is_empty() {
+        // The counting endpoints come back keyed by rank and id, which is
+        // the served depth order. Only the page slice decodes; the whole
+        // counted level carries the walk forward, so the requested depth
+        // bounds the exploration, not the output page.
+        let counting = nodes::counting(snapshot, &candidates).await?;
+        if counting.is_empty() {
             break;
         }
-        frontier = next
-            .iter()
-            .map(|node| (node.node_type(), node.id().clone()))
-            .collect();
-        reached.extend(next.into_iter().map(|node| TracedNode { depth, node }));
-        if reached.len() > request.limit {
+        let take = (request.limit - reached.len()).min(counting.len());
+        more = more || counting.len() > take;
+        let page = nodes::nodes(snapshot, &counting[..take]).await?;
+        for node in page.into_values() {
+            reached.push(TracedNode { depth, node });
+        }
+        frontier = counting;
+        if more {
             break;
         }
     }
-    let (nodes, has_more) = take_page(reached, request.limit);
     Ok(TraceResult {
         id: request.id,
         max_depth: request.max_depth,
         limit: request.limit,
-        has_more,
-        nodes,
+        has_more: more,
+        nodes: reached,
     })
 }

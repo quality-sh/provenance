@@ -30,6 +30,7 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
+        self.ensure_canonical_id_available(&scope_id, &id)?;
         crate::write_error::ensure!(
             MissingReference,
             !requirement_ids.is_empty(),
@@ -107,6 +108,7 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
+        self.ensure_canonical_id_available(&scope_id, &id)?;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
         crate::write_error::ensure!(
             MissingReference,

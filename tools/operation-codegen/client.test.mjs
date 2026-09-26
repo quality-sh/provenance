@@ -33,7 +33,7 @@ async function host(handler, action) {
 }
 
 const metadata = compatibility => ({
-  data: { compatibility, package: { name: 'fixture', version: '0' }, contract_digest: 'fixture', repository: 'fixture', scope: 'default' }, meta: {},
+  data: { compatibility, package: { name: 'fixture', version: '0' }, repository: 'fixture', scope: 'default' }, meta: {},
 });
 
 test('typed refusal is preserved and operation is sent once', async () => {
@@ -64,6 +64,48 @@ test('bearer connection authenticates metadata and operation requests', async ()
     assert.deepEqual(await client.checkStatement({ data: { statement: 'Stop.' } }), { data: report, meta: {} });
   });
   assert.deepEqual(observed, ['Bearer fixture-secret', 'Bearer fixture-secret']);
+});
+
+test('metadata refusal preserves its declared status and payload', async () => {
+  const { HttpClient, OperationError } = clientModule;
+  const failure = { error: { kind: 'unauthenticated' }, meta: {} };
+  await host((_request, response) => {
+    response.writeHead(401, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(failure));
+  }, async url => {
+    await assert.rejects(HttpClient.connectWithBearer(url, 'wrong-secret'), error => {
+      assert.ok(error instanceof OperationError);
+      assert.equal(error.status, 401);
+      assert.deepEqual(error.failure, failure);
+      return true;
+    });
+  });
+});
+
+test('malformed metadata refusal JSON is a malformed response', async () => {
+  const { HttpClient, MalformedResponseError } = clientModule;
+  await host((_request, response) => {
+    response.writeHead(401, { 'content-type': 'application/json' });
+    response.end('{');
+  }, async url => {
+    await assert.rejects(HttpClient.connect(url), MalformedResponseError);
+  });
+});
+
+test('schema-invalid metadata refusal is a malformed response', async () => {
+  const { HttpClient, MalformedResponseError } = clientModule;
+  await host((_request, response) => {
+    response.writeHead(401, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ error: { kind: 'not_declared' }, meta: {} }));
+  }, async url => {
+    await assert.rejects(HttpClient.connect(url), MalformedResponseError);
+  });
+});
+
+test('metadata transport loss remains a connection error', async () => {
+  const { HttpClient, ConnectionError } = clientModule;
+  const unavailable = async () => { throw new TypeError('fixture unavailable'); };
+  await assert.rejects(HttpClient.connect('http://localhost', unavailable), ConnectionError);
 });
 
 test('an aborted read cancels a response stream and releases its lock', async () => {

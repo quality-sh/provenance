@@ -217,7 +217,8 @@ fn collection_lists_accept_the_returned_cursor() {
 
     let second = provenance()
         .args([
-            "sources", "list", "--repo", &repo, "--cursor", cursor, "--format", "json",
+            "sources", "list", "--repo", &repo, "--limit", "1", "--cursor", cursor, "--format",
+            "json",
         ])
         .output()
         .unwrap();
@@ -235,15 +236,149 @@ fn collection_lists_accept_the_returned_cursor() {
 }
 
 #[test]
-fn member_reads_return_a_typed_refusal_for_unknown_query_parameters() {
+fn collection_cursors_refuse_a_changed_page_limit() {
+    let (_directory, repo) = init();
+    create_source(&repo, "source_cursor_a");
+    create_source(&repo, "source_cursor_b");
+    let first = provenance()
+        .args([
+            "sources", "list", "--repo", &repo, "--limit", "1", "--format", "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(first.status.success());
+    let first: Value = serde_json::from_slice(&first.stdout).unwrap();
+    let cursor = first["meta"]["next_cursor"].as_str().unwrap();
+
+    provenance()
+        .args([
+            "sources", "list", "--repo", &repo, "--limit", "2", "--cursor", cursor, "--format",
+            "json",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("cursor_invalid"));
+}
+
+#[test]
+fn collection_member_actions_follow_the_id_then_action_grammar() {
+    let (_directory, repo) = init();
+    create_source(&repo, "source_action_one");
+    create_source(&repo, "source_action_two");
+
+    let updated = provenance()
+        .args([
+            "sources",
+            "source_action_one",
+            "update",
+            "--repo",
+            &repo,
+            "--name",
+            "Changed",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        updated.status.success(),
+        "{}",
+        String::from_utf8_lossy(&updated.stderr)
+    );
+    let updated: Value = serde_json::from_slice(&updated.stdout).unwrap();
+    assert_eq!(updated["data"]["id"], "source_action_one");
+    assert_eq!(updated["data"]["name"], "Changed");
+
+    let read = provenance()
+        .args([
+            "sources",
+            "source_action_two",
+            "get",
+            "--repo",
+            &repo,
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        read.status.success(),
+        "{}",
+        String::from_utf8_lossy(&read.stderr)
+    );
+    let read: Value = serde_json::from_slice(&read.stdout).unwrap();
+    assert_eq!(read["data"]["id"], "source_action_two");
+}
+
+#[test]
+fn array_query_flags_use_the_registered_wire_encoding() {
+    let (_directory, repo) = init();
+    provenance()
+        .args([
+            "domains",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "domain_filter",
+            "--name",
+            "Filter domain",
+        ])
+        .assert()
+        .success();
+    provenance()
+        .args([
+            "requirements",
+            "create",
+            "--repo",
+            &repo,
+            "--id",
+            "req_filter",
+            "--statement",
+            "The system stores records.",
+            "--domain-id",
+            "domain_filter",
+        ])
+        .assert()
+        .success();
+
+    let output = provenance()
+        .args([
+            "requirements",
+            "req_filter",
+            "neighbors",
+            "--repo",
+            &repo,
+            "--relations",
+            "domain_id",
+            "--limit",
+            "20",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let neighbors = output["data"]["neighbors"].as_array().unwrap();
+    assert!(!neighbors.is_empty());
+    assert!(neighbors.iter().all(|item| item["relation"] == "domain_id"));
+}
+
+#[test]
+fn member_reads_return_usage_status_for_unknown_options() {
     let (_directory, repo) = init();
     create_source(&repo, "source_catalog_member");
 
     provenance()
         .args([
             "sources",
-            "get",
             "source_catalog_member",
+            "get",
             "--repo",
             &repo,
             "--stray",
@@ -252,9 +387,8 @@ fn member_reads_return_a_typed_refusal_for_unknown_query_parameters() {
             "json",
         ])
         .assert()
-        .failure()
-        .stderr(contains("\"kind\":\"invalid_input\""))
-        .stderr(contains("\"field\":\"stray\""));
+        .code(2)
+        .stderr(contains("unexpected argument '--stray'"));
 }
 
 #[test]
@@ -306,69 +440,5 @@ fn query_words_win_over_member_ids() {
         .stderr(contains("git_unavailable"));
 }
 
-#[test]
-fn question_update_method_alias_is_resolved_before_schema_validation() {
-    let (_directory, repo) = init();
-    provenance()
-        .args([
-            "requirements",
-            "create",
-            "--repo",
-            &repo,
-            "--id",
-            "req_question_alias",
-            "--statement",
-            "The system records a question.",
-        ])
-        .assert()
-        .success();
-    provenance()
-        .args(["topics", "create", "--repo", &repo, "--stdin"])
-        .write_stdin(
-            json!({
-                "id":"topic_question_alias", "requirement_id":"req_question_alias",
-                "title":"Question aliases", "status":"open", "links":[]
-            })
-            .to_string(),
-        )
-        .assert()
-        .success();
-    provenance()
-        .args([
-            "questions",
-            "create",
-            "--repo",
-            &repo,
-            "--id",
-            "question_alias",
-            "--topic-id",
-            "topic_question_alias",
-            "--question",
-            "Which method applies?",
-            "--method",
-            "research",
-        ])
-        .assert()
-        .success();
-    let output = provenance()
-        .args([
-            "questions",
-            "update",
-            "question_alias",
-            "--repo",
-            &repo,
-            "--method",
-            "grill",
-            "--format",
-            "json",
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let output: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(output["data"]["resolution_method"], "grill");
-}
+#[path = "cli_catalog/aliases.rs"]
+mod aliases;

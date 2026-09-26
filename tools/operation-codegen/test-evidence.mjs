@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { appendFile, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 export async function checkEvidence({ HttpClient, OperationError }, fixture) {
   const identity = { repository: fixture.targets.first, scope: 'default' };
@@ -29,6 +31,39 @@ export async function checkEvidence({ HttpClient, OperationError }, fixture) {
     assert.ok(Array.isArray(result.data.items));
     assert.ok(result.data.items.length > 1);
   }
+
+  const seenRuns = new Set();
+  let runCursor;
+  do {
+    const page = await client.listVerificationRuns({ limit: 1, cursor: runCursor });
+    assert.ok(page.data.items.length <= 1);
+    for (const run of page.data.items) {
+      assert.equal(seenRuns.has(run.id), false, `duplicate verification run ${run.id}`);
+      seenRuns.add(run.id);
+    }
+    runCursor = page.meta.next_cursor ?? undefined;
+    assert.equal(page.meta.has_more, runCursor !== undefined);
+  } while (runCursor !== undefined);
+  assert.ok(seenRuns.size > 1);
+
+  const firstPage = await client.listVerificationRuns({ limit: 1 });
+  const staleCursor = firstPage.meta.next_cursor;
+  assert.equal(typeof staleCursor, 'string');
+  const runsPath = join(
+    fixture.repository_root, '.provenance/cache/scopes/default/verification-runs.jsonl',
+  );
+  const existing = (await readFile(runsPath, 'utf8')).split('\n').filter(Boolean).map(JSON.parse);
+  const added = { ...existing.at(-1), id: 'verification_live_revision' };
+  await appendFile(runsPath, `${JSON.stringify(added)}\n`);
+  await assert.rejects(
+    client.listVerificationRuns({ limit: 1, cursor: staleCursor }),
+    error => {
+      assert.ok(error instanceof OperationError);
+      assert.equal(error.status, 409);
+      assert.equal(error.failure.error.kind, 'cursor_revision_changed');
+      return true;
+    },
+  );
 
   await assert.rejects(
     client.listRules({ query: 'resolve-symbol', file: '../outside.rs' }),

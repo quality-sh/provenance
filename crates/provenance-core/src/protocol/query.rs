@@ -49,7 +49,20 @@ pub struct GetQuery {
     pub id: String,
 }
 
-/// Find records whose text contains a phrase.
+/// Resolve one repository-local ID without a kind selector.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResolveRecordQuery {
+    #[serde(default)]
+    pub protocol_version: Option<u32>,
+    pub id: String,
+    /// Kinds visible to the authorized caller.
+    #[serde(default)]
+    pub allowed_node_types: Vec<NodeType>,
+}
+
+/// Find records that satisfy the supplied text and kind predicates.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -58,7 +71,8 @@ pub struct SearchQuery {
     pub protocol_version: Option<u32>,
     #[serde(default)]
     pub cursor: Option<String>,
-    pub text: String,
+    #[serde(default)]
+    pub text: Option<String>,
     #[serde(default)]
     pub node_types: Vec<NodeType>,
     #[serde(default = "default_limit")]

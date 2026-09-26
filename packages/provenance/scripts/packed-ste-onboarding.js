@@ -5,9 +5,10 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
 } from "node:fs";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const sleep = new Int32Array(new SharedArrayBuffer(4));
@@ -74,11 +75,16 @@ export function verifyPackedSteOnboarding({
   );
 
   try {
-    execFileSync(process.execPath, [initializer], {
+    const first = execFileSync(process.execPath, [initializer], {
       cwd: project,
       env: environment,
-      stdio: "pipe",
+      encoding: "utf8",
     });
+    assert.match(first, /(?:^|\n)Initialized Provenance for scope "default" in /);
+    assert.equal(first.match(/Provenance records requirements, decisions, and the rules that connect them to code\./g)?.length, 1);
+    assert.match(first, /\nNew\n/);
+    assert.equal(first.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
+    assert.ok(first.endsWith("Have your agent run provenance prime to get acclimated.\n"));
     assertSingleDictionaryRequest(server.requests());
 
     const packageLocalEntry = join(
@@ -90,6 +96,10 @@ export function verifyPackedSteOnboarding({
     assertSingleDictionaryRequest(server.requests());
 
     assertInitializedPackage(project, packedMainSpec, initializerManifest);
+    assertRepeatedInitializationPreservesScope({
+      project, environment, npmCli, initializerArchive: join(archiveDirectory, initializerArchive),
+      initializer, packageLocalEntry,
+    });
     assertAgentInstructions(project);
     assertLocalEngines(project, environment, engineManifest, binaryName, version, npmCli);
     assertPreflightAndWriteGate(project, environment, npmCli);
@@ -99,6 +109,55 @@ export function verifyPackedSteOnboarding({
   } finally {
     server.stop();
   }
+}
+
+function assertRepeatedInitializationPreservesScope({
+  project, environment, npmCli, initializerArchive, initializer, packageLocalEntry,
+}) {
+  const manifestPath = join(project, ".provenance", "state", "manifest.json");
+  assert.deepEqual(JSON.parse(readFileSync(manifestPath, "utf8")).scopes, [
+    { id: "default", path_prefix: "." },
+  ], "a new npm project must receive the canonical default scope");
+
+  for (const prefix of [".", "crates/app"]) {
+    if (prefix !== ".") {
+      mkdirSync(join(project, prefix), { recursive: true });
+      execFileSync(process.execPath, [
+        packageLocalEntry, "init", "--path", ".",
+        "--scope", "default", "--path-prefix", prefix,
+      ], { cwd: project, env: environment, stdio: "pipe" });
+    }
+    const before = onboardingFiles(project);
+    for (let repeat = 0; repeat < 2; repeat += 1) {
+      // npm can remove the temporary initializer during the SDK installation.
+      npm(npmCli, [
+        "install", "--offline", "--cache", environment.npm_config_cache,
+        "--no-audit", "--no-fund", "--no-save", initializerArchive,
+      ], project);
+      const rerun = execFileSync(process.execPath, [initializer], {
+        cwd: project, env: environment, encoding: "utf8",
+      });
+      assert.match(rerun, /(?:^|\n)Provenance is already set up for scope "default" in /);
+      assert.equal(rerun.match(/Provenance records requirements, decisions, and the rules that connect them to code\./g)?.length, 1);
+      assert.equal(rerun.match(/Have your agent run provenance prime to get acclimated\./g)?.length, 1);
+      assert.ok(rerun.endsWith("Have your agent run provenance prime to get acclimated.\n"));
+      assert.deepEqual(JSON.parse(readFileSync(manifestPath, "utf8")).scopes, [
+        { id: "default", path_prefix: prefix },
+      ], "repeated npm initialization must preserve the configured scope");
+      assert.deepEqual(onboardingFiles(project), before,
+        "repeated npm initialization must leave onboarding files unchanged");
+    }
+  }
+}
+
+function onboardingFiles(project) {
+  const paths = ["AGENTS.md", ".gitignore"];
+  for (const directory of [".provenance/state", ".agents/skills", ".claude/skills"]) {
+    for (const entry of readdirSync(join(project, directory), { recursive: true, withFileTypes: true })) {
+      if (entry.isFile()) paths.push(join(entry.parentPath, entry.name));
+    }
+  }
+  return paths.sort().map(path => [path, readFileSync(resolve(project, path), "utf8")]);
 }
 
 function assertInitializedPackage(project, packedMainSpec, initializerManifest) {
@@ -156,7 +215,9 @@ function assertLocalEngines(project, environment, engineManifest, binaryName, ve
     "check", "--repo", ".", "--format", "json",
   ]);
   assert.equal(check.status, 0, check.stderr);
-  assert.equal(JSON.parse(check.stdout).status, "ok");
+  const categories = JSON.parse(check.stdout).categories;
+  assert.equal(categories.length, 3);
+  assert.ok(categories.every(category => category.status === "passed"));
 }
 
 function assertPreflightAndWriteGate(project, environment, npmCli) {
@@ -228,10 +289,11 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
   ]);
   assert.notEqual(strict.status, 0, "the project-local strict CI command must block findings");
   const report = JSON.parse(strict.stdout);
-  assert.equal(report.status, "findings");
-  assert.equal(report.base_commit, base);
-  assert.equal(report.candidate_commit, candidate);
-  assert.deepEqual(report.diagnostics, [{
+  const statements = report.categories.find(category => category.category === "statements");
+  assert.equal(statements.status, "findings");
+  assert.equal(statements.context.base_commit, base);
+  assert.equal(statements.context.candidate_commit, candidate);
+  assert.deepEqual(statements.findings.map(finding => finding.detail), [{
     resource_kind: "requirement",
     scope_id: "default",
     id: "req_packed_manual_edit",

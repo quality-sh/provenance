@@ -153,7 +153,7 @@ async fn groups(ctx: &ReadContext, query: DiscussionQuery) -> anyhow::Result<Dis
     })
 }
 
-async fn group(
+pub(super) async fn group(
     ctx: &ReadContext,
     parent: ThreadParent,
     discussion_id: StableId,

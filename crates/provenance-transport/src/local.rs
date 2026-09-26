@@ -129,9 +129,20 @@ impl HostAccess for LocalAccess {
     }
 
     fn advertises(&self, operation: &str) -> bool {
-        catalog::definitions()
-            .iter()
-            .any(|definition| definition.name == operation)
+        [
+            <catalog::ResolveRecord as catalog::Operation>::NAME,
+            <catalog::Search as catalog::Operation>::NAME,
+            <catalog::Trace as catalog::Operation>::NAME,
+            <catalog::Impact as catalog::Operation>::NAME,
+            <catalog::ListDiscussionsV2 as catalog::Operation>::NAME,
+            <catalog::GetDiscussionConversationV2 as catalog::Operation>::NAME,
+            <catalog::WriteDiscussionV2 as catalog::Operation>::NAME,
+            <catalog::WriteTargetDiscussionV2 as catalog::Operation>::NAME,
+        ]
+        .contains(&operation)
+            || catalog::definitions()
+                .iter()
+                .any(|definition| definition.name == operation)
     }
 
     fn bound_identity(&self) -> Option<(String, String)> {

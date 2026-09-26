@@ -2174,6 +2174,7 @@ dependencies = [
  "predicates",
  "provenance-core",
  "provenance-macros",
+ "provenance-porcelain",
  "provenance-report",
  "provenance-scanner",
  "provenance-ste100",
@@ -2181,10 +2182,12 @@ dependencies = [
  "provenance-transport",
  "pulldown-cmark",
  "remove_dir_all",
+ "rmcp",
  "rustix",
  "same-file",
  "semver",
  "serde",
+ "serde_ignored",
  "serde_json",
  "sha2 0.10.9",
  "tar",
@@ -2243,6 +2246,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "trybuild",
 ]
 
 [[package]]
@@ -2255,6 +2259,19 @@ dependencies = [
  "quote",
  "syn 2.0.117",
  "trybuild",
+]
+
+[[package]]
+name = "provenance-porcelain"
+version = "0.2.3"
+dependencies = [
+ "provenance-core",
+ "provenance-macros",
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -2306,6 +2323,7 @@ version = "0.2.3"
 dependencies = [
  "fs2",
  "jsonschema",
+ "office_oxide",
  "pdf_oxide",
  "provenance-macros",
  "schemars 1.2.2",
@@ -2326,6 +2344,7 @@ dependencies = [
  "fs_at",
  "hmac",
  "jsonschema",
+ "libsqlite3-sys",
  "provenance-core",
  "provenance-macros",
  "provenance-scanner",
@@ -2353,7 +2372,10 @@ version = "0.2.3"
 dependencies = [
  "axum",
  "futures",
+ "jsonschema",
  "provenance-core",
+ "provenance-macros",
+ "provenance-porcelain",
  "provenance-ste100",
  "provenance-store",
  "rmcp",

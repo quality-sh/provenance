@@ -149,6 +149,21 @@ impl ProjectionFamily {
         }
     }
 
+    pub(crate) const fn node_type(self) -> Option<provenance_core::NodeType> {
+        use provenance_core::NodeType;
+        match self {
+            Self::Sources => Some(NodeType::Source),
+            Self::Requirements => Some(NodeType::Requirement),
+            Self::Resolutions => Some(NodeType::Resolution),
+            Self::Rules => Some(NodeType::Rule),
+            Self::Topics => Some(NodeType::Topic),
+            Self::Questions => Some(NodeType::Question),
+            Self::Domains => Some(NodeType::Domain),
+            Self::Boundaries => Some(NodeType::Boundary),
+            _ => None,
+        }
+    }
+
     /// The canonical shard file the family's records live in.
     pub(crate) fn shard_path(self, layout: &ProvenanceLayout, scope: &ScopeId) -> Utf8PathBuf {
         match self {

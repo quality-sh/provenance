@@ -52,7 +52,49 @@ fn check_registers_every_scope_record_before_validating_references() {
 
     provenance(dir.path())
         .success()
-        .stdout(contains(r#""status": "ok""#));
+        .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
+}
+
+#[test]
+#[verifies("rule_porcelain_id_unique_in_repository", examples)]
+fn check_rejects_stored_canonical_id_collisions_across_kinds_and_scopes() {
+    for cross_scope in [false, true] {
+        let dir = tempfile::tempdir().unwrap();
+        init(dir.path());
+        let state = dir.path().join(".provenance/state");
+        if cross_scope {
+            std::fs::write(
+                state.join("manifest.json"),
+                serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scopes":[{"id":"default","path_prefix":"."},{"id":"other","path_prefix":"other"}]}).to_string(),
+            )
+            .unwrap();
+        }
+        write_jsonl(
+            &state.join("scopes/default/requirements/req.jsonl"),
+            serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"shared_id","statement":"First record","status":"active"}).to_string(),
+        );
+        let (scope, path, record) = if cross_scope {
+            (
+                "other",
+                "requirements/req.jsonl",
+                serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"other","id":"shared_id","statement":"Second record","status":"active"}),
+            )
+        } else {
+            (
+                "default",
+                "sources/source.jsonl",
+                serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"shared_id","name":"Second record","source_type":"document"}),
+            )
+        };
+        write_jsonl(
+            &state.join(format!("scopes/{scope}/{path}")),
+            record.to_string(),
+        );
+
+        provenance(dir.path())
+            .failure()
+            .stderr(contains("record ID shared_id appears more than once"));
+    }
 }
 
 #[test]
@@ -234,7 +276,7 @@ fn check_accepts_origin_message_in_non_default_month_shard() {
 
     provenance(dir.path())
         .success()
-        .stdout(contains(r#""status": "ok""#));
+        .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
 #[test]
@@ -322,7 +364,7 @@ fn check_without_strict_keeps_the_soft_fallback_for_a_reference_without_an_index
         ])
         .assert()
         .success()
-        .stdout(contains(r#""status": "ok""#));
+        .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
 #[test]
@@ -355,7 +397,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
         ])
         .assert()
         .success()
-        .stdout(contains(r#""status": "ok""#));
+        .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
 fn git(repo: &Path, arguments: &[&str]) {

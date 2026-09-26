@@ -26,7 +26,7 @@ async function recordingHost(initialVersion: number = PROTOCOL_VERSION, reposito
     if (request.url === "/metadata") response.end(JSON.stringify({ data: {
       compatibility: { ...COMPATIBILITY, wire: version },
       package: { name: "provenance", version: "fixture" },
-      contract_digest: "fixture", repository, scope,
+      repository, scope,
     }, meta: {} }));
     else {
       response.statusCode = 403;

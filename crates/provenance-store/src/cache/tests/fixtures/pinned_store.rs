@@ -1,6 +1,6 @@
 //! The frozen store behind the pinned answers test and the comparison tests:
 //! every kind and every relation, a requirement diamond, a source cited under
-//! two clauses, a `links` pair naming one id under two kinds, lists past
+//! two clauses, typed `links` to two record kinds, lists past
 //! the limit, a cleared review, and one source file with scanner sites.
 //! It never reads `.provenance/state`, which moves on most pull requests.
 
@@ -16,9 +16,8 @@ use provenance_core::{
     ResolutionMethod, ScopeId, SourceReference, SourceType, TopicStatus, SUPPORTED_SCHEMA_VERSION,
 };
 
-/// The id one requirement and one rule share, so `links` can name it
-/// under two kinds.
-pub const TWIN_ID: &str = "twin_record";
+pub const LINKED_REQUIREMENT_ID: &str = "req_twin_record";
+pub const LINKED_RULE_ID: &str = "rule_twin_record";
 
 fn seed_plain_citation(
     store: &StateStore,
@@ -139,7 +138,7 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
         .write_requirement(requirement("req_bottom", None, &["req_left", "req_right"]))
         .unwrap();
     store
-        .write_requirement(requirement(TWIN_ID, Some("req_top"), &[]))
+        .write_requirement(requirement(LINKED_REQUIREMENT_ID, Some("req_top"), &[]))
         .unwrap();
     create_resolution(store, scope, "res_overtime", "req_overtime");
     create_resolution(store, scope, "res_penalty", "req_penalty");
@@ -170,7 +169,7 @@ fn seed_graph(store: &StateStore, scope: &ScopeId) {
         );
     }
     create_rule_of(store, scope, "rule_penalty_001", "req_penalty");
-    create_rule_of(store, scope, TWIN_ID, "req_top");
+    create_rule_of(store, scope, LINKED_RULE_ID, "req_top");
 }
 
 fn seed_shaping(store: &StateStore, scope: &ScopeId) {
@@ -186,8 +185,8 @@ fn seed_shaping(store: &StateStore, scope: &ScopeId) {
             title: "Rates".into(),
             status: TopicStatus::Open,
             links: vec![
-                link(ArtifactLinkTargetType::Requirement, TWIN_ID),
-                link(ArtifactLinkTargetType::Rule, TWIN_ID),
+                link(ArtifactLinkTargetType::Requirement, LINKED_REQUIREMENT_ID),
+                link(ArtifactLinkTargetType::Rule, LINKED_RULE_ID),
                 link(ArtifactLinkTargetType::Source, "source_schads"),
             ],
         })

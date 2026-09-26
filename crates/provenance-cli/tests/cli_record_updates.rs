@@ -50,7 +50,7 @@ fn source_update_uses_the_local_writer_and_explicit_clears() {
             "--format",
             "json",
         ])
-        .write_stdin(r#"{"reference":"section 2","clear_fields":["url"]}"#)
+        .write_stdin(r#"{"reference":"section 2","url":null}"#)
         .assert()
         .success()
         .get_output()

@@ -3,6 +3,7 @@ members = [
     "crates/provenance-cli",
     "crates/provenance-core",
     "crates/provenance-macros",
+    "crates/provenance-porcelain",
     "crates/provenance-scanner",
     "crates/provenance-sdk",
     "crates/provenance-ste100",
@@ -42,7 +43,7 @@ anyhow = "1.0"
 assert_cmd = "2.0"
 axum = "0.7"
 camino = { version = "1.1", features = ["serde1"] }
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive", "string"] }
 filetime = "0.2"
 flate2 = "1"
 fs2 = "0.4"
@@ -75,6 +76,7 @@ trybuild = "1.0"
 predicates = "3.1"
 provenance-core = { path = "crates/provenance-core", version = "0.2.3" }
 provenance-macros = { path = "crates/provenance-macros", version = "0.2.3" }
+provenance-porcelain = { path = "crates/provenance-porcelain", version = "0.2.3" }
 provenance-report = { path = "crates/provenance-report", version = "0.2.3" }
 provenance-scanner = { path = "crates/provenance-scanner", version = "0.2.3" }
 provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.3" }

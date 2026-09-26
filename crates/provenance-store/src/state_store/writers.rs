@@ -22,6 +22,7 @@ impl StateStore {
                 origin_thread,
                 origin_message,
             } = input;
+            self.ensure_canonical_id_available(&scope_id, &id)?;
             let commit_pin = validate_optional_commit_pin(commit_pin)
                 .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCommitPin, error))?;
             for older in &supersedes {
@@ -82,6 +83,7 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
+        self.ensure_canonical_id_available(&scope_id, &id)?;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
         if let Some(domain_id) = &domain_id {
             self.ensure_node_exists(&scope_id, NodeType::Domain, domain_id, "--domain-id")?;

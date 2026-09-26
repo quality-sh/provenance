@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:06b0ba1b2b522d9b -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:e00fb043dfca21af -->
 
 # Shaping
 
@@ -55,10 +55,12 @@ disagree, update the binary first, then shape.
    provenance init --path . --scope <scope> --path-prefix .
    ```
 
-2. Load the low-resolution map:
+2. Read the domain guidance, then load the low-resolution map:
 
    ```sh
-   provenance prime --scope <scope> --format json
+   provenance prime
+   provenance rules list --scope <scope> --format json
+   provenance gaps --scope <scope> --format json
    provenance graph <anchor_requirement_id> --scope <scope> --format json
    provenance requirements fog show --scope <scope> --requirement-id <anchor_requirement_id> --format json
    provenance topics list --scope <scope> --format json
@@ -169,9 +171,10 @@ frontier.
 
 ### 1. Prime
 
-Load the map low-res with the commands from **Start every session**. `provenance prime`
-supplies rules and computed gaps (plus active threads only with `--include-threads`); load
-the anchor graph, fog, boundaries, topics, and questions with their separate commands. The
+Load the map with the commands from **Start every session**. `provenance prime`
+explains the domain. Use `provenance rules list` for Rules and `provenance gaps` for
+computed gaps. Load the anchor graph, fog, boundaries, topics, and questions with
+their separate commands. The
 shaping-focused subset of the computed graph frontier includes:
 
 - requirements with no valid source reference;

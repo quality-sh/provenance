@@ -1,61 +1,218 @@
-//! Generated-dialect CLI dispatch over the registered resource catalog.
-use axum::http::Method;
-use provenance_store::operations::catalog;
-use std::net::{Ipv4Addr, SocketAddr};
+//! CLI dispatch over the registered resource catalog.
+use crate::invocation::{grammar, GlobalContext};
+use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
+use clap::{parser::ValueSource, ArgMatches, Command};
+use provenance_porcelain::action::Action;
+use provenance_store::operations::catalog::{self, Definition, TargetAction};
+use serde_json::{json, Value};
+use std::{
+    collections::BTreeMap,
+    net::{Ipv4Addr, SocketAddr},
+};
 
 mod address;
+pub mod fields;
 mod input;
 
-const COLLECTIONS: &[&str] = &[
-    "sources",
-    "requirements",
-    "resolutions",
-    "rules",
-    "domains",
-    "boundaries",
-    "topics",
-    "questions",
-    "contributions",
-    "synthesis-packets",
-    "proposals",
-    "verification-runs",
-    "verification-bindings",
-    "statement-checks",
-    "authoring-plans",
-    "authoring-changes",
-    "discussion-containers",
-    "messages",
-    "assertions",
-    "dispositions",
-];
+pub struct Invocation {
+    context: GlobalContext,
+    path: String,
+    definition: &'static Definition,
+    data: Value,
+    query: BTreeMap<String, String>,
+    headers: HeaderMap,
+}
 
-pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
-    let Some((context, mut words)) = split_global(arguments)? else {
-        return Ok(false);
-    };
-    let collection = words.remove(0);
-    if words.as_slice() == ["--help"] {
-        print_help(&collection);
-        return Ok(true);
+impl Invocation {
+    pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
+        let resolved = address::resolve(&args.collection, &args.address)
+            .unwrap_or_else(|error| usage_error(error));
+        let (data, query, headers) = input::parse(
+            resolved.address.definition,
+            matches,
+            args.stdin,
+            resolved.query,
+            &["stdin"],
+        )
+        .unwrap_or_else(|error| usage_error(error));
+        if resolved.address.definition.method == catalog::HttpMethod::Post {
+            if let Some(id) = data.get("id").and_then(Value::as_str) {
+                provenance_core::ensure_record_id_assignable(id)
+                    .unwrap_or_else(|error| usage_error(error));
+            }
+        }
+        Self {
+            context: args.common.context(),
+            path: resolved.path,
+            definition: resolved.address.definition,
+            data,
+            query,
+            headers,
+        }
     }
-    let resolved = address::resolve(&collection, &words)?;
-    if resolved.flags.as_slice() == ["--help"] {
-        print_help(&collection);
-        return Ok(true);
+}
+
+pub fn is_collection(word: &str) -> bool {
+    !address::registrations(word).is_empty()
+}
+
+pub fn command(collection: &str) -> anyhow::Result<Command> {
+    let registrations = address::registrations(collection);
+    let mut command = grammar::catalog_command();
+    let mut help = address::help(collection);
+    if collection == "questions" {
+        help.push_str("\nA question should be resolvable in one agent session;\notherwise it is fog or needs decomposition.");
     }
-    let definition = resolved.definition;
+    command = command.after_help(help);
+    fields::augment(
+        command,
+        registrations.into_iter().map(|address| address.definition),
+        &["repo", "scope", "format", "quiet", "stdin"],
+    )
+}
+
+pub fn target_command() -> anyhow::Result<Command> {
+    let definitions = TargetAction::RECORD
+        .into_iter()
+        .flat_map(catalog::target_definitions)
+        .map(|(_, definition)| definition)
+        .collect::<Vec<_>>();
+    let command = fields::augment_with_overrides(
+        grammar::target_command(),
+        definitions,
+        &[
+            "repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin",
+        ],
+        &[],
+    )?;
+    fields::augment_schemas(
+        command,
+        provenance_porcelain::action::Action::DISCUSSION
+            .map(provenance_porcelain::discussion::input_schema),
+        &["parent", "discussion_id", "declared_by"],
+    )
+}
+
+/// Dispatch one catalog request through the local in-process host.
+pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
+    let Invocation {
+        context,
+        path,
+        definition,
+        data,
+        query,
+        headers,
+    } = invocation;
     let method = match definition.method {
         catalog::HttpMethod::Get => Method::GET,
         catalog::HttpMethod::Post => Method::POST,
         catalog::HttpMethod::Patch => Method::PATCH,
     };
-    let (data, query, headers) = input::parse(definition, &resolved.flags, resolved.query)?;
     if matches!(
-        collection.as_str(),
-        "questions" | "contributions" | "synthesis-packets" | "proposals"
+        path.split('/').nth(1),
+        Some("questions" | "contributions" | "synthesis-packets" | "proposals")
     ) {
         warn_if_skills_missing(&context.repo, context.quiet)?;
     }
+    let host = local_host(&context)?;
+    match host
+        .invoke_resource(method, &path, data, query, headers)
+        .await
+    {
+        Ok(value) => crate::output::print_json(&value)?,
+        Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
+    }
+    Ok(())
+}
+
+pub async fn dispatch_target(
+    context: GlobalContext,
+    format: Option<provenance_cli::porcelain::OutputFormat>,
+    target: String,
+    action: Action,
+    kind: Option<provenance_core::NodeType>,
+    matches: ArgMatches,
+) -> anyhow::Result<()> {
+    if action == Action::Create {
+        provenance_core::ensure_record_id_assignable(&target)
+            .unwrap_or_else(|error| usage_error(error));
+    }
+    let host = local_host(&context)?;
+    let route = host
+        .target_route(action, &target, kind)
+        .await
+        .map_err(anyhow::Error::new)?;
+    if route.kind == provenance_core::NodeType::Question {
+        warn_if_skills_missing(&context.repo, context.quiet)?;
+    }
+    let stdin = matches.get_flag("stdin");
+    let (data, query, headers) = input::parse(
+        route.definition,
+        &matches,
+        stdin,
+        None,
+        &["record_type", "stdin"],
+    )
+    .unwrap_or_else(|error| usage_error(error));
+    if !query.is_empty() {
+        usage_error(anyhow::anyhow!(
+            "target actions do not accept query options"
+        ));
+    }
+    let value = host
+        .invoke_target(&route, data, headers)
+        .await
+        .map_err(|failure| anyhow::anyhow!(serde_json::to_string(&failure).unwrap()))?;
+    if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
+        crate::output::print_json(&value)?;
+    } else {
+        println!(
+            "{}",
+            provenance_porcelain::action::render_readable(action, &target, route.kind, &value)
+        );
+    }
+    Ok(())
+}
+
+pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
+    const COMMON: &[&str] = &[
+        "repo",
+        "scope",
+        "format",
+        "quiet",
+        "target",
+        "action",
+        "collection",
+        "address",
+        "command",
+        "discussion_id",
+    ];
+    for id in matches.ids() {
+        let name = id.as_str();
+        if matches.value_source(name) != Some(ValueSource::CommandLine) {
+            continue;
+        }
+        let normalized = name.replace('_', "-");
+        if !COMMON.contains(&name)
+            && !allowed.contains(&name)
+            && !allowed.contains(&normalized.as_str())
+        {
+            usage_error(anyhow::anyhow!(
+                "unsupported option --{}",
+                name.replace('_', "-")
+            ));
+        }
+    }
+}
+
+pub fn usage_error(error: impl std::fmt::Display) -> ! {
+    clap::Error::raw(clap::error::ErrorKind::InvalidValue, error.to_string()).exit()
+}
+
+fn local_host(context: &GlobalContext) -> anyhow::Result<provenance_transport::StatementHost> {
+    provenance_store::layout::require_initialized_graph(
+        &provenance_store::layout::ProvenanceLayout::new(context.repo.as_str()),
+    )?;
     let root = std::fs::canonicalize(&context.repo)?;
     let access = provenance_transport::LocalAccess::new(
         &root,
@@ -65,26 +222,9 @@ pub async fn try_dispatch(arguments: &[String]) -> anyhow::Result<bool> {
         SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
     )
     .map_err(|failure| anyhow::anyhow!(failure))?;
-    let host = provenance_transport::StatementHost::with_access(std::sync::Arc::new(access));
-    match host
-        .invoke_resource(method, &resolved.path, data, query, headers)
-        .await
-    {
-        Ok(value) => crate::output::print_json(&value)?,
-        Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
-    }
-    Ok(true)
-}
-
-fn print_help(collection: &str) {
-    println!("Catalog commands for {collection}:");
-    println!("  {collection} list");
-    println!("  {collection} create [scalar flags | --stdin]");
-    println!("  {collection} <id> [get|update|trace|neighbors|impact|action]");
-    if collection == "questions" {
-        println!("A question should be resolvable in one agent session;");
-        println!("otherwise it is fog or needs decomposition.");
-    }
+    Ok(provenance_transport::StatementHost::with_access(
+        std::sync::Arc::new(access),
+    ))
 }
 
 fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
@@ -99,76 +239,4 @@ fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
         );
     }
     Ok(())
-}
-
-struct Context {
-    repo: String,
-    scope: String,
-    quiet: bool,
-}
-
-fn split_global(arguments: &[String]) -> anyhow::Result<Option<(Context, Vec<String>)>> {
-    if !begins_catalog_command(arguments) {
-        return Ok(None);
-    }
-    let mut repo = ".".to_owned();
-    let mut scope = "default".to_owned();
-    let mut format = None;
-    let mut quiet = false;
-    let mut rest = Vec::new();
-    let mut index = 1;
-    while index < arguments.len() {
-        match arguments[index].as_str() {
-            "--quiet" => {
-                quiet = true;
-                index += 1;
-            }
-            "--repo" | "--scope" | "--format" => {
-                let value = arguments
-                    .get(index + 1)
-                    .ok_or_else(|| anyhow::anyhow!("{} requires a value", arguments[index]))?;
-                match arguments[index].as_str() {
-                    "--repo" => repo.clone_from(value),
-                    "--scope" => scope.clone_from(value),
-                    _ => format = Some(value.clone()),
-                }
-                index += 2;
-            }
-            word if word.starts_with("--") && word != "--stdin" && word != "--help" => {
-                rest.push(word.to_owned());
-                let value = arguments
-                    .get(index + 1)
-                    .ok_or_else(|| anyhow::anyhow!("{word} requires a value"))?;
-                rest.push(value.clone());
-                index += 2;
-            }
-            word => {
-                rest.push(word.to_owned());
-                index += 1;
-            }
-        }
-    }
-    if rest
-        .first()
-        .is_none_or(|word| !COLLECTIONS.contains(&word.as_str()))
-    {
-        return Ok(None);
-    }
-    anyhow::ensure!(
-        format.as_deref().is_none_or(|format| format == "json"),
-        "catalog commands support --format json"
-    );
-    Ok(Some((Context { repo, scope, quiet }, rest)))
-}
-
-fn begins_catalog_command(arguments: &[String]) -> bool {
-    let mut index = 1;
-    while index < arguments.len() {
-        match arguments[index].as_str() {
-            "--quiet" => index += 1,
-            "--repo" | "--scope" | "--format" => index += 2,
-            word => return COLLECTIONS.contains(&word),
-        }
-    }
-    false
 }

@@ -2,12 +2,103 @@ use super::{initialized_store, seeded_requirement_store};
 use crate::state_store::{
     CreateContributionInput, CreateSynthesisPacketInput, IdeationLandingBatch,
 };
+use crate::write_error::{WriteError, WriteFailure};
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     Contribution, ContributionStance, IdeationTarget, IdeationTargetType, StableId,
     SynthesisPacket, UncertaintyLevel, UncertaintyRating,
 };
 use provenance_macros::verifies;
+
+#[test]
+#[verifies("rule_accepted_writes_stay_readable", examples)]
+fn landing_refuses_oversized_records_of_every_kind_before_publication() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    let oversized = "x".repeat(crate::cache::read::page::RESOURCE_RECORD_BYTES);
+    let mut contribution = serde_json::to_value(contribution(&scope, "small")).unwrap();
+    contribution["strongest_finding"] = serde_json::json!(oversized);
+    let mut synthesis = serde_json::to_value(synthesis_packet(&scope, "small")).unwrap();
+    synthesis["summary"] = serde_json::json!(oversized);
+    let proposal = serde_json::json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "proposal_large",
+        "proposal_key": "proposal-large", "proposal_type": "requirement_candidate",
+        "title": "Large", "summary": oversized,
+        "traceability": {"target": {"artifact_type": "requirement", "artifact_id": "req_overtime"},
+            "source_ids": [], "evidence_references": [], "supporting_claim_ids": []},
+        "promotion_state": "proposed"
+    });
+    let assertion = serde_json::json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "assertion_large",
+        "proposal_id": "proposal_large", "synthesis_packet_id": "synthesis_large",
+        "supporting_claim_ids": (0..16000).map(|i| format!("claim_{i:04}_{}", "x".repeat(64))).collect::<Vec<_>>()
+    });
+    let disposition = serde_json::json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default", "id": "disposition_large",
+        "proposal_id": "proposal_large", "decision": "rejected", "rationale": oversized,
+        "actor": {"identity_type": "human", "id": "ben"}
+    });
+    for (kind, record) in [
+        ("contributions", contribution),
+        ("synthesis_packets", synthesis),
+        ("proposals", proposal),
+        ("assertions", assertion),
+        ("dispositions", disposition),
+    ] {
+        let mut value = serde_json::Map::new();
+        value.insert(kind.into(), serde_json::json!([record]));
+        let batch: IdeationLandingBatch = serde_json::from_value(value.into()).unwrap();
+        let error = store.land_ideation_batch(&scope, batch, false).unwrap_err();
+        assert!(
+            matches!(WriteError(error).safe(), WriteFailure::RecordTooLarge),
+            "oversized {kind} must receive the typed refusal"
+        );
+        assert!(store.list_ideation_landings(&scope).unwrap().is_empty());
+    }
+}
+
+#[test]
+#[verifies("rule_accepted_writes_stay_readable", examples)]
+fn landed_contribution_and_synthesis_replacements_obey_read_budget() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    store
+        .land_ideation_batch(
+            &scope,
+            IdeationLandingBatch {
+                contributions: vec![contribution(&scope, "small")],
+                synthesis_packets: vec![synthesis_packet(&scope, "small")],
+                proposals: Vec::new(),
+                assertions: Vec::new(),
+                dispositions: Vec::new(),
+            },
+            false,
+        )
+        .unwrap();
+    let oversized = "x".repeat(crate::cache::read::page::RESOURCE_RECORD_BYTES);
+    let Err(contribution_error) = store.upsert_contribution(contribution_input(&scope, &oversized))
+    else {
+        panic!("an oversized landed contribution must be refused");
+    };
+    assert!(matches!(
+        WriteError(contribution_error).safe(),
+        WriteFailure::RecordTooLarge
+    ));
+    let Err(synthesis_error) = store.upsert_synthesis_packet(synthesis_input(&scope, &oversized))
+    else {
+        panic!("an oversized landed synthesis packet must be refused");
+    };
+    assert!(matches!(
+        WriteError(synthesis_error).safe(),
+        WriteFailure::RecordTooLarge
+    ));
+    assert_eq!(
+        store.list_contributions(&scope).unwrap()[0].strongest_finding,
+        "small"
+    );
+    assert_eq!(
+        store.list_synthesis_packets(&scope).unwrap()[0].summary,
+        "small"
+    );
+}
 
 #[test]
 fn ideation_output_records_are_written_deterministically() {

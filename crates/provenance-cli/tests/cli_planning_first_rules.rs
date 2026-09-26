@@ -124,16 +124,18 @@ fn planning_first_rule_is_grounded_before_code_exists() {
     let dir = planning_first_repo();
     let repo = dir.path().to_string_lossy().to_string();
 
-    let prime: Value = serde_json::from_str(&provenance(&[
-        "prime", "--repo", &repo, "--scope", "default", "--format", "json",
+    let record: Value = serde_json::from_str(&provenance(&[
+        "rule_second_approver",
+        "get",
+        "--repo",
+        &repo,
+        "--scope",
+        "default",
+        "--format",
+        "json",
     ]))
     .unwrap();
-    let rule = prime["rules"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|rule| rule["id"] == "rule_second_approver")
-        .expect("prime lists the rule");
+    let rule = &record["record"]["value"];
     assert_eq!(rule["status"], "active");
     assert!(rule.get("implementation").is_none());
 

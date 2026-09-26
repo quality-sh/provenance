@@ -54,6 +54,13 @@ pub fn find(method: &Method, path: &str) -> Option<Matched> {
     })
 }
 
+/// Whether any registered route publishes this path under some method.
+pub fn path_is_known(path: &str) -> bool {
+    catalog::definitions()
+        .iter()
+        .any(|definition| match_path(definition.path, path).is_some())
+}
+
 fn match_path(pattern: &str, actual: &str) -> Option<BTreeMap<String, String>> {
     let expected = pattern.trim_matches('/').split('/').collect::<Vec<_>>();
     let actual = actual.trim_matches('/').split('/').collect::<Vec<_>>();
@@ -83,7 +90,7 @@ pub async fn invoke(
     data: Value,
     query: BTreeMap<String, String>,
     headers: &HeaderMap,
-) -> Result<(Value, Option<String>), ErasedFailure> {
+) -> Result<(response::Success, Option<String>), ErasedFailure> {
     if !host.advertises(matched.definition.name) {
         return Err(ErasedFailure::new(None, OperationFailure::AccessDenied));
     }
@@ -98,17 +105,16 @@ pub async fn invoke(
         identity.as_ref().map(|(_, scope)| scope.as_str()),
     )?;
     let call = host.bound_call(bound.handler.context, &bound.data)?;
-    let mut value = host
+    let value = host
         .invoke_backing(matched.definition.name, bound.handler.operation, call)
         .await?;
-    response::select(
-        &mut value,
+    let value = response::success(
+        value,
         matched.definition,
         &bound.response,
-        &matched.path,
+        bound.query_response,
     )?;
-    let value = response::success(value, matched.definition, &bound.response)?;
-    let etag = if query.contains_key("query") {
+    let etag = if bound.query_response {
         None
     } else {
         matched
@@ -119,6 +125,7 @@ pub async fn invoke(
             .as_ref()
             .map(|binding| -> Result<String, ErasedFailure> {
                 let value = value
+                    .value()
                     .pointer(&format!("/data{}", binding.pointer))
                     .ok_or_else(|| {
                         ErasedFailure::new(
@@ -166,6 +173,18 @@ pub fn invalid(field: Option<&str>) -> ErasedFailure {
         OperationFailure::InvalidInput {
             field: field.map(str::to_owned),
             reason: InvalidInputReason::InvalidValue,
+        },
+    )
+}
+
+/// A request body that failed JSON parsing reports `malformed_json`, not
+/// `invalid_value`; the envelope has not been inspected yet.
+pub fn malformed_json() -> ErasedFailure {
+    ErasedFailure::new(
+        None,
+        OperationFailure::InvalidInput {
+            field: None,
+            reason: InvalidInputReason::MalformedJson,
         },
     )
 }

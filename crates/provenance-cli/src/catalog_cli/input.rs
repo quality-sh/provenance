@@ -1,233 +1,270 @@
+//! Structured catalog CLI input bound from Clap matches.
+//!
+//! Plain flags carry one scalar or one array item per use; a `--<field>-json`
+//! flag carries one whole JSON value; `--stdin` fills only the body fields
+//! that no flag assigned. Query parameters keep the canonical parameter
+//! encoding that the shared catalog contract defines.
+
+use super::fields::{self, Field, Source};
+use crate::catalog_cli::ensure_only_fields;
 use axum::http::{HeaderMap, HeaderName, HeaderValue};
+use clap::ArgMatches;
 use provenance_store::operations::catalog::{self, Definition};
 use serde_json::{json, Map, Value};
-use std::{collections::BTreeMap, io::Read as _};
+use std::collections::{BTreeMap, BTreeSet};
+use std::io::Read as _;
 
 pub(super) type Parsed = (Value, BTreeMap<String, String>, HeaderMap);
 
-struct BodyField<'a> {
-    wire_name: String,
-    schema: &'a Value,
-    item_schema: Option<&'a Value>,
-}
-
+/// One request body field that a flag or stdin already assigned.
 struct Assignment {
     flag: String,
     repeatable: bool,
 }
 
+/// One request body field with the item schema that plain flags carry.
+struct BodyField<'a> {
+    wire_name: &'a str,
+    schema: &'a Value,
+    item_schema: Option<&'a Value>,
+}
+
+/// Bind one catalog request from the parsed command line.
 pub(super) fn parse(
     definition: &Definition,
-    words: &[String],
+    matches: &ArgMatches,
+    stdin: bool,
     query_action: Option<&'static str>,
+    extra: &[&str],
 ) -> anyhow::Result<Parsed> {
+    let declared = fields::declared(definition)?;
+    let request = definition.request_schema();
+    let wire_fields = unique_wire_fields(&declared);
+    let mut allowed = declared
+        .iter()
+        .map(|field| field.name.clone())
+        .collect::<Vec<_>>();
+    allowed.extend(extra.iter().map(|name| (*name).to_owned()));
+    for wire_field in &wire_fields {
+        allowed.push(fields::json_flag(wire_field));
+    }
+    let allowed = allowed.iter().map(String::as_str).collect::<Vec<_>>();
+    ensure_only_fields(matches, &allowed);
+
     let mut data = Map::new();
     let mut assignments = BTreeMap::<String, Assignment>::new();
     let mut query = BTreeMap::new();
     let mut headers = HeaderMap::new();
-    let mut stdin_count = 0;
-    let mut index = 0;
-    while index < words.len() {
-        if words[index] == "--stdin" {
-            stdin_count += 1;
-            anyhow::ensure!(stdin_count == 1, "--stdin may be specified only once");
-            index += 1;
+    for field in ordered_fields(definition, declared) {
+        let values = supplied(matches, &field.name);
+        if values.is_empty() {
             continue;
         }
-        let flag = words[index]
-            .strip_prefix("--")
-            .ok_or_else(|| anyhow::anyhow!("unexpected argument: {}", words[index]))?;
-        let raw = words
-            .get(index + 1)
-            .ok_or_else(|| anyhow::anyhow!("--{flag} requires a value"))?;
-        if let Some(parameter) = definition
-            .parameters()
-            .iter()
-            .find(|parameter| cli_name(parameter.name) == flag)
-        {
-            insert_parameter(parameter, flag, raw, &mut query, &mut headers)?;
-        } else if let Some(request_schema) = definition.request_schema() {
-            if let Some(field_name) = flag.strip_suffix("-json") {
-                let field = structured_field(request_schema, field_name, flag)?;
-                let parsed = parse_json(request_schema, field.schema, raw, flag)?;
-                assign_complete(&mut data, &mut assignments, &field, flag, parsed)?;
-            } else {
-                let field = plain_field(definition, request_schema, flag)?;
-                let value_schema = field.item_schema.unwrap_or(field.schema);
-                let parsed = match parse_plain(request_schema, value_schema, raw, flag) {
-                    Ok(parsed) => parsed,
-                    Err(_) if field.item_schema.is_some() && is_structured_json(raw) => {
-                        let json_flag = field.wire_name.replace('_', "-");
-                        anyhow::bail!(
-                            "arrays and objects must come from --stdin or --{json_flag}-json; \
-                             --{flag} accepts one item per use"
-                        );
-                    }
-                    Err(error) => return Err(error),
-                };
-                assign_plain(&mut data, &mut assignments, &field, flag, parsed)?;
+        match field.source {
+            Source::Parameter(parameter) => {
+                bind_parameter(&parameter, &field.name, &values, &mut query, &mut headers)?;
             }
-        } else {
-            insert_query(&mut query, &flag.replace('-', "_"), raw, flag)?;
+            Source::Body {
+                wire_field,
+                value_schema,
+                wrap_array,
+            } => {
+                let request = request.expect("declared body field");
+                let item_schema = if wrap_array {
+                    Some(value_schema.clone())
+                } else {
+                    array_item_schema(request, &value_schema).cloned()
+                };
+                let body = BodyField {
+                    wire_name: &wire_field,
+                    schema: &value_schema,
+                    item_schema: item_schema.as_ref(),
+                };
+                assign_plain(
+                    &mut data,
+                    &mut assignments,
+                    request,
+                    &body,
+                    &field.name,
+                    &values,
+                )?;
+            }
         }
-        index += 2;
+    }
+    if let Some(request) = request {
+        bind_json_fields(
+            request,
+            matches,
+            &wire_fields,
+            &mut data,
+            &mut assignments,
+        )?;
     }
     if let Some(action) = query_action {
-        insert_query(&mut query, "query", action, "query action")?;
+        anyhow::ensure!(
+            !query.contains_key("query"),
+            "query action is supplied twice"
+        );
+        query.insert("query".into(), action.to_owned());
     }
-    if stdin_count == 1 {
+    if stdin {
         merge_stdin(&mut data, &assignments)?;
     }
     apply_defaults(definition, &mut data);
-    apply_idempotency_key(definition, &mut headers)?;
+    if definition.parameters().iter().any(|parameter| {
+        parameter.location == "header" && parameter.required && parameter.name == "Idempotency-Key"
+    }) && !headers.contains_key("Idempotency-Key")
+    {
+        headers.insert(
+            HeaderName::from_static("idempotency-key"),
+            HeaderValue::from_str(&uuid::Uuid::new_v4().to_string())?,
+        );
+    }
     Ok((Value::Object(data), query, headers))
 }
 
-fn insert_parameter(
-    parameter: &catalog::Parameter,
-    flag: &str,
-    raw: &str,
-    query: &mut BTreeMap<String, String>,
-    headers: &mut HeaderMap,
-) -> anyhow::Result<()> {
-    match parameter.location {
-        "query" => insert_query(query, parameter.name, raw, flag),
-        "header" => {
-            let name = HeaderName::from_bytes(parameter.name.as_bytes())?;
-            anyhow::ensure!(
-                !headers.contains_key(&name),
-                "--{flag} is assigned more than once"
-            );
-            headers.insert(name, HeaderValue::from_str(raw)?);
-            Ok(())
-        }
-        "path" => anyhow::bail!("path identity comes from the command address"),
-        _ => anyhow::bail!("unknown catalog parameter location"),
-    }
-}
-
-fn insert_query(
-    query: &mut BTreeMap<String, String>,
-    name: &str,
-    value: &str,
-    source: &str,
-) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        !query.contains_key(name),
-        "query parameter {name} conflicts with {source}"
-    );
-    query.insert(name.to_owned(), value.to_owned());
-    Ok(())
-}
-
-fn structured_field<'a>(
-    request: &'a Value,
-    field_name: &str,
-    flag: &str,
-) -> anyhow::Result<BodyField<'a>> {
-    let wire_name = field_name.replace('-', "_");
-    let schema = body_field_schema(request, &wire_name)
-        .ok_or_else(|| anyhow::anyhow!("unknown body field: --{flag}"))?;
-    Ok(BodyField {
-        wire_name,
-        schema,
-        item_schema: None,
-    })
-}
-
-fn plain_field<'a>(
-    definition: &Definition,
-    request: &'a Value,
-    flag: &str,
-) -> anyhow::Result<BodyField<'a>> {
-    let argument = flag.replace('-', "_");
-    let alias = definition
+/// Alias fields bind before canonical fields, so a competing canonical flag
+/// keeps its wire field and the alias is the spelling that fails.
+fn ordered_fields(definition: &Definition, declared: Vec<Field>) -> Vec<Field> {
+    let aliases = definition
         .registration
         .request
         .argument_aliases
         .iter()
-        .find(|alias| alias.argument == argument);
-    let wire_name = alias.map_or_else(|| argument.clone(), |alias| alias.field.to_owned());
-    let schema = body_field_schema(request, &wire_name)
-        .ok_or_else(|| anyhow::anyhow!("unknown body field: --{flag}"))?;
-    let item_schema = array_item_schema(request, schema);
-    anyhow::ensure!(
-        alias.is_none_or(|alias| !alias.wrap_array || item_schema.is_some()),
-        "invalid CLI alias registration for --{flag}"
-    );
-    Ok(BodyField {
-        wire_name,
-        schema,
-        item_schema,
-    })
+        .map(|alias| alias.argument.replace('_', "-"))
+        .collect::<Vec<_>>();
+    let (mut ordered, canonical): (Vec<_>, Vec<_>) = declared
+        .into_iter()
+        .partition(|field| aliases.contains(&field.name));
+    ordered.extend(canonical);
+    ordered
 }
 
-fn assign_plain(
-    data: &mut Map<String, Value>,
-    assignments: &mut BTreeMap<String, Assignment>,
-    field: &BodyField<'_>,
+/// One wire field per unique body field, in declaration order.
+fn unique_wire_fields(declared: &[Field]) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    let mut wire_fields = Vec::new();
+    for field in declared {
+        if let Source::Body { wire_field, .. } = &field.source {
+            if seen.insert(wire_field.clone()) {
+                wire_fields.push(wire_field.clone());
+            }
+        }
+    }
+    wire_fields
+}
+
+fn bind_parameter(
+    parameter: &catalog::Parameter,
     flag: &str,
-    parsed: Value,
+    values: &[String],
+    query: &mut BTreeMap<String, String>,
+    headers: &mut HeaderMap,
 ) -> anyhow::Result<()> {
-    if let Some(previous) = assignments.get(&field.wire_name) {
-        if previous.flag != flag {
-            anyhow::bail!(
-                "--{flag} conflicts with --{} for {}",
-                previous.flag,
-                field.wire_name
+    let [value] = values else {
+        anyhow::bail!("--{flag} is assigned more than once");
+    };
+    match parameter.location {
+        "query" => {
+            let parsed = catalog::parse_parameter_value(parameter, value)
+                .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
+            let encoded = catalog::serialize_parameter_value(parameter, &parsed)
+                .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
+            query.insert(parameter.name.to_owned(), encoded);
+        }
+        "header" => {
+            headers.insert(
+                HeaderName::from_bytes(parameter.name.as_bytes())?,
+                HeaderValue::from_str(value)?,
             );
         }
-        anyhow::ensure!(
-            previous.repeatable && field.item_schema.is_some(),
-            "body field {} is assigned more than once",
-            field.wire_name
-        );
-        data.get_mut(&field.wire_name)
-            .and_then(Value::as_array_mut)
-            .expect("repeatable body assignment is an array")
-            .push(parsed);
-        return Ok(());
+        _ => anyhow::bail!("unknown catalog parameter location"),
     }
-    let repeatable = field.item_schema.is_some();
-    assignments.insert(
-        field.wire_name.clone(),
-        Assignment {
-            flag: flag.to_owned(),
-            repeatable,
-        },
-    );
-    data.insert(
-        field.wire_name.clone(),
-        if repeatable { json!([parsed]) } else { parsed },
-    );
     Ok(())
 }
 
-fn assign_complete(
+/// Bind plain flag values for one body field: one item per use.
+fn assign_plain(
     data: &mut Map<String, Value>,
     assignments: &mut BTreeMap<String, Assignment>,
+    request: &Value,
     field: &BodyField<'_>,
     flag: &str,
-    parsed: Value,
+    values: &[String],
 ) -> anyhow::Result<()> {
-    if let Some(previous) = assignments.get(&field.wire_name) {
+    if let Some(previous) = assignments.get(field.wire_name) {
         anyhow::bail!(
             "--{flag} conflicts with --{} for {}",
             previous.flag,
             field.wire_name
         );
     }
+    let repeatable = field.item_schema.is_some();
+    anyhow::ensure!(
+        repeatable || values.len() == 1,
+        "body field {} is assigned more than once",
+        field.wire_name
+    );
+    let mut parsed = Vec::new();
+    for raw in values {
+        parsed.push(parse_plain_value(request, field, flag, raw)?);
+    }
+    let value = if repeatable {
+        Value::Array(parsed)
+    } else {
+        parsed.remove(0)
+    };
     assignments.insert(
-        field.wire_name.clone(),
+        field.wire_name.to_owned(),
         Assignment {
             flag: flag.to_owned(),
-            repeatable: false,
+            repeatable,
         },
     );
-    data.insert(field.wire_name.clone(), parsed);
+    data.insert(field.wire_name.to_owned(), value);
     Ok(())
 }
 
+/// Bind one whole JSON value per body field from its `--<field>-json` flag.
+fn bind_json_fields(
+    request: &Value,
+    matches: &ArgMatches,
+    wire_fields: &[String],
+    data: &mut Map<String, Value>,
+    assignments: &mut BTreeMap<String, Assignment>,
+) -> anyhow::Result<()> {
+    for wire_field in wire_fields {
+        let flag = fields::json_flag(wire_field);
+        let values = supplied(matches, &flag);
+        if values.is_empty() {
+            continue;
+        }
+        anyhow::ensure!(
+            values.len() == 1,
+            "--{flag} is assigned more than once"
+        );
+        if let Some(previous) = assignments.get(wire_field) {
+            anyhow::bail!(
+                "--{flag} conflicts with --{} for {wire_field}",
+                previous.flag
+            );
+        }
+        let schema = fields::wire_field_schema(request, wire_field)
+            .ok_or_else(|| anyhow::anyhow!("catalog body field {wire_field} has no schema"))?;
+        let parsed = parse_json(request, schema, &flag, &values[0])?;
+        assignments.insert(
+            wire_field.clone(),
+            Assignment {
+                flag,
+                repeatable: false,
+            },
+        );
+        data.insert(wire_field.clone(), parsed);
+    }
+    Ok(())
+}
+
+/// Fill only the body fields that no flag assigned from one stdin object.
 fn merge_stdin(
     data: &mut Map<String, Value>,
     assignments: &BTreeMap<String, Assignment>,
@@ -247,26 +284,66 @@ fn merge_stdin(
     Ok(())
 }
 
-fn parse_plain(root: &Value, schema: &Value, raw: &str, flag: &str) -> anyhow::Result<Value> {
-    if accepts_string(root, schema, 0) {
-        let value = Value::String(raw.to_owned());
-        anyhow::ensure!(
-            validates(root, schema, &value)?,
-            "invalid value for --{flag}"
-        );
-        return Ok(value);
+fn supplied(matches: &ArgMatches, name: &str) -> Vec<String> {
+    let read = |name: &str| {
+        matches
+            .try_get_many::<String>(name)
+            .ok()
+            .flatten()
+            .map(|values| values.map(String::to_owned).collect::<Vec<_>>())
+            .unwrap_or_default()
+    };
+    let values = read(name);
+    if values.is_empty() {
+        read(&name.replace('-', "_"))
+    } else {
+        values
     }
-    catalog::parse_schema_value_in(root, schema, raw)
-        .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))
 }
 
-fn parse_json(root: &Value, schema: &Value, raw: &str, flag: &str) -> anyhow::Result<Value> {
+/// Parse one plain value against the item schema for array fields, or the
+/// field schema otherwise. A schema that admits strings keeps the exact text.
+fn parse_plain_value(
+    request: &Value,
+    field: &BodyField<'_>,
+    flag: &str,
+    raw: &str,
+) -> anyhow::Result<Value> {
+    if let Some(item) = field.item_schema {
+        if is_structured_json(raw) {
+            anyhow::bail!(
+                "arrays and objects must come from --stdin or --{}; \
+                 --{flag} accepts one item per use",
+                fields::json_flag(field.wire_name)
+            );
+        }
+        return parse_typed(request, item, flag, raw);
+    }
+    if schema_kind(request, field.schema, 0) == Some("object") {
+        anyhow::bail!(
+            "objects must come from --stdin or --{}",
+            fields::json_flag(field.wire_name)
+        );
+    }
+    parse_typed(request, field.schema, flag, raw)
+}
+
+fn parse_typed(request: &Value, schema: &Value, flag: &str, raw: &str) -> anyhow::Result<Value> {
+    if accepts_string(request, schema, 0) {
+        let value = Value::String(raw.to_owned());
+        anyhow::ensure!(validates(request, schema, &value)?, "invalid value for --{flag}");
+        return Ok(value);
+    }
+    let value = catalog::parse_schema_value_in(request, schema, raw)
+        .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
+    anyhow::ensure!(validates(request, schema, &value)?, "invalid value for --{flag}");
+    Ok(value)
+}
+
+fn parse_json(request: &Value, schema: &Value, flag: &str, raw: &str) -> anyhow::Result<Value> {
     let value = serde_json::from_str(raw)
         .map_err(|_| anyhow::anyhow!("invalid JSON value for --{flag}"))?;
-    anyhow::ensure!(
-        validates(root, schema, &value)?,
-        "invalid value for --{flag}"
-    );
+    anyhow::ensure!(validates(request, schema, &value)?, "invalid value for --{flag}");
     Ok(value)
 }
 
@@ -275,6 +352,7 @@ fn is_structured_json(raw: &str) -> bool {
         .is_ok_and(|value| matches!(value, Value::Array(_) | Value::Object(_)))
 }
 
+/// Validate one value against a field schema with the request definitions.
 fn validates(root: &Value, schema: &Value, value: &Value) -> anyhow::Result<bool> {
     let mut standalone = schema.clone();
     let object = standalone
@@ -290,6 +368,7 @@ fn validates(root: &Value, schema: &Value, value: &Value) -> anyhow::Result<bool
     Ok(validator.is_valid(value))
 }
 
+/// Whether one schema admits a plain string, following references and unions.
 fn accepts_string(root: &Value, schema: &Value, depth: usize) -> bool {
     if depth > 64 {
         return false;
@@ -317,6 +396,8 @@ fn accepts_string(root: &Value, schema: &Value, depth: usize) -> bool {
         .is_some_and(|values| values.iter().all(Value::is_string))
 }
 
+/// The item schema of a schema-defined array, following references and unions
+/// that admit exactly one array shape.
 fn array_item_schema<'a>(root: &'a Value, schema: &'a Value) -> Option<&'a Value> {
     if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
         return resolve(root, reference).and_then(|schema| array_item_schema(root, schema));
@@ -335,16 +416,41 @@ fn array_item_schema<'a>(root: &'a Value, schema: &'a Value) -> Option<&'a Value
     items.next().is_none().then_some(item)
 }
 
+/// Whether one schema names an object, following references and unions.
+fn schema_kind(root: &Value, schema: &Value, depth: usize) -> Option<&'static str> {
+    if depth > 64 {
+        return None;
+    }
+    if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
+        return resolve(root, reference).and_then(|schema| schema_kind(root, schema, depth + 1));
+    }
+    if let Some(variants) = schema
+        .get("anyOf")
+        .or_else(|| schema.get("oneOf"))
+        .and_then(Value::as_array)
+    {
+        let mut kind = None;
+        for variant in variants {
+            if variant.get("type") == Some(&json!("null")) {
+                continue;
+            }
+            let current = schema_kind(root, variant, depth + 1)?;
+            if kind.is_some_and(|previous| previous != current) {
+                return None;
+            }
+            kind = Some(current);
+        }
+        return kind;
+    }
+    match schema.get("type").and_then(Value::as_str) {
+        Some("object") => Some("object"),
+        _ => None,
+    }
+}
+
 fn resolve<'a>(root: &'a Value, reference: &str) -> Option<&'a Value> {
     let name = reference.strip_prefix("#/$defs/")?;
     root.get("$defs")?.get(name)
-}
-
-fn body_field_schema<'a>(request: &'a Value, field: &str) -> Option<&'a Value> {
-    request
-        .pointer("/properties/data/properties")?
-        .as_object()?
-        .get(field)
 }
 
 fn apply_defaults(definition: &Definition, data: &mut Map<String, Value>) {
@@ -355,21 +461,4 @@ fn apply_defaults(definition: &Definition, data: &mut Map<String, Value>) {
                 catalog::CliDefaultValue::EmptyArray => json!([]),
             });
     }
-}
-
-fn apply_idempotency_key(definition: &Definition, headers: &mut HeaderMap) -> anyhow::Result<()> {
-    if definition.parameters().iter().any(|parameter| {
-        parameter.location == "header" && parameter.required && parameter.name == "Idempotency-Key"
-    }) && !headers.contains_key("Idempotency-Key")
-    {
-        headers.insert(
-            HeaderName::from_static("idempotency-key"),
-            HeaderValue::from_str(&uuid::Uuid::new_v4().to_string())?,
-        );
-    }
-    Ok(())
-}
-
-fn cli_name(name: &str) -> String {
-    name.to_ascii_lowercase().replace('_', "-")
 }

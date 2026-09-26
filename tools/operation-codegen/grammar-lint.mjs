@@ -275,10 +275,14 @@ const FAILURE_STATUS = new Map([
   ['stale', 409], ['unit_unreadable', 409], ['schema_behind', 409], ['half_migrated', 409],
   ['write_failed', 500], ['record_ownership_conflict', 409], ['already_exists', 409],
   ['ownership_conflict', 409], ['already_complete', 409],
+  ['discussion_version_conflict', 409], ['discussion_membership_mismatch', 400],
+  ['discussion_closed', 409], ['discussion_resolved', 409],
+  ['discussion_intent_changed', 409],
   ['schema_version', 400], ['invalid_commit_pin', 400], ['scope_mismatch', 400],
   ['empty_message_body', 400], ['unsupported_thread_parent', 400], ['statement_invalid', 400],
   ['invalid_declaration', 400], ['invalid_update', 400], ['missing_reference', 400],
   ['statement_rejected', 400], ['invalid_verification_target', 400], ['invalid_completion', 400],
+  ['record_too_large', 400],
 ]);
 
 function failureKinds(document, schema, seen = new Set(), kinds = new Set()) {

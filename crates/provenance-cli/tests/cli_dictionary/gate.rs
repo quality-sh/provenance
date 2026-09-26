@@ -121,10 +121,16 @@ fn strict_check_uses_the_imported_project_dictionary() {
 
     assert!(!output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report["status"], "findings");
-    assert_eq!(report["base_commit"], Value::Null);
-    assert_eq!(report["diagnostics"][0]["id"], "req_dictionary");
-    assert_eq!(report["diagnostics"][0]["rule"], "1.1");
+    let statements = report["categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|category| category["category"] == "statements")
+        .unwrap();
+    assert_eq!(statements["status"], "findings");
+    assert_eq!(statements["context"]["base_commit"], Value::Null);
+    assert_eq!(statements["findings"][0]["detail"]["id"], "req_dictionary");
+    assert_eq!(statements["findings"][0]["detail"]["rule"], "1.1");
 }
 
 fn git(repo: &std::path::Path, arguments: &[&str]) {

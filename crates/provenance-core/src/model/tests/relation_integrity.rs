@@ -1,6 +1,8 @@
 mod relation_integrity {
 use super::relation_fixtures::{fixture, ids, requirement, rule, sid};
-use crate::model::relations::{cycle_in, cycle_refusal, missing_required, reaches, required_refusal};
+use crate::model::relations::{
+    cycle_in, cycle_refusal, cycle_with_added_edges, missing_required, reaches, required_refusal,
+};
 
 #[test]
 fn a_rule_with_no_requirement_is_missing_its_required_relation() {
@@ -55,6 +57,117 @@ fn a_three_record_cycle_is_named_by_its_closing_pair_with_the_cycle_printed() {
         cycle_refusal("refines", &cycle),
         "refines forms a cycle: req_cyc_a -> req_cyc_b -> req_cyc_c -> req_cyc_a"
     );
+}
+
+#[test]
+fn a_hypothetical_edge_reports_the_complete_cycle_path() {
+    let mut a = requirement("req_cyc_a", None, &[]);
+    let mut b = requirement("req_cyc_b", None, &[]);
+    let c = requirement("req_cyc_c", None, &[]);
+    a.depends_on = ids(&["req_cyc_b"]);
+    b.depends_on = ids(&["req_cyc_c"]);
+    let records = vec![a, b, c];
+
+    let cycle = cycle_with_added_edges(
+        &records,
+        "depends_on",
+        &sid("req_cyc_c"),
+        &[sid("req_cyc_a")],
+    )
+    .expect("the added edge closes the chain");
+    assert_eq!(cycle.closes_from, sid("req_cyc_c"));
+    assert_eq!(cycle.closes_into, sid("req_cyc_a"));
+    assert_eq!(
+        cycle_refusal("depends_on", &cycle),
+        "depends_on forms a cycle: req_cyc_a -> req_cyc_b -> req_cyc_c -> req_cyc_a"
+    );
+}
+
+#[test]
+fn a_batch_walk_reports_the_first_reachable_target_over_a_shared_path() {
+    let mut first = requirement("req_first", None, &[]);
+    let mut branch_a = requirement("req_branch_a", None, &[]);
+    let mut branch_b = requirement("req_branch_b", None, &[]);
+    let mut shared = requirement("req_shared", None, &[]);
+    let owner = requirement("req_owner", None, &[]);
+    let unreachable = requirement("req_unreachable", None, &[]);
+    let mut cycle_a = requirement("req_cycle_a", None, &[]);
+    let mut cycle_b = requirement("req_cycle_b", None, &[]);
+    first.depends_on = ids(&["req_branch_a", "req_branch_b"]);
+    branch_a.depends_on = ids(&["req_shared"]);
+    branch_b.depends_on = ids(&["req_shared"]);
+    shared.depends_on = ids(&["req_owner"]);
+    cycle_a.depends_on = ids(&["req_cycle_b"]);
+    cycle_b.depends_on = ids(&["req_cycle_a"]);
+    let records = vec![
+        cycle_b,
+        branch_b,
+        unreachable,
+        first,
+        shared,
+        owner,
+        branch_a,
+        cycle_a,
+    ];
+
+    let cycle = cycle_with_added_edges(
+        &records,
+        "depends_on",
+        &sid("req_owner"),
+        &[
+            sid("req_unreachable"),
+            sid("req_first"),
+            sid("req_branch_b"),
+        ],
+    )
+    .expect("the second target reaches the owner");
+
+    assert_eq!(cycle.closes_from, sid("req_owner"));
+    assert_eq!(cycle.closes_into, sid("req_first"));
+    assert_eq!(
+        cycle_refusal("depends_on", &cycle),
+        "depends_on forms a cycle: req_first -> req_branch_a -> req_shared -> req_owner -> req_first"
+    );
+}
+
+#[test]
+fn a_batch_walk_ignores_unreachable_targets_in_a_cyclic_graph() {
+    let owner = requirement("req_owner", None, &[]);
+    let unreachable = requirement("req_unreachable", None, &[]);
+    let mut cycle_a = requirement("req_cycle_a", None, &[]);
+    let mut cycle_b = requirement("req_cycle_b", None, &[]);
+    cycle_a.depends_on = ids(&["req_cycle_b"]);
+    cycle_b.depends_on = ids(&["req_cycle_a"]);
+
+    assert_eq!(
+        cycle_with_added_edges(
+            &[owner, unreachable, cycle_a, cycle_b],
+            "depends_on",
+            &sid("req_owner"),
+            &[sid("req_unreachable"), sid("req_cycle_a")],
+        ),
+        None
+    );
+}
+
+#[test]
+fn a_batch_walk_reports_a_self_edge_as_the_first_cycle() {
+    let records = vec![
+        requirement("req_owner", None, &[]),
+        requirement("req_unreachable", None, &[]),
+    ];
+
+    let cycle = cycle_with_added_edges(
+        &records,
+        "depends_on",
+        &sid("req_owner"),
+        &[sid("req_unreachable"), sid("req_owner")],
+    )
+    .expect("the self edge closes a cycle");
+
+    assert_eq!(cycle.closes_from, sid("req_owner"));
+    assert_eq!(cycle.closes_into, sid("req_owner"));
+    assert_eq!(cycle.path, ids(&["req_owner", "req_owner"]));
 }
 
 #[test]

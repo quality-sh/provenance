@@ -11,6 +11,10 @@ export function responseSchemas(document) {
       for (const response of Object.values(operation.responses)) {
         names.add(response.content['application/json'].schema.$ref.split('/').at(-1));
       }
+      for (const variant of operation['x-provenance-query-variants'] ?? []) {
+        names.add(variant.success.$ref.split('/').at(-1));
+        names.add(variant.failure.$ref.split('/').at(-1));
+      }
     }
   }
   return [...names].sort();

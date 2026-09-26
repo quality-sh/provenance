@@ -1,4 +1,4 @@
-use super::invalid;
+use super::{invalid, malformed_json};
 use axum::http::HeaderMap;
 use provenance_core::protocol::failure::ErasedFailure;
 use provenance_store::operations::catalog::{
@@ -11,6 +11,7 @@ pub struct BoundRequest {
     pub data: Value,
     pub handler: HandlerBinding,
     pub response: ResponseBinding,
+    pub query_response: bool,
 }
 
 pub fn query(raw: Option<&str>) -> Result<BTreeMap<String, String>, ErasedFailure> {
@@ -36,7 +37,7 @@ pub fn decode_body(bytes: &[u8], expects_body: bool) -> Result<Value, ErasedFail
             Err(invalid(None))
         };
     }
-    let value: Value = serde_json::from_slice(bytes).map_err(|_| invalid(None))?;
+    let value: Value = serde_json::from_slice(bytes).map_err(|_| malformed_json())?;
     let object = value.as_object().ok_or_else(|| invalid(None))?;
     if object.len() != 1 || !object.contains_key("data") {
         return Err(invalid(None));
@@ -103,6 +104,7 @@ pub fn bind(
             || definition.registration.response.clone(),
             |route| route.response.clone(),
         ),
+        query_response: selected.is_some(),
     })
 }
 

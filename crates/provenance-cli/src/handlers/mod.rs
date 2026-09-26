@@ -1,7 +1,7 @@
 use crate::cli::Command;
 
 mod cargo_init;
-mod check;
+pub mod check;
 mod coverage;
 mod dictionary;
 mod docs;
@@ -32,11 +32,13 @@ pub(super) use export::{export_scope, ScopeExport};
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
-    let _ = quiet;
     match command {
+        Command::Search(args) => args.dispatch().await?,
         Command::CargoInit { package, ste_pdf } => {
-            tokio::task::spawn_blocking(move || cargo_init::handle(package.as_deref(), ste_pdf))
-                .await??;
+            tokio::task::spawn_blocking(move || {
+                cargo_init::handle(package.as_deref(), ste_pdf, quiet)
+            })
+            .await??;
         }
         Command::Init {
             path,
@@ -59,15 +61,33 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
                         ste_pdf,
                         invocation_channel,
                         package_manager,
+                        quiet,
                     },
                 )
             })
             .await??;
         }
         Command::Check {
-            repo, strict, base, ..
+            repo,
+            strict,
+            base,
+            graph,
+            statements,
+            bindings,
+            format,
         } => {
-            check::check(&repo, strict, base.as_deref())?;
+            check::check(
+                repo,
+                strict,
+                base,
+                format.is_some(),
+                check::Selectors {
+                    graph,
+                    statements,
+                    bindings,
+                },
+            )
+            .await?;
         }
         Command::Docs { command } => {
             docs::handle(command).await?;
@@ -104,13 +124,8 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         Command::Gaps { repo, scope, .. } => {
             gaps::handle(repo, scope)?;
         }
-        Command::Prime {
-            repo,
-            scope,
-            format,
-            include_threads,
-        } => {
-            prime::handle(repo, scope, format, include_threads)?;
+        Command::Prime { format, .. } => {
+            prime::handle(format)?;
         }
         Command::Health { repo, scope, .. } => {
             health::handle(repo, scope)?;

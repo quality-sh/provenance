@@ -234,7 +234,7 @@ pub(super) fn read_jsonl<T: DeserializeOwned>(
     store.state_path_access(path, || read_jsonl_unlocked(path))
 }
 
-fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
+pub(super) fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
     read_records(path, Fields::Open, leave_as_written, NO_NESTED_RECORDS)
 }
 
@@ -242,14 +242,18 @@ pub(super) fn read_ideation_landings<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, || {
-        read_records(
-            path,
-            Fields::Open,
-            leave_as_written,
-            IDEATION_LANDING_RECORD_FIELDS,
-        )
-    })
+    store.state_path_access(path, || read_ideation_landings_unlocked(path))
+}
+
+pub(super) fn read_ideation_landings_unlocked<T: DeserializeOwned>(
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
+    read_records(
+        path,
+        Fields::Open,
+        leave_as_written,
+        IDEATION_LANDING_RECORD_FIELDS,
+    )
 }
 
 pub(super) fn read_legacy_dispositions(
@@ -259,7 +263,9 @@ pub(super) fn read_legacy_dispositions(
     store.state_path_access(path, || read_legacy_dispositions_unlocked(path))
 }
 
-fn read_legacy_dispositions_unlocked(path: &Utf8Path) -> anyhow::Result<Vec<DispositionRecord>> {
+pub(super) fn read_legacy_dispositions_unlocked(
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<DispositionRecord>> {
     read_records(
         path,
         Fields::Open,
@@ -365,8 +371,15 @@ pub(super) fn read_message_shards(
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
     store.state_path_access(&shards::threads_path(layout, scope), || {
-        read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
+        read_message_shards_unlocked(layout, scope)
     })
+}
+
+pub(super) fn read_message_shards_unlocked(
+    layout: &ProvenanceLayout,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Message>> {
+    read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
 }
 
 /// Every month shard of the scope's messages, sorted. All message reads

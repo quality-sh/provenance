@@ -29,6 +29,37 @@ pub async fn invoke_typed<O: Operation>(
         .map_err(OperationError::Handler)
 }
 
+/// Authorize one typed call before it crosses the operation boundary.
+pub async fn invoke_authorized_typed<O: Operation>(
+    resolver: std::sync::Arc<dyn super::ContextResolver>,
+    selected: super::RequestedContext,
+    request: O::Request,
+) -> Result<O::Success, OperationError<O::Failure>> {
+    let context = authorized_context::<O>(&resolver, selected, &request)?;
+    invoke_typed::<O>(context, request).await
+}
+
+/// Authorize one native typed call without applying public wire response limits.
+pub async fn invoke_authorized_native_typed<O: Operation>(
+    resolver: std::sync::Arc<dyn super::ContextResolver>,
+    selected: super::RequestedContext,
+    request: O::Request,
+) -> Result<O::Success, OperationError<O::Failure>> {
+    let context = authorized_context::<O>(&resolver, selected, &request)?.into_native();
+    invoke_typed::<O>(context, request).await
+}
+
+fn authorized_context<O: Operation>(
+    resolver: &std::sync::Arc<dyn super::ContextResolver>,
+    selected: super::RequestedContext,
+    request: &O::Request,
+) -> Result<PreparedContext, OperationError<O::Failure>> {
+    O::validate_external(request).map_err(OperationError::Common)?;
+    resolver
+        .prepare(O::NAME, selected, O::needs(request))
+        .map_err(OperationError::Common)
+}
+
 pub async fn invoke(operation: &str, version: u32, call: Value) -> Result<Value, FailureEnvelope> {
     invoke_with(
         operation,
@@ -107,17 +138,14 @@ pub(super) fn invoke_resolved<O: Operation>(
                 (None, call.request)
             }
         };
-        O::validate_external(&request)
-            .map_err(|error| FailureEnvelope::new(Some(O::NAME), error))?;
-        let context = match selected {
-            Some(context) => resolver
-                .prepare(O::NAME, context, O::needs(&request))
-                .map_err(|error| FailureEnvelope::new(Some(O::NAME), error))?,
-            None => PreparedContext::data_free(),
-        };
-        let success = invoke_typed::<O>(context, request)
-            .await
-            .map_err(frame_failure::<O>)?;
+        let success = match selected {
+            Some(context) => invoke_authorized_typed::<O>(resolver, context, request).await,
+            None => match O::validate_external(&request) {
+                Ok(()) => invoke_typed::<O>(PreparedContext::data_free(), request).await,
+                Err(error) => Err(OperationError::Common(error)),
+            },
+        }
+        .map_err(frame_failure::<O>)?;
         serde_json::to_value(success)
             .map_err(|_| FailureEnvelope::new(Some(O::NAME), OperationFailure::Internal))
     })
