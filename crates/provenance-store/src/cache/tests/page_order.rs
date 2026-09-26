@@ -15,11 +15,17 @@ use provenance_core::{
 };
 use serde_json::json;
 use sqlx::{Row, SqlitePool};
+use std::collections::{BTreeMap, BTreeSet};
 
-async fn plan(pool: &SqlitePool, sql: &str) -> Vec<String> {
-    sqlx::query(&format!("EXPLAIN QUERY PLAN {sql}"))
-        .bind("default")
-        .bind("")
+/// Plans one page query with the scope, key, optional filter value and
+/// limit bound in the order that `id_page_sql` requires.
+async fn plan(pool: &SqlitePool, sql: &str, filter_value: Option<&str>) -> Vec<String> {
+    let sql = format!("EXPLAIN QUERY PLAN {sql}");
+    let mut query = sqlx::query(&sql).bind("default").bind("");
+    if let Some(value) = filter_value {
+        query = query.bind(value);
+    }
+    query
         .bind(1_i64)
         .fetch_all(pool)
         .await
@@ -29,41 +35,95 @@ async fn plan(pool: &SqlitePool, sql: &str) -> Vec<String> {
         .collect()
 }
 
+fn assert_no_sort(table: &str, details: &[String]) {
+    assert!(
+        !details.iter().any(|detail| detail.contains("TEMP B-TREE")),
+        "{table}: the page sorts its rows: {details:?}"
+    );
+}
+
+/// The tables that the ID page functions read.
+const PAGED_TABLES: [&str; 18] = [
+    Source::TABLE,
+    Requirement::TABLE,
+    Resolution::TABLE,
+    Rule::TABLE,
+    Topic::TABLE,
+    Question::TABLE,
+    Domain::TABLE,
+    Boundary::TABLE,
+    ImplementationBinding::TABLE,
+    VerificationBinding::TABLE,
+    RequirementReview::TABLE,
+    <Thread as PayloadRow>::TABLE,
+    <Message as PayloadRow>::TABLE,
+    <Contribution as PayloadRow>::TABLE,
+    <SynthesisPacket as PayloadRow>::TABLE,
+    <ProposalCard as PayloadRow>::TABLE,
+    <AssertionRecord as PayloadRow>::TABLE,
+    <DispositionRecord as PayloadRow>::TABLE,
+];
+
+/// `review_journal` keys on `(scope_id, id)`, but no ID page reads it.
+const UNPAGED_KEYED_TABLES: [&str; 1] = ["review_journal"];
+
+/// Every table whose primary key is exactly `(scope_id, id)`.
+async fn keyed_tables(pool: &SqlitePool) -> BTreeSet<String> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT m.name, p.name FROM sqlite_master m JOIN pragma_table_info(m.name) p \
+         WHERE m.type = 'table' AND p.pk > 0 ORDER BY m.name, p.pk",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap();
+    let mut keys: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (table, column) in rows {
+        keys.entry(table).or_default().push(column);
+    }
+    keys.into_iter()
+        .filter(|(_, key)| *key == ["scope_id", "id"])
+        .map(|(table, _)| table)
+        .collect()
+}
+
 #[tokio::test]
 async fn id_pages_search_the_primary_key_without_a_sort() {
     let (_dir, layout, _scope) = seeded_layout();
     catch_up_state(&layout).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
-    for table in [
-        Source::TABLE,
-        Requirement::TABLE,
-        Resolution::TABLE,
-        Rule::TABLE,
-        Topic::TABLE,
-        Question::TABLE,
-        Domain::TABLE,
-        Boundary::TABLE,
-        ImplementationBinding::TABLE,
-        VerificationBinding::TABLE,
-        RequirementReview::TABLE,
-        <Thread as PayloadRow>::TABLE,
-        <Message as PayloadRow>::TABLE,
-        <Contribution as PayloadRow>::TABLE,
-        <SynthesisPacket as PayloadRow>::TABLE,
-        <ProposalCard as PayloadRow>::TABLE,
-        <AssertionRecord as PayloadRow>::TABLE,
-        <DispositionRecord as PayloadRow>::TABLE,
-    ] {
-        let details = plan(cache.pool(), &id_page_sql(table, "")).await;
-        assert!(
-            !details.iter().any(|detail| detail.contains("TEMP B-TREE")),
-            "{table}: the page sorts its rows: {details:?}"
-        );
+    let served: BTreeSet<String> = PAGED_TABLES
+        .iter()
+        .chain(&UNPAGED_KEYED_TABLES)
+        .copied()
+        .map(String::from)
+        .collect();
+    assert_eq!(
+        keyed_tables(cache.pool()).await,
+        served,
+        "each (scope_id, id) table is paged here or named as unpaged"
+    );
+    for table in PAGED_TABLES {
+        let details = plan(cache.pool(), &id_page_sql(table, ""), None).await;
+        assert_no_sort(table, &details);
         let index = format!("sqlite_autoindex_{table}_1 (scope_id=? AND id>?)");
         assert!(
             details.iter().any(|detail| detail.contains(&index)),
             "{table}: the page does not search the primary key: {details:?}"
         );
+    }
+    for (table, filter) in [
+        (VerificationBinding::TABLE, " AND rule_id = ?"),
+        (
+            <AssertionRecord as PayloadRow>::TABLE,
+            " AND proposal_id = ?",
+        ),
+        (
+            <DispositionRecord as PayloadRow>::TABLE,
+            " AND proposal_id = ?",
+        ),
+    ] {
+        let details = plan(cache.pool(), &id_page_sql(table, filter), Some("owner")).await;
+        assert_no_sort(table, &details);
     }
     cache.close().await.unwrap();
 }
