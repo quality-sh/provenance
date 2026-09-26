@@ -67,29 +67,26 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         })
         .unwrap();
     assert_eq!(member["description"], definition.description);
-    let variants = member["variants"].as_array().unwrap();
-    assert_eq!(variants.len(), 4, "one base and three member queries");
-    let base = variants
-        .iter()
-        .find(|variant| variant["selector"].is_null())
-        .unwrap();
+    let forms = member["queries"].as_array().unwrap();
+    assert_eq!(forms.len(), 4, "one base and three member queries");
+    let base = forms.iter().find(|form| form["query"].is_null()).unwrap();
     let names = base["parameters"]
         .as_array()
         .unwrap()
         .iter()
         .map(|parameter| parameter["name"].as_str().unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(names, ["id"], "the member base variant binds only the path");
+    assert_eq!(names, ["id"], "the member base form binds only the path");
     let base_success = base["success_schema"].as_object().unwrap();
     assert_eq!(
         base_success["properties"]["data"]["$ref"],
         json!("#/$defs/Source"),
-        "the base variant publishes the source-resource envelope"
+        "the base form publishes the source-resource envelope"
     );
     assert_eq!(base_success["required"], json!(["data", "meta"]));
-    let neighbors = variants
+    let neighbors = forms
         .iter()
-        .find(|variant| variant["selector"] == "neighbors")
+        .find(|form| form["query"] == "neighbors")
         .unwrap();
     assert_ne!(neighbors["success_schema"], base["success_schema"]);
 
@@ -132,7 +129,7 @@ async fn api_discovery_hides_denied_operations() {
 
 #[tokio::test]
 #[verifies("rule_porcelain_api_catalog_discovery", examples)]
-async fn api_discovery_preserves_query_variant_contracts() {
+async fn api_discovery_preserves_query_contracts() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
     let service = Porcelain::new(HostApiPort::new(host(&repository)));
@@ -147,20 +144,20 @@ async fn api_discovery_preserves_query_variant_contracts() {
         .iter()
         .find(|route| route.path == "/rules" && route.method == ApiMethod::Get)
         .expect("the rules list route is described");
-    let selectors = rules
-        .variants
+    let queries = rules
+        .queries
         .iter()
-        .map(|variant| variant.selector.as_deref())
+        .map(|form| form.query.as_deref())
         .collect::<Vec<_>>();
     assert_eq!(
-        selectors,
+        queries,
         vec![None, Some("search"), Some("stale"), Some("resolve-symbol")]
     );
 
     let base = rules
-        .variants
+        .queries
         .iter()
-        .find(|variant| variant.selector.is_none())
+        .find(|form| form.query.is_none())
         .unwrap();
     let base_names = names_of(&base.parameters);
     assert!(base_names.contains(&"limit"));
@@ -168,14 +165,14 @@ async fn api_discovery_preserves_query_variant_contracts() {
     for flattened in ["base", "head", "symbol", "file", "line", "text"] {
         assert!(
             !base_names.contains(&flattened),
-            "the base variant must not advertise {flattened}"
+            "the base form must not advertise {flattened}"
         );
     }
 
     let resolve_symbol = rules
-        .variants
+        .queries
         .iter()
-        .find(|variant| variant.selector.as_deref() == Some("resolve-symbol"))
+        .find(|form| form.query.as_deref() == Some("resolve-symbol"))
         .unwrap();
     let symbol_names = names_of(&resolve_symbol.parameters);
     assert!(symbol_names.contains(&"file"));
@@ -192,9 +189,9 @@ async fn api_discovery_preserves_query_variant_contracts() {
     assert!(!resolve_symbol.failure_schema.is_null());
 
     let stale = rules
-        .variants
+        .queries
         .iter()
-        .find(|variant| variant.selector.as_deref() == Some("stale"))
+        .find(|form| form.query.as_deref() == Some("stale"))
         .unwrap();
     let stale_names = names_of(&stale.parameters);
     assert!(stale_names.contains(&"base"));
@@ -203,7 +200,7 @@ async fn api_discovery_preserves_query_variant_contracts() {
     assert!(!stale.failure_schema.is_null());
     assert_ne!(
         stale.success_schema, base.success_schema,
-        "each variant keeps its own response schema"
+        "each form keeps its own response schema"
     );
 
     let member = catalog
@@ -211,19 +208,19 @@ async fn api_discovery_preserves_query_variant_contracts() {
         .iter()
         .find(|route| route.path == "/requirements/{id}" && route.method == ApiMethod::Get)
         .expect("the requirement member route is described");
-    let member_selectors = member
-        .variants
+    let member_queries = member
+        .queries
         .iter()
-        .map(|variant| variant.selector.as_deref())
+        .map(|form| form.query.as_deref())
         .collect::<Vec<_>>();
     assert_eq!(
-        member_selectors,
+        member_queries,
         vec![None, Some("trace"), Some("neighbors"), Some("impact")]
     );
     let member_base = member
-        .variants
+        .queries
         .iter()
-        .find(|variant| variant.selector.is_none())
+        .find(|form| form.query.is_none())
         .unwrap();
     assert!(names_of(&member_base.parameters).contains(&"id"));
 }
@@ -266,7 +263,7 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
         "invocation output violates the published schema: {invoked:?}"
     );
 
-    // The described base variant schema must also describe the live result
+    // The described base form schema must also describe the live result
     // that the named catalog tool returns on the same public path.
     let named = session
         .call_named("get-source", json!({"id": "source_shared"}))
@@ -278,15 +275,15 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
         .iter()
         .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
         .expect("the source member route is described");
-    let base_schema = member["variants"]
+    let base_schema = member["queries"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|variant| variant["selector"].is_null())
-        .expect("the base variant is described")["success_schema"]
+        .find(|form| form["query"].is_null())
+        .expect("the base form is described")["success_schema"]
         .clone();
     let base_contract =
-        JSONSchema::compile(&base_schema).expect("the described base variant schema compiles");
+        JSONSchema::compile(&base_schema).expect("the described base form schema compiles");
     assert!(
         base_contract.is_valid(named.structured_content.as_ref().unwrap()),
         "named tool output violates the described route schema: {named:?}"

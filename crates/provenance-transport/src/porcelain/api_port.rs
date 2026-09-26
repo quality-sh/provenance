@@ -1,6 +1,6 @@
 use provenance_porcelain::api::{
-    ApiCatalog, ApiError, ApiErrorKind, ApiMethod, ApiParameter, ApiPort, ApiPortFuture, ApiRoute,
-    ApiVariant,
+    ApiCatalog, ApiError, ApiErrorKind, ApiMethod, ApiParameter, ApiPort, ApiPortFuture, ApiQuery,
+    ApiRoute,
 };
 use provenance_store::operations::catalog::{self, Definition, HttpMethod};
 use serde_json::{json, Value};
@@ -108,9 +108,9 @@ fn route(definition: &Definition) -> ApiRoute {
         data
     });
     let declared = definition.query_variants();
-    let variants = if declared.is_empty() {
-        vec![ApiVariant {
-            selector: None,
+    let queries = if declared.is_empty() {
+        vec![ApiQuery {
+            query: None,
             parameters: definition.parameters().iter().map(parameter).collect(),
             success_schema: definition.success_schema(),
             failure_schema: definition.failure_schema().clone(),
@@ -118,8 +118,8 @@ fn route(definition: &Definition) -> ApiRoute {
     } else {
         declared
             .iter()
-            .map(|variant| ApiVariant {
-                selector: variant.selector.map(str::to_owned),
+            .map(|variant| ApiQuery {
+                query: variant.selector.map(str::to_owned),
                 parameters: variant.parameters.iter().map(parameter).collect(),
                 success_schema: variant.success_schema.clone(),
                 failure_schema: variant.failure_schema.clone(),
@@ -135,7 +135,7 @@ fn route(definition: &Definition) -> ApiRoute {
         path: definition.path.to_owned(),
         description: definition.description.to_owned(),
         request_schema,
-        variants,
+        queries,
     }
 }
 

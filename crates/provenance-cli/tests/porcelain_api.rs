@@ -228,12 +228,12 @@ fn api_discovery_describes_the_live_catalog() {
         .iter()
         .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
         .expect("the source member route is described");
-    let variants = member["variants"].as_array().unwrap();
-    assert!(!variants.is_empty());
-    let base = variants
+    let forms = member["queries"].as_array().unwrap();
+    assert!(!forms.is_empty());
+    let base = forms
         .iter()
-        .find(|variant| variant["selector"].is_null())
-        .expect("the base variant is described");
+        .find(|form| form["query"].is_null())
+        .expect("the base form is described");
     assert!(!base["success_schema"].as_object().unwrap().is_empty());
     assert!(!base["parameters"].as_array().unwrap().is_empty());
 }
@@ -263,7 +263,7 @@ fn api_unsupported_methods_refuse_with_the_canonical_failure() {
 
 #[test]
 #[verifies("rule_porcelain_api_public_path", examples)]
-fn api_query_selectors_follow_the_variant_contracts() {
+fn api_query_values_follow_their_contracts() {
     let (_directory, repo) = init();
     provenance()
         .args([
@@ -335,7 +335,7 @@ fn api_query_selectors_follow_the_variant_contracts() {
     ]);
     assert!(neighbors["data"].is_object(), "{neighbors}");
 
-    let unknown_selector = refusal(&[
+    let unknown_query = refusal(&[
         "api",
         "requirements/req_q",
         "--repo",
@@ -343,8 +343,8 @@ fn api_query_selectors_follow_the_variant_contracts() {
         "--query",
         "query=stale",
     ]);
-    assert_eq!(unknown_selector["error"]["kind"], "invalid_input");
-    assert_eq!(unknown_selector["error"]["field"], "query");
+    assert_eq!(unknown_query["error"]["kind"], "invalid_input");
+    assert_eq!(unknown_query["error"]["field"], "query");
 }
 
 fn directory_file(repo: &str, name: &str, content: &str) -> String {

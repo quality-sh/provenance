@@ -1,6 +1,6 @@
 use provenance_porcelain::api::{
     render_discovery_readable, ApiArguments, ApiCatalog, ApiError, ApiErrorKind, ApiInput,
-    ApiMethod, ApiOutcome, ApiParameter, ApiPort, ApiPortFuture, ApiRequest, ApiRoute, ApiVariant,
+    ApiMethod, ApiOutcome, ApiParameter, ApiPort, ApiPortFuture, ApiQuery, ApiRequest, ApiRoute,
 };
 use provenance_porcelain::Porcelain;
 use serde_json::{json, Value};
@@ -54,13 +54,13 @@ fn route(
         path: path.into(),
         description: description.into(),
         request_schema,
-        variants: vec![variant(None)],
+        queries: vec![form(None)],
     }
 }
 
-fn variant(selector: Option<&str>) -> ApiVariant {
-    ApiVariant {
-        selector: selector.map(str::to_owned),
+fn form(query: Option<&str>) -> ApiQuery {
+    ApiQuery {
+        query: query.map(str::to_owned),
         parameters: Vec::new(),
         success_schema: json!({"type": "object"}),
         failure_schema: json!({"type": "object"}),
@@ -349,14 +349,14 @@ fn readable_discovery_lists_routes_with_their_inputs() {
         "Read one requirement.",
         None,
     );
-    member.variants[0].parameters = vec![parameter("id", "path", true)];
-    member.variants.push(ApiVariant {
+    member.queries[0].parameters = vec![parameter("id", "path", true)];
+    member.queries.push(ApiQuery {
         parameters: vec![
             parameter("id", "path", true),
             parameter("query", "query", true),
             parameter("depth", "query", false),
         ],
-        ..variant(Some("neighbors"))
+        ..form(Some("neighbors"))
     });
     let mut create = route(
         ApiMethod::Post,
@@ -364,7 +364,7 @@ fn readable_discovery_lists_routes_with_their_inputs() {
         "Create one requirement.",
         Some(json!({"type": "object"})),
     );
-    create.variants[0].parameters = vec![parameter("Idempotency-Key", "header", true)];
+    create.queries[0].parameters = vec![parameter("Idempotency-Key", "header", true)];
     let catalog = ApiCatalog {
         routes: vec![
             route(ApiMethod::Get, "/requirements", "List requirements.", None),

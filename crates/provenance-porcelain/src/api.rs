@@ -145,17 +145,17 @@ pub struct ApiRoute {
     pub path: String,
     pub description: String,
     pub request_schema: Option<Value>,
-    pub variants: Vec<ApiVariant>,
+    pub queries: Vec<ApiQuery>,
 }
 
-/// One selector-scoped input and response contract of one route.
+/// One `query` form of one route with its inputs and response contract.
 ///
-/// The base variant has no selector; each query variant names its selector
-/// and carries the parameters, success schema, and failure schema that the
-/// canonical definition declares for it.
+/// The base form has no `query` value; each other form names the `?query=`
+/// value that selects it and carries the parameters, success schema, and
+/// failure schema that the canonical definition declares for it.
 #[derive(Clone, Debug, Serialize, Eq, PartialEq, schemars::JsonSchema)]
-pub struct ApiVariant {
-    pub selector: Option<String>,
+pub struct ApiQuery {
+    pub query: Option<String>,
     pub parameters: Vec<ApiParameter>,
     pub success_schema: Value,
     pub failure_schema: Value,
@@ -311,14 +311,14 @@ pub fn render_discovery_readable(catalog: &ApiCatalog) -> String {
             route.path
         ));
         lines.push(format!("  {}", route.description));
-        for variant in &route.variants {
-            let label = variant.selector.as_ref().map_or_else(
+        for form in &route.queries {
+            let label = form.query.as_ref().map_or_else(
                 || "inputs".to_owned(),
                 |name| format!("inputs with query={name}"),
             );
             lines.push(format!(
                 "  {label}: {}",
-                render_parameters(&variant.parameters)
+                render_parameters(&form.parameters)
             ));
         }
         if route.request_schema.is_some() {

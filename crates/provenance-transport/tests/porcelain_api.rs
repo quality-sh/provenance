@@ -338,7 +338,7 @@ async fn host_api_port_maps_canonical_failures_for_direct_callers() {
 }
 
 #[tokio::test]
-async fn api_query_selector_invocations_follow_the_variant_contracts() {
+async fn api_query_invocations_follow_their_contracts() {
     let repository = Repository::new("The shared rule is readable.");
     repository.all_kinds();
     let session = ApiSession::start(host(&repository)).await;
@@ -371,11 +371,11 @@ async fn api_query_selector_invocations_follow_the_variant_contracts() {
         .get("data")
         .is_some());
 
-    let wrong_selector = session
+    let unknown_query = session
         .call(json!({"path": "requirements/req_shared", "query": {"query": "stale"}}))
         .await;
-    assert_eq!(wrong_selector.is_error, Some(true), "{wrong_selector:?}");
-    assert_eq!(error_kind(&wrong_selector), "invalid_input");
+    assert_eq!(unknown_query.is_error, Some(true), "{unknown_query:?}");
+    assert_eq!(error_kind(&unknown_query), "invalid_input");
 
     session.shutdown().await;
 }
