@@ -4,8 +4,15 @@
 import argparse
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
+
+# A function that only one of these cfg attributes gates cannot run on the
+# Linux coverage host, so LCOV has no executed record for it.
+PLATFORM_ONLY_CFG = re.compile(
+    r'#\[cfg\((windows|target_os\s*=\s*"(windows|macos)")\)\]'
+)
 
 
 class GateInputError(RuntimeError):
@@ -140,21 +147,47 @@ def _validate_diagnostics(report):
         )
 
 
-def _validate_perfect_coverage(entries, lcov):
+def _is_platform_only(row):
+    try:
+        lines = Path(row["file"]).read_text().splitlines()
+    except OSError as error:
+        raise GateInputError(f"cannot read source {row['file']}: {error}") from error
+    index = row["line"] - 2
+    while index >= 0:
+        text = lines[index].strip()
+        if PLATFORM_ONLY_CFG.fullmatch(text):
+            return True
+        if not (text.startswith("#[") or text.startswith("//")):
+            return False
+        index -= 1
+    return False
+
+
+def _validate_perfect_coverage(entries, lcov, allow_platform_only):
+    platform_only = []
     for row in entries:
         if row["coverage"] != 100:
             continue
         functions = _matching_functions(lcov, row["file"])
         executed_at_line = any(line == row["line"] and count > 0 for line, _, count in functions)
-        if not executed_at_line:
-            raise GateInputError(
-                f"{row['function']} at {row['file']}:{row['line']} reports 100% coverage "
-                "but has no executed LCOV function record"
-            )
+        if executed_at_line:
+            continue
+        if allow_platform_only and _is_platform_only(row):
+            platform_only.append(row)
+            continue
+        raise GateInputError(
+            f"{row['function']} at {row['file']}:{row['line']} reports 100% coverage "
+            "but has no executed LCOV function record"
+        )
+    return platform_only
 
 
-def validate_report(report, lcov_path, expected_version):
-    """Reject reports that could make absent analysis data look green."""
+def validate_report(report, lcov_path, expected_version, allow_platform_only=False):
+    """Reject reports that could make absent analysis data look green.
+
+    Return the platform-only functions that the caller allowed without
+    executed coverage.
+    """
     if not isinstance(report, dict):
         raise GateInputError("cargo-crap report is not a JSON object")
     if report.get("version") != expected_version:
@@ -179,7 +212,7 @@ def validate_report(report, lcov_path, expected_version):
             f"{first['function']} at {first['file']}:{first['line']}"
         )
     lcov = _read_lcov(Path(lcov_path))
-    _validate_perfect_coverage(entries, lcov)
+    return _validate_perfect_coverage(entries, lcov, allow_platform_only)
 
 
 def _arguments():
@@ -193,6 +226,11 @@ def _arguments():
     parser.add_argument("--threshold", type=float, required=True)
     parser.add_argument("--expected-version", default="0.5.0")
     parser.add_argument("--exclude", action="append", default=[])
+    parser.add_argument(
+        "--allow-unmeasured-platform-code",
+        action="store_true",
+        help="accept functions that only a non-Linux cfg attribute gates",
+    )
     return parser.parse_args()
 
 
@@ -262,10 +300,18 @@ def main():
     if result.returncode not in (0, 1):
         return result.returncode
     try:
-        validate_report(parsed, args.lcov, args.expected_version)
+        platform_only = validate_report(
+            parsed, args.lcov, args.expected_version, args.allow_unmeasured_platform_code
+        )
     except GateInputError as error:
         print(f"CRAP gate input error: {error}", file=sys.stderr)
         return 2
+    for row in platform_only:
+        print(
+            f"Not measured on this platform: {row['function']} at "
+            f"{row['file']}:{row['line']}",
+            flush=True,
+        )
     return result.returncode
 
 

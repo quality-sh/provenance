@@ -444,6 +444,7 @@ jobs:
           --lcov target/crap/lcov.info
           --report target/crap/crap-report.json
           --threshold 30
+          --allow-unmeasured-platform-code
           --exclude 'build.rs'
           --exclude 'build/**'
           --exclude 'src/generated/**'

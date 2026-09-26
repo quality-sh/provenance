@@ -153,6 +153,30 @@ class ReportValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(self.gate.GateInputError, "no executed LCOV function record"):
             self.gate.validate_report(report([entry(100.0, 2.0)]), self.lcov, "0.5.0")
 
+    def platform_row(self, attribute):
+        source = self.root / "platform.rs"
+        source.write_text(f"{attribute}\npub(super) fn example() {{}}\n")
+        self.lcov.write_text(f"SF:{source}\nDA:99,1\nend_of_record\n")
+        row = entry(100.0, 2.0)
+        row["file"] = str(source)
+        row["line"] = 2
+        return row
+
+    def test_platform_only_function_is_rejected_by_default(self):
+        row = self.platform_row("#[cfg(windows)]")
+        with self.assertRaisesRegex(self.gate.GateInputError, "no executed LCOV function record"):
+            self.gate.validate_report(report([row]), self.lcov, "0.5.0")
+
+    def test_platform_only_function_is_listed_when_allowed(self):
+        row = self.platform_row("#[cfg(windows)]")
+        allowed = self.gate.validate_report(report([row]), self.lcov, "0.5.0", True)
+        self.assertEqual(allowed, [row])
+
+    def test_linux_function_without_record_is_rejected_when_allowed(self):
+        row = self.platform_row("#[cfg(any(windows, unix))]")
+        with self.assertRaisesRegex(self.gate.GateInputError, "no executed LCOV function record"):
+            self.gate.validate_report(report([row]), self.lcov, "0.5.0", True)
+
     def test_same_filename_in_two_crates_is_not_guessed(self):
         self.lcov.write_text(
             "SF:crates/alpha/src/lib.rs\n"
@@ -296,6 +320,7 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("python3 .github/scripts/crap_gate.test.py", self.job)
         self.assertIn("python3 .github/scripts/crap_gate.py", self.job)
         self.assertIn("--threshold 30", self.job)
+        self.assertIn("--allow-unmeasured-platform-code", self.job)
         self.assertIn("--workspace", self.job)
         self.assertIn("--exclude 'build.rs'", self.job)
         self.assertIn("--exclude 'build/**'", self.job)
