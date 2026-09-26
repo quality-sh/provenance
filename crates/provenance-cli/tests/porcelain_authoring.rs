@@ -242,13 +242,26 @@ fn target_first_update_preserves_omissions_and_honors_null_clear() {
         "update",
         "--repo",
         &repo,
-        "--url",
+        "--url-json",
         "null",
         "--format",
         "json",
     ]);
     assert!(cleared["data"]["url"].is_null());
     assert_eq!(cleared["data"]["reference"], "clause 1");
+
+    let literal = json_output(&[
+        "source_patch",
+        "update",
+        "--repo",
+        &repo,
+        "--url",
+        "null",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(literal["data"]["url"], "null");
+    assert_eq!(literal["data"]["reference"], "clause 1");
 }
 
 fn named_action_repo() -> (tempfile::TempDir, String) {

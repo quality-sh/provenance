@@ -98,7 +98,7 @@ fn print_body_fields(help: &mut String, definition: &Definition, declared: &[fie
             writeln!(
                 help,
                 "        --{} <json>{}",
-                json_flag(wire_field),
+                fields::json_flag(wire_field),
                 bracketed(&details)
             )
             .expect("writing to a String cannot fail");
@@ -239,10 +239,6 @@ fn cli_default(definition: &Definition, field: &str) -> Option<String> {
             CliDefaultValue::String(value) => Value::String(value.to_owned()).to_string(),
             CliDefaultValue::EmptyArray => "[]".into(),
         })
-}
-
-fn json_flag(wire_field: &str) -> String {
-    format!("{}-json", fields::cli_name(wire_field))
 }
 
 fn bracketed(details: &[String]) -> String {

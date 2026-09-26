@@ -1,19 +1,19 @@
 //! CLI dispatch over the registered resource catalog.
 use crate::invocation::{grammar, GlobalContext};
-use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
+use axum::http::{HeaderMap, Method};
 use clap::{parser::ValueSource, ArgMatches, Command};
 use provenance_porcelain::action::Action;
 use provenance_store::operations::catalog::{self, Definition, TargetAction};
-use serde_json::{json, Map, Value};
+use serde_json::Value;
 use std::{
     collections::BTreeMap,
-    io::Read as _,
     net::{Ipv4Addr, SocketAddr},
 };
 
 mod address;
 pub mod fields;
 mod help;
+mod input;
 
 pub struct Invocation {
     context: GlobalContext,
@@ -28,7 +28,7 @@ impl Invocation {
     pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
         let resolved = address::resolve(&args.collection, &args.address)
             .unwrap_or_else(|error| usage_error(error));
-        let (data, query, headers) = input(
+        let (data, query, headers) = input::parse(
             resolved.address.definition,
             matches,
             args.stdin,
@@ -147,7 +147,7 @@ pub async fn dispatch_target(
         warn_if_skills_missing(&context.repo, context.quiet)?;
     }
     let stdin = matches.get_flag("stdin");
-    let (data, query, headers) = input(
+    let (data, query, headers) = input::parse(
         route.definition,
         &matches,
         stdin,
@@ -240,121 +240,4 @@ fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
         );
     }
     Ok(())
-}
-
-fn input(
-    definition: &Definition,
-    matches: &ArgMatches,
-    stdin: bool,
-    query_action: Option<&'static str>,
-    extra: &[&str],
-) -> anyhow::Result<(Value, BTreeMap<String, String>, HeaderMap)> {
-    let declared = fields::declared(definition)?;
-    let mut allowed = declared
-        .iter()
-        .map(|field| field.name.as_str())
-        .collect::<Vec<_>>();
-    allowed.extend(extra.iter().copied());
-    ensure_only_fields(matches, &allowed);
-    let mut data = Map::new();
-    let mut query = BTreeMap::new();
-    let mut headers = HeaderMap::new();
-    for field in declared {
-        let Some(value) = matches
-            .try_get_one::<String>(&field.name)
-            .ok()
-            .flatten()
-            .or_else(|| {
-                matches
-                    .try_get_one::<String>(&field.name.replace('-', "_"))
-                    .ok()
-                    .flatten()
-            })
-        else {
-            continue;
-        };
-        match field.source {
-            fields::Source::Parameter(parameter) => match parameter.location {
-                "query" => {
-                    let parsed = catalog::parse_parameter_value(&parameter, value)
-                        .map_err(|_| anyhow::anyhow!("invalid value for --{}", field.name))?;
-                    let encoded = catalog::serialize_parameter_value(&parameter, &parsed)
-                        .map_err(|_| anyhow::anyhow!("invalid value for --{}", field.name))?;
-                    query.insert(parameter.name.to_owned(), encoded);
-                }
-                "header" => {
-                    headers.insert(
-                        HeaderName::from_bytes(parameter.name.as_bytes())?,
-                        HeaderValue::from_str(value)?,
-                    );
-                }
-                _ => anyhow::bail!("unknown catalog parameter location"),
-            },
-            fields::Source::Body {
-                wire_field,
-                value_schema,
-                wrap_array,
-            } => {
-                if !wrap_array
-                    && matches!(
-                        value_schema.get("type").and_then(Value::as_str),
-                        Some("array" | "object")
-                    )
-                {
-                    anyhow::bail!("arrays and objects must come from --stdin");
-                }
-                let request = definition.request_schema().expect("declared body field");
-                let parsed = catalog::parse_schema_value_in(request, &value_schema, value)
-                    .map_err(|_| anyhow::anyhow!("invalid value for --{}", field.name))?;
-                anyhow::ensure!(
-                    data.insert(
-                        wire_field,
-                        if wrap_array { json!([parsed]) } else { parsed }
-                    )
-                    .is_none(),
-                    "body field is supplied by more than one option"
-                );
-            }
-        }
-    }
-    if let Some(action) = query_action {
-        anyhow::ensure!(
-            !query.contains_key("query"),
-            "query action is supplied twice"
-        );
-        query.insert("query".into(), action.to_owned());
-    }
-    if stdin {
-        anyhow::ensure!(
-            data.is_empty(),
-            "--stdin cannot be combined with body field flags"
-        );
-        let mut text = String::new();
-        std::io::stdin().read_to_string(&mut text)?;
-        data = serde_json::from_str::<Value>(&text)?
-            .as_object()
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("stdin must contain one JSON object"))?;
-    }
-    apply_defaults(definition, &mut data);
-    if definition.parameters().iter().any(|parameter| {
-        parameter.location == "header" && parameter.required && parameter.name == "Idempotency-Key"
-    }) && !headers.contains_key("Idempotency-Key")
-    {
-        headers.insert(
-            HeaderName::from_static("idempotency-key"),
-            HeaderValue::from_str(&uuid::Uuid::new_v4().to_string())?,
-        );
-    }
-    Ok((Value::Object(data), query, headers))
-}
-
-fn apply_defaults(definition: &Definition, data: &mut Map<String, Value>) {
-    for default in &definition.registration.cli.defaults {
-        data.entry(default.field)
-            .or_insert_with(|| match default.value {
-                catalog::CliDefaultValue::String(value) => json!(value),
-                catalog::CliDefaultValue::EmptyArray => json!([]),
-            });
-    }
 }
