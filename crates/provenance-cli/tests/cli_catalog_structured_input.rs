@@ -320,7 +320,7 @@ fn conflicting_body_sources_are_rejected_without_overwrite() {
         ])
         .assert()
         .failure()
-        .stderr(contains("body field name is assigned more than once"));
+        .stderr(contains("--name is assigned more than once for body field name"));
 
     provenance()
         .args([

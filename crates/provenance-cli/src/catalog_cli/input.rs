@@ -195,7 +195,7 @@ fn assign_plain(
     let repeatable = field.item_schema.is_some();
     anyhow::ensure!(
         repeatable || values.len() == 1,
-        "body field {} is assigned more than once",
+        "--{flag} is assigned more than once for body field {}",
         field.wire_name
     );
     let mut parsed = Vec::new();
@@ -260,7 +260,11 @@ fn merge_stdin(
         .ok_or_else(|| anyhow::anyhow!("stdin must contain one JSON object"))?;
     for (field, value) in object {
         if let Some(assignment) = assignments.get(&field) {
-            anyhow::bail!("stdin field {field} conflicts with --{}", assignment.flag);
+            anyhow::bail!(
+                "stdin field {field} conflicts with --{}; \
+                 --stdin and body flags cannot both assign {field}",
+                assignment.flag
+            );
         }
         data.insert(field, value);
     }
