@@ -4,6 +4,7 @@ use std::fs::File;
 
 mod cleanup;
 mod ownership;
+mod parent_walk;
 mod replacement;
 
 pub(super) use ownership::open_child_directory_no_follow;
@@ -50,7 +51,7 @@ impl TransactionDirectory {
             .parent()
             .filter(|path| !path.as_str().is_empty())
             .unwrap_or_else(|| Utf8Path::new("."));
-        let parent = ownership::open_or_create_parent(parent_path, output)?;
+        let parent = parent_walk::open_or_create_parent(parent_path, output)?;
         let output_leaf = output
             .file_name()
             .expect("validated output leaf")

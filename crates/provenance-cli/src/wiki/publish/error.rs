@@ -157,3 +157,7 @@ impl std::error::Error for PublishError {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "error_tests.rs"]
+mod tests;
