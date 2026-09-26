@@ -91,13 +91,7 @@ pub(super) fn parse(
         }
     }
     if let Some(request) = request {
-        bind_json_fields(
-            request,
-            matches,
-            &wire_fields,
-            &mut data,
-            &mut assignments,
-        )?;
+        bind_json_fields(request, matches, &wire_fields, &mut data, &mut assignments)?;
     }
     if let Some(action) = query_action {
         anyhow::ensure!(
@@ -237,10 +231,7 @@ fn bind_json_fields(
         if values.is_empty() {
             continue;
         }
-        anyhow::ensure!(
-            values.len() == 1,
-            "--{flag} is assigned more than once"
-        );
+        anyhow::ensure!(values.len() == 1, "--{flag} is assigned more than once");
         if let Some(previous) = assignments.get(wire_field) {
             anyhow::bail!(
                 "--{flag} conflicts with --{} for {wire_field}",
@@ -250,10 +241,7 @@ fn bind_json_fields(
         let schema = fields::wire_field_schema(request, wire_field)
             .ok_or_else(|| anyhow::anyhow!("catalog body field {wire_field} has no schema"))?;
         let parsed = parse_json(request, schema, &flag, &values[0])?;
-        assignments.insert(
-            wire_field.clone(),
-            Assignment { flag },
-        );
+        assignments.insert(wire_field.clone(), Assignment { flag });
         data.insert(wire_field.clone(), parsed);
     }
     Ok(())
@@ -326,19 +314,28 @@ fn parse_plain_value(
 fn parse_typed(request: &Value, schema: &Value, flag: &str, raw: &str) -> anyhow::Result<Value> {
     if accepts_string(request, schema, 0) {
         let value = Value::String(raw.to_owned());
-        anyhow::ensure!(validates(request, schema, &value)?, "invalid value for --{flag}");
+        anyhow::ensure!(
+            validates(request, schema, &value)?,
+            "invalid value for --{flag}"
+        );
         return Ok(value);
     }
     let value = catalog::parse_schema_value_in(request, schema, raw)
         .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
-    anyhow::ensure!(validates(request, schema, &value)?, "invalid value for --{flag}");
+    anyhow::ensure!(
+        validates(request, schema, &value)?,
+        "invalid value for --{flag}"
+    );
     Ok(value)
 }
 
 fn parse_json(request: &Value, schema: &Value, flag: &str, raw: &str) -> anyhow::Result<Value> {
     let value = serde_json::from_str(raw)
         .map_err(|_| anyhow::anyhow!("invalid JSON value for --{flag}"))?;
-    anyhow::ensure!(validates(request, schema, &value)?, "invalid value for --{flag}");
+    anyhow::ensure!(
+        validates(request, schema, &value)?,
+        "invalid value for --{flag}"
+    );
     Ok(value)
 }
 
