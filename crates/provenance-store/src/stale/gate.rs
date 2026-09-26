@@ -1,20 +1,15 @@
 use super::git::{ChangedFile, RevisionFile};
 use crate::cache::GraphEvidence;
-use crate::evidence_anchors as anchors;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::coverage::{
-    AnchorState, CoverageReport, CoverageScan, EvidenceDiffReport, EvidenceDiffSite,
-    EvidenceDiffState, EvidenceDiffSummary, EvidenceSiteKind, ScannedFile,
+    AnchorState, EvidenceDiffReport, EvidenceDiffSite, EvidenceDiffState, EvidenceDiffSummary,
+    EvidenceSiteKind,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use provenance_scanner::{CoverageBaseline, FileScanWithContent, ScannedCoverage};
+use std::collections::BTreeSet;
 
 mod source_refs;
 mod typed_bindings;
-
-struct RevisionScan {
-    coverage: CoverageScan,
-    spans: BTreeMap<(Utf8PathBuf, usize), usize>,
-}
 
 pub fn report(
     repo: &Utf8Path,
@@ -25,21 +20,23 @@ pub fn report(
     changes: &[ChangedFile],
     graph: &GraphEvidence,
 ) -> EvidenceDiffReport {
-    let base_scan = scan_revision(&base, base_files);
-    let mut head_scan = scan_revision(&head, head_files);
-    anchors::reconcile(
-        &mut head_scan.coverage,
-        &base_scan.coverage,
+    let base_scan = scan_revision(&base, base_files, None);
+    let baseline = CoverageBaseline {
+        scan: &base_scan,
         repo,
-        repo,
-        false,
-    );
+        scan_path: repo,
+        validate_rules: false,
+    };
+    let head_scan = scan_revision(&head, head_files, Some(baseline));
     let mut sites = marker_sites(&base_scan, &head_scan, changes, &graph.rule_ids);
-    let typed_sites = typed_bindings::sites(&sites, &head_scan.coverage, graph, changes);
+    let typed_sites = typed_bindings::sites(&sites, &head_scan, graph, changes);
     sites.extend(typed_sites);
-    sites.extend(graph.references.iter().flat_map(|reference| {
-        source_refs::sites(reference, &head_scan.coverage.bindings, changes)
-    }));
+    sites.extend(
+        graph
+            .references
+            .iter()
+            .flat_map(|reference| source_refs::sites(reference, &head_scan.bindings, changes)),
+    );
     sites.sort_by(|left, right| {
         (
             &left.file_path,
@@ -64,152 +61,35 @@ pub fn report(
     }
 }
 
-fn scan_revision(commit: &str, files: Vec<RevisionFile>) -> RevisionScan {
-    let scans = files
-        .iter()
+fn scan_revision(
+    commit: &str,
+    files: Vec<RevisionFile>,
+    baseline: Option<CoverageBaseline<'_>>,
+) -> ScannedCoverage {
+    let files = files
+        .into_iter()
         .map(|file| {
             let language = file
                 .path
                 .extension()
                 .and_then(provenance_scanner::Language::from_extension)
                 .expect("revision files were filtered by scanner language");
-            provenance_scanner::scan_file(&file.path, language, &file.content)
+            FileScanWithContent {
+                scan: provenance_scanner::scan_file(&file.path, language, &file.content),
+                content: file.content,
+            }
         })
         .collect::<Vec<_>>();
-    let results = provenance_scanner::coverage_results(&scans);
-    let extents = site_spans(&files, &scans);
-    let scanned_files = files
-        .into_iter()
-        .map(|file| ScannedFile {
-            file_path: file.path,
-            content: file.content,
-        })
-        .collect();
-    RevisionScan {
-        coverage: CoverageScan {
-            report: CoverageReport::new(
-                Some(commit.to_string()),
-                scans.len(),
-                results.annotations,
-                results.bindings,
-                Vec::new(),
-            ),
-            scanned_files,
-        },
-        spans: extents,
-    }
-}
-
-fn site_spans(
-    files: &[RevisionFile],
-    scans: &[provenance_scanner::FileScan],
-) -> BTreeMap<(Utf8PathBuf, usize), usize> {
-    let contents = files
-        .iter()
-        .map(|file| {
-            (
-                file.path.as_path(),
-                file.content.lines().collect::<Vec<_>>(),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-    let mut extents = BTreeMap::new();
-    for scan in scans {
-        let lines = &contents[scan.file_path.as_path()];
-        for site in &scan.annotations {
-            let end = symbol_end(
-                lines,
-                site.line,
-                site.function_name.as_deref(),
-                scan.language,
-            );
-            extents.insert((site.file_path.clone(), site.line), end);
-        }
-        for site in &scan.bindings {
-            let end = symbol_end(lines, site.line, site.item_name.as_deref(), scan.language);
-            extents.insert((site.file_path.clone(), site.line), end);
-        }
-    }
-    extents
-}
-
-fn symbol_end(
-    lines: &[&str],
-    marker_line: usize,
-    symbol: Option<&str>,
-    language: provenance_scanner::Language,
-) -> usize {
-    let Some(symbol) = symbol else {
-        return marker_line;
-    };
-    let marker_index = marker_line.saturating_sub(1);
-    let declaration = lines
-        .iter()
-        .enumerate()
-        .skip(marker_index)
-        .take(8)
-        .find(|(_, line)| line.contains(symbol))
-        .map(|(index, _)| index);
-    let Some(declaration) = declaration else {
-        return marker_line;
-    };
-    if language == provenance_scanner::Language::Python {
-        return python_symbol_end(lines, marker_line, declaration);
-    }
-    brace_symbol_end(lines, marker_line, declaration)
-}
-
-fn brace_symbol_end(lines: &[&str], marker_line: usize, declaration: usize) -> usize {
-    let mut depth = 0usize;
-    let mut opened = false;
-    for (index, line) in lines.iter().enumerate().skip(declaration) {
-        for character in line.chars() {
-            match character {
-                '{' => {
-                    opened = true;
-                    depth += 1;
-                }
-                '}' if opened => depth = depth.saturating_sub(1),
-                _ => {}
-            }
-        }
-        if (opened && depth == 0) || (!opened && line.trim_end().ends_with(';')) {
-            return index + 1;
-        }
-    }
-    marker_line.max(declaration + 1)
-}
-
-fn python_symbol_end(lines: &[&str], marker_line: usize, declaration: usize) -> usize {
-    let indentation = lines[declaration]
-        .chars()
-        .take_while(|character| character.is_whitespace())
-        .count();
-    let mut end = declaration + 1;
-    for (index, line) in lines.iter().enumerate().skip(declaration + 1) {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let current = line
-            .chars()
-            .take_while(|character| character.is_whitespace())
-            .count();
-        if current <= indentation {
-            break;
-        }
-        end = index + 1;
-    }
-    marker_line.max(end)
+    provenance_scanner::scan_to_coverage(&files, Some(commit.to_string()), Vec::new(), baseline)
 }
 
 fn marker_sites(
-    base: &RevisionScan,
-    head: &RevisionScan,
+    base: &ScannedCoverage,
+    head: &ScannedCoverage,
     changes: &[ChangedFile],
     known_rules: &BTreeSet<String>,
 ) -> Vec<EvidenceDiffSite> {
-    head.coverage
-        .annotations
+    head.annotations
         .iter()
         .filter(|site| known_rules.contains(&site.rule_id))
         .map(|site| {
@@ -224,6 +104,7 @@ fn marker_sites(
                 &site.file_path,
                 site.line,
                 site.anchor_state,
+                site.is_current(),
                 site.original_file_path.clone(),
                 site.original_line,
                 base,
@@ -232,8 +113,7 @@ fn marker_sites(
             )
         })
         .chain(
-            head.coverage
-                .bindings
+            head.bindings
                 .iter()
                 .filter(|site| known_rules.contains(&site.rule_id))
                 .map(|site| {
@@ -247,6 +127,7 @@ fn marker_sites(
                         &site.file_path,
                         site.line,
                         site.anchor_state,
+                        site.is_current(),
                         site.original_file_path.clone(),
                         site.original_line,
                         base,
@@ -265,15 +146,15 @@ fn marker_site(
     path: &Utf8Path,
     line: usize,
     anchor_state: AnchorState,
+    current: bool,
     original_file_path: Option<Utf8PathBuf>,
     original_line: Option<usize>,
-    base: &RevisionScan,
-    head: &RevisionScan,
+    base: &ScannedCoverage,
+    head: &ScannedCoverage,
     changes: &[ChangedFile],
 ) -> EvidenceDiffSite {
-    let current = anchor_state != AnchorState::Gone;
-    let spans = if current { &head.spans } else { &base.spans };
-    let end_line = spans.get(&(path.to_path_buf(), line)).copied();
+    let spans = if current { head } else { base };
+    let end_line = spans.site_end_line(path, line);
     let state = match anchor_state {
         AnchorState::Moved => {
             if moved_site_content_changed(
@@ -342,29 +223,25 @@ fn moved_site_content_changed(
     current_end: Option<usize>,
     original_path: Option<&Utf8Path>,
     original_line: Option<usize>,
-    base: &RevisionScan,
-    head: &RevisionScan,
+    base: &ScannedCoverage,
+    head: &ScannedCoverage,
 ) -> bool {
     let Some(original_line) = original_line else {
         return false;
     };
     let original_path = original_path.unwrap_or(current_path);
-    let original_end = base
-        .spans
-        .get(&(original_path.to_path_buf(), original_line))
-        .copied();
+    let original_end = base.site_end_line(original_path, original_line);
     site_text(base, original_path, original_line, original_end)
         != site_text(head, current_path, current_line, current_end)
 }
 
 fn site_text(
-    scan: &RevisionScan,
+    scan: &ScannedCoverage,
     path: &Utf8Path,
     start: usize,
     end: Option<usize>,
 ) -> Option<String> {
     let content = scan
-        .coverage
         .scanned_files
         .iter()
         .find(|file| file.file_path == path)?
