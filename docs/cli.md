@@ -80,8 +80,8 @@ null, and string values to their catalog types, and a string-typed field keeps
 the exact text it receives. A field backed by an array accepts one item per
 use, so repeated flags build the array. A `--<field>-json` flag carries one
 whole JSON value for a field, such as `--supersedes-json '[]'`; a JSON null
-clears the field where the schema allows null, while a plain flag always
-supplies text. Arrays and objects can also come from one JSON object on
+clears the field where the schema allows null, while a plain flag on a
+string-typed field always supplies text. Arrays and objects can also come from one JSON object on
 standard input with `--stdin`, which fills only the body fields that no flag
 assigned and refuses a field that a flag already set. Path identity comes from
 the command address. Query parameters and the `Idempotency-Key` and

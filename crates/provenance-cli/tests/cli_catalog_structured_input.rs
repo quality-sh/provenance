@@ -263,6 +263,23 @@ fn repeated_alias_items_accumulate_but_competing_spellings_fail() {
         json!(["req_alias_a", "req_alias_b"])
     );
 
+    let canonical_json = output(provenance().args([
+        "rules",
+        "create",
+        "--repo",
+        &repo,
+        "--id",
+        "rule_canonical_json",
+        "--statement",
+        "The system records canonical JSON input.",
+        "--requirement-ids-json",
+        r#"["req_alias_a"]"#,
+    ]));
+    assert_eq!(
+        canonical_json["data"]["requirement_ids"],
+        json!(["req_alias_a"])
+    );
+
     provenance()
         .args([
             "rules",

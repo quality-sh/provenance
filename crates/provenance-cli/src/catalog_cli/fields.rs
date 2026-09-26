@@ -120,17 +120,22 @@ pub(super) fn augment_with_overrides(
         .collect::<BTreeSet<_>>();
     names.insert("help".into());
     let mut body_flags = BTreeSet::new();
+    let mut json_flags = BTreeSet::new();
     for definition in &definitions {
+        let mut wire_fields = BTreeSet::new();
         for field in declared(definition)? {
-            if !matches!(field.source, Source::Body { .. }) {
+            let Source::Body { wire_field, .. } = field.source else {
                 continue;
-            }
+            };
             anyhow::ensure!(
                 !names.contains(&field.name),
                 "catalog field --{} collides with a command option",
                 field.name
             );
             body_flags.insert(field.name);
+            if wire_fields.insert(wire_field.clone()) {
+                json_flags.insert(json_flag(&wire_field));
+            }
         }
     }
     let mut registered = BTreeSet::new();
@@ -149,8 +154,7 @@ pub(super) fn augment_with_overrides(
             }
         }
     }
-    for body in body_flags {
-        let json = json_flag(&body);
+    for json in json_flags {
         anyhow::ensure!(
             !names.contains(&json),
             "catalog field --{json} collides with a command option"
@@ -162,9 +166,10 @@ pub(super) fn augment_with_overrides(
     Ok(command)
 }
 
-/// The `--<field>-json` flag that carries one whole JSON body value.
-pub(super) fn json_flag(body_field: &str) -> String {
-    format!("{}-json", cli_name(body_field))
+/// The `--<field>-json` flag that carries one whole JSON body value. One
+/// spelling per body wire field, so alias flags gain no JSON variant.
+pub(super) fn json_flag(wire_field: &str) -> String {
+    format!("{}-json", cli_name(wire_field))
 }
 
 fn flag(name: &str, repeated: bool) -> Arg {
@@ -281,6 +286,75 @@ pub fn schema_input(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn json_flag_declarations_follow_wire_fields_not_aliases() {
+        let definitions = provenance_store::operations::catalog::definitions();
+        let rules = definitions
+            .iter()
+            .filter(|definition| definition.path.split('/').nth(1) == Some("rules"))
+            .collect::<Vec<_>>();
+        assert!(rules.iter().any(|definition| {
+            definition
+                .registration
+                .request
+                .argument_aliases
+                .iter()
+                .any(|alias| alias.wrap_array)
+        }));
+        let command = augment(Command::new("test"), rules.into_iter(), &[]).unwrap();
+        let declared = command
+            .get_arguments()
+            .filter_map(|argument| argument.get_long().map(str::to_owned))
+            .collect::<BTreeSet<_>>();
+        assert!(declared.contains("requirement-ids-json"));
+        assert!(!declared.contains("requirement-id-json"));
+        let help = command.render_help().to_string();
+        assert!(help.contains("--requirement-ids-json"));
+        assert!(!help.contains("--requirement-id-json"));
+        let parsed = command
+            .try_get_matches_from(["test", "--requirement-ids-json", r#"["req_shared"]"#])
+            .unwrap();
+        assert_eq!(
+            parsed
+                .get_many::<String>("requirement-ids-json")
+                .map(|values| values.cloned().collect::<Vec<_>>()),
+            Some(vec!["req_shared".to_owned()])
+        );
+    }
+
+    #[test]
+    fn every_registered_json_spelling_is_a_canonical_wire_flag() {
+        let definitions = provenance_store::operations::catalog::definitions();
+        let mut collections = BTreeMap::<&str, Vec<&Definition>>::new();
+        for definition in definitions {
+            let collection = definition.path.split('/').nth(1).expect("route collection");
+            collections.entry(collection).or_default().push(definition);
+        }
+        for (collection, definitions) in collections {
+            let mut wire_fields = BTreeSet::new();
+            for definition in &definitions {
+                for field in declared(definition).unwrap() {
+                    let Source::Body { wire_field, .. } = field.source else {
+                        continue;
+                    };
+                    wire_fields.insert(json_flag(&wire_field));
+                }
+            }
+            let command = augment(Command::new("test"), definitions.into_iter(), &[]).unwrap();
+            for argument in command.get_arguments() {
+                let Some(long) = argument.get_long() else {
+                    continue;
+                };
+                if long.ends_with("-json") {
+                    assert!(
+                        wire_fields.contains(long),
+                        "{collection} registers --{long} which no body wire field declares"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn selected_schema_validates_shared_flag_in_either_declaration_order() {
