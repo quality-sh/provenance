@@ -215,3 +215,31 @@ fn beginning_a_run_materializes_and_cites_the_canonical_binding() {
     assert_eq!(run.file, Some(bindings[0].file.clone()));
     assert_eq!(run.symbol, bindings[0].symbol);
 }
+
+#[tokio::test]
+async fn the_verification_page_lists_only_the_bindings_of_the_named_rule() {
+    let (directory, store, scope) = seeded_rule_store();
+    let binding = store
+        .materialize_verification_binding(input(&scope))
+        .unwrap();
+    let root = camino::Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+
+    let named = verification_page(&root, "rule_expiry").await;
+    let items = named["result"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["id"], binding.id.as_str());
+    assert_eq!(named["result"]["has_more"], false);
+
+    let other = verification_page(&root, "rule_other").await;
+    assert!(other["result"]["items"].as_array().unwrap().is_empty());
+}
+
+async fn verification_page(root: &camino::Utf8Path, rule: &str) -> serde_json::Value {
+    super::read_budget::operation_read(
+        root,
+        "page-verification-bindings-v2",
+        serde_json::json!({"rule": rule, "limit": 10, "cursor": null}),
+    )
+    .await
+    .unwrap()
+}

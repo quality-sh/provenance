@@ -388,3 +388,23 @@ fn readable_discovery_lists_routes_with_their_inputs() {
         )
     );
 }
+
+#[test]
+fn each_api_error_kind_displays_its_own_message() {
+    for (kind, message) in [
+        (ApiErrorKind::InvalidOptions, "unsupported api options"),
+        (ApiErrorKind::UnknownPath, "unknown api path"),
+        (
+            ApiErrorKind::MethodNotAllowed,
+            "method not allowed for this path",
+        ),
+        (ApiErrorKind::AccessDenied, "api access denied"),
+        (ApiErrorKind::Operation, "api operation failed"),
+    ] {
+        let error = ApiError {
+            kind,
+            failure: Value::Null,
+        };
+        assert_eq!(error.to_string(), message, "{kind:?}");
+    }
+}

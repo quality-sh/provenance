@@ -110,7 +110,11 @@ fn init_download_work_runs_on_tokios_blocking_pool() {
         fs::read_to_string(workspace.join("crates/provenance-cli/src/ste_onboarding.rs"))
             .expect("read STE onboarding");
 
-    assert!(handlers.matches("tokio::task::spawn_blocking").count() >= 2);
+    // Both init commands hand their work to the one helper that runs it on
+    // the blocking pool.
+    assert!(handlers.contains("tokio::task::spawn_blocking(handler)"));
+    assert!(handlers.contains("run_blocking(move || cargo_init::handle("));
+    assert!(handlers.contains("run_blocking(move || repo::init("));
     assert!(!onboarding.contains("std::thread::spawn"));
 }
 
