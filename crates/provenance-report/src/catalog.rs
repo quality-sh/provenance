@@ -7,6 +7,8 @@
 /// Stable diagnostic codes for report findings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticCode {
+    /// An active Rule has no current implementation binding.
+    ActiveRuleMissingImplementation,
     /// An active Rule has no current verification binding.
     ActiveRuleMissingVerification,
     /// A deprecated or archived Rule still has a current binding.
@@ -23,6 +25,7 @@ impl DiagnosticCode {
     /// Parse one catalog code. Unknown codes never reach the report.
     pub fn parse(code: &str) -> Option<Self> {
         match code {
+            "active_rule_missing_implementation" => Some(Self::ActiveRuleMissingImplementation),
             "active_rule_missing_verification" => Some(Self::ActiveRuleMissingVerification),
             "inactive_rule_current_binding" => Some(Self::InactiveRuleCurrentBinding),
             "verification_site_removed" => Some(Self::VerificationSiteRemoved),
@@ -35,6 +38,7 @@ impl DiagnosticCode {
     /// The stable code string. Round-trips with [`Self::parse`].
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::ActiveRuleMissingImplementation => "active_rule_missing_implementation",
             Self::ActiveRuleMissingVerification => "active_rule_missing_verification",
             Self::InactiveRuleCurrentBinding => "inactive_rule_current_binding",
             Self::VerificationSiteRemoved => "verification_site_removed",
@@ -46,6 +50,7 @@ impl DiagnosticCode {
     /// The stable finding headline, readable in one line.
     pub const fn headline(self) -> &'static str {
         match self {
+            Self::ActiveRuleMissingImplementation => "no current implementation binding found",
             Self::ActiveRuleMissingVerification => "no current verification binding found",
             Self::InactiveRuleCurrentBinding => "an inactive Rule still has current bindings",
             Self::VerificationSiteRemoved => "one verification site is gone",
@@ -57,6 +62,11 @@ impl DiagnosticCode {
     /// The prescribed next action. Reviewed catalog text, never graph text.
     pub const fn next_action(self) -> &'static str {
         match self {
+            Self::ActiveRuleMissingImplementation => {
+                "Add the primary implementation binding, or inspect the full scan if the binding \
+                 already exists. Rerun the full supported scan. Do not add an empty function or \
+                 change the lifecycle to silence this report."
+            }
             Self::ActiveRuleMissingVerification => {
                 "Add evidence for the full-scan absence behavior, or inspect an \
                  intended qualified or wrapped marker if evidence already exists. \
