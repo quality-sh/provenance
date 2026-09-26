@@ -46,6 +46,18 @@ pub fn byte_expression(columns: &[&str]) -> String {
         .join(" + ")
 }
 
+/// Selects at most `LIMIT` IDs after a key, in primary-key order.
+///
+/// `ORDER BY` names the table column. A bare `id` binds to the guarded
+/// output alias, and `SQLite` then sorts every remaining row for each page.
+pub(crate) fn id_page_sql(table: &str, filter: &str) -> String {
+    let table = quoted(table);
+    format!(
+        "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id \
+         FROM {table} WHERE scope_id = ? AND id > ?{filter} ORDER BY {table}.id LIMIT ?"
+    )
+}
+
 impl<K: ProjectionRow> Table<'_, K> {
     /// Reads one canonical row only after its stored byte count passes the cap.
     pub(crate) async fn page_record(&self, id: &str) -> anyhow::Result<Option<K>> {
@@ -111,10 +123,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         after: &str,
         limit: usize,
     ) -> anyhow::Result<Vec<String>> {
-        let sql = format!(
-            "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id FROM {} WHERE scope_id = ? AND id > ? ORDER BY id LIMIT ?",
-            quoted(K::TABLE)
-        );
+        let sql = id_page_sql(K::TABLE, "");
         let mut tx = self.snapshot().connection().await;
         let rows = sqlx::query(&sql)
             .bind(self.snapshot().scope().as_str())
@@ -140,10 +149,7 @@ impl Table<'_, provenance_core::VerificationBinding> {
         rule: Option<&provenance_core::StableId>,
     ) -> anyhow::Result<Vec<String>> {
         let filter = rule.map_or("", |_| " AND rule_id = ?");
-        let sql = format!(
-            "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id \
-             FROM verification_bindings WHERE scope_id = ? AND id > ?{filter} ORDER BY id LIMIT ?"
-        );
+        let sql = id_page_sql("verification_bindings", filter);
         let mut query = sqlx::query(&sql)
             .bind(self.snapshot().scope().as_str())
             .bind(after);
