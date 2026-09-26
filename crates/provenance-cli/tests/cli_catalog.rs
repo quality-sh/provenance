@@ -136,7 +136,9 @@ fn rich_and_scalar_body_inputs_follow_one_rule() {
         ])
         .assert()
         .failure()
-        .stderr(contains("arrays and objects must come from --stdin"));
+        .stderr(contains(
+            "arrays and objects must come from --stdin or --supersedes-json",
+        ));
 }
 
 #[test]
