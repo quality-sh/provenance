@@ -1,32 +1,31 @@
-//! Count the entire successful wire envelope before a native answer leaves.
-use provenance_core::protocol::{read_failure::ReadFailure, Stamp, Stamped, SDK_PROTOCOL_VERSION};
+//! Count the successful native envelope before an answer leaves.
+use provenance_core::protocol::{
+    read_failure::ReadFailure, QueryResponse, Stamped, QUERY_RESPONSE_BYTES,
+};
 use serde::Serialize;
 use std::io::{self, Write};
 
-pub(super) const RESPONSE_BYTES: usize = 1_114_112;
-
-pub fn checked<R: Serialize>(operation: &str, answer: Stamped<R>) -> anyhow::Result<Stamped<R>> {
-    #[derive(Serialize)]
-    struct Envelope<'a, R> {
-        protocol_version: u32,
-        operation: &'a str,
-        stamp: &'a Stamp,
-        freshness_error: &'a Option<String>,
-        #[serde(flatten)]
-        result: &'a R,
-    }
-    let envelope = Envelope {
-        protocol_version: SDK_PROTOCOL_VERSION,
+pub fn checked<R: Serialize>(
+    operation: &'static str,
+    answer: Stamped<R>,
+) -> anyhow::Result<Stamped<R>> {
+    let response = QueryResponse::new(
         operation,
-        stamp: &answer.stamp,
-        freshness_error: &answer.freshness_error,
-        result: &answer.result,
-    };
-    // Reserve space for the external freshness-cause field and framing.
-    serde_json::to_writer(Budget(RESPONSE_BYTES - 256), &envelope)
-        .map_err(|_| ReadFailure::PageBudgetExceeded)?;
+        Stamped {
+            result: &answer.result,
+            stamp: answer.stamp.clone(),
+            freshness_error: answer.freshness_error.clone(),
+        },
+    );
+    if let Err(error) = serde_json::to_writer(Budget(QUERY_RESPONSE_BYTES), &response) {
+        if error.is_io() {
+            return Err(ReadFailure::PageBudgetExceeded.into());
+        }
+        return Err(error.into());
+    }
     Ok(answer)
 }
+
 struct Budget(usize);
 impl Write for Budget {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {

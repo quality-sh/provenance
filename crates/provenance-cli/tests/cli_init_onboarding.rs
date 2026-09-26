@@ -3,6 +3,10 @@ use predicates::prelude::*;
 use provenance_macros::verifies;
 use std::path::Path;
 
+#[path = "cli_dictionary/support.rs"]
+#[allow(dead_code)]
+mod dictionary_support;
+
 const INSTRUCTIONS: &str = r#"## Provenance
 
 Requirements live in a Provenance graph. Plan changes with the graph and update
@@ -11,7 +15,7 @@ it in the same change.
 - Use the `provenance-grounded-writing` skill before you write or change a
   Requirement or Rule statement.
 - Before a graph write, send `{"statement":"<statement>"}` to
-  `provenance sdk check-statement --format json`. A clean report covers only the
+  `provenance statement-checks create --stdin --format json`. A clean report covers only the
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
   conformance.
 - Plan: `provenance prime --quiet`
@@ -101,7 +105,7 @@ fn typescript_init_writes_a_package_local_command() {
 
     let agents = read_agents(&repo);
     assert!(agents.contains("`npx --no provenance prime --quiet`"));
-    assert!(agents.contains("`npx --no provenance sdk check-statement --format json`"));
+    assert!(agents.contains("`npx --no provenance statement-checks create --stdin --format json`"));
     assert!(!agents.contains("`provenance prime --quiet`"));
 }
 
@@ -161,7 +165,9 @@ fn init_refuses_to_replace_an_edited_skill_from_a_prior_provenance_version() {
     init(&repo)
         .failure()
         .stderr(predicate::str::contains("exists and differs"))
-        .stderr(predicate::str::contains("rerun with --force"));
+        .stderr(predicate::str::contains(
+            "provenance skills install --force",
+        ));
 
     assert_eq!(std::fs::read_to_string(skill).unwrap(), edited);
 }
@@ -210,7 +216,10 @@ fn a_late_claude_conflict_leaves_every_existing_file_unchanged() {
 
     init(&repo)
         .failure()
-        .stderr(predicate::str::contains("rerun with --force"));
+        .stdout(predicate::str::is_empty())
+        .stderr(predicate::str::contains(
+            "provenance skills install --force",
+        ));
 
     assert_eq!(
         std::fs::read_to_string(repo.join("keep.txt")).unwrap(),
@@ -298,9 +307,9 @@ fn existing_manifest_is_preserved_when_a_late_skill_conflicts() {
     remove_skill_entry(&conflict);
     std::fs::write(&conflict, "user-owned\n").unwrap();
 
-    init(&repo)
-        .failure()
-        .stderr(predicate::str::contains("rerun with --force"));
+    init(&repo).failure().stderr(predicate::str::contains(
+        "provenance skills install --force",
+    ));
 
     assert_eq!(std::fs::read(manifest).unwrap(), before);
     assert_eq!(std::fs::read_to_string(conflict).unwrap(), "user-owned\n");

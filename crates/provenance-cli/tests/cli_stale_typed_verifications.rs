@@ -78,14 +78,15 @@ fn init_repo() -> tempfile::TempDir {
     });
     provenance()
         .args([
-            "sdk",
-            "apply",
+            "authoring-changes",
+            "create",
             "--repo",
             directory.path().to_str().unwrap(),
             "--scope",
             "default",
             "--format",
             "json",
+            "--stdin",
         ])
         .write_stdin(serde_json::to_vec(&input).unwrap())
         .assert()
@@ -96,7 +97,7 @@ fn init_repo() -> tempfile::TempDir {
 fn verify(repo: &Path, rule: &str, key: &str, file: &str) {
     provenance()
         .args([
-            "sdk",
+            "verification-runs",
             "begin-verification",
             "--repo",
             repo.to_str().unwrap(),
@@ -104,6 +105,7 @@ fn verify(repo: &Path, rule: &str, key: &str, file: &str) {
             "default",
             "--format",
             "json",
+            "--stdin",
         ])
         .write_stdin(
             serde_json::to_vec(&json!({
@@ -122,8 +124,11 @@ fn verify(repo: &Path, rule: &str, key: &str, file: &str) {
 fn verification_sites(repo: &Path, base: &str, head: &str) -> Vec<Value> {
     let output = provenance()
         .args([
+            "rules",
             "stale",
+            "--base",
             base,
+            "--head",
             head,
             "--repo",
             repo.to_str().unwrap(),
@@ -137,7 +142,7 @@ fn verification_sites(repo: &Path, base: &str, head: &str) -> Vec<Value> {
         .get_output()
         .stdout
         .clone();
-    serde_json::from_slice::<Value>(&output).unwrap()["sites"]
+    serde_json::from_slice::<Value>(&output).unwrap()["data"]["items"]
         .as_array()
         .unwrap()
         .iter()

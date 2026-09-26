@@ -1,48 +1,28 @@
 use crate::cli::Command;
 
-mod boundaries;
 mod cargo_init;
-mod check;
-mod common;
-mod contributions;
+pub mod check;
 mod coverage;
 mod dictionary;
-mod dispositions;
 mod docs;
 #[cfg(feature = "dogfood")]
 mod dogfood;
-mod domains;
 mod export;
 mod gaps;
 mod graph;
 mod graph_reference;
 mod health;
-mod impact;
 mod import;
 mod materialize;
 mod merge_jsonl;
-mod native;
 mod orphans;
 mod prime;
-mod proposals;
-mod questions;
-mod refs;
 mod repo;
 mod report;
-mod requirements;
-mod resolutions;
-mod rules;
 mod schema;
-mod sdk;
 mod skills;
-mod sources;
-mod stale;
 mod swarm_backtrace;
-mod synthesis_packets;
-mod thread;
-mod topics;
 mod traceability;
-mod updates;
 mod validate;
 mod wiki;
 
@@ -53,9 +33,12 @@ pub(super) use export::{export_scope, ScopeExport};
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
+        Command::Search(args) => args.dispatch().await?,
         Command::CargoInit { package, ste_pdf } => {
-            tokio::task::spawn_blocking(move || cargo_init::handle(package.as_deref(), ste_pdf))
-                .await??;
+            tokio::task::spawn_blocking(move || {
+                cargo_init::handle(package.as_deref(), ste_pdf, quiet)
+            })
+            .await??;
         }
         Command::Init {
             path,
@@ -78,15 +61,33 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
                         ste_pdf,
                         invocation_channel,
                         package_manager,
+                        quiet,
                     },
                 )
             })
             .await??;
         }
         Command::Check {
-            repo, strict, base, ..
+            repo,
+            strict,
+            base,
+            graph,
+            statements,
+            bindings,
+            format,
         } => {
-            check::check(&repo, strict, base.as_deref())?;
+            check::check(
+                repo,
+                strict,
+                base,
+                format.is_some(),
+                check::Selectors {
+                    graph,
+                    statements,
+                    bindings,
+                },
+            )
+            .await?;
         }
         Command::Docs { command } => {
             docs::handle(command).await?;
@@ -101,26 +102,8 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         Command::Materialize { repo, .. } => {
             materialize::handle(repo).await?;
         }
-        Command::Sources { command } => {
-            sources::handle(command).await?;
-        }
-        Command::Requirements { command } => {
-            requirements::handle(command).await?;
-        }
         Command::GraphReference { command } => {
             graph_reference::handle(command)?;
-        }
-        Command::Domains { command } => {
-            domains::handle(command).await?;
-        }
-        Command::Boundaries { command } => {
-            boundaries::handle(command).await?;
-        }
-        Command::Topics { command } => {
-            topics::handle(command).await?;
-        }
-        Command::Questions { command } => {
-            questions::handle(command, quiet).await?;
         }
         Command::Graph {
             requirement_id,
@@ -129,12 +112,6 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             ..
         } => {
             graph::handle(requirement_id, repo, scope)?;
-        }
-        Command::Resolutions { command } => {
-            resolutions::handle(command).await?;
-        }
-        Command::Rules { command } => {
-            rules::handle(command).await?;
         }
         Command::Traceability {
             rule_id,
@@ -147,50 +124,8 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         Command::Gaps { repo, scope, .. } => {
             gaps::handle(repo, scope)?;
         }
-        Command::Thread { command } => {
-            thread::handle(command)?;
-        }
-        Command::Contributions { command } => {
-            contributions::handle(command, quiet)?;
-        }
-        Command::SynthesisPackets { command } => {
-            synthesis_packets::handle(command, quiet)?;
-        }
-        Command::Proposals { command } => {
-            proposals::handle(command, quiet)?;
-        }
-        Command::Dispositions { command } => {
-            dispositions::handle(command)?;
-        }
-        Command::Prime {
-            repo,
-            scope,
-            format,
-            include_threads,
-        } => {
-            prime::handle(repo, scope, format, include_threads)?;
-        }
-        Command::Impact {
-            id,
-            repo,
-            scope,
-            node_type,
-            max_hops,
-            follow_indirect,
-            ..
-        } => {
-            impact::handle(id, repo, scope, &node_type, max_hops, follow_indirect)?;
-        }
-        Command::Stale {
-            base,
-            head,
-            since,
-            repo,
-            scope,
-            strict,
-            format,
-        } => {
-            stale::handle(&repo, scope, base, head, since, strict, format)?;
+        Command::Prime { format, .. } => {
+            prime::handle(format)?;
         }
         Command::Health { repo, scope, .. } => {
             health::handle(repo, scope)?;
@@ -203,9 +138,6 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         }
         Command::Report { command } => {
             report::handle(command)?;
-        }
-        Command::Sdk { command } => {
-            sdk::handle(command).await?;
         }
         Command::SwarmBacktrace { command } => {
             swarm_backtrace::handle(command)?;

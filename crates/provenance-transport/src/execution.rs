@@ -56,14 +56,8 @@ impl Execution {
             drop(closed);
             task
         };
-        task.await.map_err(|_| {
-            let failure = if provenance_store::operations::catalog::mutates(operation) {
-                OperationFailure::UncertainWrite
-            } else {
-                OperationFailure::Internal
-            };
-            FailureEnvelope::new(Some(operation), failure)
-        })?
+        task.await
+            .map_err(|_| FailureEnvelope::new(Some(operation), OperationFailure::Internal))?
     }
 
     pub async fn shutdown(&self) {
@@ -172,6 +166,9 @@ mod tests {
             .unwrap_err();
         execution.shutdown().await;
         assert_eq!(error.error, serde_json::json!({"kind":"internal"}));
-        assert_eq!(error.operation.as_deref(), Some("get"));
+        assert_eq!(
+            serde_json::to_value(error.meta).unwrap(),
+            serde_json::json!({})
+        );
     }
 }

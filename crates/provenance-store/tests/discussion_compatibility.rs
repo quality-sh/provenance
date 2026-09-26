@@ -73,7 +73,7 @@ fn malformed_enrollment_keeps_the_existing_version_refusal_context() {
 }
 
 #[test]
-fn a_message_read_failure_after_legacy_thread_publication_remains_uncertain() {
+fn a_message_read_failure_prevents_legacy_thread_publication() {
     let (temp, store) = fixture();
     let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
     let path = shards::messages_path(&layout, &scope());
@@ -90,8 +90,8 @@ fn a_message_read_failure_after_legacy_thread_publication_remains_uncertain() {
         .unwrap_err();
     assert!(matches!(
         provenance_store::write_error::WriteError::from(error).safe(),
-        provenance_store::write_error::WriteFailure::UncertainWrite
+        provenance_store::write_error::WriteFailure::WriteFailed
     ));
-    assert_eq!(store.list_threads(&scope()).unwrap().len(), 1);
+    assert!(store.list_threads(&scope()).unwrap().is_empty());
     assert_eq!(std::fs::read_to_string(path).unwrap(), "invalid JSON\n");
 }

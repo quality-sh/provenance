@@ -49,11 +49,18 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         )
         .context("cannot configure review repository access")?,
     );
-    let host = StatementHost::with_access(access.clone());
+    let host = StatementHost::with_access(access.clone()).with_check_port(Arc::new(
+        crate::handlers::check::RepositoryCheckPort::new(
+            camino::Utf8PathBuf::from_path_buf(options.repo.clone())
+                .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
+            false,
+            None,
+        ),
+    ));
     let endpoint = format!("http://{address}");
     let config = json!({
         "endpoint": endpoint, "repositoryId": options.repository_id, "scope": options.scope,
-        "protocolVersion": provenance_core::SDK_PROTOCOL_VERSION,
+        "compatibility": provenance_core::protocol::host::COMPATIBILITY,
         "sdkVersion": env!("CARGO_PKG_VERSION"),
     });
     let router = host

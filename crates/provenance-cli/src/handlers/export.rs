@@ -65,7 +65,7 @@ impl ScopeExport {
 
 pub fn export_scope(repo: Utf8PathBuf, scope: String) -> anyhow::Result<ScopeExport> {
     let scope_id = ScopeId::new(scope.clone())?;
-    let store = Store::open(repo);
+    let store = Store::open_required(repo)?;
     store.with_repository_publication(|| {
         store.ensure_review_portable(&scope_id)?;
         store.validate_ideation_scope(&scope_id)?;

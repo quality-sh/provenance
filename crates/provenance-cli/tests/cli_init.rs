@@ -77,13 +77,13 @@ fn cli_init_check_and_materialize_empty_repo() {
 }
 
 #[test]
-fn fresh_init_without_scope_fails_before_writing() {
+fn fresh_init_without_scope_uses_default_scope() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
 
-    init(&repo, &[]).failure();
+    init(&repo, &[]).success();
 
-    assert!(!repo.exists());
+    assert_eq!(read_manifest(&repo)["scopes"][0]["id"], "default");
 }
 
 #[test]

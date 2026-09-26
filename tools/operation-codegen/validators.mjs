@@ -4,20 +4,24 @@ import standaloneCode from 'ajv/dist/standalone/index.js';
 import { build } from 'esbuild';
 
 export function responseSchemas(document) {
-  const names = new Set(['MetadataOutput']);
+  const names = new Set();
   for (const route of Object.values(document.paths)) {
-    if (!route.post) continue;
-    for (const response of Object.values(route.post.responses)) {
-      names.add(response.content['application/json'].schema.$ref.split('/').at(-1));
+    for (const operation of Object.values(route)) {
+      if (!operation?.responses) continue;
+      for (const response of Object.values(operation.responses)) {
+        names.add(response.content['application/json'].schema.$ref.split('/').at(-1));
+      }
+      for (const variant of operation['x-provenance-query-variants'] ?? []) {
+        names.add(variant.success.$ref.split('/').at(-1));
+        names.add(variant.failure.$ref.split('/').at(-1));
+      }
     }
   }
   return [...names].sort();
 }
 
-export async function validators(document, names = responseSchemas(document), prefix = 'validators', compatibility = true) {
+export async function validators(document, names = responseSchemas(document), prefix = 'validators', _compatibility = true) {
   const schemas = structuredClone(document.components.schemas);
-  // Compatibility is checked after validating the metadata's shape.
-  if (compatibility) delete schemas.MetadataOutput.properties.protocol_version.const;
   const ajv = new Ajv({ code: { source: true, esm: true }, strict: true, allowUnionTypes: true });
   addFormats(ajv);
   for (const format of ['int64', 'int32', 'uint64', 'uint32', 'uint16', 'uint8', 'uint', 'int', 'float', 'double']) ajv.addFormat(format, true);

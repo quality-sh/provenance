@@ -23,6 +23,26 @@ fn check(repository: &std::path::Path) -> std::process::Output {
         .unwrap()
 }
 
+fn statements(report: &Value) -> &Value {
+    report["categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|category| category["category"] == "statements")
+        .unwrap()
+}
+
+fn diagnostics(report: &Value) -> Value {
+    Value::Array(
+        statements(report)["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|finding| finding["detail"].clone())
+            .collect(),
+    )
+}
+
 fn rewrite_statement(repository: &std::path::Path, shard: &str, id: &str, statement: &str) {
     let path = repository.join(shard);
     let contents = std::fs::read_to_string(&path).unwrap();
@@ -63,9 +83,9 @@ fn check_reports_only_new_and_statement_changed_records_against_git_head() {
 
     assert!(output.status.success(), "manual findings are informational");
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report["status"], "ok");
+    assert_eq!(statements(&report)["status"], "findings");
     assert_eq!(
-        report["diagnostics"],
+        diagnostics(&report),
         json!([
             diagnostic("requirement", "req_changed", 5),
             diagnostic("rule", "rule_added", 4)
@@ -91,7 +111,8 @@ fn clean_repository_check_is_successful_and_has_no_statement_diagnostics() {
     assert!(first.status.success());
     assert_eq!(first.stdout, second.stdout);
     let report: Value = serde_json::from_slice(&first.stdout).unwrap();
-    assert_eq!(report, json!({"status": "ok", "diagnostics": []}));
+    assert_eq!(statements(&report)["status"], "passed");
+    assert_eq!(diagnostics(&report), json!([]));
 }
 
 #[test]
@@ -108,5 +129,6 @@ fn repository_without_git_head_reports_no_statement_diagnostics() {
 
     assert!(output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report, json!({"status": "ok", "diagnostics": []}));
+    assert_eq!(statements(&report)["status"], "passed");
+    assert_eq!(diagnostics(&report), json!([]));
 }

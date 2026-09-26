@@ -25,12 +25,15 @@ struct Payload {
     serial: i64,
     digest: String,
     derivation: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    live_revision: Option<String>,
     position: Position,
 }
 
 pub struct Cursor {
     identity: String,
     key: Vec<u8>,
+    live_revision: Option<String>,
 }
 
 impl Cursor {
@@ -41,6 +44,33 @@ impl Cursor {
         operation: &str,
         selector: &impl Serialize,
         token: Option<&str>,
+    ) -> anyhow::Result<(Self, Position)> {
+        Self::open_at_live_revision(ctx, operation, selector, token, None)
+    }
+
+    /// Opens a cursor whose snapshot also includes one locked live source.
+    pub fn open_live(
+        ctx: &ReadContext,
+        operation: &str,
+        selector: &impl Serialize,
+        token: Option<&str>,
+        live_revision: &str,
+    ) -> anyhow::Result<(Self, Position)> {
+        Self::open_at_live_revision(
+            ctx,
+            operation,
+            selector,
+            token,
+            Some(live_revision.to_string()),
+        )
+    }
+
+    fn open_at_live_revision(
+        ctx: &ReadContext,
+        operation: &str,
+        selector: &impl Serialize,
+        token: Option<&str>,
+        live_revision: Option<String>,
     ) -> anyhow::Result<(Self, Position)> {
         let identity = format!(
             "{:x}",
@@ -55,6 +85,7 @@ impl Cursor {
         let cursor = Self {
             identity,
             key: signing_key(ctx)?,
+            live_revision,
         };
         let Some(token) = token else {
             return Ok((cursor, Position::default()));
@@ -74,6 +105,9 @@ impl Cursor {
             return Err(invalid().into());
         }
         check_revision(ctx, &payload)?;
+        if payload.live_revision != cursor.live_revision {
+            return Err(ReadFailure::CursorRevisionChanged.into());
+        }
         Ok((cursor, payload.position))
     }
 
@@ -85,6 +119,7 @@ impl Cursor {
             serial: snapshot.serial(),
             digest: snapshot.digest().into(),
             derivation: crate::operations::stamp::READ_DERIVATION,
+            live_revision: self.live_revision.clone(),
             position,
         };
         let bytes = serde_json::to_vec(&payload)?;

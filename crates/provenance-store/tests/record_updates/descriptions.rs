@@ -122,6 +122,9 @@ async fn owned_requirement_and_rule_updates_preserve_declaration_identity() {
         let after = fixture.call(operation, json!({"scope_id":"default","id":before["id"],"declared_by":"spec://fixture","description":"Changed"})).await.unwrap();
         let mut expected = before;
         expected["description"] = json!("Changed");
+        if operation == "update-requirement" {
+            expected["schema_version"] = json!(3);
+        }
 
         assert_eq!(after, expected);
     }

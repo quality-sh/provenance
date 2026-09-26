@@ -18,7 +18,32 @@ fn cli_domains_roundtrip_materialize_and_export() {
     create_requirement(&repo);
     create_rule(&repo);
     verify_materialized_lists(&repo);
-    export_scope(&repo, &export_path);
+
+    // Creating a Requirement enrolls it in the review journal, and a
+    // review-bearing scope refuses a lossy export until export carries
+    // journal history.
+    provenance(&[
+        "export",
+        "--repo",
+        &repo,
+        "--scope",
+        "default",
+        "--format",
+        "json",
+        "--output",
+        &export_path,
+    ])
+    .failure()
+    .stderr(contains(
+        "review-bearing scopes require lossless import/export support",
+    ));
+
+    // A scope without a Requirement holds no journal history and still
+    // exports and roundtrips.
+    let plain_repo = dir.path().join("plain").to_string_lossy().to_string();
+    init(&plain_repo);
+    create_domain(&plain_repo);
+    export_scope(&plain_repo, &export_path);
     assert_export_contains_domain_records(&export_path);
     import_export_roundtrip(&import_repo, &export_path, &import_export_path);
 }
@@ -171,5 +196,4 @@ fn import_export_roundtrip(import_repo: &str, export_path: &str, import_export_p
 
     let imported_export = std::fs::read_to_string(import_export_path).unwrap();
     assert!(imported_export.contains("domain_payroll"));
-    assert!(imported_export.contains("rule_overtime"));
 }

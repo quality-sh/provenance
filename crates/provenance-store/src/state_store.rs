@@ -3,6 +3,7 @@ mod canonical_artifacts;
 mod domain_writers;
 mod graph_validation;
 mod ideation_batches;
+mod ideation_edits;
 mod ideation_targets;
 mod ideation_validation;
 mod ideation_writers;
@@ -10,6 +11,7 @@ mod implementation_bindings;
 mod inputs;
 mod proposal_surfaces;
 mod proposal_writers;
+pub(crate) mod read_budget;
 pub(crate) mod readers;
 mod record_stamps;
 mod reference_methods;
@@ -35,6 +37,7 @@ pub use ideation_batches::{
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, CONTRIBUTION_KIND,
     SYNTHESIS_KIND,
 };
+pub use ideation_edits::{UpdateContributionInput, UpdateSynthesisPacketInput};
 pub use inputs::{
     AddSourceReferenceInput, BeginVerificationInput, CascadedResource, CompleteVerificationInput,
     CreateAssertionInput, CreateBoundaryInput, CreateContributionInput, CreateDispositionInput,
@@ -57,14 +60,28 @@ pub use typed_statement_policy::TypedSpecWriteError;
 use crate::{layout::ProvenanceLayout, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
-    ensure_supported_schema_version, AssertionRecord, Boundary, Contribution, DispositionRecord,
-    Domain, ImplementationBinding, Manifest, Message, ProposalCard, Question, Requirement,
-    Resolution, Rule, SchemaVersion, Scope, ScopeId, Source, SynthesisPacket, Thread, Topic,
-    VerificationBinding,
+    ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Boundary,
+    Contribution, DispositionRecord, Domain, ImplementationBinding, Manifest, Message,
+    ProposalCard, Question, Requirement, Resolution, Rule, SchemaVersion, Scope, ScopeId, Source,
+    SynthesisPacket, Thread, Topic, VerificationBinding,
 };
+
+fn ensure_new_ids_assignable<T>(
+    existing: &[T],
+    incoming: &[T],
+    id: impl Fn(&T) -> &str,
+) -> anyhow::Result<()> {
+    for record in incoming {
+        let assigned = id(record);
+        if !existing.iter().any(|known| id(known) == assigned) {
+            ensure_record_id_assignable(assigned)?;
+        }
+    }
+    Ok(())
+}
 use readers::{
-    deserialize_closed, read_ideation_landings, read_jsonl, read_jsonl_closed,
-    read_legacy_dispositions, read_message_shards,
+    deserialize_closed, read_ideation_landings, read_jsonl, read_jsonl_closed, read_jsonl_unlocked,
+    read_legacy_dispositions, read_message_shards, read_message_shards_unlocked,
 };
 use serde::{Deserialize, Serialize};
 
@@ -119,8 +136,15 @@ impl StateStore {
     }
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_read(|| {
-            crate::test_probes::record_read(&self.layout.manifest_path());
-            manifest_from_bytes(&std::fs::read(self.layout.manifest_path())?)
+            let path = self.layout.manifest_path();
+            crate::test_probes::record_read(&path);
+            manifest_from_bytes(&std::fs::read(&path)?).map_err(|error| {
+                if error.is::<serde_json::Error>() {
+                    error.context(format!("failed to parse manifest {path}"))
+                } else {
+                    error
+                }
+            })
         })
     }
 

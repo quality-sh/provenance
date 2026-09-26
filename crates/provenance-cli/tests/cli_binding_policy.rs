@@ -47,27 +47,30 @@ fn init_repo() -> tempfile::TempDir {
 }
 
 fn create_rule(repo: &Path, id: &str, status: &str) {
-    run(
-        repo,
-        &[
+    provenance()
+        .args([
             "rules",
             "create",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            id,
-            "--requirement-id",
-            "req_anchor",
-            "--statement",
-            "The covered obligation holds",
-            "--status",
-            status,
-            "--severity",
-            "high",
-        ],
-    );
+            "--stdin",
+        ])
+        .current_dir(repo)
+        .write_stdin(
+            json!({
+                "id": id,
+                "requirement_ids": ["req_anchor"],
+                "resolution_ids": [],
+                "statement": "The covered obligation holds",
+                "status": status,
+                "severity": "high"
+            })
+            .to_string(),
+        )
+        .assert()
+        .success();
 }
 
 fn set_binding_policy(repo: &Path, severity: &str) {
@@ -112,7 +115,7 @@ fn begin_verification(repo: &Path, rule: &str, key: &str, file: &str) {
     std::fs::write(&path, "// exercises the rule\n").unwrap();
     provenance()
         .args([
-            "sdk",
+            "verification-runs",
             "begin-verification",
             "--repo",
             repo.to_str().unwrap(),
@@ -120,6 +123,7 @@ fn begin_verification(repo: &Path, rule: &str, key: &str, file: &str) {
             "default",
             "--format",
             "json",
+            "--stdin",
         ])
         .write_stdin(
             serde_json::to_vec(&json!({

@@ -31,8 +31,8 @@ fn a_reference_with_a_loadable_index_rejects_an_unapproved_word() {
         String::from_utf8_lossy(&output.stdout)
     );
     let error = error_json(&output);
-    assert_eq!(error["field"], "statement");
-    let findings = error["findings"]
+    assert_eq!(error["kind"], "statement_invalid", "{error}");
+    let findings = error["report"]["findings"]
         .as_array()
         .expect("the error lists findings");
     assert_eq!(findings.len(), 1, "findings: {findings:?}");
@@ -121,10 +121,16 @@ fn strict_check_uses_the_imported_project_dictionary() {
 
     assert!(!output.status.success());
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report["status"], "findings");
-    assert_eq!(report["base_commit"], Value::Null);
-    assert_eq!(report["diagnostics"][0]["id"], "req_dictionary");
-    assert_eq!(report["diagnostics"][0]["rule"], "1.1");
+    let statements = report["categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|category| category["category"] == "statements")
+        .unwrap();
+    assert_eq!(statements["status"], "findings");
+    assert_eq!(statements["context"]["base_commit"], Value::Null);
+    assert_eq!(statements["findings"][0]["detail"]["id"], "req_dictionary");
+    assert_eq!(statements["findings"][0]["detail"]["rule"], "1.1");
 }
 
 fn git(repo: &std::path::Path, arguments: &[&str]) {

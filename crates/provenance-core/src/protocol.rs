@@ -1,5 +1,7 @@
 mod document;
+mod envelope;
 pub use document::{DocumentEntry, ReadDocumentQuery, ReadDocumentResult};
+pub use envelope::{ListData, ResponseMeta, SuccessEnvelope};
 pub mod failure;
 mod node;
 mod query;
@@ -9,6 +11,7 @@ pub mod read_failure;
 pub mod repository;
 mod response;
 mod stamp;
+mod target_action;
 mod typed_spec;
 
 use camino::Utf8PathBuf;
@@ -19,14 +22,16 @@ pub use node::{
     AffectedRule, GraphNode, ImplementationSite, Neighbor, TracedNode, VerificationSite,
 };
 pub use query::{
-    Direction, EvidenceQuery, GetQuery, ImpactQuery, NeighborsQuery, ResolveSymbolQuery,
-    SearchQuery, StaleQuery, TraceQuery,
+    Direction, EvidenceQuery, GetQuery, ImpactQuery, NeighborsQuery, ResolveRecordQuery,
+    ResolveSymbolQuery, SearchQuery, StaleQuery, TraceQuery,
 };
 pub use response::{
-    EvidenceResult, GetResult, ImpactResult, NeighborsResult, QueryResponse, ResolveSymbolResult,
-    SearchResult, StaleEvidence, StaleResult, TraceResult,
+    EvidenceResult, GetResult, ImpactResult, NeighborsResult, QueryResponse, RecordResolution,
+    ResolveRecordResult, ResolveSymbolResult, SearchResult, StaleEvidence, StaleResult,
+    TraceResult,
 };
 pub use stamp::{Stamp, StampPolicy, Stamped};
+pub use target_action::TargetAction;
 pub use typed_spec::{
     CheckStatementRequest, TypedAdoptionTarget, TypedDeclarationKind, TypedImplementationInput,
     TypedRequirementInput, TypedRuleInput, TypedSourceInput, TypedSpecInput,
@@ -39,6 +44,9 @@ pub const QUERY_DEFAULT_LIMIT: usize = 50;
 
 /// The largest page any query primitive will hand back.
 pub const QUERY_MAX_LIMIT: usize = 200;
+
+/// The largest encoded response a structured query will publish.
+pub const QUERY_RESPONSE_BYTES: usize = 1_114_112;
 
 /// How many hops `trace` walks when the caller names no depth.
 pub const TRACE_DEFAULT_MAX_DEPTH: usize = 3;

@@ -7,12 +7,16 @@ use super::{
 };
 use crate::{
     shards,
-    state_store::{RequirementReviewInput, StateStore},
+    state_store::{read_budget, RequirementReviewInput, StateStore},
 };
 use provenance_core::{Boundary, Domain, NodeType, Requirement};
 
 impl StateStore {
-    pub fn update_requirement(&self, input: UpdateRequirementInput) -> anyhow::Result<Requirement> {
+    /// Mutates a Requirement only within the guarded save path.
+    pub(crate) fn apply_requirement_update(
+        &self,
+        input: UpdateRequirementInput,
+    ) -> anyhow::Result<Requirement> {
         self.with_repository_publication(|| {
             if let Some(id) = &input.domain_id {
                 self.ensure_node_exists(&input.scope_id, NodeType::Domain, id, "domain_id")?;
@@ -105,7 +109,9 @@ impl StateStore {
                 input.color,
                 input.clear_fields.contains(&DomainClearField::Color),
             )?;
-            Ok(record.clone())
+            let record = record.clone();
+            read_budget::ensure_within_read_budget(&record)?;
+            Ok(record)
         })
     }
 
@@ -134,7 +140,9 @@ impl StateStore {
                     input.source_ref,
                     input.clear_fields.contains(&BoundaryClearField::SourceRef),
                 )?;
-                Ok(record.clone())
+                let record = record.clone();
+                read_budget::ensure_within_read_budget(&record)?;
+                Ok(record)
             })
         })
     }

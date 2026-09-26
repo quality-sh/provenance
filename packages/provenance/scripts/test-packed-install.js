@@ -108,7 +108,15 @@ assert.deepEqual(
   "init through the installed bin must record the scope the quick start asks for",
 );
 const initialCheck = JSON.parse(provenance(["check", "--repo", ".", "--format", "json"], application));
-assert.equal(initialCheck.status, "ok", "a freshly initialized project must validate");
+assert.deepEqual(
+  initialCheck.categories.map(({ category, status, findings }) => ({ category, status, findings })),
+  [
+    { category: "graph", status: "passed", findings: [] },
+    { category: "statements", status: "passed", findings: [] },
+    { category: "bindings", status: "passed", findings: [] },
+  ],
+  "a freshly initialized project must validate",
+);
 verifyGeneratedCommandIgnoresStaleGlobal(application);
 execFileSync(process.execPath, [
   join(application, "node_modules", "@quality-sh", "provenance", "bin", "provenance.mjs"),
@@ -303,8 +311,8 @@ try {
     stdio: "pipe",
   });
 } finally { await fixture.close(); }
-const runs = JSON.parse(execFileSync(localEngine, [
-  "sdk", "verification-runs", "--repo", application, "--scope", "default", "--format", "json",
+const { data: { items: runs } } = JSON.parse(execFileSync(localEngine, [
+  "verification-runs", "list", "--repo", application, "--scope", "default", "--format", "json",
 ], { encoding: "utf8" }));
 assert.equal(runs.length, 2);
 assert.deepEqual(runs.map(({ status }) => status), ["passed", "passed"]);
@@ -395,7 +403,11 @@ function verifyYarnPnpInstall() {
   const check = JSON.parse(execFileSync("yarn", [
     "provenance", "check", "--repo", yarnApplication, "--format", "json",
   ], { cwd: yarnApplication, encoding: "utf8" }));
-  assert.equal(check.status, "ok", "the Yarn PnP project must validate with the native engine");
+  assert.equal(check.categories.length, 3);
+  assert.ok(
+    check.categories.every(category => category.status === "passed"),
+    "the Yarn PnP project must validate with the native engine",
+  );
 }
 
 function stageEngineArchivesForYarn() {

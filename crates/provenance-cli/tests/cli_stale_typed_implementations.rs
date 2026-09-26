@@ -59,7 +59,6 @@ fn init_repo() -> tempfile::TempDir {
 }
 
 fn apply_binding(repo: &Path) {
-    let target = repo.join("src/runtime.ts");
     let input = json!({
         "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "runtime",
@@ -74,32 +73,36 @@ fn apply_binding(repo: &Path) {
             "requirement": "workflows",
             "statement": "Accepted workflows start",
             "implementation": {
-                "file": target,
+                "file": "src/runtime.ts",
                 "symbol": "startWorkflow"
             }
         }]
     });
     provenance()
         .args([
-            "sdk",
-            "apply",
+            "authoring-changes",
+            "create",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
             "--format",
             "json",
+            "--stdin",
         ])
         .write_stdin(serde_json::to_vec(&input).unwrap())
         .assert()
         .success();
 }
 
-fn stale(repo: &Path, base: &str, head: &str) -> Value {
+fn stale(repo: &Path, base: &str, head: &str) -> Vec<Value> {
     let output = provenance()
         .args([
+            "rules",
             "stale",
+            "--base",
             base,
+            "--head",
             head,
             "--repo",
             repo.to_str().unwrap(),
@@ -113,7 +116,10 @@ fn stale(repo: &Path, base: &str, head: &str) -> Value {
         .get_output()
         .stdout
         .clone();
-    serde_json::from_slice(&output).unwrap()
+    serde_json::from_slice::<Value>(&output).unwrap()["data"]["items"]
+        .as_array()
+        .unwrap()
+        .clone()
 }
 
 #[test]
@@ -135,12 +141,11 @@ fn changed_typed_implementation_is_touched_without_a_scanner_marker() {
 
     let report = stale(directory.path(), &base, &head);
 
-    assert_eq!(report["summary"]["total_sites"], 1);
-    assert_eq!(report["summary"]["touched"], 1);
-    assert_eq!(report["sites"][0]["kind"], "rule_binding");
-    assert_eq!(report["sites"][0]["file_path"], "src/runtime.ts");
-    assert_eq!(report["sites"][0]["state"], "touched");
-    assert!(report["sites"][0].get("line").is_none());
+    assert_eq!(report.len(), 1);
+    assert_eq!(report[0]["kind"], "rule_binding");
+    assert_eq!(report[0]["file_path"], "src/runtime.ts");
+    assert_eq!(report[0]["state"], "touched");
+    assert!(report[0].get("line").is_none());
 }
 
 #[test]
@@ -158,11 +163,10 @@ fn deleted_typed_implementation_is_gone_without_a_scanner_marker() {
 
     let report = stale(directory.path(), &base, &head);
 
-    assert_eq!(report["summary"]["total_sites"], 1);
-    assert_eq!(report["summary"]["gone"], 1);
-    assert_eq!(report["sites"][0]["kind"], "rule_binding");
-    assert_eq!(report["sites"][0]["file_path"], "src/runtime.ts");
-    assert_eq!(report["sites"][0]["state"], "gone");
+    assert_eq!(report.len(), 1);
+    assert_eq!(report[0]["kind"], "rule_binding");
+    assert_eq!(report[0]["file_path"], "src/runtime.ts");
+    assert_eq!(report[0]["state"], "gone");
 }
 
 #[test]
@@ -184,10 +188,9 @@ fn matching_scanner_and_typed_implementation_is_one_stale_site() {
 
     let report = stale(directory.path(), &base, &head);
 
-    assert_eq!(report["summary"]["total_sites"], 1);
-    assert_eq!(report["summary"]["touched"], 1);
-    assert_eq!(report["sites"][0]["subject_id"], "rule_start");
-    assert_eq!(report["sites"][0]["kind"], "rule_binding");
+    assert_eq!(report.len(), 1);
+    assert_eq!(report[0]["subject_id"], "rule_start");
+    assert_eq!(report[0]["kind"], "rule_binding");
 }
 
 #[test]
@@ -213,17 +216,12 @@ fn same_file_different_scanner_symbol_remains_a_distinct_stale_site() {
 
     let report = stale(directory.path(), &base, &head);
 
-    assert_eq!(report["summary"]["total_sites"], 2);
-    assert_eq!(report["summary"]["touched"], 2);
-    assert!(report["sites"]
-        .as_array()
-        .unwrap()
+    assert_eq!(report.len(), 2);
+    assert!(report
         .iter()
         .all(|site| site["subject_id"] == "rule_start" && site["kind"] == "rule_binding"));
     assert_eq!(
-        report["sites"]
-            .as_array()
-            .unwrap()
+        report
             .iter()
             .filter(|site| site.get("line").is_some())
             .count(),

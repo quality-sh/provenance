@@ -1,19 +1,40 @@
 use super::{
     inputs::{RuleClearField, SourceClearField, UpdateRuleInput, UpdateSourceInput},
-    missing, optional, owner_matches, required_text, set,
+    missing, optional, owner_matches, required_text, set, validate_final_relations,
 };
-use crate::{shards, state_store::StateStore};
+use crate::{publication::with_staged_state, review, shards, state_store::StateStore};
 use provenance_core::{validate_optional_commit_pin, Rule, Source};
 
 impl StateStore {
     pub fn update_source(&self, input: UpdateSourceInput) -> anyhow::Result<Source> {
+        with_staged_state(&self.layout, false, |layout| {
+            Self::new(layout.clone()).prepare_source_update(input)
+        })
+    }
+
+    fn prepare_source_update(&self, input: UpdateSourceInput) -> anyhow::Result<Source> {
+        let scope = input.scope_id.clone();
         let path = shards::sources_path(&self.layout, &input.scope_id);
-        self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
-            let record = records
-                .iter_mut()
-                .find(|r| r.id == input.id)
+        let record = self.mutate_graph_record(&path, |records: &mut Vec<Source>| {
+            let position = records
+                .iter()
+                .position(|record| record.id == input.id)
                 .ok_or_else(missing)?;
-            owner_matches(record.declared_by.as_deref(), input.declared_by.as_deref())?;
+            owner_matches(
+                records[position].declared_by.as_deref(),
+                input.declared_by.as_deref(),
+            )?;
+            self.validate_relation_targets(
+                &scope,
+                records,
+                &input.id,
+                &[(
+                    "supersedes",
+                    review::relationships::removal_targets(input.supersedes.as_ref()),
+                )],
+            )?;
+            let record = &mut records[position];
+            review::relationships::expand_list(&mut record.supersedes, input.supersedes.as_ref());
             if let Some(name) = &input.name {
                 required_text(name)?;
             }
@@ -54,53 +75,89 @@ impl StateStore {
                     )
                 })?;
             Ok(record.clone())
-        })
+        })?;
+        validate_final_relations(self, &scope, &record)?;
+        Ok(record)
     }
 
     pub fn update_rule(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
-        self.with_repository_publication(|| {
-            let path = shards::rules_path(&self.layout, &input.scope_id);
-            self.mutate_graph_record(&path, |records: &mut Vec<Rule>| {
-                let record = records
-                    .iter_mut()
-                    .find(|r| r.id == input.id)
-                    .ok_or_else(missing)?;
-                owner_matches(record.declared_by.as_deref(), input.declared_by.as_deref())?;
-                if let Some(statement) = &input.statement {
-                    required_text(statement)?;
-                    super::super::statement_policy::ensure_statement_is_writable(
-                        &self.layout,
-                        statement,
-                    )?;
-                }
-                set(&mut record.statement, input.statement);
-                set(&mut record.status, input.status);
-                if let Some(stamp) = input.archived_in_commit {
-                    record.archived_in_commit = Some(stamp);
-                }
-                set(&mut record.severity, input.severity);
-                optional(
-                    &mut record.name,
-                    input.name,
-                    input.clear_fields.contains(&RuleClearField::Name),
-                )?;
-                optional(
-                    &mut record.description,
-                    input.description,
-                    input.clear_fields.contains(&RuleClearField::Description),
-                )?;
-                optional(
-                    &mut record.source_document,
-                    input.source_document,
-                    input.clear_fields.contains(&RuleClearField::SourceDocument),
-                )?;
-                optional(
-                    &mut record.source_section,
-                    input.source_section,
-                    input.clear_fields.contains(&RuleClearField::SourceSection),
-                )?;
-                Ok(record.clone())
-            })
+        with_staged_state(&self.layout, false, |layout| {
+            Self::new(layout.clone()).prepare_rule_update(input)
         })
+    }
+
+    fn prepare_rule_update(&self, input: UpdateRuleInput) -> anyhow::Result<Rule> {
+        let scope = input.scope_id.clone();
+        let path = shards::rules_path(&self.layout, &input.scope_id);
+        let record = self.mutate_graph_record(&path, |records: &mut Vec<Rule>| {
+            let position = records
+                .iter()
+                .position(|record| record.id == input.id)
+                .ok_or_else(missing)?;
+            owner_matches(
+                records[position].declared_by.as_deref(),
+                input.declared_by.as_deref(),
+            )?;
+            self.validate_relation_targets(
+                &scope,
+                records,
+                &input.id,
+                &[
+                    (
+                        "requirement_ids",
+                        review::relationships::removal_targets(input.requirement_ids.as_ref()),
+                    ),
+                    (
+                        "resolution_ids",
+                        review::relationships::removal_targets(input.resolution_ids.as_ref()),
+                    ),
+                ],
+            )?;
+            let record = &mut records[position];
+            review::relationships::expand_list(
+                &mut record.requirement_ids,
+                input.requirement_ids.as_ref(),
+            );
+            review::relationships::expand_list(
+                &mut record.resolution_ids,
+                input.resolution_ids.as_ref(),
+            );
+            if let Some(statement) = &input.statement {
+                required_text(statement)?;
+                super::super::statement_policy::ensure_statement_is_writable(
+                    &self.layout,
+                    statement,
+                )?;
+            }
+            set(&mut record.statement, input.statement);
+            set(&mut record.status, input.status);
+            if let Some(stamp) = input.archived_in_commit {
+                record.archived_in_commit = Some(stamp);
+            }
+            set(&mut record.severity, input.severity);
+            optional(
+                &mut record.name,
+                input.name,
+                input.clear_fields.contains(&RuleClearField::Name),
+            )?;
+            optional(
+                &mut record.description,
+                input.description,
+                input.clear_fields.contains(&RuleClearField::Description),
+            )?;
+            optional(
+                &mut record.source_document,
+                input.source_document,
+                input.clear_fields.contains(&RuleClearField::SourceDocument),
+            )?;
+            optional(
+                &mut record.source_section,
+                input.source_section,
+                input.clear_fields.contains(&RuleClearField::SourceSection),
+            )?;
+            Ok(record.clone())
+        })?;
+        validate_final_relations(self, &scope, &record)?;
+        Ok(record)
     }
 }

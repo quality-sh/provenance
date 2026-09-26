@@ -1,8 +1,11 @@
 mod atomic_file;
+mod catalog_cli;
 mod cli;
 mod docs;
 mod gitignore;
 mod handlers;
+mod init_summary;
+mod invocation;
 mod legacy_cleanup;
 mod onboarding;
 mod output;
@@ -12,12 +15,8 @@ mod ste_onboarding;
 mod store;
 mod wiki;
 
-use clap::Parser;
-use cli::Cli;
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let cli = Cli::parse();
-    let quiet = cli.quiet;
-    handlers::dispatch(cli.command, quiet).await
+    let arguments = std::env::args().collect::<Vec<_>>();
+    invocation::Invocation::parse(arguments)?.dispatch().await
 }

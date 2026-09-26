@@ -81,7 +81,7 @@ npx provenance prime
 
 | Command | What it does |
 | --- | --- |
-| `provenance prime` | Bounded low-res graph frontier; proposals surface separately when evidence or claimed territory demands them |
+| `provenance prime` | Introduces Provenance domain concepts and agent actions |
 | `provenance check` | Validate the state files |
 | `provenance materialize` | Rebuild the SQLite query cache |
 | `provenance graph <requirement>` | Show the neighbourhood of a requirement |
@@ -90,7 +90,7 @@ npx provenance prime
 | `provenance proposals surface --scope default --changed-path <path>` | Surface undisposed proposals when current work touches their evidence or explicit territory |
 | `provenance wiki build` / `provenance wiki serve` | Build or serve the generated wiki with domain browsing and offline search |
 | `provenance coverage scan --path . --validate-rules` | Check bindings and report active Rules with no implementation or verification |
-| `provenance sdk check-statement` / `provenance sdk apply` / `provenance sdk verification-runs` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
+| `provenance statement-checks create --stdin` / `provenance authoring-changes create --stdin` / `provenance verification-runs list` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
 | `provenance stale --since main` | Report whether a diff touched, moved, or removed any graph evidence path |
 | `provenance skills install` | Install the bundled agent skills (`provenance-shaping`, `provenance-fork-tournament`, `provenance-swarm-backtrace`, `provenance-grounded-writing`) |
 

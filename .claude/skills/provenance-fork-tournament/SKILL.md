@@ -2,7 +2,7 @@
 name: provenance-fork-tournament
 description: Run a fork tournament when a shaping session hits a genuine design fork — mutually exclusive directions, expensive to reverse, and the human's preference unknowable without concrete artifacts to react to. Implements the `prototype` resolution method from docs/shaping.md - spawn stance-based agents producing competing artifacts as proposals (phase 1, end session), then present them for human disposal and land the decision as a Resolution (phase 2).
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:b4dd86418cea8313 -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:e83ad3dfbf9323ed -->
 
 # Fork tournament (`prototype`)
 
@@ -69,7 +69,8 @@ provenance questions claim --scope <scope> \
 
 1. **Spawn N agents in parallel** — one Agent tool call per stance, all in one message.
    Each spawn prompt carries: the anchor requirement and boundaries (loaded with the
-   graph and boundary commands; `provenance prime` supplies rules and computed gaps),
+   graph and boundary commands; `provenance rules list` supplies Rules and
+   `provenance gaps` supplies computed gaps),
    the question, the stance (values + quality bar + exit
    criterion), its evidence partition, and its task framing. Each agent produces one
    competing concrete artifact **opening with a design-principles manifesto** — the
@@ -129,8 +130,7 @@ provenance questions claim --scope <scope> \
 4. **Mark the question blocked-on-human** and post the proposal ids to its thread:
 
     ```sh
-    provenance questions update --scope <scope> \
-      --id <question_id> \
+    provenance questions <question_id> update --scope <scope> \
       --status blocked-on-human
 
     provenance thread post --scope <scope> \
@@ -246,8 +246,8 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
 
 ## CLI gaps and conventions (as of this writing)
 
-- **Question status and method are first-class** — use `questions update --status
-  blocked-on-human` for the phase boundary, and `questions update --method prototype`
+- **Question status and method are first-class** — use `questions <id> update --status
+  blocked-on-human` for the phase boundary, and `questions <id> update --method prototype`
   if an existing question was minted with the wrong method. Keep the thread post because
   proposal ids are not question link targets.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an

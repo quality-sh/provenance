@@ -18,7 +18,7 @@ async fn search(root: &camino::Utf8Path, request: Value) -> anyhow::Result<Value
 #[tokio::test]
 #[verifies("rule_cursor_binds_query_identity", examples)]
 #[verifies("rule_cursor_restarts_on_revision_change", examples)]
-async fn cursor_pages_preserve_order_and_refuse_invalid_continuations() {
+async fn filter_only_cursor_pages_preserve_order_and_refuse_invalid_continuations() {
     let (dir, store, scope) = seeded_store();
     let root = root_of(&dir);
     let path = crate::shards::requirements_path(&store.layout, &scope);
@@ -27,7 +27,7 @@ async fn cursor_pages_preserve_order_and_refuse_invalid_continuations() {
         record["id"] = json!(format!("req_page_{i:03}"));
         crate::cache::tests::fixtures::append_record(&path, &record);
     }
-    let request = json!({"text":"req_","node_types":["requirement"],"limit":200});
+    let request = json!({"node_types":["requirement"],"limit":200});
     let first = search(&root, request.clone()).await.unwrap();
     let cursor = first["next_cursor"].as_str().expect("continuation");
     let mut next = request.clone();
@@ -60,6 +60,40 @@ async fn cursor_pages_preserve_order_and_refuse_invalid_continuations() {
     let mut tampered = next.clone();
     tampered["cursor"] = json!(format!("{cursor}x"));
     assert!(search(&root, tampered).await.is_err());
+    let wrong_operation = queries::read_document(
+        Some(root.clone()),
+        &scope,
+        ReadPolicy::default(),
+        provenance_core::protocol::ReadDocumentQuery {
+            id: "req_overtime".into(),
+            cursor: Some(cursor.to_owned()),
+            limit: 1,
+        },
+    )
+    .await
+    .unwrap_err();
+    assert!(wrong_operation.to_string().contains("cursor"));
+    let other_scope = provenance_core::ScopeId::new("other").unwrap();
+    let manifest_path = store.layout.manifest_path();
+    let mut manifest: Value =
+        serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+    manifest["scopes"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"id":"other","path_prefix":"."}));
+    std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let wrong_scope = queries::search(
+        Some(root.clone()),
+        &other_scope,
+        ReadPolicy::default(),
+        serde_json::from_value(json!({
+            "node_types":["requirement"], "limit":200, "cursor":cursor
+        }))
+        .unwrap(),
+    )
+    .await
+    .unwrap_err();
+    assert!(wrong_scope.to_string().contains("cursor"));
     record["id"] = json!("req_new");
     crate::cache::tests::fixtures::append_record(&path, &record);
     assert!(search(&root, next)

@@ -64,11 +64,11 @@ fn requirement_creation_rejects_a_deterministic_violation_without_writing_the_re
         .assert()
         .failure()
         .stderr(
-            contains(r#""field":"statement""#)
+            contains(r#""kind":"statement_invalid""#)
                 .and(contains(r#""standard":"ASD-STE100""#))
                 .and(contains(r#""issue":9"#))
                 .and(contains(r#""rule":"8.1""#))
-                .and(contains(r#""start":4,"end":5"#)),
+                .and(contains(r#""end":5,"start":4"#)),
         );
 
     assert!(!export(&repo).contains("req_rejected"));
@@ -112,12 +112,26 @@ fn rule_creation_rejects_a_deterministic_violation_without_writing_the_record() 
         .assert()
         .failure()
         .stderr(
-            contains(r#""field":"statement""#)
+            contains(r#""kind":"statement_invalid""#)
                 .and(contains(r#""standard":"ASD-STE100""#))
                 .and(contains(r#""issue":9"#))
                 .and(contains(r#""rule":"8.1""#))
-                .and(contains(r#""start":16,"end":17"#)),
+                .and(contains(r#""end":17,"start":16"#)),
         );
 
-    assert!(!export(&repo).contains("rule_rejected"));
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "rules",
+            "list",
+            "--repo",
+            repo.path().to_str().unwrap(),
+            "--scope",
+            "default",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("rule_rejected").not());
 }

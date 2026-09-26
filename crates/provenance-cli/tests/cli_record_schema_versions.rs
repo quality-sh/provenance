@@ -137,16 +137,32 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
     std::fs::write(
         &path,
         stored.replace(
-            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+            // The CLI-created Requirement is enrolled, so it stands at the
+            // review journal schema version.
+            &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0),
             &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0 + 1),
         ),
     )
     .unwrap();
 
     let export = dir.path().join("export.json");
-    for command in [
-        vec!["check", "--repo", repo.as_str()],
-        vec![
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["check", "--repo", repo.as_str()])
+        .assert()
+        .failure()
+        .stderr(contains("requirements/req.jsonl line 1"))
+        .stderr(contains("record req_overtime"))
+        .stderr(contains(format!(
+            "has schema_version {}, but this build reads schema_version {} only",
+            REVIEW_SCHEMA_VERSION.0 + 1,
+            SUPPORTED_SCHEMA_VERSION.0
+        )));
+
+    // The export refuses earlier, on the review-bearing portability gate.
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
             "export",
             "--repo",
             repo.as_str(),
@@ -156,21 +172,12 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
             "json",
             "--output",
             export.to_str().unwrap(),
-        ],
-    ] {
-        Command::cargo_bin("provenance")
-            .unwrap()
-            .args(&command)
-            .assert()
-            .failure()
-            .stderr(contains("requirements/req.jsonl line 1"))
-            .stderr(contains("record req_overtime"))
-            .stderr(contains(format!(
-                "has schema_version {}, but this build reads schema_version {} only",
-                REVIEW_SCHEMA_VERSION.0 + 1,
-                SUPPORTED_SCHEMA_VERSION.0
-            )));
-    }
+        ])
+        .assert()
+        .failure()
+        .stderr(contains(
+            "review-bearing scopes require lossless import/export support",
+        ));
 }
 
 /// Writing to a shard that holds a hand-edited record changes nothing.
@@ -199,7 +206,7 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
     let planted = std::fs::read_to_string(&path)
         .unwrap()
         .replace(
-            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+            &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0),
             &format!("\"schema_version\":{} ", REVIEW_SCHEMA_VERSION.0 + 1),
         )
         .replace(
@@ -226,13 +233,7 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
         ])
         .assert()
         .failure()
-        .stderr(contains("requirements/req.jsonl line 1"))
-        .stderr(contains("record req_overtime"))
-        .stderr(contains(format!(
-            "has schema_version {}, but this build reads schema_version {} only",
-            REVIEW_SCHEMA_VERSION.0 + 1,
-            SUPPORTED_SCHEMA_VERSION.0
-        )));
+        .stderr(contains(r#""kind":"write_failed""#));
 
     assert_eq!(std::fs::read_to_string(&path).unwrap(), planted);
 }

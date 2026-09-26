@@ -34,6 +34,7 @@ jsonschema.workspace = true
 pulldown-cmark.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
+provenance-porcelain.workspace = true
 provenance-report.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
@@ -44,6 +45,7 @@ rustix.workspace = true
 same-file.workspace = true
 semver.workspace = true
 serde.workspace = true
+serde_ignored.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["signal"] }
 uuid.workspace = true
@@ -68,5 +70,6 @@ pdf_oxide = { version = "=0.3.77", default-features = false, features = ["legacy
 jsonschema.workspace = true
 tempfile.workspace = true
 predicates.workspace = true
+rmcp = { version = "=1.4.0", default-features = false, features = ["client"] }
 sha2.workspace = true
 tar.workspace = true

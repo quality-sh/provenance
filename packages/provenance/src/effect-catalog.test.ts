@@ -50,7 +50,11 @@ test('every catalog method is lazy and preserves its generated request, success,
     const failure = value(op.responses['400'].content['application/json'].schema);
     let posts = 0;
     const client = await Effect.runPromise(sdk.EffectHttpClient.connect({ baseUrl: 'https://example.test', fetch: async (url, init) => {
-      if (init?.method !== 'POST') return Response.json({ engine_version: 'test', protocol_version: sdk.PROTOCOL_VERSION });
+      if (init?.method !== 'POST') return Response.json({ data: {
+        compatibility: sdk.COMPATIBILITY,
+        package: { name: 'provenance', version: 'test' },
+        repository: null, scope: null,
+      }, meta: {} });
       posts++;
       assert.equal(url, `https://example.test${path}`);
       assert.deepEqual(JSON.parse(String(init.body)), input);
@@ -64,7 +68,6 @@ test('every catalog method is lazy and preserves its generated request, success,
     assert.equal(error._tag, 'OperationError', op.operationId);
     if (error._tag === 'OperationError') assert.deepEqual(error.failure, failure);
     assert.equal(posts, 2);
-    assert.deepEqual(client.unresolvedWrites(), []);
     for (const [schemaNode, fixture] of [[op.requestBody.content['application/json'].schema, input], [op.responses['200'].content['application/json'].schema, success], [op.responses['400'].content['application/json'].schema, failure]] as const) {
       const schema = schemas[schemaNode.$ref!.split('/').at(-1)!];
       assert.deepEqual(Schema.decodeUnknownSync(schema)(fixture), fixture, op.operationId);

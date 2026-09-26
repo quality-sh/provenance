@@ -13,6 +13,7 @@ use provenance_core::{
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateReviewRequirement {
@@ -29,13 +30,30 @@ impl StateStore {
     #[rule("rule_comment_created_record_retains_discussion_origin")]
     pub fn create_review_requirement(
         &self,
-        mut input: CreateReviewRequirement,
+        input: CreateReviewRequirement,
     ) -> anyhow::Result<ReviewEntry> {
+        self.create_review_requirement_with(input, |_, entry| Ok(entry))
+    }
+
+    pub(crate) fn create_review_requirement_resource(
+        &self,
+        input: CreateReviewRequirement,
+    ) -> anyhow::Result<super::RequirementResourceSnapshot> {
+        self.create_review_requirement_with(input, |store, entry| {
+            store.requirement_resource_snapshot_unlocked(&entry.scope_id, &entry.requirement_id)
+        })
+    }
+
+    fn create_review_requirement_with<R>(
+        &self,
+        mut input: CreateReviewRequirement,
+        complete: impl FnOnce(&Self, ReviewEntry) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
         let digest = normalize(&mut input)?;
         self.with_repository_publication(|| {
             let scope = &input.create.scope_id;
             if let Some(receipt) = self.creation_receipt(&input, &digest)? {
-                return Ok(receipt);
+                return complete(self, receipt);
             }
             anyhow::ensure!(
                 !self
@@ -64,19 +82,14 @@ impl StateStore {
                 guard::with_writer(
                     &shards::requirements_path(layout, &scope),
                     id.as_str(),
-                    || Self::new(layout.clone()).commit_creation(input, digest),
+                    || {
+                        let staged = Self::new(layout.clone());
+                        let entry = staged.commit_creation(input, digest)?;
+                        complete(&staged, entry)
+                    },
                 )
             })
         })
-    }
-
-    /// Reports absence only after recovery, scope checks, and current owner checks.
-    pub fn requirement_creation_receipt(
-        &self,
-        mut input: CreateReviewRequirement,
-    ) -> anyhow::Result<Option<ReviewEntry>> {
-        let digest = normalize(&mut input)?;
-        self.with_repository_publication(|| self.creation_receipt(&input, &digest))
     }
 
     fn creation_receipt(
@@ -122,7 +135,7 @@ impl StateStore {
         intent_digest: String,
     ) -> anyhow::Result<ReviewEntry> {
         let scope = input.create.scope_id.clone();
-        let created = self.create_requirement(input.create)?;
+        let created = self.write_requirement(input.create)?;
         let path = shards::requirements_path(&self.layout, &scope);
         let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
             let record = records.iter_mut().find(|r| r.id == created.id).unwrap();

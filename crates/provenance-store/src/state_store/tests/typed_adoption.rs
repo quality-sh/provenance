@@ -1,6 +1,6 @@
 use super::initialized_store;
 use crate::state_store::{
-    AddSourceReferenceInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
+    CreateDomainInput, CreateRequirementInput, CreateResolutionInput, CreateRuleInput,
     CreateSourceInput, MaterializeImplementationBindingInput, ReconcileState, StateStore,
 };
 use provenance_core::protocol::{
@@ -8,9 +8,10 @@ use provenance_core::protocol::{
     TypedRuleInput, TypedSourceInput, TypedSpecInput,
 };
 use provenance_core::{
-    RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceType, StableId,
-    SUPPORTED_SCHEMA_VERSION,
+    Requirement, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
+    SourceReference, SourceType, StableId, SUPPORTED_SCHEMA_VERSION,
 };
+use provenance_macros::verifies;
 
 mod metadata;
 mod noscope;
@@ -20,6 +21,35 @@ mod source_kind;
 
 const OWNER: &str = "spec://rust/migration";
 const STATEMENT: &str = "The canonical Requirement keeps its identity";
+
+#[test]
+#[verifies("rule_porcelain_id_unique_in_repository", examples)]
+fn typed_spec_cannot_reuse_another_canonical_kind_id() {
+    let (_dir, store, scope) = initialized_store();
+    store
+        .create_domain(CreateDomainInput {
+            scope_id: scope.clone(),
+            id: StableId::new("shared_typed_spec_id").unwrap(),
+            name: "Existing domain".to_owned(),
+            description: None,
+            color: None,
+        })
+        .unwrap();
+    let input = document(
+        OWNER,
+        vec![requirement(
+            "canonical",
+            Some("shared_typed_spec_id"),
+            STATEMENT,
+        )],
+        Vec::new(),
+    );
+
+    let error = store.apply_typed_spec(&scope, input).unwrap_err();
+
+    assert!(error.to_string().contains("record ID already exists"));
+    assert!(store.list_requirements(&scope).unwrap().is_empty());
+}
 
 fn target(kind: TypedDeclarationKind, id: &str) -> TypedAdoptionTarget {
     TypedAdoptionTarget {
@@ -59,8 +89,9 @@ fn document(
 }
 
 fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, statement: &str) {
+    // Seed an unenrolled Requirement.
     store
-        .create_requirement(CreateRequirementInput {
+        .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: StableId::new(id).unwrap(),
             statement: statement.to_string(),
@@ -73,6 +104,29 @@ fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, sta
             spawned_by: None,
             origin_thread: None,
             origin_message: None,
+        })
+        .unwrap();
+}
+
+fn seed_plain_citation(
+    store: &StateStore,
+    scope: &ScopeId,
+    requirement_id: &str,
+    source_id: &str,
+    clause: Option<&str>,
+) {
+    let path = crate::shards::requirements_path(&store.layout, scope);
+    store
+        .mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
+            let record = records
+                .iter_mut()
+                .find(|record| record.id.as_str() == requirement_id)
+                .unwrap();
+            record.source_refs.push(SourceReference {
+                source_id: StableId::new(source_id).unwrap(),
+                clause: clause.map(str::to_string),
+            });
+            Ok(record.clone())
         })
         .unwrap();
 }

@@ -7,9 +7,9 @@ mod protected_spans;
 mod vocabulary;
 
 pub use dictionary::{
-    import_dictionary, load_dictionary_index, store_dictionary_index, DictionaryEntry,
-    DictionaryImport, DictionaryImportError, DictionaryImportIdentity, DictionaryIndexError,
-    DictionaryStatus, PartOfSpeech,
+    import_dictionary, load_dictionary_index, load_dictionary_index_for_source,
+    store_dictionary_index, DictionaryEntry, DictionaryImport, DictionaryImportError,
+    DictionaryImportIdentity, DictionaryIndexError, DictionaryStatus, PartOfSpeech,
 };
 
 use provenance_macros::rule;

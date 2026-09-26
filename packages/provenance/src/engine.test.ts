@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { PROTOCOL_VERSION } from "./generated/client.js";
+import { COMPATIBILITY, PROTOCOL_VERSION } from "./generated/client.js";
 import { configure, defineSpec, plan } from "./index.js";
 
 interface HttpSettings { endpoint?: string; bearer?: string; repositoryId?: string; localRoot?: string; scope?: string }
@@ -15,7 +15,7 @@ function spec() {
   }));
 }
 function named(name: string) { return (error: unknown) => error instanceof Error && error.constructor.name === name; }
-async function recordingHost(initialVersion = PROTOCOL_VERSION) {
+async function recordingHost(initialVersion: number = PROTOCOL_VERSION, repository = "opaque", scope = "default") {
   let version = initialVersion;
   const requests: { path: string; authorization?: string; body: unknown }[] = [];
   const server = createServer(async (request, response) => {
@@ -23,10 +23,14 @@ async function recordingHost(initialVersion = PROTOCOL_VERSION) {
     for await (const chunk of request) body += String(chunk);
     requests.push({ path: request.url ?? "", authorization: request.headers.authorization, body: body ? JSON.parse(body) : null });
     response.setHeader("content-type", "application/json");
-    if (request.url === "/metadata") response.end(JSON.stringify({ engine_version: "fixture", protocol_version: version }));
+    if (request.url === "/metadata") response.end(JSON.stringify({ data: {
+      compatibility: { ...COMPATIBILITY, wire: version },
+      package: { name: "provenance", version: "fixture" },
+      repository, scope,
+    }, meta: {} }));
     else {
       response.statusCode = 403;
-      response.end(JSON.stringify({ protocol_version: PROTOCOL_VERSION, operation: "plan", error: { kind: "access_denied" } }));
+      response.end(JSON.stringify({ error: { kind: "access_denied" }, meta: {} }));
     }
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -54,20 +58,20 @@ test("failed compatibility checks do not poison a repaired endpoint", async () =
     await assert.rejects(plan(spec()), named("ProtocolMismatchError"));
     host.repair();
     await assert.rejects(plan(spec()), named("OperationError"));
-    assert.deepEqual(host.requests.map(request => request.path), ["/metadata", "/metadata", `/v${PROTOCOL_VERSION}/operations/plan`]);
+    assert.deepEqual(host.requests.map(request => request.path), ["/metadata", "/metadata", "/authoring-plans"]);
   } finally { await host.close(); }
 });
 
 test("endpoint switching sends credentials and the opaque repository to the selected host", async () => {
-  const first = await recordingHost();
-  const second = await recordingHost();
+  const first = await recordingHost(PROTOCOL_VERSION, "first", "selected");
+  const second = await recordingHost(PROTOCOL_VERSION, "second", "selected");
   try {
     for (const [host, bearer, repositoryId] of [[first, "first-token", "first"], [second, "second-token", "second"]] as const) {
       configureHttp({ endpoint: host.endpoint, bearer, repositoryId, localRoot: process.cwd(), scope: "selected" });
       await assert.rejects(plan(spec()), named("OperationError"));
-      assert.deepEqual(host.requests.map(request => request.path), ["/metadata", `/v${PROTOCOL_VERSION}/operations/plan`]);
+      assert.deepEqual(host.requests.map(request => request.path), ["/metadata", "/authoring-plans"]);
       assert.ok(host.requests.every(request => request.authorization === `Bearer ${bearer}`));
-      assert.deepEqual((host.requests[1].body as { context: unknown }).context, { repository: repositoryId, scope: "selected" });
+      assert.deepEqual(Object.keys(host.requests[1].body as object), ["data"]);
     }
     assert.equal(first.requests.length, 2);
   } finally { await first.close(); await second.close(); }

@@ -5,7 +5,7 @@ use provenance_core::{ScopeId, StableId};
 use provenance_store::cache;
 
 pub(super) fn handle(rule_id: String, repo: Utf8PathBuf, scope: String) -> anyhow::Result<()> {
-    let store = Store::open(repo);
+    let store = Store::open_required(repo)?;
     let trace = cache::trace_rule(
         store.layout(),
         &ScopeId::new(scope)?,

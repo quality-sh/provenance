@@ -107,7 +107,34 @@ impl<'c> LiveHandle<'c> {
     /// The scope's verification runs.
     pub fn runs(&self, scope: &ScopeId) -> anyhow::Result<Vec<VerificationRun>> {
         self.only(Live::VerificationRuns);
-        StateStore::new(self.layout()).list_verification_runs(scope)
+        StateStore::new(self.layout()).read_verification_runs(
+            scope,
+            crate::cache::read::page::RECORD_BYTES,
+            |_, next| {
+                let mut runs = Vec::new();
+                while let Some((_, run)) = next()? {
+                    runs.push(run);
+                }
+                Ok(runs)
+            },
+        )
+    }
+
+    /// Reads the scope's verification runs without loading the file at once.
+    pub(crate) fn read_runs<R>(
+        &self,
+        scope: &ScopeId,
+        read: impl FnOnce(
+            &str,
+            &mut dyn FnMut() -> anyhow::Result<Option<(i64, VerificationRun)>>,
+        ) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        self.only(Live::VerificationRuns);
+        StateStore::new(self.layout()).read_verification_runs(
+            scope,
+            crate::cache::read::page::RESOURCE_RECORD_BYTES,
+            read,
+        )
     }
 
     /// The two commits a range names, resolved; `head` defaults to the

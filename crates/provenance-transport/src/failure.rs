@@ -31,6 +31,7 @@ mod tests {
                 400,
             ),
             (OperationFailure::UnknownOperation, 404),
+            (OperationFailure::MethodNotAllowed, 405),
             (OperationFailure::Unauthenticated, 401),
             (OperationFailure::AccessDenied, 403),
             (OperationFailure::UnknownTarget, 404),

@@ -47,19 +47,31 @@ fn planning_first_repo() -> tempfile::TempDir {
         "--statement",
         "Expenses above the delegated authority limit need second-approver sign-off",
     ]);
-    provenance(&[
-        "requirements",
-        "source-ref",
-        "add",
-        "--repo",
-        &repo,
-        "--scope",
-        "default",
-        "--requirement-id",
-        "req_second_approver",
-        "--source-id",
-        "source_finance_policy",
-    ]);
+    let store = provenance_store::state_store::StateStore::new(
+        provenance_store::layout::ProvenanceLayout::new(&repo),
+    );
+    let etag = store
+        .requirement_edit_state(
+            &provenance_core::ScopeId::new("default").unwrap(),
+            &provenance_core::StableId::new("req_second_approver").unwrap(),
+        )
+        .unwrap()
+        .etag;
+    provenance_stdin(
+        &[
+            "requirements",
+            "req_second_approver",
+            "update",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
+            "--if-match",
+            &etag,
+            "--stdin",
+        ],
+        r#"{"relationships":{"cites":[{"source_id":"source_finance_policy"}]}}"#,
+    );
     provenance(&[
         "rules",
         "create",
@@ -91,6 +103,19 @@ fn provenance(args: &[&str]) -> String {
     String::from_utf8(output).unwrap()
 }
 
+fn provenance_stdin(args: &[&str], input: &str) -> String {
+    let output = Command::cargo_bin("provenance")
+        .unwrap()
+        .args(args)
+        .write_stdin(input)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    String::from_utf8(output).unwrap()
+}
+
 /// Graph reads show the accepted, grounded Rule without a code verdict. The
 /// canonical coverage scan separately reports that its implementation binding
 /// is absent.
@@ -99,16 +124,18 @@ fn planning_first_rule_is_grounded_before_code_exists() {
     let dir = planning_first_repo();
     let repo = dir.path().to_string_lossy().to_string();
 
-    let prime: Value = serde_json::from_str(&provenance(&[
-        "prime", "--repo", &repo, "--scope", "default", "--format", "json",
+    let record: Value = serde_json::from_str(&provenance(&[
+        "rule_second_approver",
+        "get",
+        "--repo",
+        &repo,
+        "--scope",
+        "default",
+        "--format",
+        "json",
     ]))
     .unwrap();
-    let rule = prime["rules"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|rule| rule["id"] == "rule_second_approver")
-        .expect("prime lists the rule");
+    let rule = &record["record"]["value"];
     assert_eq!(rule["status"], "active");
     assert!(rule.get("implementation").is_none());
 

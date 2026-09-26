@@ -35,14 +35,7 @@ fn noscope_sized_source_and_requirement_adoption_preserves_all_ids_and_citations
         let id = format!("req_noscope_{index:02}");
         let statement = format!("Canonical Requirement number {index} stays stable");
         create_unowned_requirement(&store, &scope, &id, &statement);
-        store
-            .add_source_reference(AddSourceReferenceInput {
-                scope_id: scope.clone(),
-                source_id: StableId::new("source_policy").unwrap(),
-                requirement_id: StableId::new(&id).unwrap(),
-                clause: None,
-            })
-            .unwrap();
+        seed_plain_citation(&store, &scope, &id, "source_policy", None);
         let mut declaration = requirement(&format!("canonical-{index:02}"), Some(&id), &statement);
         declaration.sources.push("policy".to_string());
         requirements.push(declaration);

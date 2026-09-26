@@ -217,13 +217,12 @@ fn collaboration_claims_do_not_change_digest_or_appear_in_exact_export() {
     provenance(temp.path())
         .args([
             "topics",
+            "topic_claims",
             "claim",
             "--repo",
             ".",
             "--scope",
             "default",
-            "--id",
-            "topic_claims",
             "--actor",
             "workflowd-123",
         ])

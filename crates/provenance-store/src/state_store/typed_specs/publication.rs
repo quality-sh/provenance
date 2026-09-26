@@ -1,4 +1,4 @@
-use provenance_core::{ImplementationBinding, Requirement, Rule, ScopeId, Source};
+use provenance_core::{ImplementationBinding, NodeType, Requirement, Rule, ScopeId, Source};
 
 use super::{cascade::Cascade, replace_records};
 use crate::review::guard::protect_requirements;
@@ -22,7 +22,27 @@ impl Replacement {
         requirement_resources: &[ReconciledResource],
         rule_resources: &[ReconciledResource],
     ) -> anyhow::Result<()> {
+        let replacements = self
+            .sources
+            .iter()
+            .map(|record| (Some(NodeType::Source), &record.id))
+            .chain(
+                self.requirements
+                    .iter()
+                    .map(|record| (Some(NodeType::Requirement), &record.id)),
+            )
+            .chain(
+                self.rules
+                    .iter()
+                    .map(|record| (Some(NodeType::Rule), &record.id)),
+            );
+        store.ensure_canonical_replacement_ids_unique(
+            scope,
+            replacements,
+            &[NodeType::Source, NodeType::Requirement, NodeType::Rule],
+        )?;
         super::super::typed_statement_policy::ensure_typed_spec_is_writable(result)?;
+        store.commit_enrollment_adoptions(scope, &self.requirements, &result.declared_by)?;
         protect_requirements(&store.layout, scope, &self.requirements)?;
         for rule in &self.rules {
             rule.validate_archive()?;

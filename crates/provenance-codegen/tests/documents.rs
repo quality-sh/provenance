@@ -1,390 +1,182 @@
-use serde_json::json;
+use serde_json::{json, Value};
+
+fn operation<'a>(document: &'a Value, path: &str, method: &str) -> &'a Value {
+    &document["paths"][path][method]
+}
+
+fn variants(schema: &Value) -> Vec<&Value> {
+    schema["oneOf"]
+        .as_array()
+        .or_else(|| schema["anyOf"].as_array())
+        .map_or_else(|| vec![schema], |variants| variants.iter().collect())
+}
 
 #[test]
-fn statement_documents_have_named_operation_and_closed_call_schema() {
-    let (openapi, mcp) = provenance_codegen::documents();
+fn document_exports_unversioned_resource_routes() {
+    let (openapi, _) = provenance_codegen::documents();
     assert_eq!(openapi["openapi"], "3.1.0");
-    let version = provenance_core::protocol::SDK_PROTOCOL_VERSION;
-    let path = format!("/v{version}/operations/check-statement");
-    assert_eq!(
-        openapi["paths"][&path]["post"]["operationId"],
-        "checkStatement"
-    );
-    assert_eq!(mcp["tools"][0]["name"], "check-statement");
-    assert_eq!(
-        mcp["tools"][0]["inputSchema"]["properties"]["protocol_version"]["const"],
-        json!(version)
-    );
-    assert_eq!(
-        mcp["tools"][0]["inputSchema"]["required"],
-        json!(["protocol_version", "call"])
-    );
-    assert!(openapi["components"]["schemas"].as_object().unwrap().len() > 3);
+    let paths = openapi["paths"].as_object().unwrap();
+    assert!(paths.contains_key("/metadata"));
+    assert!(paths.contains_key("/sources"));
+    assert!(paths.contains_key("/sources/{id}"));
+    assert!(paths.contains_key("/requirements/{id}/document"));
+    assert!(paths.contains_key("/verification-runs/begin-verification"));
+    assert!(paths
+        .keys()
+        .all(|path| !path.starts_with("/v9/") && !path.contains("/operations/")));
 }
 
 #[test]
-fn operation_names_are_explicit() {
-    let (_, mcp) = provenance_codegen::documents();
-    let mut names = mcp["tools"]
+fn operation_ids_and_mutation_flags_come_from_routes() {
+    let (openapi, _) = provenance_codegen::documents();
+    let create = operation(&openapi, "/sources", "post");
+    assert_eq!(create["operationId"], "createSource");
+    assert_eq!(create["x-operation-mutates"], true);
+    let list = operation(&openapi, "/sources", "get");
+    assert_eq!(list["operationId"], "listSources");
+    assert_eq!(list["x-operation-mutates"], false);
+    assert_eq!(
+        operation(&openapi, "/statement-checks", "post")["x-operation-mutates"],
+        false
+    );
+}
+
+#[test]
+fn array_query_parameters_use_one_comma_separated_wire_form() {
+    let (openapi, _) = provenance_codegen::documents();
+    let parameters = operation(&openapi, "/sources/{id}", "get")["parameters"]
         .as_array()
-        .unwrap()
+        .unwrap();
+    let relations = parameters
         .iter()
-        .map(|tool| tool["name"].as_str().unwrap())
-        .collect::<Vec<_>>();
-    names.sort_unstable();
-    assert_eq!(
-        names,
-        [
-            "add-requirement-depends-on",
-            "add-requirement-supersedes",
-            "add-resolution-requirement",
-            "add-resolution-supersedes",
-            "add-rule-requirement",
-            "add-rule-resolution",
-            "add-source-reference",
-            "add-source-supersedes",
-            "answer-question",
-            "apply",
-            "begin-verification",
-            "check-statement",
-            "claim-question",
-            "claim-topic",
-            "clear-question-contradicts",
-            "clear-requirement-depends-on",
-            "clear-requirement-refines",
-            "clear-requirement-spawned-by",
-            "clear-requirement-supersedes",
-            "clear-resolution-requirement",
-            "clear-resolution-supersedes",
-            "clear-rule-requirement",
-            "clear-rule-resolution",
-            "clear-source-reference",
-            "clear-source-supersedes",
-            "close-topic",
-            "complete-verification",
-            "create-assertion",
-            "create-boundary",
-            "create-contribution",
-            "create-disposition",
-            "create-domain",
-            "create-proposal",
-            "create-question",
-            "create-requirement",
-            "create-resolution",
-            "create-rule",
-            "create-source",
-            "create-synthesis-packet",
-            "create-topic",
-            "evidence",
-            "get",
-            "impact",
-            "info",
-            "list-assertions",
-            "list-dispositions",
-            "list-messages",
-            "list-proposals",
-            "list-threads",
-            "neighbors",
-            "plan",
-            "post-thread-message",
-            "read-document",
-            "release-question",
-            "release-topic",
-            "resolve-symbol",
-            "search",
-            "set-question-contradicts",
-            "set-requirement-refines",
-            "set-requirement-spawned-by",
-            "stale",
-            "trace",
-            "update-boundary",
-            "update-domain",
-            "update-question",
-            "update-requirement",
-            "update-resolution",
-            "update-rule",
-            "update-source",
-            "update-topic",
-            "upsert-contribution",
-            "upsert-synthesis-packet",
-            "verification-bindings",
-            "verification-runs",
-        ]
-    );
+        .find(|parameter| parameter["name"] == "relations")
+        .unwrap();
+    assert_eq!(relations["schema"]["type"], "array");
+    assert_eq!(relations["style"], "form");
+    assert_eq!(relations["explode"], false);
 }
 
 #[test]
-fn operation_failure_statuses_and_repository_context_are_explicit() {
-    let (document, _) = provenance_codegen::documents();
-    let paths = &document["paths"];
-    let version = provenance_core::protocol::SDK_PROTOCOL_VERSION;
-    assert!(
-        paths[format!("/v{version}/operations/check-statement")]["post"]["responses"]
-            .get("409")
-            .is_none()
-    );
-    assert!(
-        paths[format!("/v{version}/operations/get")]["post"]["responses"]
-            .get("409")
-            .is_some()
-    );
-    let context = &document["components"]["schemas"]["InfoRequestInput"]["properties"]["context"];
-    let resolved = document
-        .pointer(context["$ref"].as_str().unwrap().strip_prefix('#').unwrap())
+fn requests_bind_connection_and_path_identity_outside_data() {
+    let (openapi, _) = provenance_codegen::documents();
+    let request = operation(&openapi, "/sources/{id}", "patch")["requestBody"]["content"]
+        ["application/json"]["schema"]["$ref"]
+        .as_str()
         .unwrap();
-    assert_eq!(resolved["required"], json!(["repository"]));
-    assert!(resolved["properties"].get("scope").is_none());
+    let schema = openapi.pointer(request.strip_prefix('#').unwrap()).unwrap();
+    assert_eq!(schema["required"], json!(["data"]));
+    let data = &schema["properties"]["data"];
+    for field in ["repository", "scope", "scope_id", "id"] {
+        assert!(data["properties"].get(field).is_none(), "{field}");
+    }
 }
 
 #[test]
-fn document_read_has_a_scoped_cursor_request() {
-    let (document, mcp) = provenance_codegen::documents();
-    let version = provenance_core::SDK_PROTOCOL_VERSION;
-    let route = &document["paths"][format!("/v{version}/operations/read-document")]["post"];
-    assert_eq!(route["operationId"], "readDocument");
-    assert_eq!(route["x-operation-mutates"], false);
-    assert_eq!(
-        route["responses"]
-            .as_object()
-            .unwrap()
-            .keys()
-            .map(String::as_str)
-            .collect::<Vec<_>>(),
-        ["200", "400", "401", "403", "404", "409", "500", "503"]
-    );
-    assert_eq!(
-        route["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
-        "#/components/schemas/ReadDocumentSuccessOutput"
-    );
-    let tool = mcp["tools"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|tool| tool["name"] == "read-document")
-        .unwrap();
-    let input = jsonschema::JSONSchema::options()
-        .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&tool["inputSchema"])
-        .unwrap();
-    let request = json!({"protocol_version":version,"call":{
-        "context":{"repository":"selected","scope":"default"},"request":{"id":"req_shared"}
-    }});
-    assert!(input.is_valid(&request));
-    for pointer in [
-        "/call/context/repository",
-        "/call/context/scope",
-        "/call/request/id",
-    ] {
-        let mut missing = request.clone();
-        let (parent, field) = pointer.rsplit_once('/').unwrap();
-        missing
-            .pointer_mut(parent)
-            .unwrap()
-            .as_object_mut()
-            .unwrap()
-            .remove(field);
-        assert!(!input.is_valid(&missing), "{pointer}");
+fn every_response_uses_the_shared_envelope() {
+    let (openapi, mcp) = provenance_codegen::documents();
+    for (path, item) in openapi["paths"].as_object().unwrap() {
+        for operation in item.as_object().unwrap().values() {
+            for (status, response) in operation["responses"].as_object().unwrap() {
+                let reference = response["content"]["application/json"]["schema"]["$ref"]
+                    .as_str()
+                    .unwrap();
+                let schema = openapi
+                    .pointer(reference.strip_prefix('#').unwrap())
+                    .unwrap();
+                for schema in variants(schema) {
+                    let required = schema["required"].as_array().unwrap();
+                    assert!(required.contains(&json!("meta")), "{path}");
+                    assert!(
+                        required.contains(&json!(if status == "200" { "data" } else { "error" })),
+                        "{path}"
+                    );
+                    assert!(
+                        schema["properties"].get("protocol_version").is_none(),
+                        "{path}"
+                    );
+                    assert!(schema["properties"].get("operation").is_none(), "{path}");
+                }
+            }
+        }
     }
-    let mut paged = request;
-    for limit in [1, 50, 200] {
-        paged["call"]["request"]["limit"] = json!(limit);
-        assert!(input.is_valid(&paged));
-    }
-    for limit in [0, 201] {
-        paged["call"]["request"]["limit"] = json!(limit);
-        assert!(!input.is_valid(&paged));
-    }
-    paged["call"]["request"]["limit"] = json!(1);
-    paged["call"]["request"]["cursor"] = json!("opaque-continuation");
-    assert!(input.is_valid(&paged));
-    paged["call"]["request"]["cursor"] = json!(17);
-    assert!(!input.is_valid(&paged));
-    paged["call"]["request"]["cursor"] = json!(null);
-    assert!(input.is_valid(&paged));
-    paged["call"]["request"]["offset"] = json!(1);
-    assert!(!input.is_valid(&paged));
-}
-
-#[test]
-fn document_read_has_a_stamped_page_output() {
-    let (document, mcp) = provenance_codegen::documents();
-    let tool = mcp["tools"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|tool| tool["name"] == "read-document")
-        .unwrap();
-    let output = &document["components"]["schemas"]["ReadDocumentSuccessOutput"];
-    assert_eq!(output["properties"]["operation"]["const"], "read-document");
-    for field in [
-        "root_id",
-        "stamp",
-        "protocol_version",
-        "operation",
-        "limit",
-        "has_more",
-        "next_cursor",
-        "entries",
-    ] {
-        assert!(
-            output["required"]
+    for tool in mcp["tools"].as_array().unwrap() {
+        assert!(tool["description"].as_str().unwrap().len() >= 20);
+        assert_ne!(tool["description"], "Invoke the shared operation.");
+        for schema in variants(&tool["outputSchema"]) {
+            assert_eq!(schema["type"], "object");
+            assert!(schema["required"]
                 .as_array()
                 .unwrap()
-                .contains(&json!(field)),
-            "{field}"
-        );
-        assert!(
-            tool["outputSchema"]["required"]
-                .as_array()
-                .unwrap()
-                .contains(&json!(field)),
-            "{field}"
-        );
-    }
-    for family in [
-        "requirements",
-        "resolutions",
-        "rules",
-        "sources",
-        "topics",
-        "questions",
-        "threads",
-        "messages",
-    ] {
-        assert!(output["properties"].get(family).is_none(), "{family}");
-    }
-    assert_eq!(output["properties"]["entries"]["type"], "array");
-    assert_eq!(
-        output["properties"]["entries"]["items"]["$ref"],
-        "#/components/schemas/ReadDocumentSuccessOutputDocumentEntry"
-    );
-    for entry in [
-        &document["components"]["schemas"]["ReadDocumentSuccessOutputDocumentEntry"],
-        &tool["outputSchema"]["$defs"]["DocumentEntry"],
-    ] {
-        let variants = entry["oneOf"].as_array().unwrap();
-        assert_eq!(variants.len(), 4);
-        for (variant, (kind, payload)) in variants.iter().zip([
-            ("member", "node"),
-            ("reference", "node"),
-            ("thread", "thread"),
-            ("message", "message"),
-        ]) {
-            assert_eq!(variant["properties"]["kind"]["const"], kind);
-            assert_eq!(variant["required"], json!(["kind", payload]));
+                .contains(&json!("meta")));
         }
     }
 }
 
 #[test]
-fn mcp_list_outputs_wrap_the_complete_http_array() {
-    let (document, mcp) = provenance_codegen::documents();
-    for name in [
-        "verification-bindings",
-        "verification-runs",
-        "list-threads",
-        "list-messages",
-        "list-proposals",
-        "list-dispositions",
-        "list-assertions",
-    ] {
-        let tool = mcp["tools"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|tool| tool["name"] == name)
-            .unwrap();
-        let schema = &tool["outputSchema"];
-        assert_eq!(schema["type"], "object");
-        assert_eq!(schema["properties"]["result"]["type"], "array");
-        let validator = jsonschema::JSONSchema::options()
-            .with_draft(jsonschema::Draft::Draft202012)
-            .compile(schema)
-            .unwrap();
-        assert!(validator.is_valid(&json!({"result":[]})));
-        assert!(!validator.is_valid(&json!([])));
-        let path = format!(
-            "/v{}/operations/{name}",
-            provenance_core::protocol::SDK_PROTOCOL_VERSION
-        );
-        let reference = document["paths"][path]["post"]["responses"]["200"]["content"]
-            ["application/json"]["schema"]["$ref"]
-            .as_str()
-            .unwrap();
-        assert_eq!(
-            document
-                .pointer(reference.strip_prefix('#').unwrap())
-                .unwrap()["type"],
-            "array"
-        );
+fn list_envelopes_put_records_in_data_items() {
+    let (openapi, _) = provenance_codegen::documents();
+    let reference = operation(&openapi, "/sources", "get")["responses"]["200"]["content"]
+        ["application/json"]["schema"]["$ref"]
+        .as_str()
+        .unwrap();
+    let schema = openapi
+        .pointer(reference.strip_prefix('#').unwrap())
+        .unwrap();
+    let variants = variants(schema);
+    let list = variants
+        .iter()
+        .find(|schema| schema["properties"]["data"]["required"] == json!(["items"]))
+        .expect("list success has a data.items variant");
+    assert_eq!(list["properties"]["data"]["required"], json!(["items"]));
+    assert_eq!(
+        list["properties"]["data"]["properties"]["items"]["type"],
+        "array"
+    );
+}
+
+#[test]
+fn declared_statuses_include_every_runtime_failure_family() {
+    let (openapi, _) = provenance_codegen::documents();
+    for (path, item) in openapi["paths"].as_object().unwrap() {
+        for operation in item.as_object().unwrap().values() {
+            let statuses = operation["responses"].as_object().unwrap();
+            for status in ["400", "401", "403", "500", "503"] {
+                assert!(statuses.contains_key(status), "{path} lacks {status}");
+            }
+            if operation["x-operation-mutates"] == true {
+                assert!(statuses.contains_key("409"), "{path} lacks 409");
+            }
+        }
     }
 }
 
 #[test]
-fn mutation_classification_comes_from_the_catalog() {
-    let (document, _) = provenance_codegen::documents();
-    for (path, route) in document["paths"].as_object().unwrap() {
-        if let Some(operation) = route.get("post") {
-            let expected = [
-                "create-contribution",
-                "upsert-contribution",
-                "create-synthesis-packet",
-                "upsert-synthesis-packet",
-                "set-requirement-refines",
-                "clear-requirement-refines",
-                "add-requirement-depends-on",
-                "clear-requirement-depends-on",
-                "add-requirement-supersedes",
-                "clear-requirement-supersedes",
-                "set-requirement-spawned-by",
-                "clear-requirement-spawned-by",
-                "add-rule-requirement",
-                "clear-rule-requirement",
-                "add-rule-resolution",
-                "clear-rule-resolution",
-                "add-resolution-requirement",
-                "clear-resolution-requirement",
-                "add-resolution-supersedes",
-                "clear-resolution-supersedes",
-                "add-source-supersedes",
-                "clear-source-supersedes",
-                "set-question-contradicts",
-                "clear-question-contradicts",
-                "clear-source-reference",
-                "claim-topic",
-                "release-topic",
-                "close-topic",
-                "claim-question",
-                "release-question",
-                "answer-question",
-                "update-source",
-                "update-resolution",
-                "update-requirement",
-                "update-rule",
-                "update-domain",
-                "update-boundary",
-                "update-topic",
-                "update-question",
-                "create-domain",
-                "create-boundary",
-                "create-topic",
-                "create-question",
-                "apply",
-                "begin-verification",
-                "complete-verification",
-                "create-source",
-                "create-requirement",
-                "create-resolution",
-                "create-rule",
-                "add-source-reference",
-                "post-thread-message",
-                "create-proposal",
-                "create-assertion",
-                "create-disposition",
-            ]
-            .iter()
-            .any(|name| path.ends_with(&format!("/{name}")));
-            assert_eq!(operation["x-operation-mutates"], expected, "{path}");
-        }
-    }
+fn metadata_is_the_only_compatibility_advertisement() {
+    let (openapi, _) = provenance_codegen::documents();
+    assert!(openapi.get("x-protocol-version").is_none());
+    assert!(openapi.get("x-provenance-compatibility").is_none());
+    assert!(operation(&openapi, "/metadata", "get")["responses"]
+        .get("405")
+        .is_some());
+    let reference = operation(&openapi, "/metadata", "get")["responses"]["200"]["content"]
+        ["application/json"]["schema"]["$ref"]
+        .as_str()
+        .unwrap();
+    let envelope = openapi
+        .pointer(reference.strip_prefix('#').unwrap())
+        .unwrap();
+    let data_ref = envelope["properties"]["data"]["$ref"].as_str().unwrap();
+    let metadata = openapi
+        .pointer(data_ref.strip_prefix('#').unwrap())
+        .unwrap();
+    let tuple_ref = metadata["properties"]["compatibility"]["$ref"]
+        .as_str()
+        .unwrap();
+    let tuple = openapi
+        .pointer(tuple_ref.strip_prefix('#').unwrap())
+        .unwrap();
+    assert_eq!(
+        tuple["required"],
+        json!(["wire", "state", "review_journal", "read_derivation"])
+    );
 }

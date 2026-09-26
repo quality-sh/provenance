@@ -10,10 +10,11 @@ import { clientPolicyTests } from './client-policy.mjs';
 
 async function generatedClient() {
   const document = JSON.parse(await readFile(new URL('../../contracts/operations/openapi.json', import.meta.url), 'utf8'));
+  const compatibility = JSON.parse(await readFile(new URL('../../contracts/operations/compatibility.json', import.meta.url), 'utf8'));
   const root = await mkdtemp(join(tmpdir(), 'operation-client-'));
   const path = join(root, 'client.js');
   await writeFile(join(root, 'package.json'), '{"type":"module"}');
-  for (const [name, content] of Object.entries(await typescriptFiles(document))) {
+  for (const [name, content] of Object.entries(await typescriptFiles(document, compatibility))) {
     if (name.endsWith('.ts')) await writeFile(join(root, name.replace(/\.ts$/, '.js')), ts.transpileModule(content, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText);
     else await writeFile(join(root, name), content);
   }
@@ -31,16 +32,20 @@ async function host(handler, action) {
   finally { await new Promise(resolve => server.close(resolve)); }
 }
 
+const metadata = compatibility => ({
+  data: { compatibility, package: { name: 'fixture', version: '0' }, repository: 'fixture', scope: 'default' }, meta: {},
+});
+
 test('typed refusal is preserved and operation is sent once', async () => {
-  const { HttpClient, OperationError, PROTOCOL_VERSION } = clientModule;
-  const failure = { protocol_version: PROTOCOL_VERSION, operation: 'check-statement', error: { kind: 'invalid_input', field: 'statement', reason: 'required' } };
+  const { HttpClient, OperationError, COMPATIBILITY } = clientModule;
+  const failure = { error: { kind: 'invalid_input', field: 'statement', reason: 'required' }, meta: {} };
   let posts = 0;
   await host((request, response) => {
-    if (request.method === 'GET') response.end(JSON.stringify({ engine_version: 'test', protocol_version: PROTOCOL_VERSION }));
+    if (request.method === 'GET') response.end(JSON.stringify(metadata(COMPATIBILITY)));
     else { posts++; response.writeHead(400); response.end(JSON.stringify(failure)); }
   }, async url => {
     const client = await HttpClient.connect(url);
-    await assert.rejects(client.checkStatement({ request: { statement: '' } }), error => {
+    await assert.rejects(client.checkStatement({ data: { statement: '' } }), error => {
       assert.ok(error instanceof OperationError); assert.equal(error.status, 400); assert.deepEqual(error.failure, failure); return true;
     });
   });
@@ -48,33 +53,75 @@ test('typed refusal is preserved and operation is sent once', async () => {
 });
 
 test('bearer connection authenticates metadata and operation requests', async () => {
-  const { HttpClient, PROTOCOL_VERSION } = clientModule;
+  const { HttpClient, COMPATIBILITY } = clientModule;
   const observed = [];
   const report = { standard: 'ASD-STE100', issue: 9, analyzer_version: 'test', findings: [] };
   await host((request, response) => {
     observed.push(request.headers.authorization);
-    response.end(JSON.stringify(request.method === 'GET' ? { engine_version: 'test', protocol_version: PROTOCOL_VERSION } : report));
+    response.end(JSON.stringify(request.method === 'GET' ? metadata(COMPATIBILITY) : { data: report, meta: {} }));
   }, async url => {
     const client = await HttpClient.connectWithBearer(url, 'fixture-secret');
-    assert.deepEqual(await client.checkStatement({ request: { statement: 'Stop.' } }), report);
+    assert.deepEqual(await client.checkStatement({ data: { statement: 'Stop.' } }), { data: report, meta: {} });
   });
   assert.deepEqual(observed, ['Bearer fixture-secret', 'Bearer fixture-secret']);
 });
 
+test('metadata refusal preserves its declared status and payload', async () => {
+  const { HttpClient, OperationError } = clientModule;
+  const failure = { error: { kind: 'unauthenticated' }, meta: {} };
+  await host((_request, response) => {
+    response.writeHead(401, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(failure));
+  }, async url => {
+    await assert.rejects(HttpClient.connectWithBearer(url, 'wrong-secret'), error => {
+      assert.ok(error instanceof OperationError);
+      assert.equal(error.status, 401);
+      assert.deepEqual(error.failure, failure);
+      return true;
+    });
+  });
+});
+
+test('malformed metadata refusal JSON is a malformed response', async () => {
+  const { HttpClient, MalformedResponseError } = clientModule;
+  await host((_request, response) => {
+    response.writeHead(401, { 'content-type': 'application/json' });
+    response.end('{');
+  }, async url => {
+    await assert.rejects(HttpClient.connect(url), MalformedResponseError);
+  });
+});
+
+test('schema-invalid metadata refusal is a malformed response', async () => {
+  const { HttpClient, MalformedResponseError } = clientModule;
+  await host((_request, response) => {
+    response.writeHead(401, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ error: { kind: 'not_declared' }, meta: {} }));
+  }, async url => {
+    await assert.rejects(HttpClient.connect(url), MalformedResponseError);
+  });
+});
+
+test('metadata transport loss remains a connection error', async () => {
+  const { HttpClient, ConnectionError } = clientModule;
+  const unavailable = async () => { throw new TypeError('fixture unavailable'); };
+  await assert.rejects(HttpClient.connect('http://localhost', unavailable), ConnectionError);
+});
+
 test('an aborted read cancels a response stream and releases its lock', async () => {
-  const { HttpClient, PROTOCOL_VERSION } = clientModule;
+  const { HttpClient, COMPATIBILITY } = clientModule;
   let cancelled = false;
   let body;
   let started;
   const reading = new Promise(resolve => { started = resolve; });
   const fetcher = async (_url, init) => {
-    if (init.method !== 'POST') return Response.json({ engine_version: 'test', protocol_version: PROTOCOL_VERSION });
+    if (init.method !== 'POST') return Response.json(metadata(COMPATIBILITY));
     body = new ReadableStream({ pull() { started(); }, cancel() { cancelled = true; } });
     return new Response(body);
   };
   const client = await HttpClient.connect('http://localhost', fetcher);
   const controller = new AbortController();
-  const result = client.checkStatement({ request: { statement: 'Stop.' } }, { signal: controller.signal });
+  const result = client.checkStatement({ data: { statement: 'Stop.' } }, { signal: controller.signal });
   const rejected = assert.rejects(result, { name: 'ConnectionError' });
   await reading;
   controller.abort();
@@ -84,13 +131,12 @@ test('an aborted read cancels a response stream and releases its lock', async ()
   assert.equal(body.locked, false);
 });
 
-clientPolicyTests('Promise', async ({ baseUrl, bearer, fetch }) => {
+clientPolicyTests('Promise', async ({ baseUrl, bearer, fetch, repository, scope }) => {
   const client = bearer === undefined
-    ? await clientModule.HttpClient.connect(baseUrl, fetch)
-    : await clientModule.HttpClient.connectWithBearer(baseUrl, bearer, fetch);
-  const context = { repository: 'fixture', scope: 'default' };
+    ? await clientModule.HttpClient.connect(baseUrl, fetch, { repository, scope })
+    : await clientModule.HttpClient.connectWithBearer(baseUrl, bearer, fetch, { repository, scope });
   return {
-    read: () => client.plan({ context, request: { schema_version: 2, spec: 'fixture', declared_by: 'spec://fixture', requirements: [] } }),
-    write: () => client.completeVerification({ context, request: { run: 'run_x', status: 'passed' } }),
+    read: () => client.checkStatement({ data: { statement: 'Stop.' } }),
+    write: () => client.completeVerification({ run_id: 'run_x', data: { status: 'passed' } }),
   };
-}, clientModule.PROTOCOL_VERSION, clientModule.MAX_RESPONSE_BYTES);
+}, clientModule.COMPATIBILITY, clientModule.MAX_RESPONSE_BYTES);

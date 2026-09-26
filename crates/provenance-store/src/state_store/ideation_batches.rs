@@ -1,4 +1,5 @@
-use super::{read_ideation_landings, IdeationLandingBatch, StateStore};
+use super::read_budget::ensure_slice_within_read_budget;
+use super::{ensure_new_ids_assignable, read_ideation_landings, IdeationLandingBatch, StateStore};
 use crate::shards;
 use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, IdeationAggregate, ProposalCard, ScopeId,
@@ -43,6 +44,11 @@ impl StateStore {
         replace: bool,
     ) -> anyhow::Result<()> {
         ensure_scope(scope, &incoming)?;
+        ensure_slice_within_read_budget(&incoming.contributions)?;
+        ensure_slice_within_read_budget(&incoming.synthesis_packets)?;
+        ensure_slice_within_read_budget(&incoming.proposals)?;
+        ensure_slice_within_read_budget(&incoming.assertions)?;
+        ensure_slice_within_read_budget(&incoming.dispositions)?;
         let path = shards::ideation_landings_path(&self.layout, scope);
         self.mutate_jsonl_records(&path, |landings: &mut Vec<IdeationLandingBatch>| {
             let mut contributions = self.list_contributions(scope)?;
@@ -51,6 +57,21 @@ impl StateStore {
             let mut proposals = self.list_proposal_definitions(scope)?;
             let mut assertions = self.list_assertion_records(scope)?;
             let mut dispositions = self.list_dispositions(scope)?;
+            ensure_new_ids_assignable(&contributions, &incoming.contributions, |record| {
+                record.id.as_str()
+            })?;
+            ensure_new_ids_assignable(&synthesis_packets, &incoming.synthesis_packets, |record| {
+                record.id.as_str()
+            })?;
+            ensure_new_ids_assignable(&proposals, &incoming.proposals, |record| {
+                record.id.as_str()
+            })?;
+            ensure_new_ids_assignable(&assertions, &incoming.assertions, |record| {
+                record.id.as_str()
+            })?;
+            ensure_new_ids_assignable(&dispositions, &incoming.dispositions, |record| {
+                record.id.as_str()
+            })?;
             merge_immutable("proposal", &mut proposals, &incoming.proposals, |r| {
                 r.id.as_str()
             })?;
@@ -93,23 +114,7 @@ impl StateStore {
                 &incoming.dispositions,
                 |r| r.id.as_str(),
             )?;
-            for proposal in &incoming.proposals {
-                // Read as the aggregate reads it, so the two cannot disagree
-                // about a landing batch: the intrinsic rule is what a live
-                // proposal row may claim, and a terminal row is legacy history
-                // that `validate_ideation_aggregate` judges by its shipped
-                // fingerprint instead.
-                if proposal.promotion_state == provenance_core::PromotionState::Proposed {
-                    provenance_core::validate_proposal_intrinsic(proposal)?;
-                }
-                // A truthful binding to an exact review revision can only be
-                // written by the review seam, which checks the revision under
-                // the publication lock.
-                anyhow::ensure!(
-                    proposal.proposal_type != provenance_core::ProposalType::RecordRevision,
-                    "batch writes cannot create review submissions; they go through the review seam"
-                );
-            }
+            validate_batch_proposals(&incoming.proposals)?;
             let manifest = self.manifest()?;
             provenance_core::validate_ideation_aggregate(IdeationAggregate {
                 legacy_policy: provenance_core::LegacyProposalPolicy::ShippedV1,
@@ -138,6 +143,27 @@ impl StateStore {
             Ok(())
         })
     }
+}
+
+fn validate_batch_proposals(proposals: &[ProposalCard]) -> anyhow::Result<()> {
+    for proposal in proposals {
+        // Read as the aggregate reads it, so the two cannot disagree
+        // about a landing batch: the intrinsic rule is what a live
+        // proposal row may claim, and a terminal row is legacy history
+        // that `validate_ideation_aggregate` judges by its shipped
+        // fingerprint instead.
+        if proposal.promotion_state == provenance_core::PromotionState::Proposed {
+            provenance_core::validate_proposal_intrinsic(proposal)?;
+        }
+        // A truthful binding to an exact review revision can only be
+        // written by the review seam, which checks the revision under
+        // the publication lock.
+        anyhow::ensure!(
+            proposal.proposal_type != provenance_core::ProposalType::RecordRevision,
+            "batch writes cannot create review submissions; they go through the review seam"
+        );
+    }
+    Ok(())
 }
 
 /// Evidence an assertion rests on cannot be edited afterwards.

@@ -1,173 +1,273 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lintFixture, lintRoutes } from './grammar-lint.mjs';
+import { documentGrammarErrors, routeGrammarErrors } from './grammar-lint.mjs';
 
-function baseFixture() {
-  return {
-    catalog_size: 1,
-    review_size: 0,
-    accounting: { create: 1 },
-    collections: ['requirements'],
-    compute_collections: ['statement-checks'],
-    variables: ['collection', 'id'],
-    actions: ['claim'],
-    queries: ['search'],
-    base_statuses: [400, 401, 403, 404, 500, 503],
-    routes: [
-      { id: 'post-collection', method: 'POST', path: '/{collection}', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503], response: 'resource' },
-    ],
-    operations: [
-      { legacy: 'create-requirement', bucket: 'create', source: 'catalog', routes: ['post-collection'] },
-    ],
+const successEnvelope = data => ({
+  type: 'object',
+  additionalProperties: false,
+  required: ['data', 'meta'],
+  properties: { data: data ?? { type: 'object' }, meta: { type: 'object' } },
+});
+const failureEnvelope = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['error', 'meta'],
+  properties: { error: { type: 'object' }, meta: { type: 'object' } },
+};
+const requestEnvelope = data => ({
+  type: 'object',
+  additionalProperties: false,
+  required: ['data'],
+  properties: { data: data ?? { type: 'object', properties: {} } },
+});
+
+function operation(path, method, overrides = {}) {
+  const mutates = overrides['x-operation-mutates'] ?? method !== 'get';
+  const statuses = overrides.statuses
+    ?? [400, 401, 403, 404, 405, ...(mutates ? [409] : []), 500, 503];
+  const parameters = path.match(/\{([a-z0-9_]+)\}/g)?.map(part => ({
+    name: part.slice(1, -1), in: 'path', required: true, schema: { type: 'string' },
+  })) ?? [];
+  const responses = Object.fromEntries([
+    ['200', { content: { 'application/json': { schema: successEnvelope(overrides.dataSchema) } } }],
+    ...statuses.map(status => [String(status), {
+      content: { 'application/json': { schema: failureEnvelope } },
+    }]),
+  ]);
+  const value = {
+    operationId: overrides.operationId ?? `${method}${path.replace(/[^a-z0-9]+/gi, '_')}`,
+    description: 'Perform one specific resource operation in the bound scope.',
+    'x-operation-mutates': mutates,
+    parameters,
+    responses,
   };
+  if (method !== 'get') {
+    value.requestBody = {
+      required: true,
+      content: { 'application/json': { schema: requestEnvelope(overrides.requestData) } },
+    };
+  }
+  return Object.assign(value, overrides.operation ?? {});
 }
 
-function routeOverrides(overrides) {
-  const fixture = baseFixture();
-  fixture.routes = [{ id: 'under-test', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [400, 401, 403, 404, 500, 503], response: 'resource' }, ...overrides];
-  fixture.operations = [
-    { legacy: 'create-requirement', bucket: 'create', source: 'catalog', routes: ['post-collection'] },
-    { legacy: 'get-requirement', bucket: 'read', source: 'pr273', routes: ['under-test'] },
-  ];
-  fixture.accounting = { create: 1, read: 1 };
-  fixture.review_size = 1;
-  return fixture;
+function document(routes) {
+  const paths = {};
+  for (const route of routes) {
+    paths[route.path] ??= {};
+    paths[route.path][route.method] = operation(route.path, route.method, route);
+  }
+  return { paths, components: { schemas: {} } };
 }
 
-function errorsFor(overrides) {
-  return lintRoutes(routeOverrides(overrides));
+function errorsFor(path, method = 'get', overrides = {}) {
+  return routeGrammarErrors(document([{ path, method, ...overrides }]));
 }
 
-test('the unmodified base fixture lints clean', () => {
-  assert.deepEqual(lintFixture(baseFixture()), []);
+test('the live resource document lints clean', () => {
+  assert.deepEqual(routeGrammarErrors(document([
+    { path: '/requirements', method: 'post' },
+    { path: '/requirements/{id}', method: 'get' },
+    { path: '/requirements/{id}', method: 'patch' },
+    { path: '/requirements/{id}/submit', method: 'post' },
+  ])), []);
 });
 
 test('repository and scope path prefixes are rejected', () => {
-  assert.ok(errorsFor([{ id: 'scoped', method: 'GET', path: '/{repository}/{scope}/requirements', mutates: false, statuses: [500] }]).some(e => /repository or scope path prefix/.test(e)));
-  assert.ok(errorsFor([{ id: 'scoped', method: 'GET', path: '/repositories/requirements', mutates: false, statuses: [500] }]).some(e => /repository or scope path prefix/.test(e)));
+  assert.ok(errorsFor('/{repository}/{scope}/requirements').some(error => /repository or scope path prefix/.test(error)));
+  assert.ok(errorsFor('/repositories/requirements').some(error => /repository or scope path prefix/.test(error)));
 });
 
 test('query subroutes are rejected', () => {
-  assert.ok(errorsFor([{ id: 'query-search', method: 'GET', path: '/query/search', mutates: false, statuses: [500] }]).some(e => /\/query subroutes/.test(e)));
+  assert.ok(errorsFor('/query/search').some(error => /\/query subroutes/.test(error)));
 });
 
 test('relationship and edge routes are rejected', () => {
-  assert.ok(errorsFor([{ id: 'edge', method: 'PATCH', path: '/requirements/{id}/refines', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503] }]).some(e => /relationship route segment 'refines'/.test(e)));
-  assert.ok(errorsFor([{ id: 'edge', method: 'GET', path: '/rules/{id}/requirements', mutates: false, statuses: [500] }]).some(e => /'requirements' as a subresource/.test(e)));
+  assert.ok(errorsFor('/requirements/{id}/refines', 'patch').some(error => /relationship route segment 'refines'/.test(error)));
+  assert.ok(errorsFor('/rules/{id}/requirements').some(error => /'requirements' as a subresource/.test(error)));
 });
 
 test('legacy verb routes are rejected', () => {
-  assert.ok(errorsFor([{ id: 'verb', method: 'POST', path: '/create-source', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503] }]).some(e => /verb-led route 'create-source' is rejected/.test(e)));
-  assert.ok(errorsFor([{ id: 'verb', method: 'POST', path: '/create-requirement', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503] }]).some(e => /'create-requirement' repeats a legacy operation name/.test(e)));
-  assert.ok(errorsFor([{ id: 'verb', method: 'POST', path: '/v9/operations/create-source', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503] }]).some(e => /versioned URL prefix/.test(e)));
-  assert.ok(errorsFor([{ id: 'verb', method: 'POST', path: '/operations/set-requirement-refines', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503] }]).some(e => /legacy verb segment 'operations'/.test(e)));
-  assert.ok(errorsFor([{ id: 'verb', method: 'POST', path: '/requirements/{id}/promote-thing', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503] }]).some(e => /subresource segment 'promote-thing' is not a declared child address or action/.test(e)));
+  assert.ok(errorsFor('/create-source', 'post').some(error => /verb-led route 'create-source'/.test(error)));
+  assert.ok(errorsFor('/v9/operations/create-source', 'post').some(error => /versioned URL prefix/.test(error)));
+  assert.ok(errorsFor('/operations/set-requirement-refines', 'post').some(error => /legacy verb segment 'operations'/.test(error)));
+  assert.ok(errorsFor('/requirements/{id}/promote-thing', 'post').some(error => /not a declared child address or action/.test(error)));
 });
 
 test('GET bodies are rejected', () => {
-  assert.ok(errorsFor([{ id: 'body', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [500], body: true }]).some(e => /GET bodies/.test(e)));
+  const doc = document([{ path: '/requirements/{id}', method: 'get' }]);
+  doc.paths['/requirements/{id}'].get.requestBody = {
+    required: true,
+    content: { 'application/json': { schema: requestEnvelope() } },
+  };
+  assert.ok(routeGrammarErrors(doc).some(error => /GET bodies/.test(error)));
 });
 
 test('required-null and untyped request slots are rejected', () => {
-  for (const request of [null, 'null', 'empty', 'anything-goes']) {
-    assert.ok(errorsFor([{ id: 'null-body', method: 'GET', path: '/requirements', mutates: false, statuses: [500], request }]).some(e => /required-null or empty request slots/.test(e)), `request ${JSON.stringify(request)}`);
-  }
+  const doc = document([{ path: '/requirements', method: 'post' }]);
+  doc.paths['/requirements'].post.requestBody = {
+    required: false,
+    content: { 'application/json': { schema: null } },
+  };
+  assert.ok(routeGrammarErrors(doc).some(error => /required typed \{data\} envelope/.test(error)));
 });
 
-test('raw array and flattened envelopes are rejected', () => {
-  assert.ok(errorsFor([{ id: 'raw', method: 'GET', path: '/requirements', mutates: false, statuses: [500], response: 'array' }]).some(e => /response kind 'array'/.test(e)));
-  assert.ok(errorsFor([{ id: 'flat', method: 'GET', path: '/requirements', mutates: false, statuses: [500], response: 'resource', envelope: 'flattened' }]).some(e => /flattened or non-standard envelopes/.test(e)));
+test('raw, flattened, and MCP-only response envelopes are rejected', () => {
+  const raw = document([{ path: '/requirements', method: 'get' }]);
+  raw.paths['/requirements'].get.responses['200'].content['application/json'].schema = {
+    type: 'array', items: { type: 'object' },
+  };
+  assert.ok(routeGrammarErrors(raw).some(error => /flattened or non-standard envelope/.test(error)));
+
+  const mcp = { tools: [{
+    name: 'list-requirements',
+    description: 'List Requirements in the bound scope.',
+    outputSchema: { type: 'object', required: ['result'], properties: { result: { type: 'array' } } },
+  }] };
+  assert.ok(documentGrammarErrors(document([]), mcp).some(error => /MCP tool.*non-standard envelope/.test(error)));
 });
 
-test('MCP-only wrappers are rejected', () => {
-  assert.ok(errorsFor([{ id: 'mcp', method: 'GET', path: '/requirements', mutates: false, statuses: [500], response: 'items', mcp_envelope: 'wrapped' }]).some(e => /MCP-only wrappers/.test(e)));
-  assert.ok(errorsFor([{ id: 'mcp', method: 'GET', path: '/requirements', mutates: false, statuses: [500], response: 'items', mcp_only: true }]).some(e => /MCP-only wrappers/.test(e)));
+test('payload identity repetition and empty tool descriptions are rejected', () => {
+  const doc = document([{
+    path: '/requirements/{id}',
+    method: 'patch',
+    requestData: { properties: { id: { type: 'string' }, scope_id: { type: 'string' } } },
+  }]);
+  const errors = documentGrammarErrors(doc, { tools: [{
+    name: 'update-requirement',
+    description: 'Invoke the shared operation.',
+    outputSchema: successEnvelope(),
+  }] });
+  assert.ok(errors.some(error => error.includes("path field 'id'")), errors.join('; '));
+  assert.ok(errors.some(error => error.includes("connection field 'scope_id'")), errors.join('; '));
+  assert.ok(errors.some(error => error.includes('tool-description-usefulness')), errors.join('; '));
+});
+
+test('an immutable child id does not repeat its Proposal parent id', () => {
+  const doc = document([{
+    path: '/proposals/{id}/assertions',
+    method: 'post',
+    requestData: { properties: { id: { type: 'string' } } },
+  }]);
+  assert.deepEqual(documentGrammarErrors(doc), []);
 });
 
 test('undeclared actions and queries are rejected', () => {
-  assert.ok(errorsFor([{ id: 'act', method: 'POST', path: '/requirements/{id}/promote', action: 'promote', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503] }]).some(e => /action 'promote' is not declared/.test(e)));
-  assert.ok(errorsFor([{ id: 'q', method: 'GET', path: '/requirements', query: 'rank', mutates: false, statuses: [500], response: 'items' }]).some(e => /query 'rank' is not declared/.test(e)));
-  assert.ok(errorsFor([{ id: 'q', method: 'POST', path: '/requirements', query: 'search', mutates: false, statuses: [500], response: 'items' }]).some(e => /queries are GETs/.test(e)));
+  assert.ok(errorsFor('/requirements/{id}/promote', 'post').some(error => /not a declared child address or action/.test(error)));
+  const doc = document([{ path: '/requirements', method: 'get' }]);
+  doc.paths['/requirements'].get.parameters.push({
+    name: 'query', in: 'query', schema: { type: 'string', enum: ['rank'] },
+  });
+  assert.ok(routeGrammarErrors(doc).some(error => /query 'rank' is not declared/.test(error)));
 });
 
-test('mutating GETs and undeclared read POSTs are rejected', () => {
-  assert.ok(errorsFor([{ id: 'mget', method: 'GET', path: '/requirements', mutates: true, statuses: [500] }]).some(e => /mutating GETs/.test(e)));
-  assert.ok(errorsFor([{ id: 'rpost', method: 'POST', path: '/requirements', statuses: [500], response: 'result' }]).some(e => /declare mutates explicitly/.test(e)));
-  assert.ok(errorsFor([{ id: 'ppatch', method: 'PATCH', path: '/requirements/{id}', mutates: false, statuses: [400, 401, 403, 404, 500, 503] }]).some(e => /PATCH is a write/.test(e)));
+test('declared action segments are final POSTs', () => {
+  assert.ok(errorsFor('/requirements/{id}/submit', 'get')
+    .some(error => /actions are POSTs/.test(error)));
+  assert.ok(errorsFor('/requirements/{id}/submit/history', 'post')
+    .some(error => /action segment 'submit' must be final/.test(error)));
 });
 
-test('missing status declarations are rejected', () => {
-  assert.ok(errorsFor([{ id: 'nostatus', method: 'GET', path: '/requirements/{id}', mutates: false }]).some(e => /statuses must be a non-empty array/.test(e)));
-  assert.ok(errorsFor([{ id: 'nobase', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [400, 500] }]).some(e => /base status 401 is not declared/.test(e)));
-  assert.ok(errorsFor([{ id: 'noconflict', method: 'POST', path: '/requirements', mutates: true, statuses: [400, 401, 403, 404, 500, 503], response: 'resource' }]).some(e => /must declare 409/.test(e)));
-  assert.ok(errorsFor([{ id: 'unsorted', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [500, 400, 401, 403, 404, 503] }]).some(e => /sorted and unique/.test(e)));
+test('mutating GETs, implicit POSTs, and read PATCHes are rejected', () => {
+  assert.ok(errorsFor('/requirements', 'get', { operation: { 'x-operation-mutates': true } }).some(error => /mutating GETs/.test(error)));
+  assert.ok(errorsFor('/requirements', 'post', { operation: { 'x-operation-mutates': undefined } }).some(error => /must be declared explicitly/.test(error)));
+  assert.ok(errorsFor('/requirements/{id}', 'patch', { operation: { 'x-operation-mutates': false } }).some(error => /PATCH is a write/.test(error)));
 });
 
-test('a connection-scoped metadata read is exempt from the 404 base requirement', () => {
-  const fixture = routeOverrides([]);
-  fixture.routes[0] = { id: 'get-metadata', method: 'GET', path: '/metadata', mutates: false, statuses: [400, 401, 403, 500, 503], response: 'result' };
-  assert.deepEqual(lintRoutes(fixture), []);
-  assert.ok(errorsFor([{ id: 'no404', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [400, 401, 403, 500, 503], response: 'resource' }]).some(e => /base status 404 is not declared/.test(e)));
+test('missing failure statuses are rejected', () => {
+  assert.ok(errorsFor('/requirements/{id}', 'get', { statuses: [400, 500] }).some(error => /base status 401 is not declared/.test(error)));
+  assert.ok(errorsFor('/requirements', 'post', { statuses: [400, 401, 403, 404, 405, 500, 503] }).some(error => /must declare 409/.test(error)));
+});
+
+test('declared statuses cover every live failure variant status', () => {
+  const doc = document([{ path: '/requirements/{id}', method: 'get' }]);
+  doc.paths['/requirements/{id}'].get.responses['400'].content['application/json'].schema = {
+    properties: { error: { $ref: '#/components/schemas/ReadFailure' } },
+    required: ['error', 'meta'],
+  };
+  doc.components.schemas.ReadFailure = {
+    oneOf: [
+      { properties: { kind: { const: 'resource_not_found' } } },
+      { properties: { kind: { const: 'file_unavailable' } } },
+    ],
+  };
+  delete doc.paths['/requirements/{id}'].get.responses['503'];
+  assert.ok(documentGrammarErrors(doc).some(error => /file_unavailable.*503|503.*file_unavailable/.test(error)));
+});
+
+test('Discussion refusal statuses match the write runtime', () => {
+  const doc = document([{ path: '/requirements/{id}/discussions', method: 'post' }]);
+  const response = doc.paths['/requirements/{id}/discussions'].post.responses['400'];
+  response.content['application/json'].schema = {
+    ...failureEnvelope,
+    properties: {
+      ...failureEnvelope.properties,
+      error: { $ref: '#/components/schemas/WriteFailure' },
+    },
+  };
+  const kinds = [
+    'discussion_version_conflict', 'discussion_membership_mismatch',
+    'discussion_closed', 'discussion_resolved', 'discussion_intent_changed',
+  ];
+  doc.components.schemas.WriteFailure = {
+    oneOf: kinds.map(kind => ({ properties: { kind: { const: kind } } })),
+  };
+  assert.deepEqual(documentGrammarErrors(doc), []);
+  delete doc.paths['/requirements/{id}/discussions'].post.responses['409'];
+  const errors = documentGrammarErrors(doc);
+  for (const kind of kinds.filter(kind => kind !== 'discussion_membership_mismatch')) {
+    assert.ok(errors.some(error => error.includes(kind) && error.includes('409')));
+  }
+  doc.paths['/requirements/{id}/discussions'].post.responses['401'] = response;
+  delete doc.paths['/requirements/{id}/discussions'].post.responses['400'];
+  assert.ok(documentGrammarErrors(doc).some(error =>
+    error.includes('discussion_membership_mismatch') && error.includes('400')));
+});
+
+test('method errors have the declared envelope status', () => {
+  const doc = document([{ path: '/requirements/{id}', method: 'get' }]);
+  doc.paths['/requirements/{id}'].get.responses['400'].content['application/json'].schema = {
+    ...failureEnvelope,
+    properties: {
+      ...failureEnvelope.properties,
+      error: { properties: { kind: { const: 'method_not_allowed' } } },
+    },
+  };
+  assert.deepEqual(documentGrammarErrors(doc), []);
+  delete doc.paths['/requirements/{id}'].get.responses['405'];
+  assert.ok(documentGrammarErrors(doc).some(error => /method_not_allowed.*405|405.*method_not_allowed/.test(error)));
 });
 
 test('a single-message read never ships the items envelope', () => {
-  const fixture = routeOverrides([
-    { id: 'single', method: 'GET', path: '/requirements/{id}/discussions/{discussion_id}/messages/{message_id}', mutates: false, statuses: [400, 401, 403, 404, 500, 503], response: 'items' },
-  ]);
-  fixture.variables.push('discussion_id', 'message_id');
-  const errors = lintRoutes(fixture);
-  assert.ok(errors.some(e => /single-message read must not ship the items envelope/.test(e)), errors.join('; '));
+  const errors = errorsFor(
+    '/requirements/{id}/discussions/{discussion_id}/messages/{message_id}',
+    'get',
+    { dataSchema: { type: 'object', required: ['items'], properties: { items: { type: 'array' } } } },
+  );
+  assert.ok(errors.some(error => /single-message read must not ship the items envelope/.test(error)));
 });
 
-test('name collisions and duplicate bindings are rejected', () => {
-  const collided = routeOverrides([
-    { id: 'first', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [500] },
-    { id: 'second', method: 'GET', path: '/requirements/{id}', mutates: false, statuses: [500] },
+test('operation name collisions and duplicate bindings are rejected', () => {
+  const collided = document([
+    { path: '/requirements', method: 'get', operationId: 'sameName' },
+    { path: '/rules', method: 'get', operationId: 'sameName' },
   ]);
-  const errors = lintRoutes(collided);
-  assert.ok(errors.some(e => /generated name '.*' collides/.test(e)), errors.join('; '));
-  const duplicated = baseFixture();
-  duplicated.routes.push({ id: 'again', method: 'POST', path: '/{collection}', mutates: true, statuses: [400, 401, 403, 404, 409, 500, 503], response: 'resource' });
-  assert.ok(lintRoutes(duplicated).some(e => /duplicate binding/.test(e)));
+  assert.ok(routeGrammarErrors(collided).some(error => /operationId 'sameName' collides/.test(error)));
+
+  const duplicated = document([
+    { path: '/requirements/{id}', method: 'get' },
+    { path: '/requirements/{requirement_id}', method: 'get' },
+  ]);
+  assert.ok(routeGrammarErrors(duplicated).some(error => /duplicate binding/.test(error)));
 });
 
 test('unresolved path parameters are rejected', () => {
-  assert.ok(errorsFor([{ id: 'loose', method: 'GET', path: '/requirements/{bogus_id}', mutates: false, statuses: [500] }]).some(e => /\{bogus_id\} is not declared/.test(e)));
+  const doc = document([{ path: '/requirements/{id}', method: 'get' }]);
+  doc.paths['/requirements/{id}'].get.parameters = [];
+  assert.ok(routeGrammarErrors(doc).some(error => /\{id\} is not declared/.test(error)));
 });
 
-test('undeclared root segments are rejected', () => {
-  assert.ok(errorsFor([{ id: 'stray', method: 'GET', path: '/gadgets', mutates: false, statuses: [500], response: 'items' }]).some(e => /root segment 'gadgets' is not a declared collection/.test(e)));
-});
-
-test('coverage failures: double-mapped, unmapped, internal routes, counts', () => {
-  const fixture = baseFixture();
-  fixture.operations.push({ legacy: 'create-requirement', bucket: 'create', source: 'catalog', routes: ['post-collection'] });
-  fixture.accounting = { create: 2 };
-  let errors = lintFixture(fixture);
-  assert.ok(errors.some(e => /double-mapped/.test(e)), errors.join('; '));
-  assert.ok(errors.some(e => /2 operations mapped, expected 1/.test(e)));
-
-  const unmapped = baseFixture();
-  unmapped.operations.push({ legacy: 'orphan-op', bucket: 'create', source: 'pr273', routes: [] });
-  unmapped.review_size = 1;
-  errors = lintFixture(unmapped);
-  assert.ok(errors.some(e => /orphan-op: unmapped/.test(e)), errors.join('; '));
-
-  const internal = baseFixture();
-  internal.operations[0].internal = true;
-  errors = lintFixture(internal);
-  assert.ok(errors.some(e => /internal operations declare no routes/.test(e)), errors.join('; '));
-
-  const wrongBucket = baseFixture();
-  wrongBucket.accounting = { create: 5 };
-  assert.ok(lintFixture(wrongBucket).some(e => /bucket 'create' has 1 operations, expected 5/.test(e)));
-});
-
-test('catalog drift fails in both directions', () => {
-  const fixture = baseFixture();
-  assert.deepEqual(lintFixture(fixture, { catalogNames: ['create-requirement'] }), []);
-  const missing = lintFixture(fixture, { catalogNames: ['create-requirement', 'create-rule'] });
-  assert.ok(missing.some(e => /'create-rule' is unmapped/.test(e)), missing.join('; '));
-  const stale = lintFixture(fixture, { catalogNames: [] });
-  assert.ok(stale.some(e => /'create-requirement' is not in the live catalog/.test(e)), stale.join('; '));
+test('undeclared root segments and methods are rejected', () => {
+  assert.ok(errorsFor('/gadgets').some(error => /root segment 'gadgets' is not a declared collection/.test(error)));
+  const doc = { paths: { '/requirements/{id}': { delete: {} } } };
+  assert.ok(routeGrammarErrors(doc).some(error => /method is not GET, POST, or PATCH/.test(error)));
 });
