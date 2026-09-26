@@ -129,8 +129,8 @@ fn canonical_json_flags_express_empty_arrays_and_nested_deltas() {
 
     let with_delta = output(provenance().args([
         "requirements",
-        "update",
         "req_owner",
+        "update",
         "--repo",
         &repo,
         "--if-match",
@@ -148,8 +148,8 @@ fn canonical_json_flags_express_empty_arrays_and_nested_deltas() {
 
     let full_set = output(provenance().args([
         "requirements",
-        "update",
         "req_owner",
+        "update",
         "--repo",
         &repo,
         "--if-match",
@@ -161,8 +161,8 @@ fn canonical_json_flags_express_empty_arrays_and_nested_deltas() {
 
     let removed = output(provenance().args([
         "requirements",
-        "update",
         "req_owner",
+        "update",
         "--repo",
         &repo,
         "--if-match",
@@ -213,8 +213,8 @@ fn json_null_is_distinct_from_the_scalar_string_null() {
     ]));
     let literal = output(provenance().args([
         "requirements",
-        "update",
         "req_null",
+        "update",
         "--repo",
         &repo,
         "--if-match",
@@ -226,8 +226,8 @@ fn json_null_is_distinct_from_the_scalar_string_null() {
 
     let cleared = output(provenance().args([
         "requirements",
-        "update",
         "req_null",
+        "update",
         "--repo",
         &repo,
         "--if-match",
@@ -388,8 +388,8 @@ fn existing_header_preconditions_remain_required() {
     provenance()
         .args([
             "requirements",
-            "update",
             "req_precondition",
+            "update",
             "--repo",
             &repo,
             "--description",
