@@ -38,11 +38,16 @@ fn jsonl_writes_one_line_for_each_record_of_each_collection() {
     let threads = vec![thread("thread_a"), thread("thread_b")];
     let rendered =
         render_export(OutputFormat::Jsonl, &export_with_threads(threads.clone())).unwrap();
-    let expected: String = threads
-        .iter()
-        .map(|record| format!("{}\n", serde_json::to_string(record).unwrap()))
+    assert!(rendered.ends_with('\n'));
+    let lines: Vec<serde_json::Value> = rendered
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    assert_eq!(rendered, expected);
+    let expected: Vec<serde_json::Value> = threads
+        .iter()
+        .map(|record| serde_json::to_value(record).unwrap())
+        .collect();
+    assert_eq!(lines, expected);
 }
 
 #[test]
