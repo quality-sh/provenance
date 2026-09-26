@@ -63,6 +63,9 @@ jobs:
             rust:
               - *ci
               - *release
+              - ".github/scripts/crap_gate.py"
+              - ".github/scripts/crap_gate.test.py"
+              - ".github/scripts/fixtures/crap_gate/**"
               - ".github/scripts/publish-cargo-if-missing.sh"
               - "crates/**"
               - "Cargo.toml"
@@ -395,6 +398,69 @@ jobs:
           path: target/cargo-timings/*.html
           if-no-files-found: warn
           retention-days: 30
+
+  crap-quality:
+    name: Rust CRAP quality gate
+    needs: [changes, generate-operations]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          prefix-key: v1
+          shared-key: crap-coverage
+          add-job-id-key: "false"
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install pinned coverage and CRAP tools
+        uses: taiki-e/install-action@c3ec0de9ae7f1019cea21aa96aa0a895b9552063 # v2
+        with:
+          tool: cargo-llvm-cov@0.9.1,cargo-crap@0.5.0
+      - name: Test the gate with native cargo-crap fixtures
+        run: python3 .github/scripts/crap_gate.test.py
+      - name: Prepare CRAP output directory
+        run: mkdir -p target/crap
+      - name: Execute workspace tests for LCOV
+        run: cargo llvm-cov --workspace --all-features --lcov --output-path target/crap/lcov.info
+      # cargo-crap skips #[test] functions and exact #[cfg(test)] modules. Its
+      # defaults omit tests/**, benches/**, and examples/**. These patterns
+      # also omit build-script code, generated clients, dedicated test
+      # modules under src, and explicitly named test-fixture support.
+      - name: Enforce the CRAP threshold
+        run: >-
+          python3 .github/scripts/crap_gate.py
+          --cargo-crap cargo-crap
+          --workspace
+          --lcov target/crap/lcov.info
+          --report target/crap/crap-report.json
+          --threshold 30
+          --allow-unmeasured-platform-code
+          --exclude 'build.rs'
+          --exclude 'build/**'
+          --exclude 'src/generated/**'
+          --exclude 'src/**/tests/**'
+          --exclude 'src/**/tests.rs'
+          --exclude 'src/**/*_tests.rs'
+          --exclude 'src/fixture.rs'
+          --exclude 'src/bin/*-fixture.rs'
+      - name: Upload the exhaustive CRAP report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rust-crap-report
+          path: target/crap/crap-report.json
+          retention-days: 7
+          if-no-files-found: error
 
   rule-coverage:
     name: Rule Coverage
@@ -828,6 +894,7 @@ jobs:
       - test-default-features
       - build-cli-linux
       - build-cli-platforms
+      - crap-quality
       - rule-coverage
       - rust-sdk
       - typescript-sdk
