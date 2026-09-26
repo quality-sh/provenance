@@ -1,10 +1,7 @@
 //! Direct typed reads for resource member routes.
 
-use super::failures::ReadError;
 use super::v2_review_reads::ReadResult;
-use super::{
-    ContextKind, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
-};
+use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::cache::read::payloads::{PayloadRow, ProposalPayloadRow};
 use crate::operations::reader::{self, ReadContext};
 use provenance_core::model::ProjectionRow;
@@ -62,39 +59,28 @@ async fn proposal_fact_member<T: ProposalPayloadRow>(
 
 macro_rules! member_operation {
     ($name:ident, $wire:literal, $request:ty, $result:ty, $read:expr) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = $request;
-            type Success = ReadResult<$result>;
-            type Failure = ReadError;
-            const NAME: &'static str = $wire;
-            const CONTEXT: ContextKind = ContextKind::Scoped;
-            const FAILURE_STATUSES: &'static [u16] = &[404, 409];
-            fn needs(_: &Self::Request) -> ExecutionNeeds {
+        graph_read_operation!(
+            pub $name,
+            $wire,
+            $request,
+            ReadResult<$result>,
+            &[404, 409],
+            |_| {
                 &[
                     ExecutionNeed::GraphStorage,
                     ExecutionNeed::ProjectionMaintenance,
                 ]
+            },
+            |read, request| async move {
+                Ok(
+                    reader::answer(&read.root, &read.scope, read.policy, move |ctx| {
+                        Box::pin($read(ctx, request))
+                    })
+                    .await?
+                    .into(),
+                )
             }
-            fn failure_status(error: &ReadError) -> u16 {
-                error.status()
-            }
-            fn run(
-                context: PreparedContext,
-                request: Self::Request,
-            ) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let read = context.graph()?;
-                    Ok(
-                        reader::answer(&read.root, &read.scope, read.policy, move |ctx| {
-                            Box::pin($read(ctx, request))
-                        })
-                        .await?
-                        .into(),
-                    )
-                })
-            }
-        }
+        );
     };
 }
 

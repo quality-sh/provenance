@@ -1,6 +1,10 @@
 use super::*;
-use crate::operations::catalog::PreparedScope;
-use provenance_core::{Manifest, RepoPathPrefix};
+use crate::{
+    layout::ProvenanceLayout,
+    operations::catalog::{Operation, PreparedContext, PreparedScope},
+    state_store::StateStore,
+};
+use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 use serde_json::json;
 
 fn fixture() -> (tempfile::TempDir, PreparedContext, StateStore, ScopeId) {
