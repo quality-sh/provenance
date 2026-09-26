@@ -1,6 +1,6 @@
 //! CLI dispatch over the registered resource catalog.
 use crate::invocation::{grammar, GlobalContext};
-use axum::http::{HeaderMap, HeaderName, HeaderValue, Method};
+use axum::http::{HeaderMap, Method};
 use clap::{parser::ValueSource, ArgMatches, Command};
 use provenance_porcelain::action::Action;
 use provenance_store::operations::catalog::{self, Definition, TargetAction};

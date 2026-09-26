@@ -168,8 +168,8 @@ pub(super) fn json_flag(body_field: &str) -> String {
 }
 
 fn flag(name: &str, repeated: bool) -> Arg {
-    let argument = Arg::new(name)
-        .long(name)
+    let argument = Arg::new(name.to_owned())
+        .long(name.to_owned())
         .num_args(1)
         .allow_hyphen_values(true);
     if repeated {
