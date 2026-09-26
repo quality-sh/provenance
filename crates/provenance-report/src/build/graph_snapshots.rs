@@ -186,7 +186,7 @@ pub(super) fn diff_snapshots(base: &GraphSnapshot, head: &GraphSnapshot) -> Vec<
         RecordKind::Requirement,
         |record| record.id.as_str(),
         |record| record.statement.clone(),
-        requirement_lifecycle,
+        |record| lifecycle_word(&record.status),
         requirement_relations,
         &mut changes,
     );
@@ -196,7 +196,7 @@ pub(super) fn diff_snapshots(base: &GraphSnapshot, head: &GraphSnapshot) -> Vec<
         RecordKind::Rule,
         |record| record.id.as_str(),
         |record| record.statement.clone(),
-        rule_lifecycle,
+        |record| lifecycle_word(&record.status),
         rule_relations,
         &mut changes,
     );
@@ -206,7 +206,7 @@ pub(super) fn diff_snapshots(base: &GraphSnapshot, head: &GraphSnapshot) -> Vec<
         RecordKind::Resolution,
         |record| record.id.as_str(),
         |record| record.title.clone(),
-        resolution_lifecycle,
+        |record| lifecycle_word(&record.status),
         resolution_relations,
         &mut changes,
     );
@@ -341,39 +341,13 @@ fn relation(name: &str, kind: RecordKind, id: &str) -> RelationKey {
     (name.to_string(), kind, id.to_string())
 }
 
-fn requirement_lifecycle(record: &Requirement) -> String {
-    let status = match record.status {
-        provenance_core::RequirementStatus::Active => "active",
-        provenance_core::RequirementStatus::Discovery => "discovery",
-        provenance_core::RequirementStatus::Refinement => "refinement",
-        provenance_core::RequirementStatus::Resolved => "resolved",
-    };
-    status.to_string()
-}
-
-fn rule_lifecycle(record: &Rule) -> String {
-    let status = match record.status {
-        provenance_core::RuleStatus::Draft => "draft",
-        provenance_core::RuleStatus::Review => "review",
-        provenance_core::RuleStatus::Active => "active",
-        provenance_core::RuleStatus::Deprecated => "deprecated",
-        provenance_core::RuleStatus::Archived => "archived",
-    };
-    status.to_string()
-}
-
-fn resolution_lifecycle(record: &Resolution) -> String {
-    let status = match record.status {
-        provenance_core::ResolutionStatus::Draft => "draft",
-        provenance_core::ResolutionStatus::Review => "review",
-        provenance_core::ResolutionStatus::Proposed => "proposed",
-        provenance_core::ResolutionStatus::Approved => "approved",
-        provenance_core::ResolutionStatus::Rejected => "rejected",
-        provenance_core::ResolutionStatus::Revised => "revised",
-        provenance_core::ResolutionStatus::Superseded => "superseded",
-        provenance_core::ResolutionStatus::Abandoned => "abandoned",
-    };
-    status.to_string()
+/// The wire word of a record's lifecycle status. The serde rename on the
+/// status enum is the only word list.
+fn lifecycle_word(status: &impl serde::Serialize) -> String {
+    serde_json::to_value(status)
+        .ok()
+        .and_then(|word| word.as_str().map(str::to_owned))
+        .expect("a lifecycle status serializes as one word")
 }
 
 fn requirement_relations(record: &Requirement) -> BTreeSet<RelationKey> {
