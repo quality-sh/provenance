@@ -8,6 +8,7 @@ use crate::cache::{catch_up_state, open_cache};
 use crate::operations::reader::ReadSnapshot;
 use crate::state_store::StateStore;
 use provenance_core::model::ProjectionRow;
+use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{
     AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
     Message, ProposalCard, Question, Requirement, RequirementReview, Resolution, Rule, Source,
@@ -201,6 +202,63 @@ async fn id_pages_return_every_id_in_order() {
         walked.extend(page);
     }
     assert_eq!(walked, threads);
+    drop(snapshot);
+    cache.close().await.unwrap();
+}
+
+/// Each caller asks for `limit + 1` IDs, and a NULL ID in any returned row
+/// refuses the call. So the page whose window reaches an ID over 1024 bytes
+/// refuses, also when that ID is only the extra row past the page.
+#[tokio::test]
+async fn the_window_that_reaches_an_over_long_id_refuses() {
+    let (_dir, layout, scope) = seeded_layout();
+    let store = StateStore::new(layout.clone());
+    for index in 0..9 {
+        create_rule_of(
+            &store,
+            &scope,
+            &format!("rule_page_{index:02}"),
+            "req_schads_overtime",
+        );
+    }
+    catch_up_state(&layout).await.unwrap();
+    let cache = open_cache(&layout).await.unwrap();
+    // The writer refuses an ID over 1024 bytes, so the test changes the
+    // projected row directly. The new ID keeps the sort position of
+    // `rule_page_06`.
+    let long = format!("rule_page_06{}", "x".repeat(1100));
+    sqlx::query("UPDATE rules SET id = ? WHERE scope_id = ? AND id = 'rule_page_06'")
+        .bind(&long)
+        .bind(scope.as_str())
+        .execute(cache.pool())
+        .await
+        .unwrap();
+    let snapshot = ReadSnapshot::open(cache.pool(), &scope)
+        .await
+        .unwrap()
+        .expect("a revision");
+    let table = snapshot.table::<Rule>();
+    let limit = 2;
+    let window = limit + 1;
+    assert_eq!(
+        table.search_ids("", window).await.unwrap(),
+        ["rule_page_00", "rule_page_01", "rule_page_02"]
+    );
+    assert_eq!(
+        table.search_ids("rule_page_01", window).await.unwrap(),
+        ["rule_page_02", "rule_page_03", "rule_page_04"]
+    );
+    // The page holds `rule_page_04` and `rule_page_05`. Only the extra row
+    // is over-long.
+    let error = table.search_ids("rule_page_03", window).await.unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<ReadFailure>(),
+        Some(&ReadFailure::PageRecordTooLarge)
+    );
+    assert_eq!(
+        table.search_ids(&long, window).await.unwrap(),
+        ["rule_page_07", "rule_page_08", "rule_schads_pay_001"]
+    );
     drop(snapshot);
     cache.close().await.unwrap();
 }
