@@ -46,10 +46,14 @@ pub fn byte_expression(columns: &[&str]) -> String {
         .join(" + ")
 }
 
-/// Selects at most `LIMIT` IDs after a key, in primary-key order.
+/// Returns the SQL text for one keyset page of at most `LIMIT` IDs after a
+/// key, in primary-key order. An ID over 1024 bytes comes back as NULL.
 ///
-/// `ORDER BY` names the table column. A bare `id` binds to the guarded
-/// output alias, and `SQLite` then sorts every remaining row for each page.
+/// Bind the scope, the previous key, the filter value when `filter` is not
+/// empty, and the limit, in that order. `filter` is trusted SQL text from a
+/// fixed set of literals and never holds caller input. `ORDER BY` names the
+/// table column: a bare `id` binds to the guarded output alias, and `SQLite`
+/// then sorts every remaining row for each page.
 pub fn id_page_sql(table: &str, filter: &str) -> String {
     let table = quoted(table);
     format!(
