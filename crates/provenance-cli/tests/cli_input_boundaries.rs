@@ -4,7 +4,9 @@ use serde_json::{json, Value};
 
 fn command(repo: &str, args: &[&str]) -> Command {
     let mut command = Command::new(assert_cmd::cargo::cargo_bin!("provenance"));
-    command.args(args).args(["--repo", repo, "--format", "json"]);
+    command
+        .args(args)
+        .args(["--repo", repo, "--format", "json"]);
     command
 }
 
@@ -22,13 +24,25 @@ fn fixture() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .args(["init", "--path", repo, "--scope", "default", "--path-prefix", "."])
+        .args([
+            "init",
+            "--path",
+            repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
         .assert()
         .success();
     command(
         repo,
         &[
-            "requirements", "create", "--id", "req_parent", "--statement",
+            "requirements",
+            "create",
+            "--id",
+            "req_parent",
+            "--statement",
             "The system records one parent.",
         ],
     )
@@ -43,12 +57,22 @@ fn discussion_list_refuses_repeated_scalar_flags() {
     let repo = directory.path().to_str().unwrap();
     command(
         repo,
-        &["req_parent", "discussions", "--status", "active", "--status", "resolved"],
+        &[
+            "req_parent",
+            "discussions",
+            "--status",
+            "active",
+            "--status",
+            "resolved",
+        ],
     )
     .assert()
     .code(2)
     .stderr(contains("--status"));
-    let single = output(&mut command(repo, &["req_parent", "discussions", "--limit", "1"]));
+    let single = output(&mut command(
+        repo,
+        &["req_parent", "discussions", "--limit", "1"],
+    ));
     assert_eq!(single["limit"], 1);
 }
 
@@ -58,7 +82,16 @@ fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     let repo = directory.path().to_str().unwrap();
     command(
         repo,
-        &["req_parent", "discuss", "--body", "hello", "--actor", "first", "--actor", "second"],
+        &[
+            "req_parent",
+            "discuss",
+            "--body",
+            "hello",
+            "--actor",
+            "first",
+            "--actor",
+            "second",
+        ],
     )
     .assert()
     .code(2)
@@ -88,12 +121,25 @@ fn free_string_array_items_preserve_json_looking_text() {
     let created = output(
         command(
             repo,
-            &["contributions", "create", "--stdin", "--risks", "[]", "--risks", "{}", "--open-questions", "null"],
+            &[
+                "contributions",
+                "create",
+                "--stdin",
+                "--risks",
+                "[]",
+                "--risks",
+                "{}",
+                "--open-questions",
+                "null",
+            ],
         )
         .write_stdin(body.to_string()),
     );
     assert_eq!(created["data"]["risks"], json!(["[]", "{}"]));
     assert_eq!(created["data"]["open_questions"], json!(["null"]));
-    let stored = output(&mut command(repo, &["contributions", "contrib_literals", "get"]));
+    let stored = output(&mut command(
+        repo,
+        &["contributions", "contrib_literals", "get"],
+    ));
     assert_eq!(stored["data"]["risks"], json!(["[]", "{}"]));
 }
