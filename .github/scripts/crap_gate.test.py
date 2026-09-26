@@ -172,6 +172,16 @@ class ReportValidationTests(unittest.TestCase):
         allowed = self.gate.validate_report(report([row]), self.lcov, "0.5.0", True)
         self.assertEqual(allowed, [row])
 
+    def test_function_that_linux_excludes_is_listed_when_allowed(self):
+        row = self.platform_row("#[cfg(not(unix))]")
+        allowed = self.gate.validate_report(report([row]), self.lcov, "0.5.0", True)
+        self.assertEqual(allowed, [row])
+
+    def test_cfg_with_unknown_value_on_linux_is_rejected_when_allowed(self):
+        row = self.platform_row("#[cfg(any(windows, test))]")
+        with self.assertRaisesRegex(self.gate.GateInputError, "no executed LCOV function record"):
+            self.gate.validate_report(report([row]), self.lcov, "0.5.0", True)
+
     def test_linux_function_without_record_is_rejected_when_allowed(self):
         row = self.platform_row("#[cfg(any(windows, unix))]")
         with self.assertRaisesRegex(self.gate.GateInputError, "no executed LCOV function record"):

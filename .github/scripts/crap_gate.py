@@ -8,11 +8,16 @@ import re
 import subprocess
 import sys
 
-# A function that only one of these cfg attributes gates cannot run on the
-# Linux coverage host, so LCOV has no executed record for it.
-PLATFORM_ONLY_CFG = re.compile(
-    r'#\[cfg\((windows|target_os\s*=\s*"(windows|macos)")\)\]'
-)
+CFG_ATTRIBUTE = re.compile(r"#\[cfg\((.*)\)\]")
+CFG_TOKEN = re.compile(r'\s*(any|all|not|[A-Za-z_]+\s*=\s*"[^"]*"|[A-Za-z_]+|[(),])')
+# Facts about the Linux coverage host. Other predicates, such as test and
+# feature, have no fixed value here, so the gate keeps them strict.
+LINUX_HOST = {
+    "unix": True,
+    "windows": False,
+    "target_os": "linux",
+    "target_family": "unix",
+}
 
 
 class GateInputError(RuntimeError):
@@ -147,6 +152,58 @@ def _validate_diagnostics(report):
         )
 
 
+def _cfg_tokens(predicate):
+    tokens = []
+    position = 0
+    while position < len(predicate):
+        match = CFG_TOKEN.match(predicate, position)
+        if not match:
+            return None
+        tokens.append(match.group(1))
+        position = match.end()
+    return tokens
+
+
+def _cfg_value(tokens):
+    """Return True, False, or None (unknown) for the next predicate on Linux."""
+    token = tokens.pop(0)
+    if token in ("any", "all", "not"):
+        if tokens.pop(0) != "(":
+            raise ValueError(token)
+        values = []
+        while tokens[0] != ")":
+            values.append(_cfg_value(tokens))
+            if tokens[0] == ",":
+                tokens.pop(0)
+        tokens.pop(0)
+        if token == "not":
+            if len(values) != 1:
+                raise ValueError(token)
+            return None if values[0] is None else not values[0]
+        decisive = token == "any"
+        if decisive in values:
+            return decisive
+        return None if None in values else not decisive
+    if "=" in token:
+        key, value = (part.strip().strip('"') for part in token.split("=", 1))
+        fact = LINUX_HOST.get(key)
+        return None if not isinstance(fact, str) else fact == value
+    fact = LINUX_HOST.get(token)
+    return fact if isinstance(fact, bool) else None
+
+
+def _linux_excludes(attribute):
+    match = CFG_ATTRIBUTE.fullmatch(attribute)
+    tokens = match and _cfg_tokens(match.group(1))
+    if not tokens:
+        return False
+    try:
+        value = _cfg_value(tokens)
+    except (IndexError, ValueError):
+        return False
+    return value is False and not tokens
+
+
 def _is_platform_only(row):
     try:
         lines = Path(row["file"]).read_text().splitlines()
@@ -155,7 +212,7 @@ def _is_platform_only(row):
     index = row["line"] - 2
     while index >= 0:
         text = lines[index].strip()
-        if PLATFORM_ONLY_CFG.fullmatch(text):
+        if _linux_excludes(text):
             return True
         if not (text.startswith("#[") or text.startswith("//")):
             return False
@@ -229,7 +286,7 @@ def _arguments():
     parser.add_argument(
         "--allow-unmeasured-platform-code",
         action="store_true",
-        help="accept functions that only a non-Linux cfg attribute gates",
+        help="accept functions whose cfg attribute excludes the Linux host",
     )
     return parser.parse_args()
 
