@@ -9,9 +9,7 @@ pub async fn dispatch_search(
     query: SearchQuery,
 ) -> anyhow::Result<()> {
     let host = local_host(repo, scope)?;
-    let service = provenance_porcelain::Porcelain::new(
-        provenance_transport::porcelain::HostSearchPort::new(host),
-    );
+    let service = host.porcelain().search();
     let response = service.search(query).await?;
     let rendered = if format == Some(OutputFormat::Json) {
         serde_json::to_string_pretty(&response)?

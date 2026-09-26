@@ -11,6 +11,7 @@ pub(crate) mod authoring;
 mod authoring_mcp;
 mod discussion_port;
 mod get_port;
+mod host;
 mod search_port;
 pub(super) use api_mcp::{call as call_api, tool as api_tool};
 pub use api_port::HostApiPort;
@@ -18,6 +19,7 @@ pub use authoring::{Action, ActionError, TargetRoute};
 pub(super) use authoring_mcp::{call as call_authoring, tools as authoring_tools};
 pub use discussion_port::HostDiscussionPort;
 pub use get_port::HostGetPort;
+pub use host::HostPorcelain;
 
 pub(crate) fn api_is_available(host: &crate::StatementHost) -> bool {
     api_port::is_available(host)
@@ -32,28 +34,13 @@ pub(crate) fn discussion_tools(host: &crate::StatementHost) -> Vec<rmcp::model::
         .into_iter()
         .filter(|action| discussion_is_available(host, *action))
         .map(|action| {
-            let mut input = provenance_porcelain::discussion::input_schema(action);
-            input.as_object_mut().map(|object| object.remove("$schema"));
-            let mut output = provenance_porcelain::discussion::output_schema();
-            output
-                .as_object_mut()
-                .map(|object| object.remove("$schema"));
-            let mut tool = rmcp::model::Tool::new(
+            crate::mcp_surface::tool(
                 action.as_str(),
                 provenance_porcelain::action::description(action),
-                input
-                    .as_object()
-                    .expect("Discussion input schema is an object")
-                    .clone(),
-            );
-            tool.output_schema = Some(
-                output
-                    .as_object()
-                    .expect("Discussion output schema is an object")
-                    .clone()
-                    .into(),
-            );
-            tool
+                provenance_porcelain::discussion::input_schema(action),
+                provenance_porcelain::discussion::output_schema(),
+                crate::mcp_surface::SchemaDeclaration::Remove,
+            )
         })
         .collect()
 }
@@ -64,7 +51,7 @@ pub(crate) async fn call_discussion(
     arguments: serde_json::Map<String, Value>,
 ) -> CallToolResult {
     let value = Value::Object(arguments);
-    let service = provenance_porcelain::Porcelain::new(HostDiscussionPort::new(host.clone()));
+    let service = host.porcelain().discussion();
     let outcome = service.execute_discussion(action, value).await;
     match outcome {
         Ok(outcome) => {
@@ -93,9 +80,7 @@ fn discussion_error(error: &ActionError) -> CallToolResult {
             serde_json::json!({"kind":"operation_failed","message":message})
         }
     };
-    CallToolResult::structured_error(serde_json::json!({
-        "error": detail, "meta": {}, "message": error.to_string()
-    }))
+    crate::mcp_surface::detail_error(with_message(detail, error.to_string()))
 }
 pub use search_port::HostSearchPort;
 
@@ -117,63 +102,33 @@ pub(crate) fn search_tool() -> rmcp::model::Tool {
     if let Some(required) = input.get_mut("required").and_then(Value::as_array_mut) {
         required.retain(|field| field != "protocol_version");
     }
-    let mut output = catalog::operation_success_schema::<catalog::Search>();
-    output
-        .as_object_mut()
-        .map(|object| object.remove("$schema"));
-    let mut tool = rmcp::model::Tool::new(
+    crate::mcp_surface::tool(
         "search",
         provenance_porcelain::guidance::SEARCH_DESCRIPTION,
-        input
-            .as_object()
-            .expect("search schema is an object")
-            .clone(),
-    );
-    tool.output_schema = Some(
-        output
-            .as_object()
-            .expect("search output schema is an object")
-            .clone()
-            .into(),
-    );
-    tool
+        input,
+        catalog::operation_success_schema::<catalog::Search>(),
+        crate::mcp_surface::SchemaDeclaration::Remove,
+    )
 }
 
 pub(crate) fn get_tool() -> rmcp::model::Tool {
-    let schema = provenance_porcelain::get::input_schema();
-    let mut tool = rmcp::model::Tool::new(
+    crate::mcp_surface::tool(
         "get",
         provenance_porcelain::guidance::GET_DESCRIPTION,
-        schema.as_object().expect("get schema is an object").clone(),
-    );
-    tool.output_schema = Some(
-        provenance_porcelain::get::output_schema()
-            .as_object()
-            .expect("get output schema is an object")
-            .clone()
-            .into(),
-    );
-    tool
+        provenance_porcelain::get::input_schema(),
+        provenance_porcelain::get::output_schema(),
+        crate::mcp_surface::SchemaDeclaration::Keep,
+    )
 }
 
 pub(crate) fn check_tool() -> rmcp::model::Tool {
-    let schema = provenance_porcelain::check::input_schema();
-    let mut tool = rmcp::model::Tool::new(
+    crate::mcp_surface::tool(
         "check",
         provenance_porcelain::guidance::CHECK_DESCRIPTION,
-        schema
-            .as_object()
-            .expect("check schema is an object")
-            .clone(),
-    );
-    tool.output_schema = Some(
-        provenance_porcelain::check::output_schema()
-            .as_object()
-            .expect("check output schema is an object")
-            .clone()
-            .into(),
-    );
-    tool
+        provenance_porcelain::check::input_schema(),
+        provenance_porcelain::check::output_schema(),
+        crate::mcp_surface::SchemaDeclaration::Keep,
+    )
 }
 
 pub(crate) async fn call_check(
@@ -184,7 +139,7 @@ pub(crate) async fn call_check(
     let Ok(arguments) = serde_json::from_value::<CheckInput>(Value::Object(arguments)) else {
         return get_error("invalid_options", "unsupported check options");
     };
-    let service = provenance_porcelain::Porcelain::new(port);
+    let service = host.porcelain().check(port);
     let mut input = arguments;
     if let Some((_, scope)) = host.bound_identity() {
         input = input.in_scope(scope);
@@ -205,7 +160,7 @@ pub(crate) async fn call_get(
     let Ok(arguments) = serde_json::from_value::<GetInput>(Value::Object(arguments)) else {
         return get_error("invalid_options", "unsupported read options");
     };
-    let service = provenance_porcelain::Porcelain::new(HostGetPort::new(host.clone()));
+    let service = host.porcelain().get();
     match service.get(arguments).await {
         Ok(outcome) => {
             let summary = provenance_porcelain::get::render_readable(&outcome)
@@ -239,7 +194,7 @@ pub(crate) async fn call_search(
         return get_error("invalid_options", "unsupported search options");
     };
     request.protocol_version = Some(provenance_core::SDK_PROTOCOL_VERSION);
-    let service = provenance_porcelain::Porcelain::new(HostSearchPort::new(host.clone()));
+    let service = host.porcelain().search();
     match service.search(request).await {
         Ok(response) => {
             let summary = provenance_porcelain::search::render_readable(&response);
@@ -262,13 +217,18 @@ fn search_error(error: &provenance_porcelain::search::SearchError) -> CallToolRe
         SearchError::AccessDenied => serde_json::json!({"kind":"access_denied"}),
         SearchError::Operation { detail, .. } => detail.clone(),
     };
-    CallToolResult::structured_error(serde_json::json!({
-        "error": detail, "meta": {}, "message": error.to_string()
-    }))
+    crate::mcp_surface::detail_error(with_message(detail, error.to_string()))
 }
 
 fn get_error(kind: &str, message: &str) -> CallToolResult {
-    CallToolResult::structured_error(serde_json::json!({
-        "error": {"kind": kind, "message": message}
-    }))
+    crate::mcp_surface::detail_error(serde_json::json!({"kind": kind, "message": message}))
+}
+
+fn with_message(mut detail: Value, message: String) -> Value {
+    detail
+        .as_object_mut()
+        .expect("error detail is an object")
+        .entry("message")
+        .or_insert(Value::String(message));
+    detail
 }
