@@ -94,6 +94,29 @@ fn parse_api_method(value: &str) -> Result<provenance_porcelain::api::ApiMethod,
         .ok_or_else(|| "unsupported method".to_owned())
 }
 
+/// Root words that select their own grammar before target-first parsing.
+/// They name commands, so no record ID may take them.
+#[derive(Clone, Copy)]
+pub enum RootWord {
+    Api,
+    Search,
+}
+
+impl RootWord {
+    pub const ALL: [Self; 2] = [Self::Api, Self::Search];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Api => "api",
+            Self::Search => "search",
+        }
+    }
+
+    pub fn parse(word: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|root| root.as_str() == word)
+    }
+}
+
 #[derive(Parser)]
 #[command(
     name = "provenance",

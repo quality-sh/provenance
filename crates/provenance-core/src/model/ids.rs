@@ -79,6 +79,7 @@ pub struct StableId(String);
 pub const RESERVED_RECORD_IDS: &[&str] = &[
     "__cargo-init",
     "answer",
+    "api",
     "assertions",
     "authoring-changes",
     "authoring-plans",

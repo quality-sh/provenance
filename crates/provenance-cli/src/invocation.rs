@@ -11,7 +11,7 @@ mod discussion;
 pub mod grammar;
 use grammar::{
     ApiArgs, ApiCommand, CatalogArgs, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute,
-    SearchArgs, SearchCommand, TargetArgs, TargetVerb,
+    RootWord, SearchArgs, SearchCommand, TargetArgs, TargetVerb,
 };
 
 #[cfg(test)]
@@ -57,17 +57,20 @@ impl Invocation {
                 Cli::try_parse_from(arguments).unwrap_or_else(|error| error.exit()),
             ));
         };
-        if word == "search" {
-            let args =
-                SearchCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
-            debug_assert_eq!(args.command, "search");
-            return Ok(Self::Search(args.args));
-        }
-        if word == "api" {
-            let command =
-                ApiCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
-            debug_assert_eq!(command.command, "api");
-            return Ok(Self::Api(command.args));
+        match RootWord::parse(word) {
+            Some(RootWord::Search) => {
+                let args =
+                    SearchCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
+                debug_assert_eq!(args.command, "search");
+                return Ok(Self::Search(args.args));
+            }
+            Some(RootWord::Api) => {
+                let command =
+                    ApiCommand::try_parse_from(arguments).unwrap_or_else(|error| error.exit());
+                debug_assert_eq!(command.command, "api");
+                return Ok(Self::Api(command.args));
+            }
+            None => {}
         }
         if word == "discussions" {
             let target_command = catalog_cli::target_command()?;
