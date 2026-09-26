@@ -286,6 +286,7 @@ pub fn schema_input(
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     #[test]
     fn json_flag_declarations_follow_wire_fields_not_aliases() {
@@ -302,7 +303,7 @@ mod tests {
                 .iter()
                 .any(|alias| alias.wrap_array)
         }));
-        let command = augment(Command::new("test"), rules.into_iter(), &[]).unwrap();
+        let mut command = augment(Command::new("test"), rules.into_iter(), &[]).unwrap();
         let declared = command
             .get_arguments()
             .filter_map(|argument| argument.get_long().map(str::to_owned))
@@ -312,15 +313,14 @@ mod tests {
         let help = command.render_help().to_string();
         assert!(help.contains("--requirement-ids-json"));
         assert!(!help.contains("--requirement-id-json"));
+        let raw = r#"["req_shared"]"#;
         let parsed = command
-            .try_get_matches_from(["test", "--requirement-ids-json", r#"["req_shared"]"#])
+            .try_get_matches_from(["test", "--requirement-ids-json", raw])
             .unwrap();
-        assert_eq!(
-            parsed
-                .get_many::<String>("requirement-ids-json")
-                .map(|values| values.cloned().collect::<Vec<_>>()),
-            Some(vec!["req_shared".to_owned()])
-        );
+        let supplied = parsed
+            .get_many::<String>("requirement-ids-json")
+            .map(|values| values.cloned().collect::<Vec<_>>());
+        assert_eq!(supplied, Some(vec![raw.to_owned()]));
     }
 
     #[test]
