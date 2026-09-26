@@ -3,27 +3,13 @@
 //! operational failure never reads as clean; repository links are built
 //! only from an immutable commit plus a validated path.
 
-use assert_cmd::Command;
 use provenance_macros::verifies;
+use provenance_report::{render_envelope, RenderFormat};
 use serde_json::{json, Value};
-use tempfile::TempDir;
 
 fn render_markdown(envelope: &Value) -> String {
-    let dir = TempDir::new().unwrap();
-    let input = dir.path().join("envelope.json");
-    std::fs::write(&input, serde_json::to_vec_pretty(envelope).unwrap()).unwrap();
-    let output = Command::cargo_bin("provenance")
-        .unwrap()
-        .args(["report", "render", "--input"])
-        .arg(&input)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "render failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap()
+    let raw = serde_json::to_string(envelope).unwrap();
+    render_envelope(&raw, RenderFormat::Markdown).unwrap()
 }
 
 /// 96373e74a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 → 52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6, with the three new active Rules unverified.
