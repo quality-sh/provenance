@@ -82,7 +82,10 @@ fn query_help_shows_only_the_selected_query_options() {
     let neighbors = block(&output, "provenance requirements <id> neighbors");
     let trace = block(&output, "provenance requirements <id> trace");
 
-    assert!(neighbors.contains("--direction <in|out|both>"), "{neighbors}");
+    assert!(
+        neighbors.contains("--direction <out|in|both>"),
+        "{neighbors}"
+    );
     assert!(neighbors.contains("--limit <integer>"), "{neighbors}");
     assert!(!neighbors.contains("--max-depth"), "{neighbors}");
     assert!(!neighbors.contains("--text"), "{neighbors}");
@@ -112,7 +115,14 @@ fn a_declared_flag_value_can_be_the_literal_help_word() {
     let empty = tempfile::tempdir().expect("create empty working directory");
     let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
         .current_dir(empty.path())
-        .args(["requirements", "create", "--id", "req_example", "--statement", "--help"])
+        .args([
+            "requirements",
+            "create",
+            "--id",
+            "req_example",
+            "--statement",
+            "--help",
+        ])
         .output()
         .expect("run provenance create");
 
@@ -120,7 +130,10 @@ fn a_declared_flag_value_can_be_the_literal_help_word() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("not initialized"), "{stderr}");
     let stdout = String::from_utf8(output.stdout).expect("create output is UTF-8");
-    assert!(!stdout.contains("Catalog commands for requirements"), "{stdout}");
+    assert!(
+        !stdout.contains("Catalog commands for requirements"),
+        "{stdout}"
+    );
 }
 
 #[test]
@@ -128,7 +141,14 @@ fn global_options_work_in_every_help_position() {
     for arguments in [
         vec!["--repo", ".", "requirements", "--help"],
         vec!["requirements", "--quiet", "--help"],
-        vec!["--scope", "default", "--format", "json", "requirements", "--help"],
+        vec![
+            "--scope",
+            "default",
+            "--format",
+            "json",
+            "requirements",
+            "--help",
+        ],
     ] {
         let output = help(&arguments);
         assert!(

@@ -25,8 +25,7 @@ pub(super) fn collection(collection: &str) -> String {
 
 fn operation(help: &mut String, collection: &str, address: &address::Address) {
     let definition = address.definition;
-    writeln!(help, "\n  {}", usage(collection, address))
-        .expect("writing to a String cannot fail");
+    writeln!(help, "\n  {}", usage(collection, address)).expect("writing to a String cannot fail");
     writeln!(help, "      {}", description(collection, address))
         .expect("writing to a String cannot fail");
     let declared = fields::declared(definition).expect("catalog fields compile");
@@ -151,9 +150,7 @@ fn print_options(help: &mut String, address: &address::Address) {
     let parameters = variant_parameters(definition, address.query)
         .into_iter()
         .filter(|parameter| {
-            parameter.location != "path"
-                && parameter.name != "query"
-                && seen.insert(parameter.name)
+            parameter.location != "path" && parameter.name != "query" && seen.insert(parameter.name)
         })
         .collect::<Vec<_>>();
     if parameters.is_empty() {
