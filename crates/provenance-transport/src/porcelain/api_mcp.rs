@@ -44,12 +44,10 @@ pub async fn call(
     if let Some(Value::String(method)) = arguments.get_mut("method") {
         method.make_ascii_lowercase();
     }
-    let parsed: ApiArguments = match serde_json::from_value(Value::Object(arguments.clone())) {
-        Ok(value) => value,
-        Err(_) => {
-            let field = rejected_field(&arguments);
-            return refused(&ApiError::invalid_options(field.as_deref()));
-        }
+    let Ok(parsed) = serde_json::from_value::<ApiArguments>(Value::Object(arguments.clone()))
+    else {
+        let field = rejected_field(&arguments);
+        return refused(&ApiError::invalid_options(field.as_deref()));
     };
     let request = match ApiRequest::from(parsed) {
         Ok(request) => request,
