@@ -200,6 +200,12 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
         refusal(&named),
         "a stale If-Match refuses as the named tool refuses"
     );
+    let failure = refusal(&stale);
+    assert_eq!(failure["kind"], "requirement_edit_conflict");
+    assert_eq!(
+        failure["current_etag"],
+        current.structured_content.as_ref().unwrap()["data"]["edit"]["etag"]
+    );
 
     session.shutdown().await;
 }
