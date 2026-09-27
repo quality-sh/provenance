@@ -14,6 +14,9 @@ use rmcp::model::CallToolResult;
 use serde_json::{json, Value};
 use support::api_fixture::{access, error_kind, host, ApiSession, Repository};
 
+#[path = "porcelain_api/review_conflicts.rs"]
+mod review_conflicts;
+
 /// The canonical refusal of one refused tool result.
 fn refusal(result: &CallToolResult) -> Value {
     assert_eq!(result.is_error, Some(true), "{result:?}");

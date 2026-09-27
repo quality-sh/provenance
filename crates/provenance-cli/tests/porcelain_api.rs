@@ -413,3 +413,5 @@ fn directory_file(repo: &str, name: &str, content: &str) -> String {
 mod options;
 #[path = "porcelain_api/scope.rs"]
 mod scope;
+#[path = "porcelain_api/review_conflicts.rs"]
+mod review_conflicts;
