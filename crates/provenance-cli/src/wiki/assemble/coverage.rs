@@ -69,22 +69,16 @@ impl Assembler<'_> {
             .coverage
             .into_iter()
             .flat_map(native_first)
-            .filter(|site| {
-                let core = site.core();
-                core.rule_id == rule_id
-                    && site.role() == SiteRole::Verification
-                    && site.is_current()
-            })
-            .map(|site| VerificationSite {
-                method: site
-                    .core()
-                    .verification
-                    .clone()
-                    .expect("verification sites have a method"),
-                symbol: site.symbol().map(str::to_string),
-                location: self.site_location(site),
-                outside_implementation_module: implementation_file
-                    .is_some_and(|file| file != &site.core().file_path),
+            .filter(|site| site.core().rule_id == rule_id && site.is_current())
+            .filter_map(|site| {
+                let method = site.core().verification.clone()?;
+                Some(VerificationSite {
+                    method,
+                    symbol: site.symbol().map(str::to_string),
+                    location: self.site_location(site),
+                    outside_implementation_module: implementation_file
+                        .is_some_and(|file| file != &site.core().file_path),
+                })
             })
             .collect::<Vec<_>>();
         for binding in self
