@@ -69,6 +69,31 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
         .unwrap();
     assert!(schema.status.success());
     let schema: serde_json::Value = serde_json::from_slice(&schema.stdout).unwrap();
+    let mut published = schema["schema"].clone();
+    published["$defs"] = schema["$defs"].clone();
+    let validator = jsonschema::JSONSchema::options()
+        .with_draft(jsonschema::Draft::Draft202012)
+        .compile(&published)
+        .unwrap();
+    let disposition = |decision: &str, rationale: Option<&str>| {
+        let mut sample = json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": "disposition_sample",
+            "proposal_id": "proposal_candidate",
+            "decision": decision,
+            "actor": {"identity_type": "human", "id": "reviewer"}
+        });
+        if let Some(rationale) = rationale {
+            sample["rationale"] = json!(rationale);
+        }
+        sample
+    };
+    assert!(validator.is_valid(&disposition("accepted", None)));
+    assert!(validator.is_valid(&disposition("deferred", None)));
+    assert!(validator.is_valid(&disposition("rejected", Some("Needs work."))));
+    assert!(!validator.is_valid(&disposition("rejected", None)));
+    assert!(!validator.is_valid(&disposition("rejected", Some("  "))));
     let canonical = &schema["schema"]["properties"]["canonical_artifact"];
     assert_eq!(canonical["additionalProperties"], false);
     assert_eq!(
