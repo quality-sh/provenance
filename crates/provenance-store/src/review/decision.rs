@@ -45,6 +45,8 @@ impl StateStore {
         );
         let digest = request_digest(&input)?;
         let request_id = journal::new_id();
+        let proposal_id = journal::new_id();
+        let proposal_key = proposal_id.as_str().to_owned();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -56,7 +58,13 @@ impl StateStore {
             self.validated_review_entries(&scope)?;
             with_staged_state(&self.layout, false, |layout| {
                 guard::with_writer(&shards::proposal_cards_path(layout, &scope), "*", || {
-                    Self::new(layout.clone()).commit_submission(input, request_id, digest)
+                    Self::new(layout.clone()).commit_submission(
+                        input,
+                        request_id,
+                        proposal_id,
+                        proposal_key,
+                        digest,
+                    )
                 })
             })
         })
@@ -66,6 +74,8 @@ impl StateStore {
         &self,
         input: SubmitRequirementReview,
         request_id: StableId,
+        proposal_id: StableId,
+        proposal_key: String,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
@@ -100,8 +110,8 @@ impl StateStore {
         };
         let proposal = CreateProposalCardInput {
             scope_id: scope.clone(),
-            id: input.proposal_id.clone(),
-            proposal_key: input.proposal_key.clone(),
+            id: proposal_id.clone(),
+            proposal_key,
             proposal_type: ProposalType::RecordRevision,
             title: input.title.clone(),
             summary: input.summary.clone(),
@@ -133,7 +143,7 @@ impl StateStore {
             scope_id: scope,
             id: journal::new_id(),
             requirement_id: input.requirement_id,
-            proposal_id: input.proposal_id,
+            proposal_id,
             fact: CycleFact::Submitted,
             disposition_id: None,
             feedback_message_id: None,
@@ -246,7 +256,7 @@ impl StateStore {
                     id: disposition_id.clone(),
                     proposal_id: proposal_id.clone(),
                     decision,
-                    rationale,
+                    rationale: rationale.unwrap_or_default(),
                     actor: actor.clone(),
                     canonical_artifact,
                     external_action: None,

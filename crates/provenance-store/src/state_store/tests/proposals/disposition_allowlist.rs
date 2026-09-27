@@ -36,7 +36,7 @@ fn scope_validation_accepts_explicit_disposition_actor_ids() {
             id: StableId::new("disposition_rejected").unwrap(),
             proposal_id: StableId::new("proposal_rejected").unwrap(),
             decision: DispositionDecision::Rejected,
-            rationale: Some("Did not pass adjudication".into()),
+            rationale: "Did not pass adjudication".into(),
             actor: DispositionActor {
                 identity_type: IdentityType::Human,
                 id: "ben".into(),
