@@ -346,7 +346,7 @@ fn disposition_by(
         id: StableId::new(id).unwrap(),
         proposal_id: StableId::new(proposal_id).unwrap(),
         decision,
-        rationale: "Reviewed".into(),
+        rationale: Some("Reviewed".into()),
         actor: DispositionActor {
             identity_type,
             id: "reviewer".into(),
@@ -367,7 +367,7 @@ pub(super) fn rejected_input(
         id: StableId::new(id).unwrap(),
         proposal_id: StableId::new(proposal_id).unwrap(),
         decision: DispositionDecision::Rejected,
-        rationale: "Reviewed".into(),
+        rationale: Some("Reviewed".into()),
         actor: DispositionActor {
             identity_type: IdentityType::Human,
             id: "reviewer".into(),
