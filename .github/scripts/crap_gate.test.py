@@ -327,6 +327,9 @@ class WorkflowWiringTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = WORKFLOW.read_text()
         cls.job = cls.workflow.split("  crap-quality:", 1)[1].split("\n  rule-coverage:", 1)[0]
+        cls.test_job = cls.workflow.split("\n  test:\n", 1)[1].split(
+            "\n  test-default-features:", 1
+        )[0]
 
     def test_quality_inputs_trigger_the_rust_jobs(self):
         rust_filter = self.workflow.split("            rust:", 1)[1].split(
@@ -334,11 +337,24 @@ class WorkflowWiringTests(unittest.TestCase):
         )[0]
         self.assertIn(".github/scripts/crap_gate", rust_filter)
 
-    def test_job_runs_executed_workspace_tests_with_pinned_tools(self):
-        self.assertIn("cargo-llvm-cov@0.9.1", self.job)
+    def test_linux_test_run_records_coverage_with_pinned_tool(self):
+        self.assertIn("cargo-llvm-cov@0.9.1", self.test_job)
+        self.assertIn("NEXTEST_PROFILE: ci", self.test_job)
+        self.assertIn("mkdir -p target/crap", self.test_job)
+        self.assertIn(
+            "cargo llvm-cov nextest --workspace --all-features --no-fail-fast --lcov",
+            self.test_job,
+        )
+        self.assertIn("name: rust-lcov", self.test_job)
+        self.assertNotIn("continue-on-error", self.test_job)
+        self.assertNotIn("PROVENANCE_CI_LOCAL", self.test_job)
+
+    def test_job_reads_the_test_coverage_instead_of_running_tests(self):
+        self.assertIn("needs: [changes, generate-operations, test]", self.job)
         self.assertIn("cargo-crap@0.5.0", self.job)
-        self.assertIn("mkdir -p target/crap", self.job)
-        self.assertIn("cargo llvm-cov --workspace --all-features --lcov", self.job)
+        self.assertIn("name: rust-lcov", self.job)
+        self.assertNotIn("cargo llvm-cov", self.job)
+        self.assertNotIn("rust-cache", self.job)
         self.assertNotIn("continue-on-error", self.job)
         self.assertNotIn("PROVENANCE_CI_LOCAL", self.job)
 
