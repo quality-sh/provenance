@@ -96,8 +96,8 @@ impl LocalAccess {
 
     fn manifest(&self) -> Result<Manifest, OperationFailure> {
         let bytes = read_repository_file(
-            camino::Utf8Path::new(&self.root),
-            camino::Utf8Path::new(".provenance/state/manifest.json"),
+            Path::new(&self.root),
+            Path::new(".provenance/state/manifest.json"),
         )
         .map_err(|_| OperationFailure::Internal)?;
         let manifest: Manifest =

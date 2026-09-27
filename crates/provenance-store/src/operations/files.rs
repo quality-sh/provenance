@@ -33,9 +33,11 @@ pub enum FileAccessRefusal {
 
 /// Read one regular repository file through held, no-follow traversal.
 pub fn read_repository_file(
-    root: &Utf8Path,
-    relative: &Utf8Path,
+    root: &std::path::Path,
+    relative: &std::path::Path,
 ) -> Result<Vec<u8>, FileAccessRefusal> {
+    let root = Utf8Path::from_path(root).ok_or(FileAccessRefusal::Denied)?;
+    let relative = Utf8Path::from_path(relative).ok_or(FileAccessRefusal::Denied)?;
     let mut opened = RepositoryFiles::open(root)?.open_file(relative)?;
     let mut bytes = Vec::new();
     opened
