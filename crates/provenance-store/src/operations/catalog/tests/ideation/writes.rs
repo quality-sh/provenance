@@ -200,7 +200,7 @@ async fn empty_rationale_is_refused_with_the_native_words() {
         .create_proposal_card(proposal_input(&scope, "proposal_overtime"))
         .unwrap();
     let input = CreateDispositionInput {
-        rationale: Some("   ".into()),
+        rationale: "   ".into(),
         ..rejected_disposition(&scope, "disposition_one", "proposal_overtime")
     };
     let error = invoke_typed::<CreateDisposition>(prepared(&dir, &scope), input)

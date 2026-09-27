@@ -80,7 +80,7 @@ fn shard_rows(case: ShardCase) -> Vec<DispositionRecord> {
         }
         ShardCase::Edited => {
             let mut rows = shipped_audit();
-            rows[0].rationale = Some("Rewritten after the fact.".into());
+            rows[0].rationale = "Rewritten after the fact.".into();
             rows
         }
         ShardCase::Forged => vec![legacy_row("disposition_forged", "proposal_forged")],
@@ -161,7 +161,7 @@ fn refuses_an_edited_or_deleted_row() {
     let proposals = proposals_for(&history, PromotionState::Accepted);
 
     let mut edited = history.clone();
-    edited[0].rationale = Some("Rewritten after the fact.".into());
+    edited[0].rationale = "Rewritten after the fact.".into();
     edited[0].decision = DispositionDecision::Rejected;
     assert!(validate_legacy_disposition_shard(&edited, &proposals).is_err());
 
@@ -312,7 +312,7 @@ fn legacy_row(id: &str, proposal_id: &str) -> DispositionRecord {
         id: StableId::new(id).unwrap(),
         proposal_id: StableId::new(proposal_id).unwrap(),
         decision: DispositionDecision::Accepted,
-        rationale: Some("Accepted by the shipped review panel.".into()),
+        rationale: "Accepted by the shipped review panel.".into(),
         actor: DispositionActor {
             identity_type: IdentityType::Human,
             id: "reviewer".into(),

@@ -69,7 +69,7 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
             id: StableId::new("disposition_modern").unwrap(),
             proposal_id: StableId::new("proposal_modern").unwrap(),
             decision: DispositionDecision::Accepted,
-            rationale: Some("Reviewed".into()),
+            rationale: "Reviewed".into(),
             actor: DispositionActor {
                 identity_type: IdentityType::Agent,
                 id: "codex-review-panel-gpt55-medium".into(),

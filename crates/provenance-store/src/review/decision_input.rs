@@ -15,8 +15,6 @@ pub struct SubmitRequirementReview {
     pub requirement_id: StableId,
     /// The owning agent of the record, checked like an edit's `declared_by`.
     pub declared_by: Option<String>,
-    pub proposal_id: StableId,
-    pub proposal_key: String,
     pub title: String,
     pub summary: String,
     pub confidence: Option<f64>,

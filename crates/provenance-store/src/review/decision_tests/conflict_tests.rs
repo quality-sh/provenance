@@ -3,12 +3,10 @@ use crate::write_error::{WriteError, WriteFailure};
 
 #[test]
 fn repeated_decision_reports_the_current_review_identity() {
-    let (_temp, store, revision) = enrolled();
+    let (_temp, store, revision, proposal) = enrolled();
     decide(
         &store,
-        "decide-1",
-        "prop-1",
-        "disp-1",
+        &proposal,
         "rejected",
         &reviewer("reviewer"),
         &json!({}),
@@ -17,9 +15,7 @@ fn repeated_decision_reports_the_current_review_identity() {
 
     let error = decide(
         &store,
-        "decide-2",
-        "prop-1",
-        "disp-2",
+        &proposal,
         "accepted",
         &reviewer("reviewer"),
         &artifact(),
@@ -39,14 +35,12 @@ fn repeated_decision_reports_the_current_review_identity() {
 
 #[test]
 fn stale_decision_reports_the_pending_submission_and_current_revision() {
-    let (_temp, store, _) = enrolled();
+    let (_temp, store, _, proposal) = enrolled();
     let current_revision = edit(&store, "edit-2", "Statement v2");
 
     let error = decide(
         &store,
-        "decide-1",
-        "prop-1",
-        "disp-1",
+        &proposal,
         "accepted",
         &reviewer("reviewer"),
         &artifact(),
@@ -58,20 +52,18 @@ fn stale_decision_reports_the_pending_submission_and_current_revision() {
         WriteFailure::ReviewSubmissionConflict {
             current_submission: Some(submission),
             current_revision: revision,
-        } if submission.as_str() == "prop-1" && revision == current_revision
+        } if submission == proposal && revision == current_revision
     ));
 }
 
 #[test]
 fn withdrawn_decision_reports_the_current_review_identity() {
-    let (_temp, store, revision) = enrolled();
-    withdraw(&store, "withdraw-1", "prop-1").unwrap();
+    let (_temp, store, revision, proposal) = enrolled();
+    withdraw(&store, &proposal).unwrap();
 
     let error = decide(
         &store,
-        "decide-1",
-        "prop-1",
-        "disp-1",
+        &proposal,
         "accepted",
         &reviewer("reviewer"),
         &artifact(),
@@ -89,23 +81,23 @@ fn withdrawn_decision_reports_the_current_review_identity() {
 
 #[test]
 fn stale_and_terminal_withdrawals_are_review_conflicts() {
-    let (_temp, store, _) = enrolled();
+    let (_temp, store, _, proposal) = enrolled();
     let current_revision = edit(&store, "edit-2", "Statement v2");
-    let stale = WriteError(withdraw(&store, "withdraw-1", "prop-1").unwrap_err());
+    let stale = WriteError(withdraw(&store, &proposal).unwrap_err());
     assert!(matches!(
         stale.safe(),
         WriteFailure::ReviewSubmissionConflict {
             current_submission: Some(submission),
             current_revision: revision,
-        } if submission.as_str() == "prop-1" && revision == current_revision
+        } if submission == proposal && revision == current_revision
     ));
 
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let revision = edit(&store, "edit-1", "Statement v1");
-    submit(&store, "submit-1", "prop-1", None, None).unwrap();
-    withdraw(&store, "withdraw-1", "prop-1").unwrap();
-    let repeated = WriteError(withdraw(&store, "withdraw-2", "prop-1").unwrap_err());
+    let proposal = submit(&store, None, None).unwrap().proposal_id;
+    withdraw(&store, &proposal).unwrap();
+    let repeated = WriteError(withdraw(&store, &proposal).unwrap_err());
     assert!(matches!(
         repeated.safe(),
         WriteFailure::ReviewSubmissionConflict {
