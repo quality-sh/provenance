@@ -101,12 +101,9 @@ async fn submit_requirement_review_rejects_a_scope_mismatch_without_writing() {
         "submit-requirement-review-v2",
         json!({
             "scope_id": "other",
-            "request_id": "request_submit",
             "actor": "agent",
             "requirement_id": "req_one",
             "declared_by": null,
-            "proposal_id": "proposal_one",
-            "proposal_key": "proposal-key",
             "title": "Review title",
             "summary": "Review summary",
             "confidence": null,
@@ -127,10 +124,8 @@ async fn decide_requirement_review_rejects_a_scope_mismatch_without_writing() {
         json!({
             "scope_id": "other",
             "requirement_id": "req_one",
-            "request_id": "request_decide",
             "actor": {"identity_type": "human", "id": "reviewer"},
             "proposal_id": "proposal_one",
-            "disposition_id": "disposition_one",
             "decision": "rejected",
             "rationale": "The revision needs work.",
             "canonical_artifact": null,
@@ -148,7 +143,6 @@ async fn withdraw_requirement_review_rejects_a_scope_mismatch_without_writing() 
         json!({
             "scope_id": "other",
             "requirement_id": "req_one",
-            "request_id": "request_withdraw",
             "actor": "agent",
             "proposal_id": "proposal_one",
             "declared_by": null,
