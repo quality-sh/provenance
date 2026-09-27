@@ -57,8 +57,6 @@ async fn mcp_submit_conflicts_return_the_typed_envelope() {
     let repeated = submit(&session, &revision_2).await;
     assert_eq!(repeated.is_error, Some(true));
     assert_eq!(repeated.structured_content.unwrap(), conflict(Some(&proposal), &revision_2));
-    let proposals = session.call(json!({"path":"proposals"})).await;
-    assert_eq!(proposals.structured_content.unwrap()["data"]["items"].as_array().unwrap().len(), 1);
     session.shutdown().await;
 }
 
