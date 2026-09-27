@@ -108,7 +108,7 @@ fn cli_source_requirement_slice_materializes_and_reads_graph() {
         .write_stdin(r#"{"description":"This update uses a stale entity tag."}"#)
         .assert()
         .failure()
-        .stderr(predicates::str::contains("invalid_update"));
+        .stderr(predicates::str::contains("requirement_edit_conflict"));
     Command::cargo_bin("provenance")
         .unwrap()
         .args(["materialize", "--repo", &repo, "--format", "json"])
