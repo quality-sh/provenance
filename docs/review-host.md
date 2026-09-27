@@ -93,8 +93,13 @@ retain their paths. Missing assets return 404; no repository file is served.
 The host reserves `/review-config` for authenticated runtime configuration:
 
 ```json
-{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","compatibility":{"wire":9,"state":2,"review_journal":3,"read_derivation":3},"sdkVersion":"0.2.3"}
+{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","dispositionActorIds":["maintainer"],"compatibility":{"wire":9,"state":2,"review_journal":3,"read_derivation":3},"sdkVersion":"0.2.3"}
 ```
+
+The host reads `dispositionActorIds` from the repository manifest for each
+authenticated request. It keeps the manifest order. If the manifest has no
+configured disposition actors, this field is an empty list. The response does
+not contain the bearer credential.
 
 The generic renderer does not read credentials, fetch host configuration, or
 mount itself. Its index is an empty shell. The reusable read adapter lives in
