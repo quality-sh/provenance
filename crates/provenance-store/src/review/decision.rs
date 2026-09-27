@@ -85,21 +85,28 @@ impl StateStore {
                 "submission requires a review revision: save the record through the review seam first"
             )
         })?;
-        if let Some(expected) = &input.expected_revision {
-            anyhow::ensure!(
-                head.revision == *expected,
-                "stale submission: the record stands at revision {} and not at the expected revision {}",
-                head.revision.as_str(),
-                expected.as_str()
-            );
-        }
         let facts = CycleFacts::validated(self, &scope)?;
-        anyhow::ensure!(
-            facts
-                .pending_submission(self, &scope, &input.requirement_id)?
-                .is_none(),
-            "this Requirement already has a pending review submission"
-        );
+        if let Some(expected) = &input.expected_revision {
+            if head.revision != *expected {
+                return Err(SourceFailure::wrap(
+                    facts.conflict_failure(self, &scope, &input.requirement_id)?,
+                    anyhow::anyhow!(
+                        "stale submission: the record stands at revision {} and not at the expected revision {}",
+                        head.revision.as_str(),
+                        expected.as_str()
+                    ),
+                ));
+            }
+        }
+        if facts
+            .pending_submission(self, &scope, &input.requirement_id)?
+            .is_some()
+        {
+            return Err(SourceFailure::wrap(
+                facts.conflict_failure(self, &scope, &input.requirement_id)?,
+                anyhow::anyhow!("this Requirement already has a pending review submission"),
+            ));
+        }
         let (revises, revises_rejection) = match &input.revises {
             Some(predecessor) => {
                 let rejection =

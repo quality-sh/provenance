@@ -179,6 +179,9 @@ impl CycleFacts {
         scope: &ScopeId,
         requirement: &StableId,
     ) -> anyhow::Result<Option<CycleEntry>> {
+        let record = store.requirement(scope, requirement)?;
+        let current_revision = store.head(&record)?.map(|entry| entry.revision);
+        let proposals = store.list_proposal_definitions(scope)?;
         let dispositions = store.list_dispositions(scope)?;
         let decided: std::collections::BTreeSet<&str> = dispositions
             .iter()
@@ -190,6 +193,13 @@ impl CycleFacts {
             .filter(|e| e.requirement_id == *requirement && e.fact == CycleFact::Submitted)
             .filter(|e| {
                 !decided.contains(e.proposal_id.as_str()) && !self.is_withdrawn(&e.proposal_id)
+            })
+            .filter(|entry| {
+                proposals
+                    .iter()
+                    .find(|proposal| proposal.id == entry.proposal_id)
+                    .and_then(|proposal| proposal.record_revision.as_ref())
+                    .is_some_and(|binding| Some(&binding.revision) == current_revision.as_ref())
             })
             .cloned()
             .next_back())
