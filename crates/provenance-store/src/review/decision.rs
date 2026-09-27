@@ -194,16 +194,19 @@ impl StateStore {
             let proposal = review_submission(self, &scope, &input.proposal_id)?;
             let facts = CycleFacts::validated(self, &scope)?;
             validate_submission_address(&proposal, &facts, &input.proposal_id, addressed.as_ref())?;
-            self.requirement(&scope, &proposal.traceability.target.artifact_id)?;
+            let requirement_id = &proposal.traceability.target.artifact_id;
+            self.requirement(&scope, requirement_id)?;
             if let Some(receipt) =
                 super::decision_state::replay(self, &scope, &input.request_id, &actor, &digest)?
             {
                 return Ok(receipt);
             }
-            anyhow::ensure!(
-                !facts.is_withdrawn(&input.proposal_id),
-                "this review submission was withdrawn from review"
-            );
+            if facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id) {
+                return Err(SourceFailure::wrap(
+                    facts.conflict_failure(self, &scope, requirement_id)?,
+                    anyhow::anyhow!("this review submission is no longer pending"),
+                ));
+            }
             with_staged_state(&self.layout, false, |layout| {
                 Self::new(layout.clone()).commit_decision(input, digest)
             })
@@ -237,14 +240,15 @@ impl StateStore {
         let head = self
             .head(&record)?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
-        anyhow::ensure!(
-            head.revision == binding.revision
-                && classifier::content_digest(&record)? == binding.content_digest,
-            "stale review selection: the submission binds revision {} but the record stands at \
-             revision {}; withdraw it and submit the current revision",
-            binding.revision.as_str(),
-            head.revision.as_str()
-        );
+        if head.revision != binding.revision
+            || classifier::content_digest(&record)? != binding.content_digest
+        {
+            let facts = CycleFacts::validated(self, &scope)?;
+            return Err(SourceFailure::wrap(
+                facts.conflict_failure(self, &scope, &requirement_id)?,
+                anyhow::anyhow!("stale review selection"),
+            ));
+        }
         guard::with_writer(
             &shards::dispositions_path(&self.layout, &scope),
             "*",
@@ -375,20 +379,30 @@ impl StateStore {
             let facts = CycleFacts::validated(self, &scope)?;
             validate_submission_address(&proposal, &facts, &input.proposal_id, addressed.as_ref())?;
             let record = self.requirement(&scope, &proposal.traceability.target.artifact_id)?;
+            let requirement_id = &proposal.traceability.target.artifact_id;
             owner_matches(&record, input.declared_by.as_deref())?;
             if let Some(receipt) =
                 super::decision_state::replay(self, &scope, &input.request_id, &input.actor, &digest)?
             {
                 return Ok(receipt);
             }
-            anyhow::ensure!(
-                !facts.is_withdrawn(&input.proposal_id),
-                "this review submission was already withdrawn"
-            );
-            anyhow::ensure!(
-                !facts.is_decided(&input.proposal_id),
-                "this review submission already has a decision; withdrawal applies to a pending submission"
-            );
+            let binding = proposal
+                .record_revision
+                .as_ref()
+                .expect("review_submission checks the binding");
+            let head = self
+                .head(&record)?
+                .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
+            if head.revision != binding.revision
+                || classifier::content_digest(&record)? != binding.content_digest
+                || facts.is_withdrawn(&input.proposal_id)
+                || facts.is_decided(&input.proposal_id)
+            {
+                return Err(SourceFailure::wrap(
+                    facts.conflict_failure(self, &scope, requirement_id)?,
+                    anyhow::anyhow!("this review submission is no longer current and pending"),
+                ));
+            }
             with_staged_state(&self.layout, false, |layout| {
                 Self::new(layout.clone()).commit_withdrawal(input, digest)
             })

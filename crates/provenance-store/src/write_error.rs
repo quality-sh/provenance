@@ -19,6 +19,13 @@ pub enum WriteFailure {
     },
     InvalidDeclaration,
     InvalidUpdate,
+    RequirementEditConflict {
+        current_etag: String,
+    },
+    ReviewSubmissionConflict {
+        current_submission: Option<provenance_core::StableId>,
+        current_revision: provenance_core::StableId,
+    },
     RecordOwnershipConflict,
     OwnershipConflict {
         conflicts: Vec<ReconciledResource>,
@@ -134,6 +141,8 @@ impl WriteError {
             WriteFailure::RecordOwnershipConflict
             | WriteFailure::AlreadyExists
             | WriteFailure::OwnershipConflict { .. }
+            | WriteFailure::RequirementEditConflict { .. }
+            | WriteFailure::ReviewSubmissionConflict { .. }
             | WriteFailure::DiscussionVersionConflict
             | WriteFailure::DiscussionClosed
             | WriteFailure::DiscussionResolved
