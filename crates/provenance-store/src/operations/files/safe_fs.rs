@@ -403,7 +403,7 @@ fn unsupported_rename() -> std::io::Result<()> {
     ))
 }
 
-pub(crate) fn rename_no_replace_in(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
+pub(super) fn rename_no_replace_in(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
     rename_no_replace_at(parent, from, to)
 }
 
