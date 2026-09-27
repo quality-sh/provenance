@@ -110,10 +110,77 @@ const QUESTION_ALIASES: &[ArgumentAlias] = &[ArgumentAlias {
 
 macro_rules! family_route_definitions {
     ($out:ident, $record:ty, $catalog:tt, none) => {};
-    ($out:ident, $record:ty, projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none), requirements) => {
+    (
+        $out:ident,
+        $record:ty,
+        projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none),
+        requirements
+    ) => {
         requirements(&mut $out);
     };
-    ($out:ident, $record:ty, $kind:ident($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, $member:ident, $member_wire:literal), read { mode: $mode:ident, plural: $plural:literal, singular: $singular:literal, singular_id: $singular_id:literal, plural_id: $plural_id:literal }) => {
+    (
+        $out:ident,
+        $record:ty,
+        $kind:ident($($catalog:tt)*),
+        read {
+            mode: $mode:ident,
+            plural: $plural:literal,
+            singular: $singular:literal,
+            singular_id: $singular_id:literal,
+            plural_id: $plural_id:literal
+        }
+    ) => {
+        family_read_route!($out, $record, [$($catalog)*], $mode, $plural, $singular,
+            $singular_id, $plural_id);
+    };
+    (
+        $out:ident,
+        $record:ty,
+        $kind:ident($($catalog:tt)*),
+        writable {
+            mode: $mode:ident,
+            plural: $plural:literal,
+            singular: $singular:literal,
+            singular_id: $singular_id:literal,
+            plural_id: $plural_id:literal,
+            create: $create:ident,
+            update: $update:ident,
+            create_defaults: $create_defaults:ident,
+            create_aliases: $create_aliases:ident,
+            update_defaults: $update_defaults:ident,
+            update_aliases: $update_aliases:ident,
+            nullable: $nullable:expr,
+            target: $target:expr
+        }
+    ) => {
+        family_write_route!($out, $record, [$($catalog)*], $mode, $plural, $singular,
+            $singular_id, $plural_id, $create, $update, $create_defaults,
+            $create_aliases, $update_defaults, $update_aliases, $nullable, $target);
+    };
+    (
+        $out:ident,
+        $record:ty,
+        $kind:ident($($catalog:tt)*),
+        proposal {
+            plural: $plural:literal,
+            singular: $singular:literal,
+            singular_id: $singular_id:literal,
+            plural_id: $plural_id:literal
+        }
+    ) => {{
+        family_proposal_route!($out, $record, [$($catalog)*], $plural, $singular,
+            $singular_id, $plural_id);
+    }};
+}
+
+macro_rules! family_read_route {
+    (
+        $out:ident, $record:ty,
+        [$list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
+            $member:ident, $member_wire:literal],
+        $mode:ident, $plural:literal, $singular:literal,
+        $singular_id:literal, $plural_id:literal
+    ) => {
         resource!(
             $out,
             $mode,
@@ -126,7 +193,13 @@ macro_rules! family_route_definitions {
             $plural_id
         );
     };
-    ($out:ident, $record:ty, verification($list:ident, $list_wire:literal, $page:ident, $member:ident, $member_wire:literal), read { mode: $mode:ident, plural: $plural:literal, singular: $singular:literal, singular_id: $singular_id:literal, plural_id: $plural_id:literal }) => {
+    (
+        $out:ident, $record:ty,
+        [$list:ident, $list_wire:literal, $page:ident,
+            $member:ident, $member_wire:literal],
+        $mode:ident, $plural:literal, $singular:literal,
+        $singular_id:literal, $plural_id:literal
+    ) => {
         resource!(
             $out,
             $mode,
@@ -139,7 +212,20 @@ macro_rules! family_route_definitions {
             $plural_id
         );
     };
-    ($out:ident, $record:ty, $kind:ident($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, $member:ident, $member_wire:literal), writable { mode: $mode:ident, plural: $plural:literal, singular: $singular:literal, singular_id: $singular_id:literal, plural_id: $plural_id:literal, create: $create:ident, update: $update:ident, create_defaults: $create_defaults:ident, create_aliases: $create_aliases:ident, update_defaults: $update_defaults:ident, update_aliases: $update_aliases:ident, nullable: $nullable:expr, target: $target:expr }) => {
+}
+
+macro_rules! family_write_route {
+    (
+        $out:ident, $record:ty,
+        [$list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
+            $member:ident, $member_wire:literal],
+        $mode:ident, $plural:literal, $singular:literal,
+        $singular_id:literal, $plural_id:literal,
+        $create:ident, $update:ident,
+        $create_defaults:ident, $create_aliases:ident,
+        $update_defaults:ident, $update_aliases:ident,
+        $nullable:expr, $target:expr
+    ) => {
         resource!(
             $out,
             $mode,
@@ -160,7 +246,16 @@ macro_rules! family_route_definitions {
             $target
         );
     };
-    ($out:ident, $record:ty, $kind:ident($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, $member:ident, $member_wire:literal), proposal { plural: $plural:literal, singular: $singular:literal, singular_id: $singular_id:literal, plural_id: $plural_id:literal }) => {{
+}
+
+macro_rules! family_proposal_route {
+    (
+        $out:ident, $record:ty,
+        [$list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
+            $member:ident, $member_wire:literal],
+        $plural:literal, $singular:literal,
+        $singular_id:literal, $plural_id:literal
+    ) => {{
         resource!(
             $out,
             plain,
@@ -188,26 +283,54 @@ macro_rules! family_route_definitions {
 }
 
 macro_rules! family_route {
-    ($out:ident, $record:ty, [$($catalog:tt)*], [none]) => {};
-    ($out:ident, $record:ty, [$($catalog:tt)*], [order: $order:literal, $($route:tt)+]) => {{
+    ($out:ident, $variant:ident, $record:ty, [$($catalog:tt)*], [none]) => {};
+    (
+        $out:ident,
+        $variant:ident,
+        $record:ty,
+        [$($catalog:tt)*],
+        [$($route:tt)+]
+    ) => {{
         let mut definitions = Vec::new();
         family_route_definitions!(definitions, $record, $($catalog)*, $($route)+);
-        $out.push(($order, definitions));
+        let order = crate::cache::ProjectionFamily::$variant
+            .meta()
+            .route_order
+            .expect("registered resource families have a route order");
+        $out.push((order, definitions));
     }};
 }
 
 macro_rules! register_family_routes {
     (
         $out:ident;
-        export { $($export_variant:ident { record: $export_type:ty, field: $export_field:ident, shard: { path: $export_path:ident, suffix: $export_suffix:literal, table: $export_table:literal }, node: [$($export_node:tt)*], reader: { open: $export_reader:ident, closed: [$($export_closed:tt)*], strategy: $export_strategy:ident }, id: $export_id:ident, loader: [$($export_loader:tt)*], graph: [$($export_graph:tt)*], import: [$($export_import:tt)*], catalog: [$($export_catalog:tt)*], route: [$($export_route:tt)*] };)* }
-        canonical { $($canonical_variant:ident { record: $canonical_type:ty, field: $canonical_field:ident, shard: { path: $canonical_path:ident, suffix: $canonical_suffix:literal, table: $canonical_table:literal }, node: [$($canonical_node:tt)*], reader: { open: $canonical_reader:ident, closed: [$($canonical_closed:tt)*], strategy: $canonical_strategy:ident }, id: $canonical_id:ident, loader: [$($canonical_loader:tt)*], graph: [$($canonical_graph:tt)*], import: [$($canonical_import:tt)*], catalog: [$($canonical_catalog:tt)*], route: [$($canonical_route:tt)*] };)* }
-        bindings { $($binding_variant:ident { record: $binding_type:ty, field: $binding_field:ident, shard: { path: $binding_path:ident, suffix: $binding_suffix:literal, table: $binding_table:literal }, node: [$($binding_node:tt)*], reader: { open: $binding_reader:ident, closed: [$($binding_closed:tt)*], strategy: $binding_strategy:ident }, id: $binding_id:ident, loader: [$($binding_loader:tt)*], graph: [$($binding_graph:tt)*], import: [$($binding_import:tt)*], catalog: [$($binding_catalog:tt)*], route: [$($binding_route:tt)*] };)* }
-        internal { $($internal_variant:ident { record: $internal_type:ty, field: $internal_field:ident, shard: { path: $internal_path:ident, suffix: $internal_suffix:literal, table: $internal_table:literal }, node: [$($internal_node:tt)*], reader: { open: $internal_reader:ident, closed: [$($internal_closed:tt)*], strategy: $internal_strategy:ident }, id: $internal_id:ident, loader: [$($internal_loader:tt)*], graph: [$($internal_graph:tt)*], import: [$($internal_import:tt)*], catalog: [$($internal_catalog:tt)*], route: [$($internal_route:tt)*] };)* }
+        $(
+            $group:ident {
+                $(
+                    $variant:ident {
+                        record: $record:ty,
+                        field: $field:ident,
+                        path: $path:ident,
+                        node: [$($node:tt)*],
+                        reader: {
+                            open: $reader:ident,
+                            closed: [$($closed:tt)*],
+                            strategy: $strategy:ident
+                        },
+                        id: $id:ident,
+                        loader: [$($loader:tt)*],
+                        graph: [$($graph:tt)*],
+                        import: [$($import:tt)*],
+                        catalog: [$($catalog:tt)*],
+                        route: [$($route:tt)*]
+                    };
+                )*
+            }
+        )*
     ) => {
-        $(family_route!($out, $export_type, [$($export_catalog)*], [$($export_route)*]);)*
-        $(family_route!($out, $canonical_type, [$($canonical_catalog)*], [$($canonical_route)*]);)*
-        $(family_route!($out, $binding_type, [$($binding_catalog)*], [$($binding_route)*]);)*
-        $(family_route!($out, $internal_type, [$($internal_catalog)*], [$($internal_route)*]);)*
+        $($(family_route!(
+            $out, $variant, $record, [$($catalog)*], [$($route)*]
+        );)*)*
     };
 }
 
