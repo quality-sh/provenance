@@ -1,5 +1,5 @@
 use super::{manifest, PublicationOutput, PublishError};
-use crate::safe_fs::Directory;
+use provenance_store::operations::files::Directory;
 use camino::{Utf8Path, Utf8PathBuf};
 use std::fs::File;
 
