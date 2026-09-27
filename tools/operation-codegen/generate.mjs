@@ -26,7 +26,10 @@ async function generate(temporary, generator) {
   const grammarErrors = documentGrammarErrors(document, mcp);
   if (grammarErrors.length) throw new Error(['Operation contract grammar check failed:', ...grammarErrors.map(error => `  - ${error}`)].join('\n'));
   const tsDir = join(temporary, directories[1]);
-  for (const [path, source] of Object.entries({ ...await typescriptFiles(document, compatibility), ...await effectFiles(document) })) await writeFile(join(tsDir, path), source);
+  for (const [path, source] of Object.entries({ ...await typescriptFiles(document, compatibility), ...await effectFiles(document) })) {
+    await mkdir(dirname(join(tsDir, path)), { recursive: true });
+    await writeFile(join(tsDir, path), source);
+  }
   const rustDir = join(temporary, directories[2]);
   run(generator, ['rust', openapiPath, rustDir]);
   await writeFile(join(rustDir, 'responses.json'), JSON.stringify({ components: document.components, response_schemas: responseSchemas(document) }) + '\n');

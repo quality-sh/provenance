@@ -41,6 +41,17 @@ test('substitute with no structured renderings leaves the text untouched', () =>
   assert.equal(used.size, 0);
 });
 
+test('substitute keeps identical nested types in the owner operation family', () => {
+  const stamp = `{ readonly "at": string, readonly "commit": string } & { readonly [x: string]: Schema.Json }`;
+  const renderings = new Map([
+    ['CreateRequirementSuccessStamp', stamp],
+    ['ListRulesSearchSuccessStamp2', stamp],
+  ]);
+  const result = substitute(`{ readonly "created": ${stamp} }`, renderings, null, 'ListRulesSearchSuccessRule');
+  assert.match(result.rewritten, /created": ListRulesSearchSuccessStamp2/);
+  assert.doesNotMatch(result.rewritten, /CreateRequirementSuccessStamp/);
+});
+
 test('union declarations break one alternative per line when long', () => {
   const short = declaration('Short', 'A | B');
   assert.equal(short, 'export type Short = A | B');
@@ -61,4 +72,12 @@ test('generated Effect contract is factored and self-contained', async () => {
     'a write operation should retain its typed failure family');
   assert.match(source, /^export function matchUpdateSourceFailureWriteFailure</m,
     'typed failure families should have exhaustive matchers');
+  for (const operation of ['ListRulesSearchSuccess', 'ListResolutionsSearchSuccess']) {
+    for (const node of ['Rule', 'Resolution']) {
+      const body = source.match(new RegExp(`export type ${operation}${node} = \\{([\\s\\S]*?)\\n\\} &`))?.[1];
+      assert.ok(body, `${operation}${node} should be declared`);
+      assert.match(body, new RegExp(`readonly "created"\\?: ${operation}Stamp2 \\| null`));
+      assert.match(body, new RegExp(`readonly "updated"\\?: ${operation}Stamp2 \\| null`));
+    }
+  }
 });

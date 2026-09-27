@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { effectFiles } from './effect.mjs';
-import { validators } from './validators.mjs';
+import { operationValidators } from './validators.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const reference = name => ({ $ref: `#/components/schemas/${name}` });
@@ -51,7 +51,8 @@ test('Effect client results and layer failures use the Effect contract family', 
     for (const [name, source] of Object.entries(await effectFiles(document))) {
       await writeFile(join(generated, name), source);
     }
-    for (const [name, source] of Object.entries(await validators(document))) {
+    for (const [name, source] of Object.entries(await operationValidators(document))) {
+      await mkdir(dirname(join(generated, name)), { recursive: true });
       await writeFile(join(generated, name), source);
     }
     await writeFile(join(generated, 'client.ts'), `

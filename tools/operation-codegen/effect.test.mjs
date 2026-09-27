@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { build } from 'esbuild';
 import * as Schema from 'effect/Schema';
 import * as generator from './typescript.mjs';
-import { validators } from './validators.mjs';
+import { operationValidators } from './validators.mjs';
 
 // @provenance rule: rule_sdk_bindings_derive_from_openapi
 // @provenance verification: conformance
@@ -19,8 +19,10 @@ test('Effect schemas retain production wire values and reject contract violation
   const directory = await mkdtemp(join(import.meta.dirname, '.effect-test-'));
   try {
     for (const [name, source] of Object.entries(await generator.effectFiles(document))) await writeFile(join(directory, name), source);
-    const shared = await validators(document, names, 'validators', false);
-    await writeFile(join(directory, 'validators.mjs'), shared['validators.mjs']);
+    for (const [name, source] of Object.entries(await operationValidators(document))) {
+      await mkdir(dirname(join(directory, name)), { recursive: true });
+      await writeFile(join(directory, name), source);
+    }
     await build({ entryPoints: [join(directory, 'effect-contract.ts')], outfile: join(directory, 'contract.mjs'), bundle: true, packages: 'external', format: 'esm' });
     const schemas = await import(join(directory, 'contract.mjs'));
     for (const [name, value] of Object.entries(document['x-wire-fixtures'])) {

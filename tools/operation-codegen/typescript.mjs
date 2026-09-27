@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import openapiTS, { astToString } from 'openapi-typescript';
 import { typescriptClient } from './templates.mjs';
-import { validators } from './validators.mjs';
+import { operationValidators } from './validators.mjs';
 import { typescriptSchema } from './typescript-schema.mjs';
 
 export async function typescriptFiles(document, compatibility) {
@@ -9,7 +9,7 @@ export async function typescriptFiles(document, compatibility) {
     'client.ts': typescriptClient(document, compatibility),
     'schema.ts': astToString(await openapiTS(typescriptSchema(document), { defaultNonNullable: false })),
     'runtime.ts': await readFile(new URL('./templates/http-runtime.ts', import.meta.url), 'utf8'),
-    ...await validators(document),
+    ...await operationValidators(document),
   };
 }
 

@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { build } from 'esbuild';
 import { effectFiles } from './effect.mjs';
+import { operationValidators } from './validators.mjs';
 
 const reference = name => ({ $ref: `#/components/schemas/${name}` });
 const response = name => ({
@@ -99,4 +103,70 @@ test('Effect HttpApi failure responses distinguish the status of each failure ki
   const declaration = source.split('\n').find(line => line.startsWith('export type UpdateRule409 ='));
   assert.match(declaration, /"stale"/);
   assert.doesNotMatch(declaration, /"invalid_input"/);
+});
+
+test('an in-memory Effect server accepts writes and optional rule searches with declared statuses', async () => {
+  const directory = await mkdtemp(join(import.meta.dirname, '.effect-server-'));
+  try {
+    const document = serverDocument();
+    for (const [name, source] of Object.entries({
+      ...await effectFiles(document),
+      ...await operationValidators(document),
+    })) {
+      await mkdir(dirname(join(directory, name)), { recursive: true });
+      await writeFile(join(directory, name), source);
+    }
+    const entry = join(directory, 'round-trip.ts');
+    await writeFile(entry, `
+import * as Effect from 'effect/Effect';
+import * as Layer from 'effect/Layer';
+import { HttpRouter, HttpServer } from 'effect/unstable/http';
+import { HttpApiBuilder, HttpApiTest } from 'effect/unstable/httpapi';
+import { ProvenanceApi } from './effect-contract.js';
+const handlers = HttpApiBuilder.group(ProvenanceApi, 'rules', group => group.handleAll({
+  listRules: ({ query }) => Effect.succeed({ data: [query.base ?? query.file ?? 'optional'] }),
+  updateRule: ({ headers, payload }) => headers['if-match'] !== 'revision-1'
+    ? Effect.die(new Error('missing lowercase header'))
+    : payload.data === 'conflict'
+      ? Effect.fail({ error: { kind: 'stale' as const }, meta: {} })
+      : Effect.succeed({ data: payload.data }),
+}));
+const sourceHandlers = HttpApiBuilder.group(ProvenanceApi, 'sources', group => group.handleAll({
+  listSources: () => Effect.succeed({ data: [] }),
+}));
+const routes = HttpApiBuilder.layer(ProvenanceApi).pipe(Layer.provide(Layer.merge(handlers, sourceHandlers)));
+const server = HttpRouter.toWebHandler(routes.pipe(Layer.provide(HttpServer.layerServices)));
+export async function roundTrip() {
+  try {
+    const search = await server.handler(new Request('http://localhost/rules?query=search'));
+    const write = await server.handler(new Request('http://localhost/rules/rule_a', {
+      method: 'PATCH', headers: { 'content-type': 'application/json', 'If-Match': 'revision-1' },
+      body: JSON.stringify({ data: 'changed' }),
+    }));
+    const conflict = await server.handler(new Request('http://localhost/rules/rule_a', {
+      method: 'PATCH', headers: { 'content-type': 'application/json', 'If-Match': 'revision-1' },
+      body: JSON.stringify({ data: 'conflict' }),
+    }));
+    return { search: [search.status, await search.json()], write: [write.status, await write.json()], conflict: [conflict.status, await conflict.json()] };
+  } finally { await server.dispose(); }
+}
+export function selectedGroup() {
+  return Effect.runPromise(Effect.scoped(Effect.gen(function*() {
+    const client = yield* HttpApiTest.groups(ProvenanceApi, ['rules']);
+    const response = yield* client.rules.listRules({ query: { query: 'search' } });
+    return response;
+  }).pipe(Effect.provide(handlers))));
+}
+`);
+    const output = join(directory, 'round-trip.mjs');
+    await build({ entryPoints: [entry], outfile: output, bundle: true, packages: 'external', platform: 'node', format: 'esm' });
+    assert.deepEqual(await (await import(output)).roundTrip(), {
+      search: [200, { data: ['optional'] }],
+      write: [200, { data: 'changed' }],
+      conflict: [409, { error: { kind: 'stale' }, meta: {} }],
+    });
+    assert.deepEqual(await (await import(output)).selectedGroup(), { data: ['optional'] });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
