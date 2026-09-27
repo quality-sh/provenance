@@ -223,6 +223,8 @@ fn server_creates_review_request_and_disposition_identities() {
     edit(&store, "edit-1", "Statement v1");
     let submission = submit(&store, None, None).unwrap();
     let proposal = submission.proposal_id.clone();
+    let receipt = serde_json::to_value(&submission).unwrap();
+    assert_eq!(receipt["proposal_key"], proposal.as_str());
     assert_eq!(
         store
             .list_proposal_definitions(&scope())
