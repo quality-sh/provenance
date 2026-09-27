@@ -90,7 +90,8 @@ pub(super) fn render_export(
     }
 }
 
-/// One line for each record of each collection, in field order.
+/// One line for each record of each collection. Collections and record keys
+/// come out in alphabetical order.
 fn render_jsonl(exported: &ScopeExport) -> anyhow::Result<String> {
     let value = serde_json::to_value(exported)?;
     let records = value

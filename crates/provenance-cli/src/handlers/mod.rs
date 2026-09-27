@@ -145,6 +145,7 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
         } => merge_jsonl::handle(&base, &ours, &theirs, output, path.as_deref()),
         #[cfg(feature = "dogfood")]
         Command::Dogfood { command } => dogfood::handle(command, quiet),
+        // These are the commands that `dispatch` runs. Keep the two lists the same.
         Command::Search(_)
         | Command::CargoInit { .. }
         | Command::Init { .. }

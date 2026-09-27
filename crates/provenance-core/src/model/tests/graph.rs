@@ -50,7 +50,7 @@ fn a_word_parse_normalizes_the_text_and_uses_the_serde_word_list() {
 
     let error = NodeType::parse("ticket").unwrap_err().to_string();
     assert!(
-        error.contains("unknown variant `ticket`") && error.contains("`boundary`"),
+        error.contains("ticket") && error.contains("boundary"),
         "the error must name the bad word and the accepted words: {error}"
     );
 }

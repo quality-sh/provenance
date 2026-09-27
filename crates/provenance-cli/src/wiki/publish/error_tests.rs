@@ -12,7 +12,7 @@ fn io_error(text: &str) -> io::Error {
 }
 
 #[test]
-fn each_refusal_names_the_path_and_what_the_operator_can_do() {
+fn each_refusal_renders_its_full_message() {
     let cases = [
         (
             PublishError::InvalidOutputPath {

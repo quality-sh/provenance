@@ -158,7 +158,8 @@ fn a_field_after_a_rule_sets_that_rule_only() {
 }
 
 #[test]
-fn each_unusable_directive_warns_on_its_line_and_changes_nothing() {
+fn unusable_directives_warn_on_their_line_and_change_nothing() {
+    // An empty `tags:` value is valid, so line 4 gives no warning.
     let parsed = parse_annotations(
         "@provenance rule: RULE-001\n\
          @provenance no separator\n\
