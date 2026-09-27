@@ -26,9 +26,7 @@ async fn incompatible_delete_mode_cache(store: &TestStore) -> Vec<u8> {
     use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
     use sqlx::{Connection, SqliteConnection};
 
-    crate::cache::catch_up_state(&store.layout())
-        .await
-        .unwrap();
+    crate::cache::catch_up_state(&store.layout()).await.unwrap();
     let options = SqliteConnectOptions::new()
         .filename(store.layout().cache_db_path())
         .journal_mode(SqliteJournalMode::Delete);

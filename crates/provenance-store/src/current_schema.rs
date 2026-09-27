@@ -34,11 +34,13 @@ pub async fn compatibility(pool: &SqlitePool) -> anyhow::Result<Compatibility> {
         };
     let expected = expected_catalog().await?;
     let live = catalog(pool).await?;
-    Ok(if stored.as_deref() == Some(expected.digest().as_str()) && live == expected {
-        Compatibility::Current
-    } else {
-        Compatibility::RebuildRequired
-    })
+    Ok(
+        if stored.as_deref() == Some(expected.digest().as_str()) && live == expected {
+            Compatibility::Current
+        } else {
+            Compatibility::RebuildRequired
+        },
+    )
 }
 
 /// Removes all cache tables and installs the current empty schema.
