@@ -193,6 +193,58 @@ fn api_stdin_body_creates_from_standard_input() {
 }
 
 #[test]
+fn api_reports_the_typed_requirement_edit_conflict() {
+    let (_directory, repo) = init();
+    let created = json(&[
+        "req_conflict",
+        "create",
+        "--type",
+        "requirement",
+        "--repo",
+        &repo,
+        "--statement",
+        "The initial statement applies.",
+        "--format",
+        "json",
+    ]);
+    let old_etag = created["data"]["edit"]["etag"].as_str().unwrap();
+    let patch = |key: &str, description: &str| {
+        provenance()
+            .args([
+                "api",
+                "requirements/req_conflict",
+                "--repo",
+                &repo,
+                "--method",
+                "patch",
+                "--input",
+                "-",
+                "--header",
+                &format!("Idempotency-Key: {key}"),
+                "--header",
+                &format!("If-Match: {old_etag}"),
+                "--format",
+                "json",
+            ])
+            .write_stdin(json!({"actor":"agent","description":description}).to_string())
+            .output()
+            .unwrap()
+    };
+    let current = patch("current-edit", "The current description applies.");
+    assert!(current.status.success(), "{}", String::from_utf8_lossy(&current.stderr));
+    let current: Value = serde_json::from_slice(&current.stdout).unwrap();
+
+    let stale = patch("stale-edit", "The stale description does not apply.");
+    assert!(!stale.status.success());
+    let failure = envelope(&String::from_utf8_lossy(&stale.stderr));
+    assert_eq!(failure["error"]["kind"], "requirement_edit_conflict");
+    assert_eq!(
+        failure["error"]["current_etag"],
+        current["data"]["edit"]["etag"]
+    );
+}
+
+#[test]
 #[verifies("rule_porcelain_api_catalog_discovery", examples)]
 fn api_discovery_describes_the_live_catalog() {
     let (_directory, repo) = init();

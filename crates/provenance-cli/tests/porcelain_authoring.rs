@@ -388,8 +388,6 @@ fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
         ],
         &serde_json::json!({
             "actor":"agent",
-            "proposal_id":"proposal_cli_target",
-            "proposal_key":"cli-target",
             "title":"CLI target",
             "summary":"The target-first action submits this Requirement.",
             "source_ids":[],
