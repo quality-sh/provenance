@@ -64,7 +64,9 @@ Actions are POSTs on a resource path with one declared action name:
 - Topics: `claim`, `release`, `close`. Questions: `claim`, `release`, `answer`.
 - Requirement review: `POST /requirements/{id}/submit`, and
   `POST /requirements/{id}/submissions/{proposal_id}/decide|withdraw`.
-  The submission identity is the existing Proposal ID.
+  Submit creates the Proposal ID and Proposal key and returns both values. A
+  client uses the returned Proposal ID in a later decide or withdraw path.
+  Decide creates and returns the Disposition ID.
 - Verification: `POST /verification-runs/begin-verification`, and
   `POST /verification-runs/{run_id}/complete-verification`. Begin retains
   Rule-ID and declaration-reference targeting.
@@ -113,6 +115,14 @@ headers. MCP and native calls use the same typed controls. `Idempotency-Key`,
 `If-Match`, and the response `ETag` map to Store-supported identity and
 precondition checks. The surface never advertises an unsupported guarantee.
 
+Requirement edit requests keep `If-Match`. Submit, decide, and withdraw do not
+accept `Idempotency-Key`. Their bodies do not accept a request ID. A submit body
+does not accept `proposal_id` or `proposal_key`, and a decide body does not
+accept `disposition_id`. The server creates these identities and returns them.
+
+A decide request can omit `rationale` for an accepted or deferred decision. A
+rejected decision must include a nonempty `rationale`.
+
 ## 4. PATCH semantics
 
 PATCH applies a partial delta. A single-field change, an add, or a remove is a
@@ -141,6 +151,13 @@ The base status set is 400, 401, 403, 404, 500, 503. A mutating operation also
 declares 409. A read POST declares `MUTATES=false`. The generator linter checks
 the live OpenAPI document. It requires the base set, 409 on a mutating route,
 and a declared status for each runtime failure variant.
+
+A stale Requirement edit returns 409 with `requirement_edit_conflict` and the
+current ETag. A decide or withdraw request returns 409 with
+`review_submission_conflict` when the named submission is superseded,
+withdrawn, or already decided. This failure carries the current Proposal ID,
+when one is pending, and the current revision ID. The client applies its update
+only after a person resolves the conflict. The server does not merge changes.
 
 ## 6. Compatibility tuple and gate
 

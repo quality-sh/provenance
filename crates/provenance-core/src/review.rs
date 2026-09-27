@@ -179,6 +179,9 @@ pub struct CycleEntry {
     pub id: StableId,
     pub requirement_id: StableId,
     pub proposal_id: StableId,
+    /// The server-created key of a `Submitted` Proposal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proposal_key: Option<String>,
     /// Submission and decision order for the addressed record.
     pub sequence: u64,
     pub fact: CycleFact,
