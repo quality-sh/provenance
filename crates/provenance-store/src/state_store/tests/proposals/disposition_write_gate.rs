@@ -357,7 +357,11 @@ fn disposition_by(
     }
 }
 
-fn rejected_input(scope: &ScopeId, id: &str, proposal_id: &str) -> CreateDispositionInput {
+pub(super) fn rejected_input(
+    scope: &ScopeId,
+    id: &str,
+    proposal_id: &str,
+) -> CreateDispositionInput {
     CreateDispositionInput {
         scope_id: scope.clone(),
         id: StableId::new(id).unwrap(),
@@ -374,7 +378,7 @@ fn rejected_input(scope: &ScopeId, id: &str, proposal_id: &str) -> CreateDisposi
     }
 }
 
-fn allow_actor(store: &StateStore) {
+pub(super) fn allow_actor(store: &StateStore) {
     let mut manifest = store.manifest().unwrap();
     manifest.disposition_actor_ids.push("reviewer".into());
     std::fs::write(

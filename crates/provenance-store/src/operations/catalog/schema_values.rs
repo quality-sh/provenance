@@ -47,30 +47,14 @@ pub fn parse_schema_value_in(
     raw: &str,
 ) -> Result<Value, ParseValueError> {
     if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
-        let name = reference.strip_prefix("#/$defs/").ok_or(ParseValueError)?;
-        let resolved = root
-            .get("$defs")
-            .and_then(|defs| defs.get(name))
-            .ok_or(ParseValueError)?;
-        return parse_schema_value_in(root, resolved, raw);
+        return parse_reference(root, reference, raw);
     }
     if let Some(variants) = schema
         .get("anyOf")
         .or_else(|| schema.get("oneOf"))
         .and_then(Value::as_array)
     {
-        if raw == "null"
-            && variants
-                .iter()
-                .any(|variant| variant.get("type") == Some(&json!("null")))
-        {
-            return Ok(Value::Null);
-        }
-        return variants
-            .iter()
-            .filter(|variant| variant.get("type") != Some(&json!("null")))
-            .find_map(|variant| parse_schema_value_in(root, variant, raw).ok())
-            .ok_or(ParseValueError);
+        return parse_variants(root, variants, raw);
     }
     if let Some(values) = schema.get("enum").and_then(Value::as_array) {
         let value = Value::String(raw.to_owned());
@@ -80,55 +64,99 @@ pub fn parse_schema_value_in(
             .ok_or(ParseValueError);
     }
     if let Some(types) = schema.get("type").and_then(Value::as_array) {
-        if raw == "null" && types.iter().any(|kind| kind == "null") {
-            return Ok(Value::Null);
-        }
-        return types
-            .iter()
-            .filter_map(Value::as_str)
-            .filter(|kind| *kind != "null")
-            .find_map(|kind| {
-                let mut variant = schema.clone();
-                variant["type"] = json!(kind);
-                parse_schema_value_in(root, &variant, raw).ok()
-            })
-            .ok_or(ParseValueError);
+        return parse_type_list(root, schema, types, raw);
     }
+    parse_single_type(root, schema, raw)
+}
+
+/// Parses against the `$defs` entry that a local `$ref` names.
+fn parse_reference(root: &Value, reference: &str, raw: &str) -> Result<Value, ParseValueError> {
+    let name = reference.strip_prefix("#/$defs/").ok_or(ParseValueError)?;
+    let resolved = root
+        .get("$defs")
+        .and_then(|defs| defs.get(name))
+        .ok_or(ParseValueError)?;
+    parse_schema_value_in(root, resolved, raw)
+}
+
+/// Parses against the first `anyOf` or `oneOf` variant that accepts the
+/// text. The text `null` reads as null when one variant is the null type.
+fn parse_variants(root: &Value, variants: &[Value], raw: &str) -> Result<Value, ParseValueError> {
+    let is_null = |variant: &Value| variant.get("type") == Some(&json!("null"));
+    if raw == "null" && variants.iter().any(is_null) {
+        return Ok(Value::Null);
+    }
+    variants
+        .iter()
+        .filter(|&variant| !is_null(variant))
+        .find_map(|variant| parse_schema_value_in(root, variant, raw).ok())
+        .ok_or(ParseValueError)
+}
+
+/// Parses against the first type of a `type` list that accepts the text.
+/// The text `null` reads as null when the list holds `null`.
+fn parse_type_list(
+    root: &Value,
+    schema: &Value,
+    types: &[Value],
+    raw: &str,
+) -> Result<Value, ParseValueError> {
+    if raw == "null" && types.iter().any(|kind| kind == "null") {
+        return Ok(Value::Null);
+    }
+    types
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|kind| *kind != "null")
+        .find_map(|kind| {
+            let mut variant = schema.clone();
+            variant["type"] = json!(kind);
+            parse_schema_value_in(root, &variant, raw).ok()
+        })
+        .ok_or(ParseValueError)
+}
+
+fn parse_single_type(root: &Value, schema: &Value, raw: &str) -> Result<Value, ParseValueError> {
     match schema.get("type").and_then(Value::as_str) {
         Some("string") => Ok(Value::String(raw.to_owned())),
-        Some("boolean") => match raw {
-            "true" => Ok(Value::Bool(true)),
-            "false" => Ok(Value::Bool(false)),
-            _ => Err(ParseValueError),
-        },
-        Some("integer") => {
-            let value = raw.parse::<i64>().map_err(|_| ParseValueError)?;
-            let minimum = schema.get("minimum").and_then(Value::as_i64);
-            let maximum = schema.get("maximum").and_then(Value::as_i64);
-            if minimum.is_some_and(|minimum| value < minimum)
-                || maximum.is_some_and(|maximum| value > maximum)
-            {
-                return Err(ParseValueError);
-            }
-            Ok(Value::from(value))
-        }
+        Some("boolean") => raw
+            .parse::<bool>()
+            .map(Value::Bool)
+            .map_err(|_| ParseValueError),
+        Some("integer") => parse_integer(schema, raw),
         Some("number") => {
             let value = raw.parse::<f64>().map_err(|_| ParseValueError)?;
             serde_json::Number::from_f64(value)
                 .map(Value::Number)
                 .ok_or(ParseValueError)
         }
-        Some("array") => {
-            let items = schema.get("items").ok_or(ParseValueError)?;
-            if raw.is_empty() {
-                return Ok(Value::Array(Vec::new()));
-            }
-            raw.split(',')
-                .map(|item| parse_schema_value_in(root, items, item))
-                .collect::<Result<Vec<_>, _>>()
-                .map(Value::Array)
-        }
+        Some("array") => parse_array(root, schema, raw),
         Some("null") if raw == "null" => Ok(Value::Null),
         _ => Err(ParseValueError),
     }
+}
+
+/// Parses an integer inside the optional `minimum` and `maximum` bounds.
+fn parse_integer(schema: &Value, raw: &str) -> Result<Value, ParseValueError> {
+    let value = raw.parse::<i64>().map_err(|_| ParseValueError)?;
+    let minimum = schema.get("minimum").and_then(Value::as_i64);
+    let maximum = schema.get("maximum").and_then(Value::as_i64);
+    let below = minimum.is_some_and(|minimum| value < minimum);
+    let above = maximum.is_some_and(|maximum| value > maximum);
+    if below || above {
+        return Err(ParseValueError);
+    }
+    Ok(Value::from(value))
+}
+
+/// Parses comma-separated items. The empty text is the empty array.
+fn parse_array(root: &Value, schema: &Value, raw: &str) -> Result<Value, ParseValueError> {
+    let items = schema.get("items").ok_or(ParseValueError)?;
+    if raw.is_empty() {
+        return Ok(Value::Array(Vec::new()));
+    }
+    raw.split(',')
+        .map(|item| parse_schema_value_in(root, items, item))
+        .collect::<Result<Vec<_>, _>>()
+        .map(Value::Array)
 }

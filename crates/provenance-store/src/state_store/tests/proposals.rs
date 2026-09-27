@@ -7,6 +7,7 @@ use provenance_core::{
 mod disposition_allowlist;
 mod disposition_references;
 mod disposition_write_gate;
+mod fact_pages;
 mod legacy_shard;
 mod lifecycle_validation;
 mod projection;

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::graph::NodeType;
 use super::ids::{SchemaVersion, ScopeId, StableId};
+use super::parsing::parse_enum_word;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -27,12 +28,7 @@ pub enum MessageRole {
 
 impl MessageRole {
     pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match value {
-            "user" => Ok(Self::User),
-            "assistant" => Ok(Self::Assistant),
-            "system" => Ok(Self::System),
-            _ => anyhow::bail!("role must be user, assistant, or system"),
-        }
+        parse_enum_word(value)
     }
 }
 

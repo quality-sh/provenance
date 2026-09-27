@@ -113,9 +113,7 @@ impl MarkerLog {
 }
 
 pub fn parse_annotations(comment_text: &str) -> ParseResult {
-    let mut warnings = Vec::new();
-    let mut annotations: Vec<Annotation> = Vec::new();
-    let mut shared = Annotation::default();
+    let mut block = Block::default();
     let mut markers = MarkerLog::default();
 
     for (line_idx, raw_line) in comment_text.lines().enumerate() {
@@ -124,40 +122,70 @@ pub fn parse_annotations(comment_text: &str) -> ParseResult {
         let Some((marker, after_marker)) = split_annotation_marker(stripped) else {
             continue;
         };
-        warnings.extend(markers.record(marker, line));
-        let Some((key, value)) = after_marker.split_once(':') else {
-            warnings.push(ParseWarning {
-                line,
-                message: format!("malformed directive: expected `key: value` after {marker}"),
-            });
-            continue;
-        };
-        let key = key.trim().to_ascii_lowercase();
-        let value = value.trim();
-        if value.is_empty() && key != "tags" {
-            warnings.push(ParseWarning {
-                line,
-                message: format!("empty value for field `{}`", key.trim()),
-            });
-            continue;
+        block.warnings.extend(markers.record(marker, line));
+        match split_directive(marker, after_marker) {
+            Ok((key, value)) => block.apply(&key, value, line),
+            Err(message) => block.warn(line, message),
         }
-        match key.as_str() {
-            "rule" => annotations.push(Annotation {
+    }
+
+    if let Some(marker) = markers.first.filter(|_| block.annotations.is_empty()) {
+        block.warn(
+            0,
+            format!("found {marker} directives but no rule annotations"),
+        );
+    }
+
+    ParseResult {
+        annotations: block.annotations,
+        warnings: block.warnings,
+    }
+}
+
+/// Splits the `key: value` text after a marker. The key is trimmed and
+/// lowercase, and the value is trimmed. Only `tags` can have an empty value.
+fn split_directive<'a>(marker: &str, after_marker: &'a str) -> Result<(String, &'a str), String> {
+    let Some((key, value)) = after_marker.split_once(':') else {
+        return Err(format!(
+            "malformed directive: expected `key: value` after {marker}"
+        ));
+    };
+    let key = key.trim().to_ascii_lowercase();
+    let value = value.trim();
+    if value.is_empty() && key != "tags" {
+        return Err(format!("empty value for field `{key}`"));
+    }
+    Ok((key, value))
+}
+
+/// The annotations of one comment block, the fields that the block gives
+/// before its first rule, and the warnings that its lines earned.
+#[derive(Default)]
+struct Block {
+    annotations: Vec<Annotation>,
+    shared: Annotation,
+    warnings: Vec<ParseWarning>,
+}
+
+impl Block {
+    fn warn(&mut self, line: usize, message: String) {
+        self.warnings.push(ParseWarning { line, message });
+    }
+
+    /// Sets a field on the latest rule. Before the first rule, the field is
+    /// shared by each rule that follows.
+    fn set(&mut self, apply: impl FnOnce(&mut Annotation)) {
+        apply(self.annotations.last_mut().unwrap_or(&mut self.shared));
+    }
+
+    fn apply(&mut self, key: &str, value: &str, line: usize) {
+        match key {
+            "rule" => self.annotations.push(Annotation {
                 rule: value.to_string(),
-                name: shared.name.clone(),
-                description: shared.description.clone(),
-                tags: shared.tags.clone(),
-                coverage: shared.coverage,
-                confidence: shared.confidence,
-                intent: shared.intent.clone(),
-                verification: shared.verification,
+                ..self.shared.clone()
             }),
-            "name" => set_field(&mut annotations, &mut shared, |ann| {
-                ann.name = Some(value.to_string());
-            }),
-            "description" => set_field(&mut annotations, &mut shared, |ann| {
-                ann.description = Some(value.to_string());
-            }),
+            "name" => self.set(|ann| ann.name = Some(value.to_string())),
+            "description" => self.set(|ann| ann.description = Some(value.to_string())),
             "tags" => {
                 let tags = value
                     .split(',')
@@ -165,55 +193,41 @@ pub fn parse_annotations(comment_text: &str) -> ParseResult {
                     .filter(|v| !v.is_empty())
                     .map(ToOwned::to_owned)
                     .collect::<Vec<_>>();
-                set_field(&mut annotations, &mut shared, |ann| {
-                    ann.tags.clone_from(&tags);
-                });
+                self.set(|ann| ann.tags = tags);
             }
-            "coverage" => match CoverageLevel::from_str(value) {
-                Ok(level) => set_field(&mut annotations, &mut shared, |ann| ann.coverage = level),
-                Err(_) => warnings.push(ParseWarning {
-                    line,
-                    message: format!("invalid coverage level `{value}`, using default"),
-                }),
-            },
-            "confidence" => match parse_confidence(value) {
-                Ok(confidence) => set_field(&mut annotations, &mut shared, |ann| {
-                    ann.confidence = confidence;
-                }),
-                Err(rejection) => warnings.push(ParseWarning {
-                    line,
-                    message: rejection.warning(value),
-                }),
-            },
-            "intent" => set_field(&mut annotations, &mut shared, |ann| {
-                ann.intent = Some(value.to_string());
-            }),
-            "verification" => match Verification::from_str(value) {
-                Ok(method) => set_field(&mut annotations, &mut shared, |ann| {
-                    ann.verification = Some(method);
-                }),
-                Err(_) => warnings.push(ParseWarning {
-                    line,
-                    message: format!("invalid verification method `{value}`, ignoring"),
-                }),
-            },
-            other => warnings.push(ParseWarning {
-                line,
-                message: format!("unknown field `{other}`"),
-            }),
+            "coverage" => self.apply_coverage(value, line),
+            "confidence" => self.apply_confidence(value, line),
+            "intent" => self.set(|ann| ann.intent = Some(value.to_string())),
+            "verification" => self.apply_verification(value, line),
+            other => self.warn(line, format!("unknown field `{other}`")),
         }
     }
 
-    if let Some(marker) = markers.first.filter(|_| annotations.is_empty()) {
-        warnings.push(ParseWarning {
-            line: 0,
-            message: format!("found {marker} directives but no rule annotations"),
-        });
+    fn apply_coverage(&mut self, value: &str, line: usize) {
+        match CoverageLevel::from_str(value) {
+            Ok(level) => self.set(|ann| ann.coverage = level),
+            Err(_) => self.warn(
+                line,
+                format!("invalid coverage level `{value}`, using default"),
+            ),
+        }
     }
 
-    ParseResult {
-        annotations,
-        warnings,
+    fn apply_confidence(&mut self, value: &str, line: usize) {
+        match parse_confidence(value) {
+            Ok(confidence) => self.set(|ann| ann.confidence = confidence),
+            Err(rejection) => self.warn(line, rejection.warning(value)),
+        }
+    }
+
+    fn apply_verification(&mut self, value: &str, line: usize) {
+        match Verification::from_str(value) {
+            Ok(method) => self.set(|ann| ann.verification = Some(method)),
+            Err(_) => self.warn(
+                line,
+                format!("invalid verification method `{value}`, ignoring"),
+            ),
+        }
     }
 }
 
@@ -290,17 +304,6 @@ fn annotation_marker(line: &str) -> Option<(&'static str, usize)> {
         .min_by_key(|(_, position)| *position)
 }
 
-fn set_field<F>(annotations: &mut [Annotation], shared: &mut Annotation, apply: F)
-where
-    F: Fn(&mut Annotation),
-{
-    if let Some(annotation) = annotations.last_mut() {
-        apply(annotation);
-    } else {
-        apply(shared);
-    }
-}
-
 fn strip_comment_prefix(line: &str) -> &str {
     line.trim_start()
         .trim_start_matches('/')
@@ -311,133 +314,4 @@ fn strip_comment_prefix(line: &str) -> &str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_shared_fields_across_multiple_provenance_rules() {
-        let parsed = parse_annotations(
-            r"
-            @provenance name: Payroll thresholds
-            @provenance coverage: full
-            @provenance rule: SCHADS-PAY-001
-            @provenance rule: SCHADS-PAY-002
-            ",
-        );
-
-        assert_eq!(parsed.annotations.len(), 2);
-        assert_eq!(
-            parsed.annotations[0].name.as_deref(),
-            Some("Payroll thresholds")
-        );
-        assert_eq!(parsed.annotations[1].coverage, CoverageLevel::Full);
-    }
-
-    #[test]
-    fn parses_statesman_marker_as_legacy_alias() {
-        let parsed = parse_annotations("@statesman rule: SCHADS-PAY-001");
-
-        assert_eq!(parsed.annotations.len(), 1);
-        assert_eq!(parsed.annotations[0].rule, "SCHADS-PAY-001");
-    }
-
-    /// The legacy marker still parses; it just says so on the way through.
-    #[test]
-    fn statesman_marker_warns_but_keeps_the_annotation() {
-        let parsed = parse_annotations("@statesman rule: SCHADS-PAY-001");
-
-        assert_eq!(parsed.annotations.len(), 1);
-        assert_eq!(
-            parsed.warnings,
-            vec![ParseWarning {
-                line: 1,
-                message: "@statesman is the legacy marker; use @provenance".to_string(),
-            }]
-        );
-    }
-
-    #[test]
-    fn statesman_marker_warns_once_per_comment_block() {
-        let parsed = parse_annotations(
-            r"
-            @statesman name: Payroll thresholds
-            @statesman rule: SCHADS-PAY-001
-            @statesman rule: SCHADS-PAY-002
-            ",
-        );
-
-        assert_eq!(parsed.annotations.len(), 2);
-        assert_eq!(parsed.warnings.len(), 1);
-        assert_eq!(parsed.warnings[0].line, 2);
-    }
-
-    #[test]
-    fn provenance_marker_draws_no_legacy_warning() {
-        let parsed = parse_annotations("@provenance rule: SCHADS-PAY-001");
-
-        assert!(parsed.warnings.is_empty());
-    }
-
-    /// A block that mixes markers is warned about once, at the first legacy
-    /// line, whichever marker opened the block.
-    #[test]
-    fn mixed_markers_warn_once_at_the_legacy_line() {
-        let parsed = parse_annotations(
-            r"
-            @provenance rule: SCHADS-PAY-001
-            @statesman rule: SCHADS-PAY-002
-            ",
-        );
-
-        assert_eq!(parsed.annotations.len(), 2);
-        assert_eq!(parsed.warnings.len(), 1);
-        assert_eq!(parsed.warnings[0].line, 3);
-    }
-
-    #[test]
-    fn rejects_non_finite_confidence_with_warning() {
-        for value in ["NaN", "inf", "-inf"] {
-            let parsed = parse_annotations(&format!(
-                "@provenance confidence: {value}\n@provenance rule: RULE-001"
-            ));
-
-            assert!((parsed.annotations[0].confidence - 1.0).abs() < f64::EPSILON);
-            assert_eq!(
-                parsed.warnings,
-                vec![ParseWarning {
-                    line: 1,
-                    message: format!("invalid confidence `{value}`, using default"),
-                }]
-            );
-        }
-    }
-
-    /// Out of range is refused, not pulled to the nearest end: the graph
-    /// rejects such a score outright (`rule_confidence_range`), and a scan
-    /// that quietly clamped would report a confidence nobody wrote.
-    #[test]
-    fn refuses_out_of_range_confidence_and_keeps_the_default() {
-        for value in ["-0.25", "1.25", "-1", "2", "100"] {
-            let parsed = parse_annotations(&format!(
-                "@provenance confidence: {value}\n@provenance rule: RULE-001"
-            ));
-
-            assert!((parsed.annotations[0].confidence - 1.0).abs() < f64::EPSILON);
-            assert_eq!(
-                parsed.warnings,
-                vec![ParseWarning {
-                    line: 1,
-                    message: format!("confidence `{value}` is outside 0.0-1.0, using default"),
-                }]
-            );
-        }
-    }
-
-    #[test]
-    fn preserves_in_range_confidence() {
-        let parsed = parse_annotations("@provenance confidence: 0.75\n@provenance rule: RULE-001");
-
-        assert!((parsed.annotations[0].confidence - 0.75).abs() < f64::EPSILON);
-        assert!(parsed.warnings.is_empty());
-    }
-}
+mod tests;

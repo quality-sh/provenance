@@ -55,19 +55,26 @@ pub fn is_relation_name(name: &str) -> bool {
             .any(|decl| decl.name == name)
 }
 
-/// The clause a retired edge name carries in a refusal: the field or
+/// The clause each retired edge name carries in a refusal: the field or
 /// record that holds the fact now, or that the fact is gone.
+const RETIRED_CLAUSES: &[(&str, &str)] = &[
+    ("references", "it is now cites"),
+    ("refines_into", "it is now refines"),
+    (
+        "produces",
+        "it is now requirement_ids/resolution_ids on the rule",
+    ),
+    ("resolves", "it is now requirement_ids on the resolution"),
+    ("spawns", "it is now spawned_by on the requirement"),
+    ("superseded_by", "it is now supersedes on the newer record"),
+    ("needs", "it is removed"),
+];
+
 fn retired_clause(name: &str) -> Option<&'static str> {
-    match name {
-        "references" => Some("it is now cites"),
-        "refines_into" => Some("it is now refines"),
-        "produces" => Some("it is now requirement_ids/resolution_ids on the rule"),
-        "resolves" => Some("it is now requirement_ids on the resolution"),
-        "spawns" => Some("it is now spawned_by on the requirement"),
-        "superseded_by" => Some("it is now supersedes on the newer record"),
-        "needs" => Some("it is removed"),
-        _ => None,
-    }
+    RETIRED_CLAUSES
+        .iter()
+        .find(|(retired, _)| *retired == name)
+        .map(|&(_, clause)| clause)
 }
 
 /// The valid relation names in alphabetical order.

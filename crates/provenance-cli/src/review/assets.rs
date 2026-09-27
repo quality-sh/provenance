@@ -35,22 +35,35 @@ pub(super) async fn serve(request: Request) -> Response {
         .expect("static asset headers")
 }
 
+/// The media type for each file extension that the review bundle can hold.
+const CONTENT_TYPES: &[(&str, &str)] = &[
+    ("html", "text/html; charset=utf-8"),
+    ("js", "text/javascript; charset=utf-8"),
+    ("mjs", "text/javascript; charset=utf-8"),
+    ("css", "text/css; charset=utf-8"),
+    ("json", "application/json"),
+    ("map", "application/json"),
+    ("svg", "image/svg+xml"),
+    ("png", "image/png"),
+    ("jpg", "image/jpeg"),
+    ("jpeg", "image/jpeg"),
+    ("webp", "image/webp"),
+    ("gif", "image/gif"),
+    ("ico", "image/x-icon"),
+    ("woff", "font/woff"),
+    ("woff2", "font/woff2"),
+    ("ttf", "font/ttf"),
+    ("wasm", "application/wasm"),
+];
+
 fn content_type(path: &str) -> &'static str {
-    match path.rsplit('.').next().unwrap_or_default() {
-        "html" => "text/html; charset=utf-8",
-        "js" | "mjs" => "text/javascript; charset=utf-8",
-        "css" => "text/css; charset=utf-8",
-        "json" | "map" => "application/json",
-        "svg" => "image/svg+xml",
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "webp" => "image/webp",
-        "gif" => "image/gif",
-        "ico" => "image/x-icon",
-        "woff" => "font/woff",
-        "woff2" => "font/woff2",
-        "ttf" => "font/ttf",
-        "wasm" => "application/wasm",
-        _ => "application/octet-stream",
-    }
+    let extension = path.rsplit('.').next().unwrap_or_default();
+    CONTENT_TYPES
+        .iter()
+        .find(|(candidate, _)| *candidate == extension)
+        .map_or("application/octet-stream", |&(_, media_type)| media_type)
 }
+
+#[cfg(test)]
+#[path = "assets_tests.rs"]
+mod tests;

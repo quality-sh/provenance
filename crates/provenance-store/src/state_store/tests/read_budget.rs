@@ -102,29 +102,37 @@ fn wire_call(request: serde_json::Value) -> serde_json::Value {
     call
 }
 
-pub(super) async fn member_read(
+/// Invokes one wire operation against the store at `root` in the default
+/// scope. A refusal gives its failure kind.
+pub(super) async fn operation_read(
     root: &camino::Utf8Path,
-    id: &str,
+    operation: &str,
+    request: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     catalog::invoke_with(
-        "get-source-v2",
+        operation,
         SDK_PROTOCOL_VERSION,
-        wire_call(json!({"id": id})),
+        wire_call(request),
         Arc::new(Target(root.to_path_buf())),
     )
     .await
     .map_err(|failure| failure.error["kind"].as_str().unwrap_or("").to_string())
 }
 
+pub(super) async fn member_read(
+    root: &camino::Utf8Path,
+    id: &str,
+) -> Result<serde_json::Value, String> {
+    operation_read(root, "get-source-v2", json!({"id": id})).await
+}
+
 pub(super) async fn list_read(root: &camino::Utf8Path) -> Result<serde_json::Value, String> {
-    catalog::invoke_with(
+    operation_read(
+        root,
         "page-sources-v2",
-        SDK_PROTOCOL_VERSION,
-        wire_call(json!({"limit": 50, "cursor": null})),
-        Arc::new(Target(root.to_path_buf())),
+        json!({"limit": 50, "cursor": null}),
     )
     .await
-    .map_err(|failure| failure.error["kind"].as_str().unwrap_or("").to_string())
 }
 
 /// The trigger case: the request body fits the transport budget while the

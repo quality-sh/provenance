@@ -1,6 +1,7 @@
+use super::discussion_page::{check_stored_size, DiscussionPageFill, Fill};
 use crate::operations::{
     read_policy::ReadPolicy,
-    reader::{self, Cursor, Position, ReadContext, PAGE_BYTES, RECORD_BYTES},
+    reader::{self, Cursor, Position, ReadContext},
 };
 use camino::Utf8Path;
 use provenance_core::{
@@ -73,53 +74,91 @@ async fn groups(ctx: &ReadContext, query: DiscussionQuery) -> anyhow::Result<Dis
     for family in ["review_journal", "threads", "messages"] {
         ctx.snapshot().attest(family);
     }
-    let mut entries = Vec::new();
-    let mut bytes = 0;
+    let mut page = DiscussionPageFill::new(query.limit);
+    let mut fill = Fill::Complete;
     if position.stage == 0 {
-        let mut tx = ctx.snapshot().connection().await;
-        let keys: Vec<(String, String, i64, String)> = sqlx::query_as(
-            "SELECT j.discussion_id, j.id, length(CAST(j.payload AS BLOB)), t.status FROM review_journal j JOIN threads t ON t.scope_id=j.scope_id AND t.id=j.thread_id WHERE j.scope_id=? AND j.parent_type=? AND j.parent_id=? AND j.discussion_id>? AND NOT EXISTS(SELECT 1 FROM review_journal n WHERE n.scope_id=j.scope_id AND n.discussion_id=j.discussion_id AND n.version>j.version) ORDER BY j.discussion_id LIMIT ?"
-        ).bind(ctx.snapshot().scope().as_str())
-        .bind(super::discussion_state::discussion_kind_word(query.parent.node_type))
-        .bind(query.parent.node_id.as_str()).bind(&position.id)
-            .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
-        drop(tx);
-        for (discussion, id, size, status) in keys {
-            if entries.len() == query.limit || bytes + usize::try_from(size)? > PAGE_BYTES - 16_384
-            {
-                return Ok(DiscussionPage {
-                    entries,
-                    next_cursor: Some(cursor.encode(ctx, position)?),
-                });
-            }
-            if size > i64::try_from(RECORD_BYTES)? {
-                return Err(ReadFailure::PageRecordTooLarge.into());
-            }
-            let mut tx = ctx.snapshot().connection().await;
-            let payload: String =
-                sqlx::query_scalar("SELECT payload FROM review_journal WHERE scope_id=? AND id=?")
-                    .bind(ctx.snapshot().scope().as_str())
-                    .bind(id)
-                    .fetch_one(&mut **tx)
-                    .await?;
-            drop(tx);
-            let group = DiscussionGroup::Addressed {
-                discussion: Box::new(serde_json::from_str::<DiscussionEntry>(&payload)?),
-                container_status: serde_json::from_value(serde_json::Value::String(status))?,
+        fill = fill_addressed(ctx, &query, &mut position, &mut page).await?;
+        if fill == Fill::Complete {
+            position = Position {
+                stage: 1,
+                ..Position::default()
             };
-            let size = serde_json::to_vec(&group)?.len();
-            if size > RECORD_BYTES {
-                return Err(ReadFailure::PageRecordTooLarge.into());
-            }
-            bytes += size + 1;
-            entries.push(group);
-            position.id = discussion;
         }
-        position = Position {
-            stage: 1,
-            ..Position::default()
-        };
     }
+    if fill == Fill::Complete {
+        fill = fill_legacy(ctx, &query, &mut position, &mut page).await?;
+    }
+    let next_cursor = match fill {
+        Fill::Full => Some(cursor.encode(ctx, position)?),
+        Fill::Complete => None,
+    };
+    Ok(DiscussionPage {
+        entries: page.entries,
+        next_cursor,
+    })
+}
+
+/// Stage 0: adds the latest version of each addressed discussion after
+/// `position`, in discussion id order.
+async fn fill_addressed(
+    ctx: &ReadContext,
+    query: &DiscussionQuery,
+    position: &mut Position,
+    page: &mut DiscussionPageFill<DiscussionGroup>,
+) -> anyhow::Result<Fill> {
+    let mut tx = ctx.snapshot().connection().await;
+    let keys: Vec<(String, String, i64, String)> = sqlx::query_as(
+        "SELECT j.discussion_id, j.id, length(CAST(j.payload AS BLOB)), t.status FROM review_journal j JOIN threads t ON t.scope_id=j.scope_id AND t.id=j.thread_id WHERE j.scope_id=? AND j.parent_type=? AND j.parent_id=? AND j.discussion_id>? AND NOT EXISTS(SELECT 1 FROM review_journal n WHERE n.scope_id=j.scope_id AND n.discussion_id=j.discussion_id AND n.version>j.version) ORDER BY j.discussion_id LIMIT ?"
+    ).bind(ctx.snapshot().scope().as_str())
+    .bind(super::discussion_state::discussion_kind_word(query.parent.node_type))
+    .bind(query.parent.node_id.as_str()).bind(&position.id)
+        .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
+    drop(tx);
+    for (discussion, id, size, status) in keys {
+        if page.at_limit() || page.over_budget(usize::try_from(size)?) {
+            return Ok(Fill::Full);
+        }
+        check_stored_size(size)?;
+        let group = journal_group(ctx, &id, status).await?;
+        let size = DiscussionPageFill::record_size(&group)?;
+        page.push(group, size);
+        position.id = discussion;
+    }
+    Ok(Fill::Complete)
+}
+
+/// Loads one journal entry by id as an addressed discussion.
+async fn journal_group(
+    ctx: &ReadContext,
+    id: &str,
+    status: String,
+) -> anyhow::Result<DiscussionGroup> {
+    let mut tx = ctx.snapshot().connection().await;
+    let payload: String =
+        sqlx::query_scalar("SELECT payload FROM review_journal WHERE scope_id=? AND id=?")
+            .bind(ctx.snapshot().scope().as_str())
+            .bind(id)
+            .fetch_one(&mut **tx)
+            .await?;
+    drop(tx);
+    addressed(&payload, status)
+}
+
+fn addressed(payload: &str, status: String) -> anyhow::Result<DiscussionGroup> {
+    Ok(DiscussionGroup::Addressed {
+        discussion: Box::new(serde_json::from_str::<DiscussionEntry>(payload)?),
+        container_status: serde_json::from_value(serde_json::Value::String(status))?,
+    })
+}
+
+/// Stage 1: adds each legacy thread after `position` that holds a message
+/// outside the review journal, in thread id order.
+async fn fill_legacy(
+    ctx: &ReadContext,
+    query: &DiscussionQuery,
+    position: &mut Position,
+    page: &mut DiscussionPageFill<DiscussionGroup>,
+) -> anyhow::Result<Fill> {
     let mut tx = ctx.snapshot().connection().await;
     let keys: Vec<(String,String)> = sqlx::query_as("SELECT t.id,t.status FROM threads t WHERE t.scope_id=? AND t.parent_type=? AND t.parent_id=? AND t.id>? AND EXISTS(SELECT 1 FROM messages m WHERE m.scope_id=t.scope_id AND m.thread_id=t.id AND NOT EXISTS(SELECT 1 FROM review_journal j WHERE j.scope_id=m.scope_id AND j.message_id=m.id)) ORDER BY t.id LIMIT ?")
         .bind(ctx.snapshot().scope().as_str())
@@ -133,24 +172,14 @@ async fn groups(ctx: &ReadContext, query: DiscussionQuery) -> anyhow::Result<Dis
             parent: query.parent.clone(),
             container_status: serde_json::from_value(serde_json::Value::String(status))?,
         };
-        let size = serde_json::to_vec(&group)?.len();
-        if size > RECORD_BYTES {
-            return Err(ReadFailure::PageRecordTooLarge.into());
+        let size = DiscussionPageFill::record_size(&group)?;
+        if page.at_limit() || page.over_budget(size) {
+            return Ok(Fill::Full);
         }
-        if entries.len() == query.limit || bytes + size > PAGE_BYTES - 16_384 {
-            return Ok(DiscussionPage {
-                entries,
-                next_cursor: Some(cursor.encode(ctx, position)?),
-            });
-        }
-        bytes += size + 1;
-        entries.push(group);
+        page.push(group, size);
         position.id = id;
     }
-    Ok(DiscussionPage {
-        entries,
-        next_cursor: None,
-    })
+    Ok(Fill::Complete)
 }
 
 pub(super) async fn group(
@@ -181,11 +210,6 @@ pub(super) async fn group(
     .await?;
     drop(tx);
     let (payload, status, size) = row.ok_or(ReadFailure::ResourceNotFound)?;
-    if size > i64::try_from(RECORD_BYTES)? {
-        return Err(ReadFailure::PageRecordTooLarge.into());
-    }
-    Ok(DiscussionGroup::Addressed {
-        discussion: Box::new(serde_json::from_str::<DiscussionEntry>(&payload)?),
-        container_status: serde_json::from_value(serde_json::Value::String(status))?,
-    })
+    check_stored_size(size)?;
+    addressed(&payload, status)
 }

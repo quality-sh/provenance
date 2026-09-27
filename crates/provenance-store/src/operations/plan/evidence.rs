@@ -142,3 +142,7 @@ fn push_unique(ids: &mut Vec<StableId>, id: StableId) {
         ids.push(id);
     }
 }
+
+#[cfg(test)]
+#[path = "evidence_tests.rs"]
+mod tests;

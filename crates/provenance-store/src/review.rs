@@ -46,6 +46,7 @@ pub use create::CreateReviewRequirement;
 mod authoring;
 mod discussion_discovery;
 mod discussion_messages;
+mod discussion_page;
 mod discussion_reads;
 mod typed_adoption;
 pub use discussion_discovery::{read_discussion_conversation, read_discussion_list};
