@@ -4,7 +4,8 @@ use sha2::Digest as _;
 
 fn repository() -> (tempfile::TempDir, camino::Utf8PathBuf, RepositoryFiles) {
     let temporary = tempfile::tempdir().unwrap();
-    let path = camino::Utf8PathBuf::from_path_buf(temporary.path().canonicalize().unwrap()).unwrap();
+    let path =
+        camino::Utf8PathBuf::from_path_buf(temporary.path().canonicalize().unwrap()).unwrap();
     let files = RepositoryFiles::open(&path).unwrap();
     (temporary, path, files)
 }

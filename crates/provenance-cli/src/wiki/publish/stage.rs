@@ -4,11 +4,11 @@ use super::{
     PublicationOutput, PublishError, PublishReport, PublishedPage, GENERATOR, MANIFEST_VERSION,
     OWNERSHIP_MANIFEST,
 };
-use provenance_store::operations::files::Directory;
 use crate::wiki::model::WikiCorpus;
 use crate::wiki::{render, theme};
 use camino::Utf8Path;
 use provenance_macros::rule;
+use provenance_store::operations::files::Directory;
 use std::fs::File;
 use std::io::Write;
 
@@ -30,10 +30,9 @@ impl StageDirectory {
             .map_err(|error| PublishError::io("record staging directory identity", path, error))?;
         #[cfg(windows)]
         let identity = {
-            let handle = Directory::open(path.as_std_path(), "output parent")
-                .map_err(|error| {
-                    PublishError::io("open staging directory identity", path, error)
-                })?;
+            let handle = Directory::open(path.as_std_path(), "output parent").map_err(|error| {
+                PublishError::io("open staging directory identity", path, error)
+            })?;
             StageIdentity::from_file(handle.as_file()).map_err(|error| {
                 PublishError::io("record staging directory identity", path, error)
             })?
