@@ -448,7 +448,7 @@ fn target_first_mutations_keep_parent_version_and_existence_preconditions() {
         ])
         .assert()
         .failure()
-        .stderr(predicates::str::contains("invalid_update"));
+        .stderr(predicates::str::contains("requirement_edit_conflict"));
     provenance()
         .args([
             "missing_target",
