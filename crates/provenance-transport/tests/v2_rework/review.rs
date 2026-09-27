@@ -34,10 +34,12 @@ async fn submit(host: &StatementHost) -> String {
     )
     .await;
     assert_eq!(status, 200, "{value}");
-    value["data"]["proposal_id"]
+    let proposal = value["data"]["proposal_id"]
         .as_str()
         .expect("submission returns its proposal identity")
-        .to_owned()
+        .to_owned();
+    assert_eq!(value["data"]["proposal_key"], proposal);
+    proposal
 }
 
 fn allow_reviewer(repo: &Repository) {
