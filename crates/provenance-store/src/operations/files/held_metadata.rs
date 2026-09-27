@@ -82,10 +82,7 @@ pub(super) fn identity(file: &File) -> Result<FileIdentity, Refusal> {
 
 #[cfg(unix)]
 fn effective_uid() -> u32 {
-    unsafe extern "C" {
-        fn geteuid() -> u32;
-    }
-    unsafe { geteuid() }
+    rustix::process::geteuid().as_raw()
 }
 
 #[cfg(windows)]
