@@ -4,6 +4,26 @@ use provenance_core::{
 };
 use serde::{Deserialize, Serialize};
 
+impl DecideRequirementReview {
+    pub(super) fn ensure_canonical_artifact_type_supported(&self) -> anyhow::Result<()> {
+        let Some(artifact) = &self.canonical_artifact else {
+            return Ok(());
+        };
+        crate::write_error::ensure!(
+            InvalidUpdate,
+            matches!(
+                artifact.artifact_type,
+                provenance_core::CanonicalArtifactType::Source
+                    | provenance_core::CanonicalArtifactType::Requirement
+                    | provenance_core::CanonicalArtifactType::Resolution
+                    | provenance_core::CanonicalArtifactType::Rule
+            ),
+            "requirement review decisions support source, requirement, resolution, or rule canonical artifacts"
+        );
+        Ok(())
+    }
+}
+
 /// Submits the record's current review revision as an immutable `proposed`
 /// candidate. The store derives the binding; the caller never states it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
