@@ -3,7 +3,6 @@ use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use provenance_store::graph_reference::{graph_digest, GraphExport};
 use serde_json::{json, Value};
-
 fn write_json(dir: &tempfile::TempDir, name: &str, json: impl AsRef<str>) -> String {
     let path = dir.path().join(name);
     std::fs::write(&path, json.as_ref()).unwrap();
