@@ -48,15 +48,14 @@ impl Default for WalSwitchRetry {
 
 /// One opened cache database, owned through completion.
 ///
-/// The connection runs in WAL mode, so a read transaction pins a snapshot
-/// without blocking a writer, and a writer never blocks a reader. The mode
-/// persists in the file; the `-wal` and `-shm` files sit beside it in the
-/// cache directory. The pool holds one connection: every caller reads and
-/// writes one statement at a time, so one is enough, and it keeps the
-/// close clean. `SQLx` returns a dropped connection through a spawned
-/// task, so a pool that can grow can close two connections at once; the
-/// ordered close prevents overlap between pools and the limit of one
-/// prevents overlap within a pool.
+/// A writable open uses WAL mode. A stored-read open keeps the file's mode,
+/// so the open cannot change a DELETE-mode file before a read refuses it.
+/// The pool holds one connection: every caller reads and writes one
+/// statement at a time, so one is enough, and it keeps the close clean.
+/// `SQLx` returns a dropped connection through a spawned task, so a pool
+/// that can grow can close two connections at once; the ordered close
+/// prevents overlap between pools and the limit of one prevents overlap
+/// within a pool.
 pub struct CacheConnection {
     pool: Option<SqlitePool>,
     immutable: bool,
@@ -196,11 +195,21 @@ pub async fn open_immutable_cache(layout: &ProvenanceLayout) -> anyhow::Result<C
 /// an immutable image of the stored projection.
 #[rule("rule_read_only_checkout_answers_as_an_immutable_image")]
 pub async fn open_stored_cache(layout: &ProvenanceLayout) -> anyhow::Result<CacheConnection> {
-    match open_existing_cache(layout).await {
+    let stored = CacheConnection::connect(
+        stored_cache_options(layout).create_if_missing(false),
+        false,
+        WalSwitchRetry::default(),
+    )
+    .await;
+    match stored {
         Ok(connection) => Ok(connection),
         Err(error) if permission_failure(layout, &error) => open_immutable_cache(layout).await,
         Err(error) => Err(error),
     }
+}
+
+fn stored_cache_options(layout: &ProvenanceLayout) -> SqliteConnectOptions {
+    SqliteConnectOptions::new().filename(layout.cache_db_path())
 }
 
 pub fn cache_options(layout: &ProvenanceLayout) -> SqliteConnectOptions {
