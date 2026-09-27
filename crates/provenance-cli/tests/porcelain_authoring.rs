@@ -397,6 +397,7 @@ fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
     );
     assert_eq!(submitted["data"]["requirement_id"], "req_actions");
     assert_eq!(submitted["data"]["fact"], "submitted");
+    assert_eq!(submitted["data"]["proposal_key"], submitted["data"]["proposal_id"]);
 }
 
 #[test]

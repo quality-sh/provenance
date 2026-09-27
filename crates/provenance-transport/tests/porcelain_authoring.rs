@@ -243,6 +243,10 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
         submitted.structured_content.as_ref().unwrap()["data"]["fact"],
         "submitted"
     );
+    assert_eq!(
+        submitted.structured_content.as_ref().unwrap()["data"]["proposal_key"],
+        submitted.structured_content.as_ref().unwrap()["data"]["proposal_id"]
+    );
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
