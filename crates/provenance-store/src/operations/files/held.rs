@@ -175,7 +175,7 @@ pub(super) fn open(
         relative: relative.to_owned(),
         parent,
         parent_path: root_path
-            .join(relative.parent().unwrap_or(Utf8Path::new("")))
+            .join(relative.parent().unwrap_or_else(|| Utf8Path::new("")))
             .into_std_path_buf(),
         leaf,
         digest: Sha256::digest(&bytes).into(),
