@@ -12,7 +12,8 @@ use provenance_store::{
             self, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
             PreparedRepository, PreparedScope, RequestedContext,
         },
-        files::read_repository_file, read_policy::ReadPolicy,
+        files::read_repository_file,
+        read_policy::ReadPolicy,
     },
     settings::Settings,
 };
