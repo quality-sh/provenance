@@ -36,6 +36,18 @@ fn repository() -> tempfile::TempDir {
     dir
 }
 
+fn set_disposition_actors(root: &std::path::Path, actor_ids: &[&str]) {
+    let layout = provenance_store::layout::ProvenanceLayout::new(root.to_str().unwrap());
+    let mut manifest: provenance_core::Manifest =
+        serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
+    manifest.disposition_actor_ids = actor_ids.iter().map(|id| (*id).to_owned()).collect();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+}
+
 fn start(root: &std::path::Path) -> Host {
     let mut child = Command::new(assert_cmd::cargo::cargo_bin("provenance"))
         .args([
@@ -134,6 +146,7 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
     .unwrap();
     assert_eq!(config["repositoryId"], "A");
     assert_eq!(config["scope"], "default");
+    assert_eq!(config["dispositionActorIds"], json!([]));
     assert_eq!(
         config["compatibility"],
         json!({"wire":9,"state":2,"review_journal":3,"read_derivation":3})
@@ -150,6 +163,26 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
             404
         );
     }
+}
+
+#[test]
+fn review_configuration_reads_disposition_actors_for_each_request() {
+    let repo = repository();
+    set_disposition_actors(repo.path(), &["maintainer"]);
+    let host = start(repo.path());
+    let read_config = || {
+        let response = request(&host, "GET", "/review-config", true)
+            .call()
+            .unwrap();
+        serde_json::from_str::<Value>(&response.into_string().unwrap()).unwrap()
+    };
+
+    assert_eq!(read_config()["dispositionActorIds"], json!(["maintainer"]));
+    set_disposition_actors(repo.path(), &["release-manager", "maintainer"]);
+    assert_eq!(
+        read_config()["dispositionActorIds"],
+        json!(["release-manager", "maintainer"])
+    );
 }
 
 #[test]
