@@ -69,13 +69,7 @@ pub(super) async fn materialize_with_guard(
     let connection = open_cache(layout).await?;
     let outcome = async {
         crate::test_probes::at("prepare_current_schema_under_guard")?;
-        rebuild_rows(
-            connection.pool(),
-            &mut reader,
-            manifest,
-            global_digests,
-        )
-        .await
+        rebuild_rows(connection.pool(), &mut reader, manifest, global_digests).await
     }
     .await;
     connection.settle(outcome).await

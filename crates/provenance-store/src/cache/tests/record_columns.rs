@@ -45,7 +45,9 @@ async fn assert_mirrors<K: ProjectionRow>(pool: &sqlx::SqlitePool, kind: bool) {
 #[verifies("rule_record_table_has_one_column_per_field", exhaustion)]
 async fn every_kind_table_mirrors_its_record_columns() {
     let (_dir, layout, _scope) = seeded_layout();
-    crate::cache::materialize_empty_state(&layout).await.unwrap();
+    crate::cache::materialize_empty_state(&layout)
+        .await
+        .unwrap();
     let pool = open_cache(&layout).await.unwrap();
     assert_mirrors::<Source>(pool.pool(), true).await;
     assert_mirrors::<Requirement>(pool.pool(), true).await;

@@ -1,8 +1,8 @@
 //! The one SQLite schema for the disposable cache.
 
+use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 use sqlx::{Executor, Sqlite, SqlitePool, Transaction};
-use provenance_macros::rule;
 
 const DDL: &str = include_str!("../current_cache.sql");
 
@@ -25,20 +25,17 @@ pub async fn compatibility(pool: &SqlitePool) -> anyhow::Result<Compatibility> {
     if table.is_none() {
         return Ok(Compatibility::RebuildRequired);
     }
-    let stored: Option<String> = match sqlx::query_scalar(
-        "SELECT schema_digest FROM _cache_metadata WHERE only_row = 1",
-    )
-    .fetch_optional(pool)
-    .await
-    {
-        Ok(stored) => stored,
-        Err(sqlx::Error::Database(error))
-            if error.message().contains("no such column") =>
+    let stored: Option<String> =
+        match sqlx::query_scalar("SELECT schema_digest FROM _cache_metadata WHERE only_row = 1")
+            .fetch_optional(pool)
+            .await
         {
-            return Ok(Compatibility::RebuildRequired);
-        }
-        Err(error) => return Err(error.into()),
-    };
+            Ok(stored) => stored,
+            Err(sqlx::Error::Database(error)) if error.message().contains("no such column") => {
+                return Ok(Compatibility::RebuildRequired);
+            }
+            Err(error) => return Err(error.into()),
+        };
     Ok(if stored.as_deref() == Some(digest().as_str()) {
         Compatibility::Current
     } else {

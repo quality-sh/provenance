@@ -60,7 +60,11 @@ fn add_linked_scope(layout: &ProvenanceLayout) {
 }
 
 fn canonical_bytes(layout: &ProvenanceLayout) -> BTreeMap<String, Vec<u8>> {
-    fn collect(root: &std::path::Path, path: &std::path::Path, files: &mut BTreeMap<String, Vec<u8>>) {
+    fn collect(
+        root: &std::path::Path,
+        path: &std::path::Path,
+        files: &mut BTreeMap<String, Vec<u8>>,
+    ) {
         for entry in std::fs::read_dir(path).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
@@ -68,7 +72,10 @@ fn canonical_bytes(layout: &ProvenanceLayout) -> BTreeMap<String, Vec<u8>> {
                 collect(root, &path, files);
             } else if path.is_file() {
                 files.insert(
-                    path.strip_prefix(root).unwrap().to_string_lossy().into_owned(),
+                    path.strip_prefix(root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
                     std::fs::read(path).unwrap(),
                 );
             }

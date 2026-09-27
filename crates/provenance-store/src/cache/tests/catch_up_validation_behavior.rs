@@ -106,7 +106,10 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
     pool.close().await.unwrap();
 
     let report = catch_up_state(&layout).await.unwrap();
-    assert!(report.rebuilt, "an incompatible schema must force a rebuild");
+    assert!(
+        report.rebuilt,
+        "an incompatible schema must force a rebuild"
+    );
     assert!(report.cache_recreated);
     assert_catch_up_equals_rebuild(&layout).await;
 }

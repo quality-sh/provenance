@@ -11,8 +11,8 @@
 
 use super::{ReadContext, ReadFuture, ReadRefusal, ReadSnapshot};
 use crate::cache::{catch_up_with_guard, open_cache, open_stored_cache, CacheConnection};
-use crate::layout::ProvenanceLayout;
 use crate::current_schema::{self, Compatibility};
+use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::operations::stamp;
 use crate::publication::publication_guard;

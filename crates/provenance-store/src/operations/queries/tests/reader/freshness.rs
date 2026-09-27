@@ -134,9 +134,9 @@ async fn old_database(store: &test_stores::TestStore) {
         .create_if_missing(true);
     let mut connection = SqliteConnection::connect_with(&options).await.unwrap();
     sqlx::query("CREATE TABLE legacy_cache (value TEXT)")
-    .execute(&mut connection)
-    .await
-    .unwrap();
+        .execute(&mut connection)
+        .await
+        .unwrap();
     connection.close().await.unwrap();
 }
 
@@ -183,7 +183,10 @@ async fn annotate_only_refuses_an_incompatible_current_schema_without_writing() 
         refused.downcast_ref::<crate::operations::reader::ReadRefusal>(),
         Some(crate::operations::reader::ReadRefusal::SchemaBehind { .. })
     ));
-    assert_eq!(std::fs::read(store.layout().cache_db_path()).unwrap(), before);
+    assert_eq!(
+        std::fs::read(store.layout().cache_db_path()).unwrap(),
+        before
+    );
 }
 
 /// When the freshness step fails before it can rebuild, the read falls
