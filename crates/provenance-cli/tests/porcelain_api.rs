@@ -231,7 +231,11 @@ fn api_reports_the_typed_requirement_edit_conflict() {
             .unwrap()
     };
     let current = patch("current-edit", "The current description applies.");
-    assert!(current.status.success(), "{}", String::from_utf8_lossy(&current.stderr));
+    assert!(
+        current.status.success(),
+        "{}",
+        String::from_utf8_lossy(&current.stderr)
+    );
     let current: Value = serde_json::from_slice(&current.stdout).unwrap();
 
     let stale = patch("stale-edit", "The stale description does not apply.");

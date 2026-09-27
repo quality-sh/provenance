@@ -287,11 +287,14 @@ fn review_action_requests_exclude_server_created_identities() {
         value[field] = supplied;
         assert!(serde_json::from_value::<review::SubmitRequirementReview>(value).is_err());
     }
-    assert!(serde_json::from_value::<DecideRequirementReviewRequest>(json!({
-        "scope_id":"default", "requirement_id":"req_a", "request_id":"client-request",
-        "actor":{"identity_type":"human", "id":"reviewer"}, "proposal_id":"prop-1",
-        "disposition_id":"client-disposition", "decision":"accepted", "rationale":null,
-        "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"},
-        "feedback":null, "declared_by":null
-    })).is_err());
+    assert!(
+        serde_json::from_value::<DecideRequirementReviewRequest>(json!({
+            "scope_id":"default", "requirement_id":"req_a", "request_id":"client-request",
+            "actor":{"identity_type":"human", "id":"reviewer"}, "proposal_id":"prop-1",
+            "disposition_id":"client-disposition", "decision":"accepted", "rationale":null,
+            "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"},
+            "feedback":null, "declared_by":null
+        }))
+        .is_err()
+    );
 }
