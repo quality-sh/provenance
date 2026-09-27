@@ -253,8 +253,8 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
 fn review_action_requests_exclude_server_created_identities() {
     let submit = serde_json::from_value::<review::SubmitRequirementReview>(json!({
         "scope_id":"default", "actor":"agent", "requirement_id":"req_a",
-        "proposal_id":"prop-1", "proposal_key":"prop-1-key", "title":"Title",
-        "summary":"Summary", "source_ids":[], "evidence_references":[], "builds_on":[],
+        "title":"Title", "summary":"Summary", "source_ids":[],
+        "evidence_references":[], "builds_on":[],
         "expected_revision":null, "revises":null
     }));
     assert!(submit.is_ok());
@@ -274,14 +274,17 @@ fn review_action_requests_exclude_server_created_identities() {
     }));
     assert!(withdraw.is_ok());
 
-    for value in [
-        json!({
-            "scope_id":"default", "request_id":"client-request", "actor":"agent",
-            "requirement_id":"req_a", "proposal_id":"prop-1", "proposal_key":"key",
+    for (field, supplied) in [
+        ("request_id", json!("client-request")),
+        ("proposal_id", json!("client-proposal")),
+        ("proposal_key", json!("client-key")),
+    ] {
+        let mut value = json!({
+            "scope_id":"default", "actor":"agent", "requirement_id":"req_a",
             "title":"Title", "summary":"Summary", "source_ids":[],
             "evidence_references":[], "builds_on":[], "expected_revision":null, "revises":null
-        }),
-    ] {
+        });
+        value[field] = supplied;
         assert!(serde_json::from_value::<review::SubmitRequirementReview>(value).is_err());
     }
     assert!(serde_json::from_value::<DecideRequirementReviewRequest>(json!({
