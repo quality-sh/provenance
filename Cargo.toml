@@ -82,6 +82,6 @@ provenance-scanner = { path = "crates/provenance-scanner", version = "0.2.3" }
 provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.3" }
 provenance-store = { path = "crates/provenance-store", version = "0.2.3" }
 walkdir = "2.5"
-windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Memory"] }
 
 schemars = "=1.2.2"
