@@ -44,7 +44,7 @@ pub(in crate::handlers::schema) fn disposition_schema() -> Value {
                 "additionalProperties": false,
                 "required": ["artifact_type", "artifact_id"],
                 "properties": {
-                    "artifact_type": {"enum": ["source", "requirement", "resolution", "rule"]},
+                    "artifact_type": {"enum": ["source", "requirement", "resolution", "rule", "domain", "boundary", "topic", "question"]},
                     "artifact_id": {"$ref": "#/$defs/stableId"}
                 }
             },

@@ -59,6 +59,14 @@ pub enum CanonicalArtifactType {
     Resolution,
     #[serde(rename = "rule")]
     Rule,
+    #[serde(rename = "domain")]
+    Domain,
+    #[serde(rename = "boundary")]
+    Boundary,
+    #[serde(rename = "topic")]
+    Topic,
+    #[serde(rename = "question")]
+    Question,
 }
 
 impl CanonicalArtifactType {

@@ -182,6 +182,7 @@ impl StateStore {
         addressed: Option<StableId>,
         input: DecideRequirementReview,
     ) -> anyhow::Result<CycleEntry> {
+        input.ensure_canonical_artifact_type_supported()?;
         let actor = input.actor.id.clone();
         let digest = request_digest(&input)?;
         let scope = input.scope_id.clone();

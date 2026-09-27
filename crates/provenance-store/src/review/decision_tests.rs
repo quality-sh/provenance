@@ -450,6 +450,7 @@ fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
 }
 
 mod bypass_tests;
+mod canonical_artifacts;
 
 #[test]
 fn legacy_unbound_decisions_read_correctly_and_stay_frozen() {

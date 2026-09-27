@@ -75,6 +75,19 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
         canonical["required"],
         serde_json::json!(["artifact_type", "artifact_id"])
     );
+    assert_eq!(
+        canonical["properties"]["artifact_type"]["enum"],
+        serde_json::json!([
+            "source",
+            "requirement",
+            "resolution",
+            "rule",
+            "domain",
+            "boundary",
+            "topic",
+            "question"
+        ])
+    );
     let external_action = &schema["schema"]["properties"]["external_action"];
     assert_eq!(external_action["additionalProperties"], false);
     assert_eq!(
