@@ -83,7 +83,12 @@ fn feedback(body: &str) -> Value {
     json!({"feedback":{"role":"user","body":body}})
 }
 fn withdraw(store: &StateStore, proposal: &StableId) -> anyhow::Result<CycleEntry> {
-    store.withdraw_requirement_review(serde_json::from_value(json!({"scope_id":"default","actor":"agent","proposal_id":proposal})).unwrap())
+    store.withdraw_requirement_review(
+        serde_json::from_value(
+            json!({"scope_id":"default","actor":"agent","proposal_id":proposal}),
+        )
+        .unwrap(),
+    )
 }
 /// The fixture with one edit enrolled and one pending submission bound to it.
 fn enrolled() -> (tempfile::TempDir, StateStore, StableId, StableId) {
@@ -272,10 +277,7 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     store
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
         .unwrap();
-    refused(
-        submit(&store, None, None),
-        "requires a review revision",
-    );
+    refused(submit(&store, None, None), "requires a review revision");
 }
 
 #[test]
@@ -284,10 +286,7 @@ fn stale_submission_and_stale_selection_are_refused() {
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let r1 = edit(&store, "edit-1", "Statement v1");
     edit(&store, "edit-2", "Statement v2");
-    refused(
-        submit(&store, None, Some(r1.as_str())),
-        "stale submission",
-    );
+    refused(submit(&store, None, Some(r1.as_str())), "stale submission");
     assert!(store
         .list_proposal_definitions(&scope())
         .unwrap()
@@ -306,10 +305,7 @@ fn stale_submission_and_stale_selection_are_refused() {
         "stale review selection",
     );
     assert!(store.list_dispositions(&scope()).unwrap().is_empty());
-    refused(
-        withdraw(&store, &proposal),
-        "no longer current and pending",
-    );
+    refused(withdraw(&store, &proposal), "no longer current and pending");
 }
 
 #[test]

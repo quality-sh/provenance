@@ -10,11 +10,17 @@ async fn enroll(host: &StatementHost) -> String {
         "PATCH",
         "/requirements/req_shared",
         Some(json!({"data":{"actor":"agent","description":"Enrolled."}})),
-        &[("idempotency-key", "enroll_requirement"), ("if-match", &etag)],
+        &[
+            ("idempotency-key", "enroll_requirement"),
+            ("if-match", &etag),
+        ],
     )
     .await;
     assert_eq!(status, 200, "{saved}");
-    saved["data"]["edit"]["revision"].as_str().unwrap().to_owned()
+    saved["data"]["edit"]["revision"]
+        .as_str()
+        .unwrap()
+        .to_owned()
 }
 
 async fn submit(host: &StatementHost) -> String {
@@ -59,9 +65,8 @@ async fn stale_requirement_edit_returns_the_current_etag() {
     let host = host(&repo);
     let (_, _, old_etag) = call(&host, "GET", "/requirements/req_shared", None, &[]).await;
     let old_etag = old_etag.unwrap();
-    let body = |description: &str| {
-        Some(json!({"data":{"actor":"agent","description":description}}))
-    };
+    let body =
+        |description: &str| Some(json!({"data":{"actor":"agent","description":description}}));
     let (status, current, _) = call(
         &host,
         "PATCH",
@@ -81,7 +86,10 @@ async fn stale_requirement_edit_returns_the_current_etag() {
     .await;
     assert_eq!(status, 409, "{conflict}");
     assert_eq!(conflict["error"]["kind"], "requirement_edit_conflict");
-    assert_eq!(conflict["error"]["current_etag"], current["data"]["edit"]["etag"]);
+    assert_eq!(
+        conflict["error"]["current_etag"],
+        current["data"]["edit"]["etag"]
+    );
 }
 
 #[tokio::test]
