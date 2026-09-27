@@ -119,23 +119,35 @@ export function effectServerDocument(document) {
         if (status < 400 || schema === undefined) continue;
         const kinds = [...failureKinds(copy, schema)].filter(kind => FAILURE_STATUS.get(kind) === status);
         if (kinds.length === 0) continue;
-        response.content['application/json'].schema = {
-          allOf: [schema, {
-            type: 'object',
-            required: ['error'],
-            properties: {
-              error: {
-                type: 'object',
-                required: ['kind'],
-                properties: { kind: { enum: kinds.sort() } },
-              },
-            },
-          }],
-        };
+        response.content['application/json'].schema = failureSchemaForStatus(copy, schema, status);
       }
     }
   }
   return copy;
+}
+
+function failureSchemaForStatus(document, schema, status, references = new Set()) {
+  if (schema === null || typeof schema !== 'object') return schema;
+  if (Array.isArray(schema)) return schema.map(value => failureSchemaForStatus(document, value, status, references));
+  if (typeof schema.$ref === 'string' && schema.$ref.startsWith('#/')) {
+    if (references.has(schema.$ref)) throw new Error(`Effect failure schema is recursive through ${schema.$ref}`);
+    const target = schema.$ref.slice(2).split('/').reduce((value, key) => value[key.replaceAll('~1', '/').replaceAll('~0', '~')], document);
+    const next = new Set(references).add(schema.$ref);
+    return failureSchemaForStatus(document, target, status, next);
+  }
+  const narrowed = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'oneOf' || key === 'anyOf') {
+      const variants = value.filter(variant => {
+        const kinds = [...failureKinds(document, variant)];
+        return kinds.length === 0 || kinds.some(kind => FAILURE_STATUS.get(kind) === status);
+      });
+      narrowed[key] = variants.map(variant => failureSchemaForStatus(document, variant, status, references));
+    } else {
+      narrowed[key] = failureSchemaForStatus(document, value, status, references);
+    }
+  }
+  return narrowed;
 }
 
 async function runGenerator(document, name, warnings) {
