@@ -65,7 +65,6 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     });
     let review_configuration = ReviewConfiguration {
         access: access.clone(),
-        manifest_path: options.repo.join(".provenance/state/manifest.json"),
         value: config,
     };
     let router = host
@@ -151,7 +150,6 @@ impl ShutdownSignals {
 #[derive(Clone)]
 struct ReviewConfiguration {
     access: Arc<LocalAccess>,
-    manifest_path: PathBuf,
     value: Value,
 }
 
@@ -162,13 +160,11 @@ async fn configuration(
     if let Err(error) = config.access.authenticate(request.headers()) {
         return refusal(error);
     }
-    let Ok(bytes) = std::fs::read(&config.manifest_path) else {
-        return refusal(OperationFailure::Internal);
+    let actor_ids = match config.access.disposition_actor_ids() {
+        Ok(actor_ids) => actor_ids,
+        Err(error) => return refusal(error),
     };
-    let Ok(manifest) = serde_json::from_slice::<provenance_core::Manifest>(&bytes) else {
-        return refusal(OperationFailure::Internal);
-    };
-    config.value["dispositionActorIds"] = json!(manifest.disposition_actor_ids);
+    config.value["dispositionActorIds"] = json!(actor_ids);
     Json(config.value).into_response()
 }
 
