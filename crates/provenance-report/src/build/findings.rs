@@ -14,8 +14,8 @@ use crate::envelope::{
 };
 use camino::Utf8Path;
 use provenance_core::coverage::{EvidenceDiffReport, EvidenceDiffState, EvidenceSiteKind};
-use provenance_core::{ImplementationBinding, Requirement, Rule, VerificationBinding};
-use provenance_scanner::{AttributeBinding, FileScan};
+use provenance_core::{Requirement, Rule};
+use provenance_scanner::{InactiveBindingOrigin, InactiveBindingRole, RuleEvidenceFacts};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// How the base commit compares, for honest comparison labels.
@@ -93,94 +93,64 @@ fn finding(
     }
 }
 
-/// Rule ids that carry a current verification: a scanned marker with a
-/// verification method, or a current typed verification binding.
-fn verified_rule_ids(
-    scans: &[FileScan],
-    verifications: &[VerificationBinding],
-) -> BTreeSet<String> {
-    let mut verified: BTreeSet<String> = scans
-        .iter()
-        .flat_map(|scan| {
-            scan.bindings
-                .iter()
-                .filter(|binding| binding.verification.is_some())
-                .map(|binding| binding.rule_id.clone())
-                .chain(
-                    scan.annotations
-                        .iter()
-                        .filter(|location| location.annotation.verification.is_some())
-                        .map(|location| location.annotation.rule.clone()),
-                )
-        })
-        .collect();
-    verified.extend(
-        verifications
-            .iter()
-            .map(|binding| binding.rule_id.as_str().to_string()),
-    );
-    verified
-}
-
-/// One absence finding per active Rule that carries no current
-/// verification. A complete scan is a caller obligation: an incomplete scan
-/// cannot clear an absence, so the caller suppresses these findings there.
-pub(super) fn absence_findings(
-    rules: &[Rule],
-    scans: &[FileScan],
-    verifications: &[VerificationBinding],
-    baseline: &BaselineView,
-    severity: Severity,
-) -> Vec<Finding> {
-    let verified = verified_rule_ids(scans, verifications);
-    rules
-        .iter()
-        .filter(|rule| rule.status == provenance_core::RuleStatus::Active)
-        .filter(|rule| !verified.contains(rule.id.as_str()))
-        .map(|rule| {
-            finding(
-                DiagnosticCode::ActiveRuleMissingVerification,
-                SubjectKind::Rule,
-                rule.id.as_str(),
-                severity,
-                baseline.comparison(rule.id.as_str()),
-                BindingPresence::Absent,
-            )
-        })
-        .collect()
-}
-
-/// Current markers or typed bindings that cite a deprecated or archived
-/// Rule. Marker sites ride along when the scan read them with a line.
-pub(super) fn inactive_current_findings(
-    rules: &[Rule],
-    scans: &[FileScan],
-    implementations: &[ImplementationBinding],
-    verifications: &[VerificationBinding],
+/// Map shared Rule evidence facts to report findings.
+pub(super) fn rule_evidence_findings(
+    facts: &RuleEvidenceFacts,
     baseline: &BaselineView,
     severity: Severity,
     repo: &Utf8Path,
 ) -> Vec<Finding> {
-    let inactive = inactive_rule_ids(rules);
-    if inactive.is_empty() {
-        return Vec::new();
-    }
-    // Collect subject id first, sites second, so marker order in the scan
-    // never decides the finding order.
+    let mut findings = facts
+        .unimplemented
+        .iter()
+        .map(|rule_id| {
+            finding(
+                DiagnosticCode::ActiveRuleMissingImplementation,
+                SubjectKind::Rule,
+                rule_id,
+                Severity::Warning,
+                baseline.comparison(rule_id),
+                BindingPresence::Absent,
+            )
+        })
+        .chain(facts.unverified.iter().map(|rule_id| {
+            finding(
+                DiagnosticCode::ActiveRuleMissingVerification,
+                SubjectKind::Rule,
+                rule_id,
+                severity,
+                baseline.comparison(rule_id),
+                BindingPresence::Absent,
+            )
+        }))
+        .collect::<Vec<_>>();
+    findings.extend(inactive_current_findings(facts, baseline, severity, repo));
+    findings
+}
+
+fn inactive_current_findings(
+    facts: &RuleEvidenceFacts,
+    baseline: &BaselineView,
+    severity: Severity,
+    repo: &Utf8Path,
+) -> Vec<Finding> {
     let mut events: BTreeMap<String, Vec<Site>> = BTreeMap::new();
-    let cited = scans
-        .iter()
-        .flat_map(|scan| scan_sites(scan, repo))
-        .filter(|(subject, _)| inactive.contains(subject));
-    for (subject, marker) in cited {
-        events.entry(subject.to_string()).or_default().push(marker);
-    }
-    let typed = implementations
-        .iter()
-        .map(|binding| binding.rule_id.as_str())
-        .chain(verifications.iter().map(|binding| binding.rule_id.as_str()));
-    for subject in typed.filter(|subject| inactive.contains(subject)) {
-        events.entry(subject.to_string()).or_default();
+    for binding in &facts.inactive_current {
+        let sites = events.entry(binding.rule_id.clone()).or_default();
+        if binding.origin == InactiveBindingOrigin::Scanned {
+            if let Some(current) = site(
+                repo,
+                &binding.file_path,
+                binding.line.expect("a scanned binding has a line"),
+                match binding.role {
+                    InactiveBindingRole::Implementation => SiteRole::Implementation,
+                    InactiveBindingRole::Verification => SiteRole::Verification,
+                },
+                binding.verification_method.map(|method| method.to_string()),
+            ) {
+                sites.push(current);
+            }
+        }
     }
     events
         .into_iter()
@@ -197,57 +167,6 @@ pub(super) fn inactive_current_findings(
             current
         })
         .collect()
-}
-
-/// The ids of the deprecated and archived Rules.
-fn inactive_rule_ids(rules: &[Rule]) -> BTreeSet<&str> {
-    rules
-        .iter()
-        .filter(|rule| {
-            matches!(
-                rule.status,
-                provenance_core::RuleStatus::Deprecated | provenance_core::RuleStatus::Archived
-            )
-        })
-        .map(|rule| rule.id.as_str())
-        .collect()
-}
-
-/// Each Rule id that one scanned file cites, with the site of the citation.
-/// Markers come first and typed bindings second, in scan order. A citation
-/// that the scan read with no usable line has no site and is left out.
-fn scan_sites<'s>(
-    scan: &'s FileScan,
-    repo: &'s Utf8Path,
-) -> impl Iterator<Item = (&'s str, Site)> + 's {
-    let markers = scan.annotations.iter().filter_map(move |location| {
-        let marker = site(
-            repo,
-            &location.file_path,
-            location.line,
-            SiteRole::Implementation,
-            None,
-        )?;
-        Some((location.annotation.rule.as_str(), marker))
-    });
-    let bindings = scan
-        .bindings
-        .iter()
-        .filter_map(move |binding| Some((binding.rule_id.as_str(), binding_site(binding, repo)?)));
-    markers.chain(bindings)
-}
-
-fn binding_site(binding: &AttributeBinding, repo: &Utf8Path) -> Option<Site> {
-    let role = if binding.verification.is_some() {
-        SiteRole::Verification
-    } else {
-        SiteRole::Implementation
-    };
-    let method = binding
-        .verification
-        .as_ref()
-        .map(std::string::ToString::to_string);
-    site(repo, &binding.file_path, binding.line, role, method)
 }
 
 /// Site findings from the evidence diff: verification sites that are gone or

@@ -1,15 +1,10 @@
 //! Edits use the same scoped writer adapter as creation.
 use super::creation::creation;
-use super::{ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext};
-use crate::{
-    layout::ProvenanceLayout,
-    state_store::{
-        CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateTopicInput,
-        EditQuestionInput, StateStore, UpdateBoundaryInput, UpdateDomainInput,
-        UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
-        UpdateTopicInput,
-    },
-    write_error::{SourceFailure, WriteError, WriteFailure},
+use super::ExecutionNeed;
+use crate::state_store::{
+    CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateTopicInput,
+    EditQuestionInput, UpdateBoundaryInput, UpdateDomainInput, UpdateRequirementInput,
+    UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
 creation!(
     UpdateSource,

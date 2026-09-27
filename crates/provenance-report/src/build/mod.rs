@@ -67,17 +67,16 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
     let scans = provenance_scanner::scan_path_with_content(input.scan_path)?;
     let files_scanned = scans.len() as u64;
     let scans: Vec<_> = scans.into_iter().map(|file| file.scan).collect();
-    let scan_covers = scan_covers_repository(input.repo, input.scan_path);
+    let scan_covers = provenance_scanner::scan_covers_repository(input.repo, input.scan_path);
     let (completeness, incompleteness_reason) =
         scan_completeness(input.repo, input.scan_path, scan_covers, &head)?;
-    let complete_scan = completeness == Completeness::Complete;
 
     let (baseline, baseline_reason, base_snapshot, head_snapshot) =
         read_snapshots(input.repo, &base, &head, &scope)?;
     let (verifications, implementations) =
         graph_snapshots::read_bindings(input.repo, &head, &scope)?;
 
-    let finding_records = collect_findings(&FindingInput {
+    let collected = collect_findings(&FindingInput {
         repo: input.repo,
         base: &base,
         head: &head,
@@ -91,15 +90,8 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         baseline,
         baseline_view: &BaselineView::for_rules(baseline, &base_snapshot.rules),
         binding_severity: binding_severity(configured),
-        complete_scan,
+        completeness,
     })?;
-    let governed = finding_records
-        .iter()
-        .filter(|finding| {
-            finding.code == "active_rule_missing_verification"
-                || finding.code == "inactive_rule_current_binding"
-        })
-        .count();
     let graph_changes = if baseline == BaselineCompatibility::Compatible {
         graph_snapshots::diff_snapshots(&base_snapshot, &head_snapshot)
     } else {
@@ -122,10 +114,10 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         },
         policy: Some(crate::envelope::PolicyOutcome {
             mode: policy_mode(configured),
-            result: policy_result(configured, governed),
+            result: policy_result(configured, collected.governed_finding_count),
         }),
         graph_changes,
-        findings: finding_records,
+        findings: collected.records,
         // Verification-run facts are out of scope for this producer. A run
         // the layers cannot supply stays absent; it is never invented.
         verification_runs: Vec::new(),
@@ -181,23 +173,23 @@ fn read_snapshots(
 /// baseline facts. Absence needs a complete scan: an incomplete scan cannot
 /// clear an absence, so it never reports one. Comparative findings need a
 /// compatible baseline.
-fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<Vec<crate::envelope::Finding>> {
+fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<CollectedFindings> {
     let rules = &input.head_snapshot.rules;
     let mut finding_records = Vec::new();
-    if input.complete_scan {
-        finding_records.extend(findings::absence_findings(
-            rules,
-            input.scans,
-            input.verifications,
-            input.baseline_view,
-            input.binding_severity,
-        ));
-    }
-    finding_records.extend(findings::inactive_current_findings(
+    let completeness = match input.completeness {
+        Completeness::Complete => provenance_scanner::RuleEvidenceCompleteness::Complete,
+        Completeness::Incomplete => provenance_scanner::RuleEvidenceCompleteness::Incomplete,
+    };
+    let facts = provenance_scanner::derive_rule_evidence_facts(
         rules,
         input.scans,
         input.implementations,
         input.verifications,
+        completeness,
+    );
+    let governed_finding_count = facts.governed_finding_count();
+    finding_records.extend(findings::rule_evidence_findings(
+        &facts,
         input.baseline_view,
         input.binding_severity,
         input.repo,
@@ -209,7 +201,7 @@ fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<Vec<crate::envel
             &input.base_snapshot.rules,
             &input.head_snapshot.rules,
         ));
-        if input.complete_scan {
+        if input.completeness == Completeness::Complete {
             finding_records.extend(evidence_site_findings(
                 input.repo,
                 input.base,
@@ -219,7 +211,15 @@ fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<Vec<crate::envel
             )?);
         }
     }
-    Ok(finding_records)
+    Ok(CollectedFindings {
+        records: finding_records,
+        governed_finding_count,
+    })
+}
+
+struct CollectedFindings {
+    records: Vec<crate::envelope::Finding>,
+    governed_finding_count: usize,
 }
 
 /// The gathered facts one finding pass reads.
@@ -237,7 +237,7 @@ struct FindingInput<'a> {
     baseline: BaselineCompatibility,
     baseline_view: &'a BaselineView,
     binding_severity: crate::envelope::Severity,
-    complete_scan: bool,
+    completeness: Completeness,
 }
 
 const fn binding_severity(
@@ -260,7 +260,15 @@ const fn policy_result(
     configured: settings::BindingFindingsSeverity,
     governed: usize,
 ) -> PolicyResult {
-    if matches!(configured, settings::BindingFindingsSeverity::Error) && governed > 0 {
+    let severity = match configured {
+        settings::BindingFindingsSeverity::Warning => {
+            provenance_scanner::BindingFindingSeverity::Warning
+        }
+        settings::BindingFindingsSeverity::Error => {
+            provenance_scanner::BindingFindingSeverity::Error
+        }
+    };
+    if provenance_scanner::binding_findings_fail(severity, governed) {
         PolicyResult::Failure
     } else {
         PolicyResult::Success
@@ -289,12 +297,6 @@ fn evidence_site_findings(
         &graph,
     );
     Ok(findings::evidence_site_findings(&report))
-}
-
-/// Whether the scan covers the declared scope. A partial scan cannot claim
-/// that a Rule has no implementation or verification elsewhere.
-fn scan_covers_repository(repo: &Utf8Path, path: &Utf8Path) -> bool {
-    same_file::is_same_file(repo, path).unwrap_or(false)
 }
 
 /// Whether the working tree matches the head commit. Scanned source facts

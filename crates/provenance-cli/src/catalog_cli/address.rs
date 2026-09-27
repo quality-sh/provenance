@@ -39,25 +39,6 @@ pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<R
     })
 }
 
-pub(super) fn help(collection: &str) -> String {
-    registrations(collection)
-        .into_iter()
-        .map(|address| {
-            let words = address
-                .words
-                .iter()
-                .map(|segment| match segment {
-                    Segment::Literal(word) => (*word).to_owned(),
-                    Segment::Parameter(name) => format!("<{name}>"),
-                })
-                .collect::<Vec<_>>()
-                .join(" ");
-            format!("  {collection} {words}")
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 fn addresses() -> &'static [Address] {
     static ADDRESSES: OnceLock<Vec<Address>> = OnceLock::new();
     ADDRESSES.get_or_init(build)

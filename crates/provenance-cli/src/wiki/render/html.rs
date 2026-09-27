@@ -7,20 +7,11 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 
 use super::labels::{kind_icon, kind_label};
+pub(in crate::wiki::render) use crate::html::{escape_attr, escape_html};
 
 #[cfg(test)]
 #[path = "tests/disambiguation.rs"]
 mod disambiguation_tests;
-
-pub(in crate::wiki::render) fn escape_html(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-}
-
-pub(in crate::wiki::render) fn escape_attr(text: &str) -> String {
-    escape_html(text).replace('"', "&quot;")
-}
 
 /// Renders every titled link on one page.
 ///

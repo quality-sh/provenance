@@ -12,6 +12,7 @@ mod http;
 mod local;
 mod mcp;
 mod mcp_io;
+mod mcp_surface;
 pub mod porcelain;
 mod routing;
 
@@ -49,6 +50,11 @@ impl Default for StatementHost {
 }
 
 impl StatementHost {
+    /// Construct Porcelain capabilities with this host's matching adapters.
+    pub const fn porcelain(&self) -> porcelain::HostPorcelain<'_> {
+        porcelain::HostPorcelain::new(self)
+    }
+
     /// Use an explicit caller and repository access policy.
     pub fn with_access(access: Arc<dyn HostAccess>) -> Self {
         Self {

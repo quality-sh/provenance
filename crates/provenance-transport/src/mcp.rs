@@ -1,10 +1,10 @@
-use crate::{routing, StatementHost, MAX_BODY_BYTES};
+use crate::{mcp_surface, routing, StatementHost};
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
 use provenance_store::operations::catalog;
 use rmcp::{
     model::{
         CallToolRequestParams, CallToolResult, ErrorCode, ListToolsResult, PaginatedRequestParams,
-        ServerCapabilities, ServerInfo, Tool,
+        ServerCapabilities, ServerInfo,
     },
     service::RequestContext,
     ErrorData, RoleServer, ServerHandler,
@@ -32,20 +32,13 @@ impl ServerHandler for StatementHost {
             .iter()
             .filter(|definition| self.advertises(definition.name))
             .map(|definition| {
-                let mut tool = Tool::new(
+                mcp_surface::tool(
                     definition.name,
                     definition.description,
-                    definition.mcp_input_schema().as_object().unwrap().clone(),
-                );
-                tool.output_schema = Some(
-                    definition
-                        .mcp_output_schema()
-                        .as_object()
-                        .unwrap()
-                        .clone()
-                        .into(),
-                );
-                tool
+                    definition.mcp_input_schema(),
+                    definition.mcp_output_schema(),
+                    mcp_surface::SchemaDeclaration::Keep,
+                )
             })
             .collect::<Vec<_>>();
         if crate::porcelain::get_is_available(self) {
@@ -103,25 +96,10 @@ impl ServerHandler for StatementHost {
                     None,
                 ));
             };
-            let _admission = match self.admit() {
-                Ok(permit) => permit,
-                Err(failure) => return Ok(error(failure)),
-            };
-            let arguments = request.arguments.unwrap_or_default();
-            if serde_json::to_vec(&arguments)
-                .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-                .len()
-                > MAX_BODY_BYTES
-            {
-                return Ok(error(ErasedFailure::new(
-                    None,
-                    OperationFailure::InvalidInput {
-                        field: None,
-                        reason: InvalidInputReason::TooLarge,
-                    },
-                )));
-            }
-            return Ok(crate::porcelain::call_check(self, port.clone(), arguments).await);
+            return mcp_surface::admitted_call(self, request.arguments, |arguments| {
+                crate::porcelain::call_check(self, port.clone(), arguments)
+            })
+            .await;
         }
         if let Some(action) = crate::porcelain::Action::RECORD
             .into_iter()
@@ -149,39 +127,23 @@ async fn call_catalog_tool(
     arguments: Option<serde_json::Map<String, Value>>,
 ) -> Result<CallToolResult, ErrorData> {
     if !host.advertises(definition.name) {
-        return Ok(error(ErasedFailure::new(
+        return Ok(mcp_surface::failure_result(ErasedFailure::new(
             None,
             OperationFailure::AccessDenied,
         )));
     }
-    let _admission = match host.admit() {
-        Ok(permit) => permit,
-        Err(failure) => return Ok(error(failure)),
-    };
-    let arguments = Value::Object(arguments.unwrap_or_default());
-    if serde_json::to_vec(&arguments)
-        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-        .len()
-        > MAX_BODY_BYTES
-    {
-        return Ok(error(ErasedFailure::new(
-            None,
-            OperationFailure::InvalidInput {
-                field: None,
-                reason: InvalidInputReason::TooLarge,
-            },
-        )));
-    }
-    let (matched, data, query, headers) = match mcp_call(definition, &arguments) {
-        Ok(call) => call,
-        Err(failure) => return Ok(error(failure)),
-    };
-    Ok(
+    mcp_surface::admitted_call(host, arguments, |arguments| async move {
+        let arguments = Value::Object(arguments);
+        let (matched, data, query, headers) = match mcp_call(definition, &arguments) {
+            Ok(call) => call,
+            Err(failure) => return mcp_surface::failure_result(failure),
+        };
         match routing::invoke(host, &matched, data, query, &headers).await {
             Ok((value, _)) => CallToolResult::structured(value.into_value()),
-            Err(failure) => error(failure),
-        },
-    )
+            Err(failure) => mcp_surface::failure_result(failure),
+        }
+    })
+    .await
 }
 
 async fn call_discussion(
@@ -196,100 +158,40 @@ async fn call_discussion(
             None,
         ));
     }
-    let _admission = match host.admit() {
-        Ok(permit) => permit,
-        Err(failure) => return Ok(error(failure)),
-    };
-    let arguments = arguments.unwrap_or_default();
-    if serde_json::to_vec(&arguments)
-        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-        .len()
-        > MAX_BODY_BYTES
-    {
-        return Ok(error(ErasedFailure::new(
-            None,
-            OperationFailure::InvalidInput {
-                field: None,
-                reason: InvalidInputReason::TooLarge,
-            },
-        )));
-    }
-    Ok(crate::porcelain::call_discussion(host, action, arguments).await)
+    mcp_surface::admitted_call(host, arguments, |arguments| {
+        crate::porcelain::call_discussion(host, action, arguments)
+    })
+    .await
 }
 
 async fn call_get(
     host: &StatementHost,
     arguments: Option<serde_json::Map<String, serde_json::Value>>,
 ) -> Result<CallToolResult, ErrorData> {
-    let _admission = match host.admit() {
-        Ok(permit) => permit,
-        Err(failure) => return Ok(error(failure)),
-    };
-    let arguments = arguments.unwrap_or_default();
-    if serde_json::to_vec(&arguments)
-        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-        .len()
-        > MAX_BODY_BYTES
-    {
-        return Ok(error(ErasedFailure::new(
-            None,
-            OperationFailure::InvalidInput {
-                field: None,
-                reason: InvalidInputReason::TooLarge,
-            },
-        )));
-    }
-    Ok(crate::porcelain::call_get(host, arguments).await)
+    mcp_surface::admitted_call(host, arguments, |arguments| {
+        crate::porcelain::call_get(host, arguments)
+    })
+    .await
 }
 
 async fn call_api_tool(
     host: &StatementHost,
     arguments: Option<serde_json::Map<String, Value>>,
 ) -> Result<CallToolResult, ErrorData> {
-    let _admission = match host.admit() {
-        Ok(permit) => permit,
-        Err(failure) => return Ok(error(failure)),
-    };
-    let arguments = arguments.unwrap_or_default();
-    if serde_json::to_vec(&arguments)
-        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-        .len()
-        > MAX_BODY_BYTES
-    {
-        return Ok(error(ErasedFailure::new(
-            None,
-            OperationFailure::InvalidInput {
-                field: None,
-                reason: InvalidInputReason::TooLarge,
-            },
-        )));
-    }
-    Ok(crate::porcelain::call_api(host, Some(arguments)).await)
+    mcp_surface::admitted_call(host, arguments, |arguments| {
+        crate::porcelain::call_api(host, Some(arguments))
+    })
+    .await
 }
 
 async fn call_search(
     host: &StatementHost,
     arguments: Option<serde_json::Map<String, serde_json::Value>>,
 ) -> Result<CallToolResult, ErrorData> {
-    let _admission = match host.admit() {
-        Ok(permit) => permit,
-        Err(failure) => return Ok(error(failure)),
-    };
-    let arguments = arguments.unwrap_or_default();
-    if serde_json::to_vec(&arguments)
-        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-        .len()
-        > MAX_BODY_BYTES
-    {
-        return Ok(error(ErasedFailure::new(
-            None,
-            OperationFailure::InvalidInput {
-                field: None,
-                reason: InvalidInputReason::TooLarge,
-            },
-        )));
-    }
-    Ok(crate::porcelain::call_search(host, arguments).await)
+    mcp_surface::admitted_call(host, arguments, |arguments| {
+        crate::porcelain::call_search(host, arguments)
+    })
+    .await
 }
 
 async fn call_authoring_action(
@@ -297,25 +199,10 @@ async fn call_authoring_action(
     action: crate::porcelain::Action,
     arguments: Option<serde_json::Map<String, Value>>,
 ) -> Result<CallToolResult, ErrorData> {
-    let _admission = match host.admit() {
-        Ok(permit) => permit,
-        Err(failure) => return Ok(error(failure)),
-    };
-    let arguments = arguments.unwrap_or_default();
-    if serde_json::to_vec(&arguments)
-        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?
-        .len()
-        > MAX_BODY_BYTES
-    {
-        return Ok(error(ErasedFailure::new(
-            None,
-            OperationFailure::InvalidInput {
-                field: None,
-                reason: InvalidInputReason::TooLarge,
-            },
-        )));
-    }
-    Ok(crate::porcelain::call_authoring(host, action, arguments).await)
+    mcp_surface::admitted_call(host, arguments, |arguments| {
+        crate::porcelain::call_authoring(host, action, arguments)
+    })
+    .await
 }
 
 type McpCall = (
@@ -415,8 +302,4 @@ fn invalid() -> ErasedFailure {
             reason: InvalidInputReason::InvalidValue,
         },
     )
-}
-
-pub fn error(failure: ErasedFailure) -> CallToolResult {
-    CallToolResult::structured_error(serde_json::to_value(failure).expect("failure is JSON"))
 }

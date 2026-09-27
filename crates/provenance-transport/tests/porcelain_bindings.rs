@@ -65,8 +65,9 @@ async fn mcp_get_runs_through_the_composed_service() {
     let tools = client.list_all_tools().await.unwrap();
     let get = tools.iter().find(|tool| tool.name == "get").unwrap();
     let output_schema = get.output_schema.as_ref().expect("get output schema");
-    assert_eq!(output_schema["type"], "object");
-    assert_eq!(output_schema["additionalProperties"], false);
+    let success_schema = &output_schema["oneOf"][0];
+    assert_eq!(success_schema["type"], "object");
+    assert_eq!(success_schema["additionalProperties"], false);
     let result = client
         .call_tool(
             CallToolRequestParams::new("get")
@@ -351,9 +352,10 @@ async fn mcp_check_uses_its_separately_injected_port() {
     let tools = client.list_all_tools().await.unwrap();
     let check = tools.iter().find(|tool| tool.name == "check").unwrap();
     let output_schema = check.output_schema.as_ref().expect("check output schema");
-    assert_eq!(output_schema["type"], "object");
-    assert_eq!(output_schema["additionalProperties"], false);
-    assert_eq!(output_schema["required"], json!(["categories"]));
+    let success_schema = &output_schema["oneOf"][0];
+    assert_eq!(success_schema["type"], "object");
+    assert_eq!(success_schema["additionalProperties"], false);
+    assert_eq!(success_schema["required"], json!(["categories"]));
     let result = client
         .call_tool(
             CallToolRequestParams::new("check").with_arguments(

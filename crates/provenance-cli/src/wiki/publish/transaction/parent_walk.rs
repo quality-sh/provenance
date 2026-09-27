@@ -1,8 +1,7 @@
 //! The no-follow walk that opens, and creates, the wiki output parent.
-use super::ownership::{open_child_directory_no_follow, open_directory_no_follow};
+use crate::safe_fs::Directory;
 use crate::wiki::publish::PublishError;
 use camino::Utf8Path;
-use std::fs::File;
 use std::iter::Peekable;
 use std::path::{Component, Components, Path, PathBuf};
 
@@ -67,7 +66,7 @@ fn normalize_verbatim_prefix_for_walk(path: &Path) -> PathBuf {
 pub(super) fn open_or_create_parent(
     parent: &Utf8Path,
     output: &Utf8Path,
-) -> Result<File, PublishError> {
+) -> Result<Directory, PublishError> {
     let parent_resolved = resolve_existing_parent_prefix(parent.as_std_path())
         .map_err(|error| PublishError::io("resolve output parent", parent, error))?;
     let mut components = parent_resolved.components().peekable();
@@ -90,7 +89,7 @@ fn open_walk_root(
     current_path: &mut PathBuf,
     parent: &Utf8Path,
     output: &Utf8Path,
-) -> Result<File, PublishError> {
+) -> Result<Directory, PublishError> {
     let (start, operation) = match components.peek().copied() {
         Some(Component::Prefix(prefix)) => {
             components.next();
@@ -110,7 +109,7 @@ fn open_walk_root(
         _ => (".", "open current directory"),
     };
     current_path.push(start);
-    open_directory_no_follow(current_path)
+    Directory::open(current_path, "output parent")
         .map_err(|error| PublishError::io(operation, parent, error))
 }
 
@@ -134,16 +133,16 @@ fn walk_leaf<'a>(
 /// Opens the child directory `leaf`, and creates it first when it is
 /// missing. A child that is not a real directory refuses the walk.
 fn open_or_create_child(
-    current: &File,
+    current: &Directory,
     leaf: &str,
     current_path: &Path,
     output: &Utf8Path,
-) -> Result<File, PublishError> {
-    match open_child_directory_no_follow(current, leaf) {
+) -> Result<Directory, PublishError> {
+    match current.open_child(leaf) {
         Ok(next) => Ok(next),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             create_child_directory(current, leaf, current_path)?;
-            open_child_directory_no_follow(current, leaf).map_err(|error| {
+            current.open_child(leaf).map_err(|error| {
                 PublishError::io(
                     "open created output parent directory",
                     utf8(current_path),
@@ -164,11 +163,11 @@ fn open_or_create_child(
 /// Creates the child directory `leaf`. A directory that another writer
 /// created first is not an error.
 fn create_child_directory(
-    current: &File,
+    current: &Directory,
     leaf: &str,
     current_path: &Path,
 ) -> Result<(), PublishError> {
-    match fs_at::OpenOptions::default().mkdir_at(current, leaf) {
+    match fs_at::OpenOptions::default().mkdir_at(current.as_file(), leaf) {
         Ok(_) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         Err(error) => Err(PublishError::io(

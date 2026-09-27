@@ -16,6 +16,7 @@ mod gap_rule_behavior;
 mod in_place_behavior;
 mod materialization_behavior;
 mod materialize_guard_behavior;
+mod page_order;
 mod projection_digest_sensitivity;
 pub mod projection_stamp_behavior;
 mod record_columns;

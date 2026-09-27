@@ -1,29 +1,7 @@
-use super::{PublicationLock, PublishError, StageIdentity, TransactionDirectory, TransactionPaths};
+use super::{PublishError, StageIdentity, TransactionDirectory, TransactionPaths};
 use camino::Utf8Path;
 use remove_dir_all::RemoveDir;
 use std::fs::File;
-
-impl PublicationLock {
-    pub(in crate::wiki::publish) fn cleanup(
-        self,
-        transaction: &TransactionDirectory,
-    ) -> std::io::Result<()> {
-        transaction.rename(&transaction.leaves.lock, &transaction.leaves.lock_cleanup)?;
-        if transaction.child_identity(&transaction.leaves.lock_cleanup)? != self.identity {
-            let mismatch = std::io::Error::other("publication lock path changed before cleanup");
-            return match transaction
-                .rename(&transaction.leaves.lock_cleanup, &transaction.leaves.lock)
-            {
-                Ok(()) => Err(mismatch),
-                Err(restore) => Err(std::io::Error::other(format!(
-                    "{mismatch}; restoring the replacement lock path also failed: {restore}"
-                ))),
-            };
-        }
-        drop(self);
-        transaction.remove_file(&transaction.leaves.lock_cleanup)
-    }
-}
 
 impl TransactionDirectory {
     pub(in crate::wiki::publish) fn remove_stage(
@@ -43,7 +21,9 @@ impl TransactionDirectory {
         }
         stage.remove_dir_contents(Some(self.paths.stage_cleanup.as_std_path()))?;
         drop(stage);
-        match fs_at::OpenOptions::default().rmdir_at(&self.parent, &self.leaves.stage_cleanup) {
+        match fs_at::OpenOptions::default()
+            .rmdir_at(self.parent.as_file(), &self.leaves.stage_cleanup)
+        {
             Ok(()) => Ok(()),
             Err(cleanup) => match self.rename(&self.leaves.stage_cleanup, &self.leaves.stage) {
                 Ok(()) => Err(cleanup),
@@ -102,7 +82,7 @@ pub(super) fn verify_installed_stage_with_backup(
     rename: &mut impl FnMut(&Utf8Path, &Utf8Path) -> std::io::Result<()>,
 ) -> Result<(), PublishError> {
     let paths = &transaction.paths;
-    let Err(validation) = super::replacement::verify_stage_identity(
+    let Err(validation) = super::swap::verify_stage_identity(
         stage_identity,
         transaction,
         &transaction.output_leaf,
@@ -145,5 +125,5 @@ pub(super) fn cleanup_backup(
 
     backup.remove_dir_contents(Some(backup_path.as_std_path()))?;
     drop(backup);
-    fs_at::OpenOptions::default().rmdir_at(&transaction.parent, &transaction.leaves.backup)
+    fs_at::OpenOptions::default().rmdir_at(transaction.parent.as_file(), &transaction.leaves.backup)
 }

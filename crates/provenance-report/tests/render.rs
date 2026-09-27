@@ -4,27 +4,13 @@
 //! come from the research Gist revision pinned in
 //! `source_pr_review_feedback_research_2026_09_11`.
 
-use assert_cmd::Command;
 use provenance_macros::verifies;
+use provenance_report::{render_envelope, RenderFormat};
 use serde_json::{json, Value};
-use tempfile::TempDir;
 
 fn render_markdown(envelope: &Value) -> String {
-    let dir = TempDir::new().unwrap();
-    let input = dir.path().join("envelope.json");
-    std::fs::write(&input, serde_json::to_vec_pretty(envelope).unwrap()).unwrap();
-    let output = Command::cargo_bin("provenance")
-        .unwrap()
-        .args(["report", "render", "--input"])
-        .arg(&input)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "render failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap()
+    let raw = serde_json::to_string(envelope).unwrap();
+    render_envelope(&raw, RenderFormat::Markdown).unwrap()
 }
 
 /// 96373e74a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 → 52ccec3fb1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6, with the three new active Rules unverified.
@@ -242,18 +228,8 @@ fn findings_beyond_the_display_budget_are_omitted_explicitly() {
 #[test]
 fn structured_json_output_gives_a_publisher_normalized_facts_not_markdown() {
     let reversed = scenario_a_envelope_reversed();
-    let dir = TempDir::new().unwrap();
-    let input = dir.path().join("envelope.json");
-    std::fs::write(&input, serde_json::to_vec_pretty(&reversed).unwrap()).unwrap();
-    let output = Command::cargo_bin("provenance")
-        .unwrap()
-        .args(["report", "render", "--input"])
-        .arg(&input)
-        .args(["--format", "json"])
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    let stdout = String::from_utf8(output.stdout).unwrap();
+    let raw = serde_json::to_string(&reversed).unwrap();
+    let stdout = render_envelope(&raw, RenderFormat::Json).unwrap();
     assert!(
         !stdout.contains("# Provenance report"),
         "structured output is not markdown for publishers to scrape"
@@ -277,27 +253,4 @@ fn structured_json_output_gives_a_publisher_normalized_facts_not_markdown() {
         ],
         "json output carries canonical kind-first order regardless of input order"
     );
-}
-
-#[test]
-fn output_flag_writes_the_report_to_a_file() {
-    let dir = TempDir::new().unwrap();
-    let input = dir.path().join("envelope.json");
-    let output_path = dir.path().join("report.md");
-    std::fs::write(
-        &input,
-        serde_json::to_vec_pretty(&scenario_a_envelope()).unwrap(),
-    )
-    .unwrap();
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args(["report", "render", "--input"])
-        .arg(&input)
-        .args(["--output"])
-        .arg(&output_path)
-        .output()
-        .unwrap();
-    let written = std::fs::read_to_string(&output_path).unwrap();
-    assert!(written.starts_with("# Provenance report"));
-    assert!(written.ends_with("no language model writes this report.\n"));
 }

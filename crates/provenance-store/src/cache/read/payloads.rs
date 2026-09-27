@@ -1,6 +1,6 @@
 //! Typed canonical payload reads for collaboration projection tables.
 
-use super::page::RESOURCE_RECORD_BYTES;
+use super::page::{id_page_sql, RESOURCE_RECORD_BYTES};
 use crate::operations::reader::ReadSnapshot;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{
@@ -110,11 +110,7 @@ impl<T: PayloadRow> Payloads<'_, T> {
         owner: Option<&StableId>,
     ) -> anyhow::Result<Vec<String>> {
         let filter = owner.map_or("", |_| " AND proposal_id = ?");
-        let sql = format!(
-            "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id \
-             FROM {} WHERE scope_id = ? AND id > ?{filter} ORDER BY id LIMIT ?",
-            crate::cache::quoted(T::TABLE)
-        );
+        let sql = id_page_sql(T::TABLE, filter);
         let mut query = sqlx::query(&sql)
             .bind(self.snapshot.scope().as_str())
             .bind(after);

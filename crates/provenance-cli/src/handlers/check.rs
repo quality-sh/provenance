@@ -152,7 +152,7 @@ impl RepositoryCheckPort {
             .map_err(|error| format!("{error:#}"))?
             .coverage
             .binding_findings;
-        let warnings =
+        let (warnings, governed_finding_count) =
             provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
                 let scopes = manifest
                     .scopes
@@ -165,20 +165,29 @@ impl RepositoryCheckPort {
                     anyhow::ensure!(!scopes.is_empty(), "scope {scope} does not exist");
                 }
                 let mut warnings = Vec::new();
+                let mut governed_finding_count = 0;
                 for scope in scopes {
-                    let report = super::coverage::coverage_scan_from_scanned(
+                    let outcome = super::coverage::coverage_scan_from_scanned(
                         &self.repo,
                         &self.repo,
                         scope.id.as_str(),
                         scanned,
                     )?;
-                    warnings.extend(report.report.warnings);
+                    governed_finding_count += outcome.governed_finding_count;
+                    warnings.extend(outcome.scan.report.warnings);
                 }
-                Ok(warnings)
+                Ok((warnings, governed_finding_count))
             })
             .map_err(|error| format!("{error:#}"))?;
-        let refusal = if policy == provenance_store::settings::BindingFindingsSeverity::Error
-            && warnings.iter().any(|warning| warning.binding_finding)
+        let severity = match policy {
+            provenance_store::settings::BindingFindingsSeverity::Warning => {
+                provenance_scanner::BindingFindingSeverity::Warning
+            }
+            provenance_store::settings::BindingFindingsSeverity::Error => {
+                provenance_scanner::BindingFindingSeverity::Error
+            }
+        };
+        let refusal = if provenance_scanner::binding_findings_fail(severity, governed_finding_count)
         {
             Refusal::Findings
         } else {

@@ -8,14 +8,10 @@ mod relationships;
 use std::collections::BTreeSet;
 
 use provenance_core::protocol::{TypedAdoptionTarget, TypedDeclarationKind};
-use provenance_core::{DeclarationAddress, ScopeId, StableId};
+use provenance_core::{DeclarationAddress, Requirement, Rule, ScopeId, Source, StableId};
 
-use super::identity::{requirement_address, source_address};
-use super::reconcile::{
-    desired_requirement, desired_rule, desired_source, reconciled_requirement, reconciled_rule,
-    reconciled_source, requirement_changes, rule_changes, source_changes,
-};
-use super::{rule_address, CurrentTypedState, DesiredTypedIds};
+use super::reconcile::changes::DeclarationRecord;
+use super::{CurrentTypedState, DesiredTypedIds};
 use crate::state_store::{
     ReconcileState, ReconciledResource, TypedFieldChange, TypedResourceKind, TypedSpecInput,
 };
@@ -66,226 +62,117 @@ pub(super) fn decide(
         refusal: None,
     };
 
-    decide_sources(
+    decide_declarations::<Source, _, _>(
         scope_id,
         input,
-        current,
+        &current.sources,
+        &input.sources,
         ids,
         &adopted,
-        &relationships,
         &mut decision,
+        |id, _| relationships.source_matches(id, current.relationships()),
+        |id, _, changes| {
+            relationships.add_source_change(id, current.relationships(), changes);
+            Ok(())
+        },
     )?;
-    decide_requirements(
+    decide_declarations::<Requirement, _, _>(
         scope_id,
         input,
-        current,
+        &current.requirements,
+        &input.requirements,
         ids,
         &adopted,
-        &relationships,
         &mut decision,
+        |id, _| relationships.requirement_matches(id, current.relationships()),
+        |id, _, changes| {
+            relationships.add_requirement_change(id, current.relationships(), changes);
+            Ok(())
+        },
     )?;
-    decide_rules(
+    decide_declarations::<Rule, _, _>(
         scope_id,
         input,
-        current,
+        &current.rules,
+        &input.rules,
         ids,
         &adopted,
-        &relationships,
         &mut decision,
-    )?;
-    Ok(decision)
-}
-
-#[allow(clippy::too_many_arguments)]
-fn decide_sources(
-    scope_id: &ScopeId,
-    input: &TypedSpecInput,
-    current: &CurrentTypedState,
-    ids: &DesiredTypedIds,
-    adopted: &BTreeSet<TypedAdoptionTarget>,
-    relationships: &DesiredRelationships,
-    decision: &mut OwnershipDecision,
-) -> anyhow::Result<()> {
-    for declaration in &input.sources {
-        let id = &ids.sources[&declaration.key];
-        let Some(existing) = current.sources.iter().find(|record| &record.id == id) else {
-            continue;
-        };
-        let address = source_address(&input.spec, &declaration.key)?;
-        let target = target(TypedDeclarationKind::Source, id);
-        let desired = desired_source(
-            scope_id,
-            &input.declared_by,
-            &address,
-            id,
-            declaration,
-            &ids.sources,
-        )?;
-        let reconciled = reconciled_source(existing, desired, declaration, &ids.sources);
-        let exact = same_source_definition(existing, &reconciled)
-            && relationships.source_matches(id, current.relationships());
-        let requested = adopted.contains(&target);
-        if rejects(
-            existing.declared_by.as_deref(),
-            &input.declared_by,
-            requested,
-            exact,
-        ) {
-            let mut changes = source_changes(existing, &reconciled);
-            relationships.add_source_change(id, current.relationships(), &mut changes);
-            ensure_definition_change(existing, &reconciled, &mut changes);
-            preserve_default_conflict(
-                requested,
-                existing.declared_by.as_deref(),
-                &input.declared_by,
-                &mut changes,
-            );
-            decision.reject(
-                TypedResourceKind::Source,
-                &declaration.key,
-                None,
-                address,
+        |id, declaration| {
+            implementation_matches(
                 id,
-                existing.declared_by.as_deref(),
+                declaration.implementation.as_ref(),
+                &current.implementation_bindings,
                 &input.declared_by,
-                requested,
-                changes,
-            );
-        }
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn decide_requirements(
-    scope_id: &ScopeId,
-    input: &TypedSpecInput,
-    current: &CurrentTypedState,
-    ids: &DesiredTypedIds,
-    adopted: &BTreeSet<TypedAdoptionTarget>,
-    relationships: &DesiredRelationships,
-    decision: &mut OwnershipDecision,
-) -> anyhow::Result<()> {
-    for declaration in &input.requirements {
-        let id = &ids.requirements[&declaration.key];
-        let Some(existing) = current.requirements.iter().find(|record| &record.id == id) else {
-            continue;
-        };
-        let address = requirement_address(&input.spec, &declaration.key)?;
-        let target = target(TypedDeclarationKind::Requirement, id);
-        let desired = desired_requirement(
-            scope_id,
-            &input.declared_by,
-            &address,
-            id,
-            declaration,
-            &ids.sources,
-            &ids.requirements,
-        )?;
-        let reconciled = reconciled_requirement(existing, desired, declaration, &ids.requirements)?;
-        let exact = same_requirement_definition(existing, &reconciled)
-            && relationships.requirement_matches(id, current.relationships());
-        let requested = adopted.contains(&target);
-        if rejects(
-            existing.declared_by.as_deref(),
-            &input.declared_by,
-            requested,
-            exact,
-        ) {
-            let mut changes = requirement_changes(existing, &reconciled);
-            relationships.add_requirement_change(id, current.relationships(), &mut changes);
-            ensure_definition_change(existing, &reconciled, &mut changes);
-            preserve_default_conflict(
-                requested,
-                existing.declared_by.as_deref(),
-                &input.declared_by,
-                &mut changes,
-            );
-            decision.reject(
-                TypedResourceKind::Requirement,
-                &declaration.key,
-                None,
-                address,
-                id,
-                existing.declared_by.as_deref(),
-                &input.declared_by,
-                requested,
-                changes,
-            );
-        }
-    }
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-fn decide_rules(
-    scope_id: &ScopeId,
-    input: &TypedSpecInput,
-    current: &CurrentTypedState,
-    ids: &DesiredTypedIds,
-    adopted: &BTreeSet<TypedAdoptionTarget>,
-    relationships: &DesiredRelationships,
-    decision: &mut OwnershipDecision,
-) -> anyhow::Result<()> {
-    for declaration in &input.rules {
-        let address = rule_address(&input.spec, declaration)?;
-        let id = &ids.rules[&address];
-        let Some(existing) = current.rules.iter().find(|record| &record.id == id) else {
-            continue;
-        };
-        let target = target(TypedDeclarationKind::Rule, id);
-        let desired = desired_rule(
-            scope_id,
-            &input.declared_by,
-            &address,
-            id,
-            declaration,
-            &ids.requirements,
-        )?;
-        let reconciled = reconciled_rule(existing, desired, declaration, &ids.requirements)?;
-        let implementation_exact = implementation_matches(
-            id,
-            declaration.implementation.as_ref(),
-            &current.implementation_bindings,
-            &input.declared_by,
-        );
-        let exact = same_rule_definition(existing, &reconciled)
-            && implementation_exact
-            && relationships.rule_matches(id, current.relationships());
-        let requested = adopted.contains(&target);
-        if rejects(
-            existing.declared_by.as_deref(),
-            &input.declared_by,
-            requested,
-            exact,
-        ) {
-            let mut changes = rule_changes(existing, &reconciled);
-            if let Some(implementation) = declaration
-                .implementation
-                .as_ref()
-                .filter(|_| !implementation_exact)
-            {
+            ) && relationships.rule_matches(id, current.relationships())
+        },
+        |id, declaration, changes| {
+            if let Some(implementation) = declaration.implementation.as_ref().filter(|_| {
+                !implementation_matches(
+                    id,
+                    declaration.implementation.as_ref(),
+                    &current.implementation_bindings,
+                    &input.declared_by,
+                )
+            }) {
                 changes.push(TypedFieldChange {
                     field: "implementation".to_string(),
                     before: current_implementation(id, &current.implementation_bindings),
                     after: serde_json::to_value(implementation)?,
                 });
             }
-            relationships.add_rule_change(id, current.relationships(), &mut changes);
+            relationships.add_rule_change(id, current.relationships(), changes);
+            Ok(())
+        },
+    )?;
+    Ok(decision)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn decide_declarations<T, Exact, AddChanges>(
+    scope_id: &ScopeId,
+    input: &TypedSpecInput,
+    records: &[T],
+    declarations: &[T::Declaration],
+    ids: &DesiredTypedIds,
+    adopted: &BTreeSet<TypedAdoptionTarget>,
+    decision: &mut OwnershipDecision,
+    extra_exact: Exact,
+    add_changes: AddChanges,
+) -> anyhow::Result<()>
+where
+    T: DeclarationRecord + serde::Serialize,
+    Exact: Fn(&StableId, &T::Declaration) -> bool,
+    AddChanges: Fn(&StableId, &T::Declaration, &mut Vec<TypedFieldChange>) -> anyhow::Result<()>,
+{
+    for declaration in declarations {
+        let address = T::address(&input.spec, declaration)?;
+        let id = T::desired_id(&address, declaration, ids);
+        let Some(existing) = records.iter().find(|record| record.stable_id() == id) else {
+            continue;
+        };
+        let target = target(T::KIND, id);
+        let desired = T::desired(scope_id, &input.declared_by, &address, id, declaration, ids)?;
+        let reconciled = existing.reconciled(desired, declaration, ids)?;
+        let exact = existing.same_definition(&reconciled) && extra_exact(id, declaration);
+        let requested = adopted.contains(&target);
+        if rejects(existing.declared_by(), &input.declared_by, requested, exact) {
+            let mut changes = existing.changes(&reconciled);
+            add_changes(id, declaration, &mut changes)?;
             ensure_definition_change(existing, &reconciled, &mut changes);
             preserve_default_conflict(
                 requested,
-                existing.declared_by.as_deref(),
+                existing.declared_by(),
                 &input.declared_by,
                 &mut changes,
             );
             decision.reject(
-                TypedResourceKind::Rule,
-                &declaration.key,
-                super::rule_addresses::local_parent(&address),
+                T::KIND,
+                T::key(declaration),
+                T::parent(&address),
                 address,
                 id,
-                existing.declared_by.as_deref(),
+                existing.declared_by(),
                 &input.declared_by,
                 requested,
                 changes,
@@ -355,44 +242,15 @@ fn preserve_default_conflict(
     }
 }
 
-fn target(kind: TypedDeclarationKind, id: &StableId) -> TypedAdoptionTarget {
+fn target(kind: TypedResourceKind, id: &StableId) -> TypedAdoptionTarget {
     TypedAdoptionTarget {
-        kind,
+        kind: match kind {
+            TypedResourceKind::Source => TypedDeclarationKind::Source,
+            TypedResourceKind::Requirement => TypedDeclarationKind::Requirement,
+            TypedResourceKind::Rule => TypedDeclarationKind::Rule,
+        },
         id: id.as_str().to_string(),
     }
-}
-
-fn same_source_definition(
-    current: &provenance_core::Source,
-    desired: &provenance_core::Source,
-) -> bool {
-    let mut normalized = current.clone();
-    normalized.declared_by.clone_from(&desired.declared_by);
-    normalized
-        .declaration_address
-        .clone_from(&desired.declaration_address);
-    normalized == *desired
-}
-
-fn same_requirement_definition(
-    current: &provenance_core::Requirement,
-    desired: &provenance_core::Requirement,
-) -> bool {
-    let mut normalized = current.clone();
-    normalized.declared_by.clone_from(&desired.declared_by);
-    normalized
-        .declaration_address
-        .clone_from(&desired.declaration_address);
-    normalized == *desired
-}
-
-fn same_rule_definition(current: &provenance_core::Rule, desired: &provenance_core::Rule) -> bool {
-    let mut normalized = current.clone();
-    normalized.declared_by.clone_from(&desired.declared_by);
-    normalized
-        .declaration_address
-        .clone_from(&desired.declaration_address);
-    normalized == *desired
 }
 
 fn ensure_definition_change<T: serde::Serialize + PartialEq>(

@@ -28,7 +28,9 @@ impl crate::StatementHost {
         target: &str,
         create_kind: Option<NodeType>,
     ) -> Result<TargetRoute, ActionError> {
-        let selected = provenance_porcelain::Porcelain::new(super::HostGetPort::new(self.clone()))
+        let selected = self
+            .porcelain()
+            .get()
             .select_target(action, target, create_kind)
             .await?;
         let kind = selected.kind;

@@ -24,10 +24,7 @@ use identity::{
     declaration_ids, normalize_rule_relationships, owned_declaration_ids, requirement_identity,
     rule_declaration_ids, source_identity, validate_references,
 };
-use reconcile::{
-    ensure_acyclic, ensure_resolutions_exist, reconcile_requirements, reconcile_rules,
-    reconcile_sources,
-};
+use reconcile::{ensure_acyclic, ensure_resolutions_exist, reconcile};
 pub(in crate::state_store) use rule_addresses::rule_address;
 
 struct CurrentTypedState {
@@ -166,31 +163,29 @@ impl StateStore {
         let adopted_rule_ids = adopted_rule_ids(&input);
         let rule_relationships = input.rules.clone();
         let spec = input.spec;
-        let (mut sources, source_resources) = reconcile_sources(
+        let (mut sources, source_resources) = reconcile::<Source>(
             current.sources,
             &spec,
             scope_id,
             &input.declared_by,
             input.sources,
-            &ids.sources,
+            &ids,
         )?;
-        let (mut requirements, requirement_resources) = reconcile_requirements(
+        let (mut requirements, requirement_resources) = reconcile::<Requirement>(
             current.requirements,
             &spec,
             scope_id,
             &input.declared_by,
             input.requirements,
-            &ids.requirements,
-            &ids.sources,
+            &ids,
         )?;
-        let (mut rules, mut rule_resources) = reconcile_rules(
+        let (mut rules, mut rule_resources) = reconcile::<Rule>(
             current.rules,
             &spec,
             scope_id,
             &input.declared_by,
             input.rules,
-            &ids.rules,
-            &ids.requirements,
+            &ids,
         )?;
         let deleted_resources =
             all_resources(&source_resources, &requirement_resources, &rule_resources);

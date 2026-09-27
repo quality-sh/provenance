@@ -206,6 +206,16 @@ fn active_rule_without_verification_is_reported_and_no_run_is_invented() {
     );
 
     let findings = envelope["findings"].as_array().unwrap();
+    let missing_implementation = findings
+        .iter()
+        .find(|finding| {
+            finding["code"] == "active_rule_missing_implementation"
+                && finding["subject"]["id"] == "rule_added"
+        })
+        .expect("the new unimplemented rule must carry an absence finding");
+    assert_eq!(missing_implementation["binding_presence"], "absent");
+    assert_eq!(missing_implementation["comparison"], "new");
+
     let absence = findings
         .iter()
         .find(|finding| {
@@ -225,6 +235,40 @@ fn active_rule_without_verification_is_reported_and_no_run_is_invented() {
         })
         .expect("the base rule without verification is pre-existing");
     assert_eq!(anchor_absence["comparison"], "pre_existing");
+}
+
+#[test]
+#[verifies("rule_active_rule_reports_missing_implementation", examples)]
+fn error_policy_passes_when_only_an_implementation_is_missing() {
+    let (dir, base, _) = two_commit_repo();
+    let repo = dir.path();
+    write(
+        repo,
+        "src/lib.rs",
+        "#[verifies(\"rule_anchor\", examples)]\nfn checks_anchor_rule() {}\n\
+         #[verifies(\"rule_added\", examples)]\nfn checks_added_rule() {}\n",
+    );
+    write(
+        repo,
+        ".provenance/settings.json",
+        r#"{"coverage":{"binding_findings":"error"}}"#,
+    );
+    let head = commit(repo, "Add verification evidence and error policy");
+
+    let envelope = build_envelope(repo, &base, &head);
+
+    assert_eq!(envelope["policy"]["mode"], "error");
+    assert_eq!(envelope["policy"]["result"], "success");
+    let finding = envelope["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|finding| {
+            finding["code"] == "active_rule_missing_implementation"
+                && finding["subject"]["id"] == "rule_added"
+        })
+        .expect("the missing implementation must remain visible");
+    assert_eq!(finding["severity"], "warning");
 }
 
 #[test]

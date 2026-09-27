@@ -2,25 +2,27 @@ use crate::cli::workspace::CoverageCommand;
 use crate::output::{self, ReportFormat};
 use anyhow::Context;
 use camino::Utf8PathBuf;
-use provenance_macros::rule;
-use std::collections::BTreeSet;
 
-mod lifecycle;
 mod render;
 mod verification_state;
-use lifecycle::inactive_rule_binding_warnings;
 use render::render_coverage;
-use verification_state::{load_validation_state, unverified_rule_warnings};
+use verification_state::load_validation_state;
 
 pub(super) use provenance_store::evidence_anchors as anchors;
 
+#[cfg(test)]
 pub(super) fn coverage_scan(
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
     scope: &str,
     validate_rules: bool,
 ) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
-    coverage_scan_against(repo, path, scope, validate_rules, None)
+    Ok(coverage_scan_against(repo, path, scope, validate_rules, None)?.scan)
+}
+
+pub(super) struct CoverageScanOutcome {
+    pub(super) scan: provenance_core::coverage::CoverageScan,
+    pub(super) governed_finding_count: usize,
 }
 
 fn coverage_scan_against(
@@ -29,7 +31,7 @@ fn coverage_scan_against(
     scope: &str,
     validate_rules: bool,
     baseline: Option<&camino::Utf8Path>,
-) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
+) -> anyhow::Result<CoverageScanOutcome> {
     let scanned = provenance_scanner::scan_path_with_content(path)?;
     coverage_scan_from_scanned_against(repo, path, scope, validate_rules, &scanned, baseline)
 }
@@ -39,7 +41,7 @@ pub(super) fn coverage_scan_from_scanned(
     path: &Utf8PathBuf,
     scope: &str,
     scanned: &[provenance_scanner::FileScanWithContent],
-) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
+) -> anyhow::Result<CoverageScanOutcome> {
     coverage_scan_from_scanned_against(repo, path, scope, true, scanned, None)
 }
 
@@ -50,7 +52,7 @@ fn coverage_scan_from_scanned_against(
     validate_rules: bool,
     scanned: &[provenance_scanner::FileScanWithContent],
     baseline: Option<&camino::Utf8Path>,
-) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
+) -> anyhow::Result<CoverageScanOutcome> {
     let scans = scanned
         .iter()
         .map(|file| file.scan.clone())
@@ -61,25 +63,22 @@ fn coverage_scan_from_scanned_against(
     // location. Derived Rule findings are joined on after, without one.
     let mut warnings = parse_warnings(&scans);
     warnings.extend(validation.warnings);
+    let mut governed_finding_count = 0;
     if validate_rules {
-        warnings.extend(inactive_rule_binding_warnings(
+        let completeness = if provenance_scanner::scan_covers_repository(repo, path) {
+            provenance_scanner::RuleEvidenceCompleteness::Complete
+        } else {
+            provenance_scanner::RuleEvidenceCompleteness::Incomplete
+        };
+        let facts = provenance_scanner::derive_rule_evidence_facts(
             &validation.rules,
             &scans,
             &validation.implementations,
             &validation.bindings,
-        ));
-        if scan_covers_repository(repo, path) {
-            warnings.extend(unimplemented_rule_warnings(
-                &validation.rules,
-                &scans,
-                &validation.implementations,
-            ));
-            warnings.extend(unverified_rule_warnings(
-                &validation.rules,
-                &scans,
-                &validation.bindings,
-            ));
-        }
+            completeness,
+        );
+        governed_finding_count = facts.governed_finding_count();
+        warnings.extend(rule_evidence_warnings(facts));
     }
     let results = provenance_scanner::coverage_results(&scans);
     let scanned_files = scanned
@@ -107,14 +106,12 @@ fn coverage_scan_from_scanned_against(
             .with_context(|| format!("parse coverage baseline {baseline}"))?;
         anchors::reconcile(&mut report, &baseline, repo, path, validate_rules);
     }
-    Ok(report)
+    Ok(CoverageScanOutcome {
+        scan: report,
+        governed_finding_count,
+    })
 }
 
-/// Partial scans validate encountered bindings but cannot claim that a Rule
-/// has no implementation or verification elsewhere in the repository.
-fn scan_covers_repository(repo: &camino::Utf8Path, path: &camino::Utf8Path) -> bool {
-    same_file::is_same_file(repo, path).unwrap_or(false)
-}
 /// What the parser complained about while reading the files: the legacy
 /// Statesman marker, a directive with no `key: value`, a confidence
 /// outside the range, an unknown field.
@@ -146,35 +143,55 @@ fn parse_warnings(
         .collect()
 }
 
-/// An active Rule with no scanned primary implementation site is
-/// unimplemented. A verification site and a persisted source citation do not
-/// count: evidence, source material, and implementation are distinct.
-fn unimplemented_rule_warnings(
-    rules: &[provenance_core::Rule],
-    scans: &[provenance_scanner::FileScan],
-    typed_bindings: &[provenance_core::ImplementationBinding],
+fn rule_evidence_warnings(
+    facts: provenance_scanner::RuleEvidenceFacts,
 ) -> Vec<provenance_core::coverage::ValidationWarning> {
-    let mut implementations = provenance_scanner::source_sites(scans)
-        .filter(|site| site.role() == provenance_scanner::SourceSiteRole::Implementation)
-        .map(|site| site.rule_id().to_string())
-        .collect::<BTreeSet<_>>();
-    implementations.extend(
-        typed_bindings
-            .iter()
-            .map(|binding| binding.rule_id.as_str().to_string()),
-    );
-    rules
-        .iter()
-        .filter(|rule| rule.status == provenance_core::RuleStatus::Active)
-        .filter(|rule| !implementations.contains(rule.id.as_str()))
-        .map(|rule| provenance_core::coverage::ValidationWarning {
-            rule_id: rule.id.as_str().to_string(),
+    let mut warnings = Vec::new();
+    warnings.extend(facts.inactive_current.into_iter().map(|binding| {
+        let status = match binding.status {
+            provenance_core::RuleStatus::Deprecated => "deprecated",
+            provenance_core::RuleStatus::Archived => "archived",
+            _ => unreachable!("the derivation returns only inactive Rules"),
+        };
+        let kind = match binding.origin {
+            provenance_scanner::InactiveBindingOrigin::Scanned => "marker",
+            provenance_scanner::InactiveBindingOrigin::TypedImplementation => {
+                "typed implementation binding"
+            }
+            provenance_scanner::InactiveBindingOrigin::TypedVerification => {
+                "typed verification binding"
+            }
+        };
+        provenance_core::coverage::ValidationWarning {
+            message: format!(
+                "{kind} cites rule `{}` with status `{status}`",
+                binding.rule_id
+            ),
+            rule_id: binding.rule_id,
+            file_path: Some(binding.file_path),
+            line: binding.line,
+            binding_finding: true,
+        }
+    }));
+    warnings.extend(facts.unimplemented.into_iter().map(|rule_id| {
+        provenance_core::coverage::ValidationWarning {
+            message: format!("active rule `{rule_id}` has no implementation"),
+            rule_id,
             file_path: None,
             line: None,
-            message: format!("active rule `{}` has no implementation", rule.id.as_str()),
             binding_finding: false,
-        })
-        .collect()
+        }
+    }));
+    warnings.extend(facts.unverified.into_iter().map(|rule_id| {
+        provenance_core::coverage::ValidationWarning {
+            message: format!("active rule `{rule_id}` has no verification"),
+            rule_id,
+            file_path: None,
+            line: None,
+            binding_finding: true,
+        }
+    }));
+    warnings
 }
 
 pub(super) fn current_git_commit(repo: &camino::Utf8Path) -> anyhow::Result<String> {
@@ -222,19 +239,19 @@ fn scan_commit(repo: &camino::Utf8Path, scans: &[provenance_scanner::FileScan]) 
 /// refusal. Warning reports the findings and succeeds; error reports them
 /// and fails the command. Findings the policy does not govern never refuse
 /// here, and Rule severity metadata plays no part in the decision.
-#[rule("rule_binding_finding_uses_configured_severity")]
 fn binding_finding_refusal(
     policy: provenance_store::settings::BindingFindingsSeverity,
-    warnings: &[provenance_core::coverage::ValidationWarning],
+    governed: usize,
 ) -> Option<String> {
-    let governed = warnings
-        .iter()
-        .filter(|warning| warning.binding_finding)
-        .count();
-    let refusing = matches!(
-        policy,
-        provenance_store::settings::BindingFindingsSeverity::Error
-    ) && governed > 0;
+    let severity = match policy {
+        provenance_store::settings::BindingFindingsSeverity::Warning => {
+            provenance_scanner::BindingFindingSeverity::Warning
+        }
+        provenance_store::settings::BindingFindingsSeverity::Error => {
+            provenance_scanner::BindingFindingSeverity::Error
+        }
+    };
+    let refusing = provenance_scanner::binding_findings_fail(severity, governed);
     refusing.then(|| {
         format!("coverage scan found {governed} Rule binding finding(s); the repository configuration selects error")
     })
@@ -257,26 +274,26 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
             )?
             .coverage
             .binding_findings;
-            let report = if let Some(baseline) = baseline.as_deref() {
+            let outcome = if let Some(baseline) = baseline.as_deref() {
                 coverage_scan_against(&repo, &path, &scope, validate_rules, Some(baseline))?
             } else {
-                coverage_scan(&repo, &path, &scope, validate_rules)?
+                coverage_scan_against(&repo, &path, &scope, validate_rules, None)?
             };
             if let Some(output_path) = output {
-                let rendered = render_coverage(format, &report)?;
+                let rendered = render_coverage(format, &outcome.scan)?;
                 std::fs::write(output_path, rendered)?;
             } else if matches!(format, ReportFormat::Markdown) {
-                print!("{}", render_coverage(format, &report)?);
+                print!("{}", render_coverage(format, &outcome.scan)?);
             } else {
-                output::print_json(&report)?;
+                output::print_json(&outcome.scan)?;
             }
-            if let Some(message) = binding_finding_refusal(policy, &report.warnings) {
+            if let Some(message) = binding_finding_refusal(policy, outcome.governed_finding_count) {
                 anyhow::bail!("{message}");
             }
-            if strict && !report.warnings.is_empty() {
+            if strict && !outcome.scan.warnings.is_empty() {
                 anyhow::bail!(
                     "coverage scan found {} warning(s); rerun without --strict to inspect",
-                    report.warnings.len()
+                    outcome.scan.warnings.len()
                 );
             }
         }
@@ -288,16 +305,4 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
 mod git_tests;
 
 #[cfg(test)]
-mod implementation_tests;
-
-#[cfg(test)]
-mod lifecycle_tests;
-
-#[cfg(test)]
 mod parse_warning_tests;
-
-#[cfg(test)]
-mod severity_tests;
-
-#[cfg(test)]
-mod unverified_tests;
