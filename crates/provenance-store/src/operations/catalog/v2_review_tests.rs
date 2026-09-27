@@ -248,3 +248,47 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
     });
     assert_eq!(store.review_entries(&scope).unwrap().len(), 2);
 }
+
+#[test]
+fn review_action_requests_exclude_server_created_identities() {
+    let submit = serde_json::from_value::<review::SubmitRequirementReview>(json!({
+        "scope_id":"default", "actor":"agent", "requirement_id":"req_a",
+        "proposal_id":"prop-1", "proposal_key":"prop-1-key", "title":"Title",
+        "summary":"Summary", "source_ids":[], "evidence_references":[], "builds_on":[],
+        "expected_revision":null, "revises":null
+    }));
+    assert!(submit.is_ok());
+
+    let decide = serde_json::from_value::<DecideRequirementReviewRequest>(json!({
+        "scope_id":"default", "requirement_id":"req_a", "actor":{
+            "identity_type":"human", "id":"reviewer"
+        }, "proposal_id":"prop-1", "decision":"accepted", "rationale":null,
+        "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"},
+        "feedback":null, "declared_by":null
+    }));
+    assert!(decide.is_ok());
+
+    let withdraw = serde_json::from_value::<WithdrawRequirementReviewRequest>(json!({
+        "scope_id":"default", "requirement_id":"req_a", "actor":"agent",
+        "proposal_id":"prop-1", "declared_by":null, "reason":null
+    }));
+    assert!(withdraw.is_ok());
+
+    for value in [
+        json!({
+            "scope_id":"default", "request_id":"client-request", "actor":"agent",
+            "requirement_id":"req_a", "proposal_id":"prop-1", "proposal_key":"key",
+            "title":"Title", "summary":"Summary", "source_ids":[],
+            "evidence_references":[], "builds_on":[], "expected_revision":null, "revises":null
+        }),
+    ] {
+        assert!(serde_json::from_value::<review::SubmitRequirementReview>(value).is_err());
+    }
+    assert!(serde_json::from_value::<DecideRequirementReviewRequest>(json!({
+        "scope_id":"default", "requirement_id":"req_a", "request_id":"client-request",
+        "actor":{"identity_type":"human", "id":"reviewer"}, "proposal_id":"prop-1",
+        "disposition_id":"client-disposition", "decision":"accepted", "rationale":null,
+        "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"},
+        "feedback":null, "declared_by":null
+    })).is_err());
+}
