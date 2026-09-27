@@ -7,12 +7,18 @@ fn allow_reviewer(repo: &str) {
     let mut manifest: Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
     manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
 }
 
 fn api(repo: &str, path: &str, body: Value) -> std::process::Output {
     provenance()
-        .args(["api", path, "--repo", repo, "--method", "post", "--input", "-"])
+        .args([
+            "api", path, "--repo", repo, "--method", "post", "--input", "-",
+        ])
         .write_stdin(body.to_string())
         .output()
         .unwrap()
@@ -20,8 +26,14 @@ fn api(repo: &str, path: &str, body: Value) -> std::process::Output {
 
 fn create_requirement(repo: &str) {
     success(&[
-        "req_review", "create", "--type", "requirement", "--repo", repo,
-        "--statement", "The review statement applies.",
+        "req_review",
+        "create",
+        "--type",
+        "requirement",
+        "--repo",
+        repo,
+        "--statement",
+        "The review statement applies.",
     ]);
 }
 
@@ -35,23 +47,44 @@ fn edit(repo: &str, description: &str) -> String {
         .collect();
     let key = format!("Idempotency-Key: {request_id}");
     let result = provenance()
-        .args(["api", "requirements/req_review", "--repo", repo, "--method", "patch",
-            "--input", "-", "--header", &key, "--header",
-            &format!("If-Match: {etag}")])
+        .args([
+            "api",
+            "requirements/req_review",
+            "--repo",
+            repo,
+            "--method",
+            "patch",
+            "--input",
+            "-",
+            "--header",
+            &key,
+            "--header",
+            &format!("If-Match: {etag}"),
+        ])
         .write_stdin(json!({"actor":"agent","description":description}).to_string())
         .output()
         .unwrap();
-    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
     serde_json::from_slice::<Value>(&result.stdout).unwrap()["data"]["edit"]["revision"]
-        .as_str().unwrap().to_owned()
+        .as_str()
+        .unwrap()
+        .to_owned()
 }
 
 fn submit(repo: &str, revision: &str) -> std::process::Output {
-    api(repo, "requirements/req_review/submit", json!({
-        "actor":"agent", "declared_by":null, "title":"Review", "summary":"Review it.",
-        "confidence":null, "source_ids":[], "evidence_references":[], "builds_on":[],
-        "expected_revision":revision, "revises":null
-    }))
+    api(
+        repo,
+        "requirements/req_review/submit",
+        json!({
+            "actor":"agent", "declared_by":null, "title":"Review", "summary":"Review it.",
+            "confidence":null, "source_ids":[], "evidence_references":[], "builds_on":[],
+            "expected_revision":revision, "revises":null
+        }),
+    )
 }
 
 fn conflict(submission: Option<&str>, revision: &str) -> Value {
@@ -60,7 +93,11 @@ fn conflict(submission: Option<&str>, revision: &str) -> Value {
 }
 
 fn successful(output: std::process::Output) -> Value {
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
@@ -75,7 +112,10 @@ fn cli_submit_conflicts_return_the_typed_envelope() {
     create_requirement(&repo);
     let revision_1 = edit(&repo, "Revision one.");
     let revision_2 = edit(&repo, "Revision two.");
-    assert_eq!(refused(submit(&repo, &revision_1)), conflict(None, &revision_2));
+    assert_eq!(
+        refused(submit(&repo, &revision_1)),
+        conflict(None, &revision_2)
+    );
     let submitted = successful(submit(&repo, &revision_2));
     let proposal = submitted["data"]["proposal_id"].as_str().unwrap();
     assert_eq!(
@@ -92,7 +132,11 @@ fn terminal(repo: &str, proposal: &str, action: &str) -> Value {
             "feedback":null, "declared_by":null}),
         _ => json!({"actor":"agent","declared_by":null,"reason":null}),
     };
-    refused(api(repo, &format!("requirements/req_review/submissions/{proposal}/{action}"), body))
+    refused(api(
+        repo,
+        &format!("requirements/req_review/submissions/{proposal}/{action}"),
+        body,
+    ))
 }
 
 fn prepared(state: &str) -> (tempfile::TempDir, String, String, String) {
@@ -101,17 +145,26 @@ fn prepared(state: &str) -> (tempfile::TempDir, String, String, String) {
     allow_reviewer(&repo);
     let mut revision = edit(&repo, "Revision one.");
     let submitted = successful(submit(&repo, &revision));
-    let proposal = submitted["data"]["proposal_id"].as_str().unwrap().to_owned();
+    let proposal = submitted["data"]["proposal_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     if state == "stale" {
         revision = edit(&repo, "Revision two.");
     } else if state == "withdrawn" {
-        successful(api(&repo, &format!("requirements/req_review/submissions/{proposal}/withdraw"),
-            json!({"actor":"agent","declared_by":null,"reason":null})));
+        successful(api(
+            &repo,
+            &format!("requirements/req_review/submissions/{proposal}/withdraw"),
+            json!({"actor":"agent","declared_by":null,"reason":null}),
+        ));
     } else {
-        successful(api(&repo, &format!("requirements/req_review/submissions/{proposal}/decide"),
+        successful(api(
+            &repo,
+            &format!("requirements/req_review/submissions/{proposal}/decide"),
             json!({"actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
                 "rationale":"Needs work.", "canonical_artifact":null,
-                "feedback":null, "declared_by":null})));
+                "feedback":null, "declared_by":null}),
+        ));
     }
     (directory, repo, proposal, revision)
 }
@@ -121,7 +174,10 @@ fn cli_terminal_review_conflicts_share_one_envelope() {
     for state in ["stale", "withdrawn", "decided"] {
         let (_directory, repo, proposal, revision) = prepared(state);
         for action in ["decide", "withdraw"] {
-            assert_eq!(terminal(&repo, &proposal, action), conflict(None, &revision));
+            assert_eq!(
+                terminal(&repo, &proposal, action),
+                conflict(None, &revision)
+            );
         }
     }
 }

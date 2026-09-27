@@ -63,7 +63,10 @@ async fn edit(host: &StatementHost, key: &str, description: &str) -> String {
     )
     .await;
     assert_eq!(status, 200, "{saved}");
-    saved["data"]["edit"]["revision"].as_str().unwrap().to_owned()
+    saved["data"]["edit"]["revision"]
+        .as_str()
+        .unwrap()
+        .to_owned()
 }
 
 fn conflict(submission: Option<&str>, revision: &str) -> Value {
@@ -195,32 +198,50 @@ async fn submit_conflicts_return_the_typed_http_envelope() {
     let host = host(&repo);
     let revision_1 = enroll(&host).await;
     let revision_2 = edit(&host, "edit-current", "Current revision.").await;
-    let body = |revision: &str| json!({"data":{
-        "actor":"agent", "declared_by":null, "title":"Review", "summary":"Review it.",
-        "confidence":null, "source_ids":[], "evidence_references":[], "builds_on":[],
-        "expected_revision":revision, "revises":null
-    }});
+    let body = |revision: &str| {
+        json!({"data":{
+            "actor":"agent", "declared_by":null, "title":"Review", "summary":"Review it.",
+            "confidence":null, "source_ids":[], "evidence_references":[], "builds_on":[],
+            "expected_revision":revision, "revises":null
+        }})
+    };
     let (status, stale, _) = call(
-        &host, "POST", "/requirements/req_shared/submit", Some(body(&revision_1)), &[],
-    ).await;
+        &host,
+        "POST",
+        "/requirements/req_shared/submit",
+        Some(body(&revision_1)),
+        &[],
+    )
+    .await;
     assert_eq!(status, 409);
     assert_eq!(stale, conflict(None, &revision_2));
 
     let proposal = submit_at(&host, &revision_2).await;
     let (status, repeated, _) = call(
-        &host, "POST", "/requirements/req_shared/submit", Some(body(&revision_2)), &[],
-    ).await;
+        &host,
+        "POST",
+        "/requirements/req_shared/submit",
+        Some(body(&revision_2)),
+        &[],
+    )
+    .await;
     assert_eq!(status, 409);
     assert_eq!(repeated, conflict(Some(&proposal), &revision_2));
 }
 
 async fn assert_terminal_conflicts(host: &StatementHost, proposal: &str, revision: &str) {
     let paths = [
-        ("decide", json!({"data":{"actor":{"identity_type":"human","id":"reviewer"},
+        (
+            "decide",
+            json!({"data":{"actor":{"identity_type":"human","id":"reviewer"},
             "decision":"accepted", "rationale":null,
             "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_shared"},
-            "feedback":null, "declared_by":null}})),
-        ("withdraw", json!({"data":{"actor":"agent","declared_by":null,"reason":null}})),
+            "feedback":null, "declared_by":null}}),
+        ),
+        (
+            "withdraw",
+            json!({"data":{"actor":"agent","declared_by":null,"reason":null}}),
+        ),
     ];
     for (action, body) in paths {
         let path = format!("/requirements/req_shared/submissions/{proposal}/{action}");
@@ -233,7 +254,10 @@ async fn assert_terminal_conflicts(host: &StatementHost, proposal: &str, revisio
 async fn current_revision(host: &StatementHost) -> String {
     let (status, value, _) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
     assert_eq!(status, 200, "{value}");
-    value["data"]["edit"]["revision"].as_str().unwrap().to_owned()
+    value["data"]["edit"]["revision"]
+        .as_str()
+        .unwrap()
+        .to_owned()
 }
 
 #[tokio::test]
@@ -251,9 +275,20 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
     let withdrawn = submit(&withdrawn_host).await;
     let revision = current_revision(&withdrawn_host).await;
     let path = format!("/requirements/req_shared/submissions/{withdrawn}/withdraw");
-    assert_eq!(call(&withdrawn_host, "POST", &path, Some(json!({"data":{
-        "actor":"agent","declared_by":null,"reason":null
-    }})), &[]).await.0, 200);
+    assert_eq!(
+        call(
+            &withdrawn_host,
+            "POST",
+            &path,
+            Some(json!({"data":{
+                "actor":"agent","declared_by":null,"reason":null
+            }})),
+            &[]
+        )
+        .await
+        .0,
+        200
+    );
     assert_terminal_conflicts(&withdrawn_host, &withdrawn, &revision).await;
 
     let decided_repo = Repository::new("The shared graph is readable.");
@@ -262,10 +297,21 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
     let decided = submit(&decided_host).await;
     let revision = current_revision(&decided_host).await;
     let path = format!("/requirements/req_shared/submissions/{decided}/decide");
-    assert_eq!(call(&decided_host, "POST", &path, Some(json!({"data":{
-        "actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
-        "rationale":"Needs work.", "canonical_artifact":null,
-        "feedback":null, "declared_by":null
-    }})), &[]).await.0, 200);
+    assert_eq!(
+        call(
+            &decided_host,
+            "POST",
+            &path,
+            Some(json!({"data":{
+                "actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
+                "rationale":"Needs work.", "canonical_artifact":null,
+                "feedback":null, "declared_by":null
+            }})),
+            &[]
+        )
+        .await
+        .0,
+        200
+    );
     assert_terminal_conflicts(&decided_host, &decided, &revision).await;
 }
