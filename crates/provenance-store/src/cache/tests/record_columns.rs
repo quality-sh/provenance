@@ -1,6 +1,6 @@
 //! The eleven record tables mirror their record types: one column per
 //! field, plus the derived `search_text` column on the eight kind tables.
-//! A struct field with no column fails here until its migration lands.
+//! A struct field with no column fails here until the current schema changes.
 
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::fixtures::pinned_store::{pinned_store_layout, LINKED_REQUIREMENT_ID, LINKED_RULE_ID};
@@ -45,10 +45,10 @@ async fn assert_mirrors<K: ProjectionRow>(pool: &sqlx::SqlitePool, kind: bool) {
 #[verifies("rule_record_table_has_one_column_per_field", exhaustion)]
 async fn every_kind_table_mirrors_its_record_columns() {
     let (_dir, layout, _scope) = seeded_layout();
-    let pool = open_cache(&layout).await.unwrap();
-    crate::migrations::run_migrations(pool.pool(), &layout)
+    crate::cache::materialize_empty_state(&layout)
         .await
         .unwrap();
+    let pool = open_cache(&layout).await.unwrap();
     assert_mirrors::<Source>(pool.pool(), true).await;
     assert_mirrors::<Requirement>(pool.pool(), true).await;
     assert_mirrors::<Resolution>(pool.pool(), true).await;

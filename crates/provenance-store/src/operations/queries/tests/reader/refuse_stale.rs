@@ -211,9 +211,9 @@ async fn refuse_stale_refuses_a_half_migrated_projection() {
 }
 
 #[tokio::test]
-async fn refuse_stale_refuses_old_migrations_and_validation() {
+async fn refuse_stale_refuses_an_incompatible_schema_and_old_validation() {
     for sql in [
-        "DELETE FROM _schema_migrations",
+        "UPDATE _cache_metadata SET schema_digest = 'incompatible'",
         "UPDATE projection_validation SET version = 0",
     ] {
         let store = test_stores::seeded_queries();
@@ -230,6 +230,23 @@ async fn refuse_stale_refuses_old_migrations_and_validation() {
             "{error}"
         );
     }
+}
+
+#[tokio::test]
+async fn refuse_stale_does_not_change_a_delete_mode_cache_that_it_refuses() {
+    let store = test_stores::seeded_queries();
+    let before = super::incompatible_delete_mode_cache(&store).await;
+
+    let refused = get_through(&store, policy()).await.unwrap_err();
+
+    assert!(matches!(
+        refused.downcast_ref::<ReadRefusal>(),
+        Some(ReadRefusal::SchemaBehind { .. })
+    ));
+    assert_eq!(
+        std::fs::read(store.layout().cache_db_path()).unwrap(),
+        before
+    );
 }
 
 #[tokio::test]

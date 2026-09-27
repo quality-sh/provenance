@@ -88,7 +88,7 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
 
-    // Rewind the schema to its pre-020 shape.
+    // Change the schema and its compatibility marker.
     let pool = open_cache(&layout).await.unwrap();
     for statement in [
         "DROP TABLE projection_unit_digests",
@@ -99,15 +99,18 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
     ] {
         sqlx::query(statement).execute(pool.pool()).await.unwrap();
     }
-    sqlx::query("DELETE FROM _schema_migrations WHERE id IN ('020', '028')")
+    sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
         .execute(pool.pool())
         .await
         .unwrap();
     pool.close().await.unwrap();
 
     let report = catch_up_state(&layout).await.unwrap();
-    assert!(report.rebuilt, "a migration must force a rebuild");
-    assert!(report.migrations_applied.contains(&"020".to_string()));
+    assert!(
+        report.rebuilt,
+        "an incompatible schema must force a rebuild"
+    );
+    assert!(report.cache_recreated);
     assert_catch_up_equals_rebuild(&layout).await;
 }
 

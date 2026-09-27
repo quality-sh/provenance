@@ -23,42 +23,42 @@ async fn materialization_holds_the_publication_lock_at_commit() {
 }
 
 #[tokio::test]
-async fn materialization_holds_the_publication_lock_while_migrations_run() {
+async fn materialization_holds_the_publication_lock_while_schema_prepares() {
     let (_dir, layout, _scope) = seeded_layout();
     let fired = std::rc::Rc::new(std::cell::Cell::new(false));
     let probe_layout = layout.clone();
     let probe_fired = fired.clone();
-    crate::test_probes::arm("run_migrations_under_guard", move || {
+    crate::test_probes::arm("prepare_current_schema_under_guard", move || {
         probe_fired.set(true);
         anyhow::ensure!(
             lock_is_held(&probe_layout),
-            "the publication lock must be held while migrations run"
+            "the publication lock must be held while the schema prepares"
         );
         Ok(())
     });
     materialize_state(&layout).await.unwrap();
-    crate::test_probes::disarm("run_migrations_under_guard");
-    assert!(fired.get(), "the migration probe must have run");
+    crate::test_probes::disarm("prepare_current_schema_under_guard");
+    assert!(fired.get(), "the schema probe must have run");
 }
 
 #[tokio::test]
-async fn catch_up_holds_the_publication_lock_while_migrations_run() {
+async fn catch_up_holds_the_publication_lock_while_schema_is_checked() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
     let fired = std::rc::Rc::new(std::cell::Cell::new(false));
     let probe_layout = layout.clone();
     let probe_fired = fired.clone();
-    crate::test_probes::arm("run_migrations_under_guard", move || {
+    crate::test_probes::arm("prepare_current_schema_under_guard", move || {
         probe_fired.set(true);
         anyhow::ensure!(
             lock_is_held(&probe_layout),
-            "the publication lock must be held while migrations run"
+            "the publication lock must be held while the schema is checked"
         );
         Ok(())
     });
     catch_up_state(&layout).await.unwrap();
-    crate::test_probes::disarm("run_migrations_under_guard");
-    assert!(fired.get(), "the migration probe must have run");
+    crate::test_probes::disarm("prepare_current_schema_under_guard");
+    assert!(fired.get(), "the schema probe must have run");
 }
 
 #[tokio::test]

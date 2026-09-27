@@ -22,6 +22,23 @@ use provenance_core::protocol::{
 use provenance_core::{NodeType, Requirement, Rule};
 use provenance_macros::verifies;
 
+async fn incompatible_delete_mode_cache(store: &TestStore) -> Vec<u8> {
+    use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
+    use sqlx::{Connection, SqliteConnection};
+
+    crate::cache::catch_up_state(&store.layout()).await.unwrap();
+    let options = SqliteConnectOptions::new()
+        .filename(store.layout().cache_db_path())
+        .journal_mode(SqliteJournalMode::Delete);
+    let mut connection = SqliteConnection::connect_with(&options).await.unwrap();
+    sqlx::query("UPDATE projection_validation SET version = 0")
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    connection.close().await.unwrap();
+    std::fs::read(store.layout().cache_db_path()).unwrap()
+}
+
 /// The latest revision serial and the instance id, read directly.
 async fn stored(store: &TestStore) -> (i64, String) {
     let pool = open_cache(&store.layout()).await.unwrap();

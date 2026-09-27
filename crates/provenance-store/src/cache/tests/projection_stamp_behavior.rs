@@ -24,7 +24,7 @@ async fn table_exists(pool: &sqlx::SqlitePool, table: &str) -> bool {
 }
 
 #[tokio::test]
-async fn migration_creates_the_projection_stamp_and_family_tables() {
+async fn current_schema_creates_the_projection_stamp_and_family_tables() {
     let (_dir, layout, _scope) = empty_layout();
     materialize_empty_state(&layout).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();

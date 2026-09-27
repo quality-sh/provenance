@@ -23,7 +23,7 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
     let held_during_catch_up = std::rc::Rc::new(std::cell::Cell::new(false));
     let probe_layout = layout.clone();
     let probe_seen = held_during_catch_up.clone();
-    crate::test_probes::arm("run_migrations_under_guard", move || {
+    crate::test_probes::arm("prepare_current_schema_under_guard", move || {
         probe_seen.set(publication_lock_is_held(&probe_layout));
         Ok(())
     });
@@ -49,7 +49,7 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
     )
     .await
     .unwrap();
-    crate::test_probes::disarm("run_migrations_under_guard");
+    crate::test_probes::disarm("prepare_current_schema_under_guard");
     assert!(stamped.result.found);
     assert!(
         held_during_catch_up.get(),
@@ -114,7 +114,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         RequirementStatus::Active,
     );
     let guard = publication_guard(&layout).await.unwrap();
-    let report = catch_up_with_guard(&guard, second_pool.pool(), &layout)
+    let report = catch_up_with_guard(&guard, second_pool.pool())
         .await
         .unwrap();
     drop(guard);
