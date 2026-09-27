@@ -65,7 +65,7 @@ type SourceData = Extract<components['schemas']['GetSourceSuccess']['data'], { u
 declare const source: SourceData;
 const name: string = source.name;
 `);
-    run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', join(temporary, 'client', 'assertions.ts')]);
+    run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', '--module', 'es2022', '--moduleResolution', 'bundler', join(temporary, 'client', 'assertions.ts')]);
     // Cargo reports the exporter path, including any configured build cache.
     await mkdir(join(temporary, 'src'), { recursive: true });
     run(buildBinary(root, ['--locked', '-p', 'provenance-codegen', '--bin', 'provenance-codegen'], 'provenance-codegen'), ['rust', join(root, 'contracts/operations/fixtures.openapi.json'), join(temporary, 'src/generated')]);
