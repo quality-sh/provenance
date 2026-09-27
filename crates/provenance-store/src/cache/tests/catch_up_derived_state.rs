@@ -61,7 +61,7 @@ async fn a_writer_path_disposition_moves_the_cards_effective_state() {
             id: provenance_core::StableId::new("disposition_rejected").unwrap(),
             proposal_id: provenance_core::StableId::new("proposal_base").unwrap(),
             decision: provenance_core::DispositionDecision::Rejected,
-            rationale: Some("Rejected on review".into()),
+            rationale: "Rejected on review".into(),
             actor: provenance_core::DispositionActor {
                 identity_type: provenance_core::IdentityType::Human,
                 id: "reviewer".into(),

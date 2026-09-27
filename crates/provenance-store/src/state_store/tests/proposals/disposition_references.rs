@@ -325,7 +325,7 @@ fn input(scope: &ScopeId, artifact_type: &str, artifact_id: &str) -> CreateDispo
         })
         .unwrap(),
         decision: DispositionDecision::Rejected,
-        rationale: Some("Reviewed".into()),
+        rationale: "Reviewed".into(),
         actor: DispositionActor {
             identity_type: IdentityType::Human,
             id: "reviewer".into(),

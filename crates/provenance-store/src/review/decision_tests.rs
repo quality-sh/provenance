@@ -44,16 +44,14 @@ fn edit(store: &StateStore, request: &str, statement: &str) -> StableId {
 }
 fn submit(
     store: &StateStore,
-    _request: &str,
-    proposal: &str,
-    revises: Option<&str>,
+    revises: Option<&StableId>,
     expected: Option<&str>,
 ) -> anyhow::Result<CycleEntry> {
     store.submit_requirement_review(
         serde_json::from_value(json!({
             "scope_id":"default","actor":"agent","requirement_id":"req_a",
-            "proposal_id":proposal,"proposal_key":format!("{proposal}-key"),"title":"Title",
-            "summary":"Summary","source_ids":[],"evidence_references":[],"builds_on":[],
+            "title":"Title", "summary":"Summary", "source_ids":[],
+            "evidence_references":[], "builds_on":[],
             "revises":revises,"expected_revision":expected
         }))
         .unwrap(),
@@ -61,9 +59,7 @@ fn submit(
 }
 fn decide(
     store: &StateStore,
-    _request: &str,
-    proposal: &str,
-    _disposition: &str,
+    proposal: &StableId,
     decision: &str,
     actor: &Value,
     extra: &Value,
@@ -86,26 +82,26 @@ fn artifact() -> Value {
 fn feedback(body: &str) -> Value {
     json!({"feedback":{"role":"user","body":body}})
 }
-fn withdraw(store: &StateStore, _request: &str, proposal: &str) -> anyhow::Result<CycleEntry> {
+fn withdraw(store: &StateStore, proposal: &StableId) -> anyhow::Result<CycleEntry> {
     store.withdraw_requirement_review(serde_json::from_value(json!({"scope_id":"default","actor":"agent","proposal_id":proposal})).unwrap())
 }
 /// The fixture with one edit enrolled and one pending submission bound to it.
-fn enrolled() -> (tempfile::TempDir, StateStore, StableId) {
+fn enrolled() -> (tempfile::TempDir, StateStore, StableId, StableId) {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let revision = edit(&store, "edit-1", "Statement v1");
-    submit(&store, "submit-1", "prop-1", None, None).unwrap();
-    (temp, store, revision)
+    let proposal = submit(&store, None, None).unwrap().proposal_id;
+    (temp, store, revision, proposal)
 }
 fn state(store: &StateStore) -> provenance_core::review::RequirementDecisionState {
     store.requirement_decision_state(&scope(), &req()).unwrap()
 }
-fn binding_of(store: &StateStore, proposal: &str) -> (String, String) {
+fn binding_of(store: &StateStore, proposal: &StableId) -> (String, String) {
     let card = store
         .list_proposal_definitions(&scope())
         .unwrap()
         .into_iter()
-        .find(|p| p.id.as_str() == proposal)
+        .find(|p| p.id == *proposal)
         .unwrap();
     let binding = card.record_revision.unwrap();
     (binding.revision.as_str().to_owned(), binding.content_digest)
@@ -121,16 +117,14 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let r1 = edit(&store, "edit-1", "Statement v1");
-    submit(&store, "submit-1", "prop-1", None, Some(r1.as_str())).unwrap();
-    let (prop1_revision, prop1_digest) = binding_of(&store, "prop-1");
+    let proposal_1 = submit(&store, None, Some(r1.as_str())).unwrap().proposal_id;
+    let (prop1_revision, prop1_digest) = binding_of(&store, &proposal_1);
     assert_eq!(prop1_revision, r1.as_str());
     assert_eq!(state(&store).pending.unwrap().revision, r1);
 
     let rejection = decide(
         &store,
-        "decide-1",
-        "prop-1",
-        "disp-1",
+        &proposal_1,
         "rejected",
         &reviewer("reviewer"),
         &feedback("Tighten the statement"),
@@ -154,15 +148,10 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     // Revise: a fresh Proposal answering one rejection, bound to the new
     // revision, then approve through the human existing-artifact path.
     let r2 = edit(&store, "edit-2", "Statement v2");
-    submit(
-        &store,
-        "submit-2",
-        "prop-2",
-        Some("prop-1"),
-        Some(r2.as_str()),
-    )
-    .unwrap();
-    let (prop2_revision, prop2_digest) = binding_of(&store, "prop-2");
+    let proposal_2 = submit(&store, Some(&proposal_1), Some(r2.as_str()))
+        .unwrap()
+        .proposal_id;
+    let (prop2_revision, prop2_digest) = binding_of(&store, &proposal_2);
     assert_eq!(prop2_revision, r2.as_str());
     assert_ne!(
         prop1_digest, prop2_digest,
@@ -172,9 +161,9 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
         .list_proposal_definitions(&scope())
         .unwrap()
         .into_iter()
-        .find(|p| p.id.as_str() == "prop-2")
+        .find(|p| p.id == proposal_2)
         .unwrap();
-    assert_eq!(prop2.revises.as_ref().unwrap().as_str(), "prop-1");
+    assert_eq!(prop2.revises.as_ref().unwrap(), &proposal_1);
     assert_eq!(
         prop2.revises_rejection.as_ref().unwrap(),
         rejection.disposition_id.as_ref().unwrap()
@@ -186,9 +175,7 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
 
     let approval = decide(
         &store,
-        "decide-2",
-        "prop-2",
-        "disp-2",
+        &proposal_2,
         "accepted",
         &reviewer("reviewer"),
         &artifact(),
@@ -234,13 +221,21 @@ fn server_creates_review_request_and_disposition_identities() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     edit(&store, "edit-1", "Statement v1");
-    let submission = submit(&store, "submit-1", "prop-1", None, None).unwrap();
-    assert_ne!(submission.request_id.as_str(), "submit-1");
+    let submission = submit(&store, None, None).unwrap();
+    let proposal = submission.proposal_id.clone();
+    assert_eq!(
+        store
+            .list_proposal_definitions(&scope())
+            .unwrap()
+            .into_iter()
+            .find(|candidate| candidate.id == proposal)
+            .unwrap()
+            .proposal_key,
+        proposal.as_str()
+    );
     let decision = decide(
         &store,
-        "decide-1",
-        "prop-1",
-        "disp-1",
+        &proposal,
         "accepted",
         &reviewer("reviewer"),
         &json!({
@@ -249,18 +244,15 @@ fn server_creates_review_request_and_disposition_identities() {
         }),
     )
     .unwrap();
-    assert_ne!(decision.request_id.as_str(), "decide-1");
-    assert_ne!(
-        decision.disposition_id.as_ref().unwrap().as_str(),
-        "disp-1"
-    );
+    assert_ne!(decision.request_id, submission.request_id);
+    assert_ne!(decision.disposition_id.as_ref().unwrap(), &proposal);
 }
 
 #[test]
 fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
-    let (_temp, store, _) = enrolled();
+    let (_temp, store, _, _) = enrolled();
     refused(
-        submit(&store, "submit-2", "prop-2", None, None),
+        submit(&store, None, None),
         "already has a pending review submission",
     );
     assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 1);
@@ -279,7 +271,7 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
         .unwrap();
     refused(
-        submit(&store, "submit-1", "prop-1", None, None),
+        submit(&store, None, None),
         "requires a review revision",
     );
 }
@@ -291,7 +283,7 @@ fn stale_submission_and_stale_selection_are_refused() {
     let r1 = edit(&store, "edit-1", "Statement v1");
     edit(&store, "edit-2", "Statement v2");
     refused(
-        submit(&store, "submit-1", "prop-1", None, Some(r1.as_str())),
+        submit(&store, None, Some(r1.as_str())),
         "stale submission",
     );
     assert!(store
@@ -299,14 +291,12 @@ fn stale_submission_and_stale_selection_are_refused() {
         .unwrap()
         .is_empty());
 
-    let (_temp, store, _) = enrolled();
+    let (_temp, store, _, proposal) = enrolled();
     edit(&store, "edit-2", "Statement v2");
     refused(
         decide(
             &store,
-            "decide-1",
-            "prop-1",
-            "disp-1",
+            &proposal,
             "accepted",
             &reviewer("reviewer"),
             &artifact(),
@@ -314,22 +304,19 @@ fn stale_submission_and_stale_selection_are_refused() {
         "stale review selection",
     );
     assert!(store.list_dispositions(&scope()).unwrap().is_empty());
-    // The stale candidate is not disposed; the agent withdraws it instead.
-    withdraw(&store, "withdraw-1", "prop-1").unwrap();
-    let withdrawn = state(&store);
-    assert_eq!(withdrawn.withdrawn, vec![StableId::new("prop-1").unwrap()]);
-    assert!(withdrawn.pending.is_none() && withdrawn.decisions.is_empty());
+    refused(
+        withdraw(&store, &proposal),
+        "no longer current and pending",
+    );
 }
 
 #[test]
 fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
-    let (_temp, store, _) = enrolled();
+    let (_temp, store, _, proposal) = enrolled();
     refused(
         decide(
             &store,
-            "decide-1",
-            "prop-1",
-            "disp-1",
+            &proposal,
             "accepted",
             &reviewer("intruder"),
             &artifact(),
@@ -341,9 +328,7 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
     refused(
         decide(
             &store,
-            "decide-2",
-            "prop-1",
-            "disp-2",
+            &proposal,
             "accepted",
             &json!({"identity_type":"agent","id":"agent-1"}),
             &json!({}),
@@ -355,9 +340,7 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
     // The human existing-artifact path is the qualified exception.
     decide(
         &store,
-        "decide-3",
-        "prop-1",
-        "disp-3",
+        &proposal,
         "accepted",
         &reviewer("reviewer"),
         &artifact(),
@@ -368,13 +351,11 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
 
 #[test]
 fn one_terminal_disposition_per_proposal() {
-    let (_temp, store, _) = enrolled();
+    let (_temp, store, _, proposal) = enrolled();
     // Rejection keeps a nonempty rationale and permits absent feedback.
     decide(
         &store,
-        "decide-1",
-        "prop-1",
-        "disp-1",
+        &proposal,
         "rejected",
         &reviewer("reviewer"),
         &json!({}),
@@ -383,28 +364,24 @@ fn one_terminal_disposition_per_proposal() {
     refused(
         decide(
             &store,
-            "decide-2",
-            "prop-1",
-            "disp-2",
+            &proposal,
             "accepted",
             &reviewer("reviewer"),
             &artifact(),
         ),
-        "authoritative disposition",
+        "no longer pending",
     );
     assert_eq!(store.list_dispositions(&scope()).unwrap().len(), 1);
 }
 
 #[test]
 fn feedback_publishes_with_the_decision_or_neither() {
-    let (_temp, store, _) = enrolled();
+    let (_temp, store, _, proposal) = enrolled();
     let falsified = json!({"feedback":{"role":"user","body":"Comments"},"declared_by":"mallory"});
     refused(
         decide(
             &store,
-            "decide-1",
-            "prop-1",
-            "disp-1",
+            &proposal,
             "rejected",
             &reviewer("reviewer"),
             &falsified,
@@ -423,9 +400,7 @@ fn feedback_publishes_with_the_decision_or_neither() {
 
     decide(
         &store,
-        "decide-2",
-        "prop-1",
-        "disp-2",
+        &proposal,
         "rejected",
         &reviewer("reviewer"),
         &feedback("Comments"),
@@ -439,35 +414,33 @@ fn feedback_publishes_with_the_decision_or_neither() {
 
 #[test]
 fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
-    let (_temp, store, _) = enrolled();
-    withdraw(&store, "withdraw-1", "prop-1").unwrap();
+    let (_temp, store, _, proposal_1) = enrolled();
+    withdraw(&store, &proposal_1).unwrap();
     let withdrawn = state(&store);
-    assert_eq!(withdrawn.withdrawn, vec![StableId::new("prop-1").unwrap()]);
+    assert_eq!(withdrawn.withdrawn, vec![proposal_1.clone()]);
     assert!(withdrawn.pending.is_none() && withdrawn.decisions.is_empty());
     assert!(
         store
             .list_proposal_definitions(&scope())
             .unwrap()
             .iter()
-            .any(|p| p.id.as_str() == "prop-1"),
+            .any(|p| p.id == proposal_1),
         "withdrawal keeps the candidate, its feedback, and the graph record"
     );
 
     // Withdrawal is not rejection: a fresh candidate needs no predecessor.
-    submit(&store, "submit-2", "prop-2", None, None).unwrap();
+    let proposal_2 = submit(&store, None, None).unwrap().proposal_id;
     decide(
         &store,
-        "decide-2",
-        "prop-2",
-        "disp-2",
+        &proposal_2,
         "rejected",
         &reviewer("reviewer"),
         &json!({}),
     )
     .unwrap();
     refused(
-        withdraw(&store, "withdraw-2", "prop-2"),
-        "already has a decision",
+        withdraw(&store, &proposal_2),
+        "no longer current and pending",
     );
 }
 
@@ -478,7 +451,7 @@ mod conflict_tests;
 
 #[test]
 fn legacy_unbound_decisions_read_correctly_and_stay_frozen() {
-    let (_temp, store, _) = enrolled();
+    let (_temp, store, _, _) = enrolled();
     store.create_proposal_card(serde_json::from_value(json!({
         "scope_id":"default","id":"prop-legacy","proposal_key":"legacy","proposal_type":"requirement_candidate",
         "title":"Legacy","summary":"Summary","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_a"},

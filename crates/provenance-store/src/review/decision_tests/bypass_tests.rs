@@ -5,7 +5,7 @@ use serde_json::json;
 
 #[test]
 fn native_and_batch_writers_refuse_review_mutation_bypasses() {
-    let (_temp, store, _) = enrolled();
+    let (_temp, store, _, proposal) = enrolled();
     let card = json!({
         "scope_id":"default","id":"prop-forge","proposal_key":"forge","proposal_type":"record_revision",
         "title":"T","summary":"S","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_a"},
@@ -19,7 +19,7 @@ fn native_and_batch_writers_refuse_review_mutation_bypasses() {
     refused(
         store.create_disposition(
             serde_json::from_value(json!({
-            "scope_id":"default","id":"disp-forge","proposal_id":"prop-1","decision":"rejected",
+            "scope_id":"default","id":"disp-forge","proposal_id":proposal,"decision":"rejected",
             "rationale":"Because","actor":{"identity_type":"human","id":"reviewer"}}))
             .unwrap(),
         ),
@@ -38,7 +38,7 @@ fn native_and_batch_writers_refuse_review_mutation_bypasses() {
     );
     refused(
         store.land_ideation_batch(&super::scope(), serde_json::from_value(json!({"dispositions":[{
-            "schema_version":2,"scope_id":"default","id":"disp-forge","proposal_id":"prop-1",
+            "schema_version":2,"scope_id":"default","id":"disp-forge","proposal_id":proposal,
             "decision":"rejected","rationale":"Because","actor":{"identity_type":"human","id":"reviewer"}}]})).unwrap(), false),
         "decisions on review submissions go through the review seam",
     );
