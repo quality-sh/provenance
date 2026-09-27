@@ -40,10 +40,10 @@ fn replacing_the_held_parent_after_read_refuses_without_touching_the_new_parent(
     let held = files
         .read_bounded(Utf8Path::new("dir/source.txt"), 20)
         .unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
     std::fs::rename(path.join("dir"), path.join("held-dir")).unwrap();
     std::fs::create_dir(path.join("dir")).unwrap();
     std::fs::write(path.join("dir/source.txt"), b"outside").unwrap();
+    let prepared = held.create_temp(b"replacement").unwrap();
 
     assert!(held.compare_and_swap(prepared).is_err());
     assert_eq!(
@@ -65,10 +65,10 @@ fn replacing_the_root_after_read_refuses_without_touching_the_new_root() {
     std::fs::write(root.join("source.txt"), b"original").unwrap();
     let files = RepositoryFiles::open(&root).unwrap();
     let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
-    let prepared = held.create_temp(b"replacement").unwrap();
     std::fs::rename(&root, outer_path.join("held-root")).unwrap();
     std::fs::create_dir(&root).unwrap();
     std::fs::write(root.join("source.txt"), b"outside").unwrap();
+    let prepared = held.create_temp(b"replacement").unwrap();
 
     assert!(held.compare_and_swap(prepared).is_err());
     assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), b"outside");

@@ -287,14 +287,24 @@ pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
 #[cfg(windows)]
 fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
     use fs_at::os::windows::OpenOptionsExt;
-    use std::mem::size_of;
+    use std::mem::{offset_of, size_of};
     use std::os::windows::{ffi::OsStrExt, io::AsRawHandle};
-    use windows_sys::Win32::Foundation::HANDLE;
-    use windows_sys::Win32::Storage::FileSystem::{
-        FileRenameInfo, SetFileInformationByHandle, FILE_RENAME_INFO, FILE_RENAME_INFO_0,
-    };
+    use windows_sys::Win32::Foundation::{RtlNtStatusToDosError, HANDLE};
+    use windows_sys::Win32::Storage::FileSystem::{FILE_RENAME_INFO, FILE_RENAME_INFO_0};
+
+    #[link(name = "ntdll")]
+    unsafe extern "system" {
+        fn NtSetInformationFile(
+            file: HANDLE,
+            status: *mut std::ffi::c_void,
+            information: *const std::ffi::c_void,
+            length: u32,
+            class: i32,
+        ) -> i32;
+    }
 
     const DELETE_ACCESS: u32 = 0x0001_0000;
+    const FILE_RENAME_INFORMATION: i32 = 10;
     let mut options = fs_at::OpenOptions::default();
     options.desired_access(DELETE_ACCESS).follow(false);
     let source = options.open_path_at(parent, from)?;
@@ -303,8 +313,9 @@ fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<
         .len()
         .checked_mul(size_of::<u16>())
         .ok_or(std::io::ErrorKind::InvalidInput)?;
-    let buffer_size = size_of::<FILE_RENAME_INFO>()
+    let buffer_size = offset_of!(FILE_RENAME_INFO, FileName)
         .checked_add(name_bytes)
+        .and_then(|size| size.checked_add(size_of::<u16>()))
         .ok_or(std::io::ErrorKind::InvalidInput)?;
     let mut storage = vec![0_usize; buffer_size.div_ceil(size_of::<usize>())];
     let info = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();
@@ -321,14 +332,18 @@ fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<
             std::ptr::addr_of_mut!((*info).FileName).cast::<u16>(),
             name.len(),
         );
-        if SetFileInformationByHandle(
+        let mut status_block = [0_usize; 2];
+        let status = NtSetInformationFile(
             source.as_raw_handle() as HANDLE,
-            FileRenameInfo,
-            info.cast(),
+            status_block.as_mut_ptr().cast(),
+            info.cast_const().cast(),
             u32::try_from(buffer_size).map_err(|_| std::io::ErrorKind::InvalidInput)?,
-        ) == 0
-        {
-            return Err(std::io::Error::last_os_error());
+            FILE_RENAME_INFORMATION,
+        );
+        if status < 0 {
+            return Err(std::io::Error::from_raw_os_error(
+                RtlNtStatusToDosError(status) as i32,
+            ));
         }
     }
     Ok(())
