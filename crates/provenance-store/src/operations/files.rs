@@ -31,6 +31,20 @@ pub enum FileAccessRefusal {
     Read(#[source] std::io::Error),
 }
 
+/// Read one regular repository file through held, no-follow traversal.
+pub fn read_repository_file(
+    root: &Utf8Path,
+    relative: &Utf8Path,
+) -> Result<Vec<u8>, FileAccessRefusal> {
+    let mut opened = RepositoryFiles::open(root)?.open_file(relative)?;
+    let mut bytes = Vec::new();
+    opened
+        .file
+        .read_to_end(&mut bytes)
+        .map_err(FileAccessRefusal::Read)?;
+    Ok(bytes)
+}
+
 pub(crate) struct OpenedRepositoryFile {
     pub relative: Utf8PathBuf,
     pub file: File,
