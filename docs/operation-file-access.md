@@ -81,16 +81,26 @@ The read refuses a file that is larger than the caller's byte limit. If a file
 grows during the read, the read stops after one byte beyond the limit and
 refuses the file. The read does not change line endings or other bytes.
 
-A replacement temporary file is created as a new leaf in the held parent. It
-receives the selected file's permissions. The compare-and-swap operation first
-moves the current leaf to a new backup name without replacement. It checks the
-displaced file's identity and SHA-256 digest against the bounded read. If the
-check fails, it restores the displaced leaf without replacement. Thus, a new
-file that appears at the selected name is not overwritten. If the check passes,
-the operation installs the temporary file without replacement and removes the
-backup. Access, size, UTF-8, concurrent-change, write, and restore failures are
-typed refusals. File and graph state transactions and recovery are outside this
-file-access operation.
+A replacement temporary file is created as a new leaf in the held parent. The
+operation keeps its handle open. Before installation, the operation checks that
+the temporary leaf has the same identity and digest as that handle. It also
+checks that the prepared file belongs to the selected leaf and read snapshot.
+
+On Unix, the operation refuses a target that has an owner UID other than the
+process effective UID. It does not change the owner. It copies all mode bits to
+the replacement. On Windows, it copies the target DACL to the replacement. A
+DACL copy failure refuses the operation. It also keeps the read-only attribute.
+
+The compare-and-swap operation moves the current leaf to a new backup name
+without replacement. It checks the displaced file's identity and SHA-256 digest
+against the bounded read. If the check fails, it restores the displaced leaf
+without replacement. Thus, a new file that appears at the selected name is not
+overwritten. If the check passes, the operation installs the temporary file. It
+then checks the backup identity and digest again. It removes the backup only if
+that check passes. A changed backup or a backup removal failure returns an
+installed outcome that names the retained backup. Access, size, UTF-8,
+concurrent-change, write, and restore failures are typed refusals. File and
+graph state transactions and recovery are outside this file-access operation.
 
 Review journal and snapshot reads also use this held-file seam. These reads
 resolve only the configured repository root, so a trusted root or parent alias

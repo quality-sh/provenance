@@ -94,6 +94,26 @@ fn replaced_prepared_symlink_is_refused() {
     assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), b"original");
 }
 
+#[cfg(windows)]
+#[test]
+fn replaced_prepared_symlink_is_refused() {
+    use std::os::windows::fs::symlink_file;
+    let (_temporary, path, files) = repository();
+    std::fs::write(path.join("source.txt"), b"original").unwrap();
+    std::fs::write(path.join("attacker"), b"attacker").unwrap();
+    let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
+    let prepared = held.create_temp(b"trusted").unwrap();
+    let leaf = prepared_leaf(&path);
+    std::fs::rename(&leaf, path.join("held-prepared")).unwrap();
+    symlink_file(path.join("attacker"), &leaf).unwrap();
+
+    assert!(matches!(
+        held.compare_and_swap(prepared),
+        Err(RepositoryFileRefusal::Changed | RepositoryFileRefusal::Denied)
+    ));
+    assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), b"original");
+}
+
 #[test]
 fn replacing_a_hard_link_does_not_write_through_to_the_other_name() {
     let (_temporary, path, files) = repository();
