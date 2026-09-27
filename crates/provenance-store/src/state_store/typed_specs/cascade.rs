@@ -162,54 +162,47 @@ impl Cascade {
                 continue;
             };
             let survives = match artifact.artifact_type {
-                CanonicalArtifactType::Source => contains_scoped_id(
-                    sources,
-                    scope,
-                    &artifact.artifact_id,
-                    |r| (&r.scope_id, &r.id),
-                ),
-                CanonicalArtifactType::Requirement => contains_scoped_id(
-                    requirements,
-                    scope,
-                    &artifact.artifact_id,
-                    |r| (&r.scope_id, &r.id),
-                ),
-                CanonicalArtifactType::Resolution => contains_scoped_id(
-                    &self.resolutions,
-                    scope,
-                    &artifact.artifact_id,
-                    |r| (&r.scope_id, &r.id),
-                ),
-                CanonicalArtifactType::Rule => contains_scoped_id(
-                    rules,
-                    scope,
-                    &artifact.artifact_id,
-                    |r| (&r.scope_id, &r.id),
-                ),
+                CanonicalArtifactType::Source => {
+                    contains_scoped_id(sources, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
+                CanonicalArtifactType::Requirement => {
+                    contains_scoped_id(requirements, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
+                CanonicalArtifactType::Resolution => {
+                    contains_scoped_id(&self.resolutions, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
+                CanonicalArtifactType::Rule => {
+                    contains_scoped_id(rules, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
                 CanonicalArtifactType::Domain => contains_scoped_id(
                     &store.list_domains(scope)?,
                     scope,
                     &artifact.artifact_id,
                     |r| (&r.scope_id, &r.id),
                 ),
-                CanonicalArtifactType::Boundary => contains_scoped_id(
-                    &self.boundaries,
-                    scope,
-                    &artifact.artifact_id,
-                    |r| (&r.scope_id, &r.id),
-                ),
-                CanonicalArtifactType::Topic => contains_scoped_id(
-                    &self.topics,
-                    scope,
-                    &artifact.artifact_id,
-                    |r| (&r.scope_id, &r.id),
-                ),
-                CanonicalArtifactType::Question => contains_scoped_id(
-                    &self.questions,
-                    scope,
-                    &artifact.artifact_id,
-                    |r| (&r.scope_id, &r.id),
-                ),
+                CanonicalArtifactType::Boundary => {
+                    contains_scoped_id(&self.boundaries, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
+                CanonicalArtifactType::Topic => {
+                    contains_scoped_id(&self.topics, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
+                CanonicalArtifactType::Question => {
+                    contains_scoped_id(&self.questions, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
             };
             anyhow::ensure!(
                 survives,
