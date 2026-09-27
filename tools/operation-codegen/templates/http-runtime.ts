@@ -18,7 +18,7 @@ export class MalformedResponseError extends ClientError {
   readonly _tag = 'MalformedResponseError';
   constructor(cause?: unknown) { super('MalformedResponseError', 'Host response does not match the operation contract', cause); }
 }
-export class OperationError<F extends OperationFailure = OperationFailure> extends ClientError {
+export class OperationError<F = OperationFailure> extends ClientError {
   readonly _tag = 'OperationError';
   constructor(readonly status: number, readonly failure: F) {
     super('OperationError', 'Operation failed');

@@ -61,14 +61,8 @@ export interface components { readonly schemas: {
   readonly GetDocumentSuccess: { readonly data: unknown };
   readonly GetDocumentFailure: { readonly error: { readonly kind: 'resource_not_found' }; readonly meta: unknown };
 } }
-export class ConnectionError extends Error { constructor(_cause?: unknown) { super(); } }
-export class IdentityMismatchError extends Error { constructor(_requested?: unknown, _authorized?: unknown) { super(); } }
-export class MalformedResponseError extends Error { constructor(_cause?: unknown) { super(); } }
-export class ProtocolMismatchError extends Error { constructor(_requested?: unknown, _supported?: unknown) { super(); } }
-export class OperationError<F = components['schemas'][keyof components['schemas']]> extends Error {
-  constructor(readonly status: number, readonly failure: F) { super(); }
-}
-export type OperationFailure = components['schemas'][keyof components['schemas']];
+export type OperationFailure = { readonly mutable: string[] };
+export { ConnectionError, IdentityMismatchError, MalformedResponseError, OperationError, ProtocolMismatchError } from './runtime.js';
 export class HttpClient {
   static connect(_baseUrl: string, _fetch?: typeof fetch, _options?: unknown): Promise<HttpClient> { return Promise.resolve(new HttpClient()); }
   static connectWithBearer(_baseUrl: string, _bearer: string, _fetch?: typeof fetch, _options?: unknown): Promise<HttpClient> { return Promise.resolve(new HttpClient()); }
@@ -77,6 +71,7 @@ export class HttpClient {
   }
 }
 `);
+    await writeFile(join(generated, 'runtime.ts'), await readFile(join(root, 'tools/operation-codegen/templates/http-runtime.ts'), 'utf8'));
     await writeFile(join(temporary, 'effect-runtime.ts'), await readFile(join(root, 'packages/provenance/src/effect-runtime.ts'), 'utf8'));
     await writeFile(join(temporary, 'assertions.ts'), `
 import type * as Effect from 'effect/Effect';
