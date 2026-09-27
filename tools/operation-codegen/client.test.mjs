@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
@@ -20,11 +20,12 @@ async function generatedClient() {
     else await writeFile(join(root, name), content);
   }
   const module = await import(path);
-  await rm(root, { recursive: true, force: true });
-  return module;
+  return { module, root };
 }
 
-const clientModule = await generatedClient();
+const generated = await generatedClient();
+const clientModule = generated.module;
+after(() => rm(generated.root, { recursive: true, force: true }));
 
 async function host(handler, action) {
   const server = createServer(handler);
