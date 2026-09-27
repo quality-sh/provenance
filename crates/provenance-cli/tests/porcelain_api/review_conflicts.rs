@@ -14,7 +14,7 @@ fn allow_reviewer(repo: &str) {
     .unwrap();
 }
 
-fn api(repo: &str, path: &str, body: Value) -> std::process::Output {
+fn api(repo: &str, path: &str, body: &Value) -> std::process::Output {
     provenance()
         .args([
             "api", path, "--repo", repo, "--method", "post", "--input", "-",
@@ -42,7 +42,7 @@ fn edit(repo: &str, description: &str) -> String {
     let etag = read["data"]["edit"]["etag"].as_str().unwrap();
     let request_id: String = description
         .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
+        .filter(char::is_ascii_alphanumeric)
         .flat_map(char::to_lowercase)
         .collect();
     let key = format!("Idempotency-Key: {request_id}");
@@ -79,7 +79,7 @@ fn submit(repo: &str, revision: &str) -> std::process::Output {
     api(
         repo,
         "requirements/req_review/submit",
-        json!({
+        &json!({
             "actor":"agent", "declared_by":null, "title":"Review", "summary":"Review it.",
             "confidence":null, "source_ids":[], "evidence_references":[], "builds_on":[],
             "expected_revision":revision, "revises":null
@@ -92,7 +92,7 @@ fn conflict(submission: Option<&str>, revision: &str) -> Value {
         "current_submission":submission,"current_revision":revision},"meta":{}})
 }
 
-fn successful(output: std::process::Output) -> Value {
+fn successful(output: &std::process::Output) -> Value {
     assert!(
         output.status.success(),
         "{}",
@@ -101,7 +101,7 @@ fn successful(output: std::process::Output) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn refused(output: std::process::Output) -> Value {
+fn refused(output: &std::process::Output) -> Value {
     assert!(!output.status.success());
     envelope(&String::from_utf8_lossy(&output.stderr))
 }
@@ -113,13 +113,13 @@ fn cli_submit_conflicts_return_the_typed_envelope() {
     let revision_1 = edit(&repo, "Revision one.");
     let revision_2 = edit(&repo, "Revision two.");
     assert_eq!(
-        refused(submit(&repo, &revision_1)),
+        refused(&submit(&repo, &revision_1)),
         conflict(None, &revision_2)
     );
-    let submitted = successful(submit(&repo, &revision_2));
+    let submitted = successful(&submit(&repo, &revision_2));
     let proposal = submitted["data"]["proposal_id"].as_str().unwrap();
     assert_eq!(
-        refused(submit(&repo, &revision_2)),
+        refused(&submit(&repo, &revision_2)),
         conflict(Some(proposal), &revision_2)
     );
 }
@@ -132,10 +132,10 @@ fn terminal(repo: &str, proposal: &str, action: &str) -> Value {
             "feedback":null, "declared_by":null}),
         _ => json!({"actor":"agent","declared_by":null,"reason":null}),
     };
-    refused(api(
+    refused(&api(
         repo,
         &format!("requirements/req_review/submissions/{proposal}/{action}"),
-        body,
+        &body,
     ))
 }
 
@@ -144,7 +144,7 @@ fn prepared(state: &str) -> (tempfile::TempDir, String, String, String) {
     create_requirement(&repo);
     allow_reviewer(&repo);
     let mut revision = edit(&repo, "Revision one.");
-    let submitted = successful(submit(&repo, &revision));
+    let submitted = successful(&submit(&repo, &revision));
     let proposal = submitted["data"]["proposal_id"]
         .as_str()
         .unwrap()
@@ -152,16 +152,16 @@ fn prepared(state: &str) -> (tempfile::TempDir, String, String, String) {
     if state == "stale" {
         revision = edit(&repo, "Revision two.");
     } else if state == "withdrawn" {
-        successful(api(
+        successful(&api(
             &repo,
             &format!("requirements/req_review/submissions/{proposal}/withdraw"),
-            json!({"actor":"agent","declared_by":null,"reason":null}),
+            &json!({"actor":"agent","declared_by":null,"reason":null}),
         ));
     } else {
-        successful(api(
+        successful(&api(
             &repo,
             &format!("requirements/req_review/submissions/{proposal}/decide"),
-            json!({"actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
+            &json!({"actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
                 "rationale":"Needs work.", "canonical_artifact":null,
                 "feedback":null, "declared_by":null}),
         ));
