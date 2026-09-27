@@ -162,13 +162,11 @@ async fn configuration(
     if let Err(error) = config.access.authenticate(request.headers()) {
         return refusal(error);
     }
-    let bytes = match std::fs::read(&config.manifest_path) {
-        Ok(bytes) => bytes,
-        Err(_) => return refusal(OperationFailure::Internal),
+    let Ok(bytes) = std::fs::read(&config.manifest_path) else {
+        return refusal(OperationFailure::Internal);
     };
-    let manifest: provenance_core::Manifest = match serde_json::from_slice(&bytes) {
-        Ok(manifest) => manifest,
-        Err(_) => return refusal(OperationFailure::Internal),
+    let Ok(manifest) = serde_json::from_slice::<provenance_core::Manifest>(&bytes) else {
+        return refusal(OperationFailure::Internal);
     };
     config.value["dispositionActorIds"] = json!(manifest.disposition_actor_ids);
     Json(config.value).into_response()
