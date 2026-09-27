@@ -29,7 +29,7 @@ pub fn reconcile(
         .report
         .annotations
         .iter()
-        .filter(|site| site.anchor_state != AnchorState::Gone)
+        .filter(|site| site.is_current())
         .count();
     if validate_rules {
         current.report.warnings.extend(gone_site_warnings(current));
@@ -381,13 +381,13 @@ fn gone_site_warnings(report: &CoverageScan) -> Vec<ValidationWarning> {
     report
         .annotations
         .iter()
-        .filter(|site| site.anchor_state == AnchorState::Gone)
+        .filter(|site| !site.is_current())
         .map(|site| warning(&site.rule_id, &site.file_path, site.line, "annotation"))
         .chain(
             report
                 .bindings
                 .iter()
-                .filter(|site| site.anchor_state == AnchorState::Gone)
+                .filter(|site| !site.is_current())
                 .map(|site| warning(&site.rule_id, &site.file_path, site.line, "binding")),
         )
         .collect()

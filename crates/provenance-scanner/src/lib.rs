@@ -1,5 +1,6 @@
 mod binding_lexer;
 mod coverage;
+mod coverage_anchors;
 mod rule_evidence;
 mod site;
 
@@ -8,7 +9,7 @@ mod string_context;
 pub mod validate;
 pub mod walker;
 
-pub use coverage::{coverage_results, CoverageResults};
+pub use coverage::{scan_to_coverage, CoverageBaseline, ScannedCoverage};
 pub use parser::{
     parse_annotations, Annotation, CoverageLevel, ParseResult, ParseWarning, Verification,
 };

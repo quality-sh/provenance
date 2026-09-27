@@ -1,7 +1,13 @@
 use crate::wiki::model::{CodeScan, ImplementationBinding, VerificationSite};
-use provenance_core::coverage::{AnchorState, AnnotationResult, BindingResult};
+use provenance_core::coverage::{CoverageReport, CoverageSite, SiteRole};
 
 use super::context::Assembler;
+
+fn native_first(report: &CoverageReport) -> Vec<CoverageSite<'_>> {
+    let mut sites = report.sites().collect::<Vec<_>>();
+    sites.sort_by_key(|site| matches!(site, CoverageSite::Annotation(_)));
+    sites
+}
 
 impl Assembler<'_> {
     /// The scan this build read, so a page can say which code it looked at
@@ -13,30 +19,19 @@ impl Assembler<'_> {
     }
 
     pub(super) fn implementations(&self, rule_id: &str) -> Vec<ImplementationBinding> {
-        let scanned_binding = self.coverage.and_then(|report| {
-            report.bindings.iter().find(|binding| {
-                binding.rule_id == rule_id
-                    && binding.verification.is_none()
-                    && binding.anchor_state != AnchorState::Gone
-            })
-        });
-        let scanned_annotation = self.coverage.and_then(|report| {
-            report.annotations.iter().find(|annotation| {
-                annotation.rule_id == rule_id
-                    && annotation.verification.is_none()
-                    && annotation.anchor_state != AnchorState::Gone
+        let scanned = self.coverage.and_then(|report| {
+            native_first(report).into_iter().find(|site| {
+                let core = site.core();
+                core.rule_id == rule_id
+                    && site.role() == SiteRole::Implementation
+                    && site.is_current()
             })
         });
         let mut implementations = Vec::new();
-        if let Some(binding) = scanned_binding {
+        if let Some(site) = scanned {
             implementations.push(ImplementationBinding {
-                symbol: binding.item_name.clone(),
-                location: self.binding_location(binding),
-            });
-        } else if let Some(annotation) = scanned_annotation {
-            implementations.push(ImplementationBinding {
-                symbol: annotation.function_name.clone(),
-                location: self.annotation_location(annotation),
+                symbol: site.symbol().map(str::to_string),
+                location: self.site_location(site),
             });
         }
         for binding in self
@@ -45,18 +40,10 @@ impl Assembler<'_> {
             .iter()
             .filter(|binding| binding.rule_id.as_str() == rule_id)
         {
-            let matches_scan = scanned_binding.map_or_else(
-                || {
-                    scanned_annotation.is_some_and(|scanned| {
-                        scanned.file_path == binding.file
-                            && scanned.function_name.as_deref() == Some(binding.symbol.as_str())
-                    })
-                },
-                |scanned| {
-                    scanned.file_path == binding.file
-                        && scanned.item_name.as_deref() == Some(binding.symbol.as_str())
-                },
-            );
+            let matches_scan = scanned.is_some_and(|site| {
+                site.core().file_path == binding.file
+                    && site.symbol() == Some(binding.symbol.as_str())
+            });
             if !matches_scan {
                 implementations.push(ImplementationBinding {
                     symbol: Some(binding.symbol.clone()),
@@ -68,67 +55,32 @@ impl Assembler<'_> {
     }
 
     pub(super) fn verification_sites(&self, rule_id: &str) -> Vec<VerificationSite> {
-        let implementation_file = self
-            .coverage
-            .into_iter()
-            .flat_map(|report| &report.bindings)
-            .find(|binding| {
-                binding.rule_id == rule_id
-                    && binding.verification.is_none()
-                    && binding.anchor_state != AnchorState::Gone
-            })
-            .map(|binding| &binding.file_path)
-            .or_else(|| {
-                self.coverage.and_then(|report| {
-                    report
-                        .annotations
-                        .iter()
-                        .find(|annotation| {
-                            annotation.rule_id == rule_id
-                                && annotation.verification.is_none()
-                                && annotation.anchor_state != AnchorState::Gone
-                        })
-                        .map(|annotation| &annotation.file_path)
+        let implementation_file = self.coverage.and_then(|report| {
+            native_first(report)
+                .into_iter()
+                .find(|site| {
+                    site.core().rule_id == rule_id
+                        && site.role() == SiteRole::Implementation
+                        && site.is_current()
                 })
-            });
+                .map(|site| &site.core().file_path)
+        });
         let mut sites = self
             .coverage
             .into_iter()
-            .flat_map(|report| &report.bindings)
-            .filter(|binding| binding.rule_id == rule_id)
-            .filter(|binding| binding.anchor_state != AnchorState::Gone)
-            .filter_map(|binding| {
-                binding
-                    .verification
-                    .as_ref()
-                    .map(|method| VerificationSite {
-                        method: method.clone(),
-                        symbol: binding.item_name.clone(),
-                        location: self.binding_location(binding),
-                        outside_implementation_module: implementation_file
-                            .is_some_and(|file| file != &binding.file_path),
-                    })
+            .flat_map(native_first)
+            .filter(|site| site.core().rule_id == rule_id && site.is_current())
+            .filter_map(|site| {
+                let method = site.core().verification.clone()?;
+                Some(VerificationSite {
+                    method,
+                    symbol: site.symbol().map(str::to_string),
+                    location: self.site_location(site),
+                    outside_implementation_module: implementation_file
+                        .is_some_and(|file| file != &site.core().file_path),
+                })
             })
             .collect::<Vec<_>>();
-        sites.extend(
-            self.coverage
-                .into_iter()
-                .flat_map(|report| &report.annotations)
-                .filter(|annotation| annotation.rule_id == rule_id)
-                .filter(|annotation| annotation.anchor_state != AnchorState::Gone)
-                .filter_map(|annotation| {
-                    annotation
-                        .verification
-                        .as_ref()
-                        .map(|method| VerificationSite {
-                            method: method.clone(),
-                            symbol: annotation.function_name.clone(),
-                            location: self.annotation_location(annotation),
-                            outside_implementation_module: implementation_file
-                                .is_some_and(|file| file != &annotation.file_path),
-                        })
-                }),
-        );
         for binding in self
             .state
             .verification_bindings
@@ -153,19 +105,9 @@ impl Assembler<'_> {
         sites
     }
 
-    fn binding_location(&self, binding: &BindingResult) -> crate::wiki::links::EvidenceRef {
-        let reference = format!("{}:{}", binding.file_path, binding.line);
-        self.resolver.resolve_at(
-            &reference,
-            self.coverage.and_then(|report| report.commit.as_deref()),
-        )
-    }
-
-    fn annotation_location(
-        &self,
-        annotation: &AnnotationResult,
-    ) -> crate::wiki::links::EvidenceRef {
-        let reference = format!("{}:{}", annotation.file_path, annotation.line);
+    fn site_location(&self, site: CoverageSite<'_>) -> crate::wiki::links::EvidenceRef {
+        let site = site.core();
+        let reference = format!("{}:{}", site.file_path, site.line);
         self.resolver.resolve_at(
             &reference,
             self.coverage.and_then(|report| report.commit.as_deref()),

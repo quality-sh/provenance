@@ -2,7 +2,7 @@ use super::super::git::{ChangeKind, ChangedFile};
 use crate::cache::GraphEvidence;
 use camino::Utf8Path;
 use provenance_core::{
-    coverage::{CoverageScan, EvidenceDiffSite, EvidenceDiffState, EvidenceSiteKind},
+    coverage::{CoverageScan, EvidenceDiffSite, EvidenceDiffState, EvidenceSiteKind, SiteRole},
     ImplementationBinding,
 };
 
@@ -37,22 +37,14 @@ pub(super) fn sites(
 }
 
 fn scanned_implementation_matches(scan: &CoverageScan, binding: &ImplementationBinding) -> bool {
-    scan.annotations.iter().any(|site| {
-        site.verification.is_none()
-            && site.rule_id == binding.rule_id.as_str()
-            && site.function_name.as_deref() == Some(binding.symbol.as_str())
+    scan.sites().any(|site| {
+        let core = site.core();
+        site.role() == SiteRole::Implementation
+            && core.rule_id == binding.rule_id.as_str()
+            && site.symbol() == Some(binding.symbol.as_str())
             && matches_file(
-                &site.file_path,
-                site.original_file_path.as_deref(),
-                &binding.file,
-            )
-    }) || scan.bindings.iter().any(|site| {
-        site.verification.is_none()
-            && site.rule_id == binding.rule_id.as_str()
-            && site.item_name.as_deref() == Some(binding.symbol.as_str())
-            && matches_file(
-                &site.file_path,
-                site.original_file_path.as_deref(),
+                &core.file_path,
+                core.original_file_path.as_deref(),
                 &binding.file,
             )
     })
