@@ -233,11 +233,10 @@ async fn assert_terminal_conflicts(host: &StatementHost, proposal: &str, revisio
     }
 }
 
-fn current_revision(repo: &Repository) -> String {
-    repo.store.requirement_edit_state(
-        &provenance_core::ScopeId::new("default").unwrap(),
-        &provenance_core::StableId::new("req_shared").unwrap(),
-    ).unwrap().revision.unwrap().to_string()
+async fn current_revision(host: &StatementHost) -> String {
+    let (status, value, _) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
+    assert_eq!(status, 200, "{value}");
+    value["data"]["edit"]["revision"].as_str().unwrap().to_owned()
 }
 
 #[tokio::test]
@@ -253,7 +252,7 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
     allow_reviewer(&withdrawn_repo);
     let withdrawn_host = host(&withdrawn_repo);
     let withdrawn = submit(&withdrawn_host).await;
-    let revision = current_revision(&withdrawn_repo);
+    let revision = current_revision(&withdrawn_host).await;
     let path = format!("/requirements/req_shared/submissions/{withdrawn}/withdraw");
     assert_eq!(call(&withdrawn_host, "POST", &path, Some(json!({"data":{
         "actor":"agent","declared_by":null,"reason":null
@@ -264,7 +263,7 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
     allow_reviewer(&decided_repo);
     let decided_host = host(&decided_repo);
     let decided = submit(&decided_host).await;
-    let revision = current_revision(&decided_repo);
+    let revision = current_revision(&decided_host).await;
     let path = format!("/requirements/req_shared/submissions/{decided}/decide");
     assert_eq!(call(&decided_host, "POST", &path, Some(json!({"data":{
         "actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
