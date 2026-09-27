@@ -5,54 +5,21 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 use crate::output::ReportFormat;
-use provenance_core::coverage::{AnnotationResult, BindingResult, CoverageReport, SiteCore};
+use provenance_core::coverage::{CoverageReport, CoverageSite, SiteRole};
 
 /// Said of a verification site that lives in a different file from the
 /// primary implementation binding it checks.
 const OUTSIDE_IMPLEMENTATION_MODULE: &str = " (outside implementation module)";
 
-#[derive(Clone, Copy)]
-enum ReportSite<'a> {
-    Annotation(&'a AnnotationResult),
-    Binding(&'a BindingResult),
-}
-
-impl<'a> ReportSite<'a> {
-    const fn core(self) -> &'a SiteCore {
-        match self {
-            Self::Annotation(site) => &site.site,
-            Self::Binding(site) => &site.site,
-        }
-    }
-
-    fn details(self) -> String {
-        let name = match self {
-            Self::Annotation(site) => site.function_name.as_deref(),
-            Self::Binding(site) => site.item_name.as_deref(),
-        }
+fn site_details(site: CoverageSite<'_>) -> String {
+    let name = site
+        .symbol()
         .map(|name| format!(" ({name})"))
         .unwrap_or_default();
-        match self {
-            Self::Annotation(site) => format!("{name} ({})", site.coverage),
-            Self::Binding(_) => name,
-        }
+    match site {
+        CoverageSite::Annotation(annotation) => format!("{name} ({})", annotation.coverage),
+        CoverageSite::Binding(_) => name,
     }
-}
-
-fn report_sites(report: &CoverageReport) -> impl Iterator<Item = ReportSite<'_>> {
-    report
-        .annotations
-        .iter()
-        .map(ReportSite::Annotation)
-        .chain(report.bindings.iter().map(ReportSite::Binding))
-}
-
-fn implementation_sites(report: &CoverageReport) -> impl Iterator<Item = ReportSite<'_>> {
-    report
-        .bindings
-        .iter()
-        .map(ReportSite::Binding)
-        .chain(report.annotations.iter().map(ReportSite::Annotation))
 }
 
 /// Where each rule is implemented: the file holding its native or portable
@@ -62,11 +29,29 @@ fn implementation_sites(report: &CoverageReport) -> impl Iterator<Item = ReportS
 /// and its verification sites are then left unannotated. Nothing is known
 /// about where it belongs, so nothing is claimed.
 fn implementation_modules(report: &CoverageReport) -> BTreeMap<&str, &camino::Utf8Path> {
-    implementation_sites(report)
-        .map(ReportSite::core)
-        .filter(|site| site.role() == provenance_core::coverage::SiteRole::Implementation)
-        .filter(|site| site.is_current())
-        .map(|site| (site.rule_id.as_str(), site.file_path.as_path()))
+    let mut selected = BTreeMap::new();
+    for site in report
+        .sites()
+        .filter(|site| site.role() == SiteRole::Implementation && site.is_current())
+    {
+        let core = site.core();
+        match site {
+            CoverageSite::Annotation(_) => {
+                selected.insert(core.rule_id.as_str(), (core.file_path.as_path(), true));
+            }
+            CoverageSite::Binding(_) => {
+                let previous_is_annotation = selected
+                    .get(core.rule_id.as_str())
+                    .is_some_and(|(_, annotation)| *annotation);
+                if !previous_is_annotation {
+                    selected.insert(core.rule_id.as_str(), (core.file_path.as_path(), false));
+                }
+            }
+        }
+    }
+    selected
+        .into_iter()
+        .map(|(rule_id, (path, _))| (rule_id, path))
         .collect()
 }
 
@@ -128,7 +113,7 @@ pub(super) fn render_coverage(
         writeln!(out, "- Total annotations: {}", report.total_annotations)?;
         writeln!(out, "- Warnings: {}\n", report.warnings.len())?;
         let implementation_modules = implementation_modules(report);
-        for report_site in report_sites(report) {
+        for report_site in report.sites() {
             let site = report_site.core();
             let relation = site.verification.as_ref().map_or_else(
                 || "is implemented".to_string(),
@@ -141,7 +126,7 @@ pub(super) fn render_coverage(
                 relation,
                 site.file_path,
                 site.line,
-                report_site.details(),
+                site_details(report_site),
                 anchor_state(
                     site.anchor_state,
                     site.original_line,
@@ -150,7 +135,7 @@ pub(super) fn render_coverage(
                 if is_outside_implementation_module(
                     &site.rule_id,
                     &site.file_path,
-                    site.verification.is_some(),
+                    report_site.role() == SiteRole::Verification,
                     &implementation_modules,
                 ) {
                     OUTSIDE_IMPLEMENTATION_MODULE

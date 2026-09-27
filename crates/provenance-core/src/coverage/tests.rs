@@ -69,6 +69,53 @@ fn anchored_sites_report_role_and_current_state() {
 }
 
 #[test]
+fn coverage_report_sites_have_one_order_and_one_shared_view() {
+    let annotation = AnnotationResult {
+        site: SiteCore {
+            rule_id: "rule_annotation".into(),
+            file_path: Utf8PathBuf::from("tests/payroll.py"),
+            line: 8,
+            verification: Some("examples".into()),
+            anchor: None,
+            anchor_state: AnchorState::Gone,
+            original_line: None,
+            original_file_path: None,
+        },
+        function_name: Some("checks_overtime".into()),
+        coverage: "full".into(),
+        confidence: 1.0,
+    };
+    let binding = BindingResult {
+        site: SiteCore {
+            rule_id: "rule_binding".into(),
+            file_path: Utf8PathBuf::from("src/payroll.rs"),
+            line: 4,
+            verification: None,
+            anchor: None,
+            anchor_state: AnchorState::Moved,
+            original_line: Some(3),
+            original_file_path: None,
+        },
+        item_name: Some("pays_overtime".into()),
+    };
+    let report = CoverageReport::new(None, 2, vec![annotation], vec![binding], Vec::new());
+
+    let sites = report.sites().collect::<Vec<_>>();
+
+    assert_eq!(sites.len(), 2);
+    assert_eq!(sites[0].core().rule_id, "rule_annotation");
+    assert_eq!(sites[0].role(), SiteRole::Verification);
+    assert_eq!(sites[0].symbol(), Some("checks_overtime"));
+    assert_eq!(sites[0].anchor_state(), AnchorState::Gone);
+    assert!(!sites[0].is_current());
+    assert_eq!(sites[1].core().rule_id, "rule_binding");
+    assert_eq!(sites[1].role(), SiteRole::Implementation);
+    assert_eq!(sites[1].symbol(), Some("pays_overtime"));
+    assert_eq!(sites[1].anchor_state(), AnchorState::Moved);
+    assert!(sites[1].is_current());
+}
+
+#[test]
 fn old_annotation_results_default_to_implementation_role() {
     let annotation: AnnotationResult = serde_json::from_str(
         r#"{

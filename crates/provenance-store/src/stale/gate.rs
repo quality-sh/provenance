@@ -3,7 +3,7 @@ use crate::cache::GraphEvidence;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::coverage::{
     AnchorState, EvidenceDiffReport, EvidenceDiffSite, EvidenceDiffState, EvidenceDiffSummary,
-    EvidenceSiteKind,
+    EvidenceSiteKind, SiteRole,
 };
 use provenance_scanner::{CoverageBaseline, FileScanWithContent, ScannedCoverage};
 use std::collections::BTreeSet;
@@ -89,53 +89,29 @@ fn marker_sites(
     changes: &[ChangedFile],
     known_rules: &BTreeSet<String>,
 ) -> Vec<EvidenceDiffSite> {
-    head.annotations
-        .iter()
-        .filter(|site| known_rules.contains(&site.rule_id))
+    head.sites()
+        .filter(|site| known_rules.contains(&site.core().rule_id))
         .map(|site| {
-            let kind = if site.verification.is_some() {
+            let kind = if site.role() == SiteRole::Verification {
                 EvidenceSiteKind::Verification
             } else {
                 EvidenceSiteKind::RuleBinding
             };
+            let core = site.core();
             marker_site(
                 kind,
-                &site.rule_id,
-                &site.file_path,
-                site.line,
-                site.anchor_state,
+                &core.rule_id,
+                &core.file_path,
+                core.line,
+                site.anchor_state(),
                 site.is_current(),
-                site.original_file_path.clone(),
-                site.original_line,
+                core.original_file_path.clone(),
+                core.original_line,
                 base,
                 head,
                 changes,
             )
         })
-        .chain(
-            head.bindings
-                .iter()
-                .filter(|site| known_rules.contains(&site.rule_id))
-                .map(|site| {
-                    marker_site(
-                        if site.verification.is_some() {
-                            EvidenceSiteKind::Verification
-                        } else {
-                            EvidenceSiteKind::RuleBinding
-                        },
-                        &site.rule_id,
-                        &site.file_path,
-                        site.line,
-                        site.anchor_state,
-                        site.is_current(),
-                        site.original_file_path.clone(),
-                        site.original_line,
-                        base,
-                        head,
-                        changes,
-                    )
-                }),
-        )
         .collect()
 }
 
