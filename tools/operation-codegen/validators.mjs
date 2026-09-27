@@ -35,6 +35,7 @@ export async function validators(document, names = responseSchemas(document), pr
   const bundled = await build({ stdin: { contents: code, resolveDir: import.meta.dirname, sourcefile: 'validators.js' }, bundle: true, platform: 'browser', format: 'esm', write: false, minify: true, legalComments: 'none' });
   return {
     [`${prefix}.mjs`]: '// Generated from OpenAPI. Do not edit.\n' + bundled.outputFiles[0].text,
-    [`${prefix}.d.mts`]: '// Generated from OpenAPI. Do not edit.\n' + names.map(name => `export declare function ${name}(value: unknown): boolean;`).join('\n') + '\n',
+    [`${prefix}.d.mts`]: '// Generated from OpenAPI. Do not edit.\nexport {};\n'
+      + names.map(name => `export declare function ${name}(value: unknown): boolean;`).join('\n') + '\n',
   };
 }

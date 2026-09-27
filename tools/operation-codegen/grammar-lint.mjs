@@ -262,7 +262,7 @@ export function routeGrammarErrors(document) {
   return errors;
 }
 
-const FAILURE_STATUS = new Map([
+export const FAILURE_STATUS = new Map([
   ['invalid_input', 400], ['protocol_mismatch', 400],
   ['unknown_operation', 404], ['unknown_target', 404], ['unknown_scope', 404],
   ['unauthenticated', 401], ['access_denied', 403], ['method_not_allowed', 405],
@@ -285,7 +285,7 @@ const FAILURE_STATUS = new Map([
   ['record_too_large', 400],
 ]);
 
-function failureKinds(document, schema, seen = new Set(), kinds = new Set()) {
+export function failureKinds(document, schema, seen = new Set(), kinds = new Set()) {
   if (Array.isArray(schema)) {
     for (const child of schema) failureKinds(document, child, seen, kinds);
     return kinds;
