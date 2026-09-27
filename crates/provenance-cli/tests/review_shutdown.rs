@@ -98,15 +98,35 @@ fn repository() -> (tempfile::TempDir, ProvenanceLayout, Vec<u8>) {
     ))
     .unwrap();
     std::fs::write(layout.manifest_path(), &manifest).unwrap();
-    (repo, layout, manifest)
+    let scope = ScopeId::new("default").unwrap();
+    StateStore::new(layout.clone())
+        .create_requirement(provenance_store::state_store::CreateRequirementInput {
+            scope_id: scope.clone(),
+            id: provenance_core::StableId::new("req_example").unwrap(),
+            statement: "The Requirement accepts review.".into(),
+            description: None,
+            status: provenance_core::RequirementStatus::Discovery,
+            domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    let requirements = provenance_store::shards::requirements_path(&layout, &scope);
+    (repo, layout, std::fs::read(requirements).unwrap())
 }
 
 // Hold a real filesystem read inside an admitted write. A nonblocking FIFO
 // writer opens only after the host opens the reader, so no timing guess is needed.
 fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
-    std::fs::remove_file(layout.manifest_path()).unwrap();
+    let path =
+        provenance_store::shards::requirements_path(layout, &ScopeId::new("default").unwrap());
+    std::fs::remove_file(&path).unwrap();
     assert!(Command::new("mkfifo")
-        .arg(layout.manifest_path())
+        .arg(&path)
         .status()
         .unwrap()
         .success());
@@ -122,7 +142,7 @@ fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match rustix::fs::open(
-            layout.manifest_path().as_std_path(),
+            path.as_std_path(),
             rustix::fs::OFlags::WRONLY | rustix::fs::OFlags::NONBLOCK,
             rustix::fs::Mode::empty(),
         ) {
@@ -140,23 +160,7 @@ fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
 
 #[test]
 fn first_signal_waits_for_an_active_write_to_finish() {
-    let (repo, layout, manifest) = repository();
-    StateStore::new(layout.clone())
-        .create_requirement(provenance_store::state_store::CreateRequirementInput {
-            scope_id: ScopeId::new("default").unwrap(),
-            id: provenance_core::StableId::new("req_example").unwrap(),
-            statement: "The Requirement accepts review.".into(),
-            description: None,
-            status: provenance_core::RequirementStatus::Discovery,
-            domain_id: None,
-            refines: None,
-            depends_on: Vec::new(),
-            supersedes: Vec::new(),
-            spawned_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
+    let (repo, layout, requirements) = repository();
     let mut host = Host::start(repo.path());
     let (mut blocked, mut request) = block_write(&host, &layout);
     host.signal("-TERM");
@@ -166,9 +170,11 @@ fn first_signal_waits_for_an_active_write_to_finish() {
         "active writes have no drain deadline"
     );
     // Restore the normal file before releasing the read, for later store access.
-    std::fs::remove_file(layout.manifest_path()).unwrap();
-    std::fs::write(layout.manifest_path(), &manifest).unwrap();
-    blocked.write_all(&manifest).unwrap();
+    let path =
+        provenance_store::shards::requirements_path(&layout, &ScopeId::new("default").unwrap());
+    std::fs::remove_file(&path).unwrap();
+    std::fs::write(path, &requirements).unwrap();
+    blocked.write_all(&requirements).unwrap();
     drop(blocked);
     let mut response = String::new();
     request.read_to_string(&mut response).unwrap();
