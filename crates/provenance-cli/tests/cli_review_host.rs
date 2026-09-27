@@ -185,6 +185,34 @@ fn review_configuration_reads_disposition_actors_for_each_request() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn review_configuration_stays_with_the_repository_selected_at_start() {
+    use std::os::unix::fs::symlink;
+
+    let repo_a = repository();
+    let repo_b = repository();
+    set_disposition_actors(repo_a.path(), &["maintainer"]);
+    set_disposition_actors(repo_b.path(), &["attacker"]);
+    let aliases = tempfile::tempdir().unwrap();
+    let alias = aliases.path().join("review-repo");
+    symlink(repo_a.path(), &alias).unwrap();
+    let host = start(&alias);
+
+    std::fs::remove_file(&alias).unwrap();
+    symlink(repo_b.path(), &alias).unwrap();
+
+    let config: Value = serde_json::from_str(
+        &request(&host, "GET", "/review-config", true)
+            .call()
+            .unwrap()
+            .into_string()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(config["dispositionActorIds"], json!(["maintainer"]));
+}
+
 #[test]
 fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
     let repo = repository();
