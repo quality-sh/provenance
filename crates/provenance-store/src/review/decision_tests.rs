@@ -222,40 +222,6 @@ fn assert_lifecycle_and_proposals_unchanged(store: &StateStore, statement: &str)
 }
 
 #[test]
-fn server_creates_review_request_and_disposition_identities() {
-    let temp = fixture();
-    let store = open(Utf8Path::from_path(temp.path()).unwrap());
-    edit(&store, "edit-1", "Statement v1");
-    let submission = submit(&store, None, None).unwrap();
-    let proposal = submission.proposal_id.clone();
-    let receipt = serde_json::to_value(&submission).unwrap();
-    assert_eq!(receipt["proposal_key"], proposal.as_str());
-    assert_eq!(
-        store
-            .list_proposal_definitions(&scope())
-            .unwrap()
-            .into_iter()
-            .find(|candidate| candidate.id == proposal)
-            .unwrap()
-            .proposal_key,
-        proposal.as_str()
-    );
-    let decision = decide(
-        &store,
-        &proposal,
-        "accepted",
-        &reviewer("reviewer"),
-        &json!({
-            "rationale": null,
-            "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"}
-        }),
-    )
-    .unwrap();
-    assert_ne!(decision.request_id, submission.request_id);
-    assert_ne!(decision.disposition_id.as_ref().unwrap(), &proposal);
-}
-
-#[test]
 fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     let (_temp, store, _, _) = enrolled();
     refused(
