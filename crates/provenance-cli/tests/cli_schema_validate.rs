@@ -73,7 +73,7 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
     let validator = jsonschema::JSONSchema::compile(&published).unwrap();
     let disposition = |decision: &str, rationale: Option<&str>| {
         let mut sample = json!({
-            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": "default",
+            "schema_version": published["properties"]["schema_version"]["const"], "scope_id": "default",
             "id": "disposition_sample", "proposal_id": "proposal_candidate", "decision": decision,
             "actor": {"identity_type": "human", "id": "reviewer"}
         });
