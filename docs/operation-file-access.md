@@ -73,6 +73,25 @@ original directory identity; it does not switch to a replacement pathname.
 This is a handle identity guarantee, not a promise that a file remains beneath
 the root's current text pathname after a concurrent rename.
 
+Held writes use the same traversal. A bounded read opens the parent directory
+and the regular-file leaf without following links. It returns the exact UTF-8
+bytes, their SHA-256 digest, and the file identity. The identity is the device
+and inode on Unix. It is the volume serial number and file index on Windows.
+The read refuses a file that is larger than the caller's byte limit. If a file
+grows during the read, the read stops after one byte beyond the limit and
+refuses the file. The read does not change line endings or other bytes.
+
+A replacement temporary file is created as a new leaf in the held parent. It
+receives the selected file's permissions. The compare-and-swap operation first
+moves the current leaf to a new backup name without replacement. It checks the
+displaced file's identity and SHA-256 digest against the bounded read. If the
+check fails, it restores the displaced leaf without replacement. Thus, a new
+file that appears at the selected name is not overwritten. If the check passes,
+the operation installs the temporary file without replacement and removes the
+backup. Access, size, UTF-8, concurrent-change, write, and restore failures are
+typed refusals. File and graph state transactions and recovery are outside this
+file-access operation.
+
 Review journal and snapshot reads also use this held-file seam. These reads
 resolve only the configured repository root, so a trusted root or parent alias
 is accepted. Each internal path component, including `.provenance`, must pass
