@@ -162,30 +162,54 @@ impl Cascade {
                 continue;
             };
             let survives = match artifact.artifact_type {
-                CanonicalArtifactType::Source => {
-                    contains_id(sources, &artifact.artifact_id, |r| &r.id)
-                }
-                CanonicalArtifactType::Requirement => {
-                    contains_id(requirements, &artifact.artifact_id, |r| &r.id)
-                }
-                CanonicalArtifactType::Resolution => {
-                    contains_id(&self.resolutions, &artifact.artifact_id, |r| &r.id)
-                }
-                CanonicalArtifactType::Rule => contains_id(rules, &artifact.artifact_id, |r| &r.id),
-                CanonicalArtifactType::Domain => {
-                    contains_id(&store.list_domains(scope)?, &artifact.artifact_id, |r| {
-                        &r.id
-                    })
-                }
-                CanonicalArtifactType::Boundary => {
-                    contains_id(&self.boundaries, &artifact.artifact_id, |r| &r.id)
-                }
-                CanonicalArtifactType::Topic => {
-                    contains_id(&self.topics, &artifact.artifact_id, |r| &r.id)
-                }
-                CanonicalArtifactType::Question => {
-                    contains_id(&self.questions, &artifact.artifact_id, |r| &r.id)
-                }
+                CanonicalArtifactType::Source => contains_scoped_id(
+                    sources,
+                    scope,
+                    &artifact.artifact_id,
+                    |r| (&r.scope_id, &r.id),
+                ),
+                CanonicalArtifactType::Requirement => contains_scoped_id(
+                    requirements,
+                    scope,
+                    &artifact.artifact_id,
+                    |r| (&r.scope_id, &r.id),
+                ),
+                CanonicalArtifactType::Resolution => contains_scoped_id(
+                    &self.resolutions,
+                    scope,
+                    &artifact.artifact_id,
+                    |r| (&r.scope_id, &r.id),
+                ),
+                CanonicalArtifactType::Rule => contains_scoped_id(
+                    rules,
+                    scope,
+                    &artifact.artifact_id,
+                    |r| (&r.scope_id, &r.id),
+                ),
+                CanonicalArtifactType::Domain => contains_scoped_id(
+                    &store.list_domains(scope)?,
+                    scope,
+                    &artifact.artifact_id,
+                    |r| (&r.scope_id, &r.id),
+                ),
+                CanonicalArtifactType::Boundary => contains_scoped_id(
+                    &self.boundaries,
+                    scope,
+                    &artifact.artifact_id,
+                    |r| (&r.scope_id, &r.id),
+                ),
+                CanonicalArtifactType::Topic => contains_scoped_id(
+                    &self.topics,
+                    scope,
+                    &artifact.artifact_id,
+                    |r| (&r.scope_id, &r.id),
+                ),
+                CanonicalArtifactType::Question => contains_scoped_id(
+                    &self.questions,
+                    scope,
+                    &artifact.artifact_id,
+                    |r| (&r.scope_id, &r.id),
+                ),
             };
             anyhow::ensure!(
                 survives,
@@ -411,12 +435,16 @@ fn retain_links(
     });
 }
 
-fn contains_id<'a, T>(
+fn contains_scoped_id<'a, T>(
     records: &'a [T],
+    scope: &ScopeId,
     wanted: &StableId,
-    id: impl Fn(&'a T) -> &'a StableId,
+    identity: impl Fn(&'a T) -> (&'a ScopeId, &'a StableId),
 ) -> bool {
-    records.iter().any(|record| id(record) == wanted)
+    records.iter().any(|record| {
+        let (record_scope, id) = identity(record);
+        record_scope == scope && id == wanted
+    })
 }
 
 const fn canonical_kind(kind: CanonicalArtifactType) -> &'static str {
