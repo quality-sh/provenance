@@ -13,6 +13,7 @@ use provenance_core::{
 };
 use provenance_macros::verifies;
 
+mod disposition_cascade;
 mod metadata;
 mod noscope;
 mod rule_implementation;

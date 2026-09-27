@@ -125,6 +125,10 @@ impl CanonicalArtifactIndex {
             CanonicalArtifactType::Requirement => NodeType::Requirement,
             CanonicalArtifactType::Resolution => NodeType::Resolution,
             CanonicalArtifactType::Rule => NodeType::Rule,
+            CanonicalArtifactType::Domain => NodeType::Domain,
+            CanonicalArtifactType::Boundary => NodeType::Boundary,
+            CanonicalArtifactType::Topic => NodeType::Topic,
+            CanonicalArtifactType::Question => NodeType::Question,
         };
         anyhow::ensure!(
             self.entries.contains(&key(kind, &artifact.artifact_id)),
