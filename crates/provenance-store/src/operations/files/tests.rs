@@ -2,12 +2,12 @@ use super::*;
 #[cfg(unix)]
 use std::io::Read;
 
-#[path = "tests/held_writes.rs"]
-mod held_writes;
 #[path = "tests/held_write_cleanup.rs"]
 mod held_write_cleanup;
 #[path = "tests/held_write_races.rs"]
 mod held_write_races;
+#[path = "tests/held_writes.rs"]
+mod held_writes;
 #[path = "tests/prepared_files.rs"]
 mod prepared_files;
 

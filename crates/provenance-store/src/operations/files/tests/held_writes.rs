@@ -206,7 +206,7 @@ fn compare_and_swap_keeps_the_read_only_permission() {
 fn compare_and_swap_copies_a_null_dacl() {
     use std::os::windows::fs::OpenOptionsExt as _;
     use std::os::windows::io::AsRawHandle as _;
-    use windows_sys::Win32::Foundation::{ERROR_SUCCESS, HANDLE, HLOCAL, LocalFree};
+    use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HANDLE, HLOCAL};
     use windows_sys::Win32::Security::Authorization::{
         GetSecurityInfo, SetSecurityInfo, SE_FILE_OBJECT,
     };

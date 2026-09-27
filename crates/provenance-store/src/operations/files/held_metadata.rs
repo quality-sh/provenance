@@ -93,14 +93,15 @@ struct WindowsDacl(Option<Vec<u8>>);
 
 #[cfg(windows)]
 impl WindowsDacl {
+    #[cfg(windows)]
     fn read(file: &File) -> Result<Self, Refusal> {
         use std::mem::MaybeUninit;
         use std::os::windows::io::AsRawHandle as _;
-        use windows_sys::Win32::Foundation::{ERROR_SUCCESS, HANDLE, HLOCAL, LocalFree};
+        use windows_sys::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HANDLE, HLOCAL};
         use windows_sys::Win32::Security::Authorization::{GetSecurityInfo, SE_FILE_OBJECT};
         use windows_sys::Win32::Security::{
-            GetAclInformation, ACL_SIZE_INFORMATION, AclSizeInformation,
-            DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+            AclSizeInformation, GetAclInformation, ACL_SIZE_INFORMATION, DACL_SECURITY_INFORMATION,
+            PSECURITY_DESCRIPTOR,
         };
 
         let mut dacl = std::ptr::null_mut();
@@ -146,6 +147,7 @@ impl WindowsDacl {
         result
     }
 
+    #[cfg(windows)]
     fn apply(&self, file: &File) -> Result<(), Refusal> {
         use std::os::windows::io::AsRawHandle as _;
         use windows_sys::Win32::Foundation::{ERROR_SUCCESS, HANDLE};

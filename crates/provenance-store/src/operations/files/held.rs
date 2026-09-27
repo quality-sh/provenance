@@ -114,65 +114,76 @@ impl HeldRepositoryFile {
         &self,
         mut prepared: PreparedRepositoryFile,
     ) -> Result<RepositoryFileInstall, Refusal> {
-        if !self.anchor_matches()
-            || identity(&self.parent)? != prepared.parent_identity
-            || prepared.target_leaf != self.leaf
-            || prepared.target_identity != self.identity
-            || prepared.target_digest != self.digest
-        {
-            return Err(Refusal::Changed);
-        }
+        self.require_prepared_for_target(&prepared)?;
         let backup = self.displace_to_backup()?;
+        self.require_matching_backup(&backup)?;
+        self.install_prepared(&backup, &mut prepared)?;
+        Ok(self.finish_backup(backup))
+    }
+
+    fn require_prepared_for_target(
+        &self,
+        prepared: &PreparedRepositoryFile,
+    ) -> Result<(), Refusal> {
+        let matches = self.anchor_matches()
+            && identity(&self.parent)? == prepared.parent_identity
+            && prepared.target_leaf == self.leaf
+            && prepared.target_identity == self.identity
+            && prepared.target_digest == self.digest;
+        matches.then_some(()).ok_or(Refusal::Changed)
+    }
+
+    fn require_matching_backup(&self, backup: &str) -> Result<(), Refusal> {
         match self.matches_backup(&backup) {
-            Ok(true) => {}
-            Ok(false) => {
-                restore(&self.parent, &backup, &self.leaf)?;
+            Ok(true) => Ok(()),
+            Ok(false) => self.restore_then_refuse(backup, Refusal::Changed),
+            Err(error) => self.restore_then_refuse(backup, error),
+        }
+    }
+
+    fn install_prepared(
+        &self,
+        backup: &str,
+        prepared: &mut PreparedRepositoryFile,
+    ) -> Result<(), Refusal> {
+        let install = (|| {
+            probe_io("repository_file_after_backup_check").map_err(Refusal::Write)?;
+            if !prepared.matches_entry()? {
                 return Err(Refusal::Changed);
             }
-            Err(error) => {
-                restore(&self.parent, &backup, &self.leaf)?;
-                return Err(error);
-            }
-        }
-        if let Err(error) = probe_io("repository_file_after_backup_check") {
-            restore(&self.parent, &backup, &self.leaf)?;
-            return Err(Refusal::Write(error));
-        }
-        if !prepared.matches_entry()? {
-            restore(&self.parent, &backup, &self.leaf)?;
-            return Err(Refusal::Changed);
-        }
-        if let Err(error) =
             safe_fs::rename_no_replace_in(&prepared.parent, &prepared.leaf, &self.leaf)
-        {
-            restore(&self.parent, &backup, &self.leaf)?;
-            return Err(write_refusal(error));
+                .map_err(write_refusal)
+        })();
+        if let Err(error) = install {
+            return self.restore_then_refuse(backup, error);
         }
         prepared.remove_on_drop = false;
-        match self.matches_backup(&backup) {
-            Ok(true) => {}
-            Ok(false) => {
-                return Ok(RepositoryFileInstall::InstalledBackupKept {
-                    backup,
-                    reason: BackupRetentionReason::OriginalChanged,
-                });
-            }
-            Err(_) => {
-                return Ok(RepositoryFileInstall::InstalledBackupKept {
-                    backup,
-                    reason: BackupRetentionReason::VerificationFailed,
-                });
-            }
+        Ok(())
+    }
+
+    fn restore_then_refuse(&self, backup: &str, refusal: Refusal) -> Result<(), Refusal> {
+        restore(&self.parent, backup, &self.leaf)?;
+        Err(refusal)
+    }
+
+    fn finish_backup(&self, backup: String) -> RepositoryFileInstall {
+        let retention = match self.matches_backup(&backup) {
+            Ok(true) => None,
+            Ok(false) => Some(BackupRetentionReason::OriginalChanged),
+            Err(_) => Some(BackupRetentionReason::VerificationFailed),
+        };
+        if let Some(reason) = retention {
+            return RepositoryFileInstall::InstalledBackupKept { backup, reason };
         }
         if probe_io("repository_file_unlink_backup").is_err()
             || unlink(&self.parent, &backup).is_err()
         {
-            return Ok(RepositoryFileInstall::InstalledBackupKept {
+            return RepositoryFileInstall::InstalledBackupKept {
                 backup,
                 reason: BackupRetentionReason::RemovalFailed,
-            });
+            };
         }
-        Ok(RepositoryFileInstall::Installed)
+        RepositoryFileInstall::Installed
     }
 
     fn displace_to_backup(&self) -> Result<String, Refusal> {
@@ -215,7 +226,8 @@ impl HeldRepositoryFile {
     fn anchor_matches(&self) -> bool {
         safe_fs::Directory::open(&self.parent_path, "repository file parent")
             .and_then(|directory| {
-                identity(directory.as_file()).map_err(|error| std::io::Error::other(error.to_string()))
+                identity(directory.as_file())
+                    .map_err(|error| std::io::Error::other(error.to_string()))
             })
             .is_ok_and(|current| identity(&self.parent).is_ok_and(|held| current == held))
     }
@@ -283,12 +295,15 @@ fn read_clone(
     read_inner(file, limit)
 }
 
-fn read_inner(file: &mut File, limit: usize) -> Result<(Vec<u8>, FileIdentity, FileMetadata), Refusal> {
+fn read_inner(
+    file: &mut File,
+    limit: usize,
+) -> Result<(Vec<u8>, FileIdentity, FileMetadata), Refusal> {
     let metadata = file.metadata().map_err(Refusal::Read)?;
     if metadata.len() > u64::try_from(limit).unwrap_or(u64::MAX) {
         return Err(Refusal::TooLarge { limit });
     }
-    let identity = identity(&file)?;
+    let identity = identity(file)?;
     let file_metadata = FileMetadata::read(file)?;
     probe_io("repository_file_after_metadata").map_err(Refusal::Read)?;
     file.rewind().map_err(Refusal::Read)?;
@@ -307,6 +322,14 @@ fn read_inner(file: &mut File, limit: usize) -> Result<(Vec<u8>, FileIdentity, F
 
 fn create_new(parent: &File, leaf: &str) -> std::io::Result<File> {
     let mut options = fs_at::OpenOptions::default();
+    #[cfg(windows)]
+    {
+        use fs_at::os::windows::OpenOptionsExt as _;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_GENERIC_READ, FILE_GENERIC_WRITE, WRITE_DAC,
+        };
+        options.desired_access(FILE_GENERIC_READ | FILE_GENERIC_WRITE | WRITE_DAC);
+    }
     options
         .read(true)
         .write(fs_at::OpenOptionsWriteMode::Write)
@@ -319,11 +342,7 @@ fn unlink(parent: &File, leaf: &str) -> std::io::Result<()> {
     fs_at::OpenOptions::default().unlink_at(parent, leaf)
 }
 
-fn restore(
-    parent: &File,
-    backup: &str,
-    leaf: &str,
-) -> Result<(), Refusal> {
+fn restore(parent: &File, backup: &str, leaf: &str) -> Result<(), Refusal> {
     safe_fs::rename_no_replace_in(parent, backup, leaf).map_err(Refusal::Restore)
 }
 
@@ -351,10 +370,14 @@ struct CreatedLeaf<'a> {
 
 impl<'a> CreatedLeaf<'a> {
     const fn new(parent: &'a File, leaf: &'a str) -> Self {
-        Self { parent, leaf, armed: true }
+        Self {
+            parent,
+            leaf,
+            armed: true,
+        }
     }
 
-    fn disarm(&mut self) {
+    const fn disarm(&mut self) {
         self.armed = false;
     }
 }

@@ -285,17 +285,13 @@ pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(windows)]
-fn rename_no_replace_at(
-    parent: &File,
-    from: &str,
-    to: &str,
-) -> std::io::Result<()> {
+fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
     use fs_at::os::windows::OpenOptionsExt;
     use std::mem::size_of;
     use std::os::windows::{ffi::OsStrExt, io::AsRawHandle};
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::Storage::FileSystem::{
-        FileRenameInfoEx, SetFileInformationByHandle, FILE_RENAME_INFO, FILE_RENAME_INFO_0,
+        FileRenameInfo, SetFileInformationByHandle, FILE_RENAME_INFO, FILE_RENAME_INFO_0,
     };
 
     const DELETE_ACCESS: u32 = 0x0001_0000;
@@ -314,7 +310,7 @@ fn rename_no_replace_at(
     let info = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();
     unsafe {
         info.write(FILE_RENAME_INFO {
-            Anonymous: FILE_RENAME_INFO_0 { Flags: 0 },
+            Anonymous: FILE_RENAME_INFO_0 { ReplaceIfExists: 0 },
             RootDirectory: parent.as_raw_handle() as HANDLE,
             FileNameLength: u32::try_from(name_bytes)
                 .map_err(|_| std::io::ErrorKind::InvalidInput)?,
@@ -327,7 +323,7 @@ fn rename_no_replace_at(
         );
         if SetFileInformationByHandle(
             source.as_raw_handle() as HANDLE,
-            FileRenameInfoEx,
+            FileRenameInfo,
             info.cast(),
             u32::try_from(buffer_size).map_err(|_| std::io::ErrorKind::InvalidInput)?,
         ) == 0
@@ -339,20 +335,12 @@ fn rename_no_replace_at(
 }
 
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
-fn rename_no_replace_at(
-    parent: &File,
-    from: &str,
-    to: &str,
-) -> std::io::Result<()> {
+fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
     rustix_rename_no_replace(parent, from, parent, to)
 }
 
 #[cfg(target_os = "macos")]
-fn rename_no_replace_at(
-    parent: &File,
-    from: &str,
-    to: &str,
-) -> std::io::Result<()> {
+fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
     use std::os::fd::AsRawFd;
     rename_no_replace_at_raw(
         parent.as_raw_fd(),
@@ -380,11 +368,7 @@ pub fn rename_no_replace(_from: &Path, _to: &Path) -> std::io::Result<()> {
     target_os = "macos",
     windows
 )))]
-fn rename_no_replace_at(
-    _parent: &File,
-    _from: &str,
-    _to: &str,
-) -> std::io::Result<()> {
+fn rename_no_replace_at(_parent: &File, _from: &str, _to: &str) -> std::io::Result<()> {
     unsupported_rename()
 }
 
@@ -402,11 +386,7 @@ fn unsupported_rename() -> std::io::Result<()> {
     ))
 }
 
-pub(super) fn rename_no_replace_in(
-    parent: &File,
-    from: &str,
-    to: &str,
-) -> std::io::Result<()> {
+pub(super) fn rename_no_replace_in(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
     rename_no_replace_at(parent, from, to)
 }
 

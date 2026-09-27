@@ -9,7 +9,8 @@ use camino::Utf8Path;
 
 fn repository() -> (tempfile::TempDir, camino::Utf8PathBuf, RepositoryFiles) {
     let temporary = tempfile::tempdir().unwrap();
-    let path = camino::Utf8PathBuf::from_path_buf(temporary.path().canonicalize().unwrap()).unwrap();
+    let path =
+        camino::Utf8PathBuf::from_path_buf(temporary.path().canonicalize().unwrap()).unwrap();
     let files = RepositoryFiles::open(&path).unwrap();
     (temporary, path, files)
 }
@@ -18,7 +19,13 @@ fn prepared_leaf(path: &Utf8Path) -> camino::Utf8PathBuf {
     std::fs::read_dir(path)
         .unwrap()
         .map(|entry| entry.unwrap().path())
-        .find(|entry| entry.file_name().unwrap().to_string_lossy().ends_with(".tmp"))
+        .find(|entry| {
+            entry
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .ends_with(".tmp")
+        })
         .and_then(|entry| camino::Utf8PathBuf::from_path_buf(entry).ok())
         .unwrap()
 }
@@ -124,6 +131,9 @@ fn replacing_a_hard_link_does_not_write_through_to_the_other_name() {
 
     held.compare_and_swap(prepared).unwrap();
 
-    assert_eq!(std::fs::read(path.join("source.txt")).unwrap(), b"replacement");
+    assert_eq!(
+        std::fs::read(path.join("source.txt")).unwrap(),
+        b"replacement"
+    );
     assert_eq!(std::fs::read(path.join("other.txt")).unwrap(), b"original");
 }
