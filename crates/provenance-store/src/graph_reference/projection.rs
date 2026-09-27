@@ -34,18 +34,44 @@ macro_rules! serialize_binding {
 macro_rules! define_graph_projection {
     (
         export { $(
-            $export_variant:ident { record: $export_type:ty, field: $export_field:ident,
-            shard: { path: $export_path:ident, suffix: $export_suffix:literal, table: $export_table:literal },
-            node: [$($export_node:tt)*], reader: { open: $export_reader:ident, closed: [$export_closed:ident], strategy: $export_strategy:ident },
-            id: $export_id:ident, loader: [$($export_loader:tt)*], graph: [$($export_graph:tt)+], import: [$($export_import:tt)*],
-            catalog: [$($export_catalog:tt)*], route: [$($export_route:tt)*] };)* }
+            $export_variant:ident {
+                record: $export_type:ty,
+                field: $export_field:ident,
+                path: $export_path:ident,
+                node: [$($export_node:tt)*],
+                reader: {
+                    open: $export_reader:ident,
+                    closed: [$export_closed:ident],
+                    strategy: $export_strategy:ident
+                },
+                id: $export_id:ident,
+                loader: [$($export_loader:tt)*],
+                graph: [$($export_graph:tt)+],
+                import: [$($export_import:tt)*],
+                catalog: [$($export_catalog:tt)*],
+                route: [$($export_route:tt)*]
+            };
+        )* }
         canonical { $($canonical:tt)* }
         bindings { $(
-            $binding_variant:ident { record: $binding_type:ty, field: $binding_field:ident,
-            shard: { path: $binding_path:ident, suffix: $binding_suffix:literal, table: $binding_table:literal },
-            node: [$($binding_node:tt)*], reader: { open: $binding_reader:ident, closed: [$binding_closed:ident], strategy: $binding_strategy:ident },
-            id: $binding_id:ident, loader: [$($binding_loader:tt)*], graph: [$($binding_graph:tt)+], import: [$($binding_import:tt)*],
-            catalog: [$($binding_catalog:tt)*], route: [$($binding_route:tt)*] };)* }
+            $binding_variant:ident {
+                record: $binding_type:ty,
+                field: $binding_field:ident,
+                path: $binding_path:ident,
+                node: [$($binding_node:tt)*],
+                reader: {
+                    open: $binding_reader:ident,
+                    closed: [$binding_closed:ident],
+                    strategy: $binding_strategy:ident
+                },
+                id: $binding_id:ident,
+                loader: [$($binding_loader:tt)*],
+                graph: [$($binding_graph:tt)+],
+                import: [$($binding_import:tt)*],
+                catalog: [$($binding_catalog:tt)*],
+                route: [$($binding_route:tt)*]
+            };
+        )* }
         internal { $($internal:tt)* }
     ) => {
         /// The pinned graph contains these canonical record families.
@@ -65,8 +91,12 @@ macro_rules! define_graph_projection {
                 state.serialize_field("schema_version", &self.schema_version)?;
                 state.serialize_field("scope", &self.scope)?;
                 $(state.serialize_field(stringify!($export_field), &self.$export_field)?;)*
-                $(serialize_binding!(self, state, verification, $($binding_graph)+, $binding_field);)*
-                $(serialize_binding!(self, state, implementation, $($binding_graph)+, $binding_field);)*
+                $(serialize_binding!(
+                    self, state, verification, $($binding_graph)+, $binding_field
+                );)*
+                $(serialize_binding!(
+                    self, state, implementation, $($binding_graph)+, $binding_field
+                );)*
                 state.end()
             }
         }
@@ -142,7 +172,10 @@ macro_rules! define_graph_projection {
                             return Err(GraphReferenceError::Incomplete {
                                 detail: format!(
                                     "{} '{}' belongs to scope '{}', not '{}'",
-                                    $kind, record.id.as_str(), record.scope_id.as_str(), scope.as_str()
+                                    $kind,
+                                    record.id.as_str(),
+                                    record.scope_id.as_str(),
+                                    scope.as_str()
                                 ),
                             });
                         }

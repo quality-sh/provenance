@@ -152,13 +152,39 @@ macro_rules! family_reader {
 
 macro_rules! define_export_readers {
     (
-        export { $($variant:ident: $record:ty, $field:ident, $path:ident, $suffix:literal, $table:literal, [$($node:tt)*], $list:ident, [$closed:ident], $id:ident, [$($loader:tt)*], [$($catalog:tt)*];)* }
+        export { $(
+            $variant:ident {
+                record: $record:ty,
+                field: $field:ident,
+                path: $path:ident,
+                node: [$($node:tt)*],
+                reader: $list:ident,
+                closed: [$closed:ident],
+                $($export_rest:tt)*
+            };
+        )* }
         canonical { $($canonical:tt)* }
-        bindings { $($binding_variant:ident: $binding_record:ty, $binding_field:ident, $binding_path:ident, $binding_suffix:literal, $binding_table:literal, [$($binding_node:tt)*], $binding_list:ident, [$binding_closed:ident], $binding_id:ident, [$($binding_loader:tt)*], [$($binding_catalog:tt)*];)* }
+        bindings { $(
+            $binding_variant:ident {
+                record: $binding_record:ty,
+                field: $binding_field:ident,
+                path: $binding_path:ident,
+                node: [$($binding_node:tt)*],
+                reader: $binding_list:ident,
+                closed: [$binding_closed:ident],
+                $($binding_rest:tt)*
+            };
+        )* }
         internal { $($internal:tt)* }
     ) => {
         $(family_reader!($variant, $record, $path, $list, $closed);)*
-        $(family_reader!($binding_variant, $binding_record, $binding_path, $binding_list, $binding_closed);)*
+        $(family_reader!(
+            $binding_variant,
+            $binding_record,
+            $binding_path,
+            $binding_list,
+            $binding_closed
+        );)*
     };
 }
 
@@ -229,7 +255,25 @@ macro_rules! canonical_reader {
 macro_rules! define_canonical_readers {
     (
         export { $($export:tt)* }
-        canonical { $($variant:ident { record: $record:ty, field: $field:ident, shard: { path: $path:ident, suffix: $suffix:literal, table: $table:literal }, node: [$($node:tt)*], reader: { open: $reader:ident, closed: [$($closed:tt)*], strategy: $strategy:ident }, id: $id:ident, loader: [$($loader:tt)*], graph: [$($graph:tt)*], import: [$($import:tt)*], catalog: [$($catalog:tt)*], route: [$($route:tt)*] };)* }
+        canonical { $(
+            $variant:ident {
+                record: $record:ty,
+                field: $field:ident,
+                path: $path:ident,
+                node: [$($node:tt)*],
+                reader: {
+                    open: $reader:ident,
+                    closed: [$($closed:tt)*],
+                    strategy: $strategy:ident
+                },
+                id: $id:ident,
+                loader: [$($loader:tt)*],
+                graph: [$($graph:tt)*],
+                import: [$($import:tt)*],
+                catalog: [$($catalog:tt)*],
+                route: [$($route:tt)*]
+            };
+        )* }
         bindings { $($bindings:tt)* }
         internal { $($internal:tt)* }
     ) => {
