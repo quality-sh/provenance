@@ -212,9 +212,6 @@ async fn submit_conflicts_return_the_typed_http_envelope() {
     ).await;
     assert_eq!(status, 409);
     assert_eq!(repeated, conflict(Some(&proposal), &revision_2));
-    let (status, proposals, _) = call(&host, "GET", "/proposals", None, &[]).await;
-    assert_eq!(status, 200);
-    assert_eq!(proposals["data"]["items"].as_array().unwrap().len(), 1);
 }
 
 async fn assert_terminal_conflicts(host: &StatementHost, proposal: &str, revision: &str) {

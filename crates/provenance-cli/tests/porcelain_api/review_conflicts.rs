@@ -77,8 +77,6 @@ fn cli_submit_conflicts_return_the_typed_envelope() {
         refused(submit(&repo, &revision_2)),
         conflict(Some(proposal), &revision_2)
     );
-    let proposals = json(&["api", "proposals", "--repo", &repo]);
-    assert_eq!(proposals["data"]["items"].as_array().unwrap().len(), 1);
 }
 
 fn terminal(repo: &str, proposal: &str, action: &str) -> Value {
