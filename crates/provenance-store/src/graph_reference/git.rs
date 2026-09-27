@@ -1,4 +1,4 @@
-use super::{sha256, GraphReferenceError, STORE_PATH};
+use super::{incomplete, GraphReferenceError, STORE_PATH};
 use camino::{Utf8Path, Utf8PathBuf};
 use std::process::Command;
 
@@ -65,7 +65,10 @@ impl GitRepository {
             });
         }
         let identity = format!("git-repository-v1\0{}\0{STORE_PATH}", roots.join("\0"));
-        Ok(format!("git1_{}", sha256(identity.as_bytes())))
+        Ok(format!(
+            "git1_{}",
+            crate::canonical_digest::sha256(identity.as_bytes())
+        ))
     }
 
     pub(super) fn materialize(
@@ -145,10 +148,4 @@ fn run_git(repo: &Utf8Path, args: &[&str]) -> Result<Vec<u8>, GraphReferenceErro
         });
     }
     Ok(output.stdout)
-}
-
-fn incomplete(error: impl std::fmt::Display) -> GraphReferenceError {
-    GraphReferenceError::Incomplete {
-        detail: error.to_string(),
-    }
 }
