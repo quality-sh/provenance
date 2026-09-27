@@ -40,6 +40,17 @@ fn bounded_read_refuses_a_file_above_the_limit() {
 }
 
 #[test]
+fn bounded_read_refuses_invalid_utf8() {
+    let (_temporary, path, files) = repository();
+    std::fs::write(path.join("source.txt"), [0xff, 0xfe]).unwrap();
+
+    assert!(matches!(
+        files.read_bounded(Utf8Path::new("source.txt"), 2),
+        Err(RepositoryFileRefusal::InvalidUtf8)
+    ));
+}
+
+#[test]
 fn compare_and_swap_refuses_changed_bytes_and_preserves_them() {
     let (_temporary, path, files) = repository();
     std::fs::write(path.join("source.txt"), b"original").unwrap();
@@ -59,6 +70,27 @@ fn compare_and_swap_refuses_changed_bytes_and_preserves_them() {
     );
 }
 
+#[test]
+fn compare_and_swap_refuses_a_new_identity_with_the_same_bytes() {
+    let (_temporary, path, files) = repository();
+    std::fs::write(path.join("source.txt"), b"same bytes").unwrap();
+    let held = files
+        .read_bounded(Utf8Path::new("source.txt"), 100)
+        .unwrap();
+    let prepared = held.create_temp(b"replacement").unwrap();
+    std::fs::rename(path.join("source.txt"), path.join("old.txt")).unwrap();
+    std::fs::write(path.join("source.txt"), b"same bytes").unwrap();
+
+    assert!(matches!(
+        held.compare_and_swap(prepared),
+        Err(RepositoryFileRefusal::Changed)
+    ));
+    assert_eq!(
+        std::fs::read(path.join("source.txt")).unwrap(),
+        b"same bytes"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn held_write_refuses_a_symlink_leaf_and_parent() {
@@ -69,6 +101,25 @@ fn held_write_refuses_a_symlink_leaf_and_parent() {
     std::fs::create_dir(path.join("actual-parent")).unwrap();
     std::fs::write(path.join("actual-parent/source.txt"), b"actual").unwrap();
     symlink("actual-parent", path.join("linked-parent")).unwrap();
+
+    for selected in ["leaf.txt", "linked-parent/source.txt"] {
+        assert!(matches!(
+            files.read_bounded(Utf8Path::new(selected), 100),
+            Err(RepositoryFileRefusal::Denied)
+        ));
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn held_write_refuses_a_reparse_leaf_and_parent() {
+    use std::os::windows::fs::{symlink_dir, symlink_file};
+    let (_temporary, path, files) = repository();
+    std::fs::write(path.join("actual.txt"), b"actual").unwrap();
+    symlink_file(path.join("actual.txt"), path.join("leaf.txt")).unwrap();
+    std::fs::create_dir(path.join("actual-parent")).unwrap();
+    std::fs::write(path.join("actual-parent/source.txt"), b"actual").unwrap();
+    symlink_dir(path.join("actual-parent"), path.join("linked-parent")).unwrap();
 
     for selected in ["leaf.txt", "linked-parent/source.txt"] {
         assert!(matches!(
@@ -117,5 +168,32 @@ fn compare_and_swap_keeps_the_original_permissions() {
             .unwrap()
             .identity(),
         &identity
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn compare_and_swap_keeps_the_read_only_permission() {
+    let (_temporary, path, files) = repository();
+    std::fs::write(path.join("source.txt"), b"original").unwrap();
+    let mut permissions = std::fs::metadata(path.join("source.txt"))
+        .unwrap()
+        .permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(path.join("source.txt"), permissions).unwrap();
+    let held = files
+        .read_bounded(Utf8Path::new("source.txt"), 100)
+        .unwrap();
+    let prepared = held.create_temp(b"replacement").unwrap();
+
+    held.compare_and_swap(prepared).unwrap();
+
+    assert!(std::fs::metadata(path.join("source.txt"))
+        .unwrap()
+        .permissions()
+        .readonly());
+    assert_eq!(
+        std::fs::read(path.join("source.txt")).unwrap(),
+        b"replacement"
     );
 }
