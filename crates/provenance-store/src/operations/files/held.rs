@@ -307,6 +307,14 @@ fn read_inner(file: &mut File, limit: usize) -> Result<(Vec<u8>, FileIdentity, F
 
 fn create_new(parent: &File, leaf: &str) -> std::io::Result<File> {
     let mut options = fs_at::OpenOptions::default();
+    #[cfg(windows)]
+    {
+        use fs_at::os::windows::OpenOptionsExt as _;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_GENERIC_READ, FILE_GENERIC_WRITE, WRITE_DAC,
+        };
+        options.desired_access(FILE_GENERIC_READ | FILE_GENERIC_WRITE | WRITE_DAC);
+    }
     options
         .read(true)
         .write(fs_at::OpenOptionsWriteMode::Write)

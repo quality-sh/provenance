@@ -47,20 +47,21 @@ fn replacing_the_held_parent_after_read_refuses_without_touching_the_new_parent(
 #[test]
 fn replacing_the_root_after_read_refuses_without_touching_the_new_root() {
     let outer = tempfile::tempdir().unwrap();
-    let root = camino::Utf8PathBuf::from_path_buf(outer.path().join("repo")).unwrap();
+    let outer_path = outer.path().canonicalize().unwrap();
+    let root = camino::Utf8PathBuf::from_path_buf(outer_path.join("repo")).unwrap();
     std::fs::create_dir(&root).unwrap();
     std::fs::write(root.join("source.txt"), b"original").unwrap();
     let files = RepositoryFiles::open(&root).unwrap();
     let held = files.read_bounded(Utf8Path::new("source.txt"), 20).unwrap();
     let prepared = held.create_temp(b"replacement").unwrap();
-    std::fs::rename(&root, outer.path().join("held-root")).unwrap();
+    std::fs::rename(&root, outer_path.join("held-root")).unwrap();
     std::fs::create_dir(&root).unwrap();
     std::fs::write(root.join("source.txt"), b"outside").unwrap();
 
     assert!(held.compare_and_swap(prepared).is_err());
     assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), b"outside");
     assert_eq!(
-        std::fs::read(outer.path().join("held-root/source.txt")).unwrap(),
+        std::fs::read(outer_path.join("held-root/source.txt")).unwrap(),
         b"original"
     );
 }

@@ -295,7 +295,7 @@ fn rename_no_replace_at(
     use std::os::windows::{ffi::OsStrExt, io::AsRawHandle};
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::Storage::FileSystem::{
-        FileRenameInfoEx, SetFileInformationByHandle, FILE_RENAME_INFO, FILE_RENAME_INFO_0,
+        FileRenameInfo, SetFileInformationByHandle, FILE_RENAME_INFO, FILE_RENAME_INFO_0,
     };
 
     const DELETE_ACCESS: u32 = 0x0001_0000;
@@ -314,7 +314,9 @@ fn rename_no_replace_at(
     let info = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();
     unsafe {
         info.write(FILE_RENAME_INFO {
-            Anonymous: FILE_RENAME_INFO_0 { Flags: 0 },
+            Anonymous: FILE_RENAME_INFO_0 {
+                ReplaceIfExists: 0,
+            },
             RootDirectory: parent.as_raw_handle() as HANDLE,
             FileNameLength: u32::try_from(name_bytes)
                 .map_err(|_| std::io::ErrorKind::InvalidInput)?,
@@ -327,7 +329,7 @@ fn rename_no_replace_at(
         );
         if SetFileInformationByHandle(
             source.as_raw_handle() as HANDLE,
-            FileRenameInfoEx,
+            FileRenameInfo,
             info.cast(),
             u32::try_from(buffer_size).map_err(|_| std::io::ErrorKind::InvalidInput)?,
         ) == 0
