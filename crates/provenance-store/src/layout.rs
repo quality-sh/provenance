@@ -73,6 +73,12 @@ impl ProvenanceLayout {
     pub fn import_transactions_dir(&self) -> Utf8PathBuf {
         self.cache_dir().join("import-transactions")
     }
+    pub fn source_edit_marker_path(&self) -> Utf8PathBuf {
+        self.cache_dir().join("source-edit-publication.json")
+    }
+    pub fn source_edit_transactions_dir(&self) -> Utf8PathBuf {
+        self.cache_dir().join("source-edit-transactions")
+    }
 }
 
 pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
@@ -171,6 +177,18 @@ mod tests {
             root.join(".provenance/cache/provenance.db")
         );
         assert_eq!(layout.wiki_dir(), root.join(".provenance/wiki"));
+        assert_eq!(
+            layout.source_edit_marker_path(),
+            root.join(".provenance/cache/source-edit-publication.json")
+        );
+        assert_eq!(
+            layout.source_edit_transactions_dir(),
+            root.join(".provenance/cache/source-edit-transactions")
+        );
+        assert_ne!(
+            layout.source_edit_transactions_dir(),
+            layout.import_transactions_dir()
+        );
         assert_eq!(
             layout
                 .state_shard_lock_path(&layout.scopes_dir().join("default/sources/source.jsonl"))
