@@ -1,5 +1,5 @@
 use super::*;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::verifies;
 
 /// A record at an unreadable version never reaches the projection.
@@ -35,7 +35,7 @@ fn issue_rejects_unsupported_pinned_record_schema_versions() {
         &source_path,
         source.replace(
             &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
-            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0 + 1),
+            &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0 + 1),
         ),
     )
     .unwrap();
@@ -56,7 +56,7 @@ fn issue_rejects_unsupported_pinned_record_schema_versions() {
         .stderr(predicate::str::contains("sources/source.jsonl line 1"))
         .stderr(predicate::str::contains(format!(
             "record source_v2 has schema_version {}, but this build reads schema_version {} only",
-            SUPPORTED_SCHEMA_VERSION.0 + 1,
+            REVIEW_SCHEMA_VERSION.0 + 1,
             SUPPORTED_SCHEMA_VERSION.0
         )));
 }

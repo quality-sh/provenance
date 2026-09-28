@@ -15,6 +15,7 @@ const fn requirement_kind() -> NodeType {
     NodeType::Requirement
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 const fn is_requirement_kind(kind: &NodeType) -> bool {
     matches!(kind, NodeType::Requirement)
 }

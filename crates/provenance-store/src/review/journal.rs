@@ -257,6 +257,10 @@ impl StateStore {
     /// Full-scope import and export cannot yet carry review history.
     pub fn ensure_review_portable(&self, scope: &ScopeId) -> anyhow::Result<()> {
         self.with_repository_publication(|| {
+            anyhow::ensure!(
+                !directory(&self.layout, scope).try_exists()?,
+                "review-bearing scopes require lossless import/export support"
+            );
             let has_enrolled_record = self
                 .list_sources(scope)?
                 .iter()
@@ -290,7 +294,7 @@ impl StateStore {
                     .iter()
                     .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION);
             anyhow::ensure!(
-                !directory(&self.layout, scope).try_exists()? && !has_enrolled_record,
+                !has_enrolled_record,
                 "review-bearing scopes require lossless import/export support"
             );
             Ok(())
