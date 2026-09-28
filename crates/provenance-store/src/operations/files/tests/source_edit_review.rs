@@ -114,7 +114,11 @@ fn every_physical_transition_recovers_exact_file_and_state_bytes() {
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
             .collect::<Vec<_>>();
         assert!(
-            !names.iter().any(|name| name.ends_with(".tmp")),
+            !names.iter().any(|name| {
+                std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("tmp"))
+            }),
             "{phase}: {names:?}"
         );
     }
