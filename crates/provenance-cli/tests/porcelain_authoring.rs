@@ -382,6 +382,33 @@ fn target_first_question_actions_infer_kind_and_reject_a_mismatched_action() {
 #[verifies("rule_porcelain_named_domain_actions", examples)]
 fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
     let (_directory, repo) = named_action_repo();
+    let current = json_output(&[
+        "requirements",
+        "req_actions",
+        "get",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]);
+    let automatic = current["data"]["decision"]["pending"]["proposal_id"]
+        .as_str()
+        .unwrap();
+    json_stdin_output(
+        &[
+            "requirements",
+            "req_actions",
+            "submissions",
+            automatic,
+            "withdraw",
+            "--repo",
+            &repo,
+            "--stdin",
+            "--format",
+            "json",
+        ],
+        &serde_json::json!({"actor":"agent","declared_by":null,"reason":null}),
+    );
     let submitted = json_stdin_output(
         &[
             "req_actions",
