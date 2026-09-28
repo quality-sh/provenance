@@ -20,7 +20,7 @@ pub use recovery::{
     clear_publication_marker, recover_pending_publication, write_publication_marker,
     PublicationPhase,
 };
-#[cfg(test)]
+#[cfg(all(test, unix))]
 use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
 #[cfg(any(unix, windows))]
 pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
