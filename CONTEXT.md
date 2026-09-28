@@ -204,6 +204,13 @@ in other Requirement branches can be references without becoming members.
 The state in which all member, reference, and discussion pages have been read
 at one unchanged projection revision. A failed refresh does not establish it.
 
+## Terminal-and-dead record
+
+A record whose lifecycle removes it from the current review document but keeps
+it available for historical views. An archived Rule and an abandoned Resolution
+are terminal-and-dead records. A superseded Resolution is not a
+terminal-and-dead record.
+
 ## Thread container
 
 A record's collection of collaboration history. Its active, resolved, or archived

@@ -39,7 +39,11 @@ Collections:
 
 Subresources have parent-owned addresses:
 
-- `GET /requirements/{id}/document` reads the assembled document.
+- `GET /requirements/{id}/document` reads the assembled document. The optional
+  `exclude_terminal` Boolean query parameter excludes archived Rules and
+  abandoned Resolutions when it is `true`. A superseded Resolution stays in the
+  document. The default is `false` so that omission keeps the complete
+  historical view.
 - `GET /requirements/{id}/history[/{entry_id}]` reads immutable outcomes.
 - `GET /requirements/{id}/history/{entry_id}/evidence/{side}` reads a
   before or after snapshot span.
@@ -195,6 +199,14 @@ parent-owned child, never an edge.
 
 The catalog declares ownership, cardinality, allowed methods, action and query
 names, mutation classification, preconditions, receipts, paging, and statuses.
+Query parameter names use snake_case. A parameter that is omitted uses the
+default in its request schema.
+
+The document cursor binds `exclude_terminal`, the page limit, and the
+Requirement ID. A client must send the same values on each continuation. A
+filtered cursor is invalid in an unfiltered request, and an unfiltered cursor is
+invalid in a filtered request. The filter applies before the page limit and the
+`has_more` calculation.
 
 The generator linter rejects repository or scope path prefixes, relationship
 routes, legacy verb routes, duplicate bindings, unresolved path parameters,
