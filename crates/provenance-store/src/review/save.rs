@@ -7,7 +7,7 @@ use crate::{
     write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::review::{
-    RequirementEditState, ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION,
+    RequirementEditState, ReviewEntry, ReviewRecord, SaveOutcome, REVIEW_SCHEMA_VERSION,
 };
 use provenance_core::{Requirement, ScopeId, StableId};
 use provenance_macros::rule;
@@ -140,6 +140,8 @@ impl StateStore {
     ) -> anyhow::Result<ReviewEntry> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
+        let actor = input.actor;
+        let request_id = input.request_id;
         self.apply_requirement_update(input.update)?;
         if let Some(relationships) = input.relationships {
             crate::test_probes::at("requirement_relationships_expanding")?;
@@ -158,8 +160,41 @@ impl StateStore {
             self.layout.manifest_path(),
             serde_json::to_vec_pretty(&manifest)?,
         )?;
-        let kind = provenance_core::NodeType::Requirement;
-        let fields = classifier::changed_fields(kind, before, &after)?;
+        let entry = self.commit_record_evidence(
+            before.clone().into(),
+            after.clone().into(),
+            head,
+            actor,
+            request_id,
+            intent_digest,
+            origin,
+        )?;
+        if classifier::changes_revision(entry.record_kind, &entry.changed_fields) {
+            self.commit_automatic_submission(&after, &entry)?;
+        }
+        Ok(entry)
+    }
+
+    fn commit_record_evidence(
+        &self,
+        before: ReviewRecord,
+        after: ReviewRecord,
+        head: Option<ReviewEntry>,
+        actor: String,
+        request_id: StableId,
+        intent_digest: String,
+        origin: Option<provenance_core::threads::DiscussionOrigin>,
+    ) -> anyhow::Result<ReviewEntry> {
+        let kind = before.kind();
+        anyhow::ensure!(
+            after.kind() == kind
+                && after.scope_id() == before.scope_id()
+                && after.id() == before.id(),
+            "a review save cannot change its record address"
+        );
+        let scope = before.scope_id().clone();
+        let id = before.id().clone();
+        let fields = classifier::changed_fields(kind, &before, &after)?;
         let outcome = if head.is_none() {
             SaveOutcome::Enrolled
         } else if fields.is_empty() {
@@ -175,23 +210,23 @@ impl StateStore {
         };
         let before_snapshot = match &head {
             Some(entry) => entry.after.clone(),
-            None => journal::snapshot(&self.layout, &before.clone().into())?,
+            None => journal::snapshot(&self.layout, &before)?,
         };
         let after_snapshot = if outcome == SaveOutcome::NoChange {
             before_snapshot.clone()
         } else {
-            journal::snapshot(&self.layout, &after.clone().into())?
+            journal::snapshot(&self.layout, &after)?
         };
         let entry_id = journal::new_id();
         let etag = if outcome == SaveOutcome::NoChange {
             head.as_ref().unwrap().etag.clone()
         } else {
-            journal::etag(&after.clone().into(), Some(&entry_id))?
+            journal::etag(&after, Some(&entry_id))?
         };
         let entry = ReviewEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: scope.clone(),
-            record_kind: provenance_core::NodeType::Requirement,
+            record_kind: kind,
             record_id: id,
             sequence: head.as_ref().map_or(1, |entry| entry.sequence + 1),
             id: entry_id,
@@ -201,8 +236,8 @@ impl StateStore {
             before: Some(before_snapshot),
             after: after_snapshot,
             changed_fields: fields,
-            actor: input.actor,
-            request_id: input.request_id,
+            actor,
+            request_id,
             intent_digest,
             etag,
             outcome,
@@ -216,9 +251,6 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
-        if classifier::changes_revision(entry.record_kind, &entry.changed_fields) {
-            self.commit_automatic_submission(&after, &entry)?;
-        }
         Ok(entry)
     }
 }
@@ -300,5 +332,37 @@ mod tests {
             .unwrap()
             .pending
             .is_none());
+    }
+
+    #[test]
+    fn record_save_evidence_uses_the_record_kind() {
+        let (_temp, store, _) = fixture();
+        let before = serde_json::from_value::<provenance_core::Source>(json!({
+            "schema_version": 3,
+            "scope_id": "default",
+            "id": "source_a",
+            "name": "Policy A",
+            "source_type": "document",
+            "url": null
+        }))
+        .unwrap();
+        let mut after = before.clone();
+        after.name = "Policy B".into();
+
+        let entry = store
+            .commit_record_evidence(
+                before.into(),
+                after.into(),
+                None,
+                "reviewer".into(),
+                StableId::new("save-source-a").unwrap(),
+                "sha256:intent".into(),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(entry.record_kind, provenance_core::NodeType::Source);
+        assert_eq!(entry.record_id.as_str(), "source_a");
+        assert_eq!(entry.changed_fields, ["name"]);
     }
 }
