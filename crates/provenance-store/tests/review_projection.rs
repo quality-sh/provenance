@@ -38,5 +38,19 @@ async fn receipt_only_save_changes_projection_and_rebuild_keeps_history() {
             .await
             .unwrap();
     assert_eq!(count, 3);
+    let columns: Vec<String> = sqlx::query_scalar(
+        "SELECT name FROM pragma_table_info('review_journal') WHERE name IN ('record_kind', 'record_id') ORDER BY name",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(columns, ["record_id", "record_kind"]);
+    let address: (String, String) = sqlx::query_as(
+        "SELECT record_kind, record_id FROM review_journal WHERE kind = 'requirement' LIMIT 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(address, ("requirement".into(), "req_a".into()));
     pool.close().await;
 }

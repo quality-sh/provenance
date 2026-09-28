@@ -239,3 +239,6 @@ pub struct RequirementDecisionState {
     /// candidate, its feedback, and the graph record.
     pub withdrawn: Vec<StableId>,
 }
+
+#[cfg(test)]
+mod tests;
