@@ -7,6 +7,7 @@ use sqlx::Row;
 // The recursive term follows only active refinement children. Production
 // and references are separate sets, so a cross-link cannot widen the branch.
 fn sets(exclude_terminal: bool) -> String {
+    let decision_filter = visibility_filter(exclude_terminal, "'resolution'", "candidate.id");
     let member_filter = visibility_filter(exclude_terminal, "candidate.kind", "candidate.id");
     let reference_filter = visibility_filter(exclude_terminal, "candidate.kind", "candidate.id");
     format!(
@@ -21,11 +22,14 @@ branch(id) AS (
  JOIN requirements r ON r.scope_id = ?1 AND r.id = e.owner_id
  LIMIT 4097
 ),
-decisions(id) AS (
+decision_candidates(id) AS (
  SELECT DISTINCT e.owner_id FROM branch b JOIN relations e
  ON e.scope_id = ?1 AND e.target_type = 'requirement' AND e.target_id = b.id
  AND e.owner_type = 'resolution' AND e.relation = 'requirement_ids'
- JOIN resolutions r ON r.scope_id = ?1 AND r.id = e.owner_id LIMIT 4097
+ JOIN resolutions r ON r.scope_id = ?1 AND r.id = e.owner_id
+),
+decisions(id) AS (
+ SELECT id FROM decision_candidates candidate WHERE {decision_filter} LIMIT 4097
 ),
 member_candidates(kind, id) AS (
  SELECT 'requirement', id FROM branch
@@ -34,7 +38,7 @@ member_candidates(kind, id) AS (
  ON e.scope_id = ?1 AND e.target_type = 'requirement' AND e.target_id = b.id
  AND e.owner_type = 'rule' AND e.relation = 'requirement_ids'
  JOIN rules r ON r.scope_id = ?1 AND r.id = e.owner_id
- UNION SELECT 'rule', e.owner_id FROM decisions d JOIN relations e
+ UNION SELECT 'rule', e.owner_id FROM decision_candidates d JOIN relations e
  ON e.scope_id = ?1 AND e.target_type = 'resolution' AND e.target_id = d.id
  AND e.owner_type = 'rule' AND e.relation = 'resolution_ids'
  JOIN rules r ON r.scope_id = ?1 AND r.id = e.owner_id
