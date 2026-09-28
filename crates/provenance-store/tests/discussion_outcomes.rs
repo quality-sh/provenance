@@ -21,6 +21,12 @@ fn creation_and_edits_retain_origin_and_immutable_evidence() {
     let serialized = serde_json::to_value(&input).unwrap();
     let created = store.create_review_requirement(input).unwrap();
     assert_eq!(created.outcome, SaveOutcome::Created);
+    let created_proposal = store
+        .requirement_decision_state(&scope(), &provenance_core::StableId::new("req_new").unwrap())
+        .unwrap()
+        .pending
+        .unwrap()
+        .proposal_id;
     assert!(created.before.is_none());
     assert_eq!(created.origin, Some(origin.clone()));
     let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
@@ -36,6 +42,18 @@ fn creation_and_edits_retain_origin_and_immutable_evidence() {
     let changed = store
         .save_requirement_from_discussion(edit, origin.clone())
         .unwrap();
+    assert_ne!(
+        store
+            .requirement_decision_state(
+                &scope(),
+                &provenance_core::StableId::new("req_new").unwrap(),
+            )
+            .unwrap()
+            .pending
+            .unwrap()
+            .proposal_id,
+        created_proposal
+    );
     assert_eq!(changed.before, Some(created.after.clone()));
     assert_ne!(changed.after, created.after);
     assert_eq!(changed.origin, Some(origin));
