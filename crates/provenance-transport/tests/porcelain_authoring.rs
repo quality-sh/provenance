@@ -223,11 +223,8 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
         "submit",
         json!({
             "target":"req_mcp_target",
-            "idempotency_key":"submit_req_mcp_target",
             "data":{
                 "actor":"agent",
-                "proposal_id":"proposal_mcp_target",
-                "proposal_key":"mcp-target",
                 "title":"MCP target",
                 "summary":"The target-first action submits this Requirement.",
                 "source_ids":[],
@@ -245,6 +242,10 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
     assert_eq!(
         submitted.structured_content.as_ref().unwrap()["data"]["fact"],
         "submitted"
+    );
+    assert_eq!(
+        submitted.structured_content.as_ref().unwrap()["data"]["proposal_key"],
+        submitted.structured_content.as_ref().unwrap()["data"]["proposal_id"]
     );
 
     client.cancel().await.unwrap();

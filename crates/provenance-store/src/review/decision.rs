@@ -44,27 +44,27 @@ impl StateStore {
             "invalid review request identity"
         );
         let digest = request_digest(&input)?;
+        let request_id = journal::new_id();
+        let proposal_id = journal::new_id();
+        let proposal_key = proposal_id.as_str().to_owned();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
                 self.manifest()?.scopes.iter().any(|s| s.id == scope),
                 "review scope is not in the manifest"
             );
-            if let Some(receipt) = super::decision_state::replay(
-                self,
-                &scope,
-                &input.request_id,
-                &input.actor,
-                &digest,
-            )? {
-                return Ok(receipt);
-            }
             let record = self.requirement(&scope, &input.requirement_id)?;
             owner_matches(&record, input.declared_by.as_deref())?;
             self.validated_review_entries(&scope)?;
             with_staged_state(&self.layout, false, |layout| {
                 guard::with_writer(&shards::proposal_cards_path(layout, &scope), "*", || {
-                    Self::new(layout.clone()).commit_submission(input, digest)
+                    Self::new(layout.clone()).commit_submission(
+                        input,
+                        request_id,
+                        proposal_id,
+                        proposal_key,
+                        digest,
+                    )
                 })
             })
         })
@@ -73,6 +73,9 @@ impl StateStore {
     fn commit_submission(
         &self,
         input: SubmitRequirementReview,
+        request_id: StableId,
+        proposal_id: StableId,
+        proposal_key: String,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
@@ -82,21 +85,28 @@ impl StateStore {
                 "submission requires a review revision: save the record through the review seam first"
             )
         })?;
-        if let Some(expected) = &input.expected_revision {
-            anyhow::ensure!(
-                head.revision == *expected,
-                "stale submission: the record stands at revision {} and not at the expected revision {}",
-                head.revision.as_str(),
-                expected.as_str()
-            );
-        }
         let facts = CycleFacts::validated(self, &scope)?;
-        anyhow::ensure!(
-            facts
-                .pending_submission(self, &scope, &input.requirement_id)?
-                .is_none(),
-            "this Requirement already has a pending review submission"
-        );
+        if let Some(expected) = &input.expected_revision {
+            if head.revision != *expected {
+                return Err(SourceFailure::wrap(
+                    facts.conflict_failure(self, &scope, &input.requirement_id)?,
+                    anyhow::anyhow!(
+                        "stale submission: the record stands at revision {} and not at the expected revision {}",
+                        head.revision.as_str(),
+                        expected.as_str()
+                    ),
+                ));
+            }
+        }
+        if facts
+            .pending_submission(self, &scope, &input.requirement_id)?
+            .is_some()
+        {
+            return Err(SourceFailure::wrap(
+                facts.conflict_failure(self, &scope, &input.requirement_id)?,
+                anyhow::anyhow!("this Requirement already has a pending review submission"),
+            ));
+        }
         let (revises, revises_rejection) = match &input.revises {
             Some(predecessor) => {
                 let rejection =
@@ -107,8 +117,8 @@ impl StateStore {
         };
         let proposal = CreateProposalCardInput {
             scope_id: scope.clone(),
-            id: input.proposal_id.clone(),
-            proposal_key: input.proposal_key.clone(),
+            id: proposal_id.clone(),
+            proposal_key: proposal_key.clone(),
             proposal_type: ProposalType::RecordRevision,
             title: input.title.clone(),
             summary: input.summary.clone(),
@@ -140,12 +150,13 @@ impl StateStore {
             scope_id: scope,
             id: journal::new_id(),
             requirement_id: input.requirement_id,
-            proposal_id: input.proposal_id,
+            proposal_id,
+            proposal_key: Some(proposal_key),
             fact: CycleFact::Submitted,
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-            request_id: input.request_id,
+            request_id,
             intent_digest: digest,
         };
         write_receipt(self, &entry)?;
@@ -183,8 +194,8 @@ impl StateStore {
         input: DecideRequirementReview,
     ) -> anyhow::Result<CycleEntry> {
         input.ensure_canonical_artifact_type_supported()?;
-        let actor = input.actor.id.clone();
         let digest = request_digest(&input)?;
+        let request_id = journal::new_id();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -194,18 +205,16 @@ impl StateStore {
             let proposal = review_submission(self, &scope, &input.proposal_id)?;
             let facts = CycleFacts::validated(self, &scope)?;
             validate_submission_address(&proposal, &facts, &input.proposal_id, addressed.as_ref())?;
-            self.requirement(&scope, &proposal.traceability.target.artifact_id)?;
-            if let Some(receipt) =
-                super::decision_state::replay(self, &scope, &input.request_id, &actor, &digest)?
-            {
-                return Ok(receipt);
+            let requirement_id = &proposal.traceability.target.artifact_id;
+            self.requirement(&scope, requirement_id)?;
+            if facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id) {
+                return Err(SourceFailure::wrap(
+                    facts.conflict_failure(self, &scope, requirement_id)?,
+                    anyhow::anyhow!("this review submission is no longer pending"),
+                ));
             }
-            anyhow::ensure!(
-                !facts.is_withdrawn(&input.proposal_id),
-                "this review submission was withdrawn from review"
-            );
             with_staged_state(&self.layout, false, |layout| {
-                Self::new(layout.clone()).commit_decision(input, digest)
+                Self::new(layout.clone()).commit_decision(input, request_id, digest)
             })
         })
     }
@@ -213,20 +222,20 @@ impl StateStore {
     fn commit_decision(
         &self,
         input: DecideRequirementReview,
+        request_id: StableId,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let DecideRequirementReview {
             scope_id: scope,
-            request_id,
             actor,
             proposal_id,
-            disposition_id,
             decision,
             rationale,
             canonical_artifact,
             feedback,
             declared_by,
         } = input;
+        let disposition_id = journal::new_id();
         let proposal = review_submission(self, &scope, &proposal_id)?;
         let requirement_id = proposal.traceability.target.artifact_id.clone();
         let binding = proposal
@@ -237,14 +246,15 @@ impl StateStore {
         let head = self
             .head(&record)?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
-        anyhow::ensure!(
-            head.revision == binding.revision
-                && classifier::content_digest(&record)? == binding.content_digest,
-            "stale review selection: the submission binds revision {} but the record stands at \
-             revision {}; withdraw it and submit the current revision",
-            binding.revision.as_str(),
-            head.revision.as_str()
-        );
+        if head.revision != binding.revision
+            || classifier::content_digest(&record)? != binding.content_digest
+        {
+            let facts = CycleFacts::validated(self, &scope)?;
+            return Err(SourceFailure::wrap(
+                facts.conflict_failure(self, &scope, &requirement_id)?,
+                anyhow::anyhow!("stale review selection"),
+            ));
+        }
         guard::with_writer(
             &shards::dispositions_path(&self.layout, &scope),
             "*",
@@ -254,7 +264,7 @@ impl StateStore {
                     id: disposition_id.clone(),
                     proposal_id: proposal_id.clone(),
                     decision,
-                    rationale,
+                    rationale: rationale.unwrap_or_default(),
                     actor: actor.clone(),
                     canonical_artifact,
                     external_action: None,
@@ -279,6 +289,7 @@ impl StateStore {
             id: journal::new_id(),
             requirement_id,
             proposal_id,
+            proposal_key: None,
             fact: CycleFact::Decided,
             disposition_id: Some(disposition_id),
             feedback_message_id,
@@ -365,6 +376,7 @@ impl StateStore {
             );
         }
         let digest = request_digest(&input)?;
+        let request_id = journal::new_id();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -375,22 +387,27 @@ impl StateStore {
             let facts = CycleFacts::validated(self, &scope)?;
             validate_submission_address(&proposal, &facts, &input.proposal_id, addressed.as_ref())?;
             let record = self.requirement(&scope, &proposal.traceability.target.artifact_id)?;
+            let requirement_id = &proposal.traceability.target.artifact_id;
             owner_matches(&record, input.declared_by.as_deref())?;
-            if let Some(receipt) =
-                super::decision_state::replay(self, &scope, &input.request_id, &input.actor, &digest)?
+            let binding = proposal
+                .record_revision
+                .as_ref()
+                .expect("review_submission checks the binding");
+            let head = self
+                .head(&record)?
+                .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
+            if head.revision != binding.revision
+                || classifier::content_digest(&record)? != binding.content_digest
+                || facts.is_withdrawn(&input.proposal_id)
+                || facts.is_decided(&input.proposal_id)
             {
-                return Ok(receipt);
+                return Err(SourceFailure::wrap(
+                    facts.conflict_failure(self, &scope, requirement_id)?,
+                    anyhow::anyhow!("this review submission is no longer current and pending"),
+                ));
             }
-            anyhow::ensure!(
-                !facts.is_withdrawn(&input.proposal_id),
-                "this review submission was already withdrawn"
-            );
-            anyhow::ensure!(
-                !facts.is_decided(&input.proposal_id),
-                "this review submission already has a decision; withdrawal applies to a pending submission"
-            );
             with_staged_state(&self.layout, false, |layout| {
-                Self::new(layout.clone()).commit_withdrawal(input, digest)
+                Self::new(layout.clone()).commit_withdrawal(input, request_id, digest)
             })
         })
     }
@@ -398,6 +415,7 @@ impl StateStore {
     fn commit_withdrawal(
         &self,
         input: WithdrawRequirementReview,
+        request_id: StableId,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
@@ -410,11 +428,12 @@ impl StateStore {
             id: journal::new_id(),
             requirement_id,
             proposal_id: input.proposal_id,
+            proposal_key: None,
             fact: CycleFact::Withdrawn,
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-            request_id: input.request_id,
+            request_id,
             intent_digest: digest,
         };
         write_receipt(self, &entry)?;

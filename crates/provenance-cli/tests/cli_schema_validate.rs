@@ -3,7 +3,6 @@ use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use provenance_store::graph_reference::{graph_digest, GraphExport};
 use serde_json::{json, Value};
-
 fn write_json(dir: &tempfile::TempDir, name: &str, json: impl AsRef<str>) -> String {
     let path = dir.path().join(name);
     std::fs::write(&path, json.as_ref()).unwrap();
@@ -131,17 +130,16 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
 
     assert_external_action_unknown_field_rejected(&dir);
 
-    let empty = write_json(
+    let optional = write_json(
         &dir,
-        "empty-disposition.json",
+        "optional-rationale-disposition.json",
         serde_json::json!({
           "schema_version": SUPPORTED_SCHEMA_VERSION.0,
           "scope_id": "default",
           "id": "disposition_accept",
           "proposal_id": "proposal_candidate",
           "decision": "accepted",
-          "rationale": "",
-          "actor": {"identity_type": "human", "id": ""}
+          "actor": {"identity_type": "human", "id": "reviewer"}
         })
         .to_string(),
     );
@@ -151,15 +149,12 @@ fn disposition_schema_closes_canonical_artifact_and_validation_rejects_unknown_f
             "validate",
             "disposition",
             "--input",
-            &empty,
+            &optional,
             "--format",
             "json",
         ])
         .assert()
-        .failure()
-        .stderr(predicates::str::contains(
-            "disposition rationale must not be empty",
-        ));
+        .success();
 }
 
 fn assert_external_action_unknown_field_rejected(dir: &tempfile::TempDir) {

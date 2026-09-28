@@ -4,12 +4,10 @@ use crate::write_error::{WriteError, WriteFailure};
 #[test]
 fn requirement_review_rejects_new_canonical_artifact_kinds_as_invalid_updates() {
     for artifact_type in ["domain", "boundary", "topic", "question"] {
-        let (_temp, store, _) = enrolled();
+        let (_temp, store, _, proposal) = enrolled();
         let error = decide(
             &store,
-            "decide-1",
-            "prop-1",
-            "disp-1",
+            &proposal,
             "accepted",
             &reviewer("reviewer"),
             &json!({

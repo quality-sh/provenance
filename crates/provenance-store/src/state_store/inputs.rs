@@ -400,6 +400,7 @@ pub struct CreateDispositionInput {
     pub id: StableId,
     pub proposal_id: StableId,
     pub decision: DispositionDecision,
+    #[serde(default)]
     pub rationale: String,
     pub actor: DispositionActor,
     pub canonical_artifact: Option<CanonicalArtifact>,

@@ -221,6 +221,25 @@ fn resource_operations_have_unique_registered_contracts() {
 
 #[cfg(feature = "schema")]
 #[test]
+fn review_actions_do_not_accept_idempotency_headers() {
+    for name in [
+        "submit-requirement-review",
+        "decide-requirement-review",
+        "withdraw-requirement-review",
+    ] {
+        let definition = super::definitions()
+            .iter()
+            .find(|entry| entry.name == name)
+            .unwrap();
+        assert!(
+            definition.registration.controls.headers.is_empty(),
+            "{name} exposes a client request identity"
+        );
+    }
+}
+
+#[cfg(feature = "schema")]
+#[test]
 fn query_registrations_keep_typed_scalar_parameters() {
     let definition = super::definitions()
         .iter()

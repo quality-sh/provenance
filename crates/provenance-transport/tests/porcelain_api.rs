@@ -14,6 +14,9 @@ use rmcp::model::CallToolResult;
 use serde_json::{json, Value};
 use support::api_fixture::{access, error_kind, host, ApiSession, Repository};
 
+#[path = "support/porcelain_review_conflicts.rs"]
+mod review_conflicts;
+
 /// The canonical refusal of one refused tool result.
 fn refusal(result: &CallToolResult) -> Value {
     assert_eq!(result.is_error, Some(true), "{result:?}");
@@ -199,6 +202,12 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
         refusal(&stale),
         refusal(&named),
         "a stale If-Match refuses as the named tool refuses"
+    );
+    let failure = refusal(&stale);
+    assert_eq!(failure["kind"], "requirement_edit_conflict");
+    assert_eq!(
+        failure["current_etag"],
+        current.structured_content.as_ref().unwrap()["data"]["edit"]["etag"]
     );
 
     session.shutdown().await;

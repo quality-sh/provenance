@@ -40,6 +40,7 @@ pub struct DispositionRecord {
     pub id: StableId,
     pub proposal_id: StableId,
     pub decision: DispositionDecision,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub rationale: String,
     pub actor: DispositionActor,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -85,10 +86,12 @@ pub fn disposition_requires_prior_assertion(disposition: &DispositionRecord) -> 
 }
 
 pub fn validate_disposition_intrinsic(disposition: &DispositionRecord) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        !disposition.rationale.trim().is_empty(),
-        "disposition rationale must not be empty"
-    );
+    if disposition.decision == DispositionDecision::Rejected {
+        anyhow::ensure!(
+            !disposition.rationale.trim().is_empty(),
+            "rejected disposition rationale must not be empty"
+        );
+    }
     anyhow::ensure!(
         !disposition.actor.id.trim().is_empty(),
         "disposition actor id must not be empty"

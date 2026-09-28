@@ -3,9 +3,10 @@
 mod support {
     pub mod records;
 }
+#[path = "support/v2_review.rs"]
+mod review;
 
 use axum::{body::Body, http::Request};
-use provenance_core::Manifest;
 use provenance_store::fixture_probe;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
@@ -146,60 +147,6 @@ fn resolution(id: &str, requirement: &str) -> Value {
         "rationale": "The record is available.", "status": "draft",
         "requirement_ids": [requirement], "supersedes": [], "inputs": []
     })
-}
-
-async fn enroll(host: &StatementHost) -> String {
-    let (status, read, etag) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
-    assert_eq!(status, 200, "{read}");
-    let etag = etag.unwrap();
-    let (status, saved, _) = call(
-        host,
-        "PATCH",
-        "/requirements/req_shared",
-        Some(json!({"data":{"actor":"agent","description":"Enrolled."}})),
-        &[
-            ("idempotency-key", "enroll_requirement"),
-            ("if-match", &etag),
-        ],
-    )
-    .await;
-    assert_eq!(status, 200, "{saved}");
-    saved["data"]["edit"]["revision"]
-        .as_str()
-        .unwrap()
-        .to_owned()
-}
-
-async fn submit(host: &StatementHost, proposal: &str, key: &str) {
-    let revision = enroll(host).await;
-    let body = json!({"data":{
-        "actor":"agent", "declared_by":null, "proposal_key":format!("{proposal}-key"),
-        "proposal_id":proposal,
-        "title":"Review", "summary":"Review the saved Requirement.", "confidence":null,
-        "source_ids":[], "evidence_references":[], "builds_on":[],
-        "expected_revision":revision, "revises":null
-    }});
-    let (status, value, _) = call(
-        host,
-        "POST",
-        "/requirements/req_shared/submit",
-        Some(body),
-        &[("idempotency-key", key)],
-    )
-    .await;
-    assert_eq!(status, 200, "{value}");
-    assert_eq!(value["data"]["proposal_id"], proposal);
-}
-
-fn allow_reviewer(repo: &Repository) {
-    let mut manifest: Manifest =
-        serde_json::from_slice(&std::fs::read(repo.layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(
-        repo.layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -388,67 +335,6 @@ async fn resolution_context_is_record_data_but_object_context_is_identity_inject
     assert_eq!(status, 400, "{failure}");
     assert_eq!(failure["error"]["kind"], "invalid_input");
     assert_eq!(failure["error"]["field"], "context");
-}
-
-#[tokio::test]
-async fn review_decide_dispatches_and_checks_the_addressed_requirement() {
-    let repo = Repository::new("The shared graph is readable.");
-    allow_reviewer(&repo);
-    let host = host(&repo);
-    submit(&host, "proposal_decide", "submit_decide").await;
-    create(
-        &host,
-        "/requirements",
-        Some("create_req_other"),
-        json!({"actor":"agent","id":"req_other","statement":"The other record exists.",
-            "status":"active","depends_on":[],"supersedes":[]}),
-    )
-    .await;
-    let decision = json!({"data":{
-        "actor":{"identity_type":"human","id":"reviewer"},
-        "disposition_id":"disposition_decide","decision":"rejected",
-        "rationale":"The revision needs work.","canonical_artifact":null,
-        "feedback":null,"declared_by":null
-    }});
-    let (wrong_status, wrong, _) = call(
-        &host,
-        "POST",
-        "/requirements/req_other/submissions/proposal_decide/decide",
-        Some(decision.clone()),
-        &[("idempotency-key", "wrong_parent_decide")],
-    )
-    .await;
-    assert_eq!(wrong_status, 400, "{wrong}");
-    assert_eq!(wrong["error"]["kind"], "invalid_update");
-    let (status, value, _) = call(
-        &host,
-        "POST",
-        "/requirements/req_shared/submissions/proposal_decide/decide",
-        Some(decision),
-        &[("idempotency-key", "decide_submission")],
-    )
-    .await;
-    assert_eq!(status, 200, "{value}");
-    assert_eq!(value["data"]["fact"], "decided");
-    assert_eq!(value["data"]["requirement_id"], "req_shared");
-}
-
-#[tokio::test]
-async fn review_withdraw_dispatches_for_a_real_submission() {
-    let repo = Repository::new("The shared graph is readable.");
-    let host = host(&repo);
-    submit(&host, "proposal_withdraw", "submit_withdraw").await;
-    let (status, value, _) = call(
-        &host,
-        "POST",
-        "/requirements/req_shared/submissions/proposal_withdraw/withdraw",
-        Some(json!({"data":{"actor":"agent","declared_by":null,"reason":"Revise it."}})),
-        &[("idempotency-key", "withdraw_submission")],
-    )
-    .await;
-    assert_eq!(status, 200, "{value}");
-    assert_eq!(value["data"]["fact"], "withdrawn");
-    assert_eq!(value["data"]["requirement_id"], "req_shared");
 }
 
 #[tokio::test]

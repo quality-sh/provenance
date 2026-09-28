@@ -31,13 +31,10 @@ impl DecideRequirementReview {
 #[serde(deny_unknown_fields)]
 pub struct SubmitRequirementReview {
     pub scope_id: ScopeId,
-    pub request_id: StableId,
     pub actor: String,
     pub requirement_id: StableId,
     /// The owning agent of the record, checked like an edit's `declared_by`.
     pub declared_by: Option<String>,
-    pub proposal_id: StableId,
-    pub proposal_key: String,
     pub title: String,
     pub summary: String,
     pub confidence: Option<f64>,
@@ -60,13 +57,11 @@ pub struct SubmitRequirementReview {
 #[serde(deny_unknown_fields)]
 pub struct DecideRequirementReview {
     pub scope_id: ScopeId,
-    pub request_id: StableId,
     pub actor: DispositionActor,
     pub proposal_id: StableId,
-    pub disposition_id: StableId,
     pub decision: DispositionDecision,
-    /// Never empty. Rejection keeps this with feedback absent.
-    pub rationale: String,
+    /// Required and nonempty for rejection. Optional for other decisions.
+    pub rationale: Option<String>,
     /// The human existing-artifact exception: a person accepting names the
     /// ratified artifact instead of an assertion.
     pub canonical_artifact: Option<CanonicalArtifact>,
@@ -92,7 +87,6 @@ pub struct ReviewFeedback {
 #[serde(deny_unknown_fields)]
 pub struct WithdrawRequirementReview {
     pub scope_id: ScopeId,
-    pub request_id: StableId,
     pub actor: String,
     pub proposal_id: StableId,
     pub declared_by: Option<String>,
