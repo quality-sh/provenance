@@ -82,7 +82,7 @@ fn every_record_kind_has_readable_snapshots_and_revision_chains() {
     let mut records = Vec::new();
 
     for (kind, value) in fixtures() {
-        let record = review_families::deserialize_record(kind, value).unwrap();
+        let record = review_families::deserialize_record(kind, &value).unwrap();
         let first = entry(
             kind,
             record.id().clone(),
