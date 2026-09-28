@@ -10,10 +10,7 @@ use super::record_rows::{load_kind, load_record};
 use crate::cache::quoted;
 use crate::cache::ProjectionFamily;
 use provenance_core::protocol::GraphNode;
-use provenance_core::{
-    Boundary, Domain, ImplementationBinding, Question, Requirement, RequirementReview, Resolution,
-    Rule, ScopeId, Source, Topic, VerificationBinding,
-};
+use provenance_core::ScopeId;
 use sqlx::{Sqlite, Transaction};
 
 pub(super) async fn delete_rows(
@@ -38,48 +35,54 @@ pub(super) async fn delete_rows(
     Ok(())
 }
 
-pub(super) async fn load_rows(
-    tx: &mut Transaction<'_, Sqlite>,
-    family: ProjectionFamily,
-    bytes: &[u8],
-) -> anyhow::Result<u64> {
-    match family {
-        ProjectionFamily::Sources => load_record::<Source>(tx, bytes, GraphNode::Source).await,
-        ProjectionFamily::Domains => load_record::<Domain>(tx, bytes, GraphNode::Domain).await,
-        ProjectionFamily::Requirements => {
-            load_record::<Requirement>(tx, bytes, GraphNode::Requirement).await
-        }
-        ProjectionFamily::Boundaries => {
-            load_record::<Boundary>(tx, bytes, GraphNode::Boundary).await
-        }
-        ProjectionFamily::Topics => load_record::<Topic>(tx, bytes, GraphNode::Topic).await,
-        ProjectionFamily::Questions => {
-            load_record::<Question>(tx, bytes, GraphNode::Question).await
-        }
-        ProjectionFamily::Resolutions => {
-            load_record::<Resolution>(tx, bytes, GraphNode::Resolution).await
-        }
-        ProjectionFamily::Rules => load_record::<Rule>(tx, bytes, GraphNode::Rule).await,
-        ProjectionFamily::Threads => collaboration_records::load_threads(tx, bytes).await,
-        ProjectionFamily::Messages => collaboration_records::load_messages(tx, bytes).await,
-        ProjectionFamily::Contributions => {
-            collaboration_records::load_contributions(tx, bytes).await
-        }
-        ProjectionFamily::SynthesisPackets => {
-            collaboration_records::load_synthesis_packets(tx, bytes).await
-        }
-        ProjectionFamily::AssertionRecords => {
-            collaboration_records::load_assertion_records(tx, bytes).await
-        }
-        ProjectionFamily::ProposalCards => {
-            collaboration_records::load_proposal_cards(tx, bytes).await
-        }
-        ProjectionFamily::Dispositions => collaboration_records::load_dispositions(tx, bytes).await,
-        ProjectionFamily::ImplementationBindings => {
-            load_kind::<ImplementationBinding>(tx, bytes).await
-        }
-        ProjectionFamily::VerificationBindings => load_kind::<VerificationBinding>(tx, bytes).await,
-        ProjectionFamily::ReviewJournal => crate::review::cache::load_rows(tx, bytes).await,
-        ProjectionFamily::RequirementReviews => load_kind::<RequirementReview>(tx, bytes).await,
-    }
+macro_rules! load_family {
+    ($record:ty, record($node:ident), $tx:ident, $bytes:ident) => {
+        load_record::<$record>($tx, $bytes, GraphNode::$node).await
+    };
+    ($record:ty, kind, $tx:ident, $bytes:ident) => {
+        load_kind::<$record>($tx, $bytes).await
+    };
+    ($record:ty, payload($loader:ident), $tx:ident, $bytes:ident) => {
+        collaboration_records::$loader($tx, $bytes).await
+    };
+    ($record:ty, journal, $tx:ident, $bytes:ident) => {
+        crate::review::cache::load_rows($tx, $bytes).await
+    };
 }
+
+macro_rules! define_family_loader {
+    (
+        $(
+            $group:ident {
+                $(
+                    $variant:ident {
+                        record: $record:ty,
+                        field: $field:ident,
+                        path: $path:ident,
+                        node: [$($node:tt)*],
+                        reader: $reader:ident,
+                        closed: [$($closed:tt)*],
+                        strategy: $strategy:ident,
+                        id: $id:ident,
+                        loader: [$($loader:tt)*],
+                        catalog: [$($catalog:tt)*]
+                    };
+                )*
+            }
+        )*
+    ) => {
+        pub(super) async fn load_rows(
+            tx: &mut Transaction<'_, Sqlite>,
+            family: ProjectionFamily,
+            bytes: &[u8],
+        ) -> anyhow::Result<u64> {
+            match family {
+                $($(ProjectionFamily::$variant => {
+                    load_family!($record, $($loader)*, tx, bytes)
+                },)*)*
+            }
+        }
+    };
+}
+
+crate::cache::record_families!(define_family_loader);

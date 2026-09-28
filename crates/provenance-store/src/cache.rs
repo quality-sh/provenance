@@ -1,11 +1,13 @@
 pub(crate) mod connection;
+pub(crate) mod family_table;
+pub(crate) mod family_views;
 mod gaps;
 mod health;
 mod impact;
 mod materialize;
 mod prime;
 mod projection_digest;
-mod projection_families;
+pub(crate) mod projection_families;
 pub mod read;
 mod traceability;
 
@@ -14,6 +16,7 @@ pub use connection::{
     open_cache, open_cache_with, open_existing_cache, open_immutable_cache, open_stored_cache,
     CacheConnection, WalSwitchRetry,
 };
+pub(crate) use family_views::record_families;
 pub use gaps::*;
 pub use health::*;
 pub use impact::*;
@@ -28,6 +31,7 @@ pub use projection_digest::{
     family_content_digests, revision_digest, revision_digest_from_stored_rows, FamilyContentDigest,
 };
 pub use projection_families::ProjectionFamily;
+pub(crate) use projection_families::{BudgetKind, RecordFamily};
 pub use traceability::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]

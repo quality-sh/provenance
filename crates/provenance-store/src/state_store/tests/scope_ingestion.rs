@@ -75,6 +75,23 @@ fn scope_import_does_not_create_a_staged_repository_lock() {
 }
 
 #[test]
+fn scope_import_writes_bindings_before_canonical_shards() {
+    let (_dir, live_store, staged_store, scope, _manifest_before) = staged_store();
+    crate::test_probes::crash_at("scope_import_contributions_written");
+
+    let error = with_repository_publication(&live_store.layout, || {
+        staged_store.import_scope(&scope, &ScopeShards::default())
+    })
+    .unwrap_err();
+    crate::test_probes::disarm("scope_import_contributions_written");
+
+    assert!(error.to_string().contains("injected crash"));
+    assert!(shards::verification_bindings_path(&staged_store.layout, &scope).exists());
+    assert!(shards::implementation_bindings_path(&staged_store.layout, &scope).exists());
+    assert!(!shards::synthesis_packets_path(&staged_store.layout, &scope).exists());
+}
+
+#[test]
 #[verifies("rule_porcelain_id_unique_in_repository", examples)]
 fn scope_import_rejects_an_id_shared_by_two_canonical_kinds() {
     let (_dir, live_store, staged_store, scope, _manifest_before) = staged_store();

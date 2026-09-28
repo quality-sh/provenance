@@ -262,61 +262,61 @@ macro_rules! fact_page_operation {
     };
 }
 
-projection_page_operation!(PageSourcesV2, "page-sources-v2", provenance_core::Source);
-projection_page_operation!(
-    PageRequirementsV2,
-    "page-requirements-v2",
-    provenance_core::Requirement
-);
-projection_page_operation!(
-    PageResolutionsV2,
-    "page-resolutions-v2",
-    provenance_core::Resolution
-);
-projection_page_operation!(PageRulesV2, "page-rules-v2", provenance_core::Rule);
-projection_page_operation!(PageDomainsV2, "page-domains-v2", provenance_core::Domain);
-projection_page_operation!(
-    PageBoundariesV2,
-    "page-boundaries-v2",
-    provenance_core::Boundary
-);
-projection_page_operation!(PageTopicsV2, "page-topics-v2", provenance_core::Topic);
-projection_page_operation!(
-    PageQuestionsV2,
-    "page-questions-v2",
-    provenance_core::Question
-);
-payload_page_operation!(
-    PageContributionsV2,
-    "page-contributions-v2",
-    provenance_core::Contribution
-);
-payload_page_operation!(
-    PageSynthesisPacketsV2,
-    "page-synthesis-packets-v2",
-    provenance_core::SynthesisPacket
-);
-payload_page_operation!(
-    PageProposalsV2,
-    "page-proposals-v2",
-    provenance_core::ProposalCard
-);
-payload_page_operation!(
-    PageDiscussionContainersV2,
-    "page-discussion-containers-v2",
-    provenance_core::Thread
-);
-payload_page_operation!(PageMessagesV2, "page-messages-v2", provenance_core::Message);
-payload_page_operation!(
-    PageAssertionsV2,
-    "page-assertions-v2",
-    provenance_core::AssertionRecord
-);
-payload_page_operation!(
-    PageDispositionsV2,
-    "page-dispositions-v2",
-    provenance_core::DispositionRecord
-);
+macro_rules! catalog_page {
+    (none, $record:ty) => {};
+    (
+        projection(
+            $list:ident,
+            $list_wire:literal,
+            $page:ident,
+            $wire:literal,
+            $($member:tt)*
+        ),
+        $record:ty
+    ) => {
+        projection_page_operation!($page, $wire, $record);
+    };
+    (
+        payload(
+            $list:ident,
+            $list_wire:literal,
+            $page:ident,
+            $wire:literal,
+            $($member:tt)*
+        ),
+        $record:ty
+    ) => {
+        payload_page_operation!($page, $wire, $record);
+    };
+    (verification($($metadata:tt)*), $record:ty) => {};
+}
+
+macro_rules! define_record_pages {
+    (
+        $(
+            $group:ident {
+                $(
+                    $variant:ident {
+                        record: $record:ty,
+                        field: $field:ident,
+                        path: $path:ident,
+                        node: [$($node:tt)*],
+                        reader: $reader:ident,
+                        closed: [$($closed:tt)*],
+                        strategy: $strategy:ident,
+                        id: $id:ident,
+                        loader: [$($loader:tt)*],
+                        catalog: [$($catalog:tt)*]
+                    };
+                )*
+            }
+        )*
+    ) => {
+        $($(catalog_page!($($catalog)*, $record);)*)*
+    };
+}
+
+crate::cache::record_families!(define_record_pages);
 fact_page_operation!(
     PageProposalAssertionsV2,
     "page-proposal-assertions-v2",

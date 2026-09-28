@@ -153,25 +153,40 @@ macro_rules! payload_budget {
     };
 }
 
-projection_budget!(
-    provenance_core::Source,
-    provenance_core::Requirement,
-    provenance_core::Resolution,
-    provenance_core::Rule,
-    provenance_core::Domain,
-    provenance_core::Boundary,
-    provenance_core::Topic,
-    provenance_core::Question,
-    provenance_core::VerificationBinding,
-);
+macro_rules! export_budget {
+    ($variant:ident, $record:ty) => {
+        projection_budget!($record);
+    };
+}
 
-payload_budget!(
-    provenance_core::Contribution,
-    provenance_core::SynthesisPacket,
-    provenance_core::ProposalCard,
-    provenance_core::AssertionRecord,
-    provenance_core::DispositionRecord,
-);
+macro_rules! canonical_budget {
+    (Threads, $record:ty) => {};
+    (Messages, $record:ty) => {};
+    ($variant:ident, $record:ty) => {
+        payload_budget!($record);
+    };
+}
+
+macro_rules! define_family_budgets {
+    (
+        export { $(
+            $export_variant:ident { record: $export_type:ty, $($export_rest:tt)* };
+        )* }
+        canonical { $(
+            $canonical_variant:ident { record: $canonical_type:ty, $($canonical_rest:tt)* };
+        )* }
+        bindings { $(
+            $binding_variant:ident { record: $binding_type:ty, $($binding_rest:tt)* };
+        )* }
+        internal { $($internal:tt)* }
+    ) => {
+        $(export_budget!($export_variant, $export_type);)*
+        $(canonical_budget!($canonical_variant, $canonical_type);)*
+        $(export_budget!($binding_variant, $binding_type);)*
+    };
+}
+
+crate::cache::record_families!(define_family_budgets);
 
 impl ReadBudget for provenance_core::Thread {
     fn read_bytes(&self) -> anyhow::Result<usize> {

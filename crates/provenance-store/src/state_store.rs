@@ -60,10 +60,9 @@ pub use typed_statement_policy::TypedSpecWriteError;
 use crate::{layout::ProvenanceLayout, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
-    ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Boundary,
-    Contribution, DispositionRecord, Domain, ImplementationBinding, Manifest, Message,
-    ProposalCard, Question, Requirement, Resolution, Rule, SchemaVersion, Scope, ScopeId, Source,
-    SynthesisPacket, Thread, Topic, VerificationBinding,
+    ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Contribution,
+    DispositionRecord, ImplementationBinding, Manifest, Message, ProposalCard, Rule, SchemaVersion,
+    Scope, ScopeId, SynthesisPacket, Thread, VerificationBinding,
 };
 
 fn ensure_new_ids_assignable<T>(
@@ -125,6 +124,162 @@ pub struct IdeationLandingBatch {
 pub struct PostMessageResult {
     pub thread: Thread,
     pub message: Message,
+}
+
+macro_rules! family_reader {
+    (Rules, $record:ty, $path:ident, $list:ident, $closed:ident) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            validate_rule_archives(read_jsonl(self, &shards::$path(&self.layout, scope))?)
+        }
+
+        pub(crate) fn $closed(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            validate_rule_archives(read_jsonl_closed(
+                self,
+                &shards::$path(&self.layout, scope),
+            )?)
+        }
+    };
+    ($variant:ident, $record:ty, $path:ident, $list:ident, $closed:ident) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            read_jsonl(self, &shards::$path(&self.layout, scope))
+        }
+
+        pub(crate) fn $closed(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            read_jsonl_closed(self, &shards::$path(&self.layout, scope))
+        }
+    };
+}
+
+macro_rules! define_export_readers {
+    (
+        export { $(
+            $variant:ident {
+                record: $record:ty,
+                field: $field:ident,
+                path: $path:ident,
+                node: [$($node:tt)*],
+                reader: $list:ident,
+                closed: [$closed:ident],
+                $($export_rest:tt)*
+            };
+        )* }
+        canonical { $($canonical:tt)* }
+        bindings { $(
+            $binding_variant:ident {
+                record: $binding_record:ty,
+                field: $binding_field:ident,
+                path: $binding_path:ident,
+                node: [$($binding_node:tt)*],
+                reader: $binding_list:ident,
+                closed: [$binding_closed:ident],
+                $($binding_rest:tt)*
+            };
+        )* }
+        internal { $($internal:tt)* }
+    ) => {
+        $(family_reader!($variant, $record, $path, $list, $closed);)*
+        $(family_reader!(
+            $binding_variant,
+            $binding_record,
+            $binding_path,
+            $binding_list,
+            $binding_closed
+        );)*
+    };
+}
+
+macro_rules! canonical_reader {
+    ($record:ty, $path:ident, $list:ident, direct) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            read_jsonl(self, &shards::$path(&self.layout, scope))
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, messages) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            read_message_shards(self, &self.layout, scope)
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, contributions) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.list_contributions_after_direct_read(scope, || Ok(()))
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, synthesis_packets) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.with_repository_read(|| {
+                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
+                for batch in self.list_ideation_landings(scope)? {
+                    overlay_records(&mut records, batch.synthesis_packets, |record| {
+                        record.id.as_str()
+                    });
+                }
+                Ok(records)
+            })
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, proposal_cards) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.project_proposal_cards(scope, None, || Ok(()))
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, assertion_records) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.with_repository_read(|| {
+                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
+                for batch in self.list_ideation_landings(scope)? {
+                    overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
+                }
+                Ok(records)
+            })
+        }
+    };
+    ($record:ty, $path:ident, $list:ident, dispositions) => {
+        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
+            self.with_repository_read(|| {
+                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
+                records.extend(read_legacy_dispositions(
+                    self,
+                    &shards::legacy_promotion_decisions_path(&self.layout, scope),
+                )?);
+                for batch in self.list_ideation_landings(scope)? {
+                    overlay_records(&mut records, batch.dispositions, |record| {
+                        record.id.as_str()
+                    });
+                }
+                Ok(records)
+            })
+        }
+    };
+}
+
+macro_rules! define_canonical_readers {
+    (
+        export { $($export:tt)* }
+        canonical { $(
+            $variant:ident {
+                record: $record:ty,
+                field: $field:ident,
+                path: $path:ident,
+                meta: $meta:tt,
+                node: [$($node:tt)*],
+                reader: {
+                    open: $reader:ident,
+                    closed: [$($closed:tt)*],
+                    strategy: $strategy:ident
+                },
+                id: $id:ident,
+                loader: [$($loader:tt)*],
+                graph: [$($graph:tt)*],
+                import: [$($import:tt)*],
+                catalog: [$($catalog:tt)*],
+                route: [$($route:tt)*]
+            };
+        )* }
+        bindings { $($bindings:tt)* }
+        internal { $($internal:tt)* }
+    ) => {
+        $(canonical_reader!($record, $path, $reader, $strategy);)*
+    };
 }
 
 impl StateStore {
@@ -191,39 +346,9 @@ impl StateStore {
         })
     }
 
-    pub fn list_sources(&self, scope: &ScopeId) -> anyhow::Result<Vec<Source>> {
-        read_jsonl(self, &shards::sources_path(&self.layout, scope))
-    }
-    pub fn list_requirements(&self, scope: &ScopeId) -> anyhow::Result<Vec<Requirement>> {
-        read_jsonl(self, &shards::requirements_path(&self.layout, scope))
-    }
-    pub fn list_domains(&self, scope: &ScopeId) -> anyhow::Result<Vec<Domain>> {
-        read_jsonl(self, &shards::domains_path(&self.layout, scope))
-    }
-    pub fn list_boundaries(&self, scope: &ScopeId) -> anyhow::Result<Vec<Boundary>> {
-        read_jsonl(self, &shards::boundaries_path(&self.layout, scope))
-    }
-    pub fn list_topics(&self, scope: &ScopeId) -> anyhow::Result<Vec<Topic>> {
-        read_jsonl(self, &shards::topics_path(&self.layout, scope))
-    }
-    pub fn list_questions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Question>> {
-        read_jsonl(self, &shards::questions_path(&self.layout, scope))
-    }
-    pub fn list_resolutions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Resolution>> {
-        read_jsonl(self, &shards::resolutions_path(&self.layout, scope))
-    }
-    pub fn list_rules(&self, scope: &ScopeId) -> anyhow::Result<Vec<Rule>> {
-        validate_rule_archives(read_jsonl(self, &shards::rules_path(&self.layout, scope))?)
-    }
-    pub fn list_verification_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<VerificationBinding>> {
-        read_jsonl(
-            self,
-            &shards::verification_bindings_path(&self.layout, scope),
-        )
-    }
+    crate::cache::record_families!(define_export_readers);
+    crate::cache::family_table::record_family_rows!(define_canonical_readers);
+
     pub fn active_verification_bindings(
         &self,
         scope: &ScopeId,
@@ -233,15 +358,6 @@ impl StateStore {
             .into_iter()
             .collect())
     }
-    pub fn list_implementation_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<ImplementationBinding>> {
-        read_jsonl(
-            self,
-            &shards::implementation_bindings_path(&self.layout, scope),
-        )
-    }
     pub fn active_implementation_bindings(
         &self,
         scope: &ScopeId,
@@ -250,60 +366,6 @@ impl StateStore {
             .list_implementation_bindings(scope)?
             .into_iter()
             .collect())
-    }
-    pub(crate) fn closed_sources(&self, scope: &ScopeId) -> anyhow::Result<Vec<Source>> {
-        read_jsonl_closed(self, &shards::sources_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_requirements(&self, scope: &ScopeId) -> anyhow::Result<Vec<Requirement>> {
-        read_jsonl_closed(self, &shards::requirements_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_domains(&self, scope: &ScopeId) -> anyhow::Result<Vec<Domain>> {
-        read_jsonl_closed(self, &shards::domains_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_boundaries(&self, scope: &ScopeId) -> anyhow::Result<Vec<Boundary>> {
-        read_jsonl_closed(self, &shards::boundaries_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_topics(&self, scope: &ScopeId) -> anyhow::Result<Vec<Topic>> {
-        read_jsonl_closed(self, &shards::topics_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_questions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Question>> {
-        read_jsonl_closed(self, &shards::questions_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_resolutions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Resolution>> {
-        read_jsonl_closed(self, &shards::resolutions_path(&self.layout, scope))
-    }
-    pub(crate) fn closed_rules(&self, scope: &ScopeId) -> anyhow::Result<Vec<Rule>> {
-        validate_rule_archives(read_jsonl_closed(
-            self,
-            &shards::rules_path(&self.layout, scope),
-        )?)
-    }
-    pub(crate) fn closed_verification_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<VerificationBinding>> {
-        read_jsonl_closed(
-            self,
-            &shards::verification_bindings_path(&self.layout, scope),
-        )
-    }
-    pub(crate) fn closed_implementation_bindings(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<ImplementationBinding>> {
-        read_jsonl_closed(
-            self,
-            &shards::implementation_bindings_path(&self.layout, scope),
-        )
-    }
-    pub fn list_threads(&self, scope: &ScopeId) -> anyhow::Result<Vec<Thread>> {
-        read_jsonl(self, &shards::threads_path(&self.layout, scope))
-    }
-    pub fn list_messages(&self, scope: &ScopeId) -> anyhow::Result<Vec<Message>> {
-        read_message_shards(self, &self.layout, scope)
-    }
-    pub fn list_contributions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Contribution>> {
-        self.list_contributions_after_direct_read(scope, || Ok(()))
     }
     fn list_contributions_after_direct_read(
         &self,
@@ -320,21 +382,6 @@ impl StateStore {
             }
             Ok(records)
         })
-    }
-    pub fn list_synthesis_packets(&self, scope: &ScopeId) -> anyhow::Result<Vec<SynthesisPacket>> {
-        self.with_repository_read(|| {
-            let mut records =
-                read_jsonl(self, &shards::synthesis_packets_path(&self.layout, scope))?;
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.synthesis_packets, |record| {
-                    record.id.as_str()
-                });
-            }
-            Ok(records)
-        })
-    }
-    pub fn list_proposal_cards(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.project_proposal_cards(scope, None, || Ok(()))
     }
     pub fn list_proposal_cards_with_actor_ids(
         &self,
@@ -378,31 +425,6 @@ impl StateStore {
             let mut records = read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
             for batch in self.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
-            }
-            Ok(records)
-        })
-    }
-    pub fn list_dispositions(&self, scope: &ScopeId) -> anyhow::Result<Vec<DispositionRecord>> {
-        self.with_repository_read(|| {
-            let mut records = read_jsonl(self, &shards::dispositions_path(&self.layout, scope))?;
-            records.extend(read_legacy_dispositions(
-                self,
-                &shards::legacy_promotion_decisions_path(&self.layout, scope),
-            )?);
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.dispositions, |record| {
-                    record.id.as_str()
-                });
-            }
-            Ok(records)
-        })
-    }
-    pub fn list_assertion_records(&self, scope: &ScopeId) -> anyhow::Result<Vec<AssertionRecord>> {
-        self.with_repository_read(|| {
-            let mut records =
-                read_jsonl(self, &shards::assertion_records_path(&self.layout, scope))?;
-            for batch in self.list_ideation_landings(scope)? {
-                overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
             }
             Ok(records)
         })

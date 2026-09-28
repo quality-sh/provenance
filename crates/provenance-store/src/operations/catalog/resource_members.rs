@@ -120,53 +120,79 @@ macro_rules! fact_member_operation {
     };
 }
 
-projection_member_operation!(GetSourceV2, "get-source-v2", provenance_core::Source);
-projection_member_operation!(
-    GetResolutionV2,
-    "get-resolution-v2",
-    provenance_core::Resolution
-);
-projection_member_operation!(GetRuleV2, "get-rule-v2", provenance_core::Rule);
-projection_member_operation!(GetDomainV2, "get-domain-v2", provenance_core::Domain);
-projection_member_operation!(GetBoundaryV2, "get-boundary-v2", provenance_core::Boundary);
-projection_member_operation!(GetTopicV2, "get-topic-v2", provenance_core::Topic);
-projection_member_operation!(GetQuestionV2, "get-question-v2", provenance_core::Question);
-projection_member_operation!(
-    GetVerificationBindingV2,
-    "get-verification-binding-v2",
-    provenance_core::VerificationBinding
-);
-payload_member_operation!(
-    GetContributionV2,
-    "get-contribution-v2",
-    provenance_core::Contribution
-);
-payload_member_operation!(
-    GetSynthesisPacketV2,
-    "get-synthesis-packet-v2",
-    provenance_core::SynthesisPacket
-);
-payload_member_operation!(
-    GetProposalV2,
-    "get-proposal-v2",
-    provenance_core::ProposalCard
-);
-payload_member_operation!(
-    GetDiscussionContainerV2,
-    "get-discussion-container-v2",
-    provenance_core::Thread
-);
-payload_member_operation!(GetMessageV2, "get-message-v2", provenance_core::Message);
-payload_member_operation!(
-    GetAssertionV2,
-    "get-assertion-v2",
-    provenance_core::AssertionRecord
-);
-payload_member_operation!(
-    GetDispositionV2,
-    "get-disposition-v2",
-    provenance_core::DispositionRecord
-);
+macro_rules! catalog_member {
+    (none, $record:ty) => {};
+    (
+        projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none),
+        $record:ty
+    ) => {};
+    (
+        projection(
+            $list:ident,
+            $list_wire:literal,
+            $page:ident,
+            $page_wire:literal,
+            $member:ident,
+            $wire:literal
+        ),
+        $record:ty
+    ) => {
+        projection_member_operation!($member, $wire, $record);
+    };
+    (
+        payload(
+            $list:ident,
+            $list_wire:literal,
+            $page:ident,
+            $page_wire:literal,
+            $member:ident,
+            $wire:literal
+        ),
+        $record:ty
+    ) => {
+        payload_member_operation!($member, $wire, $record);
+    };
+    (
+        verification(
+            $list:ident,
+            $list_wire:literal,
+            $page:ident,
+            $page_wire:literal,
+            $member:ident,
+            $wire:literal
+        ),
+        $record:ty
+    ) => {
+        projection_member_operation!($member, $wire, $record);
+    };
+}
+
+macro_rules! define_record_members {
+    (
+        $(
+            $group:ident {
+                $(
+                    $variant:ident {
+                        record: $record:ty,
+                        field: $field:ident,
+                        path: $path:ident,
+                        node: [$($node:tt)*],
+                        reader: $reader:ident,
+                        closed: [$($closed:tt)*],
+                        strategy: $strategy:ident,
+                        id: $id:ident,
+                        loader: [$($loader:tt)*],
+                        catalog: [$($catalog:tt)*]
+                    };
+                )*
+            }
+        )*
+    ) => {
+        $($(catalog_member!($($catalog)*, $record);)*)*
+    };
+}
+
+crate::cache::record_families!(define_record_members);
 fact_member_operation!(
     GetProposalAssertionV2,
     "get-proposal-assertion-v2",

@@ -108,226 +108,239 @@ const QUESTION_ALIASES: &[ArgumentAlias] = &[ArgumentAlias {
     wrap_array: false,
 }];
 
+macro_rules! family_route_definitions {
+    ($out:ident, $record:ty, $catalog:tt, none) => {};
+    (
+        $out:ident,
+        $record:ty,
+        projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none),
+        requirements
+    ) => {
+        requirements(&mut $out);
+    };
+    (
+        $out:ident,
+        $record:ty,
+        $kind:ident($($catalog:tt)*),
+        read {
+            mode: $mode:ident,
+            plural: $plural:literal,
+            singular: $singular:literal,
+            singular_id: $singular_id:literal,
+            plural_id: $plural_id:literal
+        }
+    ) => {
+        family_read_route!($out, $record, [$($catalog)*], $mode, $plural, $singular,
+            $singular_id, $plural_id);
+    };
+    (
+        $out:ident,
+        $record:ty,
+        $kind:ident($($catalog:tt)*),
+        writable {
+            mode: $mode:ident,
+            plural: $plural:literal,
+            singular: $singular:literal,
+            singular_id: $singular_id:literal,
+            plural_id: $plural_id:literal,
+            create: $create:ident,
+            update: $update:ident,
+            create_defaults: $create_defaults:ident,
+            create_aliases: $create_aliases:ident,
+            update_defaults: $update_defaults:ident,
+            update_aliases: $update_aliases:ident,
+            nullable: $nullable:expr,
+            target: $target:expr
+        }
+    ) => {
+        family_write_route!($out, $record, [$($catalog)*], $mode, $plural, $singular,
+            $singular_id, $plural_id, $create, $update, $create_defaults,
+            $create_aliases, $update_defaults, $update_aliases, $nullable, $target);
+    };
+    (
+        $out:ident,
+        $record:ty,
+        $kind:ident($($catalog:tt)*),
+        proposal {
+            plural: $plural:literal,
+            singular: $singular:literal,
+            singular_id: $singular_id:literal,
+            plural_id: $plural_id:literal
+        }
+    ) => {{
+        family_proposal_route!($out, $record, [$($catalog)*], $plural, $singular,
+            $singular_id, $plural_id);
+    }};
+}
+
+macro_rules! family_read_route {
+    (
+        $out:ident, $record:ty,
+        [$list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
+            $member:ident, $member_wire:literal],
+        $mode:ident, $plural:literal, $singular:literal,
+        $singular_id:literal, $plural_id:literal
+    ) => {
+        resource!(
+            $out,
+            $mode,
+            $record,
+            pages::$page,
+            members::$member,
+            $plural,
+            $singular,
+            $singular_id,
+            $plural_id
+        );
+    };
+    (
+        $out:ident, $record:ty,
+        [$list:ident, $list_wire:literal, $page:ident,
+            $member:ident, $member_wire:literal],
+        $mode:ident, $plural:literal, $singular:literal,
+        $singular_id:literal, $plural_id:literal
+    ) => {
+        resource!(
+            $out,
+            $mode,
+            $record,
+            pages::$page,
+            members::$member,
+            $plural,
+            $singular,
+            $singular_id,
+            $plural_id
+        );
+    };
+}
+
+macro_rules! family_write_route {
+    (
+        $out:ident, $record:ty,
+        [$list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
+            $member:ident, $member_wire:literal],
+        $mode:ident, $plural:literal, $singular:literal,
+        $singular_id:literal, $plural_id:literal,
+        $create:ident, $update:ident,
+        $create_defaults:ident, $create_aliases:ident,
+        $update_defaults:ident, $update_aliases:ident,
+        $nullable:expr, $target:expr
+    ) => {
+        resource!(
+            $out,
+            $mode,
+            $record,
+            pages::$page,
+            members::$member,
+            $plural,
+            $singular,
+            $singular_id,
+            $plural_id,
+            super::super::$create,
+            super::super::$update,
+            $create_defaults,
+            $create_aliases,
+            $update_defaults,
+            $update_aliases,
+            $nullable,
+            $target
+        );
+    };
+}
+
+macro_rules! family_proposal_route {
+    (
+        $out:ident, $record:ty,
+        [$list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
+            $member:ident, $member_wire:literal],
+        $plural:literal, $singular:literal,
+        $singular_id:literal, $plural_id:literal
+    ) => {{
+        resource!(
+            $out,
+            plain,
+            $record,
+            pages::$page,
+            members::$member,
+            $plural,
+            $singular,
+            $singular_id,
+            $plural_id
+        );
+        $out.push(
+            backed::<super::super::CreateProposal>(
+                "create-proposal",
+                "createProposal",
+                HttpMethod::Post,
+                "/proposals",
+                "Create one proposal in the bound scope.",
+                ResponseKind::Resource,
+                Vec::new(),
+            )
+            .scope("scope_id"),
+        );
+    }};
+}
+
+macro_rules! family_route {
+    ($out:ident, $variant:ident, $record:ty, [$($catalog:tt)*], [none]) => {};
+    (
+        $out:ident,
+        $variant:ident,
+        $record:ty,
+        [$($catalog:tt)*],
+        [$($route:tt)+]
+    ) => {{
+        let mut definitions = Vec::new();
+        family_route_definitions!(definitions, $record, $($catalog)*, $($route)+);
+        let order = crate::cache::ProjectionFamily::$variant
+            .meta()
+            .route_order
+            .expect("registered resource families have a route order");
+        $out.push((order, definitions));
+    }};
+}
+
+macro_rules! register_family_routes {
+    (
+        $out:ident;
+        $(
+            $group:ident {
+                $(
+                    $variant:ident {
+                        record: $record:ty,
+                        field: $field:ident,
+                        path: $path:ident,
+                        meta: $meta:tt,
+                        node: [$($node:tt)*],
+                        reader: {
+                            open: $reader:ident,
+                            closed: [$($closed:tt)*],
+                            strategy: $strategy:ident
+                        },
+                        id: $id:ident,
+                        loader: [$($loader:tt)*],
+                        graph: [$($graph:tt)*],
+                        import: [$($import:tt)*],
+                        catalog: [$($catalog:tt)*],
+                        route: [$($route:tt)*]
+                    };
+                )*
+            }
+        )*
+    ) => {
+        $($(family_route!(
+            $out, $variant, $record, [$($catalog)*], [$($route)*]
+        );)*)*
+    };
+}
+
 pub(super) fn register(out: &mut Vec<Definition>) {
+    let mut families = Vec::new();
+    crate::cache::family_table::record_family_rows!(register_family_routes, families);
+    let mut verification_runs = Vec::new();
     resource!(
-        out,
-        searchable,
-        provenance_core::Source,
-        pages::PageSourcesV2,
-        members::GetSourceV2,
-        "sources",
-        "source",
-        "Source",
-        "Sources",
-        super::super::CreateSource,
-        super::super::UpdateSource,
-        CREATE_SOURCE_DEFAULTS,
-        NO_ALIASES,
-        NONE,
-        NO_ALIASES,
-        &[
-            ("url", "url"),
-            ("reference", "reference"),
-            ("commit_pin", "commit_pin"),
-            ("effective_date", "effective_date"),
-            ("review_date", "review_date")
-        ],
-        Some(NodeType::Source)
-    );
-    requirements(out);
-    resource!(
-        out,
-        searchable,
-        provenance_core::Resolution,
-        pages::PageResolutionsV2,
-        members::GetResolutionV2,
-        "resolutions",
-        "resolution",
-        "Resolution",
-        "Resolutions",
-        super::super::CreateResolution,
-        super::super::UpdateResolution,
-        CREATE_RESOLUTION_DEFAULTS,
-        RESOLUTION_ALIASES,
-        NONE,
-        NO_ALIASES,
-        &[
-            ("context", "context"),
-            ("enforcement", "enforcement"),
-            ("confidence", "confidence"),
-            ("made_by", "made_by"),
-            ("approved_by", "approved_by"),
-            ("approved_at", "approved_at"),
-            ("review_on", "review_on")
-        ],
-        Some(NodeType::Resolution)
-    );
-    resource!(
-        out,
-        rules,
-        provenance_core::Rule,
-        pages::PageRulesV2,
-        members::GetRuleV2,
-        "rules",
-        "rule",
-        "Rule",
-        "Rules",
-        super::super::CreateRule,
-        super::super::UpdateRule,
-        CREATE_RULE_DEFAULTS,
-        RULE_ALIASES,
-        NONE,
-        NO_ALIASES,
-        &[
-            ("name", "name"),
-            ("description", "description"),
-            ("source_document", "source_document"),
-            ("source_section", "source_section")
-        ],
-        Some(NodeType::Rule)
-    );
-    resource!(
-        out,
-        searchable,
-        provenance_core::Domain,
-        pages::PageDomainsV2,
-        members::GetDomainV2,
-        "domains",
-        "domain",
-        "Domain",
-        "Domains",
-        super::super::CreateDomain,
-        super::super::UpdateDomain,
-        NONE,
-        NO_ALIASES,
-        NONE,
-        NO_ALIASES,
-        &[("description", "description"), ("color", "color")],
-        Some(NodeType::Domain)
-    );
-    resource!(
-        out,
-        searchable,
-        provenance_core::Boundary,
-        pages::PageBoundariesV2,
-        members::GetBoundaryV2,
-        "boundaries",
-        "boundary",
-        "Boundary",
-        "Boundaries",
-        super::super::CreateBoundary,
-        super::super::UpdateBoundary,
-        NONE,
-        NO_ALIASES,
-        NONE,
-        NO_ALIASES,
-        &[("source_ref", "source_ref")],
-        Some(NodeType::Boundary)
-    );
-    resource!(
-        out,
-        searchable,
-        provenance_core::Topic,
-        pages::PageTopicsV2,
-        members::GetTopicV2,
-        "topics",
-        "topic",
-        "Topic",
-        "Topics",
-        super::super::CreateTopic,
-        super::super::UpdateTopic,
-        OPEN_LINK_DEFAULTS,
-        NO_ALIASES,
-        NONE,
-        NO_ALIASES,
-        &[],
-        Some(NodeType::Topic)
-    );
-    resource!(
-        out,
-        searchable,
-        provenance_core::Question,
-        pages::PageQuestionsV2,
-        members::GetQuestionV2,
-        "questions",
-        "question",
-        "Question",
-        "Questions",
-        super::super::CreateQuestion,
-        super::super::UpdateQuestion,
-        OPEN_LINK_DEFAULTS,
-        QUESTION_ALIASES,
-        NONE,
-        QUESTION_ALIASES,
-        &[
-            ("resolution_id", "resolution_id"),
-            ("contradicts", "contradicts")
-        ],
-        Some(NodeType::Question)
-    );
-    resource!(
-        out,
-        plain,
-        provenance_core::Contribution,
-        pages::PageContributionsV2,
-        members::GetContributionV2,
-        "contributions",
-        "contribution",
-        "Contribution",
-        "Contributions",
-        super::super::CreateContribution,
-        super::super::UpsertContribution,
-        NONE,
-        NO_ALIASES,
-        NONE,
-        NO_ALIASES,
-        &[],
-        None
-    );
-    resource!(
-        out,
-        plain,
-        provenance_core::SynthesisPacket,
-        pages::PageSynthesisPacketsV2,
-        members::GetSynthesisPacketV2,
-        "synthesis-packets",
-        "synthesis-packet",
-        "SynthesisPacket",
-        "SynthesisPackets",
-        super::super::CreateSynthesisPacket,
-        super::super::UpsertSynthesisPacket,
-        NONE,
-        NO_ALIASES,
-        NONE,
-        NO_ALIASES,
-        &[],
-        None
-    );
-    resource!(
-        out,
-        plain,
-        provenance_core::ProposalCard,
-        pages::PageProposalsV2,
-        members::GetProposalV2,
-        "proposals",
-        "proposal",
-        "Proposal",
-        "Proposals"
-    );
-    out.push(
-        backed::<super::super::CreateProposal>(
-            "create-proposal",
-            "createProposal",
-            HttpMethod::Post,
-            "/proposals",
-            "Create one proposal in the bound scope.",
-            ResponseKind::Resource,
-            Vec::new(),
-        )
-        .scope("scope_id"),
-    );
-    resource!(
-        out,
+        verification_runs,
         verification,
         provenance_core::VerificationRun,
         verification::PageVerificationRunsV2,
@@ -337,18 +350,11 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         "VerificationRun",
         "VerificationRuns"
     );
-    resource!(
-        out,
-        verification,
-        provenance_core::VerificationBinding,
-        pages::PageVerificationBindingsV2,
-        members::GetVerificationBindingV2,
-        "verification-bindings",
-        "verification-binding",
-        "VerificationBinding",
-        "VerificationBindings"
-    );
-    indexes(out);
+    families.push((120, verification_runs));
+    families.sort_by_key(|(order, _)| *order);
+    for (_, definitions) in families {
+        out.extend(definitions);
+    }
 }
 
 fn requirements(out: &mut Vec<Definition>) {
@@ -411,52 +417,5 @@ fn requirements(out: &mut Vec<Definition>) {
         ])
         .target(TargetAction::Update, Some(NodeType::Requirement))
         .with_etag("/edit/etag", false),
-    );
-}
-
-fn indexes(out: &mut Vec<Definition>) {
-    resource!(
-        out,
-        plain,
-        provenance_core::Thread,
-        pages::PageDiscussionContainersV2,
-        members::GetDiscussionContainerV2,
-        "discussion-containers",
-        "discussion-container",
-        "DiscussionContainer",
-        "DiscussionContainers"
-    );
-    resource!(
-        out,
-        plain,
-        provenance_core::Message,
-        pages::PageMessagesV2,
-        members::GetMessageV2,
-        "messages",
-        "message",
-        "Message",
-        "Messages"
-    );
-    resource!(
-        out,
-        plain,
-        provenance_core::AssertionRecord,
-        pages::PageAssertionsV2,
-        members::GetAssertionV2,
-        "assertions",
-        "assertion",
-        "Assertion",
-        "Assertions"
-    );
-    resource!(
-        out,
-        plain,
-        provenance_core::DispositionRecord,
-        pages::PageDispositionsV2,
-        members::GetDispositionV2,
-        "dispositions",
-        "disposition",
-        "Disposition",
-        "Dispositions"
     );
 }
