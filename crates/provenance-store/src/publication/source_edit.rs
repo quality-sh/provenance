@@ -8,6 +8,7 @@ use crate::{
         FileIdentity, HeldRepositoryFile, PreparedRepositoryFile, RepositoryFileBackup,
     },
 };
+use anyhow::Context as _;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde::{Deserialize, Serialize};
@@ -99,11 +100,17 @@ impl StagedStateHook for SourceEditPublication {
 
     fn prepared(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
         let replacement_path = transaction.join("replacement");
-        std::fs::write(&replacement_path, &self.replacement)?;
-        std::fs::File::open(&replacement_path)?.sync_all()?;
-        sync_directory(transaction)?;
+        std::fs::write(&replacement_path, &self.replacement)
+            .context("write source-edit replacement record")?;
+        std::fs::File::open(&replacement_path)
+            .context("open source-edit replacement record")?
+            .sync_all()
+            .context("flush source-edit replacement record")?;
+        sync_directory(transaction).context("flush source-edit transaction")?;
         let held = self.held.as_ref().expect("source-edit held file");
-        let prepared = held.create_temp(&self.replacement)?;
+        let prepared = held
+            .create_temp(&self.replacement)
+            .context("prepare source replacement file")?;
         let backup = held.recovery_backup();
         let prepared_record = PreparedSourceRecord {
             target: held.relative().to_owned(),
@@ -111,7 +118,8 @@ impl StagedStateHook for SourceEditPublication {
             prepared_leaf: prepared.recovery_leaf().to_owned(),
             prepared_identity: prepared.recovery_identity().clone(),
         };
-        write_prepared_source_record(transaction, &prepared_record)?;
+        write_prepared_source_record(transaction, &prepared_record)
+            .context("record prepared source file")?;
         self.prepared = Some(prepared);
         self.backup = Some(backup.clone());
         crate::test_probes::at("source_edit_temp_prepared")?;
@@ -129,7 +137,7 @@ impl StagedStateHook for SourceEditPublication {
             backup_identity: backup.identity().clone(),
             backup_digest: backup.digest(),
         };
-        write_marker(live, &marker)?;
+        write_marker(live, &marker).context("write prepared source-edit marker")?;
         self.marker = Some(marker);
         crate::test_probes::at("source_edit_prepared")
     }
