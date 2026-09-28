@@ -33,6 +33,7 @@ macro_rules! project_families {
                         import: [$($import:tt)*],
                         catalog: [$($catalog:tt)*],
                         route: [$($route:tt)*]
+                        $(, review: $review:ident)?
                     };
                 )*
             }

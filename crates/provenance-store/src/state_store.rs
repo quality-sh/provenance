@@ -273,6 +273,7 @@ macro_rules! define_canonical_readers {
                 import: [$($import:tt)*],
                 catalog: [$($catalog:tt)*],
                 route: [$($route:tt)*]
+                $(, review: $review:ident)?
             };
         )* }
         bindings { $($bindings:tt)* }
