@@ -143,7 +143,10 @@ fn install_staged_state(
         .and_then(|()| crate::test_probes::at("state_before_install"))
         .and_then(|()| {
             std::fs::rename(staged_layout.state_dir(), live_layout.state_dir()).map_err(|error| {
-                anyhow::anyhow!("install staged state {}: {error}", staged_layout.state_dir())
+                anyhow::anyhow!(
+                    "install staged state {}: {error}",
+                    staged_layout.state_dir()
+                )
             })
         })
         .and_then(|()| crate::test_probes::at("state_after_install_rename"))

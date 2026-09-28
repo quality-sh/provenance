@@ -60,10 +60,7 @@ fn require_missing(parent: &std::fs::File, leaf: &str) -> Result<(), Refusal> {
     }
 }
 
-fn optional_artifact(
-    parent: &std::fs::File,
-    leaf: &str,
-) -> Result<Option<std::fs::File>, Refusal> {
+fn optional_artifact(parent: &std::fs::File, leaf: &str) -> Result<Option<std::fs::File>, Refusal> {
     match platform::regular(parent, leaf).map_err(Refusal::from) {
         Err(Refusal::Missing) => Ok(None),
         Err(error) => Err(error),
