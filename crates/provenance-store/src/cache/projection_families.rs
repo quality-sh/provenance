@@ -207,7 +207,7 @@ macro_rules! terminal_statuses {
 }
 
 /// Returns the SQL predicate for terminal-and-dead record identities.
-pub(crate) fn terminal_and_dead_predicate(kind: &str, id: &str, scope: &str) -> String {
+pub(super) fn terminal_and_dead_predicate(kind: &str, id: &str, scope: &str) -> String {
     FAMILIES
         .iter()
         .filter(|family| !family.terminal_statuses.is_empty())
