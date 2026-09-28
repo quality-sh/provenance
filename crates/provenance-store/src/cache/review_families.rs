@@ -202,7 +202,11 @@ pub(crate) fn deserialize_record(
                 unknown = Some(path.to_string());
             }
         })?;
-        anyhow::ensure!(unknown.is_none(), "unknown field `{}`", unknown.unwrap_or_default());
+        anyhow::ensure!(
+            unknown.is_none(),
+            "unknown field `{}`",
+            unknown.unwrap_or_default()
+        );
         Ok(record)
     }
     Ok(match kind {

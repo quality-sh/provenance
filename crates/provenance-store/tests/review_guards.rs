@@ -118,7 +118,10 @@ fn unintegrated_writers_refuse_enrolled_rows_for_every_record_kind() {
             error.to_string().contains("guarded review save"),
             "{directory}: {error:#}"
         );
-        assert_eq!(std::fs::read_to_string(path).unwrap(), format!("{before}\n"));
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap(),
+            format!("{before}\n")
+        );
     }
 }
 
@@ -136,14 +139,38 @@ fn review_schema_is_readable_for_every_record_kind() {
     )
     .unwrap();
     let fixtures = [
-        ("sources/source.jsonl", json!({"schema_version":3,"scope_id":"default","id":"source_a","name":"Policy","source_type":"document","url":null})),
-        ("requirements/req.jsonl", json!({"schema_version":3,"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"active"})),
-        ("resolutions/res.jsonl", json!({"schema_version":3,"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"approved","inputs":[],"requirement_ids":["req_a"],"review_on":null})),
-        ("rules/rule.jsonl", json!({"schema_version":3,"scope_id":"default","id":"rule_a","statement":"The system stores records.","status":"active","severity":"high","requirement_ids":["req_a"],"resolution_ids":[]})),
-        ("domains/domain.jsonl", json!({"schema_version":3,"scope_id":"default","id":"domain_a","name":"Storage"})),
-        ("boundaries/boundary.jsonl", json!({"schema_version":3,"scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."})),
-        ("topics/topic.jsonl", json!({"schema_version":3,"scope_id":"default","id":"topic_a","requirement_id":"req_a","title":"Storage","status":"open","links":[]})),
-        ("questions/question.jsonl", json!({"schema_version":3,"scope_id":"default","id":"question_a","topic_id":"topic_a","requirement_id":"req_a","question":"Where is storage?","resolution_method":"research","status":"open","links":[]})),
+        (
+            "sources/source.jsonl",
+            json!({"schema_version":3,"scope_id":"default","id":"source_a","name":"Policy","source_type":"document","url":null}),
+        ),
+        (
+            "requirements/req.jsonl",
+            json!({"schema_version":3,"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"active"}),
+        ),
+        (
+            "resolutions/res.jsonl",
+            json!({"schema_version":3,"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"approved","inputs":[],"requirement_ids":["req_a"],"review_on":null}),
+        ),
+        (
+            "rules/rule.jsonl",
+            json!({"schema_version":3,"scope_id":"default","id":"rule_a","statement":"The system stores records.","status":"active","severity":"high","requirement_ids":["req_a"],"resolution_ids":[]}),
+        ),
+        (
+            "domains/domain.jsonl",
+            json!({"schema_version":3,"scope_id":"default","id":"domain_a","name":"Storage"}),
+        ),
+        (
+            "boundaries/boundary.jsonl",
+            json!({"schema_version":3,"scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."}),
+        ),
+        (
+            "topics/topic.jsonl",
+            json!({"schema_version":3,"scope_id":"default","id":"topic_a","requirement_id":"req_a","title":"Storage","status":"open","links":[]}),
+        ),
+        (
+            "questions/question.jsonl",
+            json!({"schema_version":3,"scope_id":"default","id":"question_a","topic_id":"topic_a","requirement_id":"req_a","question":"Where is storage?","resolution_method":"research","status":"open","links":[]}),
+        ),
     ];
     for (relative, value) in fixtures {
         let path = layout.scopes_dir().join("default").join(relative);

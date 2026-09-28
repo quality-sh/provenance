@@ -184,7 +184,10 @@ pub struct EvidencePage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewHistoryQuery {
-    #[serde(default = "requirement_kind", skip_serializing_if = "is_requirement_kind")]
+    #[serde(
+        default = "requirement_kind",
+        skip_serializing_if = "is_requirement_kind"
+    )]
     pub record_kind: NodeType,
     #[serde(rename = "requirement_id")]
     pub record_id: StableId,
@@ -207,7 +210,10 @@ pub struct ReviewHistoryPage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EvidenceQuery {
-    #[serde(default = "requirement_kind", skip_serializing_if = "is_requirement_kind")]
+    #[serde(
+        default = "requirement_kind",
+        skip_serializing_if = "is_requirement_kind"
+    )]
     pub record_kind: NodeType,
     #[serde(rename = "requirement_id")]
     pub record_id: StableId,
@@ -274,7 +280,10 @@ pub struct CycleEntry {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
-    #[serde(default = "requirement_kind", skip_serializing_if = "is_requirement_kind")]
+    #[serde(
+        default = "requirement_kind",
+        skip_serializing_if = "is_requirement_kind"
+    )]
     pub record_kind: NodeType,
     #[serde(rename = "requirement_id")]
     pub record_id: StableId,
@@ -326,7 +335,10 @@ pub struct RecordedDecision {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequirementDecisionState {
-    #[serde(default = "requirement_kind", skip_serializing_if = "is_requirement_kind")]
+    #[serde(
+        default = "requirement_kind",
+        skip_serializing_if = "is_requirement_kind"
+    )]
     pub record_kind: NodeType,
     #[serde(rename = "requirement_id")]
     pub record_id: StableId,
