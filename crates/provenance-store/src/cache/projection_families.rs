@@ -210,23 +210,22 @@ macro_rules! terminal_statuses {
 pub(crate) fn terminal_and_dead_predicate(kind: &str, id: &str, scope: &str) -> String {
     FAMILIES
         .iter()
+        .filter(|family| !family.terminal_statuses.is_empty())
         .filter_map(|family| {
             let node_type = family.node_type?;
-            (!family.terminal_statuses.is_empty()).then(|| {
-                let statuses = family
-                    .terminal_statuses
-                    .iter()
-                    .map(|status| format!("'{status}'"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(
-                    "({kind} = '{}' AND EXISTS (SELECT 1 FROM {} lifecycle \
-                     WHERE lifecycle.scope_id = {scope} AND lifecycle.id = {id} \
-                     AND lifecycle.status IN ({statuses})))",
-                    node_type.as_str(),
-                    family.table_name,
-                )
-            })
+            let statuses = family
+                .terminal_statuses
+                .iter()
+                .map(|status| format!("'{status}'"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!(
+                "({kind} = '{}' AND EXISTS (SELECT 1 FROM {} lifecycle \
+                 WHERE lifecycle.scope_id = {scope} AND lifecycle.id = {id} \
+                 AND lifecycle.status IN ({statuses})))",
+                node_type.as_str(),
+                family.table_name,
+            ))
         })
         .collect::<Vec<_>>()
         .join(" OR ")
