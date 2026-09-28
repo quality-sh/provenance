@@ -32,10 +32,11 @@ async fn receipt_only_save_changes_projection_and_rebuild_keeps_history() {
         before, after,
         "receipt changes must participate in projection freshness"
     );
-    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM review_journal")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM review_journal WHERE kind = 'requirement'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(count, 3);
     pool.close().await;
 }

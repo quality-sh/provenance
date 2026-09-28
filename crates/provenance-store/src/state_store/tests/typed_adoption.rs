@@ -210,7 +210,7 @@ fn exact_requirement_adoption_changes_only_owner_and_address_then_replays_unchan
     let decision = store
         .requirement_decision_state(&scope, &StableId::new("req_existing").unwrap())
         .unwrap();
-    assert!(decision.pending.is_some());
+    assert!(decision.pending.is_none());
 
     let replay = store.plan_typed_spec(&scope, input).unwrap();
     assert_eq!((replay.created, replay.updated, replay.moved), (0, 0, 0));

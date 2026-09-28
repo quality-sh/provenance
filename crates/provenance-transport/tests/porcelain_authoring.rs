@@ -6,7 +6,9 @@ mod support {
     pub mod resource_http;
 }
 
+use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;
+use provenance_store::state_store::StateStore;
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use support::records::Repository;
@@ -209,6 +211,23 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
 #[tokio::test]
 async fn mcp_target_first_requirement_submit_uses_the_target() {
     let repository = Repository::new("The shared graph is readable.");
+    let store = StateStore::new(repository.layout.clone());
+    let scope = ScopeId::new("default").unwrap();
+    let requirement = StableId::new("req_shared").unwrap();
+    let proposal = store
+        .requirement_decision_state(&scope, &requirement)
+        .unwrap()
+        .pending
+        .unwrap()
+        .proposal_id;
+    store
+        .withdraw_requirement_review(
+            serde_json::from_value(
+                json!({"scope_id":"default","actor":"agent","proposal_id":proposal}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
     let host = support::resource_http::host(&repository, true);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
