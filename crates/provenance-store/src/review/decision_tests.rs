@@ -7,7 +7,7 @@ use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use camino::Utf8Path;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
-    DispositionDecision, PromotionState, ScopeId, StableId,
+    DispositionDecision, NodeType, PromotionState, ScopeId, StableId,
 };
 use serde_json::{json, Value};
 
@@ -413,6 +413,35 @@ fn review_finding_withdrawn_and_resubmitted_receipts_have_safe_sequences() {
 
     assert!(withdrawn.sequence < resubmitted.sequence);
     assert!(resubmitted.sequence < (1_u64 << 53));
+}
+
+#[test]
+fn cycle_receipt_refuses_a_different_record_kind_than_its_proposal() {
+    let (_temp, store, _, proposal) = enrolled();
+    let submitted = automatic_submission(&store);
+    let forged = CycleEntry {
+        id: super::journal::new_id(),
+        record_kind: NodeType::Source,
+        sequence: submitted.sequence + 1,
+        fact: CycleFact::Withdrawn,
+        request_id: super::journal::new_id(),
+        intent_digest: "sha256:forged-kind".into(),
+        ..submitted
+    };
+    super::decision_state::write_receipt(&store, &forged).unwrap();
+
+    refused(
+        store.validated_cycle_entries(&scope()),
+        "cycle entry address does not match its proposal target",
+    );
+    refused(
+        store.requirement_decision_state(&scope(), &req()),
+        "cycle entry address does not match its proposal target",
+    );
+    refused(
+        withdraw(&store, &proposal),
+        "cycle entry address does not match its proposal target",
+    );
 }
 
 mod bypass_tests;
