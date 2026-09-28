@@ -108,13 +108,14 @@ pub fn ensure_supported_record_version(
         .and_then(Utf8Path::file_name)
         .and_then(crate::cache::review_families::by_directory);
     if let (true, Some(family)) = (value["schema_version"] == 3, family) {
-        crate::cache::review_families::deserialize_record(family.kind, value.clone())
-            .with_context(|| {
+        crate::cache::review_families::deserialize_record(family.kind, value).with_context(
+            || {
                 format!(
                     "{path} line {line_number}: invalid enrolled {}",
                     family.kind.as_str()
                 )
-            })?;
+            },
+        )?;
         return Ok(());
     }
     let Some((id, version)) = first_unsupported_record(value) else {
