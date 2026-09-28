@@ -3,7 +3,7 @@ import { ensureGenerated } from './ensure-generated.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import { copyFile, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { cp, copyFile, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -67,7 +67,7 @@ try {
     const script = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
     await writeFile(join(temporary, `${name}.js`), script);
   }
-  await writeFile(join(temporary, 'validators.mjs'), await readFile(join(root, 'packages/provenance/src/generated/validators.mjs')));
+  await cp(join(root, 'packages/provenance/src/generated/validators'), join(temporary, 'validators'), { recursive: true });
   const module = await import(join(temporary, 'client.js'));
   const clientModule = process.argv.includes('--effect') ? (await import('./effect-host.mjs')).effectModule(module) : module;
   if (family !== 'statements') {

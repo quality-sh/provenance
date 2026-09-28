@@ -1,7 +1,7 @@
 import { buildBinary } from './cargo.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -41,7 +41,8 @@ const node: Schemas['GraphNodeOutput']['node_type'] = 'invented';
 `);
     run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', join(temporary, 'assertions.ts')]);
     await mkdir(join(temporary, 'client'), { recursive: true });
-    for (const name of ['client.ts', 'schema.ts', 'runtime.ts', 'validators.mjs', 'validators.d.mts']) await writeFile(join(temporary, 'client', name), await readFile(join(root, 'packages/provenance/src/generated', name)));
+    for (const name of ['client.ts', 'schema.ts', 'runtime.ts']) await writeFile(join(temporary, 'client', name), await readFile(join(root, 'packages/provenance/src/generated', name)));
+    await cp(join(root, 'packages/provenance/src/generated/validators'), join(temporary, 'client/validators'), { recursive: true });
     await writeFile(join(temporary, 'client', 'assertions.ts'), `import { HttpClient, type OperationFailure, type components } from './client';
 declare const client: HttpClient;
 client.listSources({query:'search',text:'fixture'});
@@ -64,7 +65,7 @@ type SourceData = Extract<components['schemas']['GetSourceSuccess']['data'], { u
 declare const source: SourceData;
 const name: string = source.name;
 `);
-    run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', join(temporary, 'client', 'assertions.ts')]);
+    run(process.execPath, [join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'), '--strict', '--noEmit', '--skipLibCheck', '--target', 'es2022', '--module', 'es2022', '--moduleResolution', 'bundler', join(temporary, 'client', 'assertions.ts')]);
     // Cargo reports the exporter path, including any configured build cache.
     await mkdir(join(temporary, 'src'), { recursive: true });
     run(buildBinary(root, ['--locked', '-p', 'provenance-codegen', '--bin', 'provenance-codegen'], 'provenance-codegen'), ['rust', join(root, 'contracts/operations/fixtures.openapi.json'), join(temporary, 'src/generated')]);

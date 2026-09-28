@@ -8,7 +8,7 @@ export class InvalidRequestError extends Error {
   readonly _tag = 'InvalidRequestError';
   constructor() { super('Request cannot be serialized as JSON'); this.name = this._tag; }
 }
-export type ClientFailure<F extends OperationFailure = OperationFailure> =
+export type ClientFailure<F = OperationFailure> =
   ConnectionError | IdentityMismatchError | MalformedResponseError | ProtocolMismatchError |
   OperationError<F> | InvalidRequestError;
 
@@ -26,20 +26,32 @@ export function requestEffect<A, E>(run: (signal: AbortSignal) => Promise<A>, fa
   });
 }
 
-export function connectionFailure(cause: unknown): ClientFailure {
-  return cause instanceof ConnectionError || cause instanceof MalformedResponseError ||
-    cause instanceof ProtocolMismatchError || cause instanceof IdentityMismatchError || cause instanceof OperationError
-    ? cause : new ConnectionError(cause);
+export function connectionFailure<F>(cause: unknown,
+  isFailure: (failure: unknown) => failure is F): ClientFailure<F> {
+  if (cause instanceof ConnectionError || cause instanceof MalformedResponseError ||
+    cause instanceof ProtocolMismatchError || cause instanceof IdentityMismatchError) return cause;
+  if (cause instanceof OperationError) {
+    return isFailure(cause.failure)
+      ? new OperationError(cause.status, cause.failure)
+      : new MalformedResponseError(cause);
+  }
+  return new ConnectionError(cause);
 }
 
 export class ClientRuntime {
-  run<I, A, F extends OperationFailure>(_operation: string, _mutates: boolean, input: I,
-    request: (input: I, signal: AbortSignal) => Promise<A>): Effect.Effect<A, ClientFailure<F>> {
+  run<I, A, F>(_operation: string, _mutates: boolean, input: I,
+    request: (input: I, signal: AbortSignal) => Promise<unknown>,
+    isSuccess: (value: unknown) => value is A,
+    isFailure: (value: unknown) => value is F): Effect.Effect<A, ClientFailure<F>> {
     return Effect.suspend(() => {
       let snapshot: I;
       try { snapshot = JSON.parse(JSON.stringify(input)) as I; }
       catch { return Effect.fail(new InvalidRequestError()); }
-      return requestEffect(signal => request(snapshot, signal), cause => connectionFailure(cause) as ClientFailure<F>);
+      return requestEffect(signal => request(snapshot, signal), cause => connectionFailure(cause, isFailure)).pipe(
+        Effect.flatMap(value => isSuccess(value)
+          ? Effect.succeed(value)
+          : Effect.fail(new MalformedResponseError())),
+      );
     });
   }
 }

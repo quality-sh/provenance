@@ -110,6 +110,7 @@ export function typescriptClient(document, compatibility) {
       }).join(' : ');
       return `${overloads}
   async ${op.operationId}(call: ${queryImplementationCall(op, variants)}, options: { signal?: AbortSignal } = {}): Promise<${successUnion}> {
+    const validate = await import('./validators/${op.operationId}.mjs');
     const contract = ${contracts} : undefined;
     if (contract === undefined) throw new TypeError('Invalid query selector');
 ${tsRequest(path, method, op)}
@@ -123,6 +124,7 @@ ${tsRequest(path, method, op)}
   }`;
     }
     return `  async ${op.operationId}(call: ${tsCall(op)}, options: { signal?: AbortSignal } = {}): Promise<components['schemas']['${success}']> {
+    const validate = await import('./validators/${op.operationId}.mjs');
 ${tsRequest(path, method, op)}
     const value = await readJson(response, '${op.operationId}', false, options.signal);
     if (!response.ok) {
@@ -135,7 +137,6 @@ ${tsRequest(path, method, op)}
   }).join('\n');
   return `// Generated from OpenAPI. Do not edit.
 import type { components } from './schema.js';
-import * as validate from './validators.mjs';
 import { send, readJson, checked, ConnectionError, OperationError, ProtocolMismatchError, IdentityMismatchError } from './runtime.js';
 export { ConnectionError, MalformedResponseError, OperationError, ProtocolMismatchError, IdentityMismatchError, MAX_RESPONSE_BYTES } from './runtime.js';
 export type { components } from './schema.js';
@@ -156,6 +157,7 @@ export class HttpClient {
     return HttpClient.connect(baseUrl, authenticated, options);
   }
   static async connect(baseUrl: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal; repository?: string; scope?: string } = {}): Promise<HttpClient> {
+    const validate = await import('./validators/metadata.mjs');
     const url = new URL(baseUrl);
     if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash || url.username || url.password) throw new Error('Invalid HTTP host URL');
     const client = new HttpClient(baseUrl.replace(/\\/$/, ''), fetcher);

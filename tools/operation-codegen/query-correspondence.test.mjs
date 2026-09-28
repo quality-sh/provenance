@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import ts from 'typescript';
 import { typescriptClient, rustClientFiles } from './templates.mjs';
 import { effectClient } from './effect.mjs';
-import { validators } from './validators.mjs';
+import { operationValidators } from './validators.mjs';
 
 const reference = name => ({ $ref: `#/components/schemas/${name}` });
 const parameter = (name, required, schema = { type: 'string' }) => ({
@@ -21,7 +21,10 @@ const compatibility = { wire: 2, state: 1, review_journal: 1, read_derivation: 1
 const document = {
   paths: {
     '/metadata': { get: {
-      operationId: 'metadata', responses: { 200: { content: { 'application/json': { schema: reference('MetadataSuccess') } } } },
+      operationId: 'metadata', responses: {
+        200: { content: { 'application/json': { schema: reference('MetadataSuccess') } } },
+        400: { content: { 'application/json': { schema: reference('MetadataFailure') } } },
+      },
     } },
     '/rules/{id}': { get: {
     operationId: 'getRule',
@@ -48,6 +51,7 @@ const document = {
       }),
       repository: { type: ['string', 'null'] }, scope: { type: ['string', 'null'] },
     }), meta: object({}) }),
+    MetadataFailure: failure('unauthenticated'),
     GetRuleSuccess: { anyOf: [reference('GetRuleBaseSuccess'), reference('GetRuleTraceSuccess')] },
     GetRuleFailure: { anyOf: [reference('GetRuleBaseFailure'), reference('GetRuleTraceFailure')] },
     GetRuleBaseSuccess: success('base'),
@@ -97,7 +101,7 @@ test('Effect generation retains selector-specific success and failure types', ()
   const source = effectClient(document);
   assert.match(source, /getRule\(call: GetRuleTraceInput\): Effect\.Effect<GetRuleTraceSuccess, ClientFailure<GetRuleTraceFailure>>/);
   assert.match(source, /getRule\(call: GetRuleBaseInput\): Effect\.Effect<GetRuleBaseSuccess, ClientFailure<GetRuleBaseFailure>>/);
-  assert.match(source, /type GetRuleTraceSuccess.*type GetRuleTraceFailure.*from '\.\/client\.js'/);
+  assert.match(source, /GetRuleTraceFailure, GetRuleTraceSuccess.*from '\.\/effect-contract\.js'/);
   assert.match(source, /export type \{ GetRuleBaseInput, GetRuleTraceInput \} from '\.\/client\.js'/);
   assert.doesNotMatch(source, /export type \{[^}]*GetRuleTraceSuccess/);
 });
@@ -113,7 +117,8 @@ async function generatedClient() {
   await writeFile(join(directory, 'client.js'), compiled(source));
   await writeFile(join(directory, 'runtime.js'), compiled(runtime));
   await writeFile(join(directory, 'schema.js'), 'export {};\n');
-  for (const [name, content] of Object.entries(await validators(document))) {
+  for (const [name, content] of Object.entries(await operationValidators(document))) {
+    await mkdir(dirname(join(directory, name)), { recursive: true });
     await writeFile(join(directory, name), content);
   }
   return { module: await import(join(directory, 'client.js')), close: () => rm(directory, { recursive: true, force: true }) };

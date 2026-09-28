@@ -108,9 +108,14 @@ and explicit default helpers (`missing_const_for_fn`, `derivable_impls`,
 retain those wire fields with a local `struct_excessive_bools` allowance.
 Handwritten code keeps the normal workspace lint settings.
 
-Response validators compile from the same OpenAPI components. TypeScript pins
-Ajv 8.20.0, ajv-formats 3.0.1 and esbuild 0.25.11 to emit standalone browser ESM;
-there is no runtime compiler or schema download. The Rust runtime pins jsonschema
+Response validators compile from the same OpenAPI components. TypeScript emits
+one validator module for each operation. Each operation, including metadata,
+uses a separate dynamic import. Both TypeScript clients load a validator on
+demand when they call its operation. The entry chunk does not contain operation
+validators. The Effect client is one class, so packaged assets still contain
+the lazy validator chunks for all operations. TypeScript pins Ajv 8.20.0,
+ajv-formats 3.0.1 and esbuild 0.25.11 to emit standalone browser ESM; there is
+no runtime compiler or schema download. The Rust runtime pins jsonschema
 0.18.3 without default network features, rejects external resolvers explicitly,
 and compiles validators once into a shared cache. Required nullable fields are
 validated before concrete deserialization. Metadata uses the generated v2

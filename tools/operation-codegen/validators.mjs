@@ -2,6 +2,32 @@ import Ajv from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import standaloneCode from 'ajv/dist/standalone/index.js';
 import { build } from 'esbuild';
+import { operations, queryVariants } from './shared.mjs';
+
+const schemaName = schema => schema.$ref.split('/').at(-1);
+
+export function operationResponseSchemas(document) {
+  return new Map(operations(document).map(({ op }) => {
+    const names = new Set();
+    for (const response of Object.values(op.responses ?? {})) {
+      const schema = response.content?.['application/json']?.schema;
+      if (schema?.$ref) names.add(schemaName(schema));
+    }
+    for (const variant of queryVariants(op)) {
+      names.add(schemaName(variant.success));
+      names.add(schemaName(variant.failure));
+    }
+    return [op.operationId, [...names].sort()];
+  }));
+}
+
+export async function operationValidators(document, prefix = 'validators') {
+  const files = {};
+  for (const [operation, names] of operationResponseSchemas(document)) {
+    Object.assign(files, await validators(document, names, `${prefix}/${operation}`, false));
+  }
+  return files;
+}
 
 export function responseSchemas(document) {
   const names = new Set();
@@ -9,11 +35,11 @@ export function responseSchemas(document) {
     for (const operation of Object.values(route)) {
       if (!operation?.responses) continue;
       for (const response of Object.values(operation.responses)) {
-        names.add(response.content['application/json'].schema.$ref.split('/').at(-1));
+        names.add(schemaName(response.content['application/json'].schema));
       }
       for (const variant of operation['x-provenance-query-variants'] ?? []) {
-        names.add(variant.success.$ref.split('/').at(-1));
-        names.add(variant.failure.$ref.split('/').at(-1));
+        names.add(schemaName(variant.success));
+        names.add(schemaName(variant.failure));
       }
     }
   }
@@ -35,6 +61,7 @@ export async function validators(document, names = responseSchemas(document), pr
   const bundled = await build({ stdin: { contents: code, resolveDir: import.meta.dirname, sourcefile: 'validators.js' }, bundle: true, platform: 'browser', format: 'esm', write: false, minify: true, legalComments: 'none' });
   return {
     [`${prefix}.mjs`]: '// Generated from OpenAPI. Do not edit.\n' + bundled.outputFiles[0].text,
-    [`${prefix}.d.mts`]: '// Generated from OpenAPI. Do not edit.\n' + names.map(name => `export declare function ${name}(value: unknown): boolean;`).join('\n') + '\n',
+    [`${prefix}.d.mts`]: '// Generated from OpenAPI. Do not edit.\nexport {};\n'
+      + names.map(name => `export declare function ${name}(value: unknown): boolean;`).join('\n') + '\n',
   };
 }

@@ -1,9 +1,9 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtemp, writeFile, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import ts from 'typescript';
 import { typescriptFiles } from './typescript.mjs';
 import { clientPolicyTests } from './client-policy.mjs';
@@ -15,15 +15,17 @@ async function generatedClient() {
   const path = join(root, 'client.js');
   await writeFile(join(root, 'package.json'), '{"type":"module"}');
   for (const [name, content] of Object.entries(await typescriptFiles(document, compatibility))) {
+    await mkdir(dirname(join(root, name)), { recursive: true });
     if (name.endsWith('.ts')) await writeFile(join(root, name.replace(/\.ts$/, '.js')), ts.transpileModule(content, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText);
     else await writeFile(join(root, name), content);
   }
   const module = await import(path);
-  await rm(root, { recursive: true, force: true });
-  return module;
+  return { module, root };
 }
 
-const clientModule = await generatedClient();
+const generated = await generatedClient();
+const clientModule = generated.module;
+after(() => rm(generated.root, { recursive: true, force: true }));
 
 async function host(handler, action) {
   const server = createServer(handler);

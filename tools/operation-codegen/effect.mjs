@@ -1,9 +1,10 @@
 import * as Effect from 'effect/Effect';
 import * as OpenApiGenerator from '@effect/openapi-generator/OpenApiGenerator';
-import { validators, responseSchemas } from './validators.mjs';
+import { validators, operationResponseSchemas, responseSchemas } from './validators.mjs';
 import { clientTypeSchema } from './typescript-schema.mjs';
 import { hoistSharedFamilies, discriminatedUnions } from './contract-families.mjs';
 import { renderNested, substitute, declaration, formatLongTypes } from './contract-render.mjs';
+import { FAILURE_STATUS, failureKinds } from './grammar-lint.mjs';
 
 function pascal(value) {
   return value.split(/[^a-zA-Z0-9]+/).filter(Boolean)
@@ -17,17 +18,24 @@ export async function effectFiles(document) {
   const contract = hoistSharedFamilies(document);
   // Client types project validation-only conditions out; runtime validation
   // below stays on the unprojected contract.
-  const projected = clientTypeSchema(contract);
+  const projected = effectServerDocument(clientTypeSchema(contract));
   const warnings = [];
   const generated = await runGenerator(projected, 'ProvenanceApi', warnings);
   const actionable = warnings.filter(warning => warning.code !== 'response-headers-ignored');
   if (actionable.length) throw new Error(`Effect generator warnings: ${JSON.stringify(actionable)}`);
   const shared = new Set(responseSchemas(contract).filter(name => Object.hasOwn(contract.components.schemas, name)));
+  const owners = new Map();
+  const validatorImports = [];
+  for (const [operation, schemas] of operationResponseSchemas(contract)) {
+    const alias = `validate${pascal(operation)}`;
+    validatorImports.push(`import * as ${alias} from "./validators/${operation}.mjs";`);
+    for (const name of schemas) if (!owners.has(name)) owners.set(name, alias);
+  }
   const names = [];
   const source = generated.replace(/^export const (\w+) = (.+)$/gm, (line, name, expression) => {
     if (!Object.hasOwn(contract.components.schemas, name)) return line;
     if (!shared.has(name)) names.push(name);
-    const validation = `${shared.has(name) ? 'shared' : 'wire'}.${name}(value)`;
+    const validation = `${shared.has(name) ? owners.get(name) : 'wire'}.${name}(value)`;
     return `export const ${name} = Schema.declare<${name}>((value): value is ${name} => ${validation}, { identifier: '${name}' })`;
   });
 
@@ -49,12 +57,13 @@ export async function effectFiles(document) {
   const emitted = new Set([...generated.matchAll(/^export const (\w+) =/gm)]
     .map(match => match[1]).filter(name => Object.hasOwn(contract.components.schemas, name)));
   for (const name of emitted) renderings.delete(name);
-  const { rewritten } = substitute(source, renderings);
-  // Declarations form a closed set: start from the names the envelope source
-  // references plus every discriminated union, then add every name those
-  // bodies reference, until nothing new appears. Non-canonical duplicates of
-  // identical renderings stay undeclared — the canonical name carries them.
-  // A union without a rendering (an empty projected body) stays inline.
+  const rewritten = source.split('\n').map(line => {
+    const owner = line.match(/^export type (\w+) =/)?.[1] ?? null;
+    return substitute(line, renderings, null, owner).rewritten;
+  }).join('\n');
+  // Declare each rendered component. Owner-aware substitution keeps identical
+  // nested structures in the operation family that owns the declaration. A
+  // union without a rendering (an empty projected body) stays inline.
   const declared = new Set(renderings.keys());
   const bodies = new Map();
   const queue = [...declared];
@@ -62,7 +71,7 @@ export async function effectFiles(document) {
     const name = queue.pop();
     const rendering = renderings.get(name);
     if (rendering === undefined) throw new Error(`contract-render: no rendering for declared name ${name}`);
-    const body = substitute(rendering, renderings, rendering);
+    const body = substitute(rendering, renderings, rendering, name);
     bodies.set(name, body.rewritten);
     for (const referenced of body.used) {
       if (declared.has(referenced)) continue;
@@ -86,10 +95,67 @@ export async function effectFiles(document) {
       + '// operation; discriminated union views (variant aliases and exhaustive\n'
       + '// matchers) are derived views of the same document.\n'
       + 'import * as wire from "./effect-validators.mjs";\n'
-      + 'import * as shared from "./validators.mjs";\n'
+      + validatorImports.join('\n') + '\n'
       + assembled,
     ...await validators(contract, names, 'effect-validators', false),
   };
+}
+
+/** Adapt transport details that an Effect HttpApi server handles differently. */
+export function effectServerDocument(document) {
+  const copy = structuredClone(document);
+  for (const [path, route] of Object.entries(copy.paths)) {
+    const group = path.split('/').find(Boolean) ?? 'root';
+    for (const method of ['get', 'post', 'patch']) {
+      const operation = route[method];
+      if (operation === undefined) continue;
+      operation.tags = [group];
+      for (const parameter of operation.parameters ?? []) {
+        if (parameter.in === 'header') parameter.name = parameter.name.toLowerCase();
+      }
+      const variants = operation['x-provenance-query-variants'] ?? [];
+      if (variants.length > 0) {
+        for (const parameter of operation.parameters ?? []) {
+          if (parameter.in !== 'query') continue;
+          parameter.required = variants.every(variant => variant.parameters.some(candidate =>
+            candidate.name === parameter.name && candidate.in === parameter.in && candidate.required));
+        }
+      }
+      for (const [statusText, response] of Object.entries(operation.responses ?? {})) {
+        const status = Number(statusText);
+        const schema = response.content?.['application/json']?.schema;
+        if (status < 400 || schema === undefined) continue;
+        const kinds = [...failureKinds(copy, schema)].filter(kind => FAILURE_STATUS.get(kind) === status);
+        if (kinds.length === 0) continue;
+        response.content['application/json'].schema = failureSchemaForStatus(copy, schema, status);
+      }
+    }
+  }
+  return copy;
+}
+
+function failureSchemaForStatus(document, schema, status, references = new Set()) {
+  if (schema === null || typeof schema !== 'object') return schema;
+  if (Array.isArray(schema)) return schema.map(value => failureSchemaForStatus(document, value, status, references));
+  if (typeof schema.$ref === 'string' && schema.$ref.startsWith('#/')) {
+    if (references.has(schema.$ref)) throw new Error(`Effect failure schema is recursive through ${schema.$ref}`);
+    const target = schema.$ref.slice(2).split('/').reduce((value, key) => value[key.replaceAll('~1', '/').replaceAll('~0', '~')], document);
+    const next = new Set(references).add(schema.$ref);
+    return failureSchemaForStatus(document, target, status, next);
+  }
+  const narrowed = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'oneOf' || key === 'anyOf') {
+      const variants = value.filter(variant => {
+        const kinds = [...failureKinds(document, variant)];
+        return kinds.length === 0 || kinds.some(kind => FAILURE_STATUS.get(kind) === status);
+      });
+      narrowed[key] = variants.map(variant => failureSchemaForStatus(document, variant, status, references));
+    } else {
+      narrowed[key] = failureSchemaForStatus(document, value, status, references);
+    }
+  }
+  return narrowed;
 }
 
 async function runGenerator(document, name, warnings) {
@@ -104,16 +170,20 @@ export function effectClient(document) {
   const queryVariants = op => op['x-provenance-query-variants'] ?? [];
   const variantStem = (op, variant) => `${pascal(op.operationId)}${variant.selector === null ? 'Base' : pascal(variant.selector)}`;
   const queryInputs = new Set();
-  const queryContracts = new Set();
+  const contracts = new Set(['MetadataFailure']);
   const methods = routes.map(op => {
     const success = ref(op.responses['200'].content['application/json'].schema);
     const failure = ref(op.responses['400'].content['application/json'].schema);
+    contracts.add(success);
+    contracts.add(failure);
     const variants = queryVariants(op);
     if (variants.length) {
       const overloads = variants.map(variant => {
         const stem = variantStem(op, variant);
         queryInputs.add(`${stem}Input`);
-        for (const suffix of ['Success', 'Failure']) queryContracts.add(`${stem}${suffix}`);
+        for (const suffix of ['Success', 'Failure']) {
+          contracts.add(`${stem}${suffix}`);
+        }
         return `  ${op.operationId}(call: ${stem}Input): Effect.Effect<${stem}Success, ClientFailure<${stem}Failure>>;`;
       }).join('\n');
       const inputs = variants.map(variant => `${variantStem(op, variant)}Input`).join(' | ');
@@ -124,7 +194,7 @@ export function effectClient(document) {
         const condition = variant.selector === null
           ? 'call.query === undefined'
           : `call.query === ${JSON.stringify(variant.selector)}`;
-        return `    if (${condition}) return this.runtime.run<${stem}Input, ${stem}Success, ${stem}Failure>('${op.operationId}', false, call, (input, signal) => this.http.${op.operationId}(input, { signal }));`;
+        return `    if (${condition}) return Effect.flatMap(Effect.promise(() => import('./validators/${op.operationId}.mjs')), validate => this.runtime.run<${stem}Input, ${stem}Success, ${stem}Failure>('${op.operationId}', false, call, (input, signal) => this.http.${op.operationId}(input, { signal }), (value): value is ${stem}Success => validate.${stem}Success(value), (value): value is ${stem}Failure => validate.${stem}Failure(value)));`;
       }).join('\n');
       return `${overloads}
   ${op.operationId}(call: ${inputs}): Effect.Effect<${successes}, ClientFailure<${failures}>> {
@@ -132,16 +202,16 @@ ${branches}
     return Effect.die(new TypeError('Invalid query selector'));
   }`;
     }
-    return `  ${op.operationId}(call: Parameters<HttpClient['${op.operationId}']>[0]): Effect.Effect<components['schemas']['${success}'], ClientFailure<components['schemas']['${failure}']>> {
-    return this.runtime.run('${op.operationId}', ${op['x-operation-mutates'] === true}, call, (input, signal) => this.http.${op.operationId}(input, { signal }));
+    return `  ${op.operationId}(call: Parameters<HttpClient['${op.operationId}']>[0]): Effect.Effect<${success}, ClientFailure<${failure}>> {
+    return Effect.flatMap(Effect.promise(() => import('./validators/${op.operationId}.mjs')), validate => this.runtime.run('${op.operationId}', ${op['x-operation-mutates'] === true}, call, (input, signal) => this.http.${op.operationId}(input, { signal }), (value): value is ${success} => validate.${success}(value), (value): value is ${failure} => validate.${failure}(value)));
   }`;
   });
-  const queryTypes = [...queryInputs, ...queryContracts];
   return `// Generated from OpenAPI. Do not edit.
 import * as Effect from 'effect/Effect';
 import * as Context from 'effect/Context';
 import * as Layer from 'effect/Layer';
-import { HttpClient, type components${queryTypes.map(name => `, type ${name}`).join('')} } from './client.js';
+import { HttpClient${[...queryInputs].map(name => `, type ${name}`).join('')} } from './client.js';
+import type { ${[...contracts].sort().join(', ')} } from './effect-contract.js';
 ${queryInputs.size ? `export type { ${[...queryInputs].join(', ')} } from './client.js';` : ''}
 import { ClientRuntime, requestEffect, connectionFailure, type ClientFailure } from '../effect-runtime.js';
 export interface ClientOptions {
@@ -154,10 +224,11 @@ export interface ClientOptions {
 export class EffectHttpClient {
   private readonly runtime = new ClientRuntime();
   private constructor(private readonly http: HttpClient) {}
-  static connect(options: ClientOptions): Effect.Effect<EffectHttpClient, ClientFailure> {
-    return Effect.map(requestEffect(signal => options.bearer === undefined
-      ? HttpClient.connect(options.baseUrl, options.fetch, { signal, repository: options.repository, scope: options.scope })
-      : HttpClient.connectWithBearer(options.baseUrl, options.bearer, options.fetch, { signal, repository: options.repository, scope: options.scope }), connectionFailure), http => new EffectHttpClient(http));
+  static connect(options: ClientOptions): Effect.Effect<EffectHttpClient, ClientFailure<MetadataFailure>> {
+    return Effect.flatMap(Effect.promise(() => import('./validators/metadata.mjs')), validate =>
+      Effect.map(requestEffect(signal => options.bearer === undefined
+        ? HttpClient.connect(options.baseUrl, options.fetch, { signal, repository: options.repository, scope: options.scope })
+        : HttpClient.connectWithBearer(options.baseUrl, options.bearer, options.fetch, { signal, repository: options.repository, scope: options.scope }), cause => connectionFailure(cause, (value): value is MetadataFailure => validate.MetadataFailure(value))), http => new EffectHttpClient(http)));
   }
 ${methods.join('\n')}
 }
