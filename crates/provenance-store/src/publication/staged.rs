@@ -89,56 +89,105 @@ pub(super) fn stage_with_hook<R>(
     let result = prepare(&layout)?;
     crate::test_probes::at("state_prepared")?;
     if !dry_run {
-        sync_tree(&layout.state_dir())?;
-        sync_directory(&layout.provenance_dir())?;
-        sync_directory(&staged_repo)?;
-        sync_directory(&transaction)?;
-        sync_directory(&hook.transactions_dir(live_layout))?;
-        let backup = transaction.join("backup-state");
-        hook.prepared(live_layout, &transaction)?;
-        std::fs::rename(live_layout.state_dir(), &backup).map_err(|error| {
-            anyhow::anyhow!(
-                "move live state {} to backup: {error}",
-                live_layout.state_dir()
-            )
-        })?;
-        let state_result = crate::test_probes::at("state_after_backup_rename")
-            .and_then(|()| hook.backup_created(live_layout, &transaction))
-            .and_then(|()| crate::test_probes::at("state_before_install"))
-            .and_then(|()| {
-                std::fs::rename(layout.state_dir(), live_layout.state_dir()).map_err(|error| {
-                    anyhow::anyhow!("install staged state {}: {error}", layout.state_dir())
-                })
-            })
-            .and_then(|()| crate::test_probes::at("state_after_install_rename"))
-            .and_then(|()| crate::test_probes::at("state_installed"))
-            .and_then(|()| sync_directory(&live_layout.provenance_dir()))
-            .and_then(|()| hook.state_installed(live_layout));
-        if let Err(error) = state_result {
-            rollback_after_error(live_layout, &layout, &backup, hook)?;
-            return Err(error);
-        }
-        let install_state = match hook.install_file() {
-            Ok(state) => state,
-            Err(error) => {
-                rollback_after_error(live_layout, &layout, &backup, hook)?;
-                return Err(error);
-            }
-        };
-        if let Err(error) = hook.published(live_layout, &transaction) {
-            if install_state == InstallState::FileInstalled {
-                return Err(error);
-            }
-            rollback_after_error(live_layout, &layout, &backup, hook)?;
-            return Err(error);
-        }
-        hook.after_published()?;
-        hook.finish(live_layout, &transaction)?;
+        publish_staged_state(live_layout, &layout, &staged_repo, &transaction, hook)?;
         return Ok(result);
     }
     std::fs::remove_dir_all(&transaction)
         .map_err(|error| anyhow::anyhow!("remove import transaction {transaction}: {error}"))?;
     Ok(result)
+}
+
+fn publish_staged_state(
+    live_layout: &ProvenanceLayout,
+    staged_layout: &ProvenanceLayout,
+    staged_repo: &camino::Utf8Path,
+    transaction: &camino::Utf8Path,
+    hook: &mut impl StagedStateHook,
+) -> anyhow::Result<()> {
+    sync_tree(&staged_layout.state_dir())?;
+    sync_directory(&staged_layout.provenance_dir())?;
+    sync_directory(staged_repo)?;
+    sync_directory(transaction)?;
+    sync_directory(&hook.transactions_dir(live_layout))?;
+    let backup = transaction.join("backup-state");
+    hook.prepared(live_layout, transaction)?;
+    std::fs::rename(live_layout.state_dir(), &backup).map_err(|error| {
+        anyhow::anyhow!(
+            "move live state {} to backup: {error}",
+            live_layout.state_dir()
+        )
+    })?;
+    install_staged_state(live_layout, staged_layout, transaction, &backup, hook)?;
+    let install_state = install_file(live_layout, staged_layout, &backup, hook)?;
+    record_publication(
+        live_layout,
+        staged_layout,
+        transaction,
+        &backup,
+        install_state,
+        hook,
+    )?;
+    hook.after_published()?;
+    hook.finish(live_layout, transaction)
+}
+
+fn install_staged_state(
+    live_layout: &ProvenanceLayout,
+    staged_layout: &ProvenanceLayout,
+    transaction: &camino::Utf8Path,
+    backup: &camino::Utf8Path,
+    hook: &mut impl StagedStateHook,
+) -> anyhow::Result<()> {
+    let state_result = crate::test_probes::at("state_after_backup_rename")
+        .and_then(|()| hook.backup_created(live_layout, transaction))
+        .and_then(|()| crate::test_probes::at("state_before_install"))
+        .and_then(|()| {
+            std::fs::rename(staged_layout.state_dir(), live_layout.state_dir()).map_err(|error| {
+                anyhow::anyhow!("install staged state {}: {error}", staged_layout.state_dir())
+            })
+        })
+        .and_then(|()| crate::test_probes::at("state_after_install_rename"))
+        .and_then(|()| crate::test_probes::at("state_installed"))
+        .and_then(|()| sync_directory(&live_layout.provenance_dir()))
+        .and_then(|()| hook.state_installed(live_layout));
+    if let Err(error) = state_result {
+        rollback_after_error(live_layout, staged_layout, backup, hook)?;
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn install_file(
+    live_layout: &ProvenanceLayout,
+    staged_layout: &ProvenanceLayout,
+    backup: &camino::Utf8Path,
+    hook: &mut impl StagedStateHook,
+) -> anyhow::Result<InstallState> {
+    match hook.install_file() {
+        Ok(state) => Ok(state),
+        Err(error) => {
+            rollback_after_error(live_layout, staged_layout, backup, hook)?;
+            Err(error)
+        }
+    }
+}
+
+fn record_publication(
+    live_layout: &ProvenanceLayout,
+    staged_layout: &ProvenanceLayout,
+    transaction: &camino::Utf8Path,
+    backup: &camino::Utf8Path,
+    install_state: InstallState,
+    hook: &mut impl StagedStateHook,
+) -> anyhow::Result<()> {
+    let Err(error) = hook.published(live_layout, transaction) else {
+        return Ok(());
+    };
+    if install_state == InstallState::FileInstalled {
+        return Err(error);
+    }
+    rollback_after_error(live_layout, staged_layout, backup, hook)?;
+    Err(error)
 }
 
 fn rollback_after_error(
