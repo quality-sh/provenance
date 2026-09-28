@@ -383,10 +383,9 @@ fn exact_export_rejects_unsupported_record_schema_versions() {
     let error = ExactExport::from_json(&serde_json::to_vec(&document).unwrap()).unwrap_err();
     assert!(matches!(error, GraphReferenceError::Incomplete { .. }));
     assert!(error.to_string().contains("source 'source_policy'"));
-    assert!(error.to_string().contains(&format!(
-        "schema_version {}",
-        REVIEW_SCHEMA_VERSION.0 + 1
-    )));
+    assert!(error
+        .to_string()
+        .contains(&format!("schema_version {}", REVIEW_SCHEMA_VERSION.0 + 1)));
 }
 
 #[test]
