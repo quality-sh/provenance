@@ -201,7 +201,11 @@ fn creation_crashes_reopen_with_both_or_neither_published_half() {
         assert_eq!(status.code(), Some(86), "{phase}");
 
         let store = open(root);
-        assert_eq!(store.requirement(&scope(), &new_id).is_ok(), committed, "{phase}");
+        assert_eq!(
+            store.requirement(&scope(), &new_id).is_ok(),
+            committed,
+            "{phase}"
+        );
         assert_eq!(
             store
                 .requirement_decision_state(&scope(), &new_id)
@@ -211,7 +215,11 @@ fn creation_crashes_reopen_with_both_or_neither_published_half() {
             committed,
             "{phase}"
         );
-        assert_eq!(journal_entry_exists(&store, "create_crash"), committed, "{phase}");
+        assert_eq!(
+            journal_entry_exists(&store, "create_crash"),
+            committed,
+            "{phase}"
+        );
     }
 }
 

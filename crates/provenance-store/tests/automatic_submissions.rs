@@ -67,7 +67,9 @@ fn assert_new_pending(
 fn direct_create_and_all_named_content_writers_open_submissions() {
     let (_temp, store, scope) = fixture();
     let id = StableId::new("req_a").unwrap();
-    store.create_requirement(requirement(&scope, "req_a")).unwrap();
+    store
+        .create_requirement(requirement(&scope, "req_a"))
+        .unwrap();
     let mut proposal = pending(&store, &scope, &id);
 
     let update: UpdateRequirementInput = serde_json::from_value(json!({
@@ -131,11 +133,7 @@ fn direct_create_and_all_named_content_writers_open_submissions() {
         )
         .unwrap();
     store
-        .set_requirement_spawned_by(
-            &scope,
-            &id,
-            StableId::new("resolution_a").unwrap(),
-        )
+        .set_requirement_spawned_by(&scope, &id, StableId::new("resolution_a").unwrap())
         .unwrap();
     assert_new_pending(&store, &scope, &id, proposal);
 }

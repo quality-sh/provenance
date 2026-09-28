@@ -120,13 +120,8 @@ impl StateStore {
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
-                    let entry = staged.commit_requirement(
-                        input,
-                        &record,
-                        head,
-                        intent_digest,
-                        origin,
-                    )?;
+                    let entry =
+                        staged.commit_requirement(input, &record, head, intent_digest, origin)?;
                     complete(&staged, entry)
                 })
             })

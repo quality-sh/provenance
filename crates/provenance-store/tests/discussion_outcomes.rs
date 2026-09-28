@@ -22,7 +22,10 @@ fn creation_and_edits_retain_origin_and_immutable_evidence() {
     let created = store.create_review_requirement(input).unwrap();
     assert_eq!(created.outcome, SaveOutcome::Created);
     let created_proposal = store
-        .requirement_decision_state(&scope(), &provenance_core::StableId::new("req_new").unwrap())
+        .requirement_decision_state(
+            &scope(),
+            &provenance_core::StableId::new("req_new").unwrap(),
+        )
         .unwrap()
         .pending
         .unwrap()
