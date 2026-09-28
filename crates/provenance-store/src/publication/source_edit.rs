@@ -137,7 +137,10 @@ impl StagedStateHook for SourceEditPublication {
     fn published(&mut self, live: &ProvenanceLayout, _transaction: &Utf8Path) -> anyhow::Result<()> {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::FileInstalled;
-        write_marker(live, marker)?;
+        write_marker(live, marker)
+    }
+
+    fn after_published(&mut self) -> anyhow::Result<()> {
         crate::test_probes::at("source_edit_file_installed")
     }
 
