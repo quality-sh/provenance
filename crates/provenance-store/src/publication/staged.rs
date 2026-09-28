@@ -43,7 +43,7 @@ pub(super) trait StagedStateHook {
         transaction: &camino::Utf8Path,
     ) -> anyhow::Result<()>;
     fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
-    fn install_file(&mut self) -> anyhow::Result<()>;
+    fn install_file(&mut self) -> anyhow::Result<InstallState>;
     fn published(
         &mut self,
         live: &ProvenanceLayout,
@@ -56,6 +56,12 @@ pub(super) trait StagedStateHook {
         live: &ProvenanceLayout,
         transaction: &camino::Utf8Path,
     ) -> anyhow::Result<()>;
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum InstallState {
+    StateOnly,
+    FileInstalled,
 }
 
 pub(super) fn stage_with_hook<R>(
@@ -96,24 +102,34 @@ pub(super) fn stage_with_hook<R>(
                 live_layout.state_dir()
             )
         })?;
-        if let Err(error) = hook
-            .backup_created(live_layout, &transaction)
+        let state_result = crate::test_probes::at("state_after_backup_rename")
+            .and_then(|()| hook.backup_created(live_layout, &transaction))
             .and_then(|()| crate::test_probes::at("state_before_install"))
             .and_then(|()| {
                 std::fs::rename(layout.state_dir(), live_layout.state_dir()).map_err(|error| {
                     anyhow::anyhow!("install staged state {}: {error}", layout.state_dir())
                 })
             })
+            .and_then(|()| crate::test_probes::at("state_after_install_rename"))
             .and_then(|()| crate::test_probes::at("state_installed"))
             .and_then(|()| sync_directory(&live_layout.provenance_dir()))
-            .and_then(|()| hook.state_installed(live_layout))
-            .and_then(|()| hook.install_file())
-            .and_then(|()| hook.published(live_layout, &transaction))
-        {
-            rollback_publication(live_layout, &layout, &backup)
-                .map_err(crate::write_error::publication_started)?;
-            hook.rollback_finished(live_layout)
-                .map_err(crate::write_error::publication_started)?;
+            .and_then(|()| hook.state_installed(live_layout));
+        if let Err(error) = state_result {
+            rollback_after_error(live_layout, &layout, &backup, hook)?;
+            return Err(error);
+        }
+        let install_state = match hook.install_file() {
+            Ok(state) => state,
+            Err(error) => {
+                rollback_after_error(live_layout, &layout, &backup, hook)?;
+                return Err(error);
+            }
+        };
+        if let Err(error) = hook.published(live_layout, &transaction) {
+            if install_state == InstallState::FileInstalled {
+                return Err(error);
+            }
+            rollback_after_error(live_layout, &layout, &backup, hook)?;
             return Err(error);
         }
         hook.after_published()?;
@@ -123,6 +139,18 @@ pub(super) fn stage_with_hook<R>(
     std::fs::remove_dir_all(&transaction)
         .map_err(|error| anyhow::anyhow!("remove import transaction {transaction}: {error}"))?;
     Ok(result)
+}
+
+fn rollback_after_error(
+    live_layout: &ProvenanceLayout,
+    staged_layout: &ProvenanceLayout,
+    backup: &camino::Utf8Path,
+    hook: &mut impl StagedStateHook,
+) -> anyhow::Result<()> {
+    rollback_publication(live_layout, staged_layout, backup)
+        .map_err(crate::write_error::publication_started)?;
+    hook.rollback_finished(live_layout)
+        .map_err(crate::write_error::publication_started)
 }
 
 struct TransactionCleanup {
@@ -199,8 +227,8 @@ impl StagedStateHook for ImportPublication {
     fn state_installed(&mut self, _live: &ProvenanceLayout) -> anyhow::Result<()> {
         Ok(())
     }
-    fn install_file(&mut self) -> anyhow::Result<()> {
-        Ok(())
+    fn install_file(&mut self) -> anyhow::Result<InstallState> {
+        Ok(InstallState::StateOnly)
     }
 
     fn published(

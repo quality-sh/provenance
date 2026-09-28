@@ -10,6 +10,7 @@ mod guard;
 mod read_only;
 mod recovery;
 mod source_edit;
+mod source_edit_recovery;
 mod staged;
 pub use durability::{sync_directory, sync_tree};
 pub use guard::{publication_guard, PublicationGuard};
@@ -74,7 +75,7 @@ pub(crate) fn with_repository_publication_checked<R>(
     let _held_lock = HeldPublicationLock::new(key);
     check()?;
     prepare_transaction_dirs(layout)?;
-    source_edit::recover_pending_source_edit(layout)?;
+    source_edit_recovery::recover_pending_source_edit(layout)?;
     recover_pending_publication(layout).and_then(|()| operation())
 }
 

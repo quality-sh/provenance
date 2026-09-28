@@ -73,6 +73,7 @@ fn review_crash_child() {
     let phase = std::env::var("PROVENANCE_REVIEW_CRASH_PHASE").unwrap();
     let phase = match phase.as_str() {
         "source_edit_temp_prepared" => "source_edit_temp_prepared",
+        "source_edit_prepared" => "source_edit_prepared",
         "state_after_backup_rename" => "state_after_backup_rename",
         "state_after_install_rename" => "state_after_install_rename",
         "repository_file_after_displace" => "repository_file_after_displace",
@@ -155,7 +156,7 @@ fn marker_failure_after_file_install_keeps_forward_recovery_material() {
 }
 
 fn crash_with_marker(root: &Utf8Path) -> (ProvenanceLayout, serde_json::Value) {
-    assert_eq!(crash(root, "state_after_backup_rename").code(), Some(CRASH_EXIT));
+    assert_eq!(crash(root, "source_edit_prepared").code(), Some(CRASH_EXIT));
     let layout = ProvenanceLayout::new(root);
     let value = marker(&layout);
     assert!(value["backup_leaf"].as_str().is_some());
@@ -213,7 +214,7 @@ fn same_before_bytes_with_a_different_identity_are_an_external_change() {
     let temp = fixture();
     let root = Utf8Path::from_path(temp.path()).unwrap();
     let layout = ProvenanceLayout::new(root);
-    assert_eq!(crash(root, "state_after_backup_rename").code(), Some(CRASH_EXIT));
+    assert_eq!(crash(root, "source_edit_prepared").code(), Some(CRASH_EXIT));
     let source = root.join("source.txt");
     std::fs::rename(&source, root.join("old-source.txt")).unwrap();
     std::fs::write(&source, BEFORE).unwrap();

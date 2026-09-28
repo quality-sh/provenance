@@ -1,15 +1,15 @@
 use super::{
-    staged::{stage_with_hook, StagedStateHook},
+    staged::{stage_with_hook, InstallState, StagedStateHook},
     sync_directory, with_repository_publication,
 };
 use crate::{
     layout::ProvenanceLayout,
     operations::files::{
-        FileIdentity, HeldRepositoryFile, PreparedRepositoryFile, RepositoryFiles,
+        FileIdentity, HeldRepositoryFile, PreparedRepositoryFile, RepositoryFileBackup,
     },
 };
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{ensure_supported_schema_version, SchemaVersion, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
 use std::io::Write as _;
@@ -22,7 +22,7 @@ pub enum SourceEditRecoveryFailure {
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-enum SourceEditPhase {
+pub(super) enum SourceEditPhase {
     Prepared,
     BackupCreated,
     StateInstalled,
@@ -31,16 +31,28 @@ enum SourceEditPhase {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct SourceEditMarker {
-    schema_version: u32,
-    transaction_dir: Utf8PathBuf,
-    phase: SourceEditPhase,
-    target: Utf8PathBuf,
-    target_identity: FileIdentity,
-    before_digest: [u8; 32],
-    after_digest: [u8; 32],
-    prepared_leaf: String,
-    prepared_identity: FileIdentity,
+pub(super) struct SourceEditMarker {
+    pub(super) schema_version: u32,
+    pub(super) transaction_dir: Utf8PathBuf,
+    pub(super) phase: SourceEditPhase,
+    pub(super) target: Utf8PathBuf,
+    pub(super) target_identity: FileIdentity,
+    pub(super) before_digest: [u8; 32],
+    pub(super) after_digest: [u8; 32],
+    pub(super) prepared_leaf: String,
+    pub(super) prepared_identity: FileIdentity,
+    pub(super) backup_leaf: String,
+    pub(super) backup_identity: FileIdentity,
+    pub(super) backup_digest: [u8; 32],
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct PreparedSourceRecord {
+    pub(super) target: Utf8PathBuf,
+    pub(super) after_digest: [u8; 32],
+    pub(super) prepared_leaf: String,
+    pub(super) prepared_identity: FileIdentity,
 }
 
 pub fn with_staged_state_and_source_edit<R>(
@@ -54,6 +66,7 @@ pub fn with_staged_state_and_source_edit<R>(
             held: Some(held),
             replacement: replacement.to_vec(),
             prepared: None,
+            backup: None,
             marker: None,
         };
         stage_with_hook(live, false, prepare, &mut publication)
@@ -71,6 +84,7 @@ struct SourceEditPublication {
     held: Option<HeldRepositoryFile>,
     replacement: Vec<u8>,
     prepared: Option<PreparedRepositoryFile>,
+    backup: Option<RepositoryFileBackup>,
     marker: Option<SourceEditMarker>,
 }
 
@@ -90,6 +104,17 @@ impl StagedStateHook for SourceEditPublication {
         sync_directory(transaction)?;
         let held = self.held.as_ref().expect("source-edit held file");
         let prepared = held.create_temp(&self.replacement)?;
+        let backup = held.recovery_backup();
+        let prepared_record = PreparedSourceRecord {
+            target: held.relative().to_owned(),
+            after_digest: Sha256::digest(&self.replacement).into(),
+            prepared_leaf: prepared.recovery_leaf().to_owned(),
+            prepared_identity: prepared.recovery_identity().clone(),
+        };
+        write_prepared_source_record(transaction, &prepared_record)?;
+        self.prepared = Some(prepared);
+        self.backup = Some(backup.clone());
+        crate::test_probes::at("source_edit_temp_prepared")?;
         let marker = SourceEditMarker {
             schema_version: SUPPORTED_SCHEMA_VERSION.0,
             transaction_dir: transaction.to_owned(),
@@ -98,11 +123,13 @@ impl StagedStateHook for SourceEditPublication {
             target_identity: held.identity().clone(),
             before_digest: held.digest(),
             after_digest: Sha256::digest(&self.replacement).into(),
-            prepared_leaf: prepared.recovery_leaf().to_owned(),
-            prepared_identity: prepared.recovery_identity().clone(),
+            prepared_leaf: prepared_record.prepared_leaf,
+            prepared_identity: prepared_record.prepared_identity,
+            backup_leaf: backup.leaf().to_owned(),
+            backup_identity: backup.identity().clone(),
+            backup_digest: backup.digest(),
         };
         write_marker(live, &marker)?;
-        self.prepared = Some(prepared);
         self.marker = Some(marker);
         crate::test_probes::at("source_edit_prepared")
     }
@@ -127,11 +154,12 @@ impl StagedStateHook for SourceEditPublication {
         crate::test_probes::at("source_edit_state_installed")
     }
 
-    fn install_file(&mut self) -> anyhow::Result<()> {
+    fn install_file(&mut self) -> anyhow::Result<InstallState> {
         let held = self.held.take().expect("source-edit held file");
         let prepared = self.prepared.take().expect("source-edit prepared file");
-        held.compare_and_swap(prepared)?;
-        Ok(())
+        let backup = self.backup.take().expect("source-edit backup");
+        held.compare_and_swap_with_backup(prepared, &backup)?;
+        Ok(InstallState::FileInstalled)
     }
 
     fn published(
@@ -141,6 +169,7 @@ impl StagedStateHook for SourceEditPublication {
     ) -> anyhow::Result<()> {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::FileInstalled;
+        crate::test_probes::at("source_edit_before_file_marker_write")?;
         write_marker(live, marker)
     }
 
@@ -158,147 +187,10 @@ impl StagedStateHook for SourceEditPublication {
     }
 }
 
-pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let marker_path = layout.source_edit_marker_path();
-    if !marker_path.exists() {
-        return Ok(());
-    }
-    let mut marker: SourceEditMarker = serde_json::from_slice(&std::fs::read(&marker_path)?)?;
-    ensure_supported_schema_version(
-        "source-edit publication marker",
-        SchemaVersion(marker.schema_version),
-    )?;
-    if marker.phase == SourceEditPhase::FileInstalled && !marker.transaction_dir.exists() {
-        validate_missing_transaction(layout, &marker.transaction_dir)?;
-        let files = RepositoryFiles::open(layout.root())?;
-        let current = files
-            .read_bounded(&marker.target, usize::MAX)
-            .map_err(|_| SourceEditRecoveryFailure::ExternalChange)?;
-        if current.digest() != marker.after_digest {
-            return Err(SourceEditRecoveryFailure::ExternalChange.into());
-        }
-        std::fs::remove_file(marker_path)?;
-        return sync_directory(&layout.cache_dir());
-    }
-    let transaction = validate_transaction(layout, &marker.transaction_dir)?;
-    let replacement = std::fs::read(transaction.join("replacement"))?;
-    anyhow::ensure!(
-        <[u8; 32]>::from(Sha256::digest(&replacement)) == marker.after_digest,
-        "source-edit recovery replacement digest differs from its marker"
-    );
-    let files = RepositoryFiles::open(layout.root())?;
-    let held = files
-        .read_bounded(&marker.target, usize::MAX)
-        .map_err(|_| SourceEditRecoveryFailure::ExternalChange)?;
-    let current = held.digest();
-    if current != marker.before_digest && current != marker.after_digest {
-        return Err(SourceEditRecoveryFailure::ExternalChange.into());
-    }
-    complete_state(layout, &transaction, &mut marker)?;
-    if current == marker.before_digest {
-        let prepared = match held.recover_temp(
-            &marker.prepared_leaf,
-            &marker.prepared_identity,
-            marker.after_digest,
-        )? {
-            Some(prepared) => prepared,
-            None => held.create_temp(&replacement)?,
-        };
-        held.compare_and_swap(prepared)?;
-        marker.phase = SourceEditPhase::FileInstalled;
-        write_marker(layout, &marker)?;
-        crate::test_probes::at("source_edit_file_installed")?;
-    } else if let Some(prepared) = held.recover_temp(
-        &marker.prepared_leaf,
-        &marker.prepared_identity,
-        marker.after_digest,
-    )? {
-        drop(prepared);
-    }
-    finish(layout, &transaction)
-}
-
-fn complete_state(
+pub(super) fn write_marker(
     layout: &ProvenanceLayout,
-    transaction: &Utf8Path,
-    marker: &mut SourceEditMarker,
+    marker: &SourceEditMarker,
 ) -> anyhow::Result<()> {
-    let staged = ProvenanceLayout::new(transaction.join("staged-repo"));
-    let backup = transaction.join("backup-state");
-    if marker.phase == SourceEditPhase::Prepared {
-        if layout.state_dir().exists() && !backup.exists() {
-            std::fs::rename(layout.state_dir(), &backup)?;
-        }
-        marker.phase = SourceEditPhase::BackupCreated;
-        write_marker(layout, marker)?;
-        crate::test_probes::at("source_edit_backup_created")?;
-    }
-    if marker.phase == SourceEditPhase::BackupCreated {
-        if staged.state_dir().exists() {
-            anyhow::ensure!(
-                !layout.state_dir().exists(),
-                "source-edit recovery found both staged and live state"
-            );
-            std::fs::rename(staged.state_dir(), layout.state_dir())?;
-            sync_directory(&layout.provenance_dir())?;
-        } else {
-            anyhow::ensure!(
-                layout.state_dir().exists(),
-                "source-edit recovery found no state"
-            );
-        }
-        marker.phase = SourceEditPhase::StateInstalled;
-        write_marker(layout, marker)?;
-        crate::test_probes::at("source_edit_state_installed")?;
-    }
-    Ok(())
-}
-
-fn validate_transaction(
-    layout: &ProvenanceLayout,
-    transaction: &Utf8Path,
-) -> anyhow::Result<Utf8PathBuf> {
-    let parent = std::fs::canonicalize(layout.source_edit_transactions_dir())?;
-    let candidate_parent = transaction
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("source-edit transaction has no parent"))?;
-    anyhow::ensure!(
-        std::fs::canonicalize(candidate_parent)? == parent,
-        "source-edit transaction is outside its transaction directory"
-    );
-    let metadata = std::fs::symlink_metadata(transaction)?;
-    anyhow::ensure!(
-        metadata.is_dir() && !metadata.file_type().is_symlink(),
-        "source-edit transaction is not a real directory"
-    );
-    Utf8PathBuf::from_path_buf(std::fs::canonicalize(transaction)?).map_err(|path| {
-        anyhow::anyhow!(
-            "source-edit transaction path is not UTF-8: {}",
-            path.display()
-        )
-    })
-}
-
-fn validate_missing_transaction(
-    layout: &ProvenanceLayout,
-    transaction: &Utf8Path,
-) -> anyhow::Result<()> {
-    let parent = std::fs::canonicalize(layout.source_edit_transactions_dir())?;
-    let candidate_parent = transaction
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("source-edit transaction has no parent"))?;
-    anyhow::ensure!(
-        std::fs::canonicalize(candidate_parent)? == parent,
-        "source-edit transaction is outside its transaction directory"
-    );
-    match std::fs::symlink_metadata(transaction) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
-        Ok(_) => anyhow::bail!("source-edit transaction still exists"),
-    }
-}
-
-fn write_marker(layout: &ProvenanceLayout, marker: &SourceEditMarker) -> anyhow::Result<()> {
     let mut temporary = tempfile::NamedTempFile::new_in(layout.cache_dir())?;
     temporary.write_all(&serde_json::to_vec(marker)?)?;
     temporary.as_file().sync_all()?;
@@ -306,8 +198,19 @@ fn write_marker(layout: &ProvenanceLayout, marker: &SourceEditMarker) -> anyhow:
     sync_directory(&layout.cache_dir())
 }
 
-fn finish(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
+pub(super) fn finish(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
     std::fs::remove_dir_all(transaction)?;
+    crate::test_probes::at("source_edit_transaction_removed")?;
     std::fs::remove_file(layout.source_edit_marker_path())?;
     sync_directory(&layout.cache_dir())
+}
+
+fn write_prepared_source_record(
+    transaction: &Utf8Path,
+    record: &PreparedSourceRecord,
+) -> anyhow::Result<()> {
+    let mut file = std::fs::File::create(transaction.join("prepared-source.json"))?;
+    file.write_all(&serde_json::to_vec(record)?)?;
+    file.sync_all()?;
+    sync_directory(transaction)
 }

@@ -1,8 +1,9 @@
 use super::held_metadata::{identity, FileMetadata};
+use super::held_io::{read, read_clone};
 use super::{platform, safe_fs, RepositoryFileRefusal as Refusal, Utf8Path, Utf8PathBuf};
 use sha2::{Digest as _, Sha256};
 use std::fs::File;
-use std::io::{Read as _, Seek as _, Write as _};
+use std::io::Write as _;
 use std::path::PathBuf;
 
 pub use super::held_metadata::FileIdentity;
@@ -21,6 +22,42 @@ pub enum RepositoryFileInstall {
         backup: String,
         reason: BackupRetentionReason,
     },
+}
+
+#[derive(Clone, Debug)]
+pub struct RepositoryFileBackup {
+    leaf: String,
+    identity: FileIdentity,
+    digest: [u8; 32],
+}
+
+impl RepositoryFileBackup {
+    pub(crate) fn from_recovery(
+        leaf: String,
+        identity: FileIdentity,
+        digest: [u8; 32],
+    ) -> Result<Self, Refusal> {
+        if matches!(leaf.as_str(), "" | "." | "..") || leaf.contains(['/', '\\', ':', '\0']) {
+            return Err(Refusal::Changed);
+        }
+        Ok(Self {
+            leaf,
+            identity,
+            digest,
+        })
+    }
+
+    pub fn leaf(&self) -> &str {
+        &self.leaf
+    }
+
+    pub const fn identity(&self) -> &FileIdentity {
+        &self.identity
+    }
+
+    pub const fn digest(&self) -> [u8; 32] {
+        self.digest
+    }
 }
 
 pub struct HeldRepositoryFile {
@@ -62,6 +99,18 @@ impl HeldRepositoryFile {
 
     pub fn relative(&self) -> &Utf8Path {
         &self.relative
+    }
+
+    pub fn recovery_backup(&self) -> RepositoryFileBackup {
+        RepositoryFileBackup {
+            leaf: format!(
+                ".{}.provenance-{}.backup",
+                self.leaf,
+                uuid::Uuid::new_v4().simple()
+            ),
+            identity: self.identity.clone(),
+            digest: self.digest,
+        }
     }
 
     pub fn create_temp(&self, bytes: &[u8]) -> Result<PreparedRepositoryFile, Refusal> {
@@ -116,8 +165,7 @@ impl HeldRepositoryFile {
         expected_identity: &FileIdentity,
         expected_digest: [u8; 32],
     ) -> Result<Option<PreparedRepositoryFile>, Refusal> {
-        let expected_prefix = format!(".{}.provenance-", self.leaf);
-        if !leaf.starts_with(&expected_prefix) || leaf.strip_suffix(".tmp").is_none() {
+        if !valid_artifact_leaf(&self.leaf, leaf, ".tmp") {
             return Err(Refusal::Changed);
         }
         let mut file = match platform::regular(&self.parent, leaf).map_err(Refusal::from) {
@@ -147,13 +195,29 @@ impl HeldRepositoryFile {
 
     pub fn compare_and_swap(
         &self,
+        prepared: PreparedRepositoryFile,
+    ) -> Result<RepositoryFileInstall, Refusal> {
+        let backup = self.recovery_backup();
+        self.compare_and_swap_with_backup(prepared, &backup)
+    }
+
+    pub fn compare_and_swap_with_backup(
+        &self,
         mut prepared: PreparedRepositoryFile,
+        backup: &RepositoryFileBackup,
     ) -> Result<RepositoryFileInstall, Refusal> {
         self.require_prepared_for_target(&prepared)?;
-        let backup = self.displace_to_backup()?;
-        self.require_matching_backup(&backup)?;
-        self.install_prepared(&backup, &mut prepared)?;
-        Ok(self.finish_backup(backup))
+        if backup.identity != self.identity
+            || backup.digest != self.digest
+            || !valid_artifact_leaf(&self.leaf, &backup.leaf, ".backup")
+        {
+            return Err(Refusal::Changed);
+        }
+        self.displace_to_backup(&backup.leaf)?;
+        probe_io("repository_file_after_displace").map_err(Refusal::Write)?;
+        self.require_matching_backup(&backup.leaf)?;
+        self.install_prepared(&backup.leaf, &mut prepared)?;
+        Ok(self.finish_backup(backup.leaf.clone()))
     }
 
     fn require_prepared_for_target(
@@ -221,26 +285,12 @@ impl HeldRepositoryFile {
         RepositoryFileInstall::Installed
     }
 
-    fn displace_to_backup(&self) -> Result<String, Refusal> {
-        for _ in 0..100 {
-            let backup = format!(
-                ".{}.provenance-{}.backup",
-                self.leaf,
-                uuid::Uuid::new_v4().simple()
-            );
-            match safe_fs::rename_no_replace_in(&self.parent, &self.leaf, &backup) {
-                Ok(()) => return Ok(backup),
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    return Err(Refusal::Changed);
-                }
-                Err(error) => return Err(write_refusal(error)),
-            }
+    fn displace_to_backup(&self, backup: &str) -> Result<(), Refusal> {
+        match safe_fs::rename_no_replace_in(&self.parent, &self.leaf, backup) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Err(Refusal::Changed),
+            Err(error) => Err(write_refusal(error)),
         }
-        Err(Refusal::Write(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            "could not allocate a repository backup file",
-        )))
     }
 
     fn matches_backup(&self, backup: &str) -> Result<bool, Refusal> {
@@ -328,42 +378,6 @@ pub(super) fn open(
     })
 }
 
-fn read(mut file: File, limit: usize) -> Result<(Vec<u8>, FileIdentity, FileMetadata), Refusal> {
-    read_inner(&mut file, limit)
-}
-
-fn read_clone(
-    file: &mut File,
-    limit: usize,
-) -> Result<(Vec<u8>, FileIdentity, FileMetadata), Refusal> {
-    read_inner(file, limit)
-}
-
-fn read_inner(
-    file: &mut File,
-    limit: usize,
-) -> Result<(Vec<u8>, FileIdentity, FileMetadata), Refusal> {
-    let metadata = file.metadata().map_err(Refusal::Read)?;
-    if metadata.len() > u64::try_from(limit).unwrap_or(u64::MAX) {
-        return Err(Refusal::TooLarge { limit });
-    }
-    let identity = identity(file)?;
-    let file_metadata = FileMetadata::read(file)?;
-    probe_io("repository_file_after_metadata").map_err(Refusal::Read)?;
-    file.rewind().map_err(Refusal::Read)?;
-    let read_limit = u64::try_from(limit).unwrap_or(u64::MAX).saturating_add(1);
-    let mut bytes = Vec::with_capacity(limit.min(64 * 1024));
-    std::io::Read::by_ref(&mut *file)
-        .take(read_limit)
-        .read_to_end(&mut bytes)
-        .map_err(Refusal::Read)?;
-    if bytes.len() > limit {
-        return Err(Refusal::TooLarge { limit });
-    }
-    std::str::from_utf8(&bytes).map_err(|_| Refusal::InvalidUtf8)?;
-    Ok((bytes, identity, file_metadata))
-}
-
 fn create_new(parent: &File, leaf: &str) -> std::io::Result<File> {
     let mut options = fs_at::OpenOptions::default();
     #[cfg(windows)]
@@ -441,4 +455,14 @@ fn write_refusal(error: std::io::Error) -> Refusal {
         | std::io::ErrorKind::InvalidInput => Refusal::Denied,
         _ => Refusal::Write(error),
     }
+}
+
+pub(super) fn valid_artifact_leaf(target: &str, leaf: &str, suffix: &str) -> bool {
+    if matches!(leaf, "" | "." | "..") || leaf.contains(['/', '\\', ':', '\0']) {
+        return false;
+    }
+    let prefix = format!(".{target}.provenance-");
+    leaf.strip_prefix(&prefix)
+        .and_then(|value| value.strip_suffix(suffix))
+        .is_some_and(|token| token.len() == 32 && token.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }

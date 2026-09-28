@@ -13,9 +13,15 @@ mod held;
 #[path = "files/held_metadata.rs"]
 mod held_metadata;
 #[cfg(any(unix, windows))]
+#[path = "files/held_io.rs"]
+mod held_io;
+#[cfg(any(unix, windows))]
+#[path = "files/held_recovery.rs"]
+mod held_recovery;
+#[cfg(any(unix, windows))]
 pub use held::{
     BackupRetentionReason, FileIdentity, HeldRepositoryFile, PreparedRepositoryFile,
-    RepositoryFileInstall,
+    RepositoryFileBackup, RepositoryFileInstall,
 };
 use std::{fs::File, io::Read};
 #[cfg(test)]
@@ -201,6 +207,21 @@ pub(crate) fn validate_relative(relative: &Utf8Path) -> Result<(), FileAccessRef
         return Err(FileAccessRefusal::Denied);
     }
     Ok(())
+}
+
+#[cfg(any(unix, windows))]
+pub(crate) fn validate_recovery_artifact_leaf(
+    relative: &Utf8Path,
+    leaf: &str,
+    suffix: &str,
+) -> Result<(), RepositoryFileRefusal> {
+    validate_relative(relative).map_err(RepositoryFileRefusal::from)?;
+    let target = relative
+        .file_name()
+        .ok_or(RepositoryFileRefusal::Changed)?;
+    held::valid_artifact_leaf(target, leaf, suffix)
+        .then_some(())
+        .ok_or(RepositoryFileRefusal::Changed)
 }
 
 /// Native paths resolve root aliases; source components remain lexical before the held open.
