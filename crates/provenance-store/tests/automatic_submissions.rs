@@ -44,10 +44,10 @@ fn assert_new_pending(
     store: &StateStore,
     scope: &ScopeId,
     id: &StableId,
-    previous: StableId,
+    previous: &StableId,
 ) -> StableId {
     let current = pending(store, scope, id);
-    assert_ne!(current, previous);
+    assert_ne!(&current, previous);
     current
 }
 
@@ -65,12 +65,12 @@ fn direct_create_and_all_named_content_writers_open_submissions() {
     }))
     .unwrap();
     store.update_requirement(update).unwrap();
-    proposal = assert_new_pending(&store, &scope, &id, proposal);
+    proposal = assert_new_pending(&store, &scope, &id, &proposal);
 
     store
         .set_requirement_fog(&scope, &id, Some("Unknown condition.".to_owned()))
         .unwrap();
-    proposal = assert_new_pending(&store, &scope, &id, proposal);
+    proposal = assert_new_pending(&store, &scope, &id, &proposal);
 
     store
         .create_source(
@@ -89,7 +89,7 @@ fn direct_create_and_all_named_content_writers_open_submissions() {
             clause: None,
         })
         .unwrap();
-    proposal = assert_new_pending(&store, &scope, &id, proposal);
+    proposal = assert_new_pending(&store, &scope, &id, &proposal);
 
     for target in ["req_b", "req_c", "req_d"] {
         store
@@ -99,15 +99,15 @@ fn direct_create_and_all_named_content_writers_open_submissions() {
     store
         .set_requirement_refines(&scope, &id, StableId::new("req_b").unwrap())
         .unwrap();
-    proposal = assert_new_pending(&store, &scope, &id, proposal);
+    proposal = assert_new_pending(&store, &scope, &id, &proposal);
     store
         .add_requirement_depends_on(&scope, &id, StableId::new("req_c").unwrap())
         .unwrap();
-    proposal = assert_new_pending(&store, &scope, &id, proposal);
+    proposal = assert_new_pending(&store, &scope, &id, &proposal);
     store
         .add_requirement_supersedes(&scope, &id, StableId::new("req_d").unwrap())
         .unwrap();
-    proposal = assert_new_pending(&store, &scope, &id, proposal);
+    proposal = assert_new_pending(&store, &scope, &id, &proposal);
 
     store
         .create_resolution(
@@ -123,5 +123,5 @@ fn direct_create_and_all_named_content_writers_open_submissions() {
     store
         .set_requirement_spawned_by(&scope, &id, StableId::new("resolution_a").unwrap())
         .unwrap();
-    assert_new_pending(&store, &scope, &id, proposal);
+    assert_new_pending(&store, &scope, &id, &proposal);
 }
