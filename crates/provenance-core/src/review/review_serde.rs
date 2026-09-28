@@ -61,11 +61,8 @@ impl Serialize for ReviewEntry {
 impl<'de> Deserialize<'de> for ReviewEntry {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let wire = ReviewEntryWire::deserialize(deserializer)?;
-        let (record_kind, record_id) = match (
-            wire.requirement_id,
-            wire.record_kind,
-            wire.record_id,
-        ) {
+        let (record_kind, record_id) = match (wire.requirement_id, wire.record_kind, wire.record_id)
+        {
             (Some(id), None, None) => (NodeType::Requirement, id),
             (None, Some(kind), Some(id)) if kind != NodeType::Requirement => (kind, id),
             _ => return Err(D::Error::custom("invalid review record address")),

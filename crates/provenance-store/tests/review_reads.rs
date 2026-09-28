@@ -109,7 +109,12 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     );
     let snapshot: RecordSnapshot = serde_json::from_str(&bytes).unwrap();
     assert_eq!(
-        snapshot.record.as_requirement().unwrap().description.as_deref(),
+        snapshot
+            .record
+            .as_requirement()
+            .unwrap()
+            .description
+            .as_deref(),
         Some(text.as_str())
     );
     let one = read_history(
