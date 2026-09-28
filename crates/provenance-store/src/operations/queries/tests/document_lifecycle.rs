@@ -142,12 +142,14 @@ async fn page(
     limit: usize,
     exclude_terminal: bool,
 ) -> anyhow::Result<Value> {
-    let query = json!({
+    let mut query = json!({
         "id": "req_overtime",
         "cursor": cursor,
         "limit": limit,
-        "exclude_terminal": exclude_terminal,
     });
+    if exclude_terminal {
+        query["exclude_terminal"] = json!(true);
+    }
     let result = queries::read_document(
         Some(root.to_owned()),
         &ScopeId::new("default")?,
