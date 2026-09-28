@@ -1,5 +1,10 @@
 use camino::{Utf8Path, Utf8PathBuf};
 
+/// Flushes directory metadata where the platform supports it.
+///
+/// Windows has no equivalent call in this module. On Windows, file contents are flushed, but a
+/// sudden power loss can lose a recent directory entry or rename. Process-crash recovery remains
+/// available because the operating system keeps the directory changes.
 pub fn sync_directory(path: &Utf8Path) -> anyhow::Result<()> {
     #[cfg(unix)]
     std::fs::File::open(path)?.sync_all()?;
