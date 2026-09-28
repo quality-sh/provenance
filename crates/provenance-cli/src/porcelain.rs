@@ -46,10 +46,6 @@ pub async fn dispatch_get(
     Ok(())
 }
 
-pub fn local_host(repo: &str, scope: &str) -> anyhow::Result<provenance_transport::StatementHost> {
-    RepoContext::new(repo, scope).local_host()
-}
-
 /// Renders the selected record as readable text or structured JSON.
 fn render_get(outcome: &GetOutcome, format: Option<OutputFormat>) -> serde_json::Result<String> {
     if format == Some(OutputFormat::Json) {
