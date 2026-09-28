@@ -21,7 +21,7 @@ pub(super) fn handle(command: SwarmBacktraceCommand) -> anyhow::Result<()> {
             run_dir,
             replace,
             ..
-        } => land(context, &run_dir, replace),
+        } => land(&context, &run_dir, replace),
     }
 }
 
@@ -57,7 +57,7 @@ type MergeRecords = (
     Vec<DispositionRecord>,
 );
 
-fn land(context: RepoContext, run_dir: &Utf8Path, replace: bool) -> anyhow::Result<()> {
+fn land(context: &RepoContext, run_dir: &Utf8Path, replace: bool) -> anyhow::Result<()> {
     anyhow::ensure!(run_dir.is_dir(), "--run-dir must be an existing directory");
     let scope_id = context.scope_id()?;
     let contributions = read_contributions(run_dir)?;
