@@ -272,10 +272,7 @@ fn plant_v2_row(repo: &std::path::Path, relative_path: &str, record_id: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         path,
-        format!(
-            "{{\"schema_version\":{},\"id\":\"{record_id}\"}}\n",
-            UNSUPPORTED_SCHEMA_VERSION
-        ),
+        format!("{{\"schema_version\":{UNSUPPORTED_SCHEMA_VERSION},\"id\":\"{record_id}\"}}\n"),
     )
     .unwrap();
 }
