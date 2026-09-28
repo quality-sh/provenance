@@ -13,7 +13,7 @@
 
 use super::{
     prepare_publication_lock, prepare_transaction_dirs, read_only, recover_pending_publication,
-    source_edit,
+    source_edit_recovery,
 };
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
@@ -85,7 +85,7 @@ pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<Publ
         prepare_publication_lock(&layout)?;
         let lock = LockedPublicationFile::acquire(&layout.publication_lock_path())?;
         prepare_transaction_dirs(&layout)?;
-        source_edit::recover_pending_source_edit(&layout)?;
+        source_edit_recovery::recover_pending_source_edit(&layout)?;
         recover_pending_publication(&layout)?;
         Ok(PublicationGuard {
             _lock: Some(lock),
