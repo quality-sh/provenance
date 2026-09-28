@@ -38,7 +38,9 @@ access.addEventListener('submit', async event => {
     load = () => {
       const id = requirement.value.trim();
       const loaderFor = (id: string): DocumentLoader => async cursor => {
-        const answer = await client.getRequirementDocument({ id, limit: 50, cursor });
+        const answer = await client.getRequirementDocument({
+          id, exclude_terminal: true, limit: 50, cursor,
+        });
         return { ...answer.data, ...answer.meta };
       };
       const search = async (request: { text: string; cursor?: string }) => {

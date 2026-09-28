@@ -7,6 +7,6 @@ test('the current review excludes terminal records', async () => {
   const source = await readFile(fileURLToPath(new URL('./main.ts', import.meta.url)), 'utf8');
   assert.match(
     source,
-    /getRequirementDocument\(\{ id, exclude_terminal: true, limit: 50, cursor \}\)/,
+    /getRequirementDocument\(\{\s*id, exclude_terminal: true, limit: 50, cursor,\s*\}\)/,
   );
 });
