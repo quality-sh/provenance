@@ -4,7 +4,7 @@ use provenance_core::review::{
     CycleEntry, JournalEntry, RecordSnapshot, ReviewEntry, ReviewRecord, SnapshotRef,
     REVIEW_SCHEMA_VERSION,
 };
-use provenance_core::{NodeType, Requirement, ScopeId, StableId};
+use provenance_core::{Requirement, ScopeId, StableId};
 use serde::{de::DeserializeOwned, Serialize};
 use std::io::{Read, Write};
 
@@ -252,33 +252,6 @@ impl StateStore {
             id.as_str()
         );
         Ok(matches[0].clone())
-    }
-
-    pub(super) fn review_record(
-        &self,
-        scope: &ScopeId,
-        kind: NodeType,
-        id: &StableId,
-    ) -> anyhow::Result<ReviewRecord> {
-        macro_rules! unique {
-            ($records:expr, $variant:ident, $name:literal) => {{
-                let records = $records?;
-                let matches = records.into_iter().filter(|record| record.id == *id).collect::<Vec<_>>();
-                anyhow::ensure!(matches.len() == 1 && matches[0].scope_id == *scope,
-                    concat!($name, " {} does not exist uniquely in this scope"), id.as_str());
-                ReviewRecord::$variant(matches.into_iter().next().unwrap())
-            }};
-        }
-        Ok(match kind {
-            NodeType::Source => unique!(self.list_sources(scope), Source, "source"),
-            NodeType::Requirement => ReviewRecord::Requirement(self.requirement(scope, id)?),
-            NodeType::Resolution => unique!(self.list_resolutions(scope), Resolution, "resolution"),
-            NodeType::Rule => unique!(self.list_rules(scope), Rule, "rule"),
-            NodeType::Domain => unique!(self.list_domains(scope), Domain, "domain"),
-            NodeType::Boundary => unique!(self.list_boundaries(scope), Boundary, "boundary"),
-            NodeType::Topic => unique!(self.list_topics(scope), Topic, "topic"),
-            NodeType::Question => unique!(self.list_questions(scope), Question, "question"),
-        })
     }
 
     /// Full-scope import and export cannot yet carry review history.

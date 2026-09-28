@@ -124,11 +124,21 @@ fn unintegrated_writers_refuse_enrolled_rows_for_every_record_kind() {
 
 #[test]
 fn review_schema_is_readable_for_every_record_kind() {
-    use provenance_store::state_store::readers::ensure_supported_record_version;
+    use provenance_core::ScopeId;
+    use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+    let temp = tempfile::tempdir().unwrap();
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let layout = ProvenanceLayout::new(root);
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        r#"{"schema_version":3,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+    )
+    .unwrap();
     let fixtures = [
         ("sources/source.jsonl", json!({"schema_version":3,"scope_id":"default","id":"source_a","name":"Policy","source_type":"document","url":null})),
         ("requirements/req.jsonl", json!({"schema_version":3,"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"active"})),
-        ("resolutions/resolution.jsonl", json!({"schema_version":3,"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"accepted","inputs":[],"requirement_ids":["req_a"],"review_on":null})),
+        ("resolutions/res.jsonl", json!({"schema_version":3,"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"approved","inputs":[],"requirement_ids":["req_a"],"review_on":null})),
         ("rules/rule.jsonl", json!({"schema_version":3,"scope_id":"default","id":"rule_a","statement":"The system stores records.","status":"active","severity":"high","requirement_ids":["req_a"],"resolution_ids":[]})),
         ("domains/domain.jsonl", json!({"schema_version":3,"scope_id":"default","id":"domain_a","name":"Storage"})),
         ("boundaries/boundary.jsonl", json!({"schema_version":3,"scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."})),
@@ -136,14 +146,32 @@ fn review_schema_is_readable_for_every_record_kind() {
         ("questions/question.jsonl", json!({"schema_version":3,"scope_id":"default","id":"question_a","topic_id":"topic_a","requirement_id":"req_a","question":"Where is storage?","resolution_method":"research","status":"open","links":[]})),
     ];
     for (relative, value) in fixtures {
-        let path = Utf8Path::new(relative);
-        ensure_supported_record_version(path, 1, &value)
-            .unwrap_or_else(|error| panic!("{relative}: {error:#}"));
-        let kind = path.parent().unwrap().file_name().unwrap().trim_end_matches('s');
+        let path = layout.scopes_dir().join("default").join(relative);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, format!("{value}\n")).unwrap();
+        let directory = Utf8Path::new(relative)
+            .parent()
+            .unwrap()
+            .file_name()
+            .unwrap();
+        let kind = match directory {
+            "boundaries" => "boundary",
+            other => other.trim_end_matches('s'),
+        };
         assert!(provenance_core::ensure_supported_schema_version(
             kind,
             provenance_core::SchemaVersion(3)
         )
         .is_ok());
     }
+    let store = StateStore::new(layout);
+    let scope = ScopeId::new("default").unwrap();
+    assert_eq!(store.list_sources(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_requirements(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_resolutions(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_rules(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_domains(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_boundaries(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_topics(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_questions(&scope).unwrap().len(), 1);
 }
