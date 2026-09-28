@@ -29,7 +29,7 @@ impl RepoContext {
     }
 
     pub fn scope_id(&self) -> anyhow::Result<ScopeId> {
-        Ok(ScopeId::new(&self.scope)?)
+        ScopeId::new(&self.scope)
     }
 
     pub fn local_host(&self) -> anyhow::Result<provenance_transport::StatementHost> {
