@@ -402,7 +402,8 @@ async fn terminal_decisions_do_not_consume_the_document_work_budget() {
         ResolutionStatus::Abandoned,
     );
     let path = crate::shards::resolutions_path(&store.layout, &scope);
-    let mut record = serde_json::to_value(store.list_resolutions(&scope).unwrap()[0].clone()).unwrap();
+    let mut record =
+        serde_json::to_value(store.list_resolutions(&scope).unwrap()[0].clone()).unwrap();
     for index in 0..4096 {
         record["id"] = json!(format!("res_abandoned_{index:04}"));
         append_record(&path, &record);
