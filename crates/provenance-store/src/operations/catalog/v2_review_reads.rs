@@ -109,7 +109,8 @@ review_read!(
             &read.scope,
             read.policy,
             ReviewHistoryQuery {
-                requirement_id: request.requirement_id,
+                record_kind: provenance_core::NodeType::Requirement,
+                record_id: request.requirement_id,
                 limit: request.limit,
                 cursor: request.cursor,
             },
@@ -144,7 +145,8 @@ review_read!(
                 &read.scope,
                 read.policy,
                 ReviewHistoryQuery {
-                    requirement_id: request.requirement_id.clone(),
+                    record_kind: provenance_core::NodeType::Requirement,
+                    record_id: request.requirement_id.clone(),
                     limit: 200,
                     cursor,
                 },
@@ -205,7 +207,8 @@ review_read!(
             &read.scope,
             read.policy,
             EvidenceQuery {
-                requirement_id: request.requirement_id,
+                record_kind: provenance_core::NodeType::Requirement,
+                record_id: request.requirement_id,
                 entry_id: request.entry_id,
                 before: request.side == ReviewEvidenceSide::Before,
                 field: request.field,

@@ -60,7 +60,8 @@ async fn the_legacy_create_enrolls_through_the_journal() {
         &scope(),
         ReadPolicy::default(),
         ReviewHistoryQuery {
-            requirement_id: StableId::new("req_b").unwrap(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: StableId::new("req_b").unwrap(),
             limit: 10,
             cursor: None,
         },

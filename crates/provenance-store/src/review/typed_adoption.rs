@@ -60,7 +60,7 @@ impl StateStore {
                 return Ok(());
             }
             self.validated_review_entries(&scope)?;
-            let head = self.head(before)?;
+            let head = self.head(&before.clone().into())?;
             with_staged_state(&self.layout, false, |layout| {
                 let staged = Self::new(layout.clone());
                 let path = shards::requirements_path(layout, &scope);

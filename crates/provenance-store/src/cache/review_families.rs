@@ -10,18 +10,6 @@ pub(crate) struct ReviewFamily {
     pub lifecycle_fields: &'static [&'static str],
 }
 
-const COMMON: &[&str] = &[
-    "schema_version",
-    "scope_id",
-    "id",
-    "created",
-    "updated",
-    "declared_by",
-    "declaration_address",
-    "origin_thread",
-    "origin_message",
-];
-
 pub(crate) const REVIEW_FAMILIES: [ReviewFamily; 8] = [
     ReviewFamily {
         kind: NodeType::Source,
@@ -248,9 +236,20 @@ mod tests {
 
     #[test]
     fn common_audit_fields_are_lifecycle_fields_when_present() {
+        let common = [
+            "schema_version",
+            "scope_id",
+            "id",
+            "created",
+            "updated",
+            "declared_by",
+            "declaration_address",
+            "origin_thread",
+            "origin_message",
+        ];
         for family in REVIEW_FAMILIES.iter().take(4) {
-            for field in COMMON {
-                assert!(family.lifecycle_fields.contains(field));
+            for field in common {
+                assert!(family.lifecycle_fields.contains(&field));
             }
         }
     }
