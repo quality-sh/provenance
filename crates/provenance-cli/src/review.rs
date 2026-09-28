@@ -177,7 +177,10 @@ async fn protect_origin(
         Ok(()) => next.run(request).await,
         Err(error) => refusal(error),
     };
-    if matches!(response.status(), StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN) {
+    if matches!(
+        response.status(),
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
+    ) {
         response
             .headers_mut()
             .insert(header::CONNECTION, HeaderValue::from_static("close"));
