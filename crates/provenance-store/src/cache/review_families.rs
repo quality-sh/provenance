@@ -242,8 +242,6 @@ mod tests {
             "id",
             "created",
             "updated",
-            "declared_by",
-            "declaration_address",
             "origin_thread",
             "origin_message",
         ];

@@ -257,12 +257,40 @@ impl StateStore {
     /// Full-scope import and export cannot yet carry review history.
     pub fn ensure_review_portable(&self, scope: &ScopeId) -> anyhow::Result<()> {
         self.with_repository_publication(|| {
+            let has_enrolled_record = self
+                .list_sources(scope)?
+                .iter()
+                .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
+                || self
+                    .list_requirements(scope)?
+                    .iter()
+                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
+                || self
+                    .list_resolutions(scope)?
+                    .iter()
+                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
+                || self
+                    .list_rules(scope)?
+                    .iter()
+                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
+                || self
+                    .list_domains(scope)?
+                    .iter()
+                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
+                || self
+                    .list_boundaries(scope)?
+                    .iter()
+                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
+                || self
+                    .list_topics(scope)?
+                    .iter()
+                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
+                || self
+                    .list_questions(scope)?
+                    .iter()
+                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION);
             anyhow::ensure!(
-                !directory(&self.layout, scope).try_exists()?
-                    && !self
-                        .journal_entries(scope)?
-                        .iter()
-                        .any(|entry| matches!(entry, JournalEntry::Record(_))),
+                !directory(&self.layout, scope).try_exists()? && !has_enrolled_record,
                 "review-bearing scopes require lossless import/export support"
             );
             Ok(())
