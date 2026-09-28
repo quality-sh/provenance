@@ -9,6 +9,7 @@ use std::{
 struct Host {
     child: Child,
     endpoint: String,
+    bearer: String,
 }
 
 impl Drop for Host {
@@ -63,6 +64,7 @@ fn start(root: &std::path::Path) -> Host {
     Host {
         child,
         endpoint: config["endpoint"].as_str().unwrap().to_owned(),
+        bearer: config["bearer"].as_str().unwrap().to_owned(),
     }
 }
 
@@ -74,13 +76,13 @@ fn response(result: Result<ureq::Response, ureq::Error>) -> ureq::Response {
 }
 
 #[test]
-fn early_refusals_close_reused_connections_before_body_decode() {
+fn body_bearing_refusals_do_not_break_the_next_request() {
     let repo = repository();
     let host = start(repo.path());
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(5))
         .build();
-    let body = "invalid";
+    let body = "invalid".repeat(256 * 1024);
 
     for _ in 0..4 {
         let refusal = response(
@@ -89,9 +91,32 @@ fn early_refusals_close_reused_connections_before_body_decode() {
                     "{}/requirements/req_example/discussions",
                     host.endpoint
                 ))
-                .send_string(body),
+                .send_string(&body),
         );
         assert_eq!(refusal.status(), 401);
-        assert_eq!(refusal.header("Connection"), Some("close"));
     }
+
+    let valid = response(
+        agent
+            .get(&format!("{}/review-config", host.endpoint))
+            .set("Authorization", &format!("Bearer {}", host.bearer))
+            .call(),
+    );
+    assert_eq!(valid.status(), 200);
+}
+
+#[test]
+fn early_refusals_ask_the_client_to_close_the_connection() {
+    let repo = repository();
+    let host = start(repo.path());
+    let refusal = response(
+        ureq::post(&format!(
+            "{}/requirements/req_example/discussions",
+            host.endpoint
+        ))
+        .send_string("invalid"),
+    );
+
+    assert_eq!(refusal.status(), 401);
+    assert_eq!(refusal.header("Connection"), Some("close"));
 }
