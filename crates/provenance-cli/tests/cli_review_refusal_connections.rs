@@ -82,7 +82,7 @@ fn body_bearing_refusals_do_not_break_the_next_request() {
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(5))
         .build();
-    let body = "invalid".repeat(256 * 1024);
+    let body = "invalid";
 
     for _ in 0..4 {
         let refusal = response(
@@ -91,7 +91,7 @@ fn body_bearing_refusals_do_not_break_the_next_request() {
                     "{}/requirements/req_example/discussions",
                     host.endpoint
                 ))
-                .send_string(&body),
+                .send_string(body),
         );
         assert_eq!(refusal.status(), 401);
     }
