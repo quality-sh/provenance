@@ -175,7 +175,7 @@ embedded assets, and shutdown. Persistent review mutations remain separate.
 
 ## Validation
 
-Run `cargo test -p provenance-cli --test cli_review_host --test review_asset_build --test review_archive`
+Run `cargo test -p provenance-cli --test cli_review_host --test cli_review_refusal_connections --test review_asset_build --test review_archive`
 and `cargo test -p provenance-transport --features test-fixture` after generation.
 Run `node --test tools/review-host/*.test.ts` for composition and session checks.
 Run `node tools/review-host/verify-native.ts BINARY COMPOSED_ASSETS SDK_PACKAGE`
