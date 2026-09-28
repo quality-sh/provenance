@@ -143,6 +143,11 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         requirement.structured_content.as_ref().unwrap()["data"]["refines"],
         "req_shared"
     );
+    let created_submission = requirement.structured_content.as_ref().unwrap()["data"]["decision"]
+        ["pending"]["proposal_id"]
+        .as_str()
+        .expect("the MCP create response returns its submission identity")
+        .to_owned();
 
     let dependency = call(
         &client,
@@ -185,6 +190,16 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
     assert_eq!(
         edited_requirement.structured_content.as_ref().unwrap()["data"]["depends_on"],
         json!(["req_mcp_dependency"])
+    );
+    let edited = edited_requirement.structured_content.as_ref().unwrap();
+    assert!(edited["data"]["decision"]["pending"]["proposal_id"].is_string());
+    assert_ne!(
+        edited["data"]["decision"]["pending"]["proposal_id"],
+        created_submission
+    );
+    assert_eq!(
+        edited["data"]["decision"]["pending"]["revision"],
+        edited["data"]["edit"]["revision"]
     );
 
     client.cancel().await.unwrap();
