@@ -103,12 +103,10 @@ async fn prepared(state: &str) -> (Repository, ApiSession, String, String, Optio
         access(&repository).allow_writes(),
     ))
     .await;
-    let (mut revision, proposal) = edit(&session, "revision-one").await;
-    let mut current = None;
-    if state == "stale" {
+    let (revision, proposal) = edit(&session, "revision-one").await;
+    let (revision, current) = if state == "stale" {
         let edited = edit(&session, "revision-two").await;
-        revision = edited.0;
-        current = Some(edited.1);
+        (edited.0, Some(edited.1))
     } else {
         let action = if state == "withdrawn" {
             "withdraw"
@@ -117,7 +115,8 @@ async fn prepared(state: &str) -> (Repository, ApiSession, String, String, Optio
         };
         let terminal = terminal(&session, &proposal, action).await;
         assert_ne!(terminal.is_error, Some(true), "{terminal:?}");
-    }
+        (revision, None)
+    };
     (repository, session, proposal, revision, current)
 }
 
