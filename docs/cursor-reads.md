@@ -29,6 +29,15 @@ The assembled Requirement document uses:
 GET /requirements/req_review/document?limit=50
 ```
 
+The current review can omit archived Rules and abandoned Resolutions:
+
+```text
+GET /requirements/req_review/document?exclude_terminal=true&limit=50
+```
+
+The default is `exclude_terminal=false`. A superseded Resolution stays visible.
+The cursor binds the selected value.
+
 A successful list has this form:
 
 ```json
