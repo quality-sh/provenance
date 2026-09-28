@@ -176,6 +176,10 @@ A named repository that a host makes available to a caller. Its name identifies 
 
 The canonical graph saved in a selected repository, including saved changes that are not committed to Git.
 
+## Source-edit transaction
+
+A publication unit that couples one working-tree source-file replacement with one canonical state swap. Recovery completes both changes or keeps the prior file and state.
+
 ## Local caller
 
 The person who starts a local review host and the clients to which that person

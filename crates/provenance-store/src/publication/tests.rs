@@ -24,6 +24,25 @@ fn concurrent_first_access_creates_publication_lock_directories_idempotently() {
 }
 
 #[test]
+fn source_edit_recovery_runs_before_import_recovery() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    let layout = ProvenanceLayout::new(root);
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::create_dir_all(layout.import_transactions_dir()).unwrap();
+    std::fs::write(layout.source_edit_marker_path(), "{").unwrap();
+    let transaction = layout.import_transactions_dir().join("completed");
+    std::fs::create_dir(&transaction).unwrap();
+    write_publication_marker(&layout, &transaction, PublicationPhase::Published).unwrap();
+    std::fs::remove_dir(transaction).unwrap();
+
+    let error = with_repository_publication(&layout, || Ok(())).unwrap_err();
+
+    assert!(error.to_string().contains("EOF"), "{error:#}");
+    assert!(layout.publication_marker_path().exists());
+}
+
+#[test]
 #[verifies("rule_recovery_stays_in_cache", examples)]
 fn recovery_rejects_traversal_outside_import_transactions() {
     let directory = tempfile::tempdir().unwrap();

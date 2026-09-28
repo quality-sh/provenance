@@ -12,8 +12,8 @@
 //! to `spawn_blocking` or make them async first.
 
 use super::{
-    prepare_import_transactions_dir, prepare_publication_lock, read_only,
-    recover_pending_publication,
+    prepare_publication_lock, prepare_transaction_dirs, read_only, recover_pending_publication,
+    source_edit_recovery,
 };
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
@@ -84,7 +84,8 @@ pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<Publ
     tokio::task::spawn_blocking(move || {
         prepare_publication_lock(&layout)?;
         let lock = LockedPublicationFile::acquire(&layout.publication_lock_path())?;
-        prepare_import_transactions_dir(&layout)?;
+        prepare_transaction_dirs(&layout)?;
+        source_edit_recovery::recover_pending_source_edit(&layout)?;
         recover_pending_publication(&layout)?;
         Ok(PublicationGuard {
             _lock: Some(lock),
