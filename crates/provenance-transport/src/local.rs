@@ -12,6 +12,7 @@ use provenance_store::{
             self, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
             PreparedRepository, PreparedScope, RequestedContext,
         },
+        files::read_repository_file,
         read_policy::ReadPolicy,
     },
     settings::Settings,
@@ -87,14 +88,27 @@ impl LocalAccess {
     }
 
     fn check_scope(&self) -> Result<(), OperationFailure> {
-        let bytes =
-            std::fs::read(self.layout.manifest_path()).map_err(|_| OperationFailure::Internal)?;
-        let manifest: Manifest =
-            serde_json::from_slice(&bytes).map_err(|_| OperationFailure::Internal)?;
+        let manifest = self.manifest()?;
         if !manifest.scopes.iter().any(|scope| scope.id == self.scope) {
             return Err(OperationFailure::UnknownScope);
         }
         Ok(())
+    }
+
+    fn manifest(&self) -> Result<Manifest, OperationFailure> {
+        let bytes = read_repository_file(
+            Path::new(&self.root),
+            Path::new(".provenance/state/manifest.json"),
+        )
+        .map_err(|_| OperationFailure::Internal)?;
+        let manifest: Manifest =
+            serde_json::from_slice(&bytes).map_err(|_| OperationFailure::Internal)?;
+        Ok(manifest)
+    }
+
+    /// Read disposition actors from the repository bound at startup.
+    pub fn disposition_actor_ids(&self) -> Result<Vec<String>, OperationFailure> {
+        Ok(self.manifest()?.disposition_actor_ids)
     }
 }
 

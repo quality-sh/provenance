@@ -80,6 +80,26 @@ impl From<FileAccessRefusal> for RepositoryFileRefusal {
     }
 }
 
+/// Read one regular UTF-8 repository file through held, no-follow traversal.
+pub fn read_repository_file(
+    root: &std::path::Path,
+    relative: &std::path::Path,
+) -> Result<Vec<u8>, RepositoryFileRefusal> {
+    let root = Utf8Path::from_path(root).ok_or(RepositoryFileRefusal::Denied)?;
+    let relative = Utf8Path::from_path(relative).ok_or(RepositoryFileRefusal::Denied)?;
+    #[cfg(any(unix, windows))]
+    {
+        let files = RepositoryFiles::open(root).map_err(RepositoryFileRefusal::from)?;
+        let held = files.read_bounded(relative, usize::MAX)?;
+        Ok(held.bytes().to_vec())
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (root, relative);
+        Err(RepositoryFileRefusal::Unavailable)
+    }
+}
+
 pub struct OpenedRepositoryFile {
     pub relative: Utf8PathBuf,
     pub file: File,

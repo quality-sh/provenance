@@ -63,11 +63,15 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         "compatibility": provenance_core::protocol::host::COMPATIBILITY,
         "sdkVersion": env!("CARGO_PKG_VERSION"),
     });
+    let review_configuration = ReviewConfiguration {
+        access: access.clone(),
+        value: config,
+    };
     let router = host
         .router()
         .route(
             "/review-config",
-            get(configuration).with_state((access.clone(), config)),
+            get(configuration).with_state(review_configuration),
         )
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(access, protect_origin));
@@ -143,14 +147,25 @@ impl ShutdownSignals {
     }
 }
 
+#[derive(Clone)]
+struct ReviewConfiguration {
+    access: Arc<LocalAccess>,
+    value: Value,
+}
+
 async fn configuration(
-    State((access, config)): State<(Arc<LocalAccess>, Value)>,
+    State(mut config): State<ReviewConfiguration>,
     request: Request,
 ) -> Response {
-    match access.authenticate(request.headers()) {
-        Ok(()) => Json(config).into_response(),
-        Err(error) => refusal(error),
+    if let Err(error) = config.access.authenticate(request.headers()) {
+        return refusal(error);
     }
+    let actor_ids = match config.access.disposition_actor_ids() {
+        Ok(actor_ids) => actor_ids,
+        Err(error) => return refusal(error),
+    };
+    config.value["dispositionActorIds"] = json!(actor_ids);
+    Json(config.value).into_response()
 }
 
 async fn protect_origin(
