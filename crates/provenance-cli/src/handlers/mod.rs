@@ -1,4 +1,7 @@
 use crate::cli::Command;
+use crate::output;
+use provenance_core::StableId;
+use provenance_store::cache;
 
 mod cargo_init;
 pub mod check;
@@ -8,21 +11,15 @@ mod docs;
 #[cfg(feature = "dogfood")]
 mod dogfood;
 mod export;
-mod gaps;
-mod graph;
 mod graph_reference;
-mod health;
 mod import;
-mod materialize;
 mod merge_jsonl;
-mod orphans;
 mod prime;
 mod repo;
 mod report;
 mod schema;
 mod skills;
 mod swarm_backtrace;
-mod traceability;
 mod validate;
 mod wiki;
 
@@ -79,7 +76,10 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         Command::Docs { command } => docs::handle(command).await,
         Command::Wiki { command } => wiki::handle(command).await,
         Command::Review(options) => crate::review::run(options).await,
-        Command::Materialize { repo, .. } => materialize::handle(repo).await,
+        Command::Materialize { repo, .. } => {
+            let store = crate::store::Store::open_required(repo)?;
+            output::print_json(&cache::materialize_state(store.layout()).await?)
+        }
         command => dispatch_on_thread(command, quiet),
     }
 }
@@ -100,20 +100,44 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
         Command::GraphReference { command } => graph_reference::handle(command),
         Command::Graph {
             requirement_id,
-            repo,
-            scope,
+            context,
             ..
-        } => graph::handle(requirement_id, repo, scope),
+        } => {
+            let store = context.open_graph()?;
+            let graph = cache::get_requirement_graph(
+                store.layout(),
+                &context.scope_id()?,
+                &StableId::new(requirement_id)?,
+            )?;
+            output::print_json(&graph)
+        }
         Command::Traceability {
-            rule_id,
-            repo,
-            scope,
-            ..
-        } => traceability::handle(rule_id, repo, scope),
-        Command::Gaps { repo, scope, .. } => gaps::handle(repo, scope),
+            rule_id, context, ..
+        } => {
+            let store = context.open_graph()?;
+            let trace = cache::trace_rule(
+                store.layout(),
+                &context.scope_id()?,
+                &StableId::new(rule_id)?,
+            )?;
+            output::print_json(&trace)
+        }
+        Command::Gaps { context, .. } => {
+            let store = context.open_graph()?;
+            output::print_json(&cache::find_gaps(store.layout(), &context.scope_id()?)?)
+        }
         Command::Prime { format, .. } => prime::handle(format),
-        Command::Health { repo, scope, .. } => health::handle(repo, scope),
-        Command::Orphans { repo, scope, .. } => orphans::handle(repo, scope),
+        Command::Health { context, .. } => {
+            let store = context.open_graph()?;
+            output::print_json(&cache::coverage_health(
+                store.layout(),
+                &context.scope_id()?,
+            )?)
+        }
+        Command::Orphans { context, .. } => {
+            let store = context.open_graph()?;
+            output::print_json(&cache::orphan_rules(store.layout(), &context.scope_id()?)?)
+        }
         Command::Coverage { command } => coverage::handle(command),
         Command::Report { command } => report::handle(command),
         Command::SwarmBacktrace { command } => swarm_backtrace::handle(command),
@@ -123,18 +147,16 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
             artifact, input, ..
         } => validate::handle(artifact, &input),
         Command::Export {
-            repo,
-            scope,
+            context,
             format,
             output,
-        } => export::handle(repo, scope, format, output),
+        } => export::handle(context, format, output),
         Command::Import {
-            repo,
-            scope,
+            context,
             input,
             dry_run,
             ..
-        } => import::handle(repo, scope, input, dry_run),
+        } => import::handle(context, input, dry_run),
         Command::MergeJsonl {
             base,
             ours,

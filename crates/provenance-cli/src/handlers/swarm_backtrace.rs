@@ -1,9 +1,10 @@
 use super::validate::{
     validate_contribution_record, validate_proposal_card_record, validate_synthesis_packet_record,
 };
+use crate::repo_context::RepoContext;
 use crate::{cli::ideation::SwarmBacktraceCommand, output, store::Store};
 use anyhow::Context;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use provenance_core::{
     packet_qualifies_proposal, AssertionRecord, Contribution, DispositionRecord, ProposalCard,
     ScopeId, StableId, SynthesisPacket,
@@ -16,12 +17,11 @@ use std::collections::BTreeSet;
 pub(super) fn handle(command: SwarmBacktraceCommand) -> anyhow::Result<()> {
     match command {
         SwarmBacktraceCommand::Land {
-            repo,
-            scope,
+            context,
             run_dir,
             replace,
             ..
-        } => land(repo, scope, &run_dir, replace),
+        } => land(context, &run_dir, replace),
     }
 }
 
@@ -57,9 +57,9 @@ type MergeRecords = (
     Vec<DispositionRecord>,
 );
 
-fn land(repo: Utf8PathBuf, scope: String, run_dir: &Utf8Path, replace: bool) -> anyhow::Result<()> {
+fn land(context: RepoContext, run_dir: &Utf8Path, replace: bool) -> anyhow::Result<()> {
     anyhow::ensure!(run_dir.is_dir(), "--run-dir must be an existing directory");
-    let scope_id = ScopeId::new(scope)?;
+    let scope_id = context.scope_id()?;
     let contributions = read_contributions(run_dir)?;
     let (synthesis_packets, proposals, assertions, dispositions) = read_merge_outputs(run_dir)?;
     anyhow::ensure!(
@@ -118,7 +118,7 @@ fn land(repo: Utf8PathBuf, scope: String, run_dir: &Utf8Path, replace: bool) -> 
     let synthesis_count = synthesis_packets.len();
     let proposal_count = proposals.len();
     let assertion_count = assertions.len();
-    let store = Store::open(repo);
+    let store = Store::open(context.repo);
     preflight_land(
         &store,
         &scope_id,

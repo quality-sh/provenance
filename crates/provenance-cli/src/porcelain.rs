@@ -1,8 +1,8 @@
 //! CLI-owned bindings for shared Porcelain capabilities.
 
+use crate::repo_context::RepoContext;
 use provenance_porcelain::check::{Category, CheckInput};
 use provenance_porcelain::get::{GetInput, GetOutcome};
-use std::net::{Ipv4Addr, SocketAddr};
 
 mod api;
 mod search;
@@ -47,21 +47,7 @@ pub async fn dispatch_get(
 }
 
 pub fn local_host(repo: &str, scope: &str) -> anyhow::Result<provenance_transport::StatementHost> {
-    provenance_store::layout::require_initialized_graph(
-        &provenance_store::layout::ProvenanceLayout::new(repo),
-    )?;
-    let root = std::fs::canonicalize(repo)?;
-    let access = provenance_transport::LocalAccess::new(
-        &root,
-        "native",
-        scope,
-        &"0".repeat(64),
-        SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
-    )
-    .map_err(|failure| anyhow::anyhow!(failure))?;
-    Ok(provenance_transport::StatementHost::with_access(
-        std::sync::Arc::new(access),
-    ))
+    RepoContext::new(repo, scope).local_host()
 }
 
 /// Renders the selected record as readable text or structured JSON.

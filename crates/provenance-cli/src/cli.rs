@@ -9,6 +9,7 @@ pub use ideation::{IdeationArtifactKind, SchemaCommand};
 use crate::output::{JsonFormat, OutputFormat, ReportFormat};
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
+use provenance_cli::repo_context::RepoContext;
 
 #[derive(Clone, Copy, Debug, Default, ValueEnum)]
 pub enum InvocationChannel {
@@ -31,7 +32,10 @@ pub enum PackageManager {
 #[command(
     name = "provenance",
     version,
-    after_help = "Discussion actions: provenance discussions [<discussion-id> get], or provenance <record-id> discussions|discuss, or provenance <discussion-id> reply."
+    after_help = concat!(
+        "Discussion actions: provenance discussions [<discussion-id> get], or provenance ",
+        "<record-id> discussions|discuss, or provenance <discussion-id> reply."
+    )
 )]
 pub struct Cli {
     /// Drop the advisory notes commands print alongside their output, such as
@@ -125,27 +129,21 @@ pub enum Command {
     },
     Graph {
         requirement_id: String,
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
     Traceability {
         rule_id: String,
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
     Gaps {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
@@ -164,18 +162,14 @@ pub enum Command {
         include_threads: bool,
     },
     Health {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
     Orphans {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         #[arg(long, value_enum, default_value_t = JsonFormat::Json)]
         format: JsonFormat,
     },
@@ -208,20 +202,16 @@ pub enum Command {
         format: JsonFormat,
     },
     Export {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         #[arg(long, value_enum, default_value_t = OutputFormat::Json)]
         format: OutputFormat,
         #[arg(long)]
         output: Option<Utf8PathBuf>,
     },
     Import {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         #[arg(long)]
         input: Utf8PathBuf,
         #[arg(long)]

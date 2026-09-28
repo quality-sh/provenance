@@ -1,6 +1,7 @@
 use crate::{catalog_cli, cli::Cli, handlers};
 use clap::{CommandFactory as _, FromArgMatches as _, Parser as _};
 use provenance_cli::porcelain;
+use provenance_cli::repo_context::RepoContext;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 use provenance_porcelain::action::{validate_target, Action};
@@ -30,8 +31,7 @@ pub enum Invocation {
 }
 
 pub struct GlobalContext {
-    pub repo: String,
-    pub scope: String,
+    pub repo: RepoContext,
     pub quiet: bool,
 }
 
@@ -156,8 +156,8 @@ impl Invocation {
             Self::Catalog(invocation) => catalog_cli::dispatch(invocation).await,
             Self::Get(invocation) => {
                 porcelain::dispatch_get(
-                    &invocation.context.repo,
-                    &invocation.context.scope,
+                    invocation.context.repo.repo.as_str(),
+                    &invocation.context.repo.scope,
                     invocation.format,
                     invocation.input,
                 )

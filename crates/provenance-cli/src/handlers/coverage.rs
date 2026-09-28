@@ -211,16 +211,18 @@ fn binding_finding_refusal(
     };
     let refusing = provenance_scanner::binding_findings_fail(severity, governed);
     refusing.then(|| {
-        format!("coverage scan found {governed} Rule binding finding(s); the repository configuration selects error")
+        format!(
+            "coverage scan found {governed} Rule binding finding(s); the repository \
+             configuration selects error"
+        )
     })
 }
 
 pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
     match command {
         CoverageCommand::Scan {
-            repo,
+            context,
             path,
-            scope,
             baseline,
             validate_rules,
             strict,
@@ -228,14 +230,20 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
             output,
         } => {
             let policy = provenance_store::settings::Settings::load(
-                &provenance_store::layout::ProvenanceLayout::new(&repo),
+                &provenance_store::layout::ProvenanceLayout::new(&context.repo),
             )?
             .coverage
             .binding_findings;
             let outcome = if let Some(baseline) = baseline.as_deref() {
-                coverage_scan_against(&repo, &path, &scope, validate_rules, Some(baseline))?
+                coverage_scan_against(
+                    &context.repo,
+                    &path,
+                    &context.scope,
+                    validate_rules,
+                    Some(baseline),
+                )?
             } else {
-                coverage_scan_against(&repo, &path, &scope, validate_rules, None)?
+                coverage_scan_against(&context.repo, &path, &context.scope, validate_rules, None)?
             };
             if let Some(output_path) = output {
                 let rendered = render_coverage(format, &outcome.scan)?;

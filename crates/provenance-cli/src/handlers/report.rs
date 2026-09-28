@@ -12,20 +12,19 @@ pub(super) fn handle(command: ReportCommand) -> anyhow::Result<()> {
             output,
         } => render_handler(&input, format, output.as_ref()),
         ReportCommand::Build {
-            repo,
+            context,
             base,
             head,
             repository,
-            scope,
             path,
             output,
         } => {
-            let scan_path = path.as_deref().unwrap_or(repo.as_path());
+            let scan_path = path.as_deref().unwrap_or(context.repo.as_path());
             let envelope =
                 provenance_report::build::build_envelope(&provenance_report::build::BuildInput {
-                    repo: repo.as_path(),
+                    repo: context.repo.as_path(),
                     scan_path,
-                    scope: &scope,
+                    scope: &context.scope,
                     base: &base,
                     head: &head,
                     repository: &repository,

@@ -5,10 +5,7 @@ use clap::{parser::ValueSource, Arg, ArgAction, ArgMatches, Command};
 use provenance_porcelain::action::Action;
 use provenance_store::operations::catalog::{self, Definition, TargetAction};
 use serde_json::Value;
-use std::{
-    collections::BTreeMap,
-    net::{Ipv4Addr, SocketAddr},
-};
+use std::collections::BTreeMap;
 
 mod address;
 pub mod fields;
@@ -122,9 +119,9 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         path.split('/').nth(1),
         Some("questions" | "contributions" | "synthesis-packets" | "proposals")
     ) {
-        warn_if_skills_missing(&context.repo, context.quiet)?;
+        warn_if_skills_missing(context.repo.repo.as_str(), context.quiet)?;
     }
-    let host = local_host(&context)?;
+    let host = context.repo.local_host()?;
     match host
         .invoke_resource(method, &path, data, query, headers)
         .await
@@ -147,13 +144,13 @@ pub async fn dispatch_target(
         provenance_core::ensure_record_id_assignable(&target)
             .unwrap_or_else(|error| usage_error(error));
     }
-    let host = local_host(&context)?;
+    let host = context.repo.local_host()?;
     let route = host
         .target_route(action, &target, kind)
         .await
         .map_err(anyhow::Error::new)?;
     if route.kind == provenance_core::NodeType::Question {
-        warn_if_skills_missing(&context.repo, context.quiet)?;
+        warn_if_skills_missing(context.repo.repo.as_str(), context.quiet)?;
     }
     let stdin = matches.get_flag("stdin");
     let (data, query, headers) = input::parse(
@@ -217,24 +214,6 @@ pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
 
 pub fn usage_error(error: impl std::fmt::Display) -> ! {
     clap::Error::raw(clap::error::ErrorKind::InvalidValue, error.to_string()).exit()
-}
-
-fn local_host(context: &GlobalContext) -> anyhow::Result<provenance_transport::StatementHost> {
-    provenance_store::layout::require_initialized_graph(
-        &provenance_store::layout::ProvenanceLayout::new(context.repo.as_str()),
-    )?;
-    let root = std::fs::canonicalize(&context.repo)?;
-    let access = provenance_transport::LocalAccess::new(
-        &root,
-        "native",
-        &context.scope,
-        &"0".repeat(64),
-        SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
-    )
-    .map_err(|failure| anyhow::anyhow!(failure))?;
-    Ok(provenance_transport::StatementHost::with_access(
-        std::sync::Arc::new(access),
-    ))
 }
 
 fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {

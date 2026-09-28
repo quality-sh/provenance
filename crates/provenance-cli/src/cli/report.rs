@@ -1,6 +1,7 @@
 use crate::output::ReportFormat;
 use camino::Utf8PathBuf;
 use clap::Subcommand;
+use provenance_cli::repo_context::RepoContext;
 
 #[derive(Subcommand)]
 pub enum ReportCommand {
@@ -18,8 +19,8 @@ pub enum ReportCommand {
     /// Build a report envelope from a real repository at a named base and
     /// head.
     Build {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
+        #[command(flatten)]
+        context: RepoContext,
         /// Older endpoint of the comparison range.
         #[arg(long)]
         base: String,
@@ -29,8 +30,6 @@ pub enum ReportCommand {
         /// Repository identity in `owner/name` form for report links.
         #[arg(long)]
         repository: String,
-        #[arg(long, default_value = "default")]
-        scope: String,
         /// Scan this path instead of the repository root; a partial scan is
         /// recorded as incomplete.
         #[arg(long)]
