@@ -243,7 +243,7 @@ mod tests {
         )
     }
 
-    fn enroll(store: &StateStore, id: &StableId, request: &str, update: serde_json::Value) {
+    fn enroll(store: &StateStore, id: &StableId, request: &str, update: &serde_json::Value) {
         let input: SaveRequirement = serde_json::from_value(json!({
             "request_id":request, "actor":"ben",
             "expected_etag":store.requirement_edit_state(&ScopeId::new("default").unwrap(), id).unwrap().etag,
@@ -276,7 +276,7 @@ mod tests {
             &store,
             &changed,
             "enroll_changed",
-            json!({"scope_id":"default", "id":"req_changed", "description":"Needs audit."}),
+            &json!({"scope_id":"default", "id":"req_changed", "description":"Needs audit."}),
         );
         assert!(store
             .requirement_decision_state(&scope, &changed)
@@ -289,7 +289,7 @@ mod tests {
             &store,
             &unchanged,
             "enroll_unchanged",
-            json!({"scope_id":"default", "id":"req_unchanged"}),
+            &json!({"scope_id":"default", "id":"req_unchanged"}),
         );
         assert!(store
             .requirement_decision_state(&scope, &unchanged)
