@@ -82,3 +82,25 @@ fn source_snapshot_carries_its_kind_and_record() {
     assert!(matches!(snapshot.record, ReviewRecord::Source(_)));
     assert_eq!(serde_json::to_value(snapshot).unwrap(), value);
 }
+
+#[test]
+fn source_snapshot_refuses_unknown_record_fields() {
+    let value = json!({
+        "schema_version": REVIEW_SCHEMA_VERSION,
+        "record_kind": "source",
+        "record": {
+            "schema_version": 3,
+            "scope_id": "default",
+            "id": "source_a",
+            "name": "Policy",
+            "source_type": "document",
+            "url": null,
+            "unexpected": true
+        }
+    });
+
+    let error = serde_json::from_value::<RecordSnapshot>(value)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("unknown field `unexpected`"), "{error}");
+}
