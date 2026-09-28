@@ -192,6 +192,53 @@ async fn lifecycle_update_keeps_the_current_submission() {
 }
 
 #[tokio::test]
+async fn revision_keeps_the_prior_submission_and_feedback_readable() {
+    let (_temp, context, store, scope) = fixture();
+    let created = CreateRequirementV2::run(context.clone(), create_request("create_a"))
+        .await
+        .unwrap();
+    let proposal = created.decision.pending.unwrap().proposal_id;
+    let mut manifest = store.manifest().unwrap();
+    manifest.disposition_actor_ids.push("reviewer".to_owned());
+    std::fs::write(
+        store.layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    store
+        .decide_requirement_review(
+            serde_json::from_value(json!({
+                "scope_id":"default",
+                "actor":{"identity_type":"human","id":"reviewer"},
+                "proposal_id":proposal,
+                "decision":"rejected",
+                "rationale":"The statement needs more detail.",
+                "canonical_artifact":null,
+                "feedback":{"role":"user","body":"Add the missing condition."},
+                "declared_by":null
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+    let revised = UpdateRequirementV2::run(context, update_request(&store, "update_a"))
+        .await
+        .unwrap();
+
+    assert_ne!(
+        revised.decision.pending.as_ref().unwrap().proposal_id,
+        proposal
+    );
+    assert_eq!(revised.decision.decisions.len(), 1);
+    assert!(revised.decision.decisions[0].feedback_message_id.is_some());
+    assert!(store
+        .list_proposal_definitions(&scope)
+        .unwrap()
+        .iter()
+        .any(|record| record.id == proposal));
+}
+
+#[tokio::test]
 async fn update_response_failure_refuses_before_publication() {
     let (_temp, context, store, scope) = fixture();
     store
