@@ -149,7 +149,10 @@ fn rollback_publication(
     clear_publication_marker(live_layout)
 }
 
-fn copy_directory(source: &camino::Utf8Path, destination: &camino::Utf8Path) -> anyhow::Result<()> {
+pub(super) fn copy_directory(
+    source: &camino::Utf8Path,
+    destination: &camino::Utf8Path,
+) -> anyhow::Result<()> {
     std::fs::create_dir_all(destination)?;
     for entry in std::fs::read_dir(source)? {
         let entry = entry?;
