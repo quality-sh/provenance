@@ -32,14 +32,14 @@ impl StateStore {
         &self,
         input: CreateReviewRequirement,
     ) -> anyhow::Result<ReviewEntry> {
-        self.create_review_requirement_with(input, |_, entry| Ok(entry))
+        self.create_review_requirement_with(input, false, |_, entry| Ok(entry))
     }
 
     pub(crate) fn create_review_requirement_resource(
         &self,
         input: CreateReviewRequirement,
     ) -> anyhow::Result<super::RequirementResourceSnapshot> {
-        self.create_review_requirement_with(input, |store, entry| {
+        self.create_review_requirement_with(input, true, |store, entry| {
             store.requirement_resource_snapshot_unlocked(&entry.scope_id, &entry.requirement_id)
         })
     }
@@ -47,6 +47,7 @@ impl StateStore {
     fn create_review_requirement_with<R>(
         &self,
         mut input: CreateReviewRequirement,
+        submit: bool,
         complete: impl FnOnce(&Self, ReviewEntry) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         let digest = normalize(&mut input)?;
@@ -84,7 +85,7 @@ impl StateStore {
                     id.as_str(),
                     || {
                         let staged = Self::new(layout.clone());
-                        let entry = staged.commit_creation(input, digest)?;
+                        let entry = staged.commit_creation(input, digest, submit)?;
                         complete(&staged, entry)
                     },
                 )
@@ -133,6 +134,7 @@ impl StateStore {
         &self,
         input: CreateReviewRequirement,
         intent_digest: String,
+        submit: bool,
     ) -> anyhow::Result<ReviewEntry> {
         let scope = input.create.scope_id.clone();
         let created = self.write_requirement(input.create)?;
@@ -178,6 +180,9 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
+        if submit {
+            self.commit_automatic_submission(&after, &entry)?;
+        }
         Ok(entry)
     }
 }
