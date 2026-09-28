@@ -1,7 +1,7 @@
 //! The no-follow walk that opens, and creates, the wiki output parent.
-use crate::safe_fs::Directory;
 use crate::wiki::publish::PublishError;
 use camino::Utf8Path;
+use provenance_store::operations::files::Directory;
 use std::iter::Peekable;
 use std::path::{Component, Components, Path, PathBuf};
 

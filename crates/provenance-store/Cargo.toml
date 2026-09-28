@@ -23,6 +23,7 @@ schemars = { workspace = true, optional = true }
 anyhow.workspace = true
 camino.workspace = true
 fs2.workspace = true
+fs_at.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-scanner.workspace = true
@@ -44,7 +45,6 @@ libsqlite3-sys = "0.30.1"
 rustix.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-fs_at.workspace = true
 windows-sys.workspace = true
 
 [dev-dependencies]

@@ -18,40 +18,40 @@ pub enum ChildKind {
 }
 
 impl Directory {
-    pub(super) fn open(path: &Path, role: &str) -> std::io::Result<Self> {
+    pub fn open(path: &Path, role: &str) -> std::io::Result<Self> {
         open_directory_no_follow(path, role).map(|file| Self {
             file,
             path: path.to_path_buf(),
         })
     }
 
-    pub(super) const fn from_file(file: File, path: PathBuf) -> Self {
+    pub const fn from_file(file: File, path: PathBuf) -> Self {
         Self { file, path }
     }
 
-    pub(super) const fn as_file(&self) -> &File {
+    pub const fn as_file(&self) -> &File {
         &self.file
     }
 
-    pub(super) fn try_clone(&self) -> std::io::Result<Self> {
+    pub fn try_clone(&self) -> std::io::Result<Self> {
         Ok(Self {
             file: self.file.try_clone()?,
             path: self.path.clone(),
         })
     }
 
-    pub(super) fn into_file(self) -> File {
+    pub fn into_file(self) -> File {
         self.file
     }
 
-    pub(super) fn open_child(&self, leaf: &str) -> std::io::Result<Self> {
+    pub fn open_child(&self, leaf: &str) -> std::io::Result<Self> {
         open_child_directory_no_follow(&self.file, leaf).map(|file| Self {
             file,
             path: self.path.join(leaf),
         })
     }
 
-    pub(super) fn create_child(&self, leaf: &str) -> std::io::Result<Self> {
+    pub fn create_child(&self, leaf: &str) -> std::io::Result<Self> {
         fs_at::OpenOptions::default()
             .mkdir_at(&self.file, leaf)
             .map(|file| Self {
@@ -60,12 +60,12 @@ impl Directory {
             })
     }
 
-    pub(super) fn child_kind(&self, leaf: &str) -> std::io::Result<Option<ChildKind>> {
+    pub fn child_kind(&self, leaf: &str) -> std::io::Result<Option<ChildKind>> {
         child_kind(&self.file, leaf)
     }
 
-    pub(super) fn rename_no_replace(&self, from: &str, to: &str) -> std::io::Result<()> {
-        rename_no_replace_at(&self.file, &self.path, from, to)
+    pub fn rename_no_replace(&self, from: &str, to: &str) -> std::io::Result<()> {
+        rename_no_replace_at(&self.file, from, to)
     }
 }
 
@@ -285,40 +285,44 @@ pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(windows)]
-fn rename_no_replace_at(
-    parent: &File,
-    parent_path: &Path,
-    from: &str,
-    to: &str,
-) -> std::io::Result<()> {
+fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
     use fs_at::os::windows::OpenOptionsExt;
-    use std::ffi::OsStr;
-    use std::mem::size_of;
+    use std::mem::{offset_of, size_of};
     use std::os::windows::{ffi::OsStrExt, io::AsRawHandle};
-    use windows_sys::Win32::Foundation::HANDLE;
-    use windows_sys::Win32::Storage::FileSystem::{
-        FileRenameInfoEx, SetFileInformationByHandle, FILE_RENAME_INFO, FILE_RENAME_INFO_0,
-    };
+    use windows_sys::Win32::Foundation::{RtlNtStatusToDosError, HANDLE};
+    use windows_sys::Win32::Storage::FileSystem::{FILE_RENAME_INFO, FILE_RENAME_INFO_0};
+
+    #[link(name = "ntdll")]
+    unsafe extern "system" {
+        fn NtSetInformationFile(
+            file: HANDLE,
+            status: *mut std::ffi::c_void,
+            information: *const std::ffi::c_void,
+            length: u32,
+            class: i32,
+        ) -> i32;
+    }
 
     const DELETE_ACCESS: u32 = 0x0001_0000;
+    const FILE_RENAME_INFORMATION: i32 = 10;
     let mut options = fs_at::OpenOptions::default();
     options.desired_access(DELETE_ACCESS).follow(false);
     let source = options.open_path_at(parent, from)?;
-    let destination = parent_path.join(to);
-    let name: Vec<u16> = OsStr::new(&destination).encode_wide().collect();
+    let name: Vec<u16> = std::ffi::OsStr::new(to).encode_wide().collect();
     let name_bytes = name
         .len()
         .checked_mul(size_of::<u16>())
         .ok_or(std::io::ErrorKind::InvalidInput)?;
-    let buffer_size = size_of::<FILE_RENAME_INFO>()
+    let buffer_size = offset_of!(FILE_RENAME_INFO, FileName)
         .checked_add(name_bytes)
+        .and_then(|size| size.checked_add(size_of::<u16>()))
         .ok_or(std::io::ErrorKind::InvalidInput)?;
     let mut storage = vec![0_usize; buffer_size.div_ceil(size_of::<usize>())];
     let info = storage.as_mut_ptr().cast::<FILE_RENAME_INFO>();
     unsafe {
         info.write(FILE_RENAME_INFO {
-            Anonymous: FILE_RENAME_INFO_0 { Flags: 0 },
-            RootDirectory: 0 as HANDLE,
+            Anonymous: FILE_RENAME_INFO_0 { ReplaceIfExists: 0 },
+            RootDirectory: parent.as_raw_handle() as HANDLE,
             FileNameLength: u32::try_from(name_bytes)
                 .map_err(|_| std::io::ErrorKind::InvalidInput)?,
             FileName: [0],
@@ -328,36 +332,30 @@ fn rename_no_replace_at(
             std::ptr::addr_of_mut!((*info).FileName).cast::<u16>(),
             name.len(),
         );
-        if SetFileInformationByHandle(
+        let mut status_block = [0_usize; 2];
+        let status = NtSetInformationFile(
             source.as_raw_handle() as HANDLE,
-            FileRenameInfoEx,
-            info.cast(),
+            status_block.as_mut_ptr().cast(),
+            info.cast_const().cast(),
             u32::try_from(buffer_size).map_err(|_| std::io::ErrorKind::InvalidInput)?,
-        ) == 0
-        {
-            return Err(std::io::Error::last_os_error());
+            FILE_RENAME_INFORMATION,
+        );
+        if status < 0 {
+            return Err(std::io::Error::from_raw_os_error(
+                RtlNtStatusToDosError(status) as i32,
+            ));
         }
     }
     Ok(())
 }
 
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
-fn rename_no_replace_at(
-    parent: &File,
-    _parent_path: &Path,
-    from: &str,
-    to: &str,
-) -> std::io::Result<()> {
+fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
     rustix_rename_no_replace(parent, from, parent, to)
 }
 
 #[cfg(target_os = "macos")]
-fn rename_no_replace_at(
-    parent: &File,
-    _parent_path: &Path,
-    from: &str,
-    to: &str,
-) -> std::io::Result<()> {
+fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
     use std::os::fd::AsRawFd;
     rename_no_replace_at_raw(
         parent.as_raw_fd(),
@@ -385,12 +383,7 @@ pub fn rename_no_replace(_from: &Path, _to: &Path) -> std::io::Result<()> {
     target_os = "macos",
     windows
 )))]
-fn rename_no_replace_at(
-    _parent: &File,
-    _parent_path: &Path,
-    _from: &str,
-    _to: &str,
-) -> std::io::Result<()> {
+fn rename_no_replace_at(_parent: &File, _from: &str, _to: &str) -> std::io::Result<()> {
     unsupported_rename()
 }
 
@@ -406,6 +399,10 @@ fn unsupported_rename() -> std::io::Result<()> {
         std::io::ErrorKind::Unsupported,
         "atomic no-replace rename is unavailable on this platform",
     ))
+}
+
+pub(super) fn rename_no_replace_in(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
+    rename_no_replace_at(parent, from, to)
 }
 
 #[cfg(test)]

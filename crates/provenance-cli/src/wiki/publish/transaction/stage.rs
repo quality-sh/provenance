@@ -1,8 +1,8 @@
 use super::{OutputIdentity, OutputState, PublicationOutput, TransactionDirectory};
-use crate::safe_fs::{ChildKind, Directory};
 use crate::wiki::publish::PublishError;
 use camino::Utf8Path;
 use provenance_macros::rule;
+use provenance_store::operations::files::{ChildKind, Directory};
 
 /// Decides whether a publication may start against the path it was pointed at.
 ///

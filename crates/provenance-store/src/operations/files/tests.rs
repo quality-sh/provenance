@@ -2,6 +2,15 @@ use super::*;
 #[cfg(unix)]
 use std::io::Read;
 
+#[path = "tests/held_write_cleanup.rs"]
+mod held_write_cleanup;
+#[path = "tests/held_write_races.rs"]
+mod held_write_races;
+#[path = "tests/held_writes.rs"]
+mod held_writes;
+#[path = "tests/prepared_files.rs"]
+mod prepared_files;
+
 #[cfg(unix)]
 fn physical_tempdir() -> tempfile::TempDir {
     // The selected test root must not inherit system aliases such as /var on macOS.
@@ -20,6 +29,7 @@ fn portable_relative_identity_rejects_all_escape_forms() {
         "C:x.rs",
         "a\\x.rs",
         "//server/file.rs",
+        "nul\0file.rs",
     ] {
         assert!(validate_relative(Utf8Path::new(name)).is_err(), "{name}");
     }
