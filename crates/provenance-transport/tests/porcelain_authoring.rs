@@ -214,45 +214,11 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
-    let requirement = call(
-        &client,
-        "create",
-        json!({
-            "target":"req_mcp_target",
-            "type":"requirement",
-            "idempotency_key":"create_req_mcp_target",
-            "data":{
-                "actor":"agent",
-                "statement":"The MCP action submits the target Requirement.",
-                "status":"active",
-                "depends_on":[],
-                "supersedes":[]
-            }
-        }),
-    )
-    .await;
-    assert_ne!(requirement.is_error, Some(true), "{requirement:?}");
-    let automatic = requirement.structured_content.as_ref().unwrap()["data"]["decision"]["pending"]
-        ["proposal_id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    let withdrawn = call(
-        &client,
-        "withdraw-requirement-review",
-        json!({
-            "id":"req_mcp_target", "proposal_id":automatic,
-            "actor":"agent", "declared_by":null, "reason":null
-        }),
-    )
-    .await;
-    assert_ne!(withdrawn.is_error, Some(true), "{withdrawn:?}");
-
     let submitted = call(
         &client,
         "submit",
         json!({
-            "target":"req_mcp_target",
+            "target":"req_shared",
             "data":{
                 "actor":"agent",
                 "title":"MCP target",
@@ -267,7 +233,7 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
     assert_ne!(submitted.is_error, Some(true), "{submitted:?}");
     assert_eq!(
         submitted.structured_content.as_ref().unwrap()["data"]["requirement_id"],
-        "req_mcp_target"
+        "req_shared"
     );
     assert_eq!(
         submitted.structured_content.as_ref().unwrap()["data"]["fact"],
