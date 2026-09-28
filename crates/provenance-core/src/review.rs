@@ -1,10 +1,23 @@
 //! Native review evidence types. Review does not change record lifecycle.
 use crate::SchemaVersion;
 
+mod review_serde;
+
 pub const REVIEW_SCHEMA_VERSION: SchemaVersion = SchemaVersion(3);
 
-use crate::{Requirement, ScopeId, StableId};
+use crate::{
+    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId,
+    Topic,
+};
 use serde::{Deserialize, Serialize};
+
+const fn requirement_kind() -> NodeType {
+    NodeType::Requirement
+}
+
+const fn is_requirement_kind(kind: &NodeType) -> bool {
+    matches!(kind, NodeType::Requirement)
+}
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,12 +52,12 @@ pub enum SaveOutcome {
 
 /// One committed save is also its durable request receipt.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReviewEntry {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
-    pub requirement_id: StableId,
+    pub record_kind: NodeType,
+    pub record_id: StableId,
     pub id: StableId,
     pub sequence: u64,
     pub predecessor: Option<StableId>,
@@ -58,17 +71,95 @@ pub struct ReviewEntry {
     pub intent_digest: String,
     pub etag: String,
     pub outcome: SaveOutcome,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<crate::threads::DiscussionOrigin>,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RequirementSnapshot {
+#[derive(Debug, Clone)]
+pub struct RecordSnapshot {
     pub schema_version: SchemaVersion,
-    pub record: Requirement,
+    pub record: ReviewRecord,
 }
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone)]
+pub enum ReviewRecord {
+    Source(Source),
+    Requirement(Requirement),
+    Resolution(Resolution),
+    Rule(Rule),
+    Domain(Domain),
+    Boundary(Boundary),
+    Topic(Topic),
+    Question(Question),
+}
+
+impl ReviewRecord {
+    pub const fn kind(&self) -> NodeType {
+        match self {
+            Self::Source(_) => NodeType::Source,
+            Self::Requirement(_) => NodeType::Requirement,
+            Self::Resolution(_) => NodeType::Resolution,
+            Self::Rule(_) => NodeType::Rule,
+            Self::Domain(_) => NodeType::Domain,
+            Self::Boundary(_) => NodeType::Boundary,
+            Self::Topic(_) => NodeType::Topic,
+            Self::Question(_) => NodeType::Question,
+        }
+    }
+
+    pub const fn scope_id(&self) -> &ScopeId {
+        match self {
+            Self::Source(record) => &record.scope_id,
+            Self::Requirement(record) => &record.scope_id,
+            Self::Resolution(record) => &record.scope_id,
+            Self::Rule(record) => &record.scope_id,
+            Self::Domain(record) => &record.scope_id,
+            Self::Boundary(record) => &record.scope_id,
+            Self::Topic(record) => &record.scope_id,
+            Self::Question(record) => &record.scope_id,
+        }
+    }
+
+    pub const fn id(&self) -> &StableId {
+        match self {
+            Self::Source(record) => &record.id,
+            Self::Requirement(record) => &record.id,
+            Self::Resolution(record) => &record.id,
+            Self::Rule(record) => &record.id,
+            Self::Domain(record) => &record.id,
+            Self::Boundary(record) => &record.id,
+            Self::Topic(record) => &record.id,
+            Self::Question(record) => &record.id,
+        }
+    }
+
+    pub const fn as_requirement(&self) -> Option<&Requirement> {
+        match self {
+            Self::Requirement(record) => Some(record),
+            _ => None,
+        }
+    }
+}
+
+macro_rules! review_record_from {
+    ($type:ty, $variant:ident) => {
+        impl From<$type> for ReviewRecord {
+            fn from(record: $type) -> Self {
+                Self::$variant(record)
+            }
+        }
+    };
+}
+
+review_record_from!(Source, Source);
+review_record_from!(Requirement, Requirement);
+review_record_from!(Resolution, Resolution);
+review_record_from!(Rule, Rule);
+review_record_from!(Domain, Domain);
+review_record_from!(Boundary, Boundary);
+review_record_from!(Topic, Topic);
+review_record_from!(Question, Question);
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,7 +184,10 @@ pub struct EvidencePage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewHistoryQuery {
-    pub requirement_id: StableId,
+    #[serde(default = "requirement_kind", skip_serializing_if = "is_requirement_kind")]
+    pub record_kind: NodeType,
+    #[serde(rename = "requirement_id")]
+    pub record_id: StableId,
     #[serde(default = "default_limit")]
     pub limit: usize,
     pub cursor: Option<String>,
@@ -113,7 +207,10 @@ pub struct ReviewHistoryPage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EvidenceQuery {
-    pub requirement_id: StableId,
+    #[serde(default = "requirement_kind", skip_serializing_if = "is_requirement_kind")]
+    pub record_kind: NodeType,
+    #[serde(rename = "requirement_id")]
+    pub record_id: StableId,
     pub entry_id: StableId,
     pub before: bool,
     pub field: Option<String>,
@@ -126,28 +223,28 @@ pub struct EvidenceQuery {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum JournalEntry {
-    Requirement(Box<ReviewEntry>),
+    Record(Box<ReviewEntry>),
     Discussion(Box<crate::threads::DiscussionEntry>),
     Cycle(Box<CycleEntry>),
 }
 impl JournalEntry {
     pub const fn id(&self) -> &StableId {
         match self {
-            Self::Requirement(e) => &e.id,
+            Self::Record(e) => &e.id,
             Self::Discussion(e) => &e.id,
             Self::Cycle(e) => &e.id,
         }
     }
     pub const fn scope_id(&self) -> &ScopeId {
         match self {
-            Self::Requirement(e) => &e.scope_id,
+            Self::Record(e) => &e.scope_id,
             Self::Discussion(e) => &e.scope_id,
             Self::Cycle(e) => &e.scope_id,
         }
     }
     pub const fn request_id(&self) -> &StableId {
         match self {
-            Self::Requirement(e) => &e.request_id,
+            Self::Record(e) => &e.request_id,
             Self::Discussion(e) => &e.request_id,
             Self::Cycle(e) => &e.request_id,
         }
@@ -177,7 +274,10 @@ pub struct CycleEntry {
     pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
-    pub requirement_id: StableId,
+    #[serde(default = "requirement_kind", skip_serializing_if = "is_requirement_kind")]
+    pub record_kind: NodeType,
+    #[serde(rename = "requirement_id")]
+    pub record_id: StableId,
     pub proposal_id: StableId,
     /// The server-created key of a `Submitted` Proposal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -226,7 +326,10 @@ pub struct RecordedDecision {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequirementDecisionState {
-    pub requirement_id: StableId,
+    #[serde(default = "requirement_kind", skip_serializing_if = "is_requirement_kind")]
+    pub record_kind: NodeType,
+    #[serde(rename = "requirement_id")]
+    pub record_id: StableId,
     pub current_revision: Option<StableId>,
     pub pending: Option<PendingSubmission>,
     /// The accepted decision whose revision matches current content. Editing

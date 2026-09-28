@@ -51,10 +51,10 @@ pub(super) fn validated_cycle_entries(
             "invalid decision-cycle actor"
         );
         anyhow::ensure!(
-            sequences.insert((entry.requirement_id.as_str(), entry.sequence)),
+            sequences.insert((entry.record_id.as_str(), entry.sequence)),
             "duplicate decision-cycle sequence {} for requirement {}",
             entry.sequence,
-            entry.requirement_id.as_str()
+            entry.record_id.as_str()
         );
         anyhow::ensure!(
             entry.sequence <= MAX_SAFE_SEQUENCE,
@@ -128,7 +128,7 @@ impl CycleFacts {
         self.entries
             .iter()
             .find(|entry| entry.fact == CycleFact::Submitted && entry.proposal_id == *proposal)
-            .map(|entry| &entry.requirement_id)
+            .map(|entry| &entry.record_id)
             .ok_or_else(|| anyhow::anyhow!("the proposal has no review submission cycle entry"))
     }
 
@@ -158,7 +158,7 @@ impl CycleFacts {
         let mut withdrawn: Vec<(u64, StableId)> = self
             .entries
             .iter()
-            .filter(|e| e.requirement_id == *requirement && e.fact == CycleFact::Withdrawn)
+            .filter(|e| e.record_id == *requirement && e.fact == CycleFact::Withdrawn)
             .map(|e| (e.sequence, e.proposal_id.clone()))
             .collect();
         withdrawn.sort_by_key(|(sequence, _)| *sequence);
@@ -172,7 +172,7 @@ impl CycleFacts {
         let next = self
             .entries
             .iter()
-            .filter(|e| e.requirement_id == *requirement)
+            .filter(|e| e.record_id == *requirement)
             .map(|e| e.sequence)
             .max()
             .unwrap_or(0)
@@ -193,7 +193,9 @@ impl CycleFacts {
         requirement: &StableId,
     ) -> anyhow::Result<Option<CycleEntry>> {
         let record = store.requirement(scope, requirement)?;
-        let current_revision = store.head(&record)?.map(|entry| entry.revision);
+        let current_revision = store
+            .head(&record.clone().into())?
+            .map(|entry| entry.revision);
         let proposals = store.list_proposal_definitions(scope)?;
         let dispositions = store.list_dispositions(scope)?;
         let decided: std::collections::BTreeSet<&str> = dispositions
@@ -203,7 +205,7 @@ impl CycleFacts {
         Ok(self
             .entries
             .iter()
-            .filter(|e| e.requirement_id == *requirement && e.fact == CycleFact::Submitted)
+            .filter(|e| e.record_id == *requirement && e.fact == CycleFact::Submitted)
             .filter(|e| {
                 !decided.contains(e.proposal_id.as_str()) && !self.is_withdrawn(&e.proposal_id)
             })
@@ -226,7 +228,7 @@ impl CycleFacts {
     ) -> anyhow::Result<crate::write_error::WriteFailure> {
         let record = store.requirement(scope, requirement)?;
         let current_revision = store
-            .head(&record)?
+            .head(&record.clone().into())?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?
             .revision;
         let current_submission = self

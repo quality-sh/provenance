@@ -24,7 +24,7 @@ impl StateStore {
         requirement_id: &StableId,
     ) -> anyhow::Result<RequirementDecisionState> {
         let record = self.requirement(scope, requirement_id)?;
-        let head = self.head(&record)?;
+        let head = self.head(&record.clone().into())?;
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         let facts = CycleFacts::validated(self, scope)?;
@@ -89,7 +89,8 @@ impl StateStore {
             })
             .cloned();
         Ok(RequirementDecisionState {
-            requirement_id: requirement_id.clone(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: requirement_id.clone(),
             current_revision: head.map(|entry| entry.revision),
             pending,
             current_acceptance,
