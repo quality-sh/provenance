@@ -1,5 +1,5 @@
-use super::held_metadata::{identity, FileMetadata};
 use super::held_io::{read, read_clone};
+use super::held_metadata::{identity, FileMetadata};
 use super::{platform, safe_fs, RepositoryFileRefusal as Refusal, Utf8Path, Utf8PathBuf};
 use sha2::{Digest as _, Sha256};
 use std::fs::File;
@@ -464,5 +464,7 @@ pub(super) fn valid_artifact_leaf(target: &str, leaf: &str, suffix: &str) -> boo
     let prefix = format!(".{target}.provenance-");
     leaf.strip_prefix(&prefix)
         .and_then(|value| value.strip_suffix(suffix))
-        .is_some_and(|token| token.len() == 32 && token.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .is_some_and(|token| {
+            token.len() == 32 && token.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
 }

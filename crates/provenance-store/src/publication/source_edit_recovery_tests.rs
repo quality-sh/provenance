@@ -2,8 +2,7 @@ use crate::{
     layout::ProvenanceLayout,
     operations::files::RepositoryFiles,
     publication::{
-        with_repository_publication, with_staged_state_and_source_edit,
-        SourceEditRecoveryFailure,
+        with_repository_publication, with_staged_state_and_source_edit, SourceEditRecoveryFailure,
     },
     test_probes,
 };
@@ -12,9 +11,14 @@ use camino::Utf8Path;
 const BEFORE: &[u8] = b"before\n";
 const AFTER: &[u8] = b"after\n";
 
+fn canonical_root(temp: &tempfile::TempDir) -> camino::Utf8PathBuf {
+    camino::Utf8PathBuf::from_path_buf(temp.path().canonicalize().unwrap()).unwrap()
+}
+
 fn fixture() -> tempfile::TempDir {
     let temp = tempfile::tempdir().unwrap();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     let layout = ProvenanceLayout::new(root);
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(layout.state_dir().join("value"), BEFORE).unwrap();
@@ -62,7 +66,8 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
         "source_edit_file_installed",
     ] {
         let temp = fixture();
-        let root = Utf8Path::from_path(temp.path()).unwrap();
+        let root_path = canonical_root(&temp);
+        let root = root_path.as_path();
         let status = std::process::Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
@@ -104,7 +109,8 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
 #[test]
 fn recovery_refuses_third_file_bytes_without_overwriting_them() {
     let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     let status = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -141,7 +147,8 @@ fn recovery_refuses_third_file_bytes_without_overwriting_them() {
 #[test]
 fn file_install_refusal_rolls_state_back_without_overwriting_external_bytes() {
     let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     let source = root.join("source.txt");
     let changed = source.clone();
     test_probes::arm("source_edit_state_installed", move || {
@@ -165,7 +172,8 @@ fn file_install_refusal_rolls_state_back_without_overwriting_external_bytes() {
 #[test]
 fn final_marker_clears_when_cleanup_lost_its_result() {
     let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     let status = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
@@ -201,7 +209,8 @@ fn final_marker_clears_when_cleanup_lost_its_result() {
 #[test]
 fn failed_rollback_retains_material_and_restart_finishes_the_edit() {
     let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     test_probes::crash_at("repository_file_after_backup_check");
     test_probes::crash_at("state_before_rollback");
 

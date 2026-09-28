@@ -2,8 +2,7 @@ use crate::{
     layout::ProvenanceLayout,
     operations::files::RepositoryFiles,
     publication::{
-        with_repository_publication, with_staged_state_and_source_edit,
-        SourceEditRecoveryFailure,
+        with_repository_publication, with_staged_state_and_source_edit, SourceEditRecoveryFailure,
     },
     test_probes,
 };
@@ -13,9 +12,14 @@ const BEFORE: &[u8] = b"before\n";
 const AFTER: &[u8] = b"after\n";
 const CRASH_EXIT: i32 = 86;
 
+fn canonical_root(temp: &tempfile::TempDir) -> camino::Utf8PathBuf {
+    camino::Utf8PathBuf::from_path_buf(temp.path().canonicalize().unwrap()).unwrap()
+}
+
 fn fixture() -> tempfile::TempDir {
     let temp = tempfile::tempdir().unwrap();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     let layout = ProvenanceLayout::new(root);
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     std::fs::write(layout.state_dir().join("value"), BEFORE).unwrap();
@@ -25,8 +29,7 @@ fn fixture() -> tempfile::TempDir {
 
 fn try_publish(root: &Utf8Path) -> anyhow::Result<()> {
     let layout = ProvenanceLayout::new(root);
-    let held = RepositoryFiles::open(root)?
-        .read_bounded(Utf8Path::new("source.txt"), 1024)?;
+    let held = RepositoryFiles::open(root)?.read_bounded(Utf8Path::new("source.txt"), 1024)?;
     with_staged_state_and_source_edit(&layout, held, AFTER, |staged| {
         std::fs::write(staged.state_dir().join("value"), AFTER)?;
         Ok(())
@@ -97,7 +100,8 @@ fn every_physical_transition_recovers_exact_file_and_state_bytes() {
         ("source_edit_transaction_removed", (AFTER, AFTER)),
     ] {
         let temp = fixture();
-        let root = Utf8Path::from_path(temp.path()).unwrap();
+        let root_path = canonical_root(&temp);
+        let root = root_path.as_path();
         assert_eq!(crash(root, phase).code(), Some(CRASH_EXIT), "{phase}");
 
         recover(root).unwrap();
@@ -127,7 +131,8 @@ fn every_physical_transition_recovers_exact_file_and_state_bytes() {
 #[test]
 fn recovery_restores_a_displaced_target_before_finishing_forward() {
     let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     assert_eq!(
         crash(root, "repository_file_after_backup_check").code(),
         Some(CRASH_EXIT)
@@ -142,7 +147,8 @@ fn recovery_restores_a_displaced_target_before_finishing_forward() {
 #[test]
 fn marker_failure_after_file_install_keeps_forward_recovery_material() {
     let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     test_probes::arm("source_edit_before_file_marker_write", || {
         anyhow::bail!("injected marker write failure")
     });
@@ -171,12 +177,10 @@ fn crash_with_marker(root: &Utf8Path) -> (ProvenanceLayout, serde_json::Value) {
 
 #[test]
 fn recovery_refuses_prepared_leaf_slashes_and_parent_segments() {
-    for leaf in [
-        ".source.txt.provenance-hop/../../outside/payload.tmp",
-        "..",
-    ] {
+    for leaf in [".source.txt.provenance-hop/../../outside/payload.tmp", ".."] {
         let temp = fixture();
-        let root = Utf8Path::from_path(temp.path()).unwrap();
+        let root_path = canonical_root(&temp);
+        let root = root_path.as_path();
         let (layout, mut value) = crash_with_marker(root);
         value["prepared_leaf"] = serde_json::Value::String(leaf.to_owned());
         std::fs::write(
@@ -198,7 +202,8 @@ fn recovery_refuses_backup_leaf_slashes_and_parent_segments() {
         "..",
     ] {
         let temp = fixture();
-        let root = Utf8Path::from_path(temp.path()).unwrap();
+        let root_path = canonical_root(&temp);
+        let root = root_path.as_path();
         let (layout, mut value) = crash_with_marker(root);
         value["backup_leaf"] = serde_json::Value::String(leaf.to_owned());
         std::fs::write(
@@ -216,7 +221,8 @@ fn recovery_refuses_backup_leaf_slashes_and_parent_segments() {
 #[test]
 fn same_before_bytes_with_a_different_identity_are_an_external_change() {
     let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     let layout = ProvenanceLayout::new(root);
     assert_eq!(crash(root, "source_edit_prepared").code(), Some(CRASH_EXIT));
     let source = root.join("source.txt");
@@ -246,7 +252,8 @@ fn symlink_directory(target: &Utf8Path, link: &Utf8Path) {
 #[test]
 fn recovery_refuses_a_symlinked_staged_provenance_directory() {
     let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let root_path = canonical_root(&temp);
+    let root = root_path.as_path();
     let (layout, value) = crash_with_marker(root);
     let transaction = Utf8Path::new(value["transaction_dir"].as_str().unwrap());
     let staged_provenance = transaction.join("staged-repo/.provenance");

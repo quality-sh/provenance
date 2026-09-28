@@ -10,11 +10,11 @@ pub use safe_fs::{rename_no_replace, ChildKind, Directory};
 #[path = "files/held.rs"]
 mod held;
 #[cfg(any(unix, windows))]
-#[path = "files/held_metadata.rs"]
-mod held_metadata;
-#[cfg(any(unix, windows))]
 #[path = "files/held_io.rs"]
 mod held_io;
+#[cfg(any(unix, windows))]
+#[path = "files/held_metadata.rs"]
+mod held_metadata;
 #[cfg(any(unix, windows))]
 #[path = "files/held_recovery.rs"]
 mod held_recovery;
@@ -216,9 +216,7 @@ pub(crate) fn validate_recovery_artifact_leaf(
     suffix: &str,
 ) -> Result<(), RepositoryFileRefusal> {
     validate_relative(relative).map_err(RepositoryFileRefusal::from)?;
-    let target = relative
-        .file_name()
-        .ok_or(RepositoryFileRefusal::Changed)?;
+    let target = relative.file_name().ok_or(RepositoryFileRefusal::Changed)?;
     held::valid_artifact_leaf(target, leaf, suffix)
         .then_some(())
         .ok_or(RepositoryFileRefusal::Changed)

@@ -158,15 +158,16 @@ fn complete_state(
 }
 
 fn clean_unmarked_transactions(layout: &ProvenanceLayout) -> anyhow::Result<()> {
-    let files = RepositoryFiles::open(layout.root())?;
     for entry in std::fs::read_dir(layout.source_edit_transactions_dir())? {
-        let path = Utf8PathBuf::from_path_buf(entry?.path())
-            .map_err(|path| anyhow::anyhow!("source-edit transaction is not UTF-8: {}", path.display()))?;
+        let path = Utf8PathBuf::from_path_buf(entry?.path()).map_err(|path| {
+            anyhow::anyhow!("source-edit transaction is not UTF-8: {}", path.display())
+        })?;
         let transaction = validate_transaction(layout, &path)?;
-        let record: PreparedSourceRecord =
-            serde_json::from_slice(&read_regular_file(&transaction.join("prepared-source.json"))?)?;
+        let record: PreparedSourceRecord = serde_json::from_slice(&read_regular_file(
+            &transaction.join("prepared-source.json"),
+        )?)?;
         validate_recovery_artifact_leaf(&record.target, &record.prepared_leaf, ".tmp")?;
-        files.remove_recovery_temp(
+        RepositoryFiles::open(layout.root())?.remove_recovery_temp(
             &record.target,
             &record.prepared_leaf,
             &record.prepared_identity,
@@ -190,9 +191,8 @@ fn validate_transaction(
         "source-edit transaction is outside its transaction directory"
     );
     require_real_directory(transaction)?;
-    Utf8PathBuf::from_path_buf(std::fs::canonicalize(transaction)?).map_err(|path| {
-        anyhow::anyhow!("source-edit transaction is not UTF-8: {}", path.display())
-    })
+    Utf8PathBuf::from_path_buf(std::fs::canonicalize(transaction)?)
+        .map_err(|path| anyhow::anyhow!("source-edit transaction is not UTF-8: {}", path.display()))
 }
 
 fn validate_recovery_tree(transaction: &Utf8Path) -> anyhow::Result<()> {
