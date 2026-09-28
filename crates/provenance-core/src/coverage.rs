@@ -150,10 +150,9 @@ pub struct SiteCore {
 
 impl SiteCore {
     pub fn role(&self) -> SiteRole<&str> {
-        match self.verification.as_deref() {
-            Some(method) => SiteRole::Verification(method),
-            None => SiteRole::Implementation,
-        }
+        self.verification
+            .as_deref()
+            .map_or(SiteRole::Implementation, SiteRole::Verification)
     }
 
     pub const fn is_current(&self) -> bool {
