@@ -3,7 +3,7 @@ mod assets;
 use anyhow::Context;
 use axum::{
     extract::{Request, State},
-    http::{header, HeaderValue, StatusCode},
+    http::{HeaderValue, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
@@ -177,14 +177,6 @@ async fn protect_origin(
         Ok(()) => next.run(request).await,
         Err(error) => refusal(error),
     };
-    if matches!(
-        response.status(),
-        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
-    ) {
-        response
-            .headers_mut()
-            .insert(header::CONNECTION, HeaderValue::from_static("close"));
-    }
     for (name, value) in [
         ("cache-control", "no-store"),
         ("referrer-policy", "no-referrer"),
