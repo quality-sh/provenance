@@ -9,14 +9,38 @@ use serde_json::{json, Value};
 
 fn fixtures() -> [(NodeType, Value); 8] {
     [
-        (NodeType::Source, json!({"schema_version":3,"scope_id":"default","id":"source_a","name":"Policy","source_type":"document","url":null})),
-        (NodeType::Requirement, json!({"schema_version":3,"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"active"})),
-        (NodeType::Resolution, json!({"schema_version":3,"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"approved","inputs":[],"requirement_ids":["req_a"],"review_on":null})),
-        (NodeType::Rule, json!({"schema_version":3,"scope_id":"default","id":"rule_a","statement":"The system stores records.","status":"active","severity":"high","requirement_ids":["req_a"],"resolution_ids":[]})),
-        (NodeType::Domain, json!({"schema_version":3,"scope_id":"default","id":"domain_a","name":"Storage"})),
-        (NodeType::Boundary, json!({"schema_version":3,"scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."})),
-        (NodeType::Topic, json!({"schema_version":3,"scope_id":"default","id":"topic_a","requirement_id":"req_a","title":"Storage","status":"open","links":[]})),
-        (NodeType::Question, json!({"schema_version":3,"scope_id":"default","id":"question_a","topic_id":"topic_a","requirement_id":"req_a","question":"Where is storage?","resolution_method":"research","status":"open","links":[]})),
+        (
+            NodeType::Source,
+            json!({"schema_version":3,"scope_id":"default","id":"source_a","name":"Policy","source_type":"document","url":null}),
+        ),
+        (
+            NodeType::Requirement,
+            json!({"schema_version":3,"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"active"}),
+        ),
+        (
+            NodeType::Resolution,
+            json!({"schema_version":3,"scope_id":"default","id":"resolution_a","title":"Decision","position":"Use it.","rationale":"It is required.","status":"approved","inputs":[],"requirement_ids":["req_a"],"review_on":null}),
+        ),
+        (
+            NodeType::Rule,
+            json!({"schema_version":3,"scope_id":"default","id":"rule_a","statement":"The system stores records.","status":"active","severity":"high","requirement_ids":["req_a"],"resolution_ids":[]}),
+        ),
+        (
+            NodeType::Domain,
+            json!({"schema_version":3,"scope_id":"default","id":"domain_a","name":"Storage"}),
+        ),
+        (
+            NodeType::Boundary,
+            json!({"schema_version":3,"scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."}),
+        ),
+        (
+            NodeType::Topic,
+            json!({"schema_version":3,"scope_id":"default","id":"topic_a","requirement_id":"req_a","title":"Storage","status":"open","links":[]}),
+        ),
+        (
+            NodeType::Question,
+            json!({"schema_version":3,"scope_id":"default","id":"question_a","topic_id":"topic_a","requirement_id":"req_a","question":"Where is storage?","resolution_method":"research","status":"open","links":[]}),
+        ),
     ]
 }
 
@@ -39,9 +63,7 @@ fn entry(
         prior_revision: predecessor.map(|value| value.revision.clone()),
         before: predecessor.map(|value| value.after.clone()),
         after,
-        changed_fields: vec![
-            review_families::by_kind(kind).content_fields[0].to_string(),
-        ],
+        changed_fields: vec![review_families::by_kind(kind).content_fields[0].to_string()],
         actor: "reviewer".into(),
         request_id: new_id(),
         intent_digest: format!("sha256:intent-{sequence}"),
@@ -68,11 +90,7 @@ fn every_record_kind_has_readable_snapshots_and_revision_chains() {
             None,
             snapshot(&layout, &record).unwrap(),
         );
-        write_new(
-            &entry_path(&layout, &scope, &first.request_id),
-            &first,
-        )
-        .unwrap();
+        write_new(&entry_path(&layout, &scope, &first.request_id), &first).unwrap();
         let second = entry(
             kind,
             record.id().clone(),
@@ -80,11 +98,7 @@ fn every_record_kind_has_readable_snapshots_and_revision_chains() {
             Some(&first),
             snapshot(&layout, &record).unwrap(),
         );
-        write_new(
-            &entry_path(&layout, &scope, &second.request_id),
-            &second,
-        )
-        .unwrap();
+        write_new(&entry_path(&layout, &scope, &second.request_id), &second).unwrap();
         records.push(record);
     }
 

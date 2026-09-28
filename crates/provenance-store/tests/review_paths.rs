@@ -78,7 +78,12 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     .unwrap();
     let snapshot: RecordSnapshot = serde_json::from_str(&page.result.json_text).unwrap();
     assert_eq!(
-        snapshot.record.as_requirement().unwrap().description.as_deref(),
+        snapshot
+            .record
+            .as_requirement()
+            .unwrap()
+            .description
+            .as_deref(),
         Some("saved")
     );
 }

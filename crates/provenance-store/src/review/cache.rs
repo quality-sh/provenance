@@ -57,7 +57,8 @@ impl StateStore {
                 .chain(std::iter::once(&e.after))
                 .map(move |r| (r, e.record_kind, &e.record_id))
         }) {
-            if let Some(previous) = checked.insert(reference.id.as_str(), (reference, kind, owner)) {
+            if let Some(previous) = checked.insert(reference.id.as_str(), (reference, kind, owner))
+            {
                 anyhow::ensure!(
                     previous == (reference, kind, owner),
                     "conflicting immutable snapshot references"
