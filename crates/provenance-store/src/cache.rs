@@ -8,8 +8,8 @@ mod materialize;
 mod prime;
 mod projection_digest;
 pub(crate) mod projection_families;
-pub(crate) mod review_families;
 pub mod read;
+pub(crate) mod review_families;
 mod traceability;
 
 pub(crate) use connection::permission_failure;
