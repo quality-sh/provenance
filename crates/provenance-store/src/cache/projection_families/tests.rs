@@ -1,7 +1,7 @@
 use super::{BudgetKind, FamilyGroup, FamilyMeta, ProjectionFamily, FAMILIES};
 use provenance_core::NodeType;
 
-const fn expected(
+fn expected(
     identity: (FamilyGroup, &'static str),
     shard_suffix: &'static str,
     node_type: Option<NodeType>,
