@@ -1,7 +1,12 @@
-use super::{staged::copy_directory, sync_directory, sync_tree, with_repository_publication};
+use super::{
+    staged::{stage_with_hook, StagedStateHook},
+    sync_directory, with_repository_publication,
+};
 use crate::{
     layout::ProvenanceLayout,
-    operations::files::{FileIdentity, HeldRepositoryFile, RepositoryFiles},
+    operations::files::{
+        FileIdentity, HeldRepositoryFile, PreparedRepositoryFile, RepositoryFiles,
+    },
 };
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, SchemaVersion, SUPPORTED_SCHEMA_VERSION};
@@ -44,74 +49,101 @@ pub fn with_staged_state_and_source_edit<R>(
     replacement: &[u8],
     prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    with_repository_publication(live, || publish(live, held, replacement, prepare)).map_err(
-        |error| {
-            if live.source_edit_marker_path().exists() {
-                crate::write_error::publication_started(error)
-            } else {
-                error
-            }
-        },
-    )
+    with_repository_publication(live, || {
+        let mut publication = SourceEditPublication {
+            held: Some(held),
+            replacement: replacement.to_vec(),
+            prepared: None,
+            marker: None,
+        };
+        stage_with_hook(live, false, prepare, &mut publication)
+    })
+    .map_err(|error| {
+        if live.source_edit_marker_path().exists() {
+            crate::write_error::publication_started(error)
+        } else {
+            error
+        }
+    })
 }
 
-fn publish<R>(
-    live: &ProvenanceLayout,
-    held: HeldRepositoryFile,
-    replacement: &[u8],
-    prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
-) -> anyhow::Result<R> {
-    let transaction = create_transaction(live)?;
-    let staged_root = transaction.join("staged-repo");
-    let staged = ProvenanceLayout::new(staged_root.clone());
-    let result = (|| {
-        copy_directory(&live.state_dir(), &staged.state_dir())?;
-        let result = prepare(&staged)?;
-        sync_tree(&staged.state_dir())?;
-        sync_directory(&staged.provenance_dir())?;
-        sync_directory(&staged_root)?;
+struct SourceEditPublication {
+    held: Option<HeldRepositoryFile>,
+    replacement: Vec<u8>,
+    prepared: Option<PreparedRepositoryFile>,
+    marker: Option<SourceEditMarker>,
+}
+
+impl StagedStateHook for SourceEditPublication {
+    fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
+        live.source_edit_transactions_dir()
+    }
+
+    fn marker_path(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
+        live.source_edit_marker_path()
+    }
+
+    fn prepared(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
         let replacement_path = transaction.join("replacement");
-        std::fs::write(&replacement_path, replacement)?;
+        std::fs::write(&replacement_path, &self.replacement)?;
         std::fs::File::open(&replacement_path)?.sync_all()?;
-        let prepared = held.create_temp(replacement)?;
-        let mut marker = SourceEditMarker {
+        sync_directory(transaction)?;
+        let held = self.held.as_ref().expect("source-edit held file");
+        let prepared = held.create_temp(&self.replacement)?;
+        let marker = SourceEditMarker {
             schema_version: SUPPORTED_SCHEMA_VERSION.0,
-            transaction_dir: transaction.clone(),
+            transaction_dir: transaction.to_owned(),
             phase: SourceEditPhase::Prepared,
             target: held.relative().to_owned(),
             target_identity: held.identity().clone(),
             before_digest: held.digest(),
-            after_digest: Sha256::digest(replacement).into(),
+            after_digest: Sha256::digest(&self.replacement).into(),
             prepared_leaf: prepared.recovery_leaf().to_owned(),
             prepared_identity: prepared.recovery_identity().clone(),
         };
         write_marker(live, &marker)?;
-        crate::test_probes::at("source_edit_prepared")?;
-        let backup = transaction.join("backup-state");
-        std::fs::rename(live.state_dir(), &backup)?;
+        self.prepared = Some(prepared);
+        self.marker = Some(marker);
+        crate::test_probes::at("source_edit_prepared")
+    }
+
+    fn backup_created(
+        &mut self,
+        live: &ProvenanceLayout,
+        transaction: &Utf8Path,
+    ) -> anyhow::Result<()> {
+        sync_directory(transaction)?;
+        sync_directory(&live.provenance_dir())?;
+        let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::BackupCreated;
         write_marker(live, &marker)?;
-        crate::test_probes::at("source_edit_backup_created")?;
-        std::fs::rename(staged.state_dir(), live.state_dir())?;
-        sync_directory(&live.provenance_dir())?;
+        crate::test_probes::at("source_edit_backup_created")
+    }
+
+    fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
+        let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::StateInstalled;
         write_marker(live, &marker)?;
-        crate::test_probes::at("source_edit_state_installed")?;
-        if let Err(error) = held.compare_and_swap(prepared) {
-            rollback_state(live, &staged, &backup)?;
-            finish(live, &transaction)?;
-            return Err(error.into());
-        }
+        crate::test_probes::at("source_edit_state_installed")
+    }
+
+    fn install_file(&mut self) -> anyhow::Result<()> {
+        let held = self.held.take().expect("source-edit held file");
+        let prepared = self.prepared.take().expect("source-edit prepared file");
+        held.compare_and_swap(prepared)?;
+        Ok(())
+    }
+
+    fn published(&mut self, live: &ProvenanceLayout, _transaction: &Utf8Path) -> anyhow::Result<()> {
+        let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::FileInstalled;
         write_marker(live, &marker)?;
-        crate::test_probes::at("source_edit_file_installed")?;
-        finish(live, &transaction)?;
-        Ok(result)
-    })();
-    if !live.source_edit_marker_path().exists() && transaction.exists() {
-        let _ = std::fs::remove_dir_all(&transaction);
+        crate::test_probes::at("source_edit_file_installed")
     }
-    result
+
+    fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
+        finish(live, transaction)
+    }
 }
 
 pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::Result<()> {
@@ -210,13 +242,6 @@ fn complete_state(
     Ok(())
 }
 
-fn create_transaction(layout: &ProvenanceLayout) -> anyhow::Result<Utf8PathBuf> {
-    let name = format!("{}-{}", std::process::id(), uuid::Uuid::new_v4().simple());
-    let path = layout.source_edit_transactions_dir().join(name);
-    std::fs::create_dir(&path)?;
-    Ok(path)
-}
-
 fn validate_transaction(
     layout: &ProvenanceLayout,
     transaction: &Utf8Path,
@@ -269,19 +294,4 @@ fn finish(layout: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<(
     std::fs::remove_dir_all(transaction)?;
     std::fs::remove_file(layout.source_edit_marker_path())?;
     sync_directory(&layout.cache_dir())
-}
-
-fn rollback_state(
-    live: &ProvenanceLayout,
-    staged: &ProvenanceLayout,
-    backup: &Utf8Path,
-) -> anyhow::Result<()> {
-    crate::test_probes::at("state_before_rollback")?;
-    if live.state_dir().exists() {
-        std::fs::rename(live.state_dir(), staged.state_dir())?;
-    }
-    if backup.exists() {
-        std::fs::rename(backup, live.state_dir())?;
-    }
-    sync_directory(&live.provenance_dir())
 }
