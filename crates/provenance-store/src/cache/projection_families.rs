@@ -44,6 +44,7 @@ macro_rules! define_projection_families {
                         import: [$($import:tt)*],
                         catalog: [$($catalog:tt)*],
                         route: [$($route:tt)*]
+                        $(, review: $review:ident)?
                     };
                 )*
             }

@@ -6,7 +6,6 @@ macro_rules! expand_record_family_rows {
             $($prefix)*
             export {
                 Sources {
-                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Source,
                     field: sources,
                     path: sources_path,
@@ -35,10 +34,9 @@ macro_rules! expand_record_family_rows {
                         ("commit_pin", "commit_pin"),
                         ("effective_date", "effective_date"),
                         ("review_date", "review_date")],
-                    target: Some(NodeType::Source) }]
+                    target: Some(NodeType::Source) }], review: SOURCE
                 };
                 Domains {
-                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Domain,
                     field: domains,
                     path: domains_path,
@@ -64,10 +62,9 @@ macro_rules! expand_record_family_rows {
                     update_defaults: NONE,
                     update_aliases: NO_ALIASES,
                     nullable: &[("description", "description"), ("color", "color")],
-                    target: Some(NodeType::Domain) }]
+                    target: Some(NodeType::Domain) }], review: DOMAIN
                 };
                 Requirements {
-                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Requirement,
                     field: requirements,
                     path: requirements_path,
@@ -81,10 +78,9 @@ macro_rules! expand_record_family_rows {
                     import: [node_budget],
                     catalog: [projection(ListRequirementsV2, "list-requirements",
                         PageRequirementsV2, "page-requirements-v2", none)],
-                    route: [requirements]
+                    route: [requirements], review: REQUIREMENT
                 };
                 Boundaries {
-                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Boundary,
                     field: boundaries,
                     path: boundaries_path,
@@ -111,10 +107,9 @@ macro_rules! expand_record_family_rows {
                     update_defaults: NONE,
                     update_aliases: NO_ALIASES,
                     nullable: &[("source_ref", "source_ref")],
-                    target: Some(NodeType::Boundary) }]
+                    target: Some(NodeType::Boundary) }], review: BOUNDARY
                 };
                 Topics {
-                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Topic,
                     field: topics,
                     path: topics_path,
@@ -139,10 +134,9 @@ macro_rules! expand_record_family_rows {
                     update_defaults: NONE,
                     update_aliases: NO_ALIASES,
                     nullable: &[],
-                    target: Some(NodeType::Topic) }]
+                    target: Some(NodeType::Topic) }], review: TOPIC
                 };
                 Questions {
-                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Question,
                     field: questions,
                     path: questions_path,
@@ -169,10 +163,9 @@ macro_rules! expand_record_family_rows {
                     update_aliases: QUESTION_ALIASES,
                     nullable: &[("resolution_id", "resolution_id"),
                         ("contradicts", "contradicts")],
-                    target: Some(NodeType::Question) }]
+                    target: Some(NodeType::Question) }], review: QUESTION
                 };
                 Resolutions {
-                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Resolution,
                     field: resolutions,
                     path: resolutions_path,
@@ -204,10 +197,9 @@ macro_rules! expand_record_family_rows {
                         ("confidence", "confidence"), ("made_by", "made_by"),
                         ("approved_by", "approved_by"),
                         ("approved_at", "approved_at"), ("review_on", "review_on")],
-                    target: Some(NodeType::Resolution) }]
+                    target: Some(NodeType::Resolution) }], review: RESOLUTION
                 };
                 Rules {
-                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Rule,
                     field: rules,
                     path: rules_path,
@@ -235,7 +227,7 @@ macro_rules! expand_record_family_rows {
                     nullable: &[("name", "name"), ("description", "description"),
                         ("source_document", "source_document"),
                         ("source_section", "source_section")],
-                    target: Some(NodeType::Rule) }]
+                    target: Some(NodeType::Rule) }], review: RULE
                 };
             }
             canonical {
