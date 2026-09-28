@@ -118,7 +118,7 @@ fn land(context: RepoContext, run_dir: &Utf8Path, replace: bool) -> anyhow::Resu
     let synthesis_count = synthesis_packets.len();
     let proposal_count = proposals.len();
     let assertion_count = assertions.len();
-    let store = Store::open(context.repo);
+    let store = context.open_store();
     preflight_land(
         &store,
         &scope_id,
