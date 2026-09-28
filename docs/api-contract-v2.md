@@ -42,8 +42,10 @@ Subresources have parent-owned addresses:
 - `GET /requirements/{id}/document` reads the assembled document. The optional
   `exclude_terminal` Boolean query parameter excludes archived Rules and
   abandoned Resolutions when it is `true`. A superseded Resolution stays in the
-  document. The default is `false` so that omission keeps the complete
-  historical view.
+  document. Each record follows its own lifecycle. An active Rule stays in the
+  document when its only document link is an abandoned Resolution. The
+  abandoned Resolution and its discussions stay out of the document. The
+  default is `false` so that omission keeps the complete historical view.
 - `GET /requirements/{id}/history[/{entry_id}]` reads immutable outcomes.
 - `GET /requirements/{id}/history/{entry_id}/evidence/{side}` reads a
   before or after snapshot span.
