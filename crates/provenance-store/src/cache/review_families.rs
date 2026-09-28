@@ -2,7 +2,7 @@ use provenance_core::{review::ReviewRecord, NodeType};
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct ReviewFamily {
+pub struct ReviewFamily {
     pub kind: NodeType,
     pub directory: &'static str,
     pub owner_field: &'static str,
@@ -10,7 +10,7 @@ pub(crate) struct ReviewFamily {
     pub lifecycle_fields: &'static [&'static str],
 }
 
-pub(crate) const REVIEW_FAMILIES: [ReviewFamily; 8] = [
+pub const REVIEW_FAMILIES: [ReviewFamily; 8] = [
     ReviewFamily {
         kind: NodeType::Source,
         directory: "sources",
@@ -176,24 +176,24 @@ pub(crate) const REVIEW_FAMILIES: [ReviewFamily; 8] = [
     },
 ];
 
-pub(crate) fn by_kind(kind: NodeType) -> &'static ReviewFamily {
+pub fn by_kind(kind: NodeType) -> &'static ReviewFamily {
     REVIEW_FAMILIES
         .iter()
         .find(|family| family.kind == kind)
         .expect("all NodeType values have review-family facts")
 }
 
-pub(crate) fn by_directory(directory: &str) -> Option<&'static ReviewFamily> {
+pub fn by_directory(directory: &str) -> Option<&'static ReviewFamily> {
     REVIEW_FAMILIES
         .iter()
         .find(|family| family.directory == directory)
 }
 
-pub(crate) fn deserialize_record(
+pub fn deserialize_record(
     kind: NodeType,
     value: serde_json::Value,
 ) -> anyhow::Result<ReviewRecord> {
-    fn closed<T: DeserializeOwned>(value: serde_json::Value) -> anyhow::Result<T> {
+    fn closed<T: DeserializeOwned>(value: &serde_json::Value) -> anyhow::Result<T> {
         let text = serde_json::to_string(&value)?;
         let mut unknown = None;
         let mut deserializer = serde_json::Deserializer::from_str(&text);
@@ -210,14 +210,14 @@ pub(crate) fn deserialize_record(
         Ok(record)
     }
     Ok(match kind {
-        NodeType::Source => ReviewRecord::Source(closed(value)?),
-        NodeType::Requirement => ReviewRecord::Requirement(closed(value)?),
-        NodeType::Resolution => ReviewRecord::Resolution(closed(value)?),
-        NodeType::Rule => ReviewRecord::Rule(closed(value)?),
-        NodeType::Domain => ReviewRecord::Domain(closed(value)?),
-        NodeType::Boundary => ReviewRecord::Boundary(closed(value)?),
-        NodeType::Topic => ReviewRecord::Topic(closed(value)?),
-        NodeType::Question => ReviewRecord::Question(closed(value)?),
+        NodeType::Source => ReviewRecord::Source(closed(&value)?),
+        NodeType::Requirement => ReviewRecord::Requirement(closed(&value)?),
+        NodeType::Resolution => ReviewRecord::Resolution(closed(&value)?),
+        NodeType::Rule => ReviewRecord::Rule(closed(&value)?),
+        NodeType::Domain => ReviewRecord::Domain(closed(&value)?),
+        NodeType::Boundary => ReviewRecord::Boundary(closed(&value)?),
+        NodeType::Topic => ReviewRecord::Topic(closed(&value)?),
+        NodeType::Question => ReviewRecord::Question(closed(&value)?),
     })
 }
 

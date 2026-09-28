@@ -193,9 +193,7 @@ impl CycleFacts {
         requirement: &StableId,
     ) -> anyhow::Result<Option<CycleEntry>> {
         let record = store.requirement(scope, requirement)?;
-        let current_revision = store
-            .head(&record.clone().into())?
-            .map(|entry| entry.revision);
+        let current_revision = store.head(&record.into())?.map(|entry| entry.revision);
         let proposals = store.list_proposal_definitions(scope)?;
         let dispositions = store.list_dispositions(scope)?;
         let decided: std::collections::BTreeSet<&str> = dispositions
@@ -228,7 +226,7 @@ impl CycleFacts {
     ) -> anyhow::Result<crate::write_error::WriteFailure> {
         let record = store.requirement(scope, requirement)?;
         let current_revision = store
-            .head(&record.clone().into())?
+            .head(&record.into())?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?
             .revision;
         let current_submission = self

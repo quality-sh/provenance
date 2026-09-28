@@ -24,7 +24,7 @@ impl StateStore {
         requirement_id: &StableId,
     ) -> anyhow::Result<RequirementDecisionState> {
         let record = self.requirement(scope, requirement_id)?;
-        let head = self.head(&record.clone().into())?;
+        let head = self.head(&record.into())?;
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         let facts = CycleFacts::validated(self, scope)?;
