@@ -1,9 +1,10 @@
 use crate::{canonical_digest, layout::ProvenanceLayout, state_store::StateStore};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::review::{
-    CycleEntry, JournalEntry, RequirementSnapshot, ReviewEntry, SnapshotRef, REVIEW_SCHEMA_VERSION,
+    CycleEntry, JournalEntry, RecordSnapshot, ReviewEntry, ReviewRecord, SnapshotRef,
+    REVIEW_SCHEMA_VERSION,
 };
-use provenance_core::{Requirement, ScopeId, StableId};
+use provenance_core::{NodeType, Requirement, ScopeId, StableId};
 use serde::{de::DeserializeOwned, Serialize};
 use std::io::{Read, Write};
 
@@ -38,7 +39,7 @@ pub(super) fn read_entry(
     layout: &ProvenanceLayout,
     path: &Utf8Path,
 ) -> anyhow::Result<ReviewEntry> {
-    let JournalEntry::Requirement(entry) = read_journal_entry(layout, path)? else {
+    let JournalEntry::Record(entry) = read_journal_entry(layout, path)? else {
         anyhow::bail!("request ID belongs to a Discussion or decision-cycle write");
     };
     anyhow::ensure!(
@@ -54,7 +55,7 @@ pub(super) fn read_journal_entry(
 ) -> anyhow::Result<JournalEntry> {
     let entry: JournalEntry = read_bounded(layout, path, ENTRY_BYTES)?;
     let version = match &entry {
-        JournalEntry::Requirement(e) => e.schema_version,
+        JournalEntry::Record(e) => e.schema_version,
         JournalEntry::Discussion(e) => e.schema_version,
         JournalEntry::Cycle(e) => e.schema_version,
     };
@@ -110,10 +111,10 @@ pub(super) fn write_new<T: Serialize>(path: &Utf8Path, value: &T) -> anyhow::Res
 
 pub(super) fn snapshot(
     layout: &ProvenanceLayout,
-    record: &Requirement,
+    record: &ReviewRecord,
 ) -> anyhow::Result<SnapshotRef> {
     let id = new_id();
-    let value = RequirementSnapshot {
+    let value = RecordSnapshot {
         schema_version: REVIEW_SCHEMA_VERSION,
         record: record.clone(),
     };
@@ -131,7 +132,7 @@ pub(super) fn new_id() -> StableId {
     StableId::new(uuid::Uuid::new_v4().to_string()).expect("UUID uses valid stable ID characters")
 }
 
-pub(super) fn record_digest(record: &Requirement) -> anyhow::Result<String> {
+pub(super) fn record_digest(record: &ReviewRecord) -> anyhow::Result<String> {
     let value = serde_json::json!({
         "schema_version": REVIEW_SCHEMA_VERSION,
         "record": provenance_core::model::record_stamps::content_value(record)?,
@@ -141,7 +142,7 @@ pub(super) fn record_digest(record: &Requirement) -> anyhow::Result<String> {
     ))
 }
 
-pub(super) fn etag(record: &Requirement, occurrence: Option<&StableId>) -> anyhow::Result<String> {
+pub(super) fn etag(record: &ReviewRecord, occurrence: Option<&StableId>) -> anyhow::Result<String> {
     let content = provenance_core::model::record_stamps::content_value(record)?;
     Ok(canonical_digest::digest(
         &canonical_digest::canonical_bytes(&(content, occurrence))?,
@@ -152,7 +153,7 @@ fn snapshot_record(
     layout: &ProvenanceLayout,
     scope: &ScopeId,
     reference: &SnapshotRef,
-) -> anyhow::Result<Requirement> {
+) -> anyhow::Result<ReviewRecord> {
     let path = snapshot_path(layout, scope, &reference.id);
     let mut file = regular_file(layout, &path)?;
     anyhow::ensure!(
@@ -168,7 +169,7 @@ fn snapshot_record(
             && canonical_digest::digest(&bytes) == reference.digest,
         "review snapshot digest differs from its immutable reference"
     );
-    let snapshot: RequirementSnapshot = serde_json::from_slice(&bytes)?;
+    let snapshot: RecordSnapshot = serde_json::from_slice(&bytes)?;
     Ok(snapshot.record)
 }
 
@@ -178,7 +179,7 @@ impl StateStore {
             .journal_entries(scope)?
             .into_iter()
             .filter_map(|e| match e {
-                JournalEntry::Requirement(e) => Some(*e),
+                JournalEntry::Record(e) => Some(*e),
                 _ => None,
             })
             .collect())
@@ -216,23 +217,23 @@ impl StateStore {
         Ok(entries)
     }
 
-    pub(super) fn head(&self, record: &Requirement) -> anyhow::Result<Option<ReviewEntry>> {
+    pub(super) fn head(&self, record: &ReviewRecord) -> anyhow::Result<Option<ReviewEntry>> {
         let entries = self
-            .review_entries(&record.scope_id)?
+            .review_entries(record.scope_id())?
             .into_iter()
-            .filter(|entry| entry.requirement_id == record.id)
+            .filter(|entry| entry.record_kind == record.kind() && entry.record_id == *record.id())
             .collect::<Vec<_>>();
         let head = validated_head(&entries)?;
         if let Some(head) = &head {
-            let snapshot = snapshot_record(&self.layout, &record.scope_id, &head.after)?;
+            let snapshot = snapshot_record(&self.layout, record.scope_id(), &head.after)?;
             anyhow::ensure!(
                 record_digest(&snapshot)? == record_digest(record)?,
                 "observed review history gap: live Requirement differs from its recorded snapshot"
             );
         } else {
             anyhow::ensure!(
-                record.schema_version != REVIEW_SCHEMA_VERSION,
-                "enrolled Requirement has no review history"
+                record_schema_version(record) != REVIEW_SCHEMA_VERSION,
+                "enrolled record has no review history"
             );
         }
         Ok(head)
@@ -253,19 +254,59 @@ impl StateStore {
         Ok(matches[0].clone())
     }
 
+    pub(super) fn review_record(
+        &self,
+        scope: &ScopeId,
+        kind: NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<ReviewRecord> {
+        macro_rules! unique {
+            ($records:expr, $variant:ident, $name:literal) => {{
+                let records = $records?;
+                let matches = records.into_iter().filter(|record| record.id == *id).collect::<Vec<_>>();
+                anyhow::ensure!(matches.len() == 1 && matches[0].scope_id == *scope,
+                    concat!($name, " {} does not exist uniquely in this scope"), id.as_str());
+                ReviewRecord::$variant(matches.into_iter().next().unwrap())
+            }};
+        }
+        Ok(match kind {
+            NodeType::Source => unique!(self.list_sources(scope), Source, "source"),
+            NodeType::Requirement => ReviewRecord::Requirement(self.requirement(scope, id)?),
+            NodeType::Resolution => unique!(self.list_resolutions(scope), Resolution, "resolution"),
+            NodeType::Rule => unique!(self.list_rules(scope), Rule, "rule"),
+            NodeType::Domain => unique!(self.list_domains(scope), Domain, "domain"),
+            NodeType::Boundary => unique!(self.list_boundaries(scope), Boundary, "boundary"),
+            NodeType::Topic => unique!(self.list_topics(scope), Topic, "topic"),
+            NodeType::Question => unique!(self.list_questions(scope), Question, "question"),
+        })
+    }
+
     /// Full-scope import and export cannot yet carry review history.
     pub fn ensure_review_portable(&self, scope: &ScopeId) -> anyhow::Result<()> {
         self.with_repository_publication(|| {
             anyhow::ensure!(
                 !directory(&self.layout, scope).try_exists()?
                     && !self
-                        .list_requirements(scope)?
+                        .journal_entries(scope)?
                         .iter()
-                        .any(|r| r.schema_version == REVIEW_SCHEMA_VERSION),
+                        .any(|entry| matches!(entry, JournalEntry::Record(_))),
                 "review-bearing scopes require lossless import/export support"
             );
             Ok(())
         })
+    }
+}
+
+fn record_schema_version(record: &ReviewRecord) -> provenance_core::SchemaVersion {
+    match record {
+        ReviewRecord::Source(value) => value.schema_version,
+        ReviewRecord::Requirement(value) => value.schema_version,
+        ReviewRecord::Resolution(value) => value.schema_version,
+        ReviewRecord::Rule(value) => value.schema_version,
+        ReviewRecord::Domain(value) => value.schema_version,
+        ReviewRecord::Boundary(value) => value.schema_version,
+        ReviewRecord::Topic(value) => value.schema_version,
+        ReviewRecord::Question(value) => value.schema_version,
     }
 }
 
@@ -358,12 +399,12 @@ mod tests {
         let occurrence = StableId::new("entry_one").unwrap();
 
         assert_eq!(
-            record_digest(&before).unwrap(),
-            record_digest(&after).unwrap()
+            record_digest(&before.clone().into()).unwrap(),
+            record_digest(&after.clone().into()).unwrap()
         );
         assert_eq!(
-            etag(&before, Some(&occurrence)).unwrap(),
-            etag(&after, Some(&occurrence)).unwrap()
+            etag(&before.into(), Some(&occurrence)).unwrap(),
+            etag(&after.into(), Some(&occurrence)).unwrap()
         );
     }
 }

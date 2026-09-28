@@ -1,10 +1,10 @@
 use super::journal;
 use crate::{canonical_digest, operations::reader::RECORD_BYTES, state_store::StateStore};
 use provenance_core::review::{EvidencePage, SnapshotField, SnapshotRef};
-use provenance_core::{Requirement, ScopeId};
+use provenance_core::{review::ReviewRecord, ScopeId};
 use std::io::{Read, Seek, SeekFrom};
 
-pub(super) fn fields(record: &Requirement) -> anyhow::Result<Vec<SnapshotField>> {
+pub(super) fn fields(record: &ReviewRecord) -> anyhow::Result<Vec<SnapshotField>> {
     let value = serde_json::to_value(record)?;
     let mut position = b"{\"record\":{".len() as u64;
     let mut result = Vec::new();
