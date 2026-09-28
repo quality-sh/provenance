@@ -41,7 +41,7 @@ async fn history(
     ctx.snapshot().attest("review_journal");
     let mut tx = ctx.snapshot().connection().await;
     let keys: Vec<(String, i64, i64)> = sqlx::query_as(
-        "SELECT id, sequence, length(CAST(payload AS BLOB)) FROM review_journal WHERE scope_id = ? AND record_kind = ? AND record_id = ? AND sequence > ? ORDER BY sequence LIMIT ?"
+        "SELECT id, sequence, length(CAST(payload AS BLOB)) FROM review_journal WHERE scope_id = ? AND kind IN ('requirement', 'record') AND record_kind = ? AND record_id = ? AND sequence > ? ORDER BY sequence LIMIT ?"
     ).bind(ctx.snapshot().scope().as_str()).bind(query.record_kind.as_str()).bind(query.record_id.as_str()).bind(position.counter)
         .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
     drop(tx);
@@ -83,7 +83,7 @@ impl ReadSnapshot {
         self.attest("review_journal");
         let mut tx = self.connection().await;
         let row: Option<(i64, Option<String>)> = sqlx::query_as(
-            "SELECT length(CAST(payload AS BLOB)), CASE WHEN length(CAST(payload AS BLOB)) <= ? THEN payload END FROM review_journal WHERE scope_id = ? AND record_kind = ? AND record_id = ? AND id = ?"
+            "SELECT length(CAST(payload AS BLOB)), CASE WHEN length(CAST(payload AS BLOB)) <= ? THEN payload END FROM review_journal WHERE scope_id = ? AND kind IN ('requirement', 'record') AND record_kind = ? AND record_id = ? AND id = ?"
         ).bind(i64::try_from(RECORD_BYTES)?).bind(self.scope().as_str()).bind(kind.as_str()).bind(record.as_str()).bind(id)
             .fetch_optional(&mut **tx).await?;
         drop(tx);
