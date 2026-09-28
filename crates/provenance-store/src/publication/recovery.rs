@@ -212,9 +212,7 @@ pub(super) fn validate_missing_transaction_dir(
     .map(|_| ())
 }
 
-pub(super) fn canonical_transactions_dir(
-    layout: &ProvenanceLayout,
-) -> anyhow::Result<Utf8PathBuf> {
+pub(super) fn canonical_transactions_dir(layout: &ProvenanceLayout) -> anyhow::Result<Utf8PathBuf> {
     let canonical_cache = canonical_utf8(&layout.cache_dir(), "repository cache path")?;
     recovery_dir_inside_cache(
         &canonical_cache,

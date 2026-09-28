@@ -32,18 +32,30 @@ pub fn with_staged_state<R>(
 pub(super) trait StagedStateHook {
     fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf;
     fn marker_path(&self, live: &ProvenanceLayout) -> Utf8PathBuf;
-    fn prepared(&mut self, live: &ProvenanceLayout, transaction: &camino::Utf8Path)
-        -> anyhow::Result<()>;
-    fn backup_created(&mut self, live: &ProvenanceLayout, transaction: &camino::Utf8Path)
-        -> anyhow::Result<()>;
+    fn prepared(
+        &mut self,
+        live: &ProvenanceLayout,
+        transaction: &camino::Utf8Path,
+    ) -> anyhow::Result<()>;
+    fn backup_created(
+        &mut self,
+        live: &ProvenanceLayout,
+        transaction: &camino::Utf8Path,
+    ) -> anyhow::Result<()>;
     fn state_installed(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
     fn install_file(&mut self) -> anyhow::Result<()>;
-    fn published(&mut self, live: &ProvenanceLayout, transaction: &camino::Utf8Path)
-        -> anyhow::Result<()>;
+    fn published(
+        &mut self,
+        live: &ProvenanceLayout,
+        transaction: &camino::Utf8Path,
+    ) -> anyhow::Result<()>;
     fn after_published(&mut self) -> anyhow::Result<()>;
     fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
-    fn finish(&mut self, live: &ProvenanceLayout, transaction: &camino::Utf8Path)
-        -> anyhow::Result<()>;
+    fn finish(
+        &mut self,
+        live: &ProvenanceLayout,
+        transaction: &camino::Utf8Path,
+    ) -> anyhow::Result<()>;
 }
 
 pub(super) fn stage_with_hook<R>(

@@ -134,7 +134,11 @@ impl StagedStateHook for SourceEditPublication {
         Ok(())
     }
 
-    fn published(&mut self, live: &ProvenanceLayout, _transaction: &Utf8Path) -> anyhow::Result<()> {
+    fn published(
+        &mut self,
+        live: &ProvenanceLayout,
+        _transaction: &Utf8Path,
+    ) -> anyhow::Result<()> {
         let marker = self.marker.as_mut().expect("source-edit marker");
         marker.phase = SourceEditPhase::FileInstalled;
         write_marker(live, marker)
@@ -267,8 +271,12 @@ fn validate_transaction(
         metadata.is_dir() && !metadata.file_type().is_symlink(),
         "source-edit transaction is not a real directory"
     );
-    Utf8PathBuf::from_path_buf(std::fs::canonicalize(transaction)?)
-        .map_err(|path| anyhow::anyhow!("source-edit transaction path is not UTF-8: {}", path.display()))
+    Utf8PathBuf::from_path_buf(std::fs::canonicalize(transaction)?).map_err(|path| {
+        anyhow::anyhow!(
+            "source-edit transaction path is not UTF-8: {}",
+            path.display()
+        )
+    })
 }
 
 fn validate_missing_transaction(

@@ -1,11 +1,7 @@
 use super::{
     with_repository_publication, with_staged_state_and_source_edit, SourceEditRecoveryFailure,
 };
-use crate::{
-    layout::ProvenanceLayout,
-    operations::files::RepositoryFiles,
-    test_probes,
-};
+use crate::{layout::ProvenanceLayout, operations::files::RepositoryFiles, test_probes};
 use camino::Utf8Path;
 
 const BEFORE: &[u8] = b"before\n";
@@ -78,17 +74,23 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
 
         let layout = ProvenanceLayout::new(root);
         with_repository_publication(&layout, || Ok(())).unwrap();
-        assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), AFTER, "{phase}");
-        assert_eq!(std::fs::read(layout.state_dir().join("value")).unwrap(), AFTER, "{phase}");
+        assert_eq!(
+            std::fs::read(root.join("source.txt")).unwrap(),
+            AFTER,
+            "{phase}"
+        );
+        assert_eq!(
+            std::fs::read(layout.state_dir().join("value")).unwrap(),
+            AFTER,
+            "{phase}"
+        );
         assert!(!layout.source_edit_marker_path().exists(), "{phase}");
         let names = std::fs::read_dir(root)
             .unwrap()
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
             .collect::<Vec<_>>();
         assert!(
-            !names
-                .iter()
-                .any(|name| name.strip_suffix(".tmp").is_some()),
+            !names.iter().any(|name| name.strip_suffix(".tmp").is_some()),
             "{phase}: {names:?}"
         );
     }
@@ -105,10 +107,7 @@ fn recovery_refuses_third_file_bytes_without_overwriting_them() {
             "--nocapture",
         ])
         .env("PROVENANCE_SOURCE_EDIT_CRASH_ROOT", root.as_str())
-        .env(
-            "PROVENANCE_SOURCE_EDIT_CRASH_PHASE",
-            "source_edit_prepared",
-        )
+        .env("PROVENANCE_SOURCE_EDIT_CRASH_PHASE", "source_edit_prepared")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()

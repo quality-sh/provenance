@@ -14,16 +14,16 @@ mod staged;
 pub use durability::{sync_directory, sync_tree};
 pub use guard::{publication_guard, PublicationGuard};
 pub use read_only::with_read_only_validation;
+use recovery::{canonical_transactions_dir, create_real_directory};
 pub use recovery::{
     clear_publication_marker, recover_pending_publication, write_publication_marker,
     PublicationPhase,
 };
-pub use staged::with_staged_state;
-#[cfg(any(unix, windows))]
-pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
-use recovery::{canonical_transactions_dir, create_real_directory};
 #[cfg(test)]
 use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
+#[cfg(any(unix, windows))]
+pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
+pub use staged::with_staged_state;
 
 thread_local! {
     static HELD_LOCKS: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
@@ -133,7 +133,7 @@ impl crate::state_store::StateStore {
 
 #[cfg(all(test, unix))]
 mod containment_tests;
-#[cfg(test)]
-mod tests;
 #[cfg(all(test, any(unix, windows)))]
 mod source_edit_recovery_tests;
+#[cfg(test)]
+mod tests;
