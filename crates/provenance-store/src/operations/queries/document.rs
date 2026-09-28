@@ -60,7 +60,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
     let (cursor, mut position) = Cursor::open(
         ctx,
         "read-document",
-        &(&request.id, request.limit),
+        &(&request.id, request.limit, request.exclude_terminal),
         request.cursor.as_deref(),
     )?;
     nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
@@ -68,7 +68,12 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         .ok_or(ReadFailure::DocumentRootMissing)?;
     let keys = ctx
         .snapshot()
-        .document_keys(&request.id, &position, request.limit + 1)
+        .document_keys(
+            &request.id,
+            &position,
+            request.limit + 1,
+            request.exclude_terminal,
+        )
         .await?;
     let mut entries = Vec::new();
     let mut bytes = 0;

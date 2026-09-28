@@ -20,6 +20,10 @@ A recorded decision that removes ambiguity. A Resolution may produce a Rule when
 
 An identified atomic behavioural obligation that refines one or more Requirements and may also be produced by a Resolution. A Rule can exist before any Implementation binding or Verification.
 
+## Document lifecycle filter
+
+A read choice that omits a record according to that record's lifecycle. The filter does not omit an active record only because the record links to an omitted terminal record.
+
 ## Implementation binding
 
 A durable relationship from a Rule to production code that realizes it. A retired Implementation binding preserves a former claim as history but does not implement the Rule in active views. A Rule without an active Implementation binding is unimplemented, but remains a Rule.
@@ -207,6 +211,13 @@ in other Requirement branches can be references without becoming members.
 
 The state in which all member, reference, and discussion pages have been read
 at one unchanged projection revision. A failed refresh does not establish it.
+
+## Terminal-and-dead record
+
+A record whose lifecycle removes it from the current review document but keeps
+it available for historical views. An archived Rule and an abandoned Resolution
+are terminal-and-dead records. A superseded Resolution is not a
+terminal-and-dead record.
 
 ## Thread container
 

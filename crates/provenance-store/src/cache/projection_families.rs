@@ -30,6 +30,7 @@ macro_rules! define_projection_families {
                             shard: $shard:literal,
                             order: $order:tt,
                             budget: $budget:ident
+                            $(, terminal: [$($terminal:literal),*])?
                         },
                         node: [$($node:tt)*],
                         reader: {
@@ -63,6 +64,7 @@ macro_rules! define_projection_families {
                 graph_field: family_graph_field!($group, $field),
                 route_order: family_order!($order),
                 budget: BudgetKind::$budget,
+                terminal_statuses: terminal_statuses!($([$($terminal),*])?),
                 catalog_operations: family_catalog!($($catalog)*),
             };
 
@@ -190,8 +192,43 @@ pub struct FamilyMeta {
     pub graph_field: Option<&'static str>,
     pub route_order: Option<u16>,
     pub budget: BudgetKind,
+    pub terminal_statuses: &'static [&'static str],
     #[allow(dead_code)]
     pub catalog_operations: &'static [&'static str],
+}
+
+macro_rules! terminal_statuses {
+    () => {
+        &[]
+    };
+    ([$($status:literal),*]) => {
+        &[$($status),*]
+    };
+}
+
+/// Returns the SQL predicate for terminal-and-dead record identities.
+pub(super) fn terminal_and_dead_predicate(kind: &str, id: &str, scope: &str) -> String {
+    FAMILIES
+        .iter()
+        .filter(|family| !family.terminal_statuses.is_empty())
+        .filter_map(|family| {
+            let node_type = family.node_type?;
+            let statuses = family
+                .terminal_statuses
+                .iter()
+                .map(|status| format!("'{status}'"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!(
+                "({kind} = '{}' AND EXISTS (SELECT 1 FROM {} lifecycle \
+                 WHERE lifecycle.scope_id = {scope} AND lifecycle.id = {id} \
+                 AND lifecycle.status IN ({statuses})))",
+                node_type.as_str(),
+                family.table_name,
+            ))
+        })
+        .collect::<Vec<_>>()
+        .join(" OR ")
 }
 
 macro_rules! family_group {

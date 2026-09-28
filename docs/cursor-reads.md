@@ -29,6 +29,18 @@ The assembled Requirement document uses:
 GET /requirements/req_review/document?limit=50
 ```
 
+The current review can omit archived Rules and abandoned Resolutions:
+
+```text
+GET /requirements/req_review/document?exclude_terminal=true&limit=50
+```
+
+The default is `exclude_terminal=false`. A superseded Resolution stays visible.
+The filter evaluates each record's lifecycle independently. Thus, an active Rule
+stays visible when its only document link is an abandoned Resolution. The
+abandoned Resolution and its discussions stay hidden. The cursor binds the
+selected value.
+
 A successful list has this form:
 
 ```json

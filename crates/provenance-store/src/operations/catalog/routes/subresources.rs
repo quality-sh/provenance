@@ -27,7 +27,15 @@ fn history_and_evidence(out: &mut Vec<Definition>) {
         "/requirements/{id}/document",
         "Read the assembled document for one Requirement.",
         ResponseKind::Result,
-        vec![schema::path("id"), limit(), cursor()],
+        vec![
+            schema::path("id"),
+            schema::query(
+                "exclude_terminal",
+                serde_json::json!({"type":"boolean","default":false}),
+            ),
+            limit(),
+            cursor(),
+        ],
     ));
     out.push(
         backed::<operation::ReviewHistoryV2>(
