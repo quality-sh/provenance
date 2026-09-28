@@ -4,7 +4,7 @@ use super::validate::{
 use crate::repo_context::RepoContext;
 use crate::{cli::ideation::SwarmBacktraceCommand, output, store::Store};
 use anyhow::Context;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{
     packet_qualifies_proposal, AssertionRecord, Contribution, DispositionRecord, ProposalCard,
     ScopeId, StableId, SynthesisPacket,
