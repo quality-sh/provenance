@@ -110,6 +110,41 @@ impl HeldRepositoryFile {
         )))
     }
 
+    pub(crate) fn recover_temp(
+        &self,
+        leaf: &str,
+        expected_identity: &FileIdentity,
+        expected_digest: [u8; 32],
+    ) -> Result<Option<PreparedRepositoryFile>, Refusal> {
+        let expected_prefix = format!(".{}.provenance-", self.leaf);
+        if !leaf.starts_with(&expected_prefix) || !leaf.ends_with(".tmp") {
+            return Err(Refusal::Changed);
+        }
+        let mut file = match platform::regular(&self.parent, leaf).map_err(Refusal::from) {
+            Ok(file) => file,
+            Err(Refusal::Missing) => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let (bytes, found_identity, _) = read_clone(&mut file, usize::MAX)?;
+        if &found_identity != expected_identity
+            || <[u8; 32]>::from(Sha256::digest(bytes)) != expected_digest
+        {
+            return Err(Refusal::Changed);
+        }
+        Ok(Some(PreparedRepositoryFile {
+            parent: self.parent.try_clone().map_err(Refusal::Read)?,
+            parent_identity: identity(&self.parent)?,
+            leaf: leaf.to_owned(),
+            file,
+            identity: found_identity,
+            digest: expected_digest,
+            target_leaf: self.leaf.clone(),
+            target_identity: self.identity.clone(),
+            target_digest: self.digest,
+            remove_on_drop: true,
+        }))
+    }
+
     pub fn compare_and_swap(
         &self,
         mut prepared: PreparedRepositoryFile,
