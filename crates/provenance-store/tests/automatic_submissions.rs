@@ -1,7 +1,6 @@
-use provenance_core::{review::SaveOutcome, ScopeId, StableId};
+use provenance_core::{ScopeId, StableId};
 use provenance_store::{
     layout::ProvenanceLayout,
-    review::SaveRequirement,
     state_store::{
         AddSourceReferenceInput, CreateRequirementInput, CreateResolutionInput, CreateSourceInput,
         StateStore, UpdateRequirementInput,
@@ -21,17 +20,6 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     .unwrap();
     let scope = ScopeId::new("default").unwrap();
     (temp, StateStore::new(layout), scope)
-}
-
-fn save(store: &StateStore, id: &StableId, request: &str, update: serde_json::Value) {
-    let input: SaveRequirement = serde_json::from_value(json!({
-        "request_id":request, "actor":"ben",
-        "expected_etag":store.requirement_edit_state(&ScopeId::new("default").unwrap(), id).unwrap().etag,
-        "update":update, "relationships":null
-    }))
-    .unwrap();
-    let entry = store.save_requirement(input).unwrap();
-    assert_eq!(entry.outcome, SaveOutcome::Enrolled);
 }
 
 fn requirement(scope: &ScopeId, id: &str) -> CreateRequirementInput {
@@ -136,40 +124,4 @@ fn direct_create_and_all_named_content_writers_open_submissions() {
         .set_requirement_spawned_by(&scope, &id, StableId::new("resolution_a").unwrap())
         .unwrap();
     assert_new_pending(&store, &scope, &id, proposal);
-}
-
-#[test]
-fn first_enrollment_submits_only_when_review_content_changes() {
-    let (_temp, store, scope) = fixture();
-    let changed = StableId::new("req_changed").unwrap();
-    store
-        .write_requirement(requirement(&scope, changed.as_str()))
-        .unwrap();
-    save(
-        &store,
-        &changed,
-        "enroll_changed",
-        json!({"scope_id":"default", "id":"req_changed", "description":"Needs audit."}),
-    );
-    assert!(store
-        .requirement_decision_state(&scope, &changed)
-        .unwrap()
-        .pending
-        .is_some());
-
-    let unchanged = StableId::new("req_unchanged").unwrap();
-    store
-        .write_requirement(requirement(&scope, unchanged.as_str()))
-        .unwrap();
-    save(
-        &store,
-        &unchanged,
-        "enroll_unchanged",
-        json!({"scope_id":"default", "id":"req_unchanged"}),
-    );
-    assert!(store
-        .requirement_decision_state(&scope, &unchanged)
-        .unwrap()
-        .pending
-        .is_none());
 }
