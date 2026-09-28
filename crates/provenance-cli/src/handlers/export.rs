@@ -171,11 +171,11 @@ fn render_table(exported: &ScopeExport) -> String {
 }
 
 pub(super) fn handle(
-    context: RepoContext,
+    context: &RepoContext,
     format: OutputFormat,
     output: Option<Utf8PathBuf>,
 ) -> anyhow::Result<()> {
-    let exported = export_context(&context)?;
+    let exported = export_context(context)?;
     let rendered = render_export(format, &exported)?;
     if let Some(output_path) = output {
         std::fs::write(output_path, rendered)?;

@@ -151,13 +151,13 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
             context,
             format,
             output,
-        } => export::handle(context, format, output),
+        } => export::handle(&context, format, output),
         Command::Import {
             context,
             input,
             dry_run,
             ..
-        } => import::handle(context, input, dry_run),
+        } => import::handle(&context, input, dry_run),
         Command::MergeJsonl {
             base,
             ours,

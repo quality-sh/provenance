@@ -22,7 +22,7 @@ pub struct ImportReport {
 }
 
 pub(super) fn import_scope(
-    context: RepoContext,
+    context: &RepoContext,
     input: Utf8PathBuf,
     dry_run: bool,
 ) -> anyhow::Result<ImportReport> {
@@ -294,7 +294,7 @@ fn ensure_changed_statements_are_clean(
 }
 
 pub(super) fn handle(
-    context: RepoContext,
+    context: &RepoContext,
     input: Utf8PathBuf,
     dry_run: bool,
 ) -> anyhow::Result<()> {

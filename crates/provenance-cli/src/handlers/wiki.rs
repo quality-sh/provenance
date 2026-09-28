@@ -21,7 +21,7 @@ pub(super) async fn handle(command: WikiCommand) -> anyhow::Result<()> {
             port,
         } => {
             crate::wiki::site::serve(context.repo, context.scope, coverage.as_deref(), host, port)
-                .await?
+                .await?;
         }
     }
     Ok(())

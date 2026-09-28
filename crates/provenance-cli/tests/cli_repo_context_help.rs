@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::process::Command;
 
 fn help(arguments: &[&str]) -> String {
@@ -36,8 +37,11 @@ fn centralized_repository_context_keeps_command_help() {
     ];
     let actual = commands
         .iter()
-        .map(|(name, arguments)| format!("=== {name} ===\n{}", help(arguments)))
-        .collect::<String>()
+        .fold(String::new(), |mut output, (name, arguments)| {
+            write!(output, "=== {name} ===\n{}", help(arguments))
+                .expect("writing to a String cannot fail");
+            output
+        })
         .replace(' ', "·");
 
     assert_eq!(

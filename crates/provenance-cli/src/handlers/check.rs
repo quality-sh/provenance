@@ -156,6 +156,7 @@ impl RepositoryCheckPort {
         self.binding_run_with_store(&store, selected_scope, &scanned)
     }
 
+    #[cfg(test)]
     fn binding_run_from_scanned(
         &self,
         selected_scope: Option<&str>,
