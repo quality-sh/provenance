@@ -6,7 +6,11 @@ use sqlx::Row;
 
 // The recursive term follows only active refinement children. Production
 // and references are separate sets, so a cross-link cannot widen the branch.
-const SETS: &str = r"
+fn sets(exclude_terminal: bool) -> String {
+    let member_filter = visibility_filter(exclude_terminal, "candidate.kind", "candidate.id");
+    let reference_filter = visibility_filter(exclude_terminal, "candidate.kind", "candidate.id");
+    format!(
+        r"
 WITH RECURSIVE
 branch(id) AS (
  SELECT id FROM requirements WHERE scope_id = ?1 AND id = ?2
@@ -23,7 +27,7 @@ decisions(id) AS (
  AND e.owner_type = 'resolution' AND e.relation = 'requirement_ids'
  JOIN resolutions r ON r.scope_id = ?1 AND r.id = e.owner_id LIMIT 4097
 ),
-members(kind, id) AS (
+member_candidates(kind, id) AS (
  SELECT 'requirement', id FROM branch
  UNION SELECT 'resolution', id FROM decisions
  UNION SELECT 'rule', e.owner_id FROM branch b JOIN relations e
@@ -39,13 +43,16 @@ members(kind, id) AS (
  AND e.relation = 'requirement_id' AND e.owner_type IN ('topic', 'question', 'boundary')
  LIMIT 4097
 ),
+members(kind, id) AS (
+ SELECT kind, id FROM member_candidates candidate WHERE {member_filter}
+),
 ancestors(id) AS (
  SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2 AND refines IS NOT NULL
  UNION SELECT r.refines FROM ancestors a JOIN requirements r
  ON r.scope_id = ?1 AND r.id = a.id WHERE r.refines IS NOT NULL
  LIMIT 4097
 ),
-refs(kind, id) AS (
+reference_candidates(kind, id) AS (
  SELECT e.target_type, e.target_id FROM members m JOIN relations e
  ON e.scope_id = ?1 AND e.owner_type = m.kind AND e.owner_id = m.id
  UNION SELECT 'requirement', id FROM ancestors
@@ -57,6 +64,9 @@ refs(kind, id) AS (
  OR e.owner_type = 'resolution'))
  OR (m.kind = 'requirement' AND e.relation IN ('refines', 'requirement_ids'))
  LIMIT 4097
+),
+refs(kind, id) AS (
+ SELECT kind, id FROM reference_candidates candidate WHERE {reference_filter}
 ),
 discussions(id) AS (
  SELECT t.id FROM members m JOIN threads t
@@ -75,7 +85,20 @@ ordered AS (
  WHEN 'resolution' THEN 2 WHEN 'rule' THEN 3 WHEN 'topic' THEN 4 WHEN 'question' THEN 5
  WHEN 'domain' THEN 6 WHEN 'boundary' THEN 7 ELSE 0 END + 1 END AS rank FROM keys
 )
-";
+"
+    )
+}
+
+fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
+    if exclude_terminal {
+        format!(
+            "NOT ({})",
+            crate::cache::projection_families::terminal_and_dead_predicate(kind, id, "?1")
+        )
+    } else {
+        "1".to_owned()
+    }
+}
 
 impl ReadSnapshot {
     /// Selects members from the root branch and leaves ancestors in references.
@@ -85,6 +108,7 @@ impl ReadSnapshot {
         root: &str,
         after: &Position,
         limit: usize,
+        exclude_terminal: bool,
     ) -> anyhow::Result<Vec<(String, Position)>> {
         for family in [
             "requirements",
@@ -101,8 +125,9 @@ impl ReadSnapshot {
             self.attest(family);
         }
         let mut tx = self.connection().await;
+        let sets = sets(exclude_terminal);
         let overflow: i64 = sqlx::query_scalar(&format!(
-            "{SETS} SELECT \
+            "{sets} SELECT \
             (SELECT count(*) FROM members) > 4096 OR (SELECT count(*) FROM refs) > 4096 \
             OR (SELECT count(*) FROM branch) > 4096 OR (SELECT count(*) FROM ancestors) > 4096 \
             OR (SELECT count(*) FROM decisions) > 4096"
@@ -115,7 +140,7 @@ impl ReadSnapshot {
             return Err(ReadFailure::PageBudgetExceeded.into());
         }
         let rows = sqlx::query(&format!(
-            "{SETS} SELECT stage, kind, CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id, counter, rank FROM ordered \
+            "{sets} SELECT stage, kind, CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id, counter, rank FROM ordered \
             WHERE (stage, rank, counter, id) > (?3, ?4, ?5, ?6) \
             ORDER BY stage, rank, counter, id LIMIT ?7"
         ))

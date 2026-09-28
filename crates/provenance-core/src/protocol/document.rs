@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 pub struct ReadDocumentQuery {
     pub id: String,
     #[serde(default)]
+    pub exclude_terminal: bool,
+    #[serde(default)]
     pub cursor: Option<String>,
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]

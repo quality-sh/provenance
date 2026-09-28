@@ -66,6 +66,7 @@ async fn filter_only_cursor_pages_preserve_order_and_refuse_invalid_continuation
         ReadPolicy::default(),
         provenance_core::protocol::ReadDocumentQuery {
             id: "req_overtime".into(),
+            exclude_terminal: false,
             cursor: Some(cursor.to_owned()),
             limit: 1,
         },
