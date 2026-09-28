@@ -5,7 +5,7 @@ use crate::state_store::{
 };
 use provenance_core::protocol::{read_failure::ReadFailure, ReadDocumentQuery};
 use provenance_core::{
-    RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
+    ArchivedStamp, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
 };
 use serde_json::{json, Value};
 
@@ -67,7 +67,10 @@ fn add_rule(
 ) {
     store
         .create_rule(CreateRuleInput {
-            archived_in_commit: (status == RuleStatus::Archived).then(|| "deadbeef".into()),
+            archived_in_commit: (status == RuleStatus::Archived).then(|| ArchivedStamp {
+                commit: "a".repeat(40),
+                at: None,
+            }),
             scope_id: scope.clone(),
             id: sid(id),
             name: None,
