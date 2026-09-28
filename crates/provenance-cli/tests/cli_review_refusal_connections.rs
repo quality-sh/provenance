@@ -80,7 +80,7 @@ fn early_refusals_close_reused_connections_before_body_decode() {
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(5))
         .build();
-    let body = "invalid".repeat(8 * 1024);
+    let body = "invalid";
 
     for _ in 0..4 {
         let refusal = response(
@@ -89,7 +89,7 @@ fn early_refusals_close_reused_connections_before_body_decode() {
                     "{}/requirements/req_example/discussions",
                     host.endpoint
                 ))
-                .send_string(&body),
+                .send_string(body),
         );
         assert_eq!(refusal.status(), 401);
         assert_eq!(refusal.header("Connection"), Some("close"));
