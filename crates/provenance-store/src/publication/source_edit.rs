@@ -124,6 +124,18 @@ pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::
         "source-edit publication marker",
         SchemaVersion(marker.schema_version),
     )?;
+    if marker.phase == SourceEditPhase::FileInstalled && !marker.transaction_dir.exists() {
+        validate_missing_transaction(layout, &marker.transaction_dir)?;
+        let files = RepositoryFiles::open(layout.root())?;
+        let current = files
+            .read_bounded(&marker.target, usize::MAX)
+            .map_err(|_| SourceEditRecoveryFailure::ExternalChange)?;
+        if current.digest() != marker.after_digest {
+            return Err(SourceEditRecoveryFailure::ExternalChange.into());
+        }
+        std::fs::remove_file(marker_path)?;
+        return sync_directory(&layout.cache_dir());
+    }
     let transaction = validate_transaction(layout, &marker.transaction_dir)?;
     let replacement = std::fs::read(transaction.join("replacement"))?;
     anyhow::ensure!(
@@ -224,6 +236,25 @@ fn validate_transaction(
     );
     Utf8PathBuf::from_path_buf(std::fs::canonicalize(transaction)?)
         .map_err(|path| anyhow::anyhow!("source-edit transaction path is not UTF-8: {}", path.display()))
+}
+
+fn validate_missing_transaction(
+    layout: &ProvenanceLayout,
+    transaction: &Utf8Path,
+) -> anyhow::Result<()> {
+    let parent = std::fs::canonicalize(layout.source_edit_transactions_dir())?;
+    let candidate_parent = transaction
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("source-edit transaction has no parent"))?;
+    anyhow::ensure!(
+        std::fs::canonicalize(candidate_parent)? == parent,
+        "source-edit transaction is outside its transaction directory"
+    );
+    match std::fs::symlink_metadata(transaction) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+        Ok(_) => anyhow::bail!("source-edit transaction still exists"),
+    }
 }
 
 fn write_marker(layout: &ProvenanceLayout, marker: &SourceEditMarker) -> anyhow::Result<()> {
