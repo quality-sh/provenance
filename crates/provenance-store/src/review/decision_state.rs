@@ -7,6 +7,9 @@ use provenance_core::{
     DispositionDecision, IdeationTargetType, ProposalType, ScopeId, StableId,
 };
 
+/// Cycle receipts use a separate range from contiguous Requirement outcomes.
+const CYCLE_SEQUENCE_BASE: u64 = 1 << 62;
+
 pub(super) fn request_digest(input: &impl serde::Serialize) -> anyhow::Result<String> {
     anyhow::ensure!(
         serde_json::to_vec(input)?.len() <= 1_048_576,
@@ -168,7 +171,7 @@ impl CycleFacts {
             .filter(|e| e.requirement_id == *requirement)
             .map(|e| e.sequence)
             .max()
-            .unwrap_or(0)
+            .unwrap_or(CYCLE_SEQUENCE_BASE - 1)
             + 1
     }
 
