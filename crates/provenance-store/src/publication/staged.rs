@@ -117,7 +117,7 @@ struct TransactionCleanup {
 }
 
 impl TransactionCleanup {
-    fn new(transaction: Utf8PathBuf, publication_marker: Utf8PathBuf) -> Self {
+    const fn new(transaction: Utf8PathBuf, publication_marker: Utf8PathBuf) -> Self {
         Self {
             transaction,
             publication_marker,

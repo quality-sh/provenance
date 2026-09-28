@@ -21,10 +21,9 @@ pub use recovery::{
 pub use staged::with_staged_state;
 #[cfg(any(unix, windows))]
 pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
-use recovery::{
-    canonical_transactions_dir, create_real_directory, validate_missing_transaction_dir,
-    validated_transaction_dir,
-};
+use recovery::{canonical_transactions_dir, create_real_directory};
+#[cfg(test)]
+use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
 
 thread_local! {
     static HELD_LOCKS: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
