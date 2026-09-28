@@ -2,8 +2,7 @@ use super::{BudgetKind, FamilyGroup, FamilyMeta, ProjectionFamily, FAMILIES};
 use provenance_core::NodeType;
 
 const fn expected(
-    group: FamilyGroup,
-    table_name: &'static str,
+    identity: (FamilyGroup, &'static str),
     shard_suffix: &'static str,
     node_type: Option<NodeType>,
     graph_field: Option<&'static str>,
@@ -11,6 +10,7 @@ const fn expected(
     budget: BudgetKind,
     catalog_operations: &'static [&'static str],
 ) -> FamilyMeta {
+    let (group, table_name) = identity;
     FamilyMeta {
         group,
         table_name,
@@ -32,8 +32,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Sources,
             expected(
-                Export,
-                "sources",
+                (Export, "sources"),
                 "sources/source.jsonl",
                 Some(NodeType::Source),
                 Some("sources"),
@@ -45,8 +44,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Domains,
             expected(
-                Export,
-                "domains",
+                (Export, "domains"),
                 "domains/domain.jsonl",
                 Some(NodeType::Domain),
                 Some("domains"),
@@ -58,8 +56,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Requirements,
             expected(
-                Export,
-                "requirements",
+                (Export, "requirements"),
                 "requirements/req.jsonl",
                 Some(NodeType::Requirement),
                 Some("requirements"),
@@ -71,8 +68,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Boundaries,
             expected(
-                Export,
-                "boundaries",
+                (Export, "boundaries"),
                 "boundaries/boundary.jsonl",
                 Some(NodeType::Boundary),
                 Some("boundaries"),
@@ -84,8 +80,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Topics,
             expected(
-                Export,
-                "topics",
+                (Export, "topics"),
                 "topics/topic.jsonl",
                 Some(NodeType::Topic),
                 Some("topics"),
@@ -97,8 +92,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Questions,
             expected(
-                Export,
-                "questions",
+                (Export, "questions"),
                 "questions/question.jsonl",
                 Some(NodeType::Question),
                 Some("questions"),
@@ -110,8 +104,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Resolutions,
             expected(
-                Export,
-                "resolutions",
+                (Export, "resolutions"),
                 "resolutions/res.jsonl",
                 Some(NodeType::Resolution),
                 Some("resolutions"),
@@ -127,8 +120,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Rules,
             expected(
-                Export,
-                "rules",
+                (Export, "rules"),
                 "rules/rule.jsonl",
                 Some(NodeType::Rule),
                 Some("rules"),
@@ -140,8 +132,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Threads,
             expected(
-                Canonical,
-                "threads",
+                (Canonical, "threads"),
                 "threads/threads.jsonl",
                 None,
                 None,
@@ -157,8 +148,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Messages,
             expected(
-                Canonical,
-                "messages",
+                (Canonical, "messages"),
                 "threads/2026-07.jsonl",
                 None,
                 None,
@@ -170,8 +160,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Contributions,
             expected(
-                Canonical,
-                "contributions",
+                (Canonical, "contributions"),
                 "ideation/contributions.jsonl",
                 None,
                 None,
@@ -187,8 +176,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::SynthesisPackets,
             expected(
-                Canonical,
-                "synthesis_packets",
+                (Canonical, "synthesis_packets"),
                 "ideation/synthesis_packets.jsonl",
                 None,
                 None,
@@ -204,8 +192,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::ProposalCards,
             expected(
-                Canonical,
-                "proposal_cards",
+                (Canonical, "proposal_cards"),
                 "ideation/proposal_cards.jsonl",
                 None,
                 None,
@@ -217,8 +204,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::AssertionRecords,
             expected(
-                Canonical,
-                "assertion_records",
+                (Canonical, "assertion_records"),
                 "ideation/assertions.jsonl",
                 None,
                 None,
@@ -234,8 +220,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::Dispositions,
             expected(
-                Canonical,
-                "dispositions",
+                (Canonical, "dispositions"),
                 "ideation/dispositions.jsonl",
                 None,
                 None,
@@ -251,8 +236,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::ImplementationBindings,
             expected(
-                Binding,
-                "implementation_bindings",
+                (Binding, "implementation_bindings"),
                 "implementations/binding.jsonl",
                 None,
                 Some("implementation_bindings"),
@@ -264,8 +248,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::VerificationBindings,
             expected(
-                Binding,
-                "verification_bindings",
+                (Binding, "verification_bindings"),
                 "verifications/binding.jsonl",
                 None,
                 Some("verification_bindings"),
@@ -281,8 +264,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::RequirementReviews,
             expected(
-                Internal,
-                "requirement_reviews",
+                (Internal, "requirement_reviews"),
                 "requirements/review.jsonl",
                 None,
                 None,
@@ -294,8 +276,7 @@ fn every_family_keeps_its_independent_descriptor() {
         (
             ProjectionFamily::ReviewJournal,
             expected(
-                Internal,
-                "review_journal",
+                (Internal, "review_journal"),
                 "review/journal",
                 None,
                 None,
