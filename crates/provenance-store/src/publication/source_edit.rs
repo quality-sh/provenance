@@ -141,6 +141,11 @@ impl StagedStateHook for SourceEditPublication {
         crate::test_probes::at("source_edit_file_installed")
     }
 
+    fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()> {
+        std::fs::remove_file(live.source_edit_marker_path())?;
+        sync_directory(&live.cache_dir())
+    }
+
     fn finish(&mut self, live: &ProvenanceLayout, transaction: &Utf8Path) -> anyhow::Result<()> {
         finish(live, transaction)
     }
