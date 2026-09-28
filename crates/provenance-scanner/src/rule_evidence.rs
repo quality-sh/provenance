@@ -8,7 +8,7 @@ use provenance_core::{
 };
 use provenance_macros::rule;
 
-use crate::{source_sites, FileScan, SourceSiteRole};
+use crate::{source_sites, FileScan, SourceSite, SourceSiteRole};
 
 /// Whether the supplied scans can establish evidence absence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,18 +186,20 @@ fn inactive_current_bindings(
         }
         for binding in &scan.bindings {
             if let Some(status) = inactive.get(binding.rule_id.as_str()) {
+                let (role, verification_method) = match SourceSite::Attribute(binding).role() {
+                    SourceSiteRole::Implementation => (InactiveBindingRole::Implementation, None),
+                    SourceSiteRole::Verification(method) => {
+                        (InactiveBindingRole::Verification, Some(method))
+                    }
+                };
                 current.push(InactiveCurrentBinding {
                     rule_id: binding.rule_id.clone(),
                     status: status.clone(),
                     origin: InactiveBindingOrigin::Scanned,
-                    role: if binding.verification.is_some() {
-                        InactiveBindingRole::Verification
-                    } else {
-                        InactiveBindingRole::Implementation
-                    },
+                    role,
                     file_path: binding.file_path.clone(),
                     line: Some(binding.line),
-                    verification_method: binding.verification,
+                    verification_method,
                 });
             }
         }
