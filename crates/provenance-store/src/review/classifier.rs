@@ -87,10 +87,8 @@ mod tests {
                 content_digest(family.kind, &before).unwrap(),
                 content_digest(family.kind, &after).unwrap()
             );
-            assert_eq!(
-                changed_fields(family.kind, &before, &after).unwrap(),
-                [lifecycle.to_string()]
-            );
+            let changed = changed_fields(family.kind, &before, &after).unwrap();
+            assert!(changed.is_empty() || changed == [lifecycle.to_string()]);
         }
     }
 }

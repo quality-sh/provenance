@@ -1,4 +1,4 @@
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 use provenance_macros::verifies;
 use provenance_store::{
@@ -371,7 +371,7 @@ fn empty_graph() -> serde_json::Value {
 fn exact_export_rejects_unsupported_record_schema_versions() {
     let mut graph = empty_graph();
     graph["sources"] = json!([{
-        "schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1,
+        "schema_version": REVIEW_SCHEMA_VERSION.0 + 1,
         "scope_id": "default",
         "id": "source_policy",
         "name": "Policy",
@@ -385,7 +385,7 @@ fn exact_export_rejects_unsupported_record_schema_versions() {
     assert!(error.to_string().contains("source 'source_policy'"));
     assert!(error.to_string().contains(&format!(
         "schema_version {}",
-        SUPPORTED_SCHEMA_VERSION.0 + 1
+        REVIEW_SCHEMA_VERSION.0 + 1
     )));
 }
 
