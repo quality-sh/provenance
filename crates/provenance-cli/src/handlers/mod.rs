@@ -97,8 +97,6 @@ async fn run_blocking(
 #[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
 fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
-        Command::Dictionary { command } => dictionary::handle(command),
-        Command::GraphReference { command } => graph_reference::handle(command),
         Command::Graph {
             requirement_id,
             context,
@@ -139,14 +137,6 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
             let store = context.open_graph()?;
             output::print_json(&cache::orphan_rules(store.layout(), &context.scope_id()?)?)
         }
-        Command::Coverage { command } => coverage::handle(command),
-        Command::Report { command } => report::handle(command),
-        Command::SwarmBacktrace { command } => swarm_backtrace::handle(command),
-        Command::Skills { command } => skills::handle(command),
-        Command::Schema { command } => schema::handle(command),
-        Command::Validate {
-            artifact, input, ..
-        } => validate::handle(artifact, &input),
         Command::Export {
             context,
             format,
@@ -158,6 +148,24 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
             dry_run,
             ..
         } => import::handle(&context, input, dry_run),
+        command => dispatch_remaining_on_thread(command, quiet),
+    }
+}
+
+/// Runs a synchronous command that does not use the shared repository context.
+#[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
+fn dispatch_remaining_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
+    match command {
+        Command::Dictionary { command } => dictionary::handle(command),
+        Command::GraphReference { command } => graph_reference::handle(command),
+        Command::Coverage { command } => coverage::handle(command),
+        Command::Report { command } => report::handle(command),
+        Command::SwarmBacktrace { command } => swarm_backtrace::handle(command),
+        Command::Skills { command } => skills::handle(command),
+        Command::Schema { command } => schema::handle(command),
+        Command::Validate {
+            artifact, input, ..
+        } => validate::handle(artifact, &input),
         Command::MergeJsonl {
             base,
             ours,
@@ -168,7 +176,7 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
         } => merge_jsonl::handle(&base, &ours, &theirs, output, path.as_deref()),
         #[cfg(feature = "dogfood")]
         Command::Dogfood { command } => dogfood::handle(command, quiet),
-        // These are the commands that `dispatch` runs. Keep the two lists the same.
+        // These commands run in `dispatch` or `dispatch_on_thread`.
         Command::Search(_)
         | Command::CargoInit { .. }
         | Command::Init { .. }
@@ -176,8 +184,16 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
         | Command::Docs { .. }
         | Command::Wiki { .. }
         | Command::Review(_)
-        | Command::Materialize { .. } => {
-            unreachable!("dispatch runs the async and blocking-thread commands")
+        | Command::Materialize { .. }
+        | Command::Graph { .. }
+        | Command::Traceability { .. }
+        | Command::Gaps { .. }
+        | Command::Prime { .. }
+        | Command::Health { .. }
+        | Command::Orphans { .. }
+        | Command::Export { .. }
+        | Command::Import { .. } => {
+            unreachable!("an earlier dispatcher runs this command")
         }
     }
 }
