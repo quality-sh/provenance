@@ -41,10 +41,9 @@ member_candidates(kind, id) AS (
  UNION SELECT e.owner_type, e.owner_id FROM branch b JOIN relations e
  ON e.scope_id = ?1 AND e.target_type = 'requirement' AND e.target_id = b.id
  AND e.relation = 'requirement_id' AND e.owner_type IN ('topic', 'question', 'boundary')
- LIMIT 4097
 ),
 members(kind, id) AS (
- SELECT kind, id FROM member_candidates candidate WHERE {member_filter}
+ SELECT kind, id FROM member_candidates candidate WHERE {member_filter} LIMIT 4097
 ),
 ancestors(id) AS (
  SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2 AND refines IS NOT NULL
@@ -63,10 +62,9 @@ reference_candidates(kind, id) AS (
  OR (e.owner_type = 'source' AND EXISTS (SELECT 1 FROM sources s WHERE s.scope_id = ?1 AND s.id = e.owner_id))
  OR e.owner_type = 'resolution'))
  OR (m.kind = 'requirement' AND e.relation IN ('refines', 'requirement_ids'))
- LIMIT 4097
 ),
 refs(kind, id) AS (
- SELECT kind, id FROM reference_candidates candidate WHERE {reference_filter}
+ SELECT kind, id FROM reference_candidates candidate WHERE {reference_filter} LIMIT 4097
 ),
 discussions(id) AS (
  SELECT t.id FROM members m JOIN threads t
