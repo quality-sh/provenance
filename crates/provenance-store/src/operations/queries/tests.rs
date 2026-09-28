@@ -17,6 +17,7 @@ mod concurrent;
 mod cursor;
 mod dangling_targets;
 mod document;
+mod document_lifecycle;
 mod document_membership;
 mod evidence;
 mod front_equivalence;
