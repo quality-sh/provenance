@@ -26,7 +26,7 @@ fn legacy_entry() -> Value {
 #[test]
 fn requirement_entry_keeps_legacy_json() {
     let bytes = br#"{"schema_version":3,"scope_id":"default","requirement_id":"req_a","id":"entry_a","sequence":1,"predecessor":null,"revision":"revision_a","prior_revision":null,"before":null,"after":{"id":"snapshot_a","digest":"sha256:a","bytes":1,"fields":[]},"changed_fields":["statement"],"actor":"reviewer","request_id":"request_a","intent_digest":"sha256:b","etag":"sha256:c","outcome":"changed"}"#;
-    let entry: ReviewEntry = serde_json::from_slice(&bytes).unwrap();
+    let entry: ReviewEntry = serde_json::from_slice(bytes).unwrap();
     assert_eq!(entry.record_kind, NodeType::Requirement);
     assert_eq!(entry.record_id.as_str(), "req_a");
     assert_eq!(serde_json::to_vec(&entry).unwrap(), bytes.as_slice());
