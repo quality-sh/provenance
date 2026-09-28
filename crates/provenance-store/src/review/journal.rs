@@ -119,7 +119,7 @@ pub(super) fn snapshot(
         record: record.clone(),
     };
     let bytes = canonical_digest::canonical_bytes(&value)?;
-    write_new(&snapshot_path(layout, &record.scope_id, &id), &value)?;
+    write_new(&snapshot_path(layout, record.scope_id(), &id), &value)?;
     Ok(SnapshotRef {
         id,
         digest: canonical_digest::digest(&bytes),

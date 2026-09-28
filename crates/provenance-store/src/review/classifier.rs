@@ -81,8 +81,8 @@ mod tests {
             };
             assert!(changes_revision(family.kind, &[content.to_string()]));
             assert!(!changes_revision(family.kind, &[lifecycle.to_string()]));
-            let before = json!({content:"A", lifecycle:"old"});
-            let after = json!({content:"A", lifecycle:"new"});
+            let before = json!({(content):"A", (lifecycle):"old"});
+            let after = json!({(content):"A", (lifecycle):"new"});
             assert_eq!(
                 content_digest(family.kind, &before).unwrap(),
                 content_digest(family.kind, &after).unwrap()
