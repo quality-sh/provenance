@@ -186,11 +186,11 @@ CREATE TABLE projection_validation (
 );
 
 CREATE TABLE review_journal (
-    scope_id TEXT NOT NULL, requirement_id TEXT, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, kind TEXT NOT NULL, requirement_id TEXT, id TEXT NOT NULL,
     sequence INTEGER, request_id TEXT NOT NULL, payload TEXT NOT NULL,
     discussion_id TEXT, thread_id TEXT, message_id TEXT, parent_type TEXT,
     parent_id TEXT, version INTEGER, PRIMARY KEY (scope_id, id),
-    UNIQUE (scope_id, request_id), UNIQUE (scope_id, requirement_id, sequence),
+    UNIQUE (scope_id, request_id), UNIQUE (scope_id, kind, requirement_id, sequence),
     UNIQUE (scope_id, discussion_id, version), UNIQUE (scope_id, message_id)
 );
 CREATE INDEX discussion_parent ON review_journal(scope_id, parent_type, parent_id, discussion_id, version);

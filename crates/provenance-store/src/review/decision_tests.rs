@@ -408,6 +408,19 @@ fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
     );
 }
 
+#[test]
+fn review_finding_withdrawn_and_resubmitted_receipts_have_safe_sequences() {
+    let temp = fixture();
+    let store = open(Utf8Path::from_path(temp.path()).unwrap());
+    let proposal = state(&store).pending.unwrap().proposal_id;
+
+    let withdrawn = withdraw(&store, &proposal).unwrap();
+    let resubmitted = submit(&store, None, None).unwrap();
+
+    assert!(withdrawn.sequence < resubmitted.sequence);
+    assert!(resubmitted.sequence < (1_u64 << 53));
+}
+
 mod bypass_tests;
 mod canonical_artifacts;
 #[path = "decision_tests/conflict_tests.rs"]
