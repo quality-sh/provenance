@@ -40,7 +40,7 @@ impl StateStore {
         input: CreateReviewRequirement,
     ) -> anyhow::Result<super::RequirementResourceSnapshot> {
         self.create_review_requirement_with(input, |store, entry| {
-            store.requirement_resource_snapshot_unlocked(&entry.scope_id, &entry.requirement_id)
+            store.requirement_resource_snapshot_unlocked(&entry.scope_id, &entry.record_id)
         })
     }
 
@@ -120,7 +120,7 @@ impl StateStore {
         anyhow::ensure!(
             !current.is_empty()
                 && entry.scope_id == *scope
-                && entry.requirement_id == input.create.id
+                && entry.record_id == input.create.id
                 && entry.request_id == input.request_id
                 && entry.actor == input.actor
                 && entry.intent_digest == digest,
@@ -148,13 +148,14 @@ impl StateStore {
         let entry = ReviewEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: scope.clone(),
-            requirement_id: after.id.clone(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: after.id.clone(),
             sequence: 1,
             predecessor: None,
             prior_revision: None,
             revision: journal::new_id(),
             before: None,
-            after: journal::snapshot(&self.layout, &after)?,
+            after: journal::snapshot(&self.layout, &after.clone().into())?,
             changed_fields: serde_json::to_value(&after)?
                 .as_object()
                 .unwrap()
@@ -165,7 +166,7 @@ impl StateStore {
             actor: input.actor,
             request_id: input.request_id,
             intent_digest,
-            etag: journal::etag(&after, Some(&id))?,
+            etag: journal::etag(&after.clone().into(), Some(&id))?,
             id,
             outcome: SaveOutcome::Created,
             origin: input.origin,

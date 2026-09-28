@@ -3,7 +3,7 @@
 mod review_support;
 
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::review::{EvidenceQuery, RequirementSnapshot, ReviewHistoryQuery};
+use provenance_core::review::{EvidenceQuery, RecordSnapshot, ReviewHistoryQuery};
 use provenance_store::{
     cache,
     layout::ProvenanceLayout,
@@ -48,7 +48,8 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         &scope(),
         ReadPolicy::default(),
         ReviewHistoryQuery {
-            requirement_id: id(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
             limit: 10,
             cursor: None,
         },
@@ -65,7 +66,8 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         &scope(),
         ReadPolicy::default(),
         EvidenceQuery {
-            requirement_id: id(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
             entry_id: first.id,
             before: false,
             field: None,
@@ -74,8 +76,11 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     )
     .await
     .unwrap();
-    let snapshot: RequirementSnapshot = serde_json::from_str(&page.result.json_text).unwrap();
-    assert_eq!(snapshot.record.description.as_deref(), Some("saved"));
+    let snapshot: RecordSnapshot = serde_json::from_str(&page.result.json_text).unwrap();
+    assert_eq!(
+        snapshot.record.as_requirement().unwrap().description.as_deref(),
+        Some("saved")
+    );
 }
 
 fn review_dir(root: &Utf8Path) -> Utf8PathBuf {

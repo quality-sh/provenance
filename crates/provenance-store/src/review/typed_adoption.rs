@@ -52,7 +52,7 @@ impl StateStore {
                 let receipt = journal::read_entry(&self.layout, &path)?;
                 anyhow::ensure!(
                     receipt.scope_id == scope
-                        && receipt.requirement_id == before.id
+                        && receipt.record_id == before.id
                         && receipt.request_id == request_id
                         && receipt.intent_digest == intent_digest,
                     "adoption request ID was reused with different intent"
@@ -108,40 +108,42 @@ impl StateStore {
             self.layout.manifest_path(),
             serde_json::to_vec_pretty(&manifest)?,
         )?;
-        let fields = classifier::changed_fields(before, &after)?;
+        let kind = provenance_core::NodeType::Requirement;
+        let fields = classifier::changed_fields(kind, before, &after)?;
         let outcome = if fields.is_empty() {
             SaveOutcome::NoChange
-        } else if classifier::changes_revision(&fields) {
+        } else if classifier::changes_revision(kind, &fields) {
             SaveOutcome::Changed
         } else {
             SaveOutcome::LifecycleOnly
         };
         let revision = match head {
-            Some(head) if !classifier::changes_revision(&fields) => head.revision.clone(),
+            Some(head) if !classifier::changes_revision(kind, &fields) => head.revision.clone(),
             _ => journal::new_id(),
         };
         let before_snapshot = match head {
             Some(entry) => entry.after.clone(),
-            None => journal::snapshot(&self.layout, before)?,
+            None => journal::snapshot(&self.layout, &before.clone().into())?,
         };
         let after_snapshot = if outcome == SaveOutcome::NoChange {
             before_snapshot.clone()
         } else {
-            journal::snapshot(&self.layout, &after)?
+            journal::snapshot(&self.layout, &after.clone().into())?
         };
         let entry_id = journal::new_id();
         let etag = if outcome == SaveOutcome::NoChange {
             match head {
                 Some(head) => head.etag.clone(),
-                None => journal::etag(&after, None)?,
+                None => journal::etag(&after.clone().into(), None)?,
             }
         } else {
-            journal::etag(&after, Some(&entry_id))?
+            journal::etag(&after.clone().into(), Some(&entry_id))?
         };
         let entry = ReviewEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: scope.clone(),
-            requirement_id: id,
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id,
             sequence: head.map_or(1, |e| e.sequence + 1),
             id: entry_id,
             predecessor: head.map(|e| e.id.clone()),
@@ -165,7 +167,7 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
-        if classifier::changes_revision(&entry.changed_fields) {
+        if classifier::changes_revision(entry.record_kind, &entry.changed_fields) {
             self.commit_automatic_submission(&after, &entry)?;
         }
         Ok(())
@@ -178,8 +180,8 @@ fn adoption_intent(
     before: &Requirement,
     after: &Requirement,
 ) -> anyhow::Result<String> {
-    let before = journal::record_digest(before)?;
-    let after = journal::record_digest(after)?;
+    let before = journal::record_digest(&before.clone().into())?;
+    let after = journal::record_digest(&after.clone().into())?;
     Ok(canonical_digest::digest(
         &canonical_digest::canonical_bytes(&("typed-spec-adoption", owner, before, after))?,
     ))

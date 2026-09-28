@@ -80,7 +80,7 @@ impl StateStore {
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
         let record = self.requirement(&scope, &input.requirement_id)?;
-        let head = self.head(&record)?.ok_or_else(|| {
+        let head = self.head(&record.clone().into())?.ok_or_else(|| {
             anyhow::anyhow!(
                 "submission requires a review revision: save the record through the review seam first"
             )
@@ -138,7 +138,10 @@ impl StateStore {
             superseded_by: None,
             record_revision: Some(RecordRevisionBinding {
                 revision: head.revision,
-                content_digest: classifier::content_digest(&record)?,
+                content_digest: classifier::content_digest(
+                    provenance_core::NodeType::Requirement,
+                    &record,
+                )?,
             }),
             revises,
             revises_rejection,
@@ -149,7 +152,8 @@ impl StateStore {
             sequence: facts.next_sequence(&input.requirement_id)?,
             scope_id: scope,
             id: journal::new_id(),
-            requirement_id: input.requirement_id,
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: input.requirement_id,
             proposal_id,
             proposal_key: Some(proposal_key),
             fact: CycleFact::Submitted,
@@ -244,10 +248,11 @@ impl StateStore {
             .expect("review_submission checks the binding");
         let record = self.requirement(&scope, &requirement_id)?;
         let head = self
-            .head(&record)?
+            .head(&record.clone().into())?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
         if head.revision != binding.revision
-            || classifier::content_digest(&record)? != binding.content_digest
+            || classifier::content_digest(provenance_core::NodeType::Requirement, &record)?
+                != binding.content_digest
         {
             let facts = CycleFacts::validated(self, &scope)?;
             return Err(SourceFailure::wrap(
@@ -287,7 +292,8 @@ impl StateStore {
             sequence: CycleFacts::validated(self, &scope)?.next_sequence(&requirement_id)?,
             scope_id: scope,
             id: journal::new_id(),
-            requirement_id,
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: requirement_id,
             proposal_id,
             proposal_key: None,
             fact: CycleFact::Decided,
@@ -394,10 +400,11 @@ impl StateStore {
                 .as_ref()
                 .expect("review_submission checks the binding");
             let head = self
-                .head(&record)?
+                .head(&record.clone().into())?
                 .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
             if head.revision != binding.revision
-                || classifier::content_digest(&record)? != binding.content_digest
+                || classifier::content_digest(provenance_core::NodeType::Requirement, &record)?
+                    != binding.content_digest
                 || facts.is_withdrawn(&input.proposal_id)
                 || facts.is_decided(&input.proposal_id)
             {
@@ -426,7 +433,8 @@ impl StateStore {
             sequence: CycleFacts::validated(self, &scope)?.next_sequence(&requirement_id)?,
             scope_id: scope,
             id: journal::new_id(),
-            requirement_id,
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: requirement_id,
             proposal_id: input.proposal_id,
             proposal_key: None,
             fact: CycleFact::Withdrawn,

@@ -21,13 +21,24 @@ const PROPOSAL_KIND: &str = "proposal";
 const DISPOSITION_KIND: &str = "disposition";
 pub(super) const ASSERTION_KIND: &str = "assertion";
 
-/// Reads legacy records and the enrolled manifest and Requirement versions.
+/// Reads legacy records and the enrolled manifest and graph-record versions.
 #[rule("rule_schema_version_one")]
 pub fn ensure_supported_schema_version(kind: &str, version: SchemaVersion) -> anyhow::Result<()> {
     anyhow::ensure!(
         version == SUPPORTED_SCHEMA_VERSION
             || (version == crate::review::REVIEW_SCHEMA_VERSION
-                && matches!(kind, "manifest" | "requirement")),
+                && matches!(
+                    kind,
+                    "manifest"
+                        | "source"
+                        | "requirement"
+                        | "resolution"
+                        | "rule"
+                        | "domain"
+                        | "boundary"
+                        | "topic"
+                        | "question"
+                )),
         "{kind} schema_version must be {}",
         SUPPORTED_SCHEMA_VERSION.0
     );

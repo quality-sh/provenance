@@ -36,10 +36,9 @@ pub fn writer_allows(path: &Utf8Path, id: &str) -> bool {
 }
 
 pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
-    if !matches!(
-        path.parent().and_then(Utf8Path::file_name),
-        Some("requirements" | "threads")
-    ) {
+    let directory = path.parent().and_then(Utf8Path::file_name);
+    let family = directory.and_then(crate::cache::review_families::by_directory);
+    if family.is_none() && directory != Some("threads") {
         return Ok(());
     }
     let before: Vec<Value> = match std::fs::read_to_string(path) {
@@ -54,7 +53,7 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
         .iter()
         .map(serde_json::to_value)
         .collect::<Result<Vec<_>, _>>()?;
-    if path.parent().and_then(Utf8Path::file_name) == Some("threads")
+    if directory == Some("threads")
         && path.file_name() != Some("threads.jsonl")
         && !writer_allows(path, "*")
     {
@@ -91,7 +90,8 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
         .chain(&after)
         .filter(|r| r["schema_version"] == 3)
     {
-        let id = record["id"].as_str().unwrap_or_default();
+        let owner_field = family.map_or("id", |facts| facts.owner_field);
+        let id = record[owner_field].as_str().unwrap_or_default();
         if !writer_allows(path, id) {
             let old = before.iter().filter(|r| r["id"] == id).collect::<Vec<_>>();
             let new = after.iter().filter(|r| r["id"] == id).collect::<Vec<_>>();

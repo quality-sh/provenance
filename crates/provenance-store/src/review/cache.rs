@@ -36,14 +36,16 @@ impl StateStore {
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<ReviewEntry>> {
         let entries = self.review_entries(scope)?;
-        let mut ids = std::collections::BTreeSet::new();
+        let mut ids = Vec::new();
         for entry in &entries {
-            ids.insert(entry.requirement_id.as_str());
+            ids.push((entry.record_kind, entry.record_id.as_str()));
         }
-        for id in ids {
+        ids.sort_by_key(|(kind, id)| (kind.rank(), *id));
+        ids.dedup();
+        for (kind, id) in ids {
             let chain = entries
                 .iter()
-                .filter(|e| e.requirement_id.as_str() == id)
+                .filter(|e| e.record_kind == kind && e.record_id.as_str() == id)
                 .cloned()
                 .collect::<Vec<_>>();
             super::journal::validated_head(&chain)?;
@@ -53,11 +55,11 @@ impl StateStore {
             e.before
                 .iter()
                 .chain(std::iter::once(&e.after))
-                .map(move |r| (r, &e.requirement_id))
+                .map(move |r| (r, e.record_kind, &e.record_id))
         }) {
-            if let Some(previous) = checked.insert(reference.id.as_str(), (reference, owner)) {
+            if let Some(previous) = checked.insert(reference.id.as_str(), (reference, kind, owner)) {
                 anyhow::ensure!(
-                    previous == (reference, owner),
+                    previous == (reference, kind, owner),
                     "conflicting immutable snapshot references"
                 );
                 continue;
@@ -78,12 +80,13 @@ impl StateStore {
                 hash.update(&buffer[..size]);
             }
             file.rewind()?;
-            let snapshot: provenance_core::review::RequirementSnapshot =
+            let snapshot: provenance_core::review::RecordSnapshot =
                 serde_json::from_reader(&mut file)?;
             anyhow::ensure!(
                 snapshot.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION
-                    && snapshot.record.scope_id == *scope
-                    && snapshot.record.id == *owner
+                    && snapshot.record.kind() == kind
+                    && snapshot.record.scope_id() == scope
+                    && snapshot.record.id() == owner
                     && reference.fields == super::snapshot::fields(&snapshot.record)?,
                 "snapshot field index or address mismatch"
             );
@@ -100,9 +103,14 @@ pub async fn load_rows(tx: &mut Transaction<'_, Sqlite>, bytes: &[u8]) -> anyhow
     let entries: Vec<JournalEntry> = serde_json::from_slice(bytes)?;
     for entry in &entries {
         match entry {
-            JournalEntry::Requirement(entry) => {
-                sqlx::query("INSERT INTO review_journal(scope_id, kind, requirement_id, id, sequence, request_id, payload) VALUES (?, 'requirement', ?, ?, ?, ?, ?)")
-                    .bind(entry.scope_id.as_str()).bind(entry.requirement_id.as_str()).bind(entry.id.as_str())
+            JournalEntry::Record(entry) => {
+                let row_kind = if entry.record_kind == provenance_core::NodeType::Requirement {
+                    "requirement"
+                } else {
+                    "record"
+                };
+                sqlx::query("INSERT INTO review_journal(scope_id, kind, record_kind, record_id, id, sequence, request_id, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                    .bind(entry.scope_id.as_str()).bind(row_kind).bind(entry.record_kind.as_str()).bind(entry.record_id.as_str()).bind(entry.id.as_str())
                     .bind(i64::try_from(entry.sequence)?).bind(entry.request_id.as_str()).bind(serde_json::to_string(entry)?)
                     .execute(&mut **tx).await?;
             }
@@ -114,8 +122,8 @@ pub async fn load_rows(tx: &mut Transaction<'_, Sqlite>, bytes: &[u8]) -> anyhow
                     .execute(&mut **tx).await?;
             }
             JournalEntry::Cycle(entry) => {
-                sqlx::query("INSERT INTO review_journal(scope_id, kind, requirement_id, id, sequence, request_id, payload) VALUES (?, 'cycle', ?, ?, ?, ?, ?)")
-                    .bind(entry.scope_id.as_str()).bind(entry.requirement_id.as_str()).bind(entry.id.as_str())
+                sqlx::query("INSERT INTO review_journal(scope_id, kind, record_kind, record_id, id, sequence, request_id, payload) VALUES (?, 'cycle', ?, ?, ?, ?, ?, ?)")
+                    .bind(entry.scope_id.as_str()).bind(entry.record_kind.as_str()).bind(entry.record_id.as_str()).bind(entry.id.as_str())
                     .bind(i64::try_from(entry.sequence)?).bind(entry.request_id.as_str()).bind(serde_json::to_string(entry)?)
                     .execute(&mut **tx).await?;
             }
