@@ -112,7 +112,7 @@ fn rejected_disposition(scope: &ScopeId, id: &str, proposal_id: &str) -> CreateD
 
 fn seed_requirement(store: &StateStore, scope: &ScopeId) {
     store
-        .create_requirement(CreateRequirementInput {
+        .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: StableId::new("req_overtime").unwrap(),
             statement: "Overtime".into(),

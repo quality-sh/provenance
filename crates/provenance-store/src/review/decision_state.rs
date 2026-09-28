@@ -7,6 +7,8 @@ use provenance_core::{
     DispositionDecision, IdeationTargetType, ProposalType, ScopeId, StableId,
 };
 
+const MAX_SAFE_SEQUENCE: u64 = (1 << 53) - 1;
+
 pub(super) fn request_digest(input: &impl serde::Serialize) -> anyhow::Result<String> {
     anyhow::ensure!(
         serde_json::to_vec(input)?.len() <= 1_048_576,
@@ -53,6 +55,10 @@ pub(super) fn validated_cycle_entries(
             "duplicate decision-cycle sequence {} for requirement {}",
             entry.sequence,
             entry.requirement_id.as_str()
+        );
+        anyhow::ensure!(
+            entry.sequence <= MAX_SAFE_SEQUENCE,
+            "decision-cycle sequence exceeds the safe integer limit"
         );
         anyhow::ensure!(
             proposals.iter().any(|p| p.id == entry.proposal_id),
@@ -162,14 +168,21 @@ impl CycleFacts {
             .collect()
     }
 
-    pub(super) fn next_sequence(&self, requirement: &StableId) -> u64 {
-        self.entries
+    pub(super) fn next_sequence(&self, requirement: &StableId) -> anyhow::Result<u64> {
+        let next = self
+            .entries
             .iter()
             .filter(|e| e.requirement_id == *requirement)
             .map(|e| e.sequence)
             .max()
             .unwrap_or(0)
-            + 1
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("decision-cycle sequence overflow"))?;
+        anyhow::ensure!(
+            next <= MAX_SAFE_SEQUENCE,
+            "decision-cycle sequence exceeds the safe integer limit"
+        );
+        Ok(next)
     }
 
     /// The submission of this record that still waits for a decision, if any.

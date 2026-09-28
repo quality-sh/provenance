@@ -1,4 +1,4 @@
-use super::SaveRequirement;
+use super::{CreateReviewRequirement, SaveRequirement};
 use crate::{layout::ProvenanceLayout, state_store::StateStore, test_probes};
 use camino::Utf8Path;
 use provenance_core::{ScopeId, StableId};
@@ -17,6 +17,15 @@ fn input(store: &StateStore, request: &str) -> SaveRequirement {
     serde_json::from_value(json!({"request_id":request,"actor":"ben", "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update":{"scope_id":"default","id":"req_a","description":request},"relationships":null})).unwrap()
 }
+fn create_input() -> CreateReviewRequirement {
+    serde_json::from_value(json!({
+        "request_id":"create_crash", "actor":"ben", "origin":null,
+        "create":{"scope_id":"default", "id":"req_new",
+            "statement":"The system recovers creation.", "status":"discovery",
+            "depends_on":[], "supersedes":[]}
+    }))
+    .unwrap()
+}
 fn fixture() -> tempfile::TempDir {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -29,7 +38,9 @@ fn fixture() -> tempfile::TempDir {
     .unwrap();
     let store = open(root);
     store.create_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"discovery","depends_on":[],"supersedes":[]})).unwrap()).unwrap();
-    store.save_requirement(input(&store, "baseline")).unwrap();
+    store
+        .save_requirement_resource(input(&store, "baseline"))
+        .unwrap();
     temp
 }
 
@@ -45,13 +56,65 @@ fn crash_child() {
         "state_backup_created" => "state_backup_created",
         "state_installed" => "state_installed",
         "state_published" => "state_published",
+        "requirement_submission_writing" => "requirement_submission_writing",
         _ => panic!("unknown crash phase"),
     };
     let store = open(Utf8Path::new(&root));
-    let input = input(&store, "crash_request");
     test_probes::arm(phase, || std::process::exit(86));
-    store.save_requirement(input).unwrap();
+    if std::env::var("PROVENANCE_REVIEW_CRASH_OPERATION").as_deref() == Ok("create") {
+        store.create_review_requirement(create_input()).unwrap();
+    } else {
+        store
+            .save_requirement_resource(input(&store, "crash_request"))
+            .unwrap();
+    }
     panic!("crash phase was not reached");
+}
+
+#[test]
+fn crash_between_edit_and_submission_publishes_neither_half() {
+    let temp = fixture();
+    let root = Utf8Path::from_path(temp.path()).unwrap();
+    let before = open(root)
+        .requirement_decision_state(&scope(), &id())
+        .unwrap()
+        .pending
+        .unwrap();
+    let status = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "review::recovery_tests::crash_child",
+            "--nocapture",
+        ])
+        .env("PROVENANCE_REVIEW_CRASH_ROOT", root.as_str())
+        .env(
+            "PROVENANCE_REVIEW_CRASH_PHASE",
+            "requirement_submission_writing",
+        )
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(86));
+
+    let store = open(root);
+    assert_eq!(
+        store
+            .requirement(&scope(), &id())
+            .unwrap()
+            .description
+            .as_deref(),
+        Some("baseline")
+    );
+    assert!(!journal_entry_exists(&store, "crash_request"));
+    assert_eq!(
+        store
+            .requirement_decision_state(&scope(), &id())
+            .unwrap()
+            .pending
+            .unwrap(),
+        before
+    );
 }
 
 #[test]
@@ -65,6 +128,12 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
     ] {
         let temp = fixture();
         let root = Utf8Path::from_path(temp.path()).unwrap();
+        let previous = open(root)
+            .requirement_decision_state(&scope(), &id())
+            .unwrap()
+            .pending
+            .unwrap()
+            .proposal_id;
         let status = std::process::Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
@@ -91,10 +160,66 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
             }),
             "{phase}"
         );
+        let pending = store
+            .requirement_decision_state(&scope(), &id())
+            .unwrap()
+            .pending
+            .unwrap();
+        assert_eq!(pending.proposal_id == previous, !committed, "{phase}");
         store.validated_review_entries(&scope()).unwrap();
         assert!(!ProvenanceLayout::new(root)
             .publication_marker_path()
             .exists());
+    }
+}
+
+#[test]
+fn creation_crashes_reopen_with_both_or_neither_published_half() {
+    let new_id = StableId::new("req_new").unwrap();
+    for (phase, committed) in [
+        ("state_prepared", false),
+        ("state_marker_prepared", false),
+        ("state_backup_created", false),
+        ("state_installed", true),
+        ("state_published", true),
+    ] {
+        let temp = fixture();
+        let root = Utf8Path::from_path(temp.path()).unwrap();
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "review::recovery_tests::crash_child",
+                "--nocapture",
+            ])
+            .env("PROVENANCE_REVIEW_CRASH_ROOT", root.as_str())
+            .env("PROVENANCE_REVIEW_CRASH_PHASE", phase)
+            .env("PROVENANCE_REVIEW_CRASH_OPERATION", "create")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert_eq!(status.code(), Some(86), "{phase}");
+
+        let store = open(root);
+        assert_eq!(
+            store.requirement(&scope(), &new_id).is_ok(),
+            committed,
+            "{phase}"
+        );
+        assert_eq!(
+            store
+                .requirement_decision_state(&scope(), &new_id)
+                .ok()
+                .and_then(|state| state.pending)
+                .is_some(),
+            committed,
+            "{phase}"
+        );
+        assert_eq!(
+            journal_entry_exists(&store, "create_crash"),
+            committed,
+            "{phase}"
+        );
     }
 }
 

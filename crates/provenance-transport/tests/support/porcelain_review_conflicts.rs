@@ -12,7 +12,7 @@ fn allow_reviewer(repository: &Repository) {
     .unwrap();
 }
 
-async fn edit(session: &ApiSession, description: &str) -> String {
+async fn edit(session: &ApiSession, description: &str) -> (String, String) {
     let read = session
         .call(json!({"path":"requirements/req_shared"}))
         .await;
@@ -27,10 +27,17 @@ async fn edit(session: &ApiSession, description: &str) -> String {
         }))
         .await;
     assert_ne!(saved.is_error, Some(true), "{saved:?}");
-    saved.structured_content.as_ref().unwrap()["data"]["edit"]["revision"]
-        .as_str()
-        .unwrap()
-        .to_owned()
+    let saved = saved.structured_content.as_ref().unwrap();
+    (
+        saved["data"]["edit"]["revision"]
+            .as_str()
+            .unwrap()
+            .to_owned(),
+        saved["data"]["decision"]["pending"]["proposal_id"]
+            .as_str()
+            .unwrap()
+            .to_owned(),
+    )
 }
 
 async fn submit(session: &ApiSession, revision: &str) -> CallToolResult {
@@ -56,25 +63,20 @@ async fn mcp_submit_conflicts_return_the_typed_envelope() {
         access(&repository).allow_writes(),
     ))
     .await;
-    let revision_1 = edit(&session, "revision-one").await;
-    let revision_2 = edit(&session, "revision-two").await;
+    let (revision_1, _) = edit(&session, "revision-one").await;
+    let (revision_2, automatic) = edit(&session, "revision-two").await;
     let stale = submit(&session, &revision_1).await;
     assert_eq!(stale.is_error, Some(true));
     assert_eq!(
         stale.structured_content.unwrap(),
-        conflict(None, &revision_2)
+        conflict(Some(&automatic), &revision_2)
     );
 
-    let submitted = submit(&session, &revision_2).await;
-    let proposal = submitted.structured_content.as_ref().unwrap()["data"]["proposal_id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
     let repeated = submit(&session, &revision_2).await;
     assert_eq!(repeated.is_error, Some(true));
     assert_eq!(
         repeated.structured_content.unwrap(),
-        conflict(Some(&proposal), &revision_2)
+        conflict(Some(&automatic), &revision_2)
     );
     session.shutdown().await;
 }
@@ -94,21 +96,17 @@ async fn terminal(session: &ApiSession, proposal: &str, action: &str) -> CallToo
         .await
 }
 
-async fn prepared(state: &str) -> (Repository, ApiSession, String, String) {
+async fn prepared(state: &str) -> (Repository, ApiSession, String, String, Option<String>) {
     let repository = Repository::new("The shared graph is readable.");
     allow_reviewer(&repository);
     let session = ApiSession::start(StatementHost::with_fixture_access(
         access(&repository).allow_writes(),
     ))
     .await;
-    let mut revision = edit(&session, "revision-one").await;
-    let submitted = submit(&session, &revision).await;
-    let proposal = submitted.structured_content.as_ref().unwrap()["data"]["proposal_id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    if state == "stale" {
-        revision = edit(&session, "revision-two").await;
+    let (revision, proposal) = edit(&session, "revision-one").await;
+    let (revision, current) = if state == "stale" {
+        let edited = edit(&session, "revision-two").await;
+        (edited.0, Some(edited.1))
     } else {
         let action = if state == "withdrawn" {
             "withdraw"
@@ -117,20 +115,21 @@ async fn prepared(state: &str) -> (Repository, ApiSession, String, String) {
         };
         let terminal = terminal(&session, &proposal, action).await;
         assert_ne!(terminal.is_error, Some(true), "{terminal:?}");
-    }
-    (repository, session, proposal, revision)
+        (revision, None)
+    };
+    (repository, session, proposal, revision, current)
 }
 
 #[tokio::test]
 async fn mcp_terminal_review_conflicts_share_one_envelope() {
     for state in ["stale", "withdrawn", "decided"] {
-        let (_repository, session, proposal, revision) = prepared(state).await;
+        let (_repository, session, proposal, revision, current) = prepared(state).await;
         for action in ["decide", "withdraw"] {
             let refused = terminal(&session, &proposal, action).await;
             assert_eq!(refused.is_error, Some(true), "{refused:?}");
             assert_eq!(
                 refused.structured_content.unwrap(),
-                conflict(None, &revision)
+                conflict(current.as_deref(), &revision)
             );
         }
         session.shutdown().await;

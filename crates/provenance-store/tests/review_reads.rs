@@ -9,6 +9,61 @@ use review_support::*;
 use serde_json::json;
 
 #[tokio::test]
+async fn review_finding_cycle_rows_do_not_enter_edit_history_pages() {
+    let (temp, store) = fixture();
+    store
+        .save_requirement(save(
+            &store,
+            "content_edit",
+            json!({"description":"Changed"}),
+        ))
+        .unwrap();
+    let root = camino::Utf8Path::from_path(temp.path()).unwrap();
+
+    let complete = read_history(
+        root,
+        &scope(),
+        ReadPolicy::default(),
+        ReviewHistoryQuery {
+            requirement_id: id(),
+            limit: 200,
+            cursor: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(complete.result.entries.len(), 2);
+
+    let mut cursor = None;
+    let mut requests = Vec::new();
+    loop {
+        let page = read_history(
+            root,
+            &scope(),
+            ReadPolicy::default(),
+            ReviewHistoryQuery {
+                requirement_id: id(),
+                limit: 1,
+                cursor,
+            },
+        )
+        .await
+        .unwrap();
+        requests.extend(
+            page.result
+                .entries
+                .iter()
+                .map(|entry| entry.request_id.as_str().to_owned()),
+        );
+        cursor = page.result.next_cursor;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    assert_eq!(requests, ["fixture_create", "content_edit"]);
+}
+
+#[tokio::test]
 #[allow(clippy::too_many_lines)]
 async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     let (temp, store) = fixture();

@@ -66,7 +66,8 @@ Actions are POSTs on a resource path with one declared action name:
   `POST /requirements/{id}/submissions/{proposal_id}/decide|withdraw`.
   Submit creates the Proposal ID and Proposal key and returns both values. A
   client uses the returned Proposal ID in a later decide or withdraw path.
-  Decide creates and returns the Disposition ID.
+  Decide creates and returns the Disposition ID. The separate submit and
+  withdraw operations remain available.
 - Verification: `POST /verification-runs/begin-verification`, and
   `POST /verification-runs/{run_id}/complete-verification`. Begin retains
   Rule-ID and declaration-reference targeting.
@@ -101,6 +102,15 @@ exists. The read side merges the same way: `GET /requirements/{id}` returns one
 resource read carrying the edit state, the relationships, the ETag, and the
 decision state together, so the separate edit-state and decision-state reads of
 the #273 review surface have no successor.
+
+`POST /requirements` publishes the new Requirement and its first review
+submission in one state write. A PATCH that changes review content publishes the
+new revision and a new submission in one state write. The prior pending
+submission becomes superseded; the client does not withdraw it. A PATCH that
+changes only lifecycle status keeps the current revision and submission. Create
+and PATCH responses carry the current submission under `decision.pending`,
+including its server-created Proposal ID and revision. Superseded Proposals,
+decisions, and feedback remain readable through their history resources.
 
 ## 3. Envelope
 

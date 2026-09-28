@@ -6,7 +6,9 @@ mod support {
     pub mod resource_http;
 }
 
+use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;
+use provenance_store::state_store::StateStore;
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use support::records::Repository;
@@ -143,6 +145,11 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         requirement.structured_content.as_ref().unwrap()["data"]["refines"],
         "req_shared"
     );
+    let created_submission = requirement.structured_content.as_ref().unwrap()["data"]["decision"]
+        ["pending"]["proposal_id"]
+        .as_str()
+        .expect("the MCP create response returns its submission identity")
+        .to_owned();
 
     let dependency = call(
         &client,
@@ -186,6 +193,16 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         edited_requirement.structured_content.as_ref().unwrap()["data"]["depends_on"],
         json!(["req_mcp_dependency"])
     );
+    let edited = edited_requirement.structured_content.as_ref().unwrap();
+    assert!(edited["data"]["decision"]["pending"]["proposal_id"].is_string());
+    assert_ne!(
+        edited["data"]["decision"]["pending"]["proposal_id"],
+        created_submission
+    );
+    assert_eq!(
+        edited["data"]["decision"]["pending"]["revision"],
+        edited["data"]["edit"]["revision"]
+    );
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
@@ -194,35 +211,33 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
 #[tokio::test]
 async fn mcp_target_first_requirement_submit_uses_the_target() {
     let repository = Repository::new("The shared graph is readable.");
+    let store = StateStore::new(repository.layout.clone());
+    let scope = ScopeId::new("default").unwrap();
+    let requirement = StableId::new("req_shared").unwrap();
+    let proposal = store
+        .requirement_decision_state(&scope, &requirement)
+        .unwrap()
+        .pending
+        .unwrap()
+        .proposal_id;
+    store
+        .withdraw_requirement_review(
+            serde_json::from_value(
+                json!({"scope_id":"default","actor":"agent","proposal_id":proposal}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
     let host = support::resource_http::host(&repository, true);
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
 
-    let requirement = call(
-        &client,
-        "create",
-        json!({
-            "target":"req_mcp_target",
-            "type":"requirement",
-            "idempotency_key":"create_req_mcp_target",
-            "data":{
-                "actor":"agent",
-                "statement":"The MCP action submits the target Requirement.",
-                "status":"active",
-                "depends_on":[],
-                "supersedes":[]
-            }
-        }),
-    )
-    .await;
-    assert_ne!(requirement.is_error, Some(true), "{requirement:?}");
-
     let submitted = call(
         &client,
         "submit",
         json!({
-            "target":"req_mcp_target",
+            "target":"req_shared",
             "data":{
                 "actor":"agent",
                 "title":"MCP target",
@@ -237,7 +252,7 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
     assert_ne!(submitted.is_error, Some(true), "{submitted:?}");
     assert_eq!(
         submitted.structured_content.as_ref().unwrap()["data"]["requirement_id"],
-        "req_mcp_target"
+        "req_shared"
     );
     assert_eq!(
         submitted.structured_content.as_ref().unwrap()["data"]["fact"],

@@ -70,7 +70,7 @@ impl StateStore {
         })
     }
 
-    fn commit_submission(
+    pub(super) fn commit_submission(
         &self,
         input: SubmitRequirementReview,
         request_id: StableId,
@@ -146,7 +146,7 @@ impl StateStore {
         self.create_proposal_card(proposal)?;
         let entry = CycleEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: facts.next_sequence(&input.requirement_id),
+            sequence: facts.next_sequence(&input.requirement_id)?,
             scope_id: scope,
             id: journal::new_id(),
             requirement_id: input.requirement_id,
@@ -284,7 +284,7 @@ impl StateStore {
         };
         let entry = CycleEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: CycleFacts::validated(self, &scope)?.next_sequence(&requirement_id),
+            sequence: CycleFacts::validated(self, &scope)?.next_sequence(&requirement_id)?,
             scope_id: scope,
             id: journal::new_id(),
             requirement_id,
@@ -423,7 +423,7 @@ impl StateStore {
         let requirement_id = proposal.traceability.target.artifact_id;
         let entry = CycleEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: CycleFacts::validated(self, &scope)?.next_sequence(&requirement_id),
+            sequence: CycleFacts::validated(self, &scope)?.next_sequence(&requirement_id)?,
             scope_id: scope,
             id: journal::new_id(),
             requirement_id,

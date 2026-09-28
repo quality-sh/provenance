@@ -59,6 +59,7 @@ mod decision_input;
 pub use decision_input::{
     DecideRequirementReview, ReviewFeedback, SubmitRequirementReview, WithdrawRequirementReview,
 };
+mod automatic_submission;
 mod decision;
 mod decision_reads;
 mod decision_state;

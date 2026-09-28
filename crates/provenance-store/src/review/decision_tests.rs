@@ -20,7 +20,7 @@ fn req() -> StableId {
 fn open(root: &Utf8Path) -> StateStore {
     StateStore::new(ProvenanceLayout::new(root))
 }
-/// A manifest that allowlists "reviewer" plus one created record.
+/// A manifest that allowlists "reviewer" plus one enrolled record.
 fn fixture() -> tempfile::TempDir {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
@@ -30,8 +30,13 @@ fn fixture() -> tempfile::TempDir {
         r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
     )
     .unwrap();
-    open(Utf8Path::from_path(temp.path()).unwrap())
-        .create_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
+    let store = open(Utf8Path::from_path(temp.path()).unwrap());
+    store
+        .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
+        .unwrap();
+    let etag = store.requirement_edit_state(&scope(), &req()).unwrap().etag;
+    store
+        .save_requirement(serde_json::from_value(json!({"request_id":"fixture-enroll","actor":"agent","expected_etag":etag,"update":{"scope_id":"default","id":"req_a"},"relationships":null})).unwrap())
         .unwrap();
     temp
 }
@@ -95,11 +100,20 @@ fn enrolled() -> (tempfile::TempDir, StateStore, StableId, StableId) {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let revision = edit(&store, "edit-1", "Statement v1");
-    let proposal = submit(&store, None, None).unwrap().proposal_id;
+    let proposal = automatic_submission(&store).proposal_id;
     (temp, store, revision, proposal)
 }
 fn state(store: &StateStore) -> provenance_core::review::RequirementDecisionState {
     store.requirement_decision_state(&scope(), &req()).unwrap()
+}
+fn automatic_submission(store: &StateStore) -> CycleEntry {
+    let proposal = state(store).pending.unwrap().proposal_id;
+    store
+        .cycle_entries(&scope())
+        .unwrap()
+        .into_iter()
+        .find(|entry| entry.proposal_id == proposal && entry.fact == CycleFact::Submitted)
+        .unwrap()
 }
 fn binding_of(store: &StateStore, proposal: &StableId) -> (String, String) {
     let card = store
@@ -122,7 +136,7 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let r1 = edit(&store, "edit-1", "Statement v1");
-    let proposal_1 = submit(&store, None, Some(r1.as_str())).unwrap().proposal_id;
+    let proposal_1 = automatic_submission(&store).proposal_id;
     let (prop1_revision, prop1_digest) = binding_of(&store, &proposal_1);
     assert_eq!(prop1_revision, r1.as_str());
     assert_eq!(state(&store).pending.unwrap().revision, r1);
@@ -150,34 +164,16 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
         "feedback published with its decision"
     );
 
-    // Revise: a fresh Proposal answering one rejection, bound to the new
-    // revision, then approve through the human existing-artifact path.
+    // Revise: a fresh Proposal is bound to the new revision. Then approve it
+    // through the human existing-artifact path.
     let r2 = edit(&store, "edit-2", "Statement v2");
-    let proposal_2 = submit(&store, Some(&proposal_1), Some(r2.as_str()))
-        .unwrap()
-        .proposal_id;
+    let proposal_2 = automatic_submission(&store).proposal_id;
     let (prop2_revision, prop2_digest) = binding_of(&store, &proposal_2);
     assert_eq!(prop2_revision, r2.as_str());
     assert_ne!(
         prop1_digest, prop2_digest,
         "each submission binds its exact revision"
     );
-    let prop2 = store
-        .list_proposal_definitions(&scope())
-        .unwrap()
-        .into_iter()
-        .find(|p| p.id == proposal_2)
-        .unwrap();
-    assert_eq!(prop2.revises.as_ref().unwrap(), &proposal_1);
-    assert_eq!(
-        prop2.revises_rejection.as_ref().unwrap(),
-        rejection.disposition_id.as_ref().unwrap()
-    );
-    assert!(
-        prop2.builds_on.is_empty(),
-        "rejection links are not assertion lineage"
-    );
-
     let approval = decide(
         &store,
         &proposal_2,
@@ -253,10 +249,7 @@ fn stale_submission_and_stale_selection_are_refused() {
     let r1 = edit(&store, "edit-1", "Statement v1");
     edit(&store, "edit-2", "Statement v2");
     refused(submit(&store, None, Some(r1.as_str())), "stale submission");
-    assert!(store
-        .list_proposal_definitions(&scope())
-        .unwrap()
-        .is_empty());
+    assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 2);
 
     let (_temp, store, _, proposal) = enrolled();
     edit(&store, "edit-2", "Statement v2");
@@ -406,6 +399,20 @@ fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
         withdraw(&store, &proposal_2),
         "no longer current and pending",
     );
+}
+
+#[test]
+fn review_finding_withdrawn_and_resubmitted_receipts_have_safe_sequences() {
+    let temp = fixture();
+    let store = open(Utf8Path::from_path(temp.path()).unwrap());
+    edit(&store, "edit-1", "Statement v1");
+    let proposal = state(&store).pending.unwrap().proposal_id;
+
+    let withdrawn = withdraw(&store, &proposal).unwrap();
+    let resubmitted = submit(&store, None, None).unwrap();
+
+    assert!(withdrawn.sequence < resubmitted.sequence);
+    assert!(resubmitted.sequence < (1_u64 << 53));
 }
 
 mod bypass_tests;

@@ -178,6 +178,7 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
+        self.commit_automatic_submission(&after, &entry)?;
         Ok(entry)
     }
 }

@@ -47,12 +47,13 @@ fn stale_decision_reports_the_pending_submission_and_current_revision() {
     )
     .unwrap_err();
 
+    let current_proposal = state(&store).pending.unwrap().proposal_id;
     assert!(matches!(
         WriteError(error).safe(),
         WriteFailure::ReviewSubmissionConflict {
-            current_submission: None,
+            current_submission: Some(submission),
             current_revision: revision,
-        } if revision == current_revision
+        } if submission == current_proposal && revision == current_revision
     ));
 }
 
@@ -84,18 +85,19 @@ fn stale_and_terminal_withdrawals_are_review_conflicts() {
     let (_temp, store, _, proposal) = enrolled();
     let current_revision = edit(&store, "edit-2", "Statement v2");
     let stale = WriteError(withdraw(&store, &proposal).unwrap_err());
+    let current_proposal = state(&store).pending.unwrap().proposal_id;
     assert!(matches!(
         stale.safe(),
         WriteFailure::ReviewSubmissionConflict {
-            current_submission: None,
+            current_submission: Some(submission),
             current_revision: revision,
-        } if revision == current_revision
+        } if submission == current_proposal && revision == current_revision
     ));
 
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let revision = edit(&store, "edit-1", "Statement v1");
-    let proposal = submit(&store, None, None).unwrap().proposal_id;
+    let proposal = automatic_submission(&store).proposal_id;
     withdraw(&store, &proposal).unwrap();
     let repeated = WriteError(withdraw(&store, &proposal).unwrap_err());
     assert!(matches!(
@@ -112,6 +114,7 @@ fn superseded_submission_allows_a_new_review_cycle() {
     let (_temp, store, _, proposal_1) = enrolled();
     let revision_2 = edit(&store, "edit-2", "Statement v2");
 
+    let proposal_2 = state(&store).pending.unwrap().proposal_id;
     for error in [
         decide(
             &store,
@@ -126,15 +129,12 @@ fn superseded_submission_allows_a_new_review_cycle() {
         assert!(matches!(
             WriteError(error).safe(),
             WriteFailure::ReviewSubmissionConflict {
-                current_submission: None,
+                current_submission: Some(submission),
                 current_revision,
-            } if current_revision == revision_2
+            } if submission == proposal_2 && current_revision == revision_2
         ));
     }
 
-    let proposal_2 = submit(&store, None, Some(revision_2.as_str()))
-        .unwrap()
-        .proposal_id;
     assert_ne!(proposal_1, proposal_2);
     decide(
         &store,
@@ -154,15 +154,15 @@ fn stale_and_repeated_submissions_are_typed_conflicts() {
     let revision_2 = edit(&store, "edit-2", "Statement v2");
     let stale = WriteError(submit(&store, None, Some(revision_1.as_str())).unwrap_err());
     assert_eq!(stale.status(), 409);
+    let submission = automatic_submission(&store);
     assert!(matches!(
         stale.safe(),
         WriteFailure::ReviewSubmissionConflict {
-            current_submission: None,
+            current_submission: Some(current),
             current_revision,
-        } if current_revision == revision_2
+        } if current == submission.proposal_id && current_revision == revision_2
     ));
 
-    let submission = submit(&store, None, Some(revision_2.as_str())).unwrap();
     let repeated = WriteError(submit(&store, None, Some(revision_2.as_str())).unwrap_err());
     assert_eq!(repeated.status(), 409);
     assert!(matches!(
@@ -172,7 +172,7 @@ fn stale_and_repeated_submissions_are_typed_conflicts() {
             current_revision,
         } if current == submission.proposal_id && current_revision == revision_2
     ));
-    assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 1);
+    assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 2);
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn server_creates_unique_identities_across_review_cycles() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     edit(&store, "edit-1", "Statement v1");
-    let submission_1 = submit(&store, None, None).unwrap();
+    let submission_1 = automatic_submission(&store);
     let decision_1 = decide(
         &store,
         &submission_1.proposal_id,
@@ -190,7 +190,7 @@ fn server_creates_unique_identities_across_review_cycles() {
     )
     .unwrap();
     edit(&store, "edit-2", "Statement v2");
-    let submission_2 = submit(&store, Some(&submission_1.proposal_id), None).unwrap();
+    let submission_2 = automatic_submission(&store);
     let decision_2 = decide(
         &store,
         &submission_2.proposal_id,

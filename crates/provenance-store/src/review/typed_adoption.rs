@@ -165,6 +165,9 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
+        if classifier::changes_revision(&entry.changed_fields) {
+            self.commit_automatic_submission(&after, &entry)?;
+        }
         Ok(())
     }
 }
@@ -180,4 +183,77 @@ fn adoption_intent(
     Ok(canonical_digest::digest(
         &canonical_digest::canonical_bytes(&("typed-spec-adoption", owner, before, after))?,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{layout::ProvenanceLayout, state_store::StateStore};
+    use camino::Utf8Path;
+    use provenance_core::{RequirementStatus, ScopeId, StableId};
+    use serde_json::json;
+
+    fn fixture() -> (tempfile::TempDir, StateStore, ScopeId, StableId) {
+        let temp = tempfile::tempdir().unwrap();
+        let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+        std::fs::create_dir_all(layout.state_dir()).unwrap();
+        std::fs::write(
+            layout.manifest_path(),
+            r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        )
+        .unwrap();
+        let store = StateStore::new(layout);
+        store
+            .create_requirement(
+                serde_json::from_value(json!({
+                    "scope_id":"default", "id":"req_a",
+                    "statement":"The system stores records.", "status":"discovery",
+                    "depends_on":[], "supersedes":[]
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        (
+            temp,
+            store,
+            ScopeId::new("default").unwrap(),
+            StableId::new("req_a").unwrap(),
+        )
+    }
+
+    fn proposal(store: &StateStore, scope: &ScopeId, id: &StableId) -> StableId {
+        store
+            .requirement_decision_state(scope, id)
+            .unwrap()
+            .pending
+            .unwrap()
+            .proposal_id
+    }
+
+    #[test]
+    fn content_adoption_opens_a_submission() {
+        let (_temp, store, scope, id) = fixture();
+        let before = proposal(&store, &scope, &id);
+        let mut desired = store.requirement(&scope, &id).unwrap();
+        desired.description = Some("Adopted content".to_owned());
+
+        store
+            .commit_enrollment_adoptions(&scope, &[desired], "spec://fixture")
+            .unwrap();
+
+        assert_ne!(proposal(&store, &scope, &id), before);
+    }
+
+    #[test]
+    fn lifecycle_only_adoption_keeps_the_submission() {
+        let (_temp, store, scope, id) = fixture();
+        let before = proposal(&store, &scope, &id);
+        let mut desired = store.requirement(&scope, &id).unwrap();
+        desired.status = RequirementStatus::Active;
+
+        store
+            .commit_enrollment_adoptions(&scope, &[desired], "spec://fixture")
+            .unwrap();
+
+        assert_eq!(proposal(&store, &scope, &id), before);
+    }
 }

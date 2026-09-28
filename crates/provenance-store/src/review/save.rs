@@ -189,7 +189,7 @@ impl StateStore {
             schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: scope.clone(),
             requirement_id: id,
-            sequence: head.as_ref().map_or(1, |e| e.sequence + 1),
+            sequence: head.as_ref().map_or(1, |entry| entry.sequence + 1),
             id: entry_id,
             predecessor: head.as_ref().map(|e| e.id.clone()),
             revision,
@@ -212,6 +212,89 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
+        if classifier::changes_revision(&entry.changed_fields) {
+            self.commit_automatic_submission(&after, &entry)?;
+        }
         Ok(entry)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout::ProvenanceLayout;
+    use camino::Utf8Path;
+    use provenance_core::review::SaveOutcome;
+    use serde_json::json;
+
+    fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
+        let temp = tempfile::tempdir().unwrap();
+        let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+        std::fs::create_dir_all(layout.state_dir()).unwrap();
+        std::fs::write(
+            layout.manifest_path(),
+            r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        )
+        .unwrap();
+        (
+            temp,
+            StateStore::new(layout),
+            ScopeId::new("default").unwrap(),
+        )
+    }
+
+    fn enroll(store: &StateStore, id: &StableId, request: &str, update: &serde_json::Value) {
+        let input: SaveRequirement = serde_json::from_value(json!({
+            "request_id":request, "actor":"ben",
+            "expected_etag":store.requirement_edit_state(&ScopeId::new("default").unwrap(), id).unwrap().etag,
+            "update":update, "relationships":null
+        }))
+        .unwrap();
+        assert_eq!(
+            store.save_requirement(input).unwrap().outcome,
+            SaveOutcome::Enrolled
+        );
+    }
+
+    #[test]
+    fn first_enrollment_submits_only_when_review_content_changes() {
+        let (_temp, store, scope) = fixture();
+        for id in ["req_changed", "req_unchanged"] {
+            store
+                .write_requirement(
+                    serde_json::from_value(json!({
+                        "scope_id":"default", "id":id,
+                        "statement":format!("The system stores {id}."),
+                        "status":"discovery", "depends_on":[], "supersedes":[]
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+        let changed = StableId::new("req_changed").unwrap();
+        enroll(
+            &store,
+            &changed,
+            "enroll_changed",
+            &json!({"scope_id":"default", "id":"req_changed", "description":"Needs audit."}),
+        );
+        assert!(store
+            .requirement_decision_state(&scope, &changed)
+            .unwrap()
+            .pending
+            .is_some());
+
+        let unchanged = StableId::new("req_unchanged").unwrap();
+        enroll(
+            &store,
+            &unchanged,
+            "enroll_unchanged",
+            &json!({"scope_id":"default", "id":"req_unchanged"}),
+        );
+        assert!(store
+            .requirement_decision_state(&scope, &unchanged)
+            .unwrap()
+            .pending
+            .is_none());
     }
 }

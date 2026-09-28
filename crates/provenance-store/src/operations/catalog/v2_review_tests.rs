@@ -107,7 +107,135 @@ async fn create_response_failure_refuses_before_publication() {
     .await
     .unwrap();
     assert_eq!(committed.record.id.as_str(), "req_a");
+    assert_eq!(
+        committed.decision.pending.as_ref().unwrap().revision,
+        committed.edit.revision.clone().unwrap()
+    );
     assert_eq!(store.review_entries(&scope).unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn content_update_replaces_or_opens_the_current_submission() {
+    let (_temp, context, store, scope) = fixture();
+    let created = CreateRequirementV2::run(context.clone(), create_request("create_a"))
+        .await
+        .unwrap();
+    let first = created.decision.pending.unwrap();
+
+    let updated = UpdateRequirementV2::run(context.clone(), update_request(&store, "update_a"))
+        .await
+        .unwrap();
+    let second = updated.decision.pending.unwrap();
+    assert_ne!(second.proposal_id, first.proposal_id);
+    assert_ne!(second.revision, first.revision);
+    assert_eq!(second.revision, updated.edit.revision.unwrap());
+
+    store
+        .withdraw_requirement_review(
+            serde_json::from_value(json!({
+                "scope_id":"default", "actor":"ben",
+                "proposal_id":second.proposal_id
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let etag = store
+        .requirement_edit_state(&scope, &StableId::new("req_a").unwrap())
+        .unwrap()
+        .etag;
+    let third = UpdateRequirementV2::run(
+        context,
+        update_request_with_etag("update_b", &etag, "New text."),
+    )
+    .await
+    .unwrap();
+    assert_ne!(
+        third.decision.pending.unwrap().proposal_id,
+        second.proposal_id
+    );
+    assert_eq!(
+        store
+            .requirement_decision_state(&scope, &StableId::new("req_a").unwrap())
+            .unwrap()
+            .decisions
+            .len(),
+        0
+    );
+}
+
+#[tokio::test]
+async fn lifecycle_update_keeps_the_current_submission() {
+    let (_temp, context, store, _scope) = fixture();
+    let created = CreateRequirementV2::run(context.clone(), create_request("create_a"))
+        .await
+        .unwrap();
+    let pending = created.decision.pending.unwrap();
+    let request: UpdateRequirementRequest = serde_json::from_value(json!({
+        "request_id":"activate", "actor":"ben", "expected_etag":created.edit.etag,
+        "declared_by":null, "statement":null, "description":null, "fog":null,
+        "status":"active", "domain_id":null, "clear_fields":[],
+        "relationships":null, "id":"req_a"
+    }))
+    .unwrap();
+
+    let updated = UpdateRequirementV2::run(context, request).await.unwrap();
+
+    assert_eq!(updated.decision.pending.unwrap(), pending);
+    assert_eq!(updated.edit.revision.unwrap(), pending.revision);
+    assert_eq!(
+        store
+            .list_proposal_definitions(&ScopeId::new("default").unwrap())
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn revision_keeps_the_prior_submission_and_feedback_readable() {
+    let (_temp, context, store, scope) = fixture();
+    let created = CreateRequirementV2::run(context.clone(), create_request("create_a"))
+        .await
+        .unwrap();
+    let proposal = created.decision.pending.unwrap().proposal_id;
+    let mut manifest = store.manifest().unwrap();
+    manifest.disposition_actor_ids.push("reviewer".to_owned());
+    std::fs::write(
+        store.layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    store
+        .decide_requirement_review(
+            serde_json::from_value(json!({
+                "scope_id":"default",
+                "actor":{"identity_type":"human","id":"reviewer"},
+                "proposal_id":proposal,
+                "decision":"rejected",
+                "rationale":"The statement needs more detail.",
+                "canonical_artifact":null,
+                "feedback":{"role":"user","body":"Add the missing condition."},
+                "declared_by":null
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+    let revised = UpdateRequirementV2::run(context, update_request(&store, "update_a"))
+        .await
+        .unwrap();
+
+    assert_ne!(
+        revised.decision.pending.as_ref().unwrap().proposal_id,
+        proposal
+    );
+    assert_eq!(revised.decision.decisions.len(), 1);
+    assert!(revised.decision.decisions[0].feedback_message_id.is_some());
+    assert!(store
+        .list_proposal_definitions(&scope)
+        .unwrap()
+        .iter()
+        .any(|record| record.id == proposal));
 }
 
 #[tokio::test]

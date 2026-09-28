@@ -95,7 +95,8 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
   assert.equal(disposition.data.proposal_id, proposal.id);
   assert.equal((await client.getProposalDisposition({ id: proposal.id, fact_id: disposition.data.id })).data.id, disposition.data.id);
   assert.equal((await client.listDispositions({})).data.items.length, 1);
-  assert.equal((await client.listProposals({})).data.items[0].promotion_state, 'rejected');
+  const listedProposal = (await client.listProposals({})).data.items.find(item => item.id === proposal.id);
+  assert.equal(listedProposal?.promotion_state, 'rejected');
 
   const largeIds = await seedLargeProposals(fixture.root);
   const seen = new Set();

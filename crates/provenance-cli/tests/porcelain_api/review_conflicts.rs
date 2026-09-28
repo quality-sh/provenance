@@ -37,7 +37,7 @@ fn create_requirement(repo: &str) {
     ]);
 }
 
-fn edit(repo: &str, description: &str) -> String {
+fn edit(repo: &str, description: &str) -> (String, String) {
     let read = json(&["api", "requirements/req_review", "--repo", repo]);
     let etag = read["data"]["edit"]["etag"].as_str().unwrap();
     let request_id: String = description
@@ -69,10 +69,17 @@ fn edit(repo: &str, description: &str) -> String {
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
-    serde_json::from_slice::<Value>(&result.stdout).unwrap()["data"]["edit"]["revision"]
-        .as_str()
-        .unwrap()
-        .to_owned()
+    let saved = serde_json::from_slice::<Value>(&result.stdout).unwrap();
+    (
+        saved["data"]["edit"]["revision"]
+            .as_str()
+            .unwrap()
+            .to_owned(),
+        saved["data"]["decision"]["pending"]["proposal_id"]
+            .as_str()
+            .unwrap()
+            .to_owned(),
+    )
 }
 
 fn submit(repo: &str, revision: &str) -> std::process::Output {
@@ -110,12 +117,21 @@ fn refused(output: &std::process::Output) -> Value {
 fn cli_submit_conflicts_return_the_typed_envelope() {
     let (_directory, repo) = init();
     create_requirement(&repo);
-    let revision_1 = edit(&repo, "Revision one.");
-    let revision_2 = edit(&repo, "Revision two.");
+    let (revision_1, _) = edit(&repo, "Revision one.");
+    let (revision_2, automatic) = edit(&repo, "Revision two.");
     assert_eq!(
         refused(&submit(&repo, &revision_1)),
-        conflict(None, &revision_2)
+        conflict(Some(&automatic), &revision_2)
     );
+    assert_eq!(
+        refused(&submit(&repo, &revision_2)),
+        conflict(Some(&automatic), &revision_2)
+    );
+    successful(&api(
+        &repo,
+        &format!("requirements/req_review/submissions/{automatic}/withdraw"),
+        &json!({"actor":"agent","declared_by":null,"reason":null}),
+    ));
     let submitted = successful(&submit(&repo, &revision_2));
     let proposal = submitted["data"]["proposal_id"].as_str().unwrap();
     assert_eq!(
@@ -139,18 +155,16 @@ fn terminal(repo: &str, proposal: &str, action: &str) -> Value {
     ))
 }
 
-fn prepared(state: &str) -> (tempfile::TempDir, String, String, String) {
+fn prepared(state: &str) -> (tempfile::TempDir, String, String, String, Option<String>) {
     let (directory, repo) = init();
     create_requirement(&repo);
     allow_reviewer(&repo);
-    let mut revision = edit(&repo, "Revision one.");
-    let submitted = successful(&submit(&repo, &revision));
-    let proposal = submitted["data"]["proposal_id"]
-        .as_str()
-        .unwrap()
-        .to_owned();
+    let (mut revision, proposal) = edit(&repo, "Revision one.");
+    let mut current = None;
     if state == "stale" {
-        revision = edit(&repo, "Revision two.");
+        let edited = edit(&repo, "Revision two.");
+        revision = edited.0;
+        current = Some(edited.1);
     } else if state == "withdrawn" {
         successful(&api(
             &repo,
@@ -166,17 +180,17 @@ fn prepared(state: &str) -> (tempfile::TempDir, String, String, String) {
                 "feedback":null, "declared_by":null}),
         ));
     }
-    (directory, repo, proposal, revision)
+    (directory, repo, proposal, revision, current)
 }
 
 #[test]
 fn cli_terminal_review_conflicts_share_one_envelope() {
     for state in ["stale", "withdrawn", "decided"] {
-        let (_directory, repo, proposal, revision) = prepared(state);
+        let (_directory, repo, proposal, revision, current) = prepared(state);
         for action in ["decide", "withdraw"] {
             assert_eq!(
                 terminal(&repo, &proposal, action),
-                conflict(None, &revision)
+                conflict(current.as_deref(), &revision)
             );
         }
     }
