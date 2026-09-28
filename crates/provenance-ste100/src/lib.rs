@@ -1,4 +1,6 @@
-//! This crate is an implementation part of Provenance. Its API can change in any release without notice. Use `provenance-sdk` for Rust instead.
+//! This crate is an implementation part of Provenance. The project does not provide compatibility
+//! shims for changes to its API. An API removal requires a minor version update. Use
+//! `provenance-sdk` for Rust.
 //!
 //! Deterministic descriptive-text checks from ASD-STE100 Issue 9.
 
