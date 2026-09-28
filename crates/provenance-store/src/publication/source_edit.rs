@@ -102,7 +102,10 @@ impl StagedStateHook for SourceEditPublication {
         let replacement_path = transaction.join("replacement");
         std::fs::write(&replacement_path, &self.replacement)
             .context("write source-edit replacement record")?;
-        std::fs::File::open(&replacement_path)
+        std::fs::OpenOptions::new()
+            .read(true)
+            .write(cfg!(windows))
+            .open(&replacement_path)
             .context("open source-edit replacement record")?
             .sync_all()
             .context("flush source-edit replacement record")?;
