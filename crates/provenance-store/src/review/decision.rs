@@ -99,7 +99,12 @@ impl StateStore {
             }
         }
         if facts
-            .pending_submission(self, &scope, &input.requirement_id)?
+            .pending_submission(
+                self,
+                &scope,
+                provenance_core::NodeType::Requirement,
+                &input.requirement_id,
+            )?
             .is_some()
         {
             return Err(SourceFailure::wrap(
@@ -149,7 +154,10 @@ impl StateStore {
         self.create_proposal_card(proposal)?;
         let entry = CycleEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: facts.next_sequence(&input.requirement_id)?,
+            sequence: facts.next_sequence(
+                provenance_core::NodeType::Requirement,
+                &input.requirement_id,
+            )?,
             scope_id: scope,
             id: journal::new_id(),
             record_kind: provenance_core::NodeType::Requirement,
@@ -289,7 +297,8 @@ impl StateStore {
         };
         let entry = CycleEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: CycleFacts::validated(self, &scope)?.next_sequence(&requirement_id)?,
+            sequence: CycleFacts::validated(self, &scope)?
+                .next_sequence(provenance_core::NodeType::Requirement, &requirement_id)?,
             scope_id: scope,
             id: journal::new_id(),
             record_kind: provenance_core::NodeType::Requirement,
@@ -430,7 +439,8 @@ impl StateStore {
         let requirement_id = proposal.traceability.target.artifact_id;
         let entry = CycleEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: CycleFacts::validated(self, &scope)?.next_sequence(&requirement_id)?,
+            sequence: CycleFacts::validated(self, &scope)?
+                .next_sequence(provenance_core::NodeType::Requirement, &requirement_id)?,
             scope_id: scope,
             id: journal::new_id(),
             record_kind: provenance_core::NodeType::Requirement,
