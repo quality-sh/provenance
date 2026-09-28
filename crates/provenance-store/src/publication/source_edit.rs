@@ -136,11 +136,24 @@ pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::
     }
     complete_state(layout, &transaction, &mut marker)?;
     if current == marker.before_digest {
-        let prepared = held.create_temp(&replacement)?;
+        let prepared = match held.recover_temp(
+            &marker.prepared_leaf,
+            &marker.prepared_identity,
+            marker.after_digest,
+        )? {
+            Some(prepared) => prepared,
+            None => held.create_temp(&replacement)?,
+        };
         held.compare_and_swap(prepared)?;
         marker.phase = SourceEditPhase::FileInstalled;
         write_marker(layout, &marker)?;
         crate::test_probes::at("source_edit_file_installed")?;
+    } else if let Some(prepared) = held.recover_temp(
+        &marker.prepared_leaf,
+        &marker.prepared_identity,
+        marker.after_digest,
+    )? {
+        drop(prepared);
     }
     finish(layout, &transaction)
 }
