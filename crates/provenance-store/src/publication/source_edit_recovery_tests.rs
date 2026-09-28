@@ -1,7 +1,12 @@
-use super::{
-    with_repository_publication, with_staged_state_and_source_edit, SourceEditRecoveryFailure,
+use crate::{
+    layout::ProvenanceLayout,
+    operations::files::RepositoryFiles,
+    publication::{
+        with_repository_publication, with_staged_state_and_source_edit,
+        SourceEditRecoveryFailure,
+    },
+    test_probes,
 };
-use crate::{layout::ProvenanceLayout, operations::files::RepositoryFiles, test_probes};
 use camino::Utf8Path;
 
 const BEFORE: &[u8] = b"before\n";
@@ -61,7 +66,7 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
         let status = std::process::Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
-                "publication::source_edit_recovery_tests::crash_child",
+                "operations::files::tests::source_edit_recovery_tests::crash_child",
                 "--nocapture",
             ])
             .env("PROVENANCE_SOURCE_EDIT_CRASH_ROOT", root.as_str())
@@ -103,7 +108,7 @@ fn recovery_refuses_third_file_bytes_without_overwriting_them() {
     let status = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "publication::source_edit_recovery_tests::crash_child",
+            "operations::files::tests::source_edit_recovery_tests::crash_child",
             "--nocapture",
         ])
         .env("PROVENANCE_SOURCE_EDIT_CRASH_ROOT", root.as_str())
@@ -164,7 +169,7 @@ fn final_marker_clears_when_cleanup_lost_its_result() {
     let status = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "publication::source_edit_recovery_tests::crash_child",
+            "operations::files::tests::source_edit_recovery_tests::crash_child",
             "--nocapture",
         ])
         .env("PROVENANCE_SOURCE_EDIT_CRASH_ROOT", root.as_str())
