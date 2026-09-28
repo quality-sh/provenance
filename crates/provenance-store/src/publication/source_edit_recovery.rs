@@ -27,20 +27,52 @@ pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::
         SchemaVersion(marker.schema_version),
     )?;
     validate_marker_leaves(&marker)?;
+    recover_marked_source_edit(layout, &marker_path, &mut marker)
+}
+
+fn recover_marked_source_edit(
+    layout: &ProvenanceLayout,
+    marker_path: &Utf8Path,
+    marker: &mut SourceEditMarker,
+) -> anyhow::Result<()> {
     if marker.phase == SourceEditPhase::FileInstalled && !marker.transaction_dir.exists() {
-        validate_missing_transaction(layout, &marker.transaction_dir)?;
-        let current = read_current(layout, &marker)?;
-        require_identity(&current, &marker, marker.after_digest)?;
-        std::fs::remove_file(marker_path)?;
-        return sync_directory(&layout.cache_dir());
+        return finish_without_transaction(layout, marker_path, marker);
     }
     let transaction = validate_transaction(layout, &marker.transaction_dir)?;
     validate_recovery_tree(&transaction)?;
+    let replacement = read_replacement(&transaction, marker.after_digest)?;
+    let held = recover_target(layout, marker)?;
+    let current = require_known_target(&held, marker)?;
+    complete_state(layout, &transaction, marker)?;
+    complete_file(layout, &held, marker, current, &replacement)?;
+    finish(layout, &transaction)
+}
+
+fn finish_without_transaction(
+    layout: &ProvenanceLayout,
+    marker_path: &Utf8Path,
+    marker: &SourceEditMarker,
+) -> anyhow::Result<()> {
+    validate_missing_transaction(layout, &marker.transaction_dir)?;
+    let current = read_current(layout, marker)?;
+    require_identity(&current, marker, marker.after_digest)?;
+    std::fs::remove_file(marker_path)?;
+    sync_directory(&layout.cache_dir())
+}
+
+fn read_replacement(transaction: &Utf8Path, expected: [u8; 32]) -> anyhow::Result<Vec<u8>> {
     let replacement = read_regular_file(&transaction.join("replacement"))?;
     anyhow::ensure!(
-        <[u8; 32]>::from(Sha256::digest(&replacement)) == marker.after_digest,
+        <[u8; 32]>::from(Sha256::digest(&replacement)) == expected,
         "source-edit recovery replacement digest differs from its marker"
     );
+    Ok(replacement)
+}
+
+fn recover_target(
+    layout: &ProvenanceLayout,
+    marker: &SourceEditMarker,
+) -> anyhow::Result<HeldRepositoryFile> {
     let files = RepositoryFiles::open(layout.root())?;
     let held = match files.read_bounded(&marker.target, usize::MAX) {
         Ok(held) => held,
@@ -54,38 +86,65 @@ pub(super) fn recover_pending_source_edit(layout: &ProvenanceLayout) -> anyhow::
             .map_err(|_| SourceEditRecoveryFailure::ExternalChange)?,
         Err(_) => return Err(SourceEditRecoveryFailure::ExternalChange.into()),
     };
+    Ok(held)
+}
+
+fn require_known_target(
+    held: &HeldRepositoryFile,
+    marker: &SourceEditMarker,
+) -> anyhow::Result<[u8; 32]> {
     let current = held.digest();
     if current != marker.before_digest && current != marker.after_digest {
         return Err(SourceEditRecoveryFailure::ExternalChange.into());
     }
-    require_identity(&held, &marker, current)?;
-    complete_state(layout, &transaction, &mut marker)?;
+    require_identity(held, marker, current)?;
+    Ok(current)
+}
+
+fn complete_file(
+    layout: &ProvenanceLayout,
+    held: &HeldRepositoryFile,
+    marker: &mut SourceEditMarker,
+    current: [u8; 32],
+    replacement: &[u8],
+) -> anyhow::Result<()> {
     if current == marker.before_digest {
-        let prepared = match held.recover_temp(
-            &marker.prepared_leaf,
-            &marker.prepared_identity,
-            marker.after_digest,
-        )? {
-            Some(prepared) => prepared,
-            None => held.create_temp(&replacement)?,
-        };
-        let backup = RepositoryFileBackup::from_recovery(
-            marker.backup_leaf.clone(),
-            marker.backup_identity.clone(),
-            marker.backup_digest,
-        )?;
-        held.compare_and_swap_with_backup(prepared, &backup)?;
-        marker.phase = SourceEditPhase::FileInstalled;
-        write_marker(layout, &marker)?;
-        crate::test_probes::at("source_edit_file_installed")?;
-    } else if let Some(prepared) = held.recover_temp(
+        return install_replacement(layout, held, marker, replacement);
+    }
+    if let Some(prepared) = held.recover_temp(
         &marker.prepared_leaf,
         &marker.prepared_identity,
         marker.after_digest,
     )? {
         drop(prepared);
     }
-    finish(layout, &transaction)
+    Ok(())
+}
+
+fn install_replacement(
+    layout: &ProvenanceLayout,
+    held: &HeldRepositoryFile,
+    marker: &mut SourceEditMarker,
+    replacement: &[u8],
+) -> anyhow::Result<()> {
+    let prepared = match held.recover_temp(
+        &marker.prepared_leaf,
+        &marker.prepared_identity,
+        marker.after_digest,
+    )? {
+        Some(prepared) => prepared,
+        None => held.create_temp(replacement)?,
+    };
+    let backup = RepositoryFileBackup::from_recovery(
+        marker.backup_leaf.clone(),
+        marker.backup_identity.clone(),
+        marker.backup_digest,
+    )?;
+    held.compare_and_swap_with_backup(prepared, &backup)?;
+    marker.phase = SourceEditPhase::FileInstalled;
+    write_marker(layout, marker)?;
+    crate::test_probes::at("source_edit_file_installed")?;
+    Ok(())
 }
 
 fn require_identity(
