@@ -381,3 +381,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod generic_tests;
