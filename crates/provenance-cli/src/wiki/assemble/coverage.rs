@@ -23,7 +23,7 @@ impl Assembler<'_> {
             native_first(report).into_iter().find(|site| {
                 let core = site.core();
                 core.rule_id == rule_id
-                    && site.role() == SiteRole::Implementation
+                    && matches!(site.role(), SiteRole::Implementation)
                     && site.is_current()
             })
         });
@@ -60,7 +60,7 @@ impl Assembler<'_> {
                 .into_iter()
                 .find(|site| {
                     site.core().rule_id == rule_id
-                        && site.role() == SiteRole::Implementation
+                        && matches!(site.role(), SiteRole::Implementation)
                         && site.is_current()
                 })
                 .map(|site| &site.core().file_path)
@@ -71,9 +71,11 @@ impl Assembler<'_> {
             .flat_map(native_first)
             .filter(|site| site.core().rule_id == rule_id && site.is_current())
             .filter_map(|site| {
-                let method = site.core().verification.clone()?;
+                let SiteRole::Verification(method) = site.role() else {
+                    return None;
+                };
                 Some(VerificationSite {
-                    method,
+                    method: method.to_string(),
                     symbol: site.symbol().map(str::to_string),
                     location: self.site_location(site),
                     outside_implementation_module: implementation_file

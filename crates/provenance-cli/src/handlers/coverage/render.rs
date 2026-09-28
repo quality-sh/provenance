@@ -32,7 +32,7 @@ fn implementation_modules(report: &CoverageReport) -> BTreeMap<&str, &camino::Ut
     let mut selected = BTreeMap::new();
     for site in report
         .sites()
-        .filter(|site| site.role() == SiteRole::Implementation && site.is_current())
+        .filter(|site| matches!(site.role(), SiteRole::Implementation) && site.is_current())
     {
         let core = site.core();
         match site {
@@ -115,10 +115,11 @@ pub(super) fn render_coverage(
         let implementation_modules = implementation_modules(report);
         for report_site in report.sites() {
             let site = report_site.core();
-            let relation = site.verification.as_ref().map_or_else(
-                || "is implemented".to_string(),
-                |method| format!("verified by {method}"),
-            );
+            let role = report_site.role();
+            let relation = match role {
+                SiteRole::Implementation => "is implemented".to_string(),
+                SiteRole::Verification(method) => format!("verified by {method}"),
+            };
             writeln!(
                 out,
                 "- `{}` {} at `{}`:{}{}{}{}",
@@ -135,7 +136,7 @@ pub(super) fn render_coverage(
                 if is_outside_implementation_module(
                     &site.rule_id,
                     &site.file_path,
-                    report_site.role() == SiteRole::Verification,
+                    matches!(role, SiteRole::Verification(_)),
                     &implementation_modules,
                 ) {
                     OUTSIDE_IMPLEMENTATION_MODULE

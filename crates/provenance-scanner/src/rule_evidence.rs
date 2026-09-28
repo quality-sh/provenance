@@ -129,7 +129,7 @@ fn implemented_rule_ids(
     bindings: &[ImplementationBinding],
 ) -> BTreeSet<String> {
     source_sites(scans)
-        .filter(|site| site.role() == SourceSiteRole::Implementation)
+        .filter(|site| matches!(site.role(), SourceSiteRole::Implementation))
         .map(|site| site.rule_id().to_string())
         .chain(
             bindings
@@ -140,20 +140,9 @@ fn implemented_rule_ids(
 }
 
 fn verified_rule_ids(scans: &[FileScan], bindings: &[VerificationBinding]) -> BTreeSet<String> {
-    scans
-        .iter()
-        .flat_map(|scan| {
-            scan.bindings
-                .iter()
-                .filter(|binding| binding.verification.is_some())
-                .map(|binding| binding.rule_id.clone())
-                .chain(
-                    scan.annotations
-                        .iter()
-                        .filter(|location| location.annotation.verification.is_some())
-                        .map(|location| location.annotation.rule.clone()),
-                )
-        })
+    source_sites(scans)
+        .filter(|site| matches!(site.role(), SourceSiteRole::Verification(_)))
+        .map(|site| site.rule_id().to_string())
         .chain(
             bindings
                 .iter()

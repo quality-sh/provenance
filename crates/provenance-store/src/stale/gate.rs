@@ -92,7 +92,7 @@ fn marker_sites(
     head.sites()
         .filter(|site| known_rules.contains(&site.core().rule_id))
         .map(|site| {
-            let kind = if site.role() == SiteRole::Verification {
+            let kind = if matches!(site.role(), SiteRole::Verification(_)) {
                 EvidenceSiteKind::Verification
             } else {
                 EvidenceSiteKind::RuleBinding

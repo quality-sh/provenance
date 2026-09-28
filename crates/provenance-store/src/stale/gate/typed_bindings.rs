@@ -39,7 +39,7 @@ pub(super) fn sites(
 fn scanned_implementation_matches(scan: &CoverageScan, binding: &ImplementationBinding) -> bool {
     scan.sites().any(|site| {
         let core = site.core();
-        site.role() == SiteRole::Implementation
+        matches!(site.role(), SiteRole::Implementation)
             && core.rule_id == binding.rule_id.as_str()
             && site.symbol() == Some(binding.symbol.as_str())
             && matches_file(

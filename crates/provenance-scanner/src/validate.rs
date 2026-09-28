@@ -44,7 +44,7 @@ pub fn validate_bindings(
                 binding_finding: false,
             });
         }
-        if site.role() == SourceSiteRole::Implementation
+        if matches!(site.role(), SourceSiteRole::Implementation)
             && !seen_rule_sites.insert(site.rule_id().to_string())
         {
             warnings.push(ValidationWarning {
