@@ -232,7 +232,7 @@ impl StateStore {
             );
         } else {
             anyhow::ensure!(
-                record_schema_version(record) != REVIEW_SCHEMA_VERSION,
+                record.schema_version() != REVIEW_SCHEMA_VERSION,
                 "enrolled record has no review history"
             );
         }
@@ -261,57 +261,14 @@ impl StateStore {
                 !directory(&self.layout, scope).try_exists()?,
                 "review-bearing scopes require lossless import/export support"
             );
-            let has_enrolled_record = self
-                .list_sources(scope)?
-                .iter()
-                .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
-                || self
-                    .list_requirements(scope)?
-                    .iter()
-                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
-                || self
-                    .list_resolutions(scope)?
-                    .iter()
-                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
-                || self
-                    .list_rules(scope)?
-                    .iter()
-                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
-                || self
-                    .list_domains(scope)?
-                    .iter()
-                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
-                || self
-                    .list_boundaries(scope)?
-                    .iter()
-                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
-                || self
-                    .list_topics(scope)?
-                    .iter()
-                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION)
-                || self
-                    .list_questions(scope)?
-                    .iter()
-                    .any(|record| record.schema_version == REVIEW_SCHEMA_VERSION);
+            let has_enrolled_record =
+                crate::cache::review_families::has_enrolled_record(self, scope)?;
             anyhow::ensure!(
                 !has_enrolled_record,
                 "review-bearing scopes require lossless import/export support"
             );
             Ok(())
         })
-    }
-}
-
-const fn record_schema_version(record: &ReviewRecord) -> provenance_core::SchemaVersion {
-    match record {
-        ReviewRecord::Source(value) => value.schema_version,
-        ReviewRecord::Requirement(value) => value.schema_version,
-        ReviewRecord::Resolution(value) => value.schema_version,
-        ReviewRecord::Rule(value) => value.schema_version,
-        ReviewRecord::Domain(value) => value.schema_version,
-        ReviewRecord::Boundary(value) => value.schema_version,
-        ReviewRecord::Topic(value) => value.schema_version,
-        ReviewRecord::Question(value) => value.schema_version,
     }
 }
 
