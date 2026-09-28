@@ -1,4 +1,4 @@
-use provenance_core::{ScopeId, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, ScopeId, SUPPORTED_SCHEMA_VERSION};
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::publication::publication_guard;
 use provenance_store::state_store::StateStore;
@@ -22,7 +22,7 @@ fn requirement_review_read_refuses_a_future_layout() {
         .state_dir()
         .join("scopes/default/requirements/review.jsonl");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let future = SUPPORTED_SCHEMA_VERSION.0 + 1;
+    let future = REVIEW_SCHEMA_VERSION.0 + 1;
     let record = json!({
         "schema_version": future,
         "scope_id": "default",
