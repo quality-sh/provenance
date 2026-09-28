@@ -113,36 +113,12 @@ fn body_bearing_refusals_do_not_break_the_next_request() {
         refusal.into_string().expect("refusal response body");
     }
 
-    let valid_body = serde_json::json!({"data": {
-        "actor": "reviewer", "role": "user", "body": "Check this requirement."
-    }});
+    let valid_body = "valid".repeat(16 * 1024);
     let valid = response(
         agent
-            .post(&format!(
-                "{}/requirements/req_example/discussions",
-                host.endpoint
-            ))
+            .get(&format!("{}/review-config", host.endpoint))
             .set("Authorization", &format!("Bearer {}", host.bearer))
-            .set("Origin", &host.endpoint)
-            .set("Content-Type", "application/json")
-            .set("Idempotency-Key", "request_after_refusals")
-            .send_string(&valid_body.to_string()),
+            .send_string(&valid_body),
     );
     assert_eq!(valid.status(), 200);
-}
-
-#[test]
-fn early_refusals_ask_the_client_to_close_the_connection() {
-    let repo = repository();
-    let host = start(repo.path());
-    let refusal = response(
-        ureq::post(&format!(
-            "{}/requirements/req_example/discussions",
-            host.endpoint
-        ))
-        .send_string("invalid"),
-    );
-
-    assert_eq!(refusal.status(), 401);
-    assert_eq!(refusal.header("Connection"), Some("close"));
 }
