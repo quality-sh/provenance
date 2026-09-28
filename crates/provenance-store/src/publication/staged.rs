@@ -40,6 +40,7 @@ pub(super) trait StagedStateHook {
     fn install_file(&mut self) -> anyhow::Result<()>;
     fn published(&mut self, live: &ProvenanceLayout, transaction: &camino::Utf8Path)
         -> anyhow::Result<()>;
+    fn after_published(&mut self) -> anyhow::Result<()>;
     fn rollback_finished(&mut self, live: &ProvenanceLayout) -> anyhow::Result<()>;
     fn finish(&mut self, live: &ProvenanceLayout, transaction: &camino::Utf8Path)
         -> anyhow::Result<()>;
@@ -103,6 +104,7 @@ pub(super) fn stage_with_hook<R>(
                 .map_err(crate::write_error::publication_started)?;
             return Err(error);
         }
+        hook.after_published()?;
         hook.finish(live_layout, &transaction)?;
         return Ok(result);
     }
@@ -194,7 +196,10 @@ impl StagedStateHook for ImportPublication {
         live: &ProvenanceLayout,
         transaction: &camino::Utf8Path,
     ) -> anyhow::Result<()> {
-        write_publication_marker(live, transaction, PublicationPhase::Published)?;
+        write_publication_marker(live, transaction, PublicationPhase::Published)
+    }
+
+    fn after_published(&mut self) -> anyhow::Result<()> {
         crate::test_probes::at("state_published")
     }
 
