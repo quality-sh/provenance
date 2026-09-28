@@ -58,13 +58,7 @@ fn add_resolution(
         .unwrap();
 }
 
-fn add_rule(
-    store: &StateStore,
-    scope: &ScopeId,
-    id: &str,
-    requirement: &str,
-    status: RuleStatus,
-) {
+fn add_rule(store: &StateStore, scope: &ScopeId, id: &str, requirement: &str, status: RuleStatus) {
     store
         .create_rule(CreateRuleInput {
             archived_in_commit: (status == RuleStatus::Archived).then(|| ArchivedStamp {
@@ -171,9 +165,13 @@ async fn all_ids(root: &camino::Utf8Path, exclude_terminal: bool) -> Vec<String>
         let answer = page(root, cursor.as_deref(), 50, exclude_terminal)
             .await
             .unwrap();
-        ids.extend(answer["entries"].as_array().unwrap().iter().filter_map(|entry| {
-            entry["node"]["id"].as_str().map(str::to_owned)
-        }));
+        ids.extend(
+            answer["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|entry| entry["node"]["id"].as_str().map(str::to_owned)),
+        );
         cursor = answer["next_cursor"].as_str().map(str::to_owned);
         if cursor.is_none() {
             return ids;
@@ -221,7 +219,12 @@ async fn lifecycle_filter_pages_across_hidden_records_and_binds_the_cursor() {
     loop {
         let answer = page(&root, cursor.as_deref(), 1, true).await.unwrap();
         assert_eq!(answer["entries"].as_array().unwrap().len(), 1);
-        pages.push(answer["entries"][0]["node"]["id"].as_str().unwrap().to_owned());
+        pages.push(
+            answer["entries"][0]["node"]["id"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+        );
         cursor = answer["next_cursor"].as_str().map(str::to_owned);
         if cursor.is_none() {
             assert_eq!(answer["has_more"], false);
@@ -238,5 +241,8 @@ async fn lifecycle_filter_pages_across_hidden_records_and_binds_the_cursor() {
     let error = page(&root, Some(filtered_cursor), 1, false)
         .await
         .unwrap_err();
-    assert_eq!(error.downcast_ref::<ReadFailure>(), Some(&ReadFailure::CursorInvalid));
+    assert_eq!(
+        error.downcast_ref::<ReadFailure>(),
+        Some(&ReadFailure::CursorInvalid)
+    );
 }

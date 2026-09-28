@@ -150,6 +150,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
     std::fs::write(&path, "invalid JSON\n").unwrap();
     let request = ReadDocumentQuery {
         id: "req_new".into(),
+        exclude_terminal: false,
         cursor: None,
         limit: 50,
     };
@@ -206,6 +207,7 @@ async fn document_valid_freshness_preserves_page_refusals() {
                 ReadPolicy::with_freshness(freshness),
                 ReadDocumentQuery {
                     id: id.into(),
+                    exclude_terminal: false,
                     cursor: cursor.map(str::to_owned),
                     limit: 50,
                 },
@@ -251,7 +253,12 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
                 }));
             }
             crate::cache::catch_up_state(&layout).await?;
-            super::super::document::read(ctx, ReadDocumentQuery { id: "req_overtime".into(), cursor: None, limit: 50 }).await
+            super::super::document::read(ctx, ReadDocumentQuery {
+                id: "req_overtime".into(),
+                exclude_terminal: false,
+                cursor: None,
+                limit: 50,
+            }).await
         })
     }).await.unwrap();
     let old = collections(serde_json::to_value(&answer.result).unwrap());
