@@ -51,7 +51,7 @@ impl StateStore {
             super::journal::validated_head(&chain)?;
         }
         let mut checked = std::collections::BTreeMap::new();
-        for (reference, owner) in entries.iter().flat_map(|e| {
+        for (reference, kind, owner) in entries.iter().flat_map(|e| {
             e.before
                 .iter()
                 .chain(std::iter::once(&e.after))
