@@ -101,33 +101,55 @@ impl<'de> Deserialize<'de> for ReviewEntry {
     }
 }
 
-#[derive(Serialize)]
-#[serde(untagged)]
-enum RecordRef<'a> {
-    Source(&'a crate::Source),
-    Requirement(&'a crate::Requirement),
-    Resolution(&'a crate::Resolution),
-    Rule(&'a crate::Rule),
-    Domain(&'a crate::Domain),
-    Boundary(&'a crate::Boundary),
-    Topic(&'a crate::Topic),
-    Question(&'a crate::Question),
+macro_rules! define_review_record_serde {
+    ($( $variant:ident($record:ty, $kind:ident), )*) => {
+        #[derive(Serialize)]
+        #[serde(untagged)]
+        enum RecordRef<'a> {
+            $( $variant(&'a $record), )*
+        }
+
+        impl<'a> From<&'a ReviewRecord> for RecordRef<'a> {
+            fn from(record: &'a ReviewRecord) -> Self {
+                match record {
+                    $( ReviewRecord::$variant(value) => Self::$variant(value), )*
+                }
+            }
+        }
+
+        impl ReviewRecord {
+            pub fn deserialize_closed(
+                kind: NodeType,
+                value: &serde_json::Value,
+            ) -> anyhow::Result<Self> {
+                fn closed<T: serde::de::DeserializeOwned>(
+                    value: &serde_json::Value,
+                ) -> anyhow::Result<T> {
+                    let text = serde_json::to_string(value)?;
+                    let mut unknown = None;
+                    let mut deserializer = serde_json::Deserializer::from_str(&text);
+                    let record = serde_ignored::deserialize(&mut deserializer, |path| {
+                        if unknown.is_none() {
+                            unknown = Some(path.to_string());
+                        }
+                    })?;
+                    anyhow::ensure!(
+                        unknown.is_none(),
+                        "unknown field `{}`",
+                        unknown.unwrap_or_default()
+                    );
+                    Ok(record)
+                }
+
+                Ok(match kind {
+                    $( NodeType::$kind => Self::$variant(closed::<$record>(value)?), )*
+                })
+            }
+        }
+    };
 }
 
-impl<'a> From<&'a ReviewRecord> for RecordRef<'a> {
-    fn from(record: &'a ReviewRecord) -> Self {
-        match record {
-            ReviewRecord::Source(value) => Self::Source(value),
-            ReviewRecord::Requirement(value) => Self::Requirement(value),
-            ReviewRecord::Resolution(value) => Self::Resolution(value),
-            ReviewRecord::Rule(value) => Self::Rule(value),
-            ReviewRecord::Domain(value) => Self::Domain(value),
-            ReviewRecord::Boundary(value) => Self::Boundary(value),
-            ReviewRecord::Topic(value) => Self::Topic(value),
-            ReviewRecord::Question(value) => Self::Question(value),
-        }
-    }
-}
+super::review_record_kinds!(define_review_record_serde);
 
 impl Serialize for ReviewRecord {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -168,21 +190,8 @@ impl<'de> Deserialize<'de> for RecordSnapshot {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let wire = RecordSnapshotWire::deserialize(deserializer)?;
         let kind = wire.record_kind.unwrap_or(NodeType::Requirement);
-        let record = match kind {
-            NodeType::Source => serde_json::from_value(wire.record).map(ReviewRecord::Source),
-            NodeType::Requirement => {
-                serde_json::from_value(wire.record).map(ReviewRecord::Requirement)
-            }
-            NodeType::Resolution => {
-                serde_json::from_value(wire.record).map(ReviewRecord::Resolution)
-            }
-            NodeType::Rule => serde_json::from_value(wire.record).map(ReviewRecord::Rule),
-            NodeType::Domain => serde_json::from_value(wire.record).map(ReviewRecord::Domain),
-            NodeType::Boundary => serde_json::from_value(wire.record).map(ReviewRecord::Boundary),
-            NodeType::Topic => serde_json::from_value(wire.record).map(ReviewRecord::Topic),
-            NodeType::Question => serde_json::from_value(wire.record).map(ReviewRecord::Question),
-        }
-        .map_err(D::Error::custom)?;
+        let record =
+            ReviewRecord::deserialize_closed(kind, &wire.record).map_err(D::Error::custom)?;
         Ok(Self {
             schema_version: wire.schema_version,
             record,
