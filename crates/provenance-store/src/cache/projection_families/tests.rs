@@ -11,6 +11,11 @@ const fn expected(
     catalog_operations: &'static [&'static str],
 ) -> FamilyMeta {
     let (group, table_name) = identity;
+    let terminal_statuses: &'static [&'static str] = match table_name {
+        "resolutions" => &["abandoned"],
+        "rules" => &["archived"],
+        _ => &[],
+    };
     FamilyMeta {
         group,
         table_name,
@@ -19,6 +24,7 @@ const fn expected(
         graph_field,
         route_order,
         budget,
+        terminal_statuses,
         catalog_operations,
     }
 }
