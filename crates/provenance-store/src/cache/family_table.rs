@@ -22,6 +22,7 @@ macro_rules! record_family_rows {
             $($prefix)*
             export {
                 Sources {
+                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Source,
                     field: sources,
                     path: sources_path,
@@ -53,6 +54,7 @@ macro_rules! record_family_rows {
                     target: Some(NodeType::Source) }]
                 };
                 Domains {
+                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Domain,
                     field: domains,
                     path: domains_path,
@@ -81,6 +83,7 @@ macro_rules! record_family_rows {
                     target: Some(NodeType::Domain) }]
                 };
                 Requirements {
+                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Requirement,
                     field: requirements,
                     path: requirements_path,
@@ -97,6 +100,7 @@ macro_rules! record_family_rows {
                     route: [requirements]
                 };
                 Boundaries {
+                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Boundary,
                     field: boundaries,
                     path: boundaries_path,
@@ -126,6 +130,7 @@ macro_rules! record_family_rows {
                     target: Some(NodeType::Boundary) }]
                 };
                 Topics {
+                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Topic,
                     field: topics,
                     path: topics_path,
@@ -153,6 +158,7 @@ macro_rules! record_family_rows {
                     target: Some(NodeType::Topic) }]
                 };
                 Questions {
+                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Question,
                     field: questions,
                     path: questions_path,
@@ -182,6 +188,7 @@ macro_rules! record_family_rows {
                     target: Some(NodeType::Question) }]
                 };
                 Resolutions {
+                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Resolution,
                     field: resolutions,
                     path: resolutions_path,
@@ -215,6 +222,7 @@ macro_rules! record_family_rows {
                     target: Some(NodeType::Resolution) }]
                 };
                 Rules {
+                    // Review facts: cache::review_families::REVIEW_FAMILIES.
                     record: provenance_core::Rule,
                     field: rules,
                     path: rules_path,
