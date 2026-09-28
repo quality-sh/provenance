@@ -1,4 +1,5 @@
-use super::{local_host, OutputFormat};
+use super::OutputFormat;
+use crate::repo_context::RepoContext;
 use provenance_porcelain::api::{render_discovery_readable, ApiOutcome, ApiRequest};
 
 /// Run one api action through the shared porcelain port, in process, with
@@ -10,7 +11,7 @@ pub async fn dispatch_api(
     format: Option<OutputFormat>,
     request: ApiRequest,
 ) -> anyhow::Result<()> {
-    let host = local_host(repo, scope)?;
+    let host = RepoContext::new(repo, scope).local_host()?;
     let service = host.porcelain().api();
     match service.execute_api(request).await {
         Ok(ApiOutcome::Catalog(catalog)) => {

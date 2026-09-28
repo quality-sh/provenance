@@ -32,7 +32,7 @@ pub async fn dispatch_root(
     if let Some(target) = target {
         input.insert("discussion_id".into(), json!(target));
     }
-    let host = porcelain::local_host(&args.common.repo, &args.common.scope)?;
+    let host = args.common.context().repo.local_host()?;
     let service = host.porcelain().discussion();
     let outcome = service
         .execute_discussion(action, Value::Object(input))
@@ -54,7 +54,7 @@ pub async fn dispatch_target(
     )
     .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
     let target = StableId::new(args.target)?;
-    let host = porcelain::local_host(&args.common.repo, &args.common.scope)?;
+    let host = args.common.context().repo.local_host()?;
     let service = host.porcelain().discussion();
     let target_field = discussion::target_field(action);
     let identity = if target_field == "parent" {

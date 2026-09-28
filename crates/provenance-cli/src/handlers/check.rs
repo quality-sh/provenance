@@ -1,4 +1,5 @@
 use crate::output;
+use crate::repo_context::RepoContext;
 use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
@@ -36,14 +37,22 @@ impl Selectors {
 
 #[derive(Clone)]
 pub struct RepositoryCheckPort {
-    repo: Utf8PathBuf,
+    context: RepoContext,
     strict: bool,
     base: Option<String>,
 }
 
 impl RepositoryCheckPort {
-    pub const fn new(repo: Utf8PathBuf, strict: bool, base: Option<String>) -> Self {
-        Self { repo, strict, base }
+    pub fn new(repo: Utf8PathBuf, strict: bool, base: Option<String>) -> Self {
+        Self::with_context(RepoContext::new(repo, "default"), strict, base)
+    }
+
+    pub const fn with_context(context: RepoContext, strict: bool, base: Option<String>) -> Self {
+        Self {
+            context,
+            strict,
+            base,
+        }
     }
 
     fn compute(&self, category: Category, scope: Option<&str>) -> Result<CategoryRun, String> {
@@ -55,7 +64,7 @@ impl RepositoryCheckPort {
     }
 
     fn graph_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
-        let store = Store::open(&self.repo);
+        let store = self.context.open_store();
         let result =
             provenance_store::layout::with_initialized_graph(store.layout(), |mut manifest| {
                 if let Some(scope) = scope {
@@ -87,7 +96,7 @@ impl RepositoryCheckPort {
     }
 
     fn statement_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
-        let store = Store::open(&self.repo);
+        let store = self.context.open_store();
         let (diagnostics, context) =
             provenance_store::layout::with_initialized_graph(store.layout(), |mut manifest| {
                 if let Some(scope) = scope {
@@ -99,14 +108,18 @@ impl RepositoryCheckPort {
                 if self.strict {
                     ensure_strict_dictionary_index(store.layout())?;
                     let analysis = statement_report::changed_statements_from_commits(
-                        &self.repo,
+                        &self.context.repo,
                         &manifest,
                         self.base.as_deref(),
                     )?;
                     Ok((analysis.diagnostics, Some(analysis.context)))
                 } else {
-                    statement_report::changed_statements_from_head(&store, &self.repo, &manifest)
-                        .map(|diagnostics| (diagnostics, None))
+                    statement_report::changed_statements_from_head(
+                        &store,
+                        &self.context.repo,
+                        &manifest,
+                    )
+                    .map(|diagnostics| (diagnostics, None))
                 }
             })
             .map_err(|error| format!("{error:#}"))?;
@@ -134,12 +147,13 @@ impl RepositoryCheckPort {
     /// Finds missing code bindings without running project tests.
     #[rule("rule_porcelain_coverage_does_not_run_tests")]
     fn binding_run(&self, selected_scope: Option<&str>) -> Result<CategoryRun, String> {
-        let store = Store::open(&self.repo);
-        provenance_store::layout::require_initialized_graph(store.layout())
+        let store = self
+            .context
+            .open_graph()
             .map_err(|error| format!("{error:#}"))?;
-        let scanned = provenance_scanner::scan_path_with_content(&self.repo)
+        let scanned = provenance_scanner::scan_path_with_content(&self.context.repo)
             .map_err(|error| format!("{error:#}"))?;
-        self.binding_run_from_scanned(selected_scope, &scanned)
+        self.binding_run_with_store(&store, selected_scope, &scanned)
     }
 
     fn binding_run_from_scanned(
@@ -147,7 +161,19 @@ impl RepositoryCheckPort {
         selected_scope: Option<&str>,
         scanned: &[provenance_scanner::FileScanWithContent],
     ) -> Result<CategoryRun, String> {
-        let store = Store::open(&self.repo);
+        let store = self
+            .context
+            .open_graph()
+            .map_err(|error| format!("{error:#}"))?;
+        self.binding_run_with_store(&store, selected_scope, scanned)
+    }
+
+    fn binding_run_with_store(
+        &self,
+        store: &Store,
+        selected_scope: Option<&str>,
+        scanned: &[provenance_scanner::FileScanWithContent],
+    ) -> Result<CategoryRun, String> {
         let policy = provenance_store::settings::Settings::load(store.layout())
             .map_err(|error| format!("{error:#}"))?
             .coverage
@@ -168,8 +194,8 @@ impl RepositoryCheckPort {
                 let mut governed_finding_count = 0;
                 for scope in scopes {
                     let outcome = super::coverage::coverage_scan_from_scanned(
-                        &self.repo,
-                        &self.repo,
+                        &self.context.repo,
+                        &self.context.repo,
                         scope.id.as_str(),
                         scanned,
                     )?;
@@ -228,15 +254,16 @@ impl CheckPort for RepositoryCheckPort {
 
 #[rule("rule_ste_strict_committed_statement_gate")]
 pub(super) async fn check(
-    repo: Utf8PathBuf,
+    context: RepoContext,
     strict: bool,
     base: Option<String>,
     json: bool,
     selectors: Selectors,
 ) -> anyhow::Result<()> {
     let input = selectors.input();
-    let service =
-        provenance_porcelain::Porcelain::new(RepositoryCheckPort::new(repo, strict, base));
+    let service = provenance_porcelain::Porcelain::new(RepositoryCheckPort::with_context(
+        context, strict, base,
+    ));
     let report = service.check(input).await;
     if json {
         output::print_json(&report)?;

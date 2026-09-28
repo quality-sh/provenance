@@ -74,10 +74,12 @@ pub enum SkillsCommand {
 #[derive(Subcommand)]
 pub enum CoverageCommand {
     Scan {
-        #[command(flatten)]
-        context: RepoContext,
+        #[arg(long, default_value = ".")]
+        repo: Utf8PathBuf,
         #[arg(long)]
         path: Utf8PathBuf,
+        #[arg(long, default_value = "default")]
+        scope: String,
         /// JSON report from an earlier scan whose evidence anchors should be
         /// resolved against this scan.
         #[arg(long)]

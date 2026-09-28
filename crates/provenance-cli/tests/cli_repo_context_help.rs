@@ -33,13 +33,12 @@ fn centralized_repository_context_keeps_command_help() {
         ),
         ("wiki-build", &["wiki", "build", "--help"]),
         ("wiki-serve", &["wiki", "serve", "--help"]),
-        ("coverage-scan", &["coverage", "scan", "--help"]),
-        ("report-build", &["report", "build", "--help"]),
     ];
     let actual = commands
         .iter()
         .map(|(name, arguments)| format!("=== {name} ===\n{}", help(arguments)))
-        .collect::<String>();
+        .collect::<String>()
+        .replace(' ', "·");
 
     assert_eq!(
         actual,

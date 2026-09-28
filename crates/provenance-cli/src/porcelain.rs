@@ -39,7 +39,7 @@ pub async fn dispatch_get(
     format: Option<OutputFormat>,
     input: GetInput,
 ) -> anyhow::Result<()> {
-    let host = local_host(repo, scope)?;
+    let host = RepoContext::new(repo, scope).local_host()?;
     let service = host.porcelain().get();
     let outcome = service.get(input).await?;
     println!("{}", render_get(&outcome, format)?);

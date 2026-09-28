@@ -71,7 +71,8 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
                 statements,
                 bindings,
             };
-            check::check(repo, strict, base, format.is_some(), selectors).await
+            let context = provenance_cli::repo_context::RepoContext::new(repo, "default");
+            check::check(context, strict, base, format.is_some(), selectors).await
         }
         Command::Docs { command } => docs::handle(command).await,
         Command::Wiki { command } => wiki::handle(command).await,

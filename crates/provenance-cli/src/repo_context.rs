@@ -4,7 +4,6 @@ use clap::Args;
 use provenance_core::ScopeId;
 use std::net::{Ipv4Addr, SocketAddr};
 
-/// Repository and scope arguments for one CLI operation.
 #[derive(Clone, Debug, Args)]
 pub struct RepoContext {
     #[arg(long, default_value = ".")]
@@ -23,6 +22,10 @@ impl RepoContext {
 
     pub fn open_graph(&self) -> anyhow::Result<Store> {
         Store::open_required(&self.repo)
+    }
+
+    pub fn open_store(&self) -> Store {
+        Store::open(&self.repo)
     }
 
     pub fn scope_id(&self) -> anyhow::Result<ScopeId> {
