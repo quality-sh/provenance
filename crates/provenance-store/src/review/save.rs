@@ -20,7 +20,7 @@ impl StateStore {
     ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|| {
             let record = self.requirement(scope, id)?;
-            let review_record = provenance_core::review::ReviewRecord::from(record.clone());
+            let review_record = provenance_core::review::ReviewRecord::from(record);
             let head = self.head(&review_record)?;
             Ok(RequirementEditState {
                 etag: head

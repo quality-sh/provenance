@@ -302,7 +302,7 @@ impl StateStore {
     }
 }
 
-fn record_schema_version(record: &ReviewRecord) -> provenance_core::SchemaVersion {
+const fn record_schema_version(record: &ReviewRecord) -> provenance_core::SchemaVersion {
     match record {
         ReviewRecord::Source(value) => value.schema_version,
         ReviewRecord::Requirement(value) => value.schema_version,

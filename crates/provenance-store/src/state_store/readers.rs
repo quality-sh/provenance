@@ -107,8 +107,7 @@ pub fn ensure_supported_record_version(
         .parent()
         .and_then(Utf8Path::file_name)
         .and_then(crate::cache::review_families::by_directory);
-    if value["schema_version"] == 3 && family.is_some() {
-        let family = family.unwrap();
+    if let (true, Some(family)) = (value["schema_version"] == 3, family) {
         crate::cache::review_families::deserialize_record(family.kind, value.clone())
             .with_context(|| {
                 format!(
