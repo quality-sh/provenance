@@ -1,3 +1,5 @@
+//! This crate is an implementation part of Provenance. Its API can change in any release without notice. Use `provenance-sdk` for Rust instead.
+//!
 //! Marker attributes binding code to provenance rules, the derive that
 //! declares a record kind's reference fields, and the derive that stores a
 //! record kind as one projection table row.

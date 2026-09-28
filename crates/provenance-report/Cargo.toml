@@ -2,7 +2,7 @@
 name = "provenance-report"
 version.workspace = true
 edition.workspace = true
-description = "Versioned report envelope contract and deterministic pull request report renderer"
+description = "Internal part of Provenance for report envelopes and rendering"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

@@ -1,3 +1,5 @@
+//! This crate is an implementation part of Provenance. Its API can change in any release without notice. Use `provenance-sdk` for Rust instead.
+//!
 //! Connection-based client generated from the operation `OpenAPI` contract.
 // Pinned Typify emits these conditional forms and explicit default helpers.
 #[allow(

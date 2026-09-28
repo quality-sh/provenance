@@ -2,7 +2,7 @@
 name = "provenance-core"
 version.workspace = true
 edition.workspace = true
-description = "Core records and validation for Provenance requirements traceability"
+description = "Internal part of Provenance for core records and validation"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

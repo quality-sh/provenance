@@ -1,3 +1,5 @@
+//! This crate is an implementation part of Provenance. Its API can change in any release without notice. Use `provenance-sdk` for Rust instead.
+//!
 //! Shared human-facing semantics for Provenance interfaces.
 //!
 //! Get and check request and result types produce their JSON and MCP schemas here.

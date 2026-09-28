@@ -1,5 +1,7 @@
 #![allow(clippy::result_large_err)]
 
+//! This crate is an implementation part of Provenance. Its API can change in any release without notice. Use `provenance-sdk` for Rust instead.
+//!
 //! Isolated adapters for the shared operation contract.
 //!
 //! This library does not open a listener. The CLI owns the local review listener.

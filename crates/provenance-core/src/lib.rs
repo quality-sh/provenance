@@ -1,3 +1,5 @@
+//! This crate is an implementation part of Provenance. Its API can change in any release without notice. Use `provenance-sdk` for Rust instead.
+
 // The `Relations` derive names this crate by its package name, inside it too.
 extern crate self as provenance_core;
 

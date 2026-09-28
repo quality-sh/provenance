@@ -1,3 +1,5 @@
+//! This crate is an implementation part of Provenance. Its API can change in any release without notice. Use `provenance-sdk` for Rust instead.
+//!
 //! Deterministic pull request report rendering and envelope production.
 //!
 //! Layers stay separate: the builder module writes the versioned report

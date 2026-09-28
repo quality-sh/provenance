@@ -2,7 +2,7 @@
 name = "provenance-http-client"
 version.workspace = true
 edition.workspace = true
-description = "Generated HTTP client for Provenance operations"
+description = "Internal part of Provenance for generated HTTP access"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

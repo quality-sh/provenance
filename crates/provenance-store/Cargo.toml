@@ -2,7 +2,7 @@
 name = "provenance-store"
 version.workspace = true
 edition.workspace = true
-description = "Git-backed graph storage for Provenance requirements traceability"
+description = "Internal part of Provenance for Git-backed graph storage"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
