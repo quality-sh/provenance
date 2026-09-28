@@ -32,6 +32,22 @@ fn repository() -> tempfile::TempDir {
         serde_json::to_vec(&manifest).unwrap(),
     )
     .unwrap();
+    provenance_store::state_store::StateStore::new(layout)
+        .create_requirement(provenance_store::state_store::CreateRequirementInput {
+            scope_id: provenance_core::ScopeId::new("default").unwrap(),
+            id: provenance_core::StableId::new("req_example").unwrap(),
+            statement: "The Requirement accepts review.".into(),
+            description: None,
+            status: provenance_core::RequirementStatus::Discovery,
+            domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
     dir
 }
 
@@ -97,11 +113,20 @@ fn body_bearing_refusals_do_not_break_the_next_request() {
         refusal.into_string().expect("refusal response body");
     }
 
+    let valid_body = serde_json::json!({"data": {
+        "actor": "reviewer", "role": "user", "body": "Check this requirement."
+    }});
     let valid = response(
         agent
-            .get(&format!("{}/review-config", host.endpoint))
+            .post(&format!(
+                "{}/requirements/req_example/discussions",
+                host.endpoint
+            ))
             .set("Authorization", &format!("Bearer {}", host.bearer))
-            .call(),
+            .set("Origin", &host.endpoint)
+            .set("Content-Type", "application/json")
+            .set("Idempotency-Key", "request_after_refusals")
+            .send_string(&valid_body.to_string()),
     );
     assert_eq!(valid.status(), 200);
 }
