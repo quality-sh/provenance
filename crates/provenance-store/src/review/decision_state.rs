@@ -171,7 +171,8 @@ impl CycleFacts {
             .filter(|e| e.requirement_id == *requirement)
             .map(|e| e.sequence)
             .max()
-            .unwrap_or(CYCLE_SEQUENCE_BASE - 1)
+            .unwrap_or(0)
+            .max(CYCLE_SEQUENCE_BASE - 1)
             + 1
     }
 
