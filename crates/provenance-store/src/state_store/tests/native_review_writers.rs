@@ -1,7 +1,8 @@
 use super::seeded_requirement_store;
 use crate::state_store::{
     CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateResolutionInput,
-    CreateRuleInput, CreateSourceInput, CreateTopicInput,
+    CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput, UpdateBoundaryInput,
+    UpdateDomainInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::review::SaveOutcome;
 use provenance_core::{
@@ -13,10 +14,7 @@ fn id(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
 
-#[test]
-fn native_creators_capture_created_occurrences_for_every_other_record_kind() {
-    let (_dir, store, scope) = seeded_requirement_store();
-
+fn seed_native_records(store: &crate::state_store::StateStore, scope: &provenance_core::ScopeId) {
     store
         .create_source(CreateSourceInput {
             scope_id: scope.clone(),
@@ -114,6 +112,12 @@ fn native_creators_capture_created_occurrences_for_every_other_record_kind() {
             contradicts: None,
         })
         .unwrap();
+}
+
+#[test]
+fn native_creators_capture_created_occurrences_for_every_other_record_kind() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    seed_native_records(&store, &scope);
 
     let entries = store.review_entries(&scope).unwrap();
     for (kind, record_id) in [
@@ -132,5 +136,74 @@ fn native_creators_capture_created_occurrences_for_every_other_record_kind() {
         assert_eq!(matches.len(), 1, "missing creation occurrence for {kind:?}");
         assert_eq!(matches[0].outcome, SaveOutcome::Created);
         assert!(matches[0].before.is_none());
+    }
+}
+
+fn update_native_records(store: &crate::state_store::StateStore, label: &str) {
+    for value in [
+        serde_json::json!({"scope_id":"default","id":"source_native","name":format!("Source {label}")}),
+        serde_json::json!({"scope_id":"default","id":"resolution_native","position":format!("Use position {label}")}),
+        serde_json::json!({"scope_id":"default","id":"rule_native","statement":format!("The system uses position {label}")}),
+        serde_json::json!({"scope_id":"default","id":"domain_native","name":format!("Domain {label}")}),
+        serde_json::json!({"scope_id":"default","id":"boundary_native","statement":format!("Boundary {label}")}),
+        serde_json::json!({"scope_id":"default","id":"topic_native","title":format!("Topic {label}")}),
+        serde_json::json!({"scope_id":"default","id":"question_native","question":format!("Is {label} correct?")}),
+    ] {
+        match value["id"].as_str().unwrap() {
+            "source_native" => store
+                .update_source(serde_json::from_value::<UpdateSourceInput>(value).unwrap())
+                .map(|_| ()),
+            "resolution_native" => store
+                .update_resolution(serde_json::from_value::<UpdateResolutionInput>(value).unwrap())
+                .map(|_| ()),
+            "rule_native" => store
+                .update_rule(serde_json::from_value::<UpdateRuleInput>(value).unwrap())
+                .map(|_| ()),
+            "domain_native" => store
+                .update_domain(serde_json::from_value::<UpdateDomainInput>(value).unwrap())
+                .map(|_| ()),
+            "boundary_native" => store
+                .update_boundary(serde_json::from_value::<UpdateBoundaryInput>(value).unwrap())
+                .map(|_| ()),
+            "topic_native" => store
+                .edit_topic(serde_json::from_value::<UpdateTopicInput>(value).unwrap())
+                .map(|_| ()),
+            "question_native" => store
+                .edit_question(serde_json::from_value::<EditQuestionInput>(value).unwrap())
+                .map(|_| ()),
+            _ => unreachable!(),
+        }
+        .unwrap();
+    }
+}
+
+#[test]
+fn native_updates_capture_each_occurrence_when_content_returns_to_an_earlier_value() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    seed_native_records(&store, &scope);
+
+    update_native_records(&store, "B");
+    update_native_records(&store, "A");
+
+    let entries = store.review_entries(&scope).unwrap();
+    for (kind, record_id) in [
+        (NodeType::Source, "source_native"),
+        (NodeType::Domain, "domain_native"),
+        (NodeType::Resolution, "resolution_native"),
+        (NodeType::Rule, "rule_native"),
+        (NodeType::Boundary, "boundary_native"),
+        (NodeType::Topic, "topic_native"),
+        (NodeType::Question, "question_native"),
+    ] {
+        let mut matches = entries
+            .iter()
+            .filter(|entry| entry.record_kind == kind && entry.record_id.as_str() == record_id)
+            .collect::<Vec<_>>();
+        matches.sort_by_key(|entry| entry.sequence);
+        assert_eq!(matches.len(), 3, "missing update occurrence for {kind:?}");
+        assert_eq!(matches[0].outcome, SaveOutcome::Created);
+        assert_eq!(matches[1].outcome, SaveOutcome::Changed);
+        assert_eq!(matches[2].outcome, SaveOutcome::Changed);
+        assert_eq!(matches[2].predecessor.as_ref(), Some(&matches[1].id));
     }
 }
