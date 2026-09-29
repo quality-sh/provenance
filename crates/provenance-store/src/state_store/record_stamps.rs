@@ -8,7 +8,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use super::read_budget::{ensure_slice_within_read_budget, ensure_within_read_budget, ReadBudget};
-use super::StateStore;
+use super::{RecordStamp, StateStore};
 
 pub trait GraphRecord:
     Clone
@@ -107,8 +107,10 @@ crate::cache::family_table::record_family_rows!(define_stored_review_records);
 
 impl StateStore {
     pub(crate) fn current_record_stamp(&self) -> anyhow::Result<Option<Stamp>> {
-        if let Some(stamp) = &self.record_stamp {
-            return Ok(stamp.clone());
+        match &self.record_stamp {
+            RecordStamp::Omit => return Ok(None),
+            RecordStamp::Fixed(stamp) => return Ok(Some(stamp.clone())),
+            RecordStamp::ResolveFromRepository => {}
         }
         let output = std::process::Command::new("git")
             .args(["rev-parse", "HEAD"])
