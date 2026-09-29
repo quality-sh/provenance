@@ -139,3 +139,16 @@ fn catalog_commands_offer_help_at_each_address() {
             .stdout(contains(usage));
     }
 }
+
+#[test]
+fn rule_create_help_shows_only_the_new_draft_default() {
+    provenance()
+        .args(["rules", "create", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "--status <draft|review|active|deprecated|archived>",
+        ))
+        .stdout(contains("default: \"draft\""))
+        .stdout(predicates::str::contains("default: \"active\"").not());
+}

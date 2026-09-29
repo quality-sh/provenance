@@ -291,6 +291,9 @@ change the artifact's kind.
    satisfy the command misrecords how the obligation arose. If the CLI rejects a Rule that
    cites only a Requirement, the installed binary is out of date; see "Check your CLI".
 
+   Rule creation defaults to `draft`. Keep this default for an agent-created Rule. Pass
+   `--status active` only when a person ratifies the Rule.
+
    ```sh
    provenance rules create --scope <scope> \
      --id rule_<stable_slug> \

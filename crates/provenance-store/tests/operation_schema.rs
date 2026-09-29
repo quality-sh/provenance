@@ -153,6 +153,11 @@ fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
     }))
     .unwrap();
     assert_eq!(defaulted.status, provenance_core::RuleStatus::Draft);
+    assert_eq!(input_schema["properties"]["status"]["default"], "draft");
+    assert!(input_contract.is_valid(&json!({
+        "scope_id":"default", "id":"rule_default", "statement":"The system saves records.",
+        "severity":"medium", "requirement_ids":["req_one"], "resolution_ids":[]
+    })));
     let mut input = json!({"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]});
     assert!(input_contract.is_valid(&input));
     input["archived_in_commit"] = json!({"commit":"a".repeat(40)});
