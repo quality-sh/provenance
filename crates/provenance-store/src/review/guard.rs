@@ -103,11 +103,3 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
     }
     Ok(())
 }
-
-pub fn protect_requirements(
-    layout: &crate::layout::ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
-    records: &[provenance_core::Requirement],
-) -> anyhow::Result<()> {
-    protect_rows(&crate::shards::requirements_path(layout, scope), records)
-}
