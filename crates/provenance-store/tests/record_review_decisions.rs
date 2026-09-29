@@ -4,9 +4,7 @@ use provenance_core::{
 };
 use provenance_store::{
     layout::ProvenanceLayout,
-    review::{
-        DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
-    },
+    review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview},
     state_store::{CreateDomainInput, CreateSourceInput, StateStore, UpdateSourceInput},
     write_error::{WriteError, WriteFailure},
 };
@@ -150,8 +148,7 @@ fn source_cycle_binds_each_decision_to_the_exact_revision() {
         .cycle_entries(&scope)
         .unwrap()
         .iter()
-        .any(|entry| entry.record_kind == NodeType::Source
-            && entry.fact == CycleFact::Withdrawn));
+        .any(|entry| entry.record_kind == NodeType::Source && entry.fact == CycleFact::Withdrawn));
 }
 
 #[test]

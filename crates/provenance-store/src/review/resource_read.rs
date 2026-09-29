@@ -1,4 +1,4 @@
-//! One coherent read of a Requirement and its mutable review state.
+//! One coherent read of a graph record and its mutable review state.
 
 use crate::state_store::StateStore;
 use provenance_core::review::{RequirementDecisionState, RequirementEditState};
@@ -43,9 +43,7 @@ impl StateStore {
         kind: NodeType,
         id: &StableId,
     ) -> anyhow::Result<RecordResourceSnapshot> {
-        self.with_repository_publication(|| {
-            self.record_resource_snapshot_unlocked(scope, kind, id)
-        })
+        self.with_repository_publication(|| self.record_resource_snapshot_unlocked(scope, kind, id))
     }
 
     fn record_resource_snapshot_unlocked(

@@ -332,11 +332,23 @@ macro_rules! review_family_route_definitions {
         }
     ) => {
         review_resource!(
-            $out, $mode, $record, pages::$page, members::$member,
-            $plural, $singular, $singular_id, $plural_id,
-            super::super::$create, super::super::$update,
-            $create_defaults, $create_aliases, $update_defaults, $update_aliases,
-            $nullable, $target
+            $out,
+            $mode,
+            $record,
+            pages::$page,
+            members::$member,
+            $plural,
+            $singular,
+            $singular_id,
+            $plural_id,
+            super::super::$create,
+            super::super::$update,
+            $create_defaults,
+            $create_aliases,
+            $update_defaults,
+            $update_aliases,
+            $nullable,
+            $target
         );
     };
 }

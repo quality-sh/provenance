@@ -232,9 +232,7 @@ impl CycleFacts {
             .entries
             .iter()
             .filter(|e| {
-                e.record_kind == kind
-                    && e.record_id == *record_id
-                    && e.fact == CycleFact::Submitted
+                e.record_kind == kind && e.record_id == *record_id && e.fact == CycleFact::Submitted
             })
             .filter(|e| {
                 !decided.contains(e.proposal_id.as_str()) && !self.is_withdrawn(&e.proposal_id)

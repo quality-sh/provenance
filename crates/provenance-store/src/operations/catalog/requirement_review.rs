@@ -1,13 +1,8 @@
 //! Resource adapters for the guarded Requirement review interface.
-use super::{
-    shapes::scoped_write_operation,
-    ExecutionNeed,
-};
+use super::{shapes::scoped_write_operation, ExecutionNeed};
 use crate::{
     review,
-    state_store::{
-        CreateRequirementInput, RequirementClearField, UpdateRequirementInput,
-    },
+    state_store::{CreateRequirementInput, RequirementClearField, UpdateRequirementInput},
 };
 use provenance_core::{
     review::{CycleEntry, RequirementDecisionState, RequirementEditState},

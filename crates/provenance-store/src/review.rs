@@ -11,9 +11,7 @@ pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
     let value = serde_json::to_value(record)?;
-    let declared_by = value
-        .get("declared_by")
-        .and_then(serde_json::Value::as_str);
+    let declared_by = value.get("declared_by").and_then(serde_json::Value::as_str);
     if declared_by != owner {
         return Err(crate::write_error::SourceFailure::wrap(
             crate::write_error::WriteFailure::RecordOwnershipConflict,
