@@ -182,3 +182,45 @@ fn annotations_stop_at_the_github_cap_and_name_where_the_rest_live() {
         "the tail must say how many findings the summary and artifact hold: {reporting}"
     );
 }
+
+#[test]
+fn pull_requests_render_the_comparison_report_without_failing_the_job() {
+    let job = rule_coverage_job(&workflow());
+    assert!(
+        job.contains("fetch-depth: 0"),
+        "the report builder must have the pull request base commit: {job}"
+    );
+
+    let report = job
+        .split_once("Build and render the pull request report")
+        .expect("the job builds and renders a pull request report")
+        .1;
+    assert!(
+        report.contains("if: github.event_name == 'pull_request'"),
+        "the comparison report must run only for pull requests: {report}"
+    );
+    assert!(
+        report.contains("continue-on-error: true"),
+        "the new report must warn without failing the job: {report}"
+    );
+    assert!(
+        report.contains("report build")
+            && report.contains("--base \"${{ github.event.pull_request.base.sha }}\"")
+            && report.contains("--head HEAD")
+            && report.contains("--repository \"${{ github.repository }}\""),
+        "the envelope must compare the pull request with its base: {report}"
+    );
+    assert!(
+        report.contains("$RUNNER_TEMP/provenance-report-envelope.json")
+            && report.contains("$RUNNER_TEMP/provenance-coverage-report.json"),
+        "report inputs and outputs must not dirty the repository: {report}"
+    );
+    assert!(
+        report.contains("report render") && report.contains("GITHUB_STEP_SUMMARY"),
+        "the rendered report must appear in the job summary: {report}"
+    );
+    assert!(
+        report.contains("select(.comparison == \"new\")") && report.contains("::warning"),
+        "each new finding must produce a workflow annotation: {report}"
+    );
+}
