@@ -12,6 +12,9 @@ use super::super::{
 };
 use crate::shards;
 
+#[cfg(test)]
+mod tests;
+
 pub(super) struct Cascade {
     pub(super) rules: BTreeSet<String>,
     resolutions: Vec<Resolution>,
