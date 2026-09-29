@@ -39,11 +39,13 @@ pub trait GraphRecord:
             return Ok(());
         };
         let previous_value = previous.map(serde_json::to_value).transpose()?;
-        let created = previous_value
-            .as_ref()
-            .and_then(|record| record.get("created"))
-            .cloned()
-            .unwrap_or(serde_json::to_value(stamp)?);
+        let created = match &previous_value {
+            Some(record) => record
+                .get("created")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null),
+            None => serde_json::to_value(stamp)?,
+        };
         let updated = if previous.is_some_and(|record| record == self) {
             previous_value
                 .as_ref()
