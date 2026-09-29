@@ -77,6 +77,15 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         read_snapshots(input.repo, &base, &head, &scope)?;
     let (verifications, implementations) =
         graph_snapshots::read_bindings(input.repo, &head, &scope)?;
+    let (base_scans, base_verifications, base_implementations) =
+        read_baseline_evidence(input.repo, &base, &scope, baseline)?;
+    let baseline_view = BaselineView::for_rules(
+        baseline,
+        &base_snapshot.rules,
+        &base_scans,
+        &base_implementations,
+        &base_verifications,
+    );
 
     let collected = collect_findings(&FindingInput {
         repo: input.repo,
@@ -90,7 +99,7 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         base_snapshot: &base_snapshot,
         head_snapshot: &head_snapshot,
         baseline,
-        baseline_view: &BaselineView::for_rules(baseline, &base_snapshot.rules),
+        baseline_view: &baseline_view,
         binding_severity: binding_severity(configured),
         completeness,
     })?;
@@ -125,6 +134,36 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         verification_runs: Vec::new(),
     };
     Ok(render::normalize(&envelope))
+}
+
+type BaselineEvidence = (
+    Vec<provenance_scanner::FileScan>,
+    Vec<provenance_core::VerificationBinding>,
+    Vec<provenance_core::ImplementationBinding>,
+);
+
+fn read_baseline_evidence(
+    repo: &Utf8Path,
+    base: &str,
+    scope: &ScopeId,
+    compatibility: BaselineCompatibility,
+) -> anyhow::Result<BaselineEvidence> {
+    if compatibility != BaselineCompatibility::Compatible {
+        return Ok((Vec::new(), Vec::new(), Vec::new()));
+    }
+    let scans = git::revision_files(repo, base)?
+        .into_iter()
+        .map(|file| {
+            let language = file
+                .path
+                .extension()
+                .and_then(provenance_scanner::Language::from_extension)
+                .expect("revision files contain only supported languages");
+            provenance_scanner::scan_file(&file.path, language, &file.content)
+        })
+        .collect();
+    let (verifications, implementations) = graph_snapshots::read_bindings(repo, base, scope)?;
+    Ok((scans, verifications, implementations))
 }
 
 /// Read both committed snapshots. The head must parse: the report describes
