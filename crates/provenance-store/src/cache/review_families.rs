@@ -59,6 +59,22 @@ macro_rules! define_review_families {
                 record.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION
             }))*)
         }
+
+        pub fn review_records(
+            store: &crate::state_store::StateStore,
+            scope: &provenance_core::ScopeId,
+        ) -> anyhow::Result<Vec<ReviewRecord>> {
+            let mut records = Vec::new();
+            $(records.extend(store.$reader(scope)?.into_iter().map(ReviewRecord::from));)*
+            Ok(records)
+        }
+
+        pub fn review_paths(
+            layout: &crate::layout::ProvenanceLayout,
+            scope: &provenance_core::ScopeId,
+        ) -> Vec<camino::Utf8PathBuf> {
+            vec![$(crate::shards::$path(layout, scope),)*]
+        }
     };
 }
 
@@ -98,6 +114,15 @@ mod tests {
             assert_eq!(facts.owner_field, "id");
             assert!(!facts.content_fields.is_empty());
             assert!(!facts.lifecycle_fields.is_empty());
+        }
+    }
+
+    #[test]
+    fn desired_inventory_contains_every_core_review_kind() {
+        let canonical = provenance_core::review::REVIEW_RECORD_KINDS;
+        assert_eq!(REVIEW_FAMILIES.len(), canonical.len());
+        for kind in canonical {
+            assert!(REVIEW_FAMILIES.iter().any(|family| family.kind == *kind));
         }
     }
 

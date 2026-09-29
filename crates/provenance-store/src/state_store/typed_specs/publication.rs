@@ -1,9 +1,8 @@
 use provenance_core::{ImplementationBinding, NodeType, Requirement, Rule, ScopeId, Source};
 
 use super::{cascade::Cascade, replace_records};
-use crate::review::guard::protect_requirements;
+use crate::shards;
 use crate::state_store::{ReconciledResource, StateStore, TypedSpecResult};
-use crate::{shards, write_error::publication_started};
 
 pub(super) struct Replacement {
     pub sources: Vec<Source>,
@@ -42,8 +41,6 @@ impl Replacement {
             &[NodeType::Source, NodeType::Requirement, NodeType::Rule],
         )?;
         super::super::typed_statement_policy::ensure_typed_spec_is_writable(result)?;
-        store.commit_enrollment_adoptions(scope, &self.requirements, &result.declared_by)?;
-        protect_requirements(&store.layout, scope, &self.requirements)?;
         for rule in &self.rules {
             rule.validate_archive()?;
         }
@@ -54,7 +51,7 @@ impl Replacement {
             &self.requirements,
             &self.rules,
         )?;
-        (|| -> anyhow::Result<()> {
+        store.publish_typed_spec(scope, &result.declared_by, |store| {
             store
                 .replace_graph_records(&shards::sources_path(&store.layout, scope), self.sources)?;
             crate::test_probes::at("typed_spec_sources_published")?;
@@ -70,7 +67,6 @@ impl Replacement {
             )?;
             self.cascade.publish(store, scope)?;
             store.raise_requirement_reviews(scope, requirement_resources, rule_resources)
-        })()
-        .map_err(publication_started)
+        })
     }
 }

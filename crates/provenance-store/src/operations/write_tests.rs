@@ -44,7 +44,7 @@ fn invalid_source_kind_is_a_typed_declaration_refusal() {
     assert!(matches!(error.safe(), WriteFailure::InvalidDeclaration));
 }
 #[test]
-fn apply_reports_a_write_failure_after_real_source_publication() {
+fn apply_reports_a_write_failure_before_staged_state_publication() {
     let (_dir, store, scope) = fixture();
     crate::test_probes::arm("typed_spec_sources_published", || {
         anyhow::bail!("injected after source publication")
@@ -53,7 +53,7 @@ fn apply_reports_a_write_failure_after_real_source_publication() {
     crate::test_probes::disarm("typed_spec_sources_published");
     let error = WriteError(result.unwrap_err());
     assert!(matches!(error.safe(), WriteFailure::WriteFailed));
-    assert_eq!(store.list_sources(&scope).unwrap().len(), 1);
+    assert!(store.list_sources(&scope).unwrap().is_empty());
     assert!(store.list_requirements(&scope).unwrap().is_empty());
 }
 #[test]

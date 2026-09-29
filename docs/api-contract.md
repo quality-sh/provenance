@@ -89,10 +89,11 @@ Three computation exceptions stay collection POSTs:
 These exceptions imply no new persistent plan records, no generic action
 dispatch, and no weaker authoring ownership checks.
 
-Known carve-out, to be reconciled in a later phase: typed-spec apply
-(`POST /authoring-changes`) and full-scope import still replace un-enrolled
-graph state without journal entries, while enrolled state takes every change
-through the guarded journal.
+Typed-spec apply (`POST /authoring-changes`) records an occurrence for each
+changed enrolled record and refuses to delete an enrolled record. It continues
+to replace un-enrolled graph state without journal entries because those
+records have not entered review. Full-scope import still requires separate
+lossless support for review history.
 
 Receipts stay internal. A write returns success or an error. The client does not
 replay a write, and no client-side uncertain-write ledger exists. The journal
