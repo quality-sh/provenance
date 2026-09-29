@@ -58,7 +58,11 @@ fn registered_operation_dispatch_names_are_unique() {
         .iter()
         .copied()
         .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(names.len(), unique.len(), "duplicate operation dispatch name");
+    assert_eq!(
+        names.len(),
+        unique.len(),
+        "duplicate operation dispatch name"
+    );
 }
 
 #[tokio::test]
