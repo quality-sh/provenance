@@ -88,7 +88,7 @@ impl StateStore {
             format!("typed-spec-review\u{1f}{intent_digest}").as_bytes(),
         ))?;
         let entry = self.commit_record_evidence(
-            &change.before,
+            Some(&change.before),
             &change.after,
             RecordEvidenceContext {
                 head: Some(change.head.clone()),
