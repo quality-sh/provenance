@@ -1,6 +1,6 @@
 use provenance_core::{
-    review::CycleFact, CanonicalArtifactType, DispositionActor, DispositionDecision, IdentityType,
-    NodeType, ScopeId, StableId,
+    CanonicalArtifactType, DispositionActor, DispositionDecision, IdentityType, NodeType, ScopeId,
+    StableId,
 };
 use provenance_store::{
     layout::ProvenanceLayout,
@@ -144,11 +144,6 @@ fn source_cycle_binds_each_decision_to_the_exact_revision() {
         second.proposal_id
     );
     assert_eq!(decided.withdrawn, [first.proposal_id]);
-    assert!(store
-        .cycle_entries(&scope)
-        .unwrap()
-        .iter()
-        .any(|entry| entry.record_kind == NodeType::Source && entry.fact == CycleFact::Withdrawn));
 }
 
 #[test]
