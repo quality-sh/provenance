@@ -85,6 +85,7 @@ fn typed_rule_creation_defaults_to_draft() {
     assert_eq!(rules.len(), 1);
     assert_eq!(rules[0].status, provenance_core::RuleStatus::Draft);
 }
+
 #[test]
 fn native_schema_diagnostic_is_not_duplicated_in_the_error_chain() {
     let (_dir, store, scope) = fixture();
