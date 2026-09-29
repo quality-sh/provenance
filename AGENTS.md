@@ -64,6 +64,26 @@ all graph and bead references. Do not leave a broken repository-path citation.
 
 Opening a pull request is not the end of the work. Do not abandon the PR at open.
 
+A `Behaviour` section that claims behaviour has not changed must cover these
+surfaces:
+
+- Which error or finding wins when an input has more than one fault.
+- Exit codes.
+- Diagnostic text and error text.
+- Output order, warning order, and finding order.
+- Write order and the state left after a failure.
+- The public Rust API of each published crate.
+- Wire names, route names, CLI names, and CLI help.
+
+Before a large refactor, add focused characterization tests on the base commit.
+Do not bind these tests to a Rule. See
+`crates/provenance-transport/tests/porcelain_route_inventory.rs` and
+`crates/provenance-store/src/state_store/tests/scope_ingestion_order.rs`.
+Make an observed order a Rule only when a user or integration depends on it.
+
+When a refactor replaces hand-written sequences with a loop over a table, list
+each sequence in the PR body. State its order before and after the refactor.
+
 - Stay with the PR and watch CI until every required check finishes. Use
   `gh pr checks <number> --watch` or read `gh pr view <number>` in a later turn.
 - If a check fails, fix the branch and push to the same PR. Do not open a

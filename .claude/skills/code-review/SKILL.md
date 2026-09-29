@@ -69,7 +69,7 @@ Send a single message with two `Agent` tool calls. Use the `general-purpose` sub
 
 - The diff command and commit list.
 - The path or fetched contents of the spec.
-- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
+- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. For each claim that behaviour has not changed, check error or finding priority for inputs with multiple faults; exit codes; diagnostic text and error text; output, warning, and finding order; write order and the state left after a failure; the public Rust API of published crates; and wire, route, and CLI names and CLI help. If a refactor replaces hand-written sequences with a loop over a table, check that the PR body lists each sequence and states its order before and after. Quote the spec line for each finding. Under 400 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report.
 
