@@ -3,7 +3,7 @@
 //
 // Fails when a watched compatibility value changes without a fresh human
 // authorization marker (AUTHORIZED-BUMP). Contract: docs/compatibility-gate.md
-// and docs/api-contract-v2.md section 6. Agents never bump versions; this
+// and docs/api-contract.md section 6. Agents never bump versions; this
 // check is the enforcement arm of that Rule.
 //
 // The core is pure and unit-tested (check.test.mjs). The Git plumbing lives in

@@ -35,14 +35,14 @@ const UNSUPPORTED_SCHEMA_VERSION: u32 = REVIEW_SCHEMA_VERSION.0 + 1;
 
 #[test]
 #[verifies("rule_reads_supported_version_only", examples)]
-fn wiki_and_check_refuse_v2_rows_in_every_stored_family() {
+fn wiki_and_check_refuse_unsupported_version_rows_in_every_stored_family() {
     for command in ["check", "wiki"] {
         for (family, relative_path) in STORED_FAMILIES {
             let dir = tempfile::tempdir().unwrap();
             let repo = dir.path().to_str().unwrap();
             init(repo);
             let record_id = format!("{family}_future");
-            plant_v2_row(dir.path(), relative_path, &record_id);
+            plant_unsupported_version_row(dir.path(), relative_path, &record_id);
 
             let mut invocation = Command::cargo_bin("provenance").unwrap();
             if command == "check" {
@@ -76,14 +76,14 @@ fn wiki_and_check_refuse_v2_rows_in_every_stored_family() {
 
 #[test]
 #[verifies("rule_reads_supported_version_only", examples)]
-fn coverage_rule_validation_refuses_a_v2_rule_row() {
+fn coverage_rule_validation_refuses_a_unsupported_version_rule_row() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_str().unwrap();
     init(repo);
     let source_dir = dir.path().join("src");
     std::fs::create_dir_all(&source_dir).unwrap();
     std::fs::write(source_dir.join("lib.rs"), "fn example() {}\n").unwrap();
-    plant_v2_row(dir.path(), "scopes/default/rules/rule.jsonl", "rule_future");
+    plant_unsupported_version_row(dir.path(), "scopes/default/rules/rule.jsonl", "rule_future");
 
     Command::cargo_bin("provenance")
         .unwrap()
@@ -267,7 +267,7 @@ fn create_requirement(repo: &str, id: &str, statement: &str) {
         .success();
 }
 
-fn plant_v2_row(repo: &std::path::Path, relative_path: &str, record_id: &str) {
+fn plant_unsupported_version_row(repo: &std::path::Path, relative_path: &str, record_id: &str) {
     let path = repo.join(".provenance/state").join(relative_path);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(

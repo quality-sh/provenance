@@ -2,7 +2,7 @@
 
 use super::resource_members::ResourceMemberRequest;
 use super::resource_pages::{ResourcePage, VerificationPageRequest};
-use super::v2_review_reads::ReadResult;
+use super::review_reads::ReadResult;
 use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::operations::reader::{self, Cursor, Live, Position, ReadContext, PAGE_BYTES};
 use provenance_core::protocol::read_failure::ReadFailure;
@@ -22,7 +22,7 @@ fn run_page(
             let selector = (&request.rule, request.limit);
             let (cursor, mut position) = Cursor::open_live(
                 ctx,
-                "page-verification-runs-v2",
+                "page-verification-runs",
                 &selector,
                 request.cursor.as_deref(),
                 digest,
@@ -81,8 +81,8 @@ fn run_member(
 }
 
 graph_read_operation!(
-    pub PageVerificationRunsV2,
-    "page-verification-runs-v2",
+    pub PageVerificationRuns,
+    "page-verification-runs",
     VerificationPageRequest,
     ReadResult<ResourcePage<VerificationRun>>,
     &[409],
@@ -105,8 +105,8 @@ graph_read_operation!(
 );
 
 graph_read_operation!(
-    pub GetVerificationRunV2,
-    "get-verification-run-v2",
+    pub GetVerificationRun,
+    "get-verification-run",
     ResourceMemberRequest,
     ReadResult<VerificationRun>,
     &[404, 409],

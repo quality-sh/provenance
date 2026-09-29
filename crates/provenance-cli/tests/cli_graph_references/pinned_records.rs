@@ -21,7 +21,7 @@ fn issue_rejects_unsupported_pinned_record_schema_versions() {
             "--scope",
             "default",
             "--id",
-            "source_v2",
+            "source_future_version",
             "--name",
             "Future source",
         ])
@@ -55,7 +55,7 @@ fn issue_rejects_unsupported_pinned_record_schema_versions() {
         .failure()
         .stderr(predicate::str::contains("sources/source.jsonl line 1"))
         .stderr(predicate::str::contains(format!(
-            "record source_v2 has schema_version {}, but this build reads schema_version {} only",
+            "record source_future_version has schema_version {}, but this build reads schema_version {} only",
             REVIEW_SCHEMA_VERSION.0 + 1,
             SUPPORTED_SCHEMA_VERSION.0
         )));

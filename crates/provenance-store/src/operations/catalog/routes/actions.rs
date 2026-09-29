@@ -64,7 +64,7 @@ fn question_actions(out: &mut Vec<Definition>) {
 
 fn requirement_reviews(out: &mut Vec<Definition>) {
     out.push(
-        backed::<operation::SubmitRequirementReviewV2>(
+        backed::<operation::SubmitRequirementReview>(
             "submit-requirement-review",
             "submitRequirementReview",
             HttpMethod::Post,
@@ -78,7 +78,7 @@ fn requirement_reviews(out: &mut Vec<Definition>) {
         .target(TargetAction::Submit, Some(NodeType::Requirement)),
     );
     out.push(
-        backed::<operation::DecideRequirementReviewV2>(
+        backed::<operation::DecideRequirementReview>(
             "decide-requirement-review",
             "decideRequirementReview",
             HttpMethod::Post,
@@ -91,7 +91,7 @@ fn requirement_reviews(out: &mut Vec<Definition>) {
         .scope("scope_id"),
     );
     out.push(
-        backed::<operation::WithdrawRequirementReviewV2>(
+        backed::<operation::WithdrawRequirementReview>(
             "withdraw-requirement-review",
             "withdrawRequirementReview",
             HttpMethod::Post,

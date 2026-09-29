@@ -67,7 +67,7 @@ fn write_parent_kinds(
     definitions
         .iter()
         .filter(|definition| {
-            definition.registration.handler.operation == catalog::WriteDiscussionV2::NAME
+            definition.registration.handler.operation == catalog::WriteDiscussion::NAME
                 && definition.registration.request.adapter.discussion_write == Some(kind)
                 && advertises(definition.name)
         })
@@ -79,7 +79,7 @@ fn write_parent_kinds(
 impl DiscussionPort for HostDiscussionPort {
     fn list(&self, input: ListInput) -> PortFuture<'_, ListAnswer> {
         Box::pin(async move {
-            let kinds = self.permitted_parent_kinds::<catalog::ReviewDiscussionsV2>();
+            let kinds = self.permitted_parent_kinds::<catalog::ReviewDiscussions>();
             if kinds.is_empty() {
                 return Err(ActionError::AccessDenied);
             }
@@ -92,7 +92,7 @@ impl DiscussionPort for HostDiscussionPort {
             }
             let response = self
                 .host
-                .invoke_scoped_typed::<catalog::ListDiscussionsV2>(DiscussionListQuery {
+                .invoke_scoped_typed::<catalog::ListDiscussions>(DiscussionListQuery {
                     parent: input.parent,
                     allowed_parent_kinds: kinds,
                     status: input.status,
@@ -118,13 +118,13 @@ impl DiscussionPort for HostDiscussionPort {
         input: ConversationInput,
     ) -> PortFuture<'_, Stamped<DiscussionConversationResult>> {
         Box::pin(async move {
-            let kinds = self.permitted_parent_kinds::<catalog::ReviewDiscussionV2>();
+            let kinds = self.permitted_parent_kinds::<catalog::ReviewDiscussion>();
             if kinds.is_empty() {
                 return Err(ActionError::AccessDenied);
             }
             let response = self
                 .host
-                .invoke_scoped_typed::<catalog::GetDiscussionConversationV2>(
+                .invoke_scoped_typed::<catalog::GetDiscussionConversation>(
                     DiscussionConversationQuery {
                         discussion_id: input.discussion_id,
                         allowed_parent_kinds: kinds,
@@ -149,7 +149,7 @@ impl DiscussionPort for HostDiscussionPort {
                 return Err(ActionError::AccessDenied);
             }
             self.host
-                .invoke_scope_typed::<catalog::WriteDiscussionV2>(catalog::WriteDiscussionRequest {
+                .invoke_scope_typed::<catalog::WriteDiscussion>(catalog::WriteDiscussionRequest {
                     scope_id: self.scope()?,
                     parent: input.parent,
                     request_id: input.request_id,
@@ -172,7 +172,7 @@ impl DiscussionPort for HostDiscussionPort {
                 return Err(ActionError::AccessDenied);
             }
             self.host
-                .invoke_scope_typed::<catalog::WriteTargetDiscussionV2>(TargetDiscussionWrite {
+                .invoke_scope_typed::<catalog::WriteTargetDiscussion>(TargetDiscussionWrite {
                     scope_id: self.scope()?,
                     request_id: input.request_id,
                     actor: input.actor,
@@ -204,23 +204,23 @@ pub(super) fn is_available(host: &crate::StatementHost, action: Action) -> bool 
     let port = HostDiscussionPort::new(host.clone());
     match action {
         Action::Discussions => {
-            host.advertises(catalog::ListDiscussionsV2::NAME)
+            host.advertises(catalog::ListDiscussions::NAME)
                 && !port
-                    .permitted_parent_kinds::<catalog::ReviewDiscussionsV2>()
+                    .permitted_parent_kinds::<catalog::ReviewDiscussions>()
                     .is_empty()
         }
         Action::Discussion => {
-            host.advertises(catalog::GetDiscussionConversationV2::NAME)
+            host.advertises(catalog::GetDiscussionConversation::NAME)
                 && !port
-                    .permitted_parent_kinds::<catalog::ReviewDiscussionV2>()
+                    .permitted_parent_kinds::<catalog::ReviewDiscussion>()
                     .is_empty()
         }
         Action::Discuss => {
-            host.advertises(catalog::WriteDiscussionV2::NAME)
+            host.advertises(catalog::WriteDiscussion::NAME)
                 && !port.permitted_write_parent_kinds(action).is_empty()
         }
         Action::Reply => {
-            host.advertises(catalog::WriteTargetDiscussionV2::NAME)
+            host.advertises(catalog::WriteTargetDiscussion::NAME)
                 && !port.permitted_write_parent_kinds(action).is_empty()
         }
         _ => false,

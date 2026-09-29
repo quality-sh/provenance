@@ -98,8 +98,8 @@ const fn limit() -> usize {
 }
 
 review_read!(
-    ReviewHistoryV2,
-    "review-history-v2",
+    ReviewHistory,
+    "review-history",
     HistoryRequest,
     ReadResult<DiscussionResultPage<ReviewEntry>>,
     |read, request| async move {
@@ -133,8 +133,8 @@ pub struct HistoryEntryRequest {
 }
 
 review_read!(
-    ReviewHistoryEntryV2,
-    "review-history-entry-v2",
+    ReviewHistoryEntry,
+    "review-history-entry",
     HistoryEntryRequest,
     ReviewEntry,
     |read, request| async move {
@@ -197,8 +197,8 @@ pub struct HistoryEvidenceRequest {
 }
 
 review_read!(
-    ReviewEvidenceV2,
-    "review-evidence-v2",
+    ReviewEvidence,
+    "review-evidence",
     HistoryEvidenceRequest,
     ReadResult<EvidencePage>,
     |read, request| async move {
@@ -231,8 +231,8 @@ pub struct DiscussionsRequest {
 }
 
 review_read!(
-    ReviewDiscussionsV2,
-    "review-discussions-v2",
+    ReviewDiscussions,
+    "review-discussions",
     DiscussionsRequest,
     ReadResult<DiscussionResultPage<DiscussionGroup>>,
     |read, request| async move {
@@ -268,8 +268,8 @@ pub struct DiscussionMessagesRequest {
 }
 
 review_read!(
-    ReviewDiscussionMessagesV2,
-    "review-discussion-messages-v2",
+    ReviewDiscussionMessages,
+    "review-discussion-messages",
     DiscussionMessagesRequest,
     ReadResult<DiscussionResultPage<Message>>,
     |read, request| async move {
@@ -304,8 +304,8 @@ pub struct DiscussionMessageRequest {
 }
 
 review_read!(
-    ReviewDiscussionMessageV2,
-    "review-discussion-message-v2",
+    ReviewDiscussionMessage,
+    "review-discussion-message",
     DiscussionMessageRequest,
     ReadResult<Message>,
     |read, request| async move {

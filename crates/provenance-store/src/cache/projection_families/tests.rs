@@ -39,7 +39,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some("sources"),
                 Some(10),
                 Resource,
-                &["list-sources", "page-sources-v2", "get-source-v2"],
+                &["list-sources", "page-sources", "get-source"],
             ),
         ),
         (
@@ -51,7 +51,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some("domains"),
                 Some(50),
                 Resource,
-                &["list-domains", "page-domains-v2", "get-domain-v2"],
+                &["list-domains", "page-domains", "get-domain"],
             ),
         ),
         (
@@ -63,7 +63,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some("requirements"),
                 Some(20),
                 Resource,
-                &["list-requirements", "page-requirements-v2"],
+                &["list-requirements", "page-requirements"],
             ),
         ),
         (
@@ -75,7 +75,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some("boundaries"),
                 Some(60),
                 Resource,
-                &["list-boundaries", "page-boundaries-v2", "get-boundary-v2"],
+                &["list-boundaries", "page-boundaries", "get-boundary"],
             ),
         ),
         (
@@ -87,7 +87,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some("topics"),
                 Some(70),
                 Resource,
-                &["list-topics", "page-topics-v2", "get-topic-v2"],
+                &["list-topics", "page-topics", "get-topic"],
             ),
         ),
         (
@@ -99,7 +99,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some("questions"),
                 Some(80),
                 Resource,
-                &["list-questions", "page-questions-v2", "get-question-v2"],
+                &["list-questions", "page-questions", "get-question"],
             ),
         ),
         (
@@ -113,8 +113,8 @@ fn every_family_keeps_its_independent_descriptor() {
                 Resource,
                 &[
                     "list-resolutions",
-                    "page-resolutions-v2",
-                    "get-resolution-v2",
+                    "page-resolutions",
+                    "get-resolution",
                 ],
             ),
         ),
@@ -127,7 +127,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some("rules"),
                 Some(40),
                 Resource,
-                &["list-rules", "page-rules-v2", "get-rule-v2"],
+                &["list-rules", "page-rules", "get-rule"],
             ),
         ),
         (
@@ -141,8 +141,8 @@ fn every_family_keeps_its_independent_descriptor() {
                 Record,
                 &[
                     "list-discussion-containers",
-                    "page-discussion-containers-v2",
-                    "get-discussion-container-v2",
+                    "page-discussion-containers",
+                    "get-discussion-container",
                 ],
             ),
         ),
@@ -155,7 +155,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 Some(150),
                 Record,
-                &["list-messages-v2", "page-messages-v2", "get-message-v2"],
+                &["list-messages", "page-messages", "get-message"],
             ),
         ),
         (
@@ -169,8 +169,8 @@ fn every_family_keeps_its_independent_descriptor() {
                 Resource,
                 &[
                     "list-contributions",
-                    "page-contributions-v2",
-                    "get-contribution-v2",
+                    "page-contributions",
+                    "get-contribution",
                 ],
             ),
         ),
@@ -185,8 +185,8 @@ fn every_family_keeps_its_independent_descriptor() {
                 Resource,
                 &[
                     "list-synthesis-packets",
-                    "page-synthesis-packets-v2",
-                    "get-synthesis-packet-v2",
+                    "page-synthesis-packets",
+                    "get-synthesis-packet",
                 ],
             ),
         ),
@@ -199,7 +199,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 Some(110),
                 Resource,
-                &["list-proposals-v2", "page-proposals-v2", "get-proposal-v2"],
+                &["list-proposals", "page-proposals", "get-proposal"],
             ),
         ),
         (
@@ -212,9 +212,9 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some(160),
                 Resource,
                 &[
-                    "list-assertions-v2",
-                    "page-assertions-v2",
-                    "get-assertion-v2",
+                    "list-assertions",
+                    "page-assertions",
+                    "get-assertion",
                 ],
             ),
         ),
@@ -228,9 +228,9 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some(170),
                 Resource,
                 &[
-                    "list-dispositions-v2",
-                    "page-dispositions-v2",
-                    "get-disposition-v2",
+                    "list-dispositions",
+                    "page-dispositions",
+                    "get-disposition",
                 ],
             ),
         ),
@@ -257,8 +257,8 @@ fn every_family_keeps_its_independent_descriptor() {
                 Resource,
                 &[
                     "list-verification-bindings",
-                    "page-verification-bindings-v2",
-                    "get-verification-binding-v2",
+                    "page-verification-bindings",
+                    "get-verification-binding",
                 ],
             ),
         ),

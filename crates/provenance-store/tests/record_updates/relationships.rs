@@ -233,7 +233,7 @@ async fn public_requirement_patch_noops_cover_citations_and_current_etag() {
         .etag;
     let first = fixture
         .call(
-            "update-requirement-v2",
+            "update-requirement",
             json!({
                 "request_id":"remove_once", "actor":"reviewer", "expected_etag":etag,
                 "id":"req_one", "relationships":{"cites":{"remove":["source_one"]}}
@@ -243,7 +243,7 @@ async fn public_requirement_patch_noops_cover_citations_and_current_etag() {
         .unwrap();
     let repeated = fixture
         .call(
-            "update-requirement-v2",
+            "update-requirement",
             json!({
                 "request_id":"remove_again", "actor":"reviewer",
                 "expected_etag":first["edit"]["etag"], "id":"req_one",

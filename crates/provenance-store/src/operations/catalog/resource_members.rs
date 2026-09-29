@@ -1,6 +1,6 @@
 //! Direct typed reads for resource member routes.
 
-use super::v2_review_reads::ReadResult;
+use super::review_reads::ReadResult;
 use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::cache::read::payloads::{PayloadRow, ProposalPayloadRow};
 use crate::operations::reader::{self, ReadContext};
@@ -194,12 +194,12 @@ macro_rules! define_record_members {
 
 crate::cache::record_families!(define_record_members);
 fact_member_operation!(
-    GetProposalAssertionV2,
-    "get-proposal-assertion-v2",
+    GetProposalAssertion,
+    "get-proposal-assertion",
     provenance_core::AssertionRecord
 );
 fact_member_operation!(
-    GetProposalDispositionV2,
-    "get-proposal-disposition-v2",
+    GetProposalDisposition,
+    "get-proposal-disposition",
     provenance_core::DispositionRecord
 );

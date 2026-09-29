@@ -41,14 +41,14 @@ async fn a_fact_page_lists_the_facts_of_the_named_proposal_only() {
         .unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
 
-    let dispositions = fact_page(&root, "page-proposal-dispositions-v2", "proposal_overtime").await;
+    let dispositions = fact_page(&root, "page-proposal-dispositions", "proposal_overtime").await;
     assert_eq!(items(&dispositions).len(), 1);
     assert_eq!(items(&dispositions)[0]["id"], "disposition_overtime");
     assert_eq!(dispositions["result"]["has_more"], false);
 
-    let other = fact_page(&root, "page-proposal-dispositions-v2", "proposal_leave").await;
+    let other = fact_page(&root, "page-proposal-dispositions", "proposal_leave").await;
     assert!(items(&other).is_empty());
 
-    let assertions = fact_page(&root, "page-proposal-assertions-v2", "proposal_overtime").await;
+    let assertions = fact_page(&root, "page-proposal-assertions", "proposal_overtime").await;
     assert!(items(&assertions).is_empty());
 }

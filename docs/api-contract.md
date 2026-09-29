@@ -1,9 +1,7 @@
-# API contract v2 — frozen
+# API contract
 
 This document is the contract for the restructured Provenance API. It records the
-settled decisions of 2026-09-13 and freezes the surface for Phase 2. Do not extend
-it without a recorded decision and an authorized compatibility change
-(docs/compatibility-gate.md).
+settled decisions of 2026-09-13.
 
 ## 1. Connection and identity
 

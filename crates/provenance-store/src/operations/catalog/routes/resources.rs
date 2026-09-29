@@ -344,8 +344,8 @@ pub(super) fn register(out: &mut Vec<Definition>) {
         verification_runs,
         verification,
         provenance_core::VerificationRun,
-        verification::PageVerificationRunsV2,
-        verification::GetVerificationRunV2,
+        verification::PageVerificationRuns,
+        verification::GetVerificationRun,
         "verification-runs",
         "verification-run",
         "VerificationRun",
@@ -359,7 +359,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
 }
 
 fn requirements(out: &mut Vec<Definition>) {
-    let list = read::<provenance_core::Requirement, pages::PageRequirementsV2>(
+    let list = read::<provenance_core::Requirement, pages::PageRequirements>(
         "list-requirements",
         "listRequirements",
         "/requirements",
@@ -371,7 +371,7 @@ fn requirements(out: &mut Vec<Definition>) {
     .pagination();
     let queries = searchable_queries(&list, "requirement");
     out.push(with_query_results(list, queries));
-    let member = backed::<super::super::GetRequirementV2>(
+    let member = backed::<super::super::GetRequirement>(
         "get-requirement",
         "getRequirement",
         HttpMethod::Get,
@@ -384,7 +384,7 @@ fn requirements(out: &mut Vec<Definition>) {
     let queries = member_queries(&member, "requirement");
     out.push(with_query_results(member, queries));
     out.push(
-        backed::<super::super::CreateRequirementV2>(
+        backed::<super::super::CreateRequirementResource>(
             "create-requirement",
             "createRequirement",
             HttpMethod::Post,
@@ -399,7 +399,7 @@ fn requirements(out: &mut Vec<Definition>) {
         .with_etag("/edit/etag", false),
     );
     out.push(
-        backed::<super::super::UpdateRequirementV2>(
+        backed::<super::super::UpdateRequirementResource>(
             "update-requirement",
             "updateRequirement",
             HttpMethod::Patch,

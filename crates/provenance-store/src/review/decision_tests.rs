@@ -166,7 +166,7 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
 
     // Revise: a fresh Proposal is bound to the new revision. Then approve it
     // through the human existing-artifact path.
-    let r2 = edit(&store, "edit-2", "Statement v2");
+    let r2 = edit(&store, "edit-2", "Revised statement");
     let proposal_2 = automatic_submission(&store).proposal_id;
     let (prop2_revision, prop2_digest) = binding_of(&store, &proposal_2);
     assert_eq!(prop2_revision, r2.as_str());
@@ -204,7 +204,7 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
         rejection.disposition_id.as_ref().unwrap()
     );
     assert!(final_state.withdrawn.is_empty());
-    assert_lifecycle_and_proposals_unchanged(&store, "Statement v2");
+    assert_lifecycle_and_proposals_unchanged(&store, "Revised statement");
 }
 
 /// Approval never changes the record's lifecycle and never mutates a proposal.
@@ -247,12 +247,12 @@ fn stale_submission_and_stale_selection_are_refused() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let r1 = edit(&store, "edit-1", "Statement v1");
-    edit(&store, "edit-2", "Statement v2");
+    edit(&store, "edit-2", "Revised statement");
     refused(submit(&store, None, Some(r1.as_str())), "stale submission");
     assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 2);
 
     let (_temp, store, _, proposal) = enrolled();
-    edit(&store, "edit-2", "Statement v2");
+    edit(&store, "edit-2", "Revised statement");
     refused(
         decide(
             &store,
@@ -475,7 +475,7 @@ fn legacy_unbound_decisions_read_correctly_and_stay_frozen() {
         "a legacy acceptance attests no current content"
     );
 
-    edit(&store, "edit-2", "Statement v2");
+    edit(&store, "edit-2", "Revised statement");
     assert!(
         state(&store).current_acceptance.is_none(),
         "editing keeps historical acceptance only"

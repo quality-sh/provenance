@@ -99,7 +99,7 @@ fiber interruption can replace a typed result with an interruption cause.
 ## Schemas
 
 The generated contract exports each request, success, and failure schema by its
-v2 operation name. It also exports matchers for discriminated unions in the new
+operation name. It also exports matchers for discriminated unions in the new
 failure families. The runtime validators preserve the exact JSON value and
 reject malformed envelopes. No runtime compiler or schema download is needed.
 

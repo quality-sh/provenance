@@ -7,10 +7,10 @@ const stamp: Stamp = {
   policy: "catch_up", attested: [], live: ["canonical"],
 };
 
-// Current responses use the v2 envelope.
+// Current responses use the response envelope.
 // @ts-expect-error A response without metadata is not a current response.
 const missingStamp: GetResponse = { data: { id: "rule_a" } };
-// @ts-expect-error A flattened result cannot satisfy the v2 get contract.
+// @ts-expect-error A flattened result cannot satisfy the resource get contract.
 const wrongOperation: GetResponse = { id: "rule_a", max_depth: 1, nodes: [] };
 
 // Resource GETs use their generated member contract. They are not search

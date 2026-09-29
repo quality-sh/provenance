@@ -109,7 +109,7 @@ async fn bound_identity_mismatch_stops_at_metadata() {
 }
 
 #[tokio::test]
-async fn resource_call_uses_v2_path_and_preserves_typed_failure() {
+async fn resource_call_uses_resource_path_and_preserves_typed_failure() {
     let failure = serde_json::json!({
         "error":{"kind":"invalid_input","field":"statement","reason":"required"}, "meta":{}
     });

@@ -36,16 +36,16 @@ mod shapes;
 mod statement;
 mod target_discussion_writes;
 mod updates;
-mod v2_discussion_reads;
-mod v2_review;
-mod v2_review_reads;
+mod discussion_reads;
+mod requirement_review;
+mod review_reads;
 mod verification_resources;
 pub use discussion_discovery::*;
 pub use discussion_writes::*;
 pub use updates::*;
-pub use v2_discussion_reads::*;
-pub use v2_review::*;
-pub use v2_review_reads::*;
+pub use discussion_reads::*;
+pub use requirement_review::*;
+pub use review_reads::*;
 
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 #[cfg(feature = "schema")]
@@ -88,7 +88,7 @@ pub use schema::{
     ResponseKind,
 };
 pub use statement::CheckStatement;
-pub use target_discussion_writes::WriteTargetDiscussionV2;
+pub use target_discussion_writes::WriteTargetDiscussion;
 
 #[cfg(test)]
 mod tests;
