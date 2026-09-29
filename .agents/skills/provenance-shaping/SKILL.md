@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:e00fb043dfca21af -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:585966ea4c97404d -->
 
 # Shaping
 
@@ -291,6 +291,9 @@ change the artifact's kind.
    really produced the Rule. A Resolution producer is not required, and inventing one to
    satisfy the command misrecords how the obligation arose. If the CLI rejects a Rule that
    cites only a Requirement, the installed binary is out of date; see "Check your CLI".
+
+   Rule creation defaults to `draft`. Keep this default for an agent-created Rule. Pass
+   `--status active` only when a person ratifies the Rule.
 
    ```sh
    provenance rules create --scope <scope> \
