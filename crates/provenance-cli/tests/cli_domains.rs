@@ -1,6 +1,9 @@
 use assert_cmd::Command;
 use predicates::str::contains;
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 #[test]
 fn cli_domains_roundtrip_materialize_and_export() {
     let dir = tempfile::tempdir().unwrap();
@@ -38,11 +41,12 @@ fn cli_domains_roundtrip_materialize_and_export() {
         "review-bearing scopes require lossless import/export support",
     ));
 
-    // A scope without a Requirement holds no journal history and still
-    // exports and roundtrips.
+    // Convert the CLI-authored Domain into a plain fixture for the legacy
+    // export contract, which cannot carry its captured review history.
     let plain_repo = dir.path().join("plain").to_string_lossy().to_string();
     init(&plain_repo);
     create_domain(&plain_repo);
+    export_fixture_support::make_default_scope_portable(&plain_repo);
     export_scope(&plain_repo, &export_path);
     assert_export_contains_domain_records(&export_path);
     import_export_roundtrip(&import_repo, &export_path, &import_export_path);
