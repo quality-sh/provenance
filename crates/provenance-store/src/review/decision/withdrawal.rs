@@ -3,7 +3,7 @@ use crate::{
     publication::with_staged_state,
     review::{
         classifier,
-        decision_input::{WithdrawRecordReview, WithdrawRequirementReview},
+        decision_input::WithdrawRecordReview,
         decision_state::{request_digest, review_submission, write_receipt, CycleFacts},
         journal, owner_matches,
     },
@@ -25,13 +25,6 @@ impl StateStore {
         self.withdraw_record_review_addressed(None, input)
     }
 
-    pub fn withdraw_requirement_review(
-        &self,
-        input: WithdrawRequirementReview,
-    ) -> anyhow::Result<CycleEntry> {
-        self.withdraw_record_review(input)
-    }
-
     pub fn withdraw_record_review_for(
         &self,
         kind: NodeType,
@@ -39,14 +32,6 @@ impl StateStore {
         input: WithdrawRecordReview,
     ) -> anyhow::Result<CycleEntry> {
         self.withdraw_record_review_addressed(Some((kind, record_id.clone())), input)
-    }
-
-    pub fn withdraw_requirement_review_for(
-        &self,
-        requirement_id: &StableId,
-        input: WithdrawRequirementReview,
-    ) -> anyhow::Result<CycleEntry> {
-        self.withdraw_record_review_for(NodeType::Requirement, requirement_id, input)
     }
 
     fn withdraw_record_review_addressed(

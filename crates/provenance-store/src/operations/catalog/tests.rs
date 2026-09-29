@@ -239,9 +239,9 @@ fn resource_operations_have_unique_registered_contracts() {
 #[test]
 fn review_actions_do_not_accept_idempotency_headers() {
     for name in [
-        "submit-requirement-review",
-        "decide-requirement-review",
-        "withdraw-requirement-review",
+        "submit-record-review",
+        "decide-record-review",
+        "withdraw-record-review",
     ] {
         let definition = super::definitions()
             .iter()

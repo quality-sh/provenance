@@ -88,9 +88,7 @@ pub struct UpdateDiscussionData {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct HistoryRequest {
-    #[serde(default = "requirement_kind")]
     pub record_kind: provenance_core::NodeType,
-    #[serde(alias = "requirement_id")]
     pub record_id: StableId,
     #[serde(default = "limit")]
     pub limit: usize,
@@ -131,9 +129,7 @@ review_read!(
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct HistoryEntryRequest {
-    #[serde(default = "requirement_kind")]
     pub record_kind: provenance_core::NodeType,
-    #[serde(alias = "requirement_id")]
     pub record_id: StableId,
     pub entry_id: StableId,
 }
@@ -194,9 +190,7 @@ pub enum ReviewEvidenceSide {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct HistoryEvidenceRequest {
-    #[serde(default = "requirement_kind")]
     pub record_kind: provenance_core::NodeType,
-    #[serde(alias = "requirement_id")]
     pub record_id: StableId,
     pub entry_id: StableId,
     pub side: ReviewEvidenceSide,
@@ -228,10 +222,6 @@ review_read!(
         .into())
     }
 );
-
-const fn requirement_kind() -> provenance_core::NodeType {
-    provenance_core::NodeType::Requirement
-}
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

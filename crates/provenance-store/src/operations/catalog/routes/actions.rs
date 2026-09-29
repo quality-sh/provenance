@@ -71,7 +71,7 @@ fn review_actions_for_kind(
 ) {
     let base = leaked(format!("/{plural}/{{id}}"));
     out.push(
-        backed::<operation::SubmitRequirementReview>(
+        backed::<operation::SubmitRecordReview>(
             leaked(format!("submit-{singular}-review")),
             leaked(format!("submit{title}Review")),
             HttpMethod::Post,
@@ -86,7 +86,7 @@ fn review_actions_for_kind(
         .target(TargetAction::Submit, Some(kind)),
     );
     out.push(
-        backed::<operation::DecideRequirementReview>(
+        backed::<operation::DecideRecordReview>(
             leaked(format!("decide-{singular}-review")),
             leaked(format!("decide{title}Review")),
             HttpMethod::Post,
@@ -100,7 +100,7 @@ fn review_actions_for_kind(
         .scope("scope_id"),
     );
     out.push(
-        backed::<operation::WithdrawRequirementReview>(
+        backed::<operation::WithdrawRecordReview>(
             leaked(format!("withdraw-{singular}-review")),
             leaked(format!("withdraw{title}Review")),
             HttpMethod::Post,

@@ -3,7 +3,7 @@ use crate::{
     publication::with_staged_state,
     review::{
         classifier,
-        decision_input::{DecideRecordReview, DecideRequirementReview, ReviewFeedback},
+        decision_input::{DecideRecordReview, ReviewFeedback},
         decision_state::{request_digest, review_submission, write_receipt, CycleFacts},
         guard, journal,
     },
@@ -23,13 +23,6 @@ impl StateStore {
         self.decide_record_review_addressed(None, input)
     }
 
-    pub fn decide_requirement_review(
-        &self,
-        input: DecideRequirementReview,
-    ) -> anyhow::Result<CycleEntry> {
-        self.decide_record_review(input)
-    }
-
     pub fn decide_record_review_for(
         &self,
         kind: NodeType,
@@ -37,14 +30,6 @@ impl StateStore {
         input: DecideRecordReview,
     ) -> anyhow::Result<CycleEntry> {
         self.decide_record_review_addressed(Some((kind, record_id.clone())), input)
-    }
-
-    pub fn decide_requirement_review_for(
-        &self,
-        requirement_id: &StableId,
-        input: DecideRequirementReview,
-    ) -> anyhow::Result<CycleEntry> {
-        self.decide_record_review_for(NodeType::Requirement, requirement_id, input)
     }
 
     fn decide_record_review_addressed(

@@ -3,7 +3,7 @@ use crate::{
     publication::with_staged_state,
     review::{
         classifier,
-        decision_input::{SubmitRecordReview, SubmitRequirementReview},
+        decision_input::SubmitRecordReview,
         decision_state::{request_digest, validated_resubmission, write_receipt, CycleFacts},
         guard, journal, owner_matches,
     },
@@ -55,14 +55,6 @@ impl StateStore {
                 })
             })
         })
-    }
-
-    pub fn submit_requirement_review(
-        &self,
-        mut input: SubmitRequirementReview,
-    ) -> anyhow::Result<CycleEntry> {
-        input.record_kind = provenance_core::NodeType::Requirement;
-        self.submit_record_review(input)
     }
 
     pub(in crate::review) fn commit_submission(

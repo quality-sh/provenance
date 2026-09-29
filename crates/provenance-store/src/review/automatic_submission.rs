@@ -37,7 +37,7 @@ impl StateStore {
                 .get("declared_by")
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_owned),
-            title: format!("Review {} {}", record.kind().as_str(), record.id().as_str()),
+            title: format!("Review {}", record.id().as_str()),
             summary,
             confidence: None,
             source_ids: Vec::new(),

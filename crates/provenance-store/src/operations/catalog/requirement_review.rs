@@ -142,20 +142,18 @@ macro_rules! decision {
     };
 }
 decision!(
-    SubmitRequirementReview,
-    "submit-requirement-review",
-    review::SubmitRequirementReview,
+    SubmitRecordReview,
+    "submit-record-review",
+    review::SubmitRecordReview,
     submit_record_review
 );
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-pub struct DecideRequirementReviewRequest {
+pub struct DecideRecordReviewRequest {
     pub scope_id: ScopeId,
-    #[serde(default = "requirement_kind")]
     pub record_kind: provenance_core::NodeType,
-    #[serde(alias = "requirement_id")]
     pub record_id: StableId,
     pub actor: DispositionActor,
     pub proposal_id: StableId,
@@ -169,11 +167,9 @@ pub struct DecideRequirementReviewRequest {
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-pub struct WithdrawRequirementReviewRequest {
+pub struct WithdrawRecordReviewRequest {
     pub scope_id: ScopeId,
-    #[serde(default = "requirement_kind")]
     pub record_kind: provenance_core::NodeType,
-    #[serde(alias = "requirement_id")]
     pub record_id: StableId,
     pub actor: String,
     pub proposal_id: StableId,
@@ -197,12 +193,12 @@ macro_rules! addressed_decision {
 }
 
 addressed_decision!(
-    DecideRequirementReview,
-    "decide-requirement-review",
-    DecideRequirementReviewRequest,
-    review::DecideRequirementReview,
+    DecideRecordReview,
+    "decide-record-review",
+    DecideRecordReviewRequest,
+    review::DecideRecordReview,
     decide_record_review_for,
-    |request: DecideRequirementReviewRequest| review::DecideRequirementReview {
+    |request: DecideRecordReviewRequest| review::DecideRecordReview {
         scope_id: request.scope_id,
         actor: request.actor,
         proposal_id: request.proposal_id,
@@ -218,12 +214,12 @@ addressed_decision!(
 #[path = "requirement_review_tests.rs"]
 mod requirement_review_tests;
 addressed_decision!(
-    WithdrawRequirementReview,
-    "withdraw-requirement-review",
-    WithdrawRequirementReviewRequest,
-    review::WithdrawRequirementReview,
+    WithdrawRecordReview,
+    "withdraw-record-review",
+    WithdrawRecordReviewRequest,
+    review::WithdrawRecordReview,
     withdraw_record_review_for,
-    |request: WithdrawRequirementReviewRequest| review::WithdrawRequirementReview {
+    |request: WithdrawRecordReviewRequest| review::WithdrawRecordReview {
         scope_id: request.scope_id,
         actor: request.actor,
         proposal_id: request.proposal_id,
@@ -231,7 +227,3 @@ addressed_decision!(
         reason: request.reason,
     }
 );
-
-const fn requirement_kind() -> provenance_core::NodeType {
-    provenance_core::NodeType::Requirement
-}
