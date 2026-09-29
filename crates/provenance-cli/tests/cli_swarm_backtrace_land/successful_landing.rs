@@ -33,6 +33,7 @@ fn swarm_backtrace_land_writes_run_dir_outputs_end_to_end() {
         .stdout(predicates::str::contains(r#""synthesis_packets": 1"#))
         .stdout(predicates::str::contains(r#""proposals": 1"#));
 
+    crate::export_fixture_support::make_default_scope_portable(&repo);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -121,6 +122,7 @@ fn swarm_backtrace_land_cannot_replace_asserted_run_outputs() {
         .failure()
         .stderr(predicates::str::contains("referenced by an assertion"));
 
+    crate::export_fixture_support::make_default_scope_portable(&repo);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -173,6 +175,7 @@ fn identical_proposal_and_assertion_relanding_without_replace_is_rejected() {
         .failure()
         .stderr(predicates::str::contains("already exists"));
 
+    crate::export_fixture_support::make_default_scope_portable(&repo);
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
