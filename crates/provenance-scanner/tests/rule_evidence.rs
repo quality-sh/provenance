@@ -250,6 +250,20 @@ fn non_active_rules_do_not_produce_absence_facts() {
 }
 
 #[test]
+fn a_draft_rule_does_not_produce_active_rule_absence_facts() {
+    let facts = derive_rule_evidence_facts(
+        &[rule("rule_draft", RuleStatus::Draft)],
+        &[],
+        &[],
+        &[],
+        RuleEvidenceCompleteness::Complete,
+    );
+
+    assert!(facts.unimplemented.is_empty());
+    assert!(facts.unverified.is_empty());
+}
+
+#[test]
 #[verifies("rule_inactive_rules_have_no_current_bindings", examples)]
 fn inactive_rules_report_scanned_and_typed_current_bindings() {
     let scan = scanned_comment("#[verifies(\"rule_old\", examples)]\nfn checks_old_rule() {}\n");

@@ -75,6 +75,16 @@ fn already_complete_is_typed_and_retains_native_text() {
     assert!(error.to_string().contains("already complete"));
     assert!(matches!(error.safe(), WriteFailure::AlreadyComplete));
 }
+
+#[test]
+fn typed_rule_creation_defaults_to_draft() {
+    let (_dir, store, scope) = fixture();
+    store.apply_typed_spec(&scope, document()).unwrap();
+
+    let rules = store.list_rules(&scope).unwrap();
+    assert_eq!(rules.len(), 1);
+    assert_eq!(rules[0].status, provenance_core::RuleStatus::Draft);
+}
 #[test]
 fn native_schema_diagnostic_is_not_duplicated_in_the_error_chain() {
     let (_dir, store, scope) = fixture();

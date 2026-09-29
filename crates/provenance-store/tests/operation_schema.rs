@@ -147,6 +147,12 @@ fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
         .with_draft(jsonschema::Draft::Draft202012)
         .compile(&input_schema)
         .unwrap();
+    let defaulted: CreateRuleInput = serde_json::from_value(json!({
+        "scope_id":"default", "id":"rule_default", "statement":"The system saves records.",
+        "severity":"medium", "requirement_ids":["req_one"], "resolution_ids":[]
+    }))
+    .unwrap();
+    assert_eq!(defaulted.status, provenance_core::RuleStatus::Draft);
     let mut input = json!({"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]});
     assert!(input_contract.is_valid(&input));
     input["archived_in_commit"] = json!({"commit":"a".repeat(40)});
