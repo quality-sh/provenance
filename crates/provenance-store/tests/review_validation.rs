@@ -186,7 +186,10 @@ fn typed_apply_captures_an_occurrence_and_publishes_other_shards() {
     store
         .apply_typed_spec(&scope(), serde_json::from_value(changed).unwrap())
         .unwrap();
-    assert_eq!(store.list_sources(&scope()).unwrap()[0].name, "Changed source");
+    assert_eq!(
+        store.list_sources(&scope()).unwrap()[0].name,
+        "Changed source"
+    );
     assert_eq!(
         store
             .list_requirements(&scope())
