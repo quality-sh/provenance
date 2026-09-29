@@ -97,7 +97,12 @@ async fn api_selects_methods_bodies_and_headers_for_one_public_mutation() {
             "path": "sources",
             "method": "post",
             "headers": {"Idempotency-Key": "api-create-one"},
-            "body": {"id": "source_api", "name": "Created by api", "source_type": "document", "supersedes": []}
+            "body": {
+                "id": "source_api",
+                "name": "Created by api",
+                "source_type": "document",
+                "supersedes": []
+            }
         }))
         .await;
     assert_ne!(created.is_error, Some(true), "{created:?}");
@@ -258,7 +263,11 @@ async fn api_refuses_header_names_that_differ_only_in_case() {
         .call(json!({
             "path": "requirements/req_shared",
             "method": "patch",
-            "headers": {"Idempotency-Key": "api-patch-case", "If-Match": "\"1\"", "if-match": "\"2\""},
+            "headers": {
+                "Idempotency-Key": "api-patch-case",
+                "If-Match": "\"1\"",
+                "if-match": "\"2\""
+            },
             "body": {"actor": "api", "description": "One description."}
         }))
         .await;

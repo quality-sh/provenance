@@ -139,7 +139,15 @@ impl Definition {
         if !self.registration.queries.is_empty() {
             parameters.push(query(
                 "query",
-                json!({"type":"string","enum":self.registration.queries.iter().map(|route| route.name).collect::<Vec<_>>() }),
+                json!({
+                    "type": "string",
+                    "enum": self
+                        .registration
+                        .queries
+                        .iter()
+                        .map(|route| route.name)
+                        .collect::<Vec<_>>()
+                }),
             ));
         }
         for parameter in self
@@ -262,7 +270,12 @@ fn mcp_input_variant_schema(body: Option<&Value>, parameters: &[Parameter]) -> V
             required.push(json!(name));
         }
     }
-    json!({"type":"object","additionalProperties":false,"properties":properties,"required":required})
+    json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": properties,
+        "required": required
+    })
 }
 
 fn merge_variants(variants: Vec<Value>) -> Value {
@@ -337,6 +350,36 @@ pub(super) fn property_schema(root: &Value, path: &[&str]) -> Value {
             .unwrap_or_else(|| panic!("registered response property {name}: {resolved}"));
     }
     let mut selected = current.clone();
+    if let Some(defs) = root.get("$defs") {
+        selected["$defs"] = defs.clone();
+    }
+    selected
+}
+
+pub(super) fn renamed_items_schema(root: &Value, path: &[&str], field: &str) -> Value {
+    let selected = path.iter().fold(root, |current, name| {
+        let resolved = resolve_schema(root, current);
+        resolved
+            .get("properties")
+            .and_then(|properties| properties.get(*name))
+            .unwrap_or_else(|| panic!("registered response property {name}: {resolved}"))
+    });
+    let mut selected = resolve_schema(root, selected).clone();
+    let properties = selected
+        .get_mut("properties")
+        .and_then(Value::as_object_mut)
+        .expect("registered items response is not an object");
+    let items = properties
+        .remove(field)
+        .unwrap_or_else(|| panic!("registered response property {field}"));
+    properties.insert("items".into(), items);
+    if let Some(required) = selected.get_mut("required").and_then(Value::as_array_mut) {
+        for name in required {
+            if name.as_str() == Some(field) {
+                *name = Value::String("items".into());
+            }
+        }
+    }
     if let Some(defs) = root.get("$defs") {
         selected["$defs"] = defs.clone();
     }
