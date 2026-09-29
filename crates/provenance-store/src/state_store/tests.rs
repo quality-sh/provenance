@@ -90,7 +90,7 @@ mod source_requirements;
 mod source_supersedes_concurrency;
 mod threads;
 mod typed_adoption;
-mod typed_review_writers;
 mod typed_references;
+mod typed_review_writers;
 mod typed_statement_feedback;
 mod verification_bindings;
