@@ -26,6 +26,14 @@ fn write(repo: &Utf8Path, relative: &str, contents: &str) {
 }
 
 fn write_graph(repo: &Utf8Path, rule_ids: &[&str]) {
+    let rules = rule_ids
+        .iter()
+        .map(|id| (*id, "active"))
+        .collect::<Vec<_>>();
+    write_graph_with_statuses(repo, &rules);
+}
+
+fn write_graph_with_statuses(repo: &Utf8Path, rules: &[(&str, &str)]) {
     let scope = ScopeId::new("default").unwrap();
     let manifest = Manifest::default_with_scope(scope, RepoPathPrefix::new("."));
     write(
@@ -45,15 +53,15 @@ fn write_graph(repo: &Utf8Path, rule_ids: &[&str]) {
         ".provenance/state/scopes/default/requirements/req.jsonl",
         &format!("{requirement}\n"),
     );
-    let rules = rule_ids
+    let rules = rules
         .iter()
-        .map(|id| {
+        .map(|(id, status)| {
             json!({
                 "schema_version": SUPPORTED_SCHEMA_VERSION,
                 "scope_id": "default",
                 "id": id,
                 "statement": format!("The {id} behavior is present"),
-                "status": "active",
+                "status": status,
                 "severity": "high",
                 "requirement_ids": ["req_anchor"]
             })
@@ -66,6 +74,33 @@ fn write_graph(repo: &Utf8Path, rule_ids: &[&str]) {
         ".provenance/state/scopes/default/rules/rule.jsonl",
         &format!("{rules}\n"),
     );
+}
+
+fn write_implementation_binding(repo: &Utf8Path, retired: Option<bool>) {
+    let mut binding = json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION,
+        "scope_id": "default",
+        "id": "impl_anchor",
+        "rule_id": "rule_anchor",
+        "declared_by": "fixture",
+        "file": "src/lib.rs",
+        "symbol": "implements"
+    });
+    if let Some(retired) = retired {
+        binding["retired"] = json!(retired);
+    }
+    write(
+        repo,
+        ".provenance/state/scopes/default/implementations/binding.jsonl",
+        &format!("{binding}\n"),
+    );
+}
+
+fn remove_implementation_bindings(repo: &Utf8Path) {
+    std::fs::remove_file(
+        repo.join(".provenance/state/scopes/default/implementations/binding.jsonl"),
+    )
+    .unwrap();
 }
 
 fn repository(rule_ids: &[&str], source: &str) -> (tempfile::TempDir, Utf8PathBuf) {
@@ -107,6 +142,13 @@ fn comparison(envelope: &super::ReportEnvelope, code: &str, rule_id: &str) -> Va
         .find(|finding| finding.code == code && finding.subject.id == rule_id)
         .expect("the expected evidence finding must exist");
     serde_json::to_value(finding.comparison).unwrap()
+}
+
+fn has_finding(envelope: &super::ReportEnvelope, code: &str, rule_id: &str) -> bool {
+    envelope
+        .findings
+        .iter()
+        .any(|finding| finding.code == code && finding.subject.id == rule_id)
 }
 
 #[test]
@@ -194,4 +236,168 @@ fn removed_implementation_site_is_reported() {
         finding.removed_sites[0].role,
         Some(SiteRole::Implementation)
     );
+}
+
+#[test]
+fn legacy_base_binding_is_evidence_for_comparison() {
+    let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
+    write_implementation_binding(&repo, Some(false));
+    let base = commit(&repo, "Add historical implementation binding");
+    remove_implementation_bindings(&repo);
+    write(&repo, "src/lib.rs", "fn after() {}\n");
+    let head = commit(&repo, "Remove implementation binding");
+
+    let report = envelope(&repo, &base, &head);
+
+    assert_eq!(
+        report.scan.baseline,
+        super::BaselineCompatibility::Compatible
+    );
+    assert_eq!(
+        comparison(&report, "active_rule_missing_implementation", "rule_anchor"),
+        "new"
+    );
+}
+
+#[test]
+fn incompatible_base_binding_makes_comparisons_uncertain() {
+    let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
+    write(
+        &repo,
+        ".provenance/state/scopes/default/implementations/binding.jsonl",
+        "{\"schema_version\":2,\"scope_id\":\"default\",\"id\":\"broken\"}\n",
+    );
+    let base = commit(&repo, "Add incompatible implementation binding");
+    remove_implementation_bindings(&repo);
+    write(&repo, "src/lib.rs", "fn after() {}\n");
+    let head = commit(&repo, "Remove incompatible binding");
+
+    let report = envelope(&repo, &base, &head);
+
+    assert_eq!(
+        report.scan.baseline,
+        super::BaselineCompatibility::Incompatible
+    );
+    assert!(report
+        .scan
+        .baseline_reason
+        .as_deref()
+        .is_some_and(|reason| reason.contains("implementations/binding.jsonl")));
+    assert_eq!(
+        comparison(&report, "active_rule_missing_implementation", "rule_anchor"),
+        "uncertain"
+    );
+    assert_eq!(
+        comparison(&report, "active_rule_missing_verification", "rule_anchor"),
+        "uncertain"
+    );
+}
+
+#[test]
+fn missing_base_makes_comparisons_uncertain() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    git(&repo, &["init", "-q"]);
+    git(&repo, &["config", "user.email", "test@example.com"]);
+    git(&repo, &["config", "user.name", "Test"]);
+    write(&repo, "src/lib.rs", "fn before() {}\n");
+    let base = commit(&repo, "Add source without a graph");
+    write_graph(&repo, &["rule_anchor"]);
+    let head = commit(&repo, "Add Rule without evidence");
+
+    let report = envelope(&repo, &base, &head);
+
+    assert_eq!(report.scan.baseline, super::BaselineCompatibility::Missing);
+    assert_eq!(
+        comparison(&report, "active_rule_missing_implementation", "rule_anchor"),
+        "uncertain"
+    );
+    assert_eq!(
+        comparison(&report, "active_rule_missing_verification", "rule_anchor"),
+        "uncertain"
+    );
+}
+
+#[test]
+fn rule_made_inactive_in_range_has_a_new_current_binding_finding() {
+    for status in ["deprecated", "archived"] {
+        let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
+        let (_directory, repo) = repository(&["rule_anchor"], source);
+        let base = commit(&repo, "Add active Rule");
+        write_graph_with_statuses(&repo, &[("rule_anchor", status)]);
+        let head = commit(&repo, "Make Rule inactive");
+
+        let report = envelope(&repo, &base, &head);
+
+        assert_eq!(
+            comparison(&report, "inactive_rule_current_binding", "rule_anchor"),
+            "new"
+        );
+        assert!(!has_finding(
+            &report,
+            "active_rule_missing_implementation",
+            "rule_anchor"
+        ));
+    }
+}
+
+#[test]
+fn moved_implementation_anchor_is_not_removed_or_missing() {
+    let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
+    let (_directory, repo) = repository(&["rule_anchor"], source);
+    let base = commit(&repo, "Add implementation anchor");
+    write(
+        &repo,
+        "src/lib.rs",
+        "fn unrelated() {}\n#[rule(\"rule_anchor\")]\nfn implements() {}\n",
+    );
+    let head = commit(&repo, "Move implementation anchor");
+
+    let report = envelope(&repo, &base, &head);
+
+    assert_eq!(
+        comparison(&report, "active_rule_missing_verification", "rule_anchor"),
+        "pre_existing"
+    );
+    assert!(!has_finding(
+        &report,
+        "implementation_site_removed",
+        "rule_anchor"
+    ));
+    assert!(!has_finding(
+        &report,
+        "active_rule_missing_implementation",
+        "rule_anchor"
+    ));
+}
+
+#[test]
+fn scanned_replacement_prevents_removed_or_missing_implementation() {
+    let (_directory, repo) = repository(&["rule_anchor"], "fn implements() {}\n");
+    write_implementation_binding(&repo, None);
+    let base = commit(&repo, "Add typed implementation binding");
+    remove_implementation_bindings(&repo);
+    write(
+        &repo,
+        "src/lib.rs",
+        "#[rule(\"rule_anchor\")]\nfn implements() {}\n",
+    );
+    let head = commit(&repo, "Replace typed binding with scanned evidence");
+
+    let report = envelope(&repo, &base, &head);
+
+    assert_eq!(
+        comparison(&report, "active_rule_missing_verification", "rule_anchor"),
+        "pre_existing"
+    );
+    assert!(!has_finding(
+        &report,
+        "implementation_site_removed",
+        "rule_anchor"
+    ));
+    assert!(!has_finding(
+        &report,
+        "active_rule_missing_implementation",
+        "rule_anchor"
+    ));
 }
