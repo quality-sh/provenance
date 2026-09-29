@@ -30,7 +30,7 @@ pub(super) async fn resolve(
     let symbol = request.symbol.as_deref();
     let snapshot = ctx.snapshot();
     let scanned = ctx.live(Live::ScannedSites).scan_file(file)?;
-    let (mut ids, mut sites) = scanned_matches(&scanned, &request);
+    let (mut ids, mut sites) = scanned_matches(scanned.as_slice(), &request);
     if request.line.is_none() {
         let by_file = file.as_str();
         for rule_id in snapshot
