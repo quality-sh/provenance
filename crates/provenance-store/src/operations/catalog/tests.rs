@@ -243,14 +243,18 @@ fn review_actions_do_not_accept_idempotency_headers() {
         "decide-record-review",
         "withdraw-record-review",
     ] {
-        let definition = super::definitions()
+        let definitions = super::definitions()
             .iter()
-            .find(|entry| entry.name == name)
-            .unwrap();
-        assert!(
-            definition.registration.controls.headers.is_empty(),
-            "{name} exposes a client request identity"
-        );
+            .filter(|entry| entry.registration.handler.operation == name)
+            .collect::<Vec<_>>();
+        assert_eq!(definitions.len(), 8, "{name} route count");
+        for definition in definitions {
+            assert!(
+                definition.registration.controls.headers.is_empty(),
+                "{} exposes a client request identity",
+                definition.name
+            );
+        }
     }
 }
 
