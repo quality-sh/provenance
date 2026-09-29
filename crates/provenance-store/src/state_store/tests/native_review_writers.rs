@@ -1,9 +1,9 @@
 use super::seeded_requirement_store;
 use crate::state_store::{
-    CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateResolutionInput,
-    CreateRequirementInput, CreateRuleInput, CreateSourceInput, CreateTopicInput,
-    EditQuestionInput, UpdateBoundaryInput, UpdateDomainInput, UpdateResolutionInput,
-    UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+    CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
+    CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput,
+    UpdateBoundaryInput, UpdateDomainInput, UpdateResolutionInput, UpdateRuleInput,
+    UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::review::SaveOutcome;
 use provenance_core::{
@@ -344,9 +344,7 @@ fn relation_and_shaping_writer_families_capture_occurrences() {
     store
         .claim_topic(&scope, &id("topic_native"), "author")
         .unwrap();
-    store
-        .release_topic(&scope, &id("topic_native"))
-        .unwrap();
+    store.release_topic(&scope, &id("topic_native")).unwrap();
     store
         .claim_question(&scope, &id("question_native"), "author")
         .unwrap();
@@ -354,12 +352,7 @@ fn relation_and_shaping_writer_families_capture_occurrences() {
         .release_question(&scope, &id("question_native"))
         .unwrap();
     store
-        .answer_question(
-            &scope,
-            &id("question_native"),
-            "A is correct".into(),
-            None,
-        )
+        .answer_question(&scope, &id("question_native"), "A is correct".into(), None)
         .unwrap();
 
     let entries = store.review_entries(&scope).unwrap();
@@ -373,8 +366,7 @@ fn relation_and_shaping_writer_families_capture_occurrences() {
         assert_eq!(
             entries
                 .iter()
-                .filter(|entry| entry.record_kind == kind
-                    && entry.record_id.as_str() == record_id)
+                .filter(|entry| entry.record_kind == kind && entry.record_id.as_str() == record_id)
                 .count(),
             count,
             "writer family missed an occurrence for {kind:?}"
