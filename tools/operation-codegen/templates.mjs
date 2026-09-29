@@ -354,7 +354,7 @@ ${helpers}
 }
 function rustArgs(op, enums) {
   const args = (op.parameters ?? []).map(parameter => `${propertyName(parameter)}: ${rustType(parameter, enums)}`);
-  if (op.requestBody) args.push(`call: &${ref(op.requestBody.content['application/json'].schema)}`);
+  if (op.requestBody) args.push(`call: &crate::types::${ref(op.requestBody.content['application/json'].schema)}`);
   return args.join(', ');
 }
 function rustRequest(path, method, op, operation, enums) {
@@ -401,13 +401,6 @@ export function rustClientFiles(document, compatibility) {
   // Metadata participates in the same declared-failure contract as every other
   // operation: a refusal is a typed MetadataFailure, never a connection loss.
   const imports = new Set(['MetadataFailure', 'MetadataSuccess']);
-  for (const { op } of routes) {
-    if (op.requestBody) imports.add(ref(op.requestBody.content['application/json'].schema));
-    if (!queryVariants(op).length) {
-      imports.add(ref(op.responses['200'].content['application/json'].schema));
-      imports.add(ref(op.responses['400'].content['application/json'].schema));
-    }
-  }
   const methods = Object.fromEntries(routes.map(({ path, method, op }) => {
     if (queryVariants(op).length) {
       const name = op.operationId.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
@@ -420,13 +413,13 @@ export function rustClientFiles(document, compatibility) {
     return [`operations/${name}.rs`, `// Generated from OpenAPI. Do not edit.
 #[allow(clippy::too_many_arguments)]
 impl HttpClient {
-    pub async fn ${name}(&self, ${rustArgs(op, enums)}) -> Result<${success}, Error> {
+    pub async fn ${name}(&self, ${rustArgs(op, enums)}) -> Result<crate::types::${success}, Error> {
         ${rustRequest(path, method, op, name, enums)}
         let status = response.status();
         let value = runtime::read_json(response, "${name}", false).await?;
         if !status.is_success() {
             runtime::validate(&value, "${failure}", "${name}", false)?;
-            let failure: ${failure} = runtime::decode(value, "${name}", false)?;
+            let failure: crate::types::${failure} = runtime::decode(value, "${name}", false)?;
             return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::${variant}(Box::new(failure)) });
         }
         runtime::validate(&value, "${success}", "${name}", false)?;
@@ -435,10 +428,10 @@ impl HttpClient {
 }
 `];
   }));
-  const failures = packedLines(['    Metadata(Box<MetadataFailure>),', ...routes.map(({ op }) => {
+  const failures = packedLines(['    Metadata(Box<crate::types::MetadataFailure>),', ...routes.map(({ op }) => {
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
-    if (queryVariants(op).length) return `    ${variant}(Box<${variant}Failure>),`;
-    return `    ${variant}(Box<${ref(op.responses['400'].content['application/json'].schema)}>),`;
+    if (queryVariants(op).length) return `    ${variant}(Box<crate::types::${variant}Failure>),`;
+    return `    ${variant}(Box<crate::types::${ref(op.responses['400'].content['application/json'].schema)}>),`;
   })]);
   const failureFile = `// Generated from OpenAPI. Do not edit.
 #[rustfmt::skip]

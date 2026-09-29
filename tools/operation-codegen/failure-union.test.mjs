@@ -25,6 +25,6 @@ test('metadata uses the declared failure contract in both clients', async () => 
   const rust = Object.values(rustClientFiles(document, compatibility)).join('\n');
   assert.match(ts, /export type OperationFailure =[^;]*MetadataFailure/s);
   assert.match(ts, /checked\(value, validate\.MetadataFailure, 'metadata', false\);[\s\S]*throw new OperationError<components\['schemas'\]\['MetadataFailure'\]>/);
-  assert.match(rust, /Metadata\(Box<MetadataFailure>\)/);
+  assert.match(rust, /Metadata\(Box<crate::types::MetadataFailure>\)/);
   assert.match(rust, /runtime::validate\(&value, "MetadataFailure", "metadata", false\)\?;[\s\S]*OperationFailure::Metadata/);
 });
