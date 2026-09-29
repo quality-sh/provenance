@@ -26,6 +26,27 @@ pub(super) fn with_writer<R>(path: &Utf8Path, id: &str, run: impl FnOnce() -> R)
     run()
 }
 
+pub(super) fn with_writers<R>(
+    paths: &[camino::Utf8PathBuf],
+    id: &str,
+    run: impl FnOnce() -> R,
+) -> R {
+    struct Reset(usize);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            WRITERS.with(|writers| writers.borrow_mut().truncate(self.0));
+        }
+    }
+    let start = WRITERS.with(|writers| {
+        let mut writers = writers.borrow_mut();
+        let start = writers.len();
+        writers.extend(paths.iter().map(|path| (path.to_string(), id.to_string())));
+        start
+    });
+    let _reset = Reset(start);
+    run()
+}
+
 pub fn writer_allows(path: &Utf8Path, id: &str) -> bool {
     WRITERS.with(|writers| {
         writers

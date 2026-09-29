@@ -68,6 +68,13 @@ macro_rules! define_review_families {
             $(records.extend(store.$reader(scope)?.into_iter().map(ReviewRecord::from));)*
             Ok(records)
         }
+
+        pub fn review_paths(
+            layout: &crate::layout::ProvenanceLayout,
+            scope: &provenance_core::ScopeId,
+        ) -> Vec<camino::Utf8PathBuf> {
+            vec![$(crate::shards::$path(layout, scope),)*]
+        }
     };
 }
 
