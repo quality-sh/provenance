@@ -32,7 +32,9 @@ impl StateStore {
                 let staged_path = layout.root().join(&relative);
                 guard::with_writer(&staged_path, "*", || {
                     for record in &mut replacement {
-                        record.set_schema_version(provenance_core::review::REVIEW_SCHEMA_VERSION);
+                        record.set_review_schema_version(
+                            provenance_core::review::REVIEW_SCHEMA_VERSION,
+                        );
                     }
                     let scope = replacement.first().map(|record| {
                         let record: ReviewRecord = record.clone().into();
@@ -66,24 +68,6 @@ impl StateStore {
     }
 
     pub(crate) fn save_native_record<T: GraphRecord>(
-        &self,
-        path: &Utf8Path,
-        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
-    ) -> anyhow::Result<T> {
-        self.save_native_record_checked(path, None, mutate)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn save_native_record_with_etag<T: GraphRecord>(
-        &self,
-        path: &Utf8Path,
-        expected_etag: &str,
-        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
-    ) -> anyhow::Result<T> {
-        self.save_native_record_checked(path, Some(expected_etag), mutate)
-    }
-
-    fn save_native_record_checked<T: GraphRecord>(
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
@@ -472,6 +456,7 @@ fn empty_update(scope_id: &ScopeId, id: &StableId) -> UpdateRequirementInput {
     UpdateRequirementInput {
         scope_id: scope_id.clone(),
         id: id.clone(),
+        expected_etag: None,
         declared_by: None,
         statement: None,
         description: None,

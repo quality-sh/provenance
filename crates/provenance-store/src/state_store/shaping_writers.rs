@@ -206,6 +206,7 @@ impl StateStore {
         self.edit_question(super::EditQuestionInput {
             scope_id,
             id,
+            expected_etag: None,
             question: None,
             resolution_method,
             status,
@@ -222,8 +223,18 @@ impl StateStore {
         id: &StableId,
         mutate: impl FnOnce(&mut Topic) -> anyhow::Result<()>,
     ) -> anyhow::Result<Topic> {
+        self.update_topic_with_etag(scope_id, id, None, mutate)
+    }
+
+    pub(super) fn update_topic_with_etag(
+        &self,
+        scope_id: &ScopeId,
+        id: &StableId,
+        expected_etag: Option<&str>,
+        mutate: impl FnOnce(&mut Topic) -> anyhow::Result<()>,
+    ) -> anyhow::Result<Topic> {
         let path = shards::topics_path(&self.layout, scope_id);
-        self.mutate_graph_record(&path, |records: &mut Vec<Topic>| {
+        self.mutate_graph_record_with_etag(&path, expected_etag, |records: &mut Vec<Topic>| {
             let topic = records
                 .iter_mut()
                 .find(|topic| &topic.id == id)
@@ -246,8 +257,18 @@ impl StateStore {
         id: &StableId,
         mutate: impl FnOnce(&mut Question) -> anyhow::Result<()>,
     ) -> anyhow::Result<Question> {
+        self.mutate_question_with_etag(scope_id, id, None, mutate)
+    }
+
+    pub(super) fn mutate_question_with_etag(
+        &self,
+        scope_id: &ScopeId,
+        id: &StableId,
+        expected_etag: Option<&str>,
+        mutate: impl FnOnce(&mut Question) -> anyhow::Result<()>,
+    ) -> anyhow::Result<Question> {
         let path = shards::questions_path(&self.layout, scope_id);
-        self.mutate_graph_record(&path, |records: &mut Vec<Question>| {
+        self.mutate_graph_record_with_etag(&path, expected_etag, |records: &mut Vec<Question>| {
             let question = records
                 .iter_mut()
                 .find(|question| &question.id == id)
