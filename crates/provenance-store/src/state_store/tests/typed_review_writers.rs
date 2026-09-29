@@ -5,8 +5,7 @@ use crate::{
 };
 use provenance_core::{
     protocol::{TypedRequirementInput, TypedRuleInput, TypedSourceInput},
-    review::{SaveOutcome, REVIEW_SCHEMA_VERSION},
-    NodeType, SUPPORTED_SCHEMA_VERSION,
+    review::SaveOutcome, NodeType, SchemaVersion, SUPPORTED_SCHEMA_VERSION,
 };
 
 fn document(source_name: &str, rule_statement: &str) -> TypedSpecInput {
@@ -80,11 +79,11 @@ fn typed_source_and_rule_record_creation_and_each_repeated_value_change() {
 
     assert_eq!(
         store.list_sources(&scope).unwrap()[0].schema_version,
-        REVIEW_SCHEMA_VERSION
+        SchemaVersion(2)
     );
     assert_eq!(
         store.list_rules(&scope).unwrap()[0].schema_version,
-        REVIEW_SCHEMA_VERSION
+        SchemaVersion(2)
     );
     for kind in [NodeType::Source, NodeType::Rule] {
         let entries = entries_for(&store, &scope, kind);
