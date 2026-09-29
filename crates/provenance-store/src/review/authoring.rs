@@ -114,6 +114,11 @@ impl StateStore {
                             ));
                         }
                     }
+                    let after = if native_record_is_closed(&staged_path, T::KIND, after.id())? {
+                        staged.enroll_graph_record::<T>(&staged_path, after.id())?
+                    } else {
+                        after
+                    };
                     let after: ReviewRecord = after.into();
                     staged.commit_native_occurrence(Some(&before), &after)?;
                     staged.validate_graph_scope(after.scope_id())?;
@@ -415,6 +420,22 @@ where
     T: serde::de::DeserializeOwned,
 {
     Ok(serde_json::from_value(serde_json::to_value(record)?)?)
+}
+
+fn native_record_is_closed(
+    path: &Utf8Path,
+    kind: provenance_core::NodeType,
+    id: &StableId,
+) -> anyhow::Result<bool> {
+    let contents = std::fs::read_to_string(path)?;
+    let value = contents
+        .lines()
+        .map(serde_json::from_str::<serde_json::Value>)
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .find(|value| value["id"].as_str() == Some(id.as_str()))
+        .ok_or_else(|| anyhow::anyhow!("updated graph record is missing"))?;
+    Ok(provenance_core::review::ReviewRecord::deserialize_closed(kind, &value).is_ok())
 }
 
 fn retype_create_error(error: anyhow::Error, duplicate: bool) -> anyhow::Error {
