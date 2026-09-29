@@ -46,6 +46,26 @@ pub fn strip_additive(value: &mut Value) {
             map.remove(field);
         }
     }
+    strip_scanned_item_names(value);
+}
+
+fn strip_scanned_item_names(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            if fields.contains_key("line") {
+                fields.remove("symbol");
+            }
+            for child in fields.values_mut() {
+                strip_scanned_item_names(child);
+            }
+        }
+        Value::Array(values) => {
+            for child in values {
+                strip_scanned_item_names(child);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn settle<T: serde::Serialize>(answer: anyhow::Result<T>) -> Value {
