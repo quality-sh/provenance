@@ -149,6 +149,9 @@ fn bind_path(
     path: &BTreeMap<String, String>,
     object: &mut Map<String, Value>,
 ) -> Result<(), ErasedFailure> {
+    for binding in &definition.registration.request.fixed {
+        object.insert(binding.field.into(), json!(binding.value));
+    }
     for binding in &definition.registration.request.path {
         let value = path
             .get(binding.parameter)

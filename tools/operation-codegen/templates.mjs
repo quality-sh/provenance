@@ -375,6 +375,14 @@ function rustRequest(path, method, op, operation, enums) {
         let response = request.send().await.map_err(|cause| runtime::connection("${operation}", false, cause))?;`;
 }
 
+function packedLines(values, size = 8) {
+  const lines = [];
+  for (let index = 0; index < values.length; index += size) {
+    lines.push(values.slice(index, index + size).join(' '));
+  }
+  return lines.join('\n');
+}
+
 export function rustClientFiles(document, compatibility) {
   const routes = operations(document).filter(({ op }) => op.operationId !== 'metadata');
   const enums = allocateEnums(document);
@@ -415,11 +423,11 @@ impl HttpClient {
 }
 `];
   }));
-  const failures = ['    Metadata(Box<MetadataFailure>),', ...routes.map(({ op }) => {
+  const failures = packedLines(['    Metadata(Box<MetadataFailure>),', ...routes.map(({ op }) => {
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
     if (queryVariants(op).length) return `    ${variant}(Box<${variant}Failure>),`;
     return `    ${variant}(Box<${ref(op.responses['400'].content['application/json'].schema)}>),`;
-  })].join('\n');
+  })]);
   const c = compatibility;
   const connection = `// Generated from OpenAPI. Do not edit.
 use crate::types::{${[...imports].sort().join(', ')}};
@@ -467,7 +475,7 @@ impl HttpClient {
         Ok(client)
     }
 }
-${['parameters.rs', ...Object.keys(methods)].map(path => `include!("${path}");`).join('\n')}
+${packedLines(['parameters.rs', ...Object.keys(methods)].map(path => `include!("${path}");`))}
 `;
   return { 'client.rs': connection, 'parameters.rs': parametersModule(enums), ...methods };
 }

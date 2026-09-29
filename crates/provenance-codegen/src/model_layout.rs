@@ -43,14 +43,41 @@ pub fn render(
             "include!(\"../models/{name}.rs\");"
         )?;
     }
-    let mut root = String::new();
+    let mut family_paths = Vec::new();
     for (family, index) in indexes {
         let path = format!("families/{family}.rs");
-        writeln!(root, "include!(\"{path}\");")?;
-        insert(&mut output, path, &index)?;
+        insert(&mut output, path.clone(), &index)?;
+        family_paths.push(path);
     }
+    let root = render_root_indexes(&mut output, &family_paths)?;
     insert(&mut output, "types.rs".into(), &root)?;
     Ok(output)
+}
+
+fn render_root_indexes(
+    output: &mut BTreeMap<String, String>,
+    family_paths: &[String],
+) -> Result<String, Box<dyn std::error::Error>> {
+    const INDEX_SIZE: usize = 400;
+    if family_paths.len() <= INDEX_SIZE {
+        let mut root = String::new();
+        for path in family_paths {
+            writeln!(root, "include!(\"{path}\");")?;
+        }
+        return Ok(root);
+    }
+
+    let mut root = String::new();
+    for (number, paths) in family_paths.chunks(INDEX_SIZE).enumerate() {
+        let path = format!("family_indexes/part_{number:03}.rs");
+        let mut index = String::new();
+        for family_path in paths {
+            writeln!(index, "include!(\"../{family_path}\");")?;
+        }
+        insert(output, path.clone(), &index)?;
+        writeln!(root, "include!(\"{path}\");")?;
+    }
+    Ok(root)
 }
 
 fn insert(
