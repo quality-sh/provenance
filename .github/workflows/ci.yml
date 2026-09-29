@@ -146,7 +146,8 @@ jobs:
         with:
           name: operation-generated
           path: target/operation-artifact/operation-generated.tar.gz
-          retention-days: 1
+          # provenance-web pins a main run and builds its client from this artifact.
+          retention-days: ${{ github.ref == 'refs/heads/main' && 90 || 1 }}
 
   review-assets:
     needs: [changes, generate-operations]
