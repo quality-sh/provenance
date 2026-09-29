@@ -10,7 +10,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use super::read_budget::{ensure_slice_within_read_budget, ensure_within_read_budget, ReadBudget};
 use super::StateStore;
 
-pub(crate) trait GraphRecord:
+pub trait GraphRecord:
     Clone
     + Into<ReviewRecord>
     + PartialEq
@@ -79,7 +79,7 @@ fn invalid_update(error: anyhow::Error) -> anyhow::Error {
     crate::write_error::SourceFailure::wrap(crate::write_error::WriteFailure::InvalidUpdate, error)
 }
 
-pub(crate) trait StoredReviewRecord {}
+pub trait StoredReviewRecord {}
 
 macro_rules! define_stored_review_records {
     (

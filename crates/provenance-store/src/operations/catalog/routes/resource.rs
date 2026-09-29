@@ -126,7 +126,6 @@ macro_rules! resource {
                 vec![schema::path("id")],
             )
             .scope("scope_id")
-            .header("If-Match", "expected_etag", true)
             .cli_defaults($update_defaults)
             .argument_aliases($update_aliases)
             .public_patch($nullable)
