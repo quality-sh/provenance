@@ -24,6 +24,8 @@ use provenance_store::{cache, layout::ProvenanceLayout, settings};
 
 mod findings;
 mod graph_snapshots;
+#[cfg(test)]
+mod tests;
 
 use findings::BaselineView;
 use graph_snapshots::{GraphSnapshot, SnapshotRead};
