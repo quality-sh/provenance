@@ -1,4 +1,5 @@
-use super::{local_host, OutputFormat};
+use super::OutputFormat;
+use crate::repo_context::RepoContext;
 use provenance_core::protocol::SearchQuery;
 
 /// Run one root search through the canonical typed operation.
@@ -8,7 +9,7 @@ pub async fn dispatch_search(
     format: Option<OutputFormat>,
     query: SearchQuery,
 ) -> anyhow::Result<()> {
-    let host = local_host(repo, scope)?;
+    let host = RepoContext::new(repo, scope).local_host()?;
     let service = host.porcelain().search();
     let response = service.search(query).await?;
     let rendered = if format == Some(OutputFormat::Json) {

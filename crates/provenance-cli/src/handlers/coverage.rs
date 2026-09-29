@@ -211,7 +211,10 @@ fn binding_finding_refusal(
     };
     let refusing = provenance_scanner::binding_findings_fail(severity, governed);
     refusing.then(|| {
-        format!("coverage scan found {governed} Rule binding finding(s); the repository configuration selects error")
+        format!(
+            "coverage scan found {governed} Rule binding finding(s); the repository \
+             configuration selects error"
+        )
     })
 }
 

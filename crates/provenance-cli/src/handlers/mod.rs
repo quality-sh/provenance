@@ -1,4 +1,7 @@
 use crate::cli::Command;
+use crate::output;
+use provenance_core::StableId;
+use provenance_store::cache;
 
 mod cargo_init;
 pub mod check;
@@ -8,21 +11,15 @@ mod docs;
 #[cfg(feature = "dogfood")]
 mod dogfood;
 mod export;
-mod gaps;
-mod graph;
 mod graph_reference;
-mod health;
 mod import;
-mod materialize;
 mod merge_jsonl;
-mod orphans;
 mod prime;
 mod repo;
 mod report;
 mod schema;
 mod skills;
 mod swarm_backtrace;
-mod traceability;
 mod validate;
 mod wiki;
 
@@ -74,12 +71,16 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
                 statements,
                 bindings,
             };
-            check::check(repo, strict, base, format.is_some(), selectors).await
+            let context = provenance_cli::repo_context::RepoContext::new(repo, "default");
+            check::check(context, strict, base, format.is_some(), selectors).await
         }
         Command::Docs { command } => docs::handle(command).await,
         Command::Wiki { command } => wiki::handle(command).await,
         Command::Review(options) => crate::review::run(options).await,
-        Command::Materialize { repo, .. } => materialize::handle(repo).await,
+        Command::Materialize { repo, .. } => {
+            let store = crate::store::Store::open_required(repo)?;
+            output::print_json(&cache::materialize_state(store.layout()).await?)
+        }
         command => dispatch_on_thread(command, quiet),
     }
 }
@@ -96,24 +97,67 @@ async fn run_blocking(
 #[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
 fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
-        Command::Dictionary { command } => dictionary::handle(command),
-        Command::GraphReference { command } => graph_reference::handle(command),
         Command::Graph {
             requirement_id,
-            repo,
-            scope,
+            context,
             ..
-        } => graph::handle(requirement_id, repo, scope),
+        } => {
+            let store = context.open_graph()?;
+            let graph = cache::get_requirement_graph(
+                store.layout(),
+                &context.scope_id()?,
+                &StableId::new(requirement_id)?,
+            )?;
+            output::print_json(&graph)
+        }
         Command::Traceability {
-            rule_id,
-            repo,
-            scope,
-            ..
-        } => traceability::handle(rule_id, repo, scope),
-        Command::Gaps { repo, scope, .. } => gaps::handle(repo, scope),
+            rule_id, context, ..
+        } => {
+            let store = context.open_graph()?;
+            let trace = cache::trace_rule(
+                store.layout(),
+                &context.scope_id()?,
+                &StableId::new(rule_id)?,
+            )?;
+            output::print_json(&trace)
+        }
+        Command::Gaps { context, .. } => {
+            let store = context.open_graph()?;
+            output::print_json(&cache::find_gaps(store.layout(), &context.scope_id()?)?)
+        }
         Command::Prime { format, .. } => prime::handle(format),
-        Command::Health { repo, scope, .. } => health::handle(repo, scope),
-        Command::Orphans { repo, scope, .. } => orphans::handle(repo, scope),
+        Command::Health { context, .. } => {
+            let store = context.open_graph()?;
+            output::print_json(&cache::coverage_health(
+                store.layout(),
+                &context.scope_id()?,
+            )?)
+        }
+        Command::Orphans { context, .. } => {
+            let store = context.open_graph()?;
+            output::print_json(&cache::orphan_rules(store.layout(), &context.scope_id()?)?)
+        }
+        Command::Export {
+            context,
+            format,
+            output,
+        } => export::handle(&context, format, output),
+        Command::Import {
+            context,
+            input,
+            dry_run,
+            ..
+        } => import::handle(&context, input, dry_run),
+        command => dispatch_remaining_on_thread(command, quiet),
+    }
+}
+
+/// Runs a synchronous command that does not use the shared repository context.
+#[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
+fn dispatch_remaining_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
+    match command {
+        Command::Dictionary { command } => dictionary::handle(command),
+        Command::GraphReference { command } => graph_reference::handle(command),
         Command::Coverage { command } => coverage::handle(command),
         Command::Report { command } => report::handle(command),
         Command::SwarmBacktrace { command } => swarm_backtrace::handle(command),
@@ -122,19 +166,6 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
         Command::Validate {
             artifact, input, ..
         } => validate::handle(artifact, &input),
-        Command::Export {
-            repo,
-            scope,
-            format,
-            output,
-        } => export::handle(repo, scope, format, output),
-        Command::Import {
-            repo,
-            scope,
-            input,
-            dry_run,
-            ..
-        } => import::handle(repo, scope, input, dry_run),
         Command::MergeJsonl {
             base,
             ours,
@@ -145,7 +176,7 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
         } => merge_jsonl::handle(&base, &ours, &theirs, output, path.as_deref()),
         #[cfg(feature = "dogfood")]
         Command::Dogfood { command } => dogfood::handle(command, quiet),
-        // These are the commands that `dispatch` runs. Keep the two lists the same.
+        // These commands run in `dispatch` or `dispatch_on_thread`.
         Command::Search(_)
         | Command::CargoInit { .. }
         | Command::Init { .. }
@@ -153,8 +184,16 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
         | Command::Docs { .. }
         | Command::Wiki { .. }
         | Command::Review(_)
-        | Command::Materialize { .. } => {
-            unreachable!("dispatch runs the async and blocking-thread commands")
+        | Command::Materialize { .. }
+        | Command::Graph { .. }
+        | Command::Traceability { .. }
+        | Command::Gaps { .. }
+        | Command::Prime { .. }
+        | Command::Health { .. }
+        | Command::Orphans { .. }
+        | Command::Export { .. }
+        | Command::Import { .. } => {
+            unreachable!("an earlier dispatcher runs this command")
         }
     }
 }

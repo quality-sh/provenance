@@ -1,6 +1,7 @@
 use crate::output::{JsonFormat, OutputFormat, ReportFormat};
 use camino::Utf8PathBuf;
 use clap::Subcommand;
+use provenance_cli::repo_context::RepoContext;
 
 #[derive(Subcommand)]
 pub enum DocsCommand {
@@ -23,10 +24,8 @@ pub enum DocsCommand {
 #[derive(Subcommand)]
 pub enum WikiCommand {
     Build {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         /// Defaults to `.provenance/wiki`, which is added to `.gitignore`
         /// automatically. Pass an explicit path to write elsewhere instead
         /// (`.gitignore` is left untouched in that case).
@@ -39,10 +38,8 @@ pub enum WikiCommand {
         format: OutputFormat,
     },
     Serve {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         /// JSON report written by `coverage scan --format json --output`.
         #[arg(long)]
         coverage: Option<Utf8PathBuf>,

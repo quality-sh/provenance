@@ -86,7 +86,9 @@ async fn cli_and_mcp_share_the_same_guidance() {
         .assert()
         .success();
     let host =
-        provenance_cli::porcelain::local_host(repo.path().to_str().unwrap(), "default").unwrap();
+        provenance_cli::repo_context::RepoContext::new(repo.path().to_str().unwrap(), "default")
+            .local_host()
+            .unwrap();
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();

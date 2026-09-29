@@ -5,6 +5,7 @@ use clap::{
     ArgAction, ArgMatches, Args, Command, CommandFactory, FromArgMatches, Parser,
 };
 use provenance_cli::porcelain;
+use provenance_cli::repo_context::RepoContext;
 use provenance_core::NodeType;
 use provenance_porcelain::action::Action;
 use provenance_porcelain::get::View;
@@ -31,8 +32,7 @@ pub struct Common {
 impl Common {
     pub fn context(&self) -> GlobalContext {
         GlobalContext {
-            repo: self.repo.clone(),
-            scope: self.scope.clone(),
+            repo: RepoContext::new(&self.repo, &self.scope),
             quiet: self.quiet,
         }
     }

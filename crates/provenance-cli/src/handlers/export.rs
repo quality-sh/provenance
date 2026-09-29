@@ -1,7 +1,7 @@
 use crate::output::OutputFormat;
-use crate::store::{ScopeSnapshot, Store};
+use crate::repo_context::RepoContext;
+use crate::store::ScopeSnapshot;
 use camino::Utf8PathBuf;
-use provenance_core::ScopeId;
 use serde::Serialize;
 
 #[derive(Serialize, serde::Deserialize)]
@@ -64,14 +64,18 @@ impl ScopeExport {
 }
 
 pub fn export_scope(repo: Utf8PathBuf, scope: String) -> anyhow::Result<ScopeExport> {
-    let scope_id = ScopeId::new(scope.clone())?;
-    let store = Store::open_required(repo)?;
+    export_context(&RepoContext::new(repo, scope))
+}
+
+fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
+    let scope_id = context.scope_id()?;
+    let store = context.open_graph()?;
     store.with_repository_publication(|| {
         store.ensure_review_portable(&scope_id)?;
         store.validate_ideation_scope(&scope_id)?;
         store.validate_graph_scope(&scope_id)?;
         Ok(ScopeExport::from_snapshot(
-            scope,
+            context.scope.clone(),
             store.snapshot(&scope_id)?,
         ))
     })
@@ -110,7 +114,11 @@ fn render_jsonl(exported: &ScopeExport) -> anyhow::Result<String> {
 
 fn render_markdown(exported: &ScopeExport) -> String {
     format!(
-        "# Provenance Export\n\n- Scope: {}\n- Sources: {}\n- Domains: {}\n- Requirements: {}\n- Boundaries: {}\n- Topics: {}\n- Questions: {}\n- Resolutions: {}\n- Rules: {}\n- Proposals: {}\n",
+        concat!(
+            "# Provenance Export\n\n- Scope: {}\n- Sources: {}\n- Domains: {}\n",
+            "- Requirements: {}\n- Boundaries: {}\n- Topics: {}\n- Questions: {}\n",
+            "- Resolutions: {}\n- Rules: {}\n- Proposals: {}\n"
+        ),
         exported.scope,
         exported.sources.len(),
         exported.domains.len(),
@@ -126,7 +134,10 @@ fn render_markdown(exported: &ScopeExport) -> String {
 
 fn render_toon(exported: &ScopeExport) -> String {
     format!(
-        "scope: {}\nsources: {}\ndomains: {}\nrequirements: {}\nboundaries: {}\ntopics: {}\nquestions: {}\nresolutions: {}\nrules: {}\nproposals: {}\n",
+        concat!(
+            "scope: {}\nsources: {}\ndomains: {}\nrequirements: {}\nboundaries: {}\n",
+            "topics: {}\nquestions: {}\nresolutions: {}\nrules: {}\nproposals: {}\n"
+        ),
         exported.scope,
         exported.sources.len(),
         exported.domains.len(),
@@ -142,7 +153,10 @@ fn render_toon(exported: &ScopeExport) -> String {
 
 fn render_table(exported: &ScopeExport) -> String {
     format!(
-        "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\tresolutions\trules\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+        concat!(
+            "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\t",
+            "resolutions\trules\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n"
+        ),
         exported.scope,
         exported.sources.len(),
         exported.domains.len(),
@@ -157,12 +171,11 @@ fn render_table(exported: &ScopeExport) -> String {
 }
 
 pub(super) fn handle(
-    repo: Utf8PathBuf,
-    scope: String,
+    context: &RepoContext,
     format: OutputFormat,
     output: Option<Utf8PathBuf>,
 ) -> anyhow::Result<()> {
-    let exported = export_scope(repo, scope)?;
+    let exported = export_context(context)?;
     let rendered = render_export(format, &exported)?;
     if let Some(output_path) = output {
         std::fs::write(output_path, rendered)?;

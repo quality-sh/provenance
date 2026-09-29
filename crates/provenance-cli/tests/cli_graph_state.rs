@@ -92,6 +92,15 @@ fn health_rejects_a_manifest_without_scopes() {
 }
 
 #[test]
+fn health_checks_repository_initialization_before_scope_validation() {
+    let directory = tempfile::tempdir().unwrap();
+
+    command(directory.path(), &["health", "--scope", "not valid"])
+        .failure()
+        .stderr(contains("provenance init"));
+}
+
+#[test]
 fn stale_publication_lock_does_not_create_recovery_state() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();

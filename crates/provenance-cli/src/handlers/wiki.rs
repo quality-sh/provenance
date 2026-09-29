@@ -3,19 +3,26 @@ use crate::cli::workspace::WikiCommand;
 pub(super) async fn handle(command: WikiCommand) -> anyhow::Result<()> {
     match command {
         WikiCommand::Build {
-            repo,
-            scope,
+            context,
             out,
             coverage,
             format,
-        } => crate::wiki::site::build(repo, scope, out, coverage.as_deref(), format)?,
+        } => crate::wiki::site::build(
+            context.repo,
+            context.scope,
+            out,
+            coverage.as_deref(),
+            format,
+        )?,
         WikiCommand::Serve {
-            repo,
-            scope,
+            context,
             coverage,
             host,
             port,
-        } => crate::wiki::site::serve(repo, scope, coverage.as_deref(), host, port).await?,
+        } => {
+            crate::wiki::site::serve(context.repo, context.scope, coverage.as_deref(), host, port)
+                .await?;
+        }
     }
     Ok(())
 }

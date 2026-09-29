@@ -1,5 +1,6 @@
 use super::export::ScopeExport;
 use crate::output;
+use crate::repo_context::RepoContext;
 use crate::store::{ScopeSnapshot, Store};
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
@@ -21,18 +22,17 @@ pub struct ImportReport {
 }
 
 pub(super) fn import_scope(
-    repo: Utf8PathBuf,
-    scope: String,
+    context: &RepoContext,
     input: Utf8PathBuf,
     dry_run: bool,
 ) -> anyhow::Result<ImportReport> {
     let input = std::fs::read_to_string(input)?;
     let exported = deserialize_scope_export(&input)?;
     anyhow::ensure!(
-        exported.scope == scope,
+        exported.scope == context.scope,
         "import scope does not match --scope"
     );
-    let scope_id = ScopeId::new(scope)?;
+    let scope_id = context.scope_id()?;
     let records = exported.sources.len()
         + exported.domains.len()
         + exported.requirements.len()
@@ -49,7 +49,7 @@ pub(super) fn import_scope(
         + exported.proposal_cards.len()
         + exported.assertion_records.len()
         + exported.dispositions.len();
-    let store = Store::open_required(repo)?;
+    let store = context.open_graph()?;
     store.with_repository_publication(|| {
         store.ensure_review_portable(&scope_id)?;
         anyhow::ensure!(
@@ -294,12 +294,11 @@ fn ensure_changed_statements_are_clean(
 }
 
 pub(super) fn handle(
-    repo: Utf8PathBuf,
-    scope: String,
+    context: &RepoContext,
     input: Utf8PathBuf,
     dry_run: bool,
 ) -> anyhow::Result<()> {
-    let report = import_scope(repo, scope, input, dry_run)?;
+    let report = import_scope(context, input, dry_run)?;
     output::print_json(&report)?;
     Ok(())
 }
