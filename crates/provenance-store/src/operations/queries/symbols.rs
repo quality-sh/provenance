@@ -36,7 +36,10 @@ pub(super) async fn resolve(
         if !request.line.is_none_or(|line| site.line() == line) {
             continue;
         }
-        ids.insert(site.rule_id().to_string());
+        let Ok(rule_id) = StableId::new(site.rule_id()) else {
+            continue;
+        };
+        ids.insert(rule_id.as_str().to_string());
         let (role, verification_method) = match site.role() {
             provenance_scanner::SourceSiteRole::Implementation => {
                 (ResolveSymbolRole::Implementation, None)
@@ -46,16 +49,12 @@ pub(super) async fn resolve(
             }
         };
         matches.push(ResolveSymbolMatch {
-            rule_id: StableId::new(site.rule_id())?,
+            rule_id,
             role,
             line: Some(site.line()),
             item_name: site.item_name().map(str::to_string),
             verification_method,
-            match_kind: if symbol.is_some_and(|wanted| site.item_name() == Some(wanted)) {
-                ResolveSymbolMatchKind::Symbol
-            } else {
-                ResolveSymbolMatchKind::File
-            },
+            match_kind: match_kind(symbol, site.item_name()),
         });
     }
     if request.line.is_none() {
@@ -90,15 +89,49 @@ pub(super) async fn resolve(
     let served = rules
         .iter()
         .map(|rule| rule.id().as_str())
-        .collect::<BTreeSet<_>>();
-    matches.retain(|site| served.contains(site.rule_id.as_str()));
+        .collect::<Vec<_>>();
+    matches.retain(|site| served.contains(&site.rule_id.as_str()));
+    if request.line.is_none() {
+        for site in snapshot
+            .table::<ImplementationBinding>()
+            .implementation_sites_for_file(file.as_str(), &served)
+            .await?
+        {
+            matches.push(ResolveSymbolMatch {
+                match_kind: match_kind(symbol, Some(&site.symbol)),
+                rule_id: StableId::new(site.rule_id)?,
+                role: ResolveSymbolRole::Implementation,
+                line: None,
+                item_name: Some(site.symbol),
+                verification_method: None,
+            });
+        }
+        for site in snapshot
+            .table::<VerificationBinding>()
+            .verification_sites_for_file(file.as_str(), &served)
+            .await?
+        {
+            matches.push(ResolveSymbolMatch {
+                match_kind: match_kind(symbol, site.symbol.as_deref()),
+                rule_id: StableId::new(site.rule_id)?,
+                role: ResolveSymbolRole::Verification,
+                line: None,
+                item_name: site.symbol,
+                verification_method: Some(site.method),
+            });
+        }
+    }
     matches.sort_by(|left, right| {
         left.rule_id
             .as_str()
             .cmp(right.rule_id.as_str())
+            .then(left.role.cmp(&right.role))
             .then(left.line.cmp(&right.line))
             .then(left.item_name.cmp(&right.item_name))
+            .then(left.verification_method.cmp(&right.verification_method))
+            .then(left.match_kind.cmp(&right.match_kind))
     });
+    matches.dedup();
     Ok(ResolveSymbolResult {
         file: request.file,
         symbol: request.symbol,
@@ -107,4 +140,12 @@ pub(super) async fn resolve(
         rules,
         matches,
     })
+}
+
+fn match_kind(symbol: Option<&str>, item_name: Option<&str>) -> ResolveSymbolMatchKind {
+    if symbol.is_some_and(|wanted| item_name == Some(wanted)) {
+        ResolveSymbolMatchKind::Symbol
+    } else {
+        ResolveSymbolMatchKind::File
+    }
 }

@@ -29,7 +29,7 @@ use test_stores::TestStore;
 
 /// Fields the served answer carries beside the answer bytes; the pinned
 /// answers file holds the answers without them.
-const ADDITIVE_FIELDS: [&str; 7] = [
+const ADDITIVE_FIELDS: [&str; 8] = [
     "stamp",
     "freshness_error",
     "implementation_bindings_has_more",
@@ -37,6 +37,7 @@ const ADDITIVE_FIELDS: [&str; 7] = [
     "verification_runs_has_more",
     "reviews_has_more",
     "scan_cut",
+    "matches",
 ];
 
 pub fn strip_additive(value: &mut Value) {
