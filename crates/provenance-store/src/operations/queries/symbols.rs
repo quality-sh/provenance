@@ -87,9 +87,18 @@ pub(super) async fn resolve(
         .into_iter()
         .map(|rule| GraphNode::Rule(Box::new(rule)))
         .collect::<Vec<_>>();
-    let served = rules.iter().map(GraphNode::id).collect::<BTreeSet<_>>();
-    matches.retain(|site| served.contains(&site.rule_id));
-    matches.sort();
+    let served = rules
+        .iter()
+        .map(|rule| rule.id().as_str())
+        .collect::<BTreeSet<_>>();
+    matches.retain(|site| served.contains(site.rule_id.as_str()));
+    matches.sort_by(|left, right| {
+        left.rule_id
+            .as_str()
+            .cmp(right.rule_id.as_str())
+            .then(left.line.cmp(&right.line))
+            .then(left.item_name.cmp(&right.item_name))
+    });
     Ok(ResolveSymbolResult {
         file: request.file,
         symbol: request.symbol,

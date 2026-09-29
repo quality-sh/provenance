@@ -174,7 +174,7 @@ pub struct ResolveSymbolResult {
 
 /// One code site that relates a Rule to the requested file.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ResolveSymbolMatch {
     pub rule_id: StableId,
     pub role: ResolveSymbolRole,
