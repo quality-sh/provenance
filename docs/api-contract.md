@@ -115,8 +115,8 @@ A collection POST publishes the new graph record and its first review submission
 in one state write. A PATCH that changes review content publishes the new
 revision and a new submission in one state write. The prior pending submission
 becomes superseded; the client does not withdraw it. A PATCH that changes only
-lifecycle status keeps the current revision and submission. Create and PATCH
-responses carry the current submission under `decision.pending`, including its
+lifecycle status keeps the current revision and submission. The current member
+read carries the current submission under `decision.pending`, including its
 server-created Proposal ID and revision. Each decision binds the exact submitted
 record revision. Superseded Proposals, decisions, feedback, and before and after
 evidence remain readable through their history resources.

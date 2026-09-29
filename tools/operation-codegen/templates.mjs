@@ -383,6 +383,18 @@ function packedLines(values, size = 8) {
   return lines.join('\n');
 }
 
+function rustOperationIndexes(methods) {
+  const files = {};
+  const paths = Object.keys(methods);
+  for (let index = 0; index < paths.length; index += 400) {
+    const part = String(index / 400).padStart(3, '0');
+    files[`operation_indexes/part_${part}.rs`] = `// Generated from OpenAPI. Do not edit.
+${paths.slice(index, index + 400).map(path => `include!("../${path}");`).join('\n')}
+`;
+  }
+  return files;
+}
+
 export function rustClientFiles(document, compatibility) {
   const routes = operations(document).filter(({ op }) => op.operationId !== 'metadata');
   const enums = allocateEnums(document);
@@ -428,14 +440,22 @@ impl HttpClient {
     if (queryVariants(op).length) return `    ${variant}(Box<${variant}Failure>),`;
     return `    ${variant}(Box<${ref(op.responses['400'].content['application/json'].schema)}>),`;
   })]);
+  const failureFile = `// Generated from OpenAPI. Do not edit.
+#[rustfmt::skip]
+#[derive(Debug, serde::Serialize)]
+#[serde(untagged)]
+pub enum OperationFailure {
+${failures}
+}
+`;
+  const indexes = rustOperationIndexes(methods);
   const c = compatibility;
   const connection = `// Generated from OpenAPI. Do not edit.
 use crate::types::{${[...imports].sort().join(', ')}};
 use crate::{runtime, Error};
 pub const PROTOCOL_VERSION: u32 = ${c.wire};
 pub const COMPATIBILITY: (u32, u32, u32, u32) = (${c.wire}, ${c.state}, ${c.review_journal}, ${c.read_derivation});
-#[derive(Debug, serde::Serialize)] #[serde(untagged)]
-pub enum OperationFailure { ${failures} }
+include!("operation_failures.rs");
 #[derive(Clone)] pub struct HttpClient { base_url: String, http: reqwest::Client }
 impl HttpClient {
     pub async fn connect(base_url: &str) -> Result<Self, Error> { Self::connect_with_headers(base_url, reqwest::header::HeaderMap::new(), None).await }
@@ -475,7 +495,14 @@ impl HttpClient {
         Ok(client)
     }
 }
-${packedLines(['parameters.rs', ...Object.keys(methods)].map(path => `include!("${path}");`))}
+include!("parameters.rs");
+${Object.keys(indexes).map(path => `include!("${path}");`).join('\n')}
 `;
-  return { 'client.rs': connection, 'parameters.rs': parametersModule(enums), ...methods };
+  return {
+    'client.rs': connection,
+    'operation_failures.rs': failureFile,
+    'parameters.rs': parametersModule(enums),
+    ...indexes,
+    ...methods,
+  };
 }

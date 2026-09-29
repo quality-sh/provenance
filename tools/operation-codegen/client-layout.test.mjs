@@ -32,5 +32,7 @@ test('the Rust client root stays bounded with many operations', async () => {
     return [`/fixtures/operation-${i}`, entry];
   }));
   const files = templates.rustClientFiles(doc, compatibility);
-  assert.ok(files['client.rs'].split('\n').length <= 500);
+  assert.ok(files['operation_indexes/part_000.rs']);
+  assert.ok(files['operation_indexes/part_001.rs']);
+  for (const [path, source] of Object.entries(files)) assert.ok(source.split('\n').length <= 500, path);
 });
