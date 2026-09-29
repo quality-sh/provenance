@@ -38,8 +38,8 @@ impl StateStore {
                         let record: ReviewRecord = record.clone().into();
                         record.scope_id().clone()
                     });
-                    let before = staged
-                        .replace_graph_records_guarded(&staged_path, replacement.clone())?;
+                    let before =
+                        staged.replace_graph_records_guarded(&staged_path, replacement.clone())?;
                     for record in &before {
                         let review: ReviewRecord = record.clone().into();
                         anyhow::ensure!(
@@ -95,8 +95,7 @@ impl StateStore {
                 let staged = Self::new(layout.clone());
                 let staged_path = layout.root().join(&relative);
                 guard::with_writer(&staged_path, "*", || {
-                    let (before, _) =
-                        staged.mutate_graph_record_guarded(&staged_path, mutate)?;
+                    let (before, _) = staged.mutate_graph_record_guarded(&staged_path, mutate)?;
                     let before = before.ok_or_else(|| {
                         anyhow::anyhow!("native update cannot create a graph record")
                     })?;
@@ -131,7 +130,10 @@ impl StateStore {
         before: Option<&ReviewRecord>,
         after: &ReviewRecord,
     ) -> anyhow::Result<()> {
-        let head = before.map(|record| self.head(record)).transpose()?.flatten();
+        let head = before
+            .map(|record| self.head(record))
+            .transpose()?
+            .flatten();
         self.validated_review_entries(after.scope_id())?;
         let request_id = journal::new_id();
         self.commit_record_evidence(
@@ -141,9 +143,7 @@ impl StateStore {
                 head,
                 actor: AUTHORING_ACTOR.to_owned(),
                 request_id,
-                intent_digest: canonical_digest::digest(
-                    &canonical_digest::canonical_bytes(after)?,
-                ),
+                intent_digest: canonical_digest::digest(&canonical_digest::canonical_bytes(after)?),
                 origin: None,
             },
         )?;
