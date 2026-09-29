@@ -174,13 +174,25 @@ impl StateStore {
     pub(super) fn replace_graph_records<T: GraphRecord>(
         &self,
         path: &Utf8Path,
-        mut replacement: Vec<T>,
+        replacement: Vec<T>,
     ) -> anyhow::Result<()> {
+        if !crate::review::guard::writer_allows_path(path) {
+            return self.replace_native_records(path, replacement);
+        }
+        self.replace_graph_records_guarded(path, replacement).map(|_| ())
+    }
+
+    pub(crate) fn replace_graph_records_guarded<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        mut replacement: Vec<T>,
+    ) -> anyhow::Result<Vec<T>> {
         self.mutate_jsonl_records(path, |records| {
+            let before = records.clone();
             self.stamp_records(records, &mut replacement)?;
             ensure_slice_within_read_budget(&replacement)?;
             *records = replacement;
-            Ok(())
+            Ok(before)
         })
     }
 }
