@@ -52,6 +52,38 @@ async fn api_read_returns_the_named_catalog_tool_result_on_the_same_path() {
 }
 
 #[tokio::test]
+async fn resolve_symbol_returns_symbol_and_file_matches_through_list_rules() {
+    let repository = Repository::new("The shared graph is readable.");
+    std::fs::write(
+        repository.dir.path().join("code.rs"),
+        concat!(
+            "#[rule(\"rule_shared\")]\n",
+            "fn pay() {}\n",
+            "#[verifies(\"rule_shared\", examples)]\n",
+            "fn checks_pay() {}\n",
+        ),
+    )
+    .unwrap();
+    let session = ApiSession::start(host(&repository)).await;
+
+    let result = session
+        .call_named(
+            "list-rules",
+            json!({"query": "resolve-symbol", "file": "code.rs", "symbol": "pay"}),
+        )
+        .await;
+
+    assert_ne!(result.is_error, Some(true), "{result:?}");
+    let matches = result.structured_content.as_ref().unwrap()["data"]["matches"]
+        .as_array()
+        .expect("resolve-symbol returns matched sites");
+    assert!(matches.iter().any(|site| site["match_kind"] == "symbol"));
+    assert!(matches.iter().any(|site| site["match_kind"] == "file"));
+
+    session.shutdown().await;
+}
+
+#[tokio::test]
 #[verifies("rule_porcelain_mcp_api_arguments", examples)]
 async fn api_selects_methods_bodies_and_headers_for_one_public_mutation() {
     let repository = Repository::new("The shared graph is readable.");
