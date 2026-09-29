@@ -90,6 +90,8 @@ fn enroll(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
         .iter_mut()
         .find(|value| value["id"] == id.as_str())
         .unwrap();
+    let before = review_families::deserialize_record(kind, value).unwrap();
+    let head = store.head(&before).unwrap();
     value["schema_version"] = REVIEW_SCHEMA_VERSION.0.into();
     let record = review_families::deserialize_record(kind, value).unwrap();
     let lines = values
@@ -98,6 +100,9 @@ fn enroll(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
         .collect::<Vec<_>>()
         .join("\n");
     std::fs::write(path, format!("{lines}\n")).unwrap();
+    if head.is_some() {
+        return;
+    }
     let after = journal::snapshot(&store.layout, &record).unwrap();
     let entry = ReviewEntry {
         schema_version: REVIEW_SCHEMA_VERSION,
