@@ -1,6 +1,9 @@
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 #[test]
 fn import_replaces_only_target_scope_and_removes_all_stale_target_shards() {
     let dir = tempfile::tempdir().unwrap();
@@ -14,6 +17,7 @@ fn import_replaces_only_target_scope_and_removes_all_stale_target_shards() {
     create_source(&repo, "default", "source_target");
     create_source(&repo, "other", "source_other");
     seed_stale_target_shards(&repo);
+    export_fixture_support::make_default_scope_portable(&repo);
 
     let export = dir.path().join("replacement.json");
     Command::cargo_bin("provenance")

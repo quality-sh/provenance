@@ -8,3 +8,5 @@ mod publication_recovery;
 mod shipped_legacy;
 #[path = "cli_import_lifecycle/support.rs"]
 mod support;
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;

@@ -159,25 +159,26 @@ fn exact_export_contains_only_canonical_graph_families() {
 #[verifies("rule_export_strips_collaboration", examples)]
 fn collaboration_claims_do_not_change_digest_or_appear_in_exact_export() {
     let temp = committed_store();
-    provenance(temp.path())
-        .args([
-            "sources",
-            "create",
-            "--repo",
-            ".",
-            "--scope",
-            "default",
-            "--id",
-            "source_origin",
-            "--name",
-            "Origin metadata source",
-            "--origin-thread",
-            "thread_private",
-            "--origin-message",
-            "message_private",
-        ])
-        .assert()
-        .success();
+    let sources = temp
+        .path()
+        .join(".provenance/state/scopes/default/sources/source.jsonl");
+    std::fs::create_dir_all(sources.parent().unwrap()).unwrap();
+    std::fs::write(
+        sources,
+        format!(
+            "{}\n",
+            json!({
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": "default",
+                "id": "source_origin",
+                "name": "Origin metadata source",
+                "source_type": "document",
+                "origin_thread": "thread_private",
+                "origin_message": "message_private"
+            })
+        ),
+    )
+    .unwrap();
     provenance(temp.path())
         .args([
             "requirements",
