@@ -2,16 +2,14 @@ use super::{
     inputs::{ResolutionClearField, UpdateResolutionInput},
     invalid, missing, optional, required_text, set, validate_final_relations,
 };
-use crate::{publication::with_staged_state, review, shards, state_store::StateStore};
+use crate::{review, shards, state_store::StateStore};
 use provenance_core::{
     validate_optional_confidence_score, validate_resolution_input_content, Resolution,
 };
 
 impl StateStore {
     pub fn update_resolution(&self, input: UpdateResolutionInput) -> anyhow::Result<Resolution> {
-        with_staged_state(&self.layout, false, |layout| {
-            Self::new(layout.clone()).prepare_resolution_update(input)
-        })
+        self.prepare_resolution_update(input)
     }
 
     fn prepare_resolution_update(

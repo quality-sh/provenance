@@ -56,6 +56,10 @@ pub fn writer_allows(path: &Utf8Path, id: &str) -> bool {
     })
 }
 
+pub fn writer_allows_path(path: &Utf8Path) -> bool {
+    WRITERS.with(|writers| writers.borrow().iter().any(|(p, _)| p == path.as_str()))
+}
+
 pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
     let directory = path.parent().and_then(Utf8Path::file_name);
     let family = directory.and_then(crate::cache::review_families::by_directory);
