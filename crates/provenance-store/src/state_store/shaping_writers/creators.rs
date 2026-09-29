@@ -3,7 +3,7 @@ use crate::{
     shards,
     state_store::{CreateBoundaryInput, CreateQuestionInput, CreateTopicInput, StateStore},
 };
-use provenance_core::{Boundary, NodeType, Question, Topic, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, Boundary, NodeType, Question, Topic};
 
 impl StateStore {
     pub fn create_boundary(&self, input: CreateBoundaryInput) -> anyhow::Result<Boundary> {
@@ -40,7 +40,7 @@ impl StateStore {
         let path = shards::boundaries_path(&self.layout, &scope_id);
         self.mutate_graph_record(&path, |records: &mut Vec<Boundary>| {
             let boundary = Boundary {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
+                schema_version: REVIEW_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 requirement_id,
@@ -87,7 +87,7 @@ impl StateStore {
         let path = shards::topics_path(&self.layout, &scope_id);
         self.mutate_graph_record(&path, |records: &mut Vec<Topic>| {
             let topic = Topic {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
+                schema_version: REVIEW_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 requirement_id,
@@ -160,7 +160,7 @@ impl StateStore {
         let path = shards::questions_path(&self.layout, &scope_id);
         self.mutate_graph_record(&path, |records: &mut Vec<Question>| {
             let question = Question {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
+                schema_version: REVIEW_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id,
                 topic_id,
