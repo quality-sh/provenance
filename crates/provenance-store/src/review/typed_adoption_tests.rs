@@ -7,6 +7,7 @@ use crate::{
         CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateResolutionInput,
         CreateTopicInput, StateStore, TypedSpecInput,
     },
+    write_error::{WriteError, WriteFailure},
 };
 use camino::Utf8Path;
 use provenance_core::{
@@ -288,10 +289,13 @@ fn typed_omission_refuses_enrolled_deletion() {
 
     let error = store.apply_typed_spec(&scope, empty).unwrap_err();
 
-    assert!(
-        error.to_string().contains("cannot delete enrolled"),
-        "{error:#}"
-    );
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::EnrolledRecordDeletionConflict {
+            record_kind: NodeType::Source,
+            record_id,
+        } if record_id == records[0].1
+    ));
     assert_eq!(
         std::fs::read(shards::requirements_path(&store.layout, &scope)).unwrap(),
         before
@@ -462,3 +466,4 @@ fn typed_cascade_captures_each_changed_enrolled_kind() {
 }
 
 mod typed_adoption_deletion_tests;
+mod typed_adoption_publication_tests;

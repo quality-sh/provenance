@@ -100,6 +100,16 @@ macro_rules! review_record_kinds {
 }
 pub(crate) use review_record_kinds;
 
+macro_rules! define_review_record_kinds {
+    ($( $variant:ident($record:ty, $kind:ident), )*) => {
+        pub const REVIEW_RECORD_KINDS: &[NodeType] = &[
+            $(NodeType::$kind,)*
+        ];
+    };
+}
+
+review_record_kinds!(define_review_record_kinds);
+
 macro_rules! define_review_record {
     ($( $variant:ident($record:ty, $kind:ident), )*) => {
         #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
