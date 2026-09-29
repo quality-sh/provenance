@@ -1,13 +1,14 @@
 use super::seeded_requirement_store;
 use crate::state_store::{
     CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateResolutionInput,
-    CreateRuleInput, CreateSourceInput, CreateTopicInput, EditQuestionInput, UpdateBoundaryInput,
-    UpdateDomainInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
+    CreateRequirementInput, CreateRuleInput, CreateSourceInput, CreateTopicInput,
+    EditQuestionInput, UpdateBoundaryInput, UpdateDomainInput, UpdateResolutionInput,
+    UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::review::SaveOutcome;
 use provenance_core::{
-    NodeType, QuestionStatus, ResolutionMethod, ResolutionStatus, RuleSeverity, RuleStatus,
-    SourceType, StableId, TopicStatus,
+    NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus, RuleSeverity,
+    RuleStatus, SourceType, StableId, TopicStatus,
 };
 
 fn id(value: &str) -> StableId {
@@ -276,4 +277,138 @@ fn source_rule_and_resolution_creators_refuse_unaddressed_origins() {
     assert!(store.list_sources(&scope).unwrap().is_empty());
     assert!(store.list_resolutions(&scope).unwrap().is_empty());
     assert!(store.list_rules(&scope).unwrap().is_empty());
+}
+
+#[test]
+fn relation_and_shaping_writer_families_capture_occurrences() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    seed_native_records(&store, &scope);
+    store
+        .create_requirement(CreateRequirementInput {
+            scope_id: scope.clone(),
+            id: id("req_target"),
+            statement: "A target requirement".into(),
+            description: None,
+            status: RequirementStatus::Active,
+            domain_id: None,
+            refines: None,
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    store
+        .create_source(CreateSourceInput {
+            scope_id: scope.clone(),
+            id: id("source_target"),
+            name: "Target source".into(),
+            source_type: SourceType::Policy,
+            url: None,
+            reference: None,
+            commit_pin: None,
+            effective_date: None,
+            review_date: None,
+            supersedes: Vec::new(),
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+
+    store
+        .add_source_supersedes(&scope, &id("source_native"), id("source_target"))
+        .unwrap();
+    store
+        .clear_source_supersedes(&scope, &id("source_native"), &id("source_target"))
+        .unwrap();
+    store
+        .add_rule_requirement(&scope, &id("rule_native"), id("req_target"))
+        .unwrap();
+    store
+        .clear_rule_requirement(&scope, &id("rule_native"), &id("req_target"))
+        .unwrap();
+    store
+        .add_resolution_requirement(&scope, &id("resolution_native"), id("req_target"))
+        .unwrap();
+    store
+        .clear_resolution_requirement(&scope, &id("resolution_native"), &id("req_target"))
+        .unwrap();
+    store
+        .set_question_contradicts(&scope, &id("question_native"), id("req_target"))
+        .unwrap();
+    store
+        .clear_question_contradicts(&scope, &id("question_native"))
+        .unwrap();
+
+    store
+        .claim_topic(&scope, &id("topic_native"), "author")
+        .unwrap();
+    store
+        .release_topic(&scope, &id("topic_native"))
+        .unwrap();
+    store
+        .claim_question(&scope, &id("question_native"), "author")
+        .unwrap();
+    store
+        .release_question(&scope, &id("question_native"))
+        .unwrap();
+    store
+        .answer_question(
+            &scope,
+            &id("question_native"),
+            "A is correct".into(),
+            None,
+        )
+        .unwrap();
+
+    let entries = store.review_entries(&scope).unwrap();
+    for (kind, record_id, count) in [
+        (NodeType::Source, "source_native", 3),
+        (NodeType::Rule, "rule_native", 3),
+        (NodeType::Resolution, "resolution_native", 3),
+        (NodeType::Topic, "topic_native", 3),
+        (NodeType::Question, "question_native", 8),
+    ] {
+        assert_eq!(
+            entries
+                .iter()
+                .filter(|entry| entry.record_kind == kind
+                    && entry.record_id.as_str() == record_id)
+                .count(),
+            count,
+            "writer family missed an occurrence for {kind:?}"
+        );
+    }
+    let mut topic = entries
+        .iter()
+        .filter(|entry| entry.record_kind == NodeType::Topic)
+        .collect::<Vec<_>>();
+    topic.sort_by_key(|entry| entry.sequence);
+    assert!(topic[1..]
+        .iter()
+        .all(|entry| entry.outcome == SaveOutcome::LifecycleOnly));
+    assert!(topic
+        .iter()
+        .all(|entry| entry.revision == topic[0].revision));
+}
+
+#[test]
+fn graph_record_replacement_captures_an_occurrence() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    seed_native_records(&store, &scope);
+    let mut sources = store.list_sources(&scope).unwrap();
+    sources[0].name = "Source B".into();
+
+    store
+        .replace_graph_records(&crate::shards::sources_path(&store.layout, &scope), sources)
+        .unwrap();
+
+    let entries = store.review_entries(&scope).unwrap();
+    let source = entries
+        .iter()
+        .filter(|entry| entry.record_kind == NodeType::Source)
+        .collect::<Vec<_>>();
+    assert_eq!(source.len(), 2);
+    assert_eq!(source[1].outcome, SaveOutcome::Changed);
 }
