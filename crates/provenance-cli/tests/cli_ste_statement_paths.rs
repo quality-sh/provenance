@@ -1,3 +1,5 @@
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
 #[path = "cli_ste_statement_paths/import.rs"]
 mod import;
 #[path = "cli_ste_statement_paths/manual.rs"]
@@ -8,5 +10,3 @@ mod merge;
 mod strict;
 #[path = "cli_ste_statement_paths/support.rs"]
 mod support;
-#[path = "export_fixture_support/mod.rs"]
-mod export_fixture_support;

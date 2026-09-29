@@ -30,7 +30,10 @@ fn rewrite_records(directory: &Path) {
         let path = entry.unwrap().path();
         if path.is_dir() {
             rewrite_records(&path);
-        } else if path.extension().is_some_and(|extension| extension == "jsonl") {
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension == "jsonl")
+        {
             rewrite_jsonl(&path);
         }
     }
