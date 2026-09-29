@@ -1,8 +1,8 @@
 use provenance_core::{ImplementationBinding, NodeType, Requirement, Rule, ScopeId, Source};
 
 use super::{cascade::Cascade, replace_records};
-use crate::state_store::{ReconciledResource, StateStore, TypedSpecResult};
 use crate::shards;
+use crate::state_store::{ReconciledResource, StateStore, TypedSpecResult};
 
 pub(super) struct Replacement {
     pub sources: Vec<Source>,
@@ -51,26 +51,22 @@ impl Replacement {
             &self.requirements,
             &self.rules,
         )?;
-        store
-            .publish_typed_spec(scope, &result.declared_by, |store| {
-                store.replace_graph_records(
-                    &shards::sources_path(&store.layout, scope),
-                    self.sources,
-                )?;
-                crate::test_probes::at("typed_spec_sources_published")?;
-                store.replace_graph_records(
-                    &shards::requirements_path(&store.layout, scope),
-                    self.requirements,
-                )?;
-                store
-                    .replace_graph_records(&shards::rules_path(&store.layout, scope), self.rules)?;
-                replace_records(
-                    store,
-                    &shards::implementation_bindings_path(&store.layout, scope),
-                    self.implementations,
-                )?;
-                self.cascade.publish(store, scope)?;
-                store.raise_requirement_reviews(scope, requirement_resources, rule_resources)
-            })
+        store.publish_typed_spec(scope, &result.declared_by, |store| {
+            store
+                .replace_graph_records(&shards::sources_path(&store.layout, scope), self.sources)?;
+            crate::test_probes::at("typed_spec_sources_published")?;
+            store.replace_graph_records(
+                &shards::requirements_path(&store.layout, scope),
+                self.requirements,
+            )?;
+            store.replace_graph_records(&shards::rules_path(&store.layout, scope), self.rules)?;
+            replace_records(
+                store,
+                &shards::implementation_bindings_path(&store.layout, scope),
+                self.implementations,
+            )?;
+            self.cascade.publish(store, scope)?;
+            store.raise_requirement_reviews(scope, requirement_resources, rule_resources)
+        })
     }
 }

@@ -1,11 +1,7 @@
 use super::*;
 use crate::write_error::{WriteError, WriteFailure};
 
-fn assert_enrolled_deletion(
-    error: anyhow::Error,
-    expected_kind: NodeType,
-    expected_id: &StableId,
-) {
+fn assert_enrolled_deletion(error: anyhow::Error, expected_kind: NodeType, expected_id: &StableId) {
     let error = WriteError(error);
     assert!(matches!(
         error.safe(),
