@@ -24,6 +24,13 @@ fn resolve(file: &str, line: Option<usize>) -> ResolveSymbolQuery {
     }
 }
 
+fn resolve_named(file: &str, symbol: &str) -> ResolveSymbolQuery {
+    ResolveSymbolQuery {
+        symbol: Some(symbol.to_string()),
+        ..resolve(file, None)
+    }
+}
+
 /// The seeded store with a rule record behind the source file's site.
 fn store_with_rule() -> TestStore {
     let store = test_stores::seeded_queries();
@@ -95,6 +102,86 @@ async fn resolve_symbol_reads_the_named_file_only() {
     assert_eq!(rule_ids(&answer.result.rules), ["rule_overtime"]);
     assert_eq!(answer.stamp.attested, ["rules"]);
     assert_eq!(answer.stamp.live, ["scanned_sites"]);
+}
+
+#[tokio::test]
+#[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
+async fn a_symbol_miss_keeps_the_named_files_rules_and_sites() {
+    let store = store_with_rule();
+    create_rule_of(
+        &store.state_store(),
+        &store.scope,
+        "rule_audit",
+        "req_overtime",
+    );
+    std::fs::write(
+        store.root.join("src/pay.rs"),
+        concat!(
+            "#[rule(\"rule_overtime\")]\n",
+            "fn pay() {}\n",
+            "#[verifies(\"rule_audit\", examples)]\n",
+            "fn checks_pay() {}\n",
+        ),
+    )
+    .unwrap();
+    let answer = queries::resolve_symbol(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        resolve_named("src/pay.rs", "missing"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        rule_ids(&answer.result.rules),
+        ["rule_audit", "rule_overtime"]
+    );
+    assert_eq!(
+        serde_json::to_value(&answer.result.matches).unwrap(),
+        json!([
+            {
+                "rule_id": "rule_audit",
+                "role": "verification",
+                "line": 3,
+                "item_name": "checks_pay",
+                "verification_method": "examples",
+                "match_kind": "file"
+            },
+            {
+                "rule_id": "rule_overtime",
+                "role": "implementation",
+                "line": 1,
+                "item_name": "pay",
+                "match_kind": "file"
+            }
+        ])
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
+async fn an_exact_item_name_marks_the_symbol_match() {
+    let store = store_with_rule();
+    let answer = queries::resolve_symbol(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        resolve_named("src/pay.rs", "pay"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        serde_json::to_value(&answer.result.matches).unwrap(),
+        json!([{
+            "rule_id": "rule_overtime",
+            "role": "implementation",
+            "line": 1,
+            "item_name": "pay",
+            "match_kind": "symbol"
+        }])
+    );
 }
 
 #[tokio::test]
