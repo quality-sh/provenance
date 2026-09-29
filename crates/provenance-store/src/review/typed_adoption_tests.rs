@@ -92,6 +92,9 @@ fn enroll(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
         .unwrap();
     let before = review_families::deserialize_record(kind, value).unwrap();
     let head = store.head(&before).unwrap();
+    if before.schema_version() == REVIEW_SCHEMA_VERSION {
+        return;
+    }
     value["schema_version"] = REVIEW_SCHEMA_VERSION.0.into();
     let record = review_families::deserialize_record(kind, value).unwrap();
     let lines = values
