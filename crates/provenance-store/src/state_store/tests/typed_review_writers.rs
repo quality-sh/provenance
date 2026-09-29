@@ -1,6 +1,6 @@
 use super::initialized_store;
 use crate::{
-    state_store::TypedSpecInput,
+    state_store::{TypedSpecInput, UpdateRuleInput, UpdateSourceInput},
     write_error::{WriteError, WriteFailure},
 };
 use provenance_core::{
@@ -115,6 +115,16 @@ fn empty_typed_replacement_refuses_enrolled_source_deletion() {
     input.requirements.clear();
     input.rules.clear();
     store.apply_typed_spec(&scope, input.clone()).unwrap();
+    store
+        .update_source(
+            serde_json::from_value::<UpdateSourceInput>(serde_json::json!({
+                "scope_id": "default",
+                "id": "source_typed_history",
+                "review_date": 1
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     input.sources.clear();
 
     let error = store.apply_typed_spec(&scope, input).unwrap_err();
@@ -127,6 +137,16 @@ fn empty_typed_rule_replacement_refuses_enrolled_rule_deletion() {
     let (_temp, store, scope) = initialized_store();
     let mut input = document("Policy A", "The system retains A.");
     store.apply_typed_spec(&scope, input.clone()).unwrap();
+    store
+        .update_rule(
+            serde_json::from_value::<UpdateRuleInput>(serde_json::json!({
+                "scope_id": "default",
+                "id": "rule_typed_history",
+                "name": "Native rule name"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     input.rules.clear();
 
     let error = store.apply_typed_spec(&scope, input).unwrap_err();
