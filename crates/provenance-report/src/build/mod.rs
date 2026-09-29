@@ -73,18 +73,28 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
     let (completeness, incompleteness_reason) =
         scan_completeness(input.repo, input.scan_path, scan_covers, &head)?;
 
-    let (baseline, baseline_reason, base_snapshot, head_snapshot) =
+    let (mut baseline, mut baseline_reason, base_snapshot, head_snapshot) =
         read_snapshots(input.repo, &base, &head, &scope)?;
     let (verifications, implementations) =
-        graph_snapshots::read_bindings(input.repo, &head, &scope)?;
-    let (base_scans, base_verifications, base_implementations) =
-        read_baseline_evidence(input.repo, &base, &scope, baseline)?;
+        graph_snapshots::read_bindings(input.repo, &head, &scope, CommitRole::Head)?;
+    let mut base_evidence = BaselineEvidence::default();
+    if baseline == BaselineCompatibility::Compatible {
+        match read_baseline_evidence(input.repo, &base, &scope)? {
+            BaselineEvidenceRead::Present(evidence) => base_evidence = evidence,
+            BaselineEvidenceRead::Incompatible(reason) => {
+                baseline = BaselineCompatibility::Incompatible;
+                baseline_reason = Some(format!(
+                    "binding records at base commit {base} do not parse: {reason}"
+                ));
+            }
+        }
+    }
     let baseline_view = BaselineView::for_rules(
         baseline,
         &base_snapshot.rules,
-        &base_scans,
-        &base_implementations,
-        &base_verifications,
+        &base_evidence.scans,
+        &base_evidence.implementations,
+        &base_evidence.verifications,
     );
 
     let collected = collect_findings(&FindingInput {
@@ -136,21 +146,23 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
     Ok(render::normalize(&envelope))
 }
 
-type BaselineEvidence = (
-    Vec<provenance_scanner::FileScan>,
-    Vec<provenance_core::VerificationBinding>,
-    Vec<provenance_core::ImplementationBinding>,
-);
+#[derive(Default)]
+struct BaselineEvidence {
+    scans: Vec<provenance_scanner::FileScan>,
+    verifications: Vec<provenance_core::VerificationBinding>,
+    implementations: Vec<provenance_core::ImplementationBinding>,
+}
+
+enum BaselineEvidenceRead {
+    Present(BaselineEvidence),
+    Incompatible(String),
+}
 
 fn read_baseline_evidence(
     repo: &Utf8Path,
     base: &str,
     scope: &ScopeId,
-    compatibility: BaselineCompatibility,
-) -> anyhow::Result<BaselineEvidence> {
-    if compatibility != BaselineCompatibility::Compatible {
-        return Ok((Vec::new(), Vec::new(), Vec::new()));
-    }
+) -> anyhow::Result<BaselineEvidenceRead> {
     let scans = git::revision_files(repo, base)?
         .into_iter()
         .map(|file| {
@@ -162,8 +174,16 @@ fn read_baseline_evidence(
             provenance_scanner::scan_file(&file.path, language, &file.content)
         })
         .collect();
-    let (verifications, implementations) = graph_snapshots::read_bindings(repo, base, scope)?;
-    Ok((scans, verifications, implementations))
+    let (verifications, implementations) =
+        match graph_snapshots::read_bindings(repo, base, scope, CommitRole::Base) {
+            Ok(bindings) => bindings,
+            Err(error) => return Ok(BaselineEvidenceRead::Incompatible(format!("{error:#}"))),
+        };
+    Ok(BaselineEvidenceRead::Present(BaselineEvidence {
+        scans,
+        verifications,
+        implementations,
+    }))
 }
 
 /// Read both committed snapshots. The head must parse: the report describes

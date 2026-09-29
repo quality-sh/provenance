@@ -30,6 +30,7 @@ struct BaselineEvidence {
     rules: BTreeSet<String>,
     implementations: BTreeSet<String>,
     verifications: BTreeSet<String>,
+    inactive_bindings: BTreeSet<String>,
 }
 
 impl BaselineView {
@@ -37,12 +38,10 @@ impl BaselineView {
         Self { evidence: None }
     }
 
-    /// The comparison label for one subject. A compatible baseline labels a
-    /// subject absent from the base `new` and one present at the base
-    /// `pre_existing`; any other baseline stays `uncertain`.
-    fn comparison(&self, subject_id: &str) -> Comparison {
+    /// Compare an inactive Rule binding with the same condition at the base.
+    fn inactive_binding_comparison(&self, subject_id: &str) -> Comparison {
         match &self.evidence {
-            Some(evidence) if !evidence.rules.contains(subject_id) => Comparison::New,
+            Some(evidence) if !evidence.inactive_bindings.contains(subject_id) => Comparison::New,
             Some(_) => Comparison::PreExisting,
             None => Comparison::Uncertain,
         }
@@ -100,6 +99,18 @@ impl BaselineView {
                         }
                     }
                 }
+                let inactive_bindings = base_rules
+                    .iter()
+                    .filter(|rule| {
+                        matches!(
+                            &rule.status,
+                            provenance_core::RuleStatus::Deprecated
+                                | provenance_core::RuleStatus::Archived
+                        ) && (implementation_rule_ids.contains(rule.id.as_str())
+                            || verification_rule_ids.contains(rule.id.as_str()))
+                    })
+                    .map(|rule| rule.id.as_str().to_string())
+                    .collect();
                 Self {
                     evidence: Some(BaselineEvidence {
                         rules: base_rules
@@ -108,6 +119,7 @@ impl BaselineView {
                             .collect(),
                         implementations: implementation_rule_ids,
                         verifications: verification_rule_ids,
+                        inactive_bindings,
                     }),
                 }
             }
@@ -211,7 +223,7 @@ fn inactive_current_findings(
                 SubjectKind::Rule,
                 &subject_id,
                 severity,
-                baseline.comparison(&subject_id),
+                baseline.inactive_binding_comparison(&subject_id),
                 BindingPresence::Present,
             );
             current.sites = sites;
