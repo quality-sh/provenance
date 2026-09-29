@@ -20,9 +20,8 @@ fn validate_submission_address(
         .submission_address(proposal_id)
         .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidUpdate, error))?;
     let matches_cycle = cycle_kind == proposal_kind && cycle_id == proposal_id_value;
-    let matches_address = addressed.is_none_or(|(kind, id)| {
-        kind == proposal_kind && id == proposal_id_value
-    });
+    let matches_address =
+        addressed.is_none_or(|(kind, id)| kind == proposal_kind && id == proposal_id_value);
     if matches_cycle && matches_address {
         return Ok(());
     }

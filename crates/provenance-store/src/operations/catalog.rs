@@ -53,8 +53,9 @@ pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 pub use binding::{
     ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, DiscussionWriteKind,
     EtagBinding, FixedBinding, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding,
-    PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestAdapter, RequestAdapterError,
-    RequestBinding, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
+    PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestAdapter,
+    RequestAdapterError, RequestBinding, ResponseAdapter, ResponseBinding, SelectorBinding,
+    TargetAction, TargetBinding,
 };
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,

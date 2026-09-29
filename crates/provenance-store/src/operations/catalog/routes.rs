@@ -3,8 +3,9 @@
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
     ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, FixedBinding, HandlerBinding,
-    HeaderBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration,
-    RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
+    HeaderBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
+    Registration, RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction,
+    TargetBinding,
 };
 use provenance_core::NodeType;
 use schemars::generate::Contract;
@@ -115,7 +116,10 @@ impl Definition {
     }
 
     fn fixed(mut self, field: &'static str, value: &'static str) -> Self {
-        self.registration.request.fixed.push(FixedBinding { field, value });
+        self.registration
+            .request
+            .fixed
+            .push(FixedBinding { field, value });
         self
     }
 
@@ -406,8 +410,8 @@ mod query;
 pub(super) mod request;
 #[macro_use]
 mod resource;
-mod review_subresources;
 mod resources;
+mod review_subresources;
 mod subresources;
 
 pub(super) fn definitions() -> Vec<Definition> {

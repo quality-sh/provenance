@@ -48,12 +48,7 @@ impl StateStore {
             })
             .collect();
         let pending = facts
-            .pending_submission(
-                self,
-                scope,
-                kind,
-                record_id,
-            )?
+            .pending_submission(self, scope, kind, record_id)?
             .map(|entry| {
                 let proposal = submissions
                     .iter()
@@ -108,8 +103,7 @@ impl StateStore {
             pending,
             current_acceptance,
             decisions: recorded,
-            withdrawn: facts
-                .withdrawn_submissions(kind, record_id),
+            withdrawn: facts.withdrawn_submissions(kind, record_id),
         })
     }
 }

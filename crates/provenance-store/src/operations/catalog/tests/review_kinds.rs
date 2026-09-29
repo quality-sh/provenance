@@ -17,20 +17,11 @@ fn every_review_kind_has_actions_history_and_evidence() {
     for (plural, _) in REVIEW_KINDS {
         for (method, suffix) in [
             (HttpMethod::Post, "/{id}/submit"),
-            (
-                HttpMethod::Post,
-                "/{id}/submissions/{proposal_id}/decide",
-            ),
-            (
-                HttpMethod::Post,
-                "/{id}/submissions/{proposal_id}/withdraw",
-            ),
+            (HttpMethod::Post, "/{id}/submissions/{proposal_id}/decide"),
+            (HttpMethod::Post, "/{id}/submissions/{proposal_id}/withdraw"),
             (HttpMethod::Get, "/{id}/history"),
             (HttpMethod::Get, "/{id}/history/{entry_id}"),
-            (
-                HttpMethod::Get,
-                "/{id}/history/{entry_id}/evidence/{side}",
-            ),
+            (HttpMethod::Get, "/{id}/history/{entry_id}/evidence/{side}"),
         ] {
             let expected = format!("/{plural}{suffix}");
             assert!(

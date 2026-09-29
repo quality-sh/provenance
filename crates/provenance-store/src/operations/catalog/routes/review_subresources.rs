@@ -3,10 +3,6 @@
 use super::*;
 use crate::operations::catalog as operation;
 
-pub(super) fn register(out: &mut Vec<Definition>) {
-    crate::cache::family_table::record_family_rows!(register_review_subresources, out);
-}
-
 fn routes_for_kind(
     out: &mut Vec<Definition>,
     plural: &'static str,
@@ -139,6 +135,10 @@ macro_rules! register_review_subresources {
             $out, [$($node)*], [$($route)*], [$($review)?]
         );)*)*
     };
+}
+
+pub(super) fn register(out: &mut Vec<Definition>) {
+    crate::cache::family_table::record_family_rows!(register_review_subresources, out);
 }
 
 fn limit() -> Parameter {

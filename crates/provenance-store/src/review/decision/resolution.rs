@@ -102,12 +102,8 @@ impl StateStore {
             .record_revision
             .as_ref()
             .expect("review_submission checks the binding");
-        let record = crate::cache::review_families::record(
-            self,
-            &input.scope_id,
-            kind,
-            &record_id,
-        )?;
+        let record =
+            crate::cache::review_families::record(self, &input.scope_id, kind, &record_id)?;
         let head = self
             .head(&record)?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;

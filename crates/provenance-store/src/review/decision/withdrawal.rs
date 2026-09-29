@@ -18,7 +18,10 @@ use provenance_macros::rule;
 
 impl StateStore {
     #[rule("rule_withdrawal_preserves_review_history")]
-    pub fn withdraw_record_review(&self, input: WithdrawRecordReview) -> anyhow::Result<CycleEntry> {
+    pub fn withdraw_record_review(
+        &self,
+        input: WithdrawRecordReview,
+    ) -> anyhow::Result<CycleEntry> {
         self.withdraw_record_review_addressed(None, input)
     }
 

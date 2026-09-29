@@ -145,13 +145,7 @@ macro_rules! review_actions_for_row {
         }],
         [$review:ident]
     ) => {
-        review_actions_for_kind(
-            $out,
-            $plural,
-            $singular,
-            $singular_id,
-            NodeType::$kind,
-        );
+        review_actions_for_kind($out, $plural, $singular, $singular_id, NodeType::$kind);
     };
     ($out:ident, [$($kind:tt)*], [$($route:tt)*], []) => {};
 }
