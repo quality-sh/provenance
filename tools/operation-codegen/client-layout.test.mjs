@@ -29,6 +29,11 @@ test('the Rust client root stays bounded with many operations', async () => {
   doc.paths = Object.fromEntries(Array.from({ length: 520 }, (_, i) => {
     const entry = structuredClone(route);
     entry.post.operationId = `operation${i}`;
+    entry.post.responses['200'].content['application/json'].schema.$ref = `#/components/schemas/Success${i}`;
+    entry.post.responses['400'].content['application/json'].schema.$ref = `#/components/schemas/Failure${i}`;
+    if (entry.post.requestBody) {
+      entry.post.requestBody.content['application/json'].schema.$ref = `#/components/schemas/Request${i}`;
+    }
     return [`/fixtures/operation-${i}`, entry];
   }));
   const files = templates.rustClientFiles(doc, compatibility);
