@@ -73,11 +73,13 @@ impl<K: ProjectionRow> Table<'_, K> {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 concat!(
-                    "SELECT {expression} AS record_bytes FROM {} ",
-                    "WHERE scope_id = ? AND {} IN ({marks})"
+                    "SELECT {expression} AS record_bytes FROM {table} ",
+                    "WHERE scope_id = ? AND {column} IN ({marks})"
                 ),
-                quoted(K::TABLE),
-                quoted(column)
+                expression = expression,
+                table = quoted(K::TABLE),
+                column = quoted(column),
+                marks = marks,
             );
             let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
             for value in chunk {
@@ -135,11 +137,14 @@ impl<K: ProjectionRow> Table<'_, K> {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 concat!(
-                    "SELECT id FROM {} WHERE scope_id = ? AND {} IN ({marks}){filter} ",
+                    "SELECT id FROM {table} WHERE scope_id = ? ",
+                    "AND {column} IN ({marks}){filter} ",
                     "ORDER BY id LIMIT ?"
                 ),
-                quoted(K::TABLE),
-                quoted(column)
+                table = quoted(K::TABLE),
+                column = quoted(column),
+                marks = marks,
+                filter = filter,
             );
             let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
             for value in chunk {
@@ -205,10 +210,12 @@ impl<K: ProjectionRow> Table<'_, K> {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
                 concat!(
-                    "SELECT {expression} AS record_bytes FROM {} ",
+                    "SELECT {expression} AS record_bytes FROM {table} ",
                     "WHERE scope_id = ? AND id IN ({marks})"
                 ),
-                quoted(K::TABLE)
+                expression = expression,
+                table = quoted(K::TABLE),
+                marks = marks,
             );
             let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
             for value in chunk {
