@@ -5,7 +5,8 @@ use crate::{
 };
 use provenance_core::{
     protocol::{TypedRequirementInput, TypedRuleInput, TypedSourceInput},
-    review::SaveOutcome, NodeType, SchemaVersion, SUPPORTED_SCHEMA_VERSION,
+    review::SaveOutcome,
+    NodeType, SchemaVersion, SUPPORTED_SCHEMA_VERSION,
 };
 
 fn document(source_name: &str, rule_statement: &str) -> TypedSpecInput {
