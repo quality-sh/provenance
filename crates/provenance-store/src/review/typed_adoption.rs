@@ -24,7 +24,7 @@ impl StateStore {
         &self,
         scope: &ScopeId,
         actor: &str,
-        desired: Vec<ReviewRecord>,
+        desired: &[ReviewRecord],
         publish: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         anyhow::ensure!(
@@ -47,7 +47,7 @@ impl StateStore {
     fn typed_changes(
         &self,
         scope: &ScopeId,
-        desired: Vec<ReviewRecord>,
+        desired: &[ReviewRecord],
     ) -> anyhow::Result<Vec<TypedChange>> {
         let current = review_records(&self.layout, scope)?;
         let mut changes = Vec::new();
