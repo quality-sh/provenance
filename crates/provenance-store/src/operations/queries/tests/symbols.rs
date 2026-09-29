@@ -214,7 +214,7 @@ async fn resolve_symbol_on_an_unscanned_extension_answers_bindings_only() {
         Some(store.root.clone()),
         &store.scope,
         ReadPolicy::default(),
-        resolve("docs/pay.md", None),
+        resolve_named("docs/pay.md", "pay"),
     )
     .await
     .unwrap();
@@ -230,7 +230,7 @@ async fn resolve_symbol_on_an_unscanned_extension_answers_bindings_only() {
                 "rule_id": "rule_overtime",
                 "role": "implementation",
                 "item_name": "pay",
-                "match_kind": "file"
+                "match_kind": "symbol"
             },
             {
                 "rule_id": "rule_overtime",
