@@ -9,10 +9,10 @@ error[E0277]: the trait bound `Side: FromStr` is not satisfied
             AnswerQuestionFailureFindingKind
             AnswerQuestionFailureFreshnessCause
             AnswerQuestionFailureInvalidInputReason
+            AnswerQuestionFailureNodeType
             AnswerQuestionFailureReconcileState
             AnswerQuestionFailureRuleNumber
             AnswerQuestionFailureStableId
-            AnswerQuestionFailureStampPolicy
           and $N others
 note: required by a bound in `core::str::<impl str>::parse`
  --> $RUST/core/src/str/mod.rs
