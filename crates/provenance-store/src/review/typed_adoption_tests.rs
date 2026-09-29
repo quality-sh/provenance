@@ -325,26 +325,13 @@ fn cascade_document(include_removable: bool) -> TypedSpecInput {
     input
 }
 
-#[test]
-fn typed_cascade_captures_each_changed_enrolled_kind() {
-    let (_temp, store, scope) = fixture();
-    store
-        .apply_typed_spec(&scope, cascade_document(true))
-        .unwrap();
-    let source = store.list_sources(&scope).unwrap()[0].id.clone();
-    let requirements = store.list_requirements(&scope).unwrap();
-    let kept = requirements
-        .iter()
-        .find(|record| record.statement.contains("stores"))
-        .unwrap()
-        .id
-        .clone();
-    let removed = requirements
-        .iter()
-        .find(|record| record.statement.contains("removes"))
-        .unwrap()
-        .id
-        .clone();
+fn seed_cascade_dependants(
+    store: &StateStore,
+    scope: &ScopeId,
+    source: StableId,
+    kept: StableId,
+    removed: StableId,
+) -> [(NodeType, &'static str); 4] {
     store
         .create_resolution(CreateResolutionInput {
             scope_id: scope.clone(),
@@ -424,10 +411,34 @@ fn typed_cascade_captures_each_changed_enrolled_kind() {
         (NodeType::Question, "question_cascade"),
     ];
     for (kind, id) in records {
-        enroll(&store, &scope, kind, &StableId::new(id).unwrap());
+        enroll(store, scope, kind, &StableId::new(id).unwrap());
     }
     let domain_id = StableId::new("domain_unchanged").unwrap();
-    enroll(&store, &scope, NodeType::Domain, &domain_id);
+    enroll(store, scope, NodeType::Domain, &domain_id);
+    records
+}
+
+#[test]
+fn typed_cascade_captures_each_changed_enrolled_kind() {
+    let (_temp, store, scope) = fixture();
+    store
+        .apply_typed_spec(&scope, cascade_document(true))
+        .unwrap();
+    let source = store.list_sources(&scope).unwrap()[0].id.clone();
+    let requirements = store.list_requirements(&scope).unwrap();
+    let kept = requirements
+        .iter()
+        .find(|record| record.statement.contains("stores"))
+        .unwrap()
+        .id
+        .clone();
+    let removed = requirements
+        .iter()
+        .find(|record| record.statement.contains("removes"))
+        .unwrap()
+        .id
+        .clone();
+    let records = seed_cascade_dependants(&store, &scope, source, kept, removed);
 
     store
         .apply_typed_spec(&scope, cascade_document(false))
