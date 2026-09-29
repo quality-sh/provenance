@@ -86,7 +86,10 @@ async fn invalid_requirement_edits_leave_statements_and_reviews_unchanged() {
         let mut request = fields;
         request["scope_id"] = json!("default");
         request["id"] = json!("req_one");
-        assert!(fixture.call("update-requirement-native", request).await.is_err());
+        assert!(fixture
+            .call("update-requirement-native", request)
+            .await
+            .is_err());
         assert_eq!(
             fixture.store.list_requirements(&fixture.scope).unwrap(),
             before
