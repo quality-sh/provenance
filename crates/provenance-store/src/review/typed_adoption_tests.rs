@@ -100,27 +100,32 @@ fn enroll(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
         .collect::<Vec<_>>()
         .join("\n");
     std::fs::write(path, format!("{lines}\n")).unwrap();
-    if head.is_some() {
-        return;
-    }
     let after = journal::snapshot(&store.layout, &record).unwrap();
+    let entry_id = journal::new_id();
+    let sequence = head.as_ref().map_or(1, |entry| entry.sequence + 1);
+    let predecessor = head.as_ref().map(|entry| entry.id.clone());
+    let revision = head
+        .as_ref()
+        .map_or_else(journal::new_id, |entry| entry.revision.clone());
+    let prior_revision = head.as_ref().map(|entry| entry.revision.clone());
+    let before = head.as_ref().map(|entry| entry.after.clone());
     let entry = ReviewEntry {
         schema_version: REVIEW_SCHEMA_VERSION,
         scope_id: scope.clone(),
         record_kind: kind,
         record_id: id.clone(),
-        id: journal::new_id(),
-        sequence: 1,
-        predecessor: None,
-        revision: journal::new_id(),
-        prior_revision: None,
-        before: None,
+        id: entry_id.clone(),
+        sequence,
+        predecessor,
+        revision,
+        prior_revision,
+        before,
         after,
         changed_fields: Vec::new(),
         actor: "reviewer".into(),
         request_id: journal::new_id(),
         intent_digest: "sha256:enrollment".into(),
-        etag: journal::etag(&record, None).unwrap(),
+        etag: journal::etag(&record, Some(&entry_id)).unwrap(),
         outcome: SaveOutcome::Enrolled,
         origin: None,
     };
@@ -209,7 +214,8 @@ fn typed_updates_capture_owned_enrolled_records() {
         let head = store.head(&record).unwrap().unwrap();
         assert_eq!(head.record_kind, kind);
         assert_eq!(head.record_id, id);
-        assert_eq!(head.sequence, 2);
+        let expected_sequence = if kind == NodeType::Requirement { 2 } else { 3 };
+        assert_eq!(head.sequence, expected_sequence);
         assert_eq!(head.actor, OWNER);
     }
 }
