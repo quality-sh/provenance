@@ -159,7 +159,7 @@ impl StateStore {
         &self,
         path: &Utf8Path,
         id: &StableId,
-        write: impl FnOnce(&StateStore) -> anyhow::Result<T>,
+        write: impl FnOnce(&Self) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         self.with_repository_publication(|| {
