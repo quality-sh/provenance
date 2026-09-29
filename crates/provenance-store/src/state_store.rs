@@ -300,10 +300,7 @@ impl StateStore {
         }
     }
 
-    pub(crate) fn staged(
-        layout: ProvenanceLayout,
-        stamp: Option<provenance_core::Stamp>,
-    ) -> Self {
+    pub(crate) fn staged(layout: ProvenanceLayout, stamp: Option<provenance_core::Stamp>) -> Self {
         let record_stamp = stamp.map_or(RecordStamp::Omit, RecordStamp::Fixed);
         Self {
             layout,
