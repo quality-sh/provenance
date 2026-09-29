@@ -86,7 +86,7 @@ fn rule_create_defaults_to_draft_and_accepts_explicit_active_status() {
         .args(["rules", "rule_overtime", "get", "--repo", repo])
         .assert()
         .success()
-        .stdout(contains("\"status\":\"draft\""));
+        .stdout(contains("\"status\": \"draft\""));
 
     provenance()
         .args([
@@ -105,7 +105,7 @@ fn rule_create_defaults_to_draft_and_accepts_explicit_active_status() {
         ])
         .assert()
         .success()
-        .stdout(contains("\"status\":\"active\""));
+        .stdout(contains("\"status\": \"active\""));
 }
 
 #[test]
