@@ -164,17 +164,37 @@ async fn answers() -> Vec<Value> {
     answers
 }
 
-// The pinned file holds record content. Stamp behavior and SQL retention have
-// dedicated tests; archive permalinks remain part of the content pinned here.
+// The pinned file holds record content. Stamp and review enrollment behavior
+// have dedicated tests; archive permalinks remain part of the content pinned here.
 fn normalize_record_stamps(value: &mut Value) {
     match value {
         Value::Object(record) => {
+            let kind = record
+                .get("node_type")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
             if matches!(
-                record.get("node_type").and_then(Value::as_str),
+                kind.as_deref(),
                 Some("source" | "requirement" | "rule" | "resolution")
             ) {
                 record.remove("created");
                 record.remove("updated");
+            }
+            if matches!(
+                kind.as_deref(),
+                Some(
+                    "source"
+                        | "requirement"
+                        | "resolution"
+                        | "rule"
+                        | "domain"
+                        | "boundary"
+                        | "topic"
+                        | "question"
+                )
+            ) && record.get("schema_version") == Some(&json!(3))
+            {
+                record.insert("schema_version".into(), json!(2));
             }
             for value in record.values_mut() {
                 normalize_record_stamps(value);
