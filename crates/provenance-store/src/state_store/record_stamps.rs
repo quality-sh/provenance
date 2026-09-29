@@ -2,7 +2,7 @@
 use camino::Utf8Path;
 use provenance_core::{
     review::{ReviewRecord, REVIEW_SCHEMA_VERSION},
-    Requirement, Resolution, Rule, SchemaVersion, Source, Stamp,
+    NodeType, Requirement, Resolution, Rule, SchemaVersion, Source, Stamp,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -13,6 +13,8 @@ use super::StateStore;
 pub trait GraphRecord:
     Clone + Into<ReviewRecord> + PartialEq + DeserializeOwned + Serialize + ReadBudget
 {
+    const KIND: NodeType;
+
     fn validate_write(&self, _previous: Option<&Self>) -> anyhow::Result<()> {
         Ok(())
     }
@@ -44,18 +46,22 @@ macro_rules! schema_version {
     };
 }
 impl GraphRecord for Source {
+    const KIND: NodeType = NodeType::Source;
     stamps!();
     schema_version!();
 }
 impl GraphRecord for Requirement {
+    const KIND: NodeType = NodeType::Requirement;
     stamps!();
     schema_version!();
 }
 impl GraphRecord for Resolution {
+    const KIND: NodeType = NodeType::Resolution;
     stamps!();
     schema_version!();
 }
 impl GraphRecord for Rule {
+    const KIND: NodeType = NodeType::Rule;
     stamps!();
     schema_version!();
     fn validate_write(&self, previous: Option<&Self>) -> anyhow::Result<()> {
@@ -70,15 +76,19 @@ impl GraphRecord for Rule {
     }
 }
 impl GraphRecord for provenance_core::Domain {
+    const KIND: NodeType = NodeType::Domain;
     schema_version!();
 }
 impl GraphRecord for provenance_core::Boundary {
+    const KIND: NodeType = NodeType::Boundary;
     schema_version!();
 }
 impl GraphRecord for provenance_core::Topic {
+    const KIND: NodeType = NodeType::Topic;
     schema_version!();
 }
 impl GraphRecord for provenance_core::Question {
+    const KIND: NodeType = NodeType::Question;
     schema_version!();
 }
 
@@ -142,7 +152,7 @@ impl StateStore {
         path: &Utf8Path,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
-        if !crate::review::guard::writer_allows_path(path) {
+        if T::KIND != NodeType::Requirement && !crate::review::guard::writer_allows_path(path) {
             return self.save_native_record(path, mutate);
         }
         self.mutate_graph_record_guarded(path, mutate)
@@ -176,7 +186,7 @@ impl StateStore {
         path: &Utf8Path,
         replacement: Vec<T>,
     ) -> anyhow::Result<()> {
-        if !crate::review::guard::writer_allows_path(path) {
+        if T::KIND != NodeType::Requirement && !crate::review::guard::writer_allows_path(path) {
             return self.replace_native_records(path, replacement);
         }
         self.replace_graph_records_guarded(path, replacement)
