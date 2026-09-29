@@ -14,6 +14,9 @@ graph before you move on. The graph holds state between turns, not the conversat
 
 ## Invariants
 
+Before you call code redundant or delete tests, run
+`provenance rules resolve-symbol --file <path>` on the file.
+
 1. **Land every decision as it resolves.** Never carry a resolved-but-unrecorded decision
    in conversation state.
 2. **Do not outrun context.** Stop before the map is too large to hand off accurately.
