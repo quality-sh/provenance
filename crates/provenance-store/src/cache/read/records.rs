@@ -327,12 +327,12 @@ impl<K: ProjectionRow> Table<'_, K> {
     }
 }
 
-pub(crate) struct ImplementationSymbolSite {
+pub struct ImplementationSymbolSite {
     pub rule_id: String,
     pub symbol: String,
 }
 
-pub(crate) struct VerificationSymbolSite {
+pub struct VerificationSymbolSite {
     pub rule_id: String,
     pub symbol: Option<String>,
     pub method: String,
