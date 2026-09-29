@@ -18,7 +18,11 @@ pub struct GuardedStore<'g> {
 
 impl Clone for StateStore {
     fn clone(&self) -> Self {
-        Self::new(self.layout.clone())
+        Self {
+            layout: self.layout.clone(),
+            access: Access::Lock,
+            record_stamp: self.record_stamp.clone(),
+        }
     }
 }
 
@@ -38,6 +42,7 @@ impl StateStore {
             store: Self {
                 layout: guard.layout().clone(),
                 access: Access::Held,
+                record_stamp: None,
             },
             _guard: PhantomData,
         }

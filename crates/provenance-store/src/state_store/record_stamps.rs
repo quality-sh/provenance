@@ -38,9 +38,6 @@ pub trait GraphRecord:
         let Some(fields) = value.as_object_mut() else {
             return Ok(());
         };
-        if !fields.contains_key("created") {
-            return Ok(());
-        }
         let previous_value = previous.map(serde_json::to_value).transpose()?;
         let created = previous_value
             .as_ref()
@@ -109,7 +106,10 @@ macro_rules! define_stored_review_records {
 crate::cache::family_table::record_family_rows!(define_stored_review_records);
 
 impl StateStore {
-    fn current_record_stamp(&self) -> anyhow::Result<Option<Stamp>> {
+    pub(crate) fn current_record_stamp(&self) -> anyhow::Result<Option<Stamp>> {
+        if let Some(stamp) = &self.record_stamp {
+            return Ok(stamp.clone());
+        }
         let output = std::process::Command::new("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(self.layout.root())

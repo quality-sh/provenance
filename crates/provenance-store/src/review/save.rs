@@ -125,8 +125,9 @@ impl StateStore {
                     anyhow::anyhow!("stale Requirement edit etag"),
                 ));
             }
+            let stamp = self.current_record_stamp()?;
             with_staged_state(&self.layout, false, |layout| {
-                let staged = Self::new(layout.clone());
+                let staged = Self::staged(layout.clone(), stamp);
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
