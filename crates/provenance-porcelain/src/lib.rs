@@ -1,3 +1,7 @@
+//! This crate is an implementation part of Provenance. The project does not provide compatibility
+//! shims for changes to its API. An API removal requires a minor version update. Use
+//! `provenance-sdk` for Rust.
+//!
 //! Shared human-facing semantics for Provenance interfaces.
 //!
 //! Get and check request and result types produce their JSON and MCP schemas here.

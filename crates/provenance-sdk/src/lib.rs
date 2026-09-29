@@ -1,5 +1,7 @@
 //! The thin Rust SDK facade.
 //!
+//! Use this crate as the supported Rust entry point. Use `provenance-cli` as the supported command-line entry point.
+//!
 //! Re-exports plus three frontend residues: verification orchestration,
 //! the macro projection, and environment settings. No materialization,
 //! no structural validation, no address logic, and no semantic layer

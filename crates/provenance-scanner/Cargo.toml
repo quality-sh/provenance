@@ -2,7 +2,7 @@
 name = "provenance-scanner"
 version.workspace = true
 edition.workspace = true
-description = "Source scanner for Provenance Rule implementation and verification bindings"
+description = "Internal part of Provenance for source scanning"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

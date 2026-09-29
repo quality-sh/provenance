@@ -1,3 +1,8 @@
+//! The `rule` and `verifies` attributes are supported Rust APIs. The other APIs in this crate are
+//! implementation parts of Provenance. The project does not provide compatibility shims for changes
+//! to the internal APIs. An API removal requires a minor version update. Use `provenance-sdk` for
+//! other Rust APIs.
+//!
 //! Marker attributes binding code to provenance rules, the derive that
 //! declares a record kind's reference fields, and the derive that stores a
 //! record kind as one projection table row.

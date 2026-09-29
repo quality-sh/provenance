@@ -2,7 +2,7 @@
 name = "provenance-macros"
 version.workspace = true
 edition.workspace = true
-description = "Attributes that bind Rust code and tests to Provenance Rules"
+description = "Supported Rule binding attributes and internal derives for Provenance"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

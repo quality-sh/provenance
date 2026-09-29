@@ -2,7 +2,7 @@
 name = "provenance-ste100"
 version.workspace = true
 edition.workspace = true
-description = "ASD-STE100 statement checks for Provenance Requirements and Rules"
+description = "Internal part of Provenance for ASD-STE100 statement checks"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
