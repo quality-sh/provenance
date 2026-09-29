@@ -112,7 +112,7 @@ impl StateStore {
     }
 }
 
-fn records_typed_occurrences(kind: NodeType) -> bool {
+const fn records_typed_occurrences(kind: NodeType) -> bool {
     matches!(kind, NodeType::Source | NodeType::Rule)
 }
 
