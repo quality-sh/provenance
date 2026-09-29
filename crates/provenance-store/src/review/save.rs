@@ -391,6 +391,11 @@ mod tests {
         .unwrap();
         let mut after = before.clone();
         after.name = "Policy B".into();
+        let path = crate::shards::sources_path(&store.layout, &after.scope_id);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut bytes = serde_json::to_vec(&after).unwrap();
+        bytes.push(b'\n');
+        std::fs::write(path, bytes).unwrap();
 
         let before = ReviewRecord::from(before);
         let after = ReviewRecord::from(after);
