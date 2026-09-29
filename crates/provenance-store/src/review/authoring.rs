@@ -70,6 +70,25 @@ impl StateStore {
         path: &Utf8Path,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
+        self.save_native_record_checked(path, None, mutate)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn save_native_record_with_etag<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        expected_etag: &str,
+        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        self.save_native_record_checked(path, Some(expected_etag), mutate)
+    }
+
+    fn save_native_record_checked<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        expected_etag: Option<&str>,
+        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         self.with_repository_publication(|| {
             with_staged_state(&self.layout, false, |layout| {
@@ -82,6 +101,19 @@ impl StateStore {
                         anyhow::anyhow!("native update cannot create a graph record")
                     })?;
                     let before: ReviewRecord = before.into();
+                    if let Some(expected_etag) = expected_etag {
+                        let head = staged.head(&before)?;
+                        let current_etag = head
+                            .as_ref()
+                            .map(|entry| entry.etag.clone())
+                            .unwrap_or(journal::etag(&before, None)?);
+                        if expected_etag != current_etag {
+                            return Err(SourceFailure::wrap(
+                                WriteFailure::RequirementEditConflict { current_etag },
+                                anyhow::anyhow!("stale native record edit etag"),
+                            ));
+                        }
+                    }
                     let after = staged.enroll_graph_record::<T>(&staged_path, before.id())?;
                     let after: ReviewRecord = after.clone().into();
                     staged.commit_native_occurrence(Some(&before), &after)?;
