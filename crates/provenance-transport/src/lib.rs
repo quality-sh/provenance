@@ -1,8 +1,7 @@
 #![allow(clippy::result_large_err)]
 
-//! This crate is an implementation part of Provenance. The project does not provide compatibility
-//! shims for changes to its API. An API removal requires a minor version update. Use
-//! `provenance-sdk` for Rust.
+//! This crate is an implementation part of Provenance. Provenance is pre-release, and this API can
+//! change without compatibility shims. Use `provenance-sdk` for Rust.
 //!
 //! Isolated adapters for the shared operation contract.
 //!
