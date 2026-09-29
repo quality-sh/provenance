@@ -1,4 +1,5 @@
 use super::{build_envelope, BuildInput};
+use crate::envelope::{Comparison, SiteRole};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId, SUPPORTED_SCHEMA_VERSION};
 use serde_json::{json, Value};
@@ -184,13 +185,13 @@ fn removed_implementation_site_is_reported() {
         })
         .expect("the removed implementation site must be reported");
 
-    assert_eq!(finding.comparison, super::Comparison::New);
+    assert_eq!(finding.comparison, Comparison::New);
     assert_eq!(finding.removed_sites.len(), 1);
     assert_eq!(finding.removed_sites[0].commit, super::CommitRole::Base);
     assert_eq!(finding.removed_sites[0].path, "src/lib.rs");
     assert_eq!(finding.removed_sites[0].line, 1);
     assert_eq!(
         finding.removed_sites[0].role,
-        Some(super::SiteRole::Implementation)
+        Some(SiteRole::Implementation)
     );
 }
