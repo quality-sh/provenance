@@ -165,7 +165,7 @@ impl StateStore {
         target: Option<StableId>,
     ) -> anyhow::Result<T>
     where
-        T: GraphRecord,
+        T: GraphRecord + RelationOwner,
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
@@ -181,7 +181,7 @@ impl StateStore {
                 }
                 let record = records
                     .iter_mut()
-                    .find(|record| record.id() == owner)
+                    .find(|record| RelationOwner::id(*record) == owner)
                     .ok_or_else(|| {
                         crate::write_error::SourceFailure::wrap(
                             crate::write_error::WriteFailure::MissingReference,
@@ -214,7 +214,7 @@ impl StateStore {
         target: StableId,
     ) -> anyhow::Result<T>
     where
-        T: GraphRecord,
+        T: GraphRecord + RelationOwner,
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
@@ -226,7 +226,7 @@ impl StateStore {
                 }
                 let record = records
                     .iter_mut()
-                    .find(|record| record.id() == owner)
+                    .find(|record| RelationOwner::id(*record) == owner)
                     .ok_or_else(|| {
                         crate::write_error::SourceFailure::wrap(
                             crate::write_error::WriteFailure::MissingReference,
@@ -262,7 +262,7 @@ impl StateStore {
         target: &StableId,
     ) -> anyhow::Result<T>
     where
-        T: GraphRecord,
+        T: GraphRecord + RelationOwner,
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
@@ -270,7 +270,7 @@ impl StateStore {
             self.mutate_graph_record(&path, |records: &mut Vec<T>| {
                 let position = records
                     .iter()
-                    .position(|record| record.id() == owner)
+                    .position(|record| RelationOwner::id(record) == owner)
                     .ok_or_else(|| {
                         crate::write_error::SourceFailure::wrap(
                             crate::write_error::WriteFailure::MissingReference,
