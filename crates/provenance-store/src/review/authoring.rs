@@ -428,13 +428,15 @@ fn native_record_is_closed(
     id: &StableId,
 ) -> anyhow::Result<bool> {
     let contents = std::fs::read_to_string(path)?;
-    let value = contents
-        .lines()
-        .map(serde_json::from_str::<serde_json::Value>)
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .find(|value| value["id"].as_str() == Some(id.as_str()))
-        .ok_or_else(|| anyhow::anyhow!("updated graph record is missing"))?;
+    let mut matched = None;
+    for line in contents.lines() {
+        let value: serde_json::Value = serde_json::from_str(line)?;
+        if value["id"].as_str() == Some(id.as_str()) {
+            matched = Some(value);
+            break;
+        }
+    }
+    let value = matched.ok_or_else(|| anyhow::anyhow!("updated graph record is missing"))?;
     Ok(provenance_core::review::ReviewRecord::deserialize_closed(kind, &value).is_ok())
 }
 
