@@ -61,7 +61,7 @@ impl Replacement {
             .collect::<Vec<_>>();
         desired.extend(store.list_domains(scope)?.into_iter().map(Into::into));
         self.cascade.extend_review_records(&mut desired);
-        store.publish_typed_spec(scope, &result.declared_by, desired, |store| {
+        store.publish_typed_spec(scope, &result.declared_by, &desired, |store| {
             store
                 .replace_graph_records(&shards::sources_path(&store.layout, scope), self.sources)?;
             crate::test_probes::at("typed_spec_sources_published")?;
