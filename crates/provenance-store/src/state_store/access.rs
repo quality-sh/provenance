@@ -2,7 +2,7 @@ use super::{Access, StateStore};
 use crate::layout::ProvenanceLayout;
 use crate::publication::{with_repository_publication, PublicationGuard};
 use camino::Utf8Path;
-use provenance_macros::rule;
+use provenance_macros::{rule, verifies};
 use std::marker::PhantomData;
 
 mod guarded_readers;
@@ -11,6 +11,8 @@ mod guarded_readers;
 mod tests;
 
 /// A read-only store that borrows its repository publication guard.
+#[verifies("rule_store_under_guard_takes_no_second_lock", construction)]
+#[verifies("rule_guarded_reads_use_guard_repository", construction)]
 pub struct GuardedStore<'g> {
     store: StateStore,
     _guard: PhantomData<&'g PublicationGuard>,
