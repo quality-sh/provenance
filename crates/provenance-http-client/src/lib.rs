@@ -1,6 +1,5 @@
-//! This crate is an implementation part of Provenance. The project does not provide compatibility
-//! shims for changes to its API. An API removal requires a minor version update. Use
-//! `provenance-sdk` for Rust.
+//! This crate is an implementation part of Provenance. Provenance is pre-release, and this API can
+//! change without compatibility shims. Use `provenance-sdk` for Rust.
 //!
 //! Connection-based client generated from the operation `OpenAPI` contract.
 // Pinned Typify emits these conditional forms and explicit default helpers.
