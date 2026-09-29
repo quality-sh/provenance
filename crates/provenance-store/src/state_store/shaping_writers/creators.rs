@@ -1,13 +1,9 @@
 use super::{artifact_links::sort_artifact_links, ensure_within_read_budget};
 use crate::{
     shards,
-    state_store::{
-        CreateBoundaryInput, CreateQuestionInput, CreateTopicInput, StateStore,
-    },
+    state_store::{CreateBoundaryInput, CreateQuestionInput, CreateTopicInput, StateStore},
 };
-use provenance_core::{
-    Boundary, NodeType, Question, Topic, SUPPORTED_SCHEMA_VERSION,
-};
+use provenance_core::{Boundary, NodeType, Question, Topic, SUPPORTED_SCHEMA_VERSION};
 
 impl StateStore {
     pub fn create_boundary(&self, input: CreateBoundaryInput) -> anyhow::Result<Boundary> {

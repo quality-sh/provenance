@@ -179,7 +179,8 @@ impl StateStore {
         if !crate::review::guard::writer_allows_path(path) {
             return self.replace_native_records(path, replacement);
         }
-        self.replace_graph_records_guarded(path, replacement).map(|_| ())
+        self.replace_graph_records_guarded(path, replacement)
+            .map(|_| ())
     }
 
     pub(crate) fn replace_graph_records_guarded<T: GraphRecord>(
