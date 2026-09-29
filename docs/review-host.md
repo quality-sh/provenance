@@ -116,7 +116,7 @@ request cannot replace a later result.
 
 The browser entry is `@quality-sh/provenance/client`. It pins the complete
 compatibility tuple from `/metadata` before it reads a resource. The application
-uses `getRequirementDocument` and collection search from the generated v2
+uses `getRequirementDocument` and collection search from the generated
 client. Its adapter supplies the renderer's document and search views. The
 composer checks the generated schema before it builds the application.
 The generated client calls an existing host; it does not

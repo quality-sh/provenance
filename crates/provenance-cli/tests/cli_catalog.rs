@@ -64,7 +64,7 @@ fn create_verification_run(repo: &str, rule: &str, key: &str) {
 }
 
 #[test]
-fn collection_commands_use_resource_addresses_and_v2_envelopes() {
+fn collection_commands_use_resource_addresses_and_response_envelopes() {
     let (_directory, repo) = init();
     let source = json!({
         "id":"source_catalog", "name":"Catalog source",

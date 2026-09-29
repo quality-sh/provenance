@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { hoistSharedFamilies, requestSideNames } from './contract-families.mjs';
 
 function responseAlternatives(schema, schemas) {
@@ -10,7 +11,7 @@ function responseAlternatives(schema, schemas) {
   return [schema];
 }
 
-function assertV2Envelope(name, schema, schemas, label) {
+function assertResponseEnvelope(name, schema, schemas, label) {
   const alternatives = responseAlternatives(schema, schemas);
   assert.ok(alternatives.length > 0, `${name}: ${label} has an envelope`);
   for (const alternative of alternatives) {
@@ -39,7 +40,7 @@ test('request envelopes are closed; response envelopes match Rust strictness', a
   const responseEnvelopes = [...referenced('200'), ...referenced('400')];
   assert.ok(responseEnvelopes.length > 0);
   for (const name of responseEnvelopes) {
-    assertV2Envelope(name, schemas[name], schemas, 'v2 envelope');
+    assertResponseEnvelope(name, schemas[name], schemas, 'response envelope');
   }
   // Nested request objects follow their own Rust structs: most deny unknown
   // fields, but a few (PostMessageInput, ThreadParent, SourceReference,
@@ -63,6 +64,16 @@ test('family hoisting keeps request and response shapes apart', async () => {
     }
   }
   for (const name of responseEnvelopes) {
-    assertV2Envelope(name, schemas[name], schemas, 'hoisted v2 envelope');
+    assertResponseEnvelope(name, schemas[name], schemas, 'hoisted response envelope');
   }
+});
+
+test('operation and schema names do not use version suffixes', () => {
+  const result = spawnSync('git', [
+    'grep', '-n', '-E', '(-v[0-9]+|[A-Za-z]V[0-9]+)', '--',
+    'crates/provenance-store/src/operations',
+  ], { encoding: 'utf8' });
+
+  assert.ok([0, 1].includes(result.status), result.stderr);
+  assert.equal(result.stdout, '');
 });

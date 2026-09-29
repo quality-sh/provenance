@@ -5,7 +5,7 @@ use serde_json::json;
 async fn relationship_operations_keep_required_relations_and_reject_cycles() {
     let fixture = Fixture::new();
     fixture.requirement().await;
-    fixture.call("create-requirement", json!({"scope_id":"default","id":"req_two","statement":"The system reads the record.","status":"active","depends_on":[],"supersedes":[]})).await.unwrap();
+    fixture.call("create-requirement-native", json!({"scope_id":"default","id":"req_two","statement":"The system reads the record.","status":"active","depends_on":[],"supersedes":[]})).await.unwrap();
     let linked = fixture
         .call(
             "add-requirement-depends-on",

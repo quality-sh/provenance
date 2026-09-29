@@ -274,7 +274,7 @@ fn get_rule_query() -> GetQuery {
 
 async fn get_rule_member(root: camino::Utf8PathBuf) -> serde_json::Value {
     catalog::invoke_with(
-        "get-rule-v2",
+        "get-rule",
         SDK_PROTOCOL_VERSION,
         json!({
             "context": {"repository": "test", "scope": "default"},

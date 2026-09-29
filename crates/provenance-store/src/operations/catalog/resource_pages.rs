@@ -1,6 +1,6 @@
 //! Revision-bound pages for resource collection routes.
 
-use super::v2_review_reads::ReadResult;
+use super::review_reads::ReadResult;
 use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::cache::read::payloads::{PayloadRow, ProposalPayloadRow};
 use crate::operations::reader::{self, Cursor, Position, ReadContext, PAGE_BYTES};
@@ -180,7 +180,7 @@ async fn verification_binding_page(
     let selector = (&request.rule, request.limit);
     let (cursor, position) = Cursor::open(
         ctx,
-        "page-verification-bindings-v2",
+        "page-verification-bindings",
         &selector,
         request.cursor.as_deref(),
     )?;
@@ -318,19 +318,19 @@ macro_rules! define_record_pages {
 
 crate::cache::record_families!(define_record_pages);
 fact_page_operation!(
-    PageProposalAssertionsV2,
-    "page-proposal-assertions-v2",
+    PageProposalAssertions,
+    "page-proposal-assertions",
     provenance_core::AssertionRecord
 );
 fact_page_operation!(
-    PageProposalDispositionsV2,
-    "page-proposal-dispositions-v2",
+    PageProposalDispositions,
+    "page-proposal-dispositions",
     provenance_core::DispositionRecord
 );
 
 graph_read_operation!(
-    pub PageVerificationBindingsV2,
-    "page-verification-bindings-v2",
+    pub PageVerificationBindings,
+    "page-verification-bindings",
     VerificationPageRequest,
     ReadResult<ResourcePage<provenance_core::VerificationBinding>>,
     &[409],

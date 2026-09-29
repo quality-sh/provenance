@@ -1,8 +1,8 @@
-// Grammar linter for the frozen v2 operation surface.
+// Grammar linter for the declared operation surface.
 //
 // Generation passes the live OpenAPI and MCP documents to this module. The
 // checks reject route shapes and wire schemas that violate
-// docs/api-contract-v2.md.
+// docs/api-contract.md.
 
 const METHODS = new Set(['GET', 'POST', 'PATCH']);
 const COLLECTIONS = new Set([

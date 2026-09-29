@@ -84,7 +84,7 @@ try {
   }
   await checks[family](clientModule, fixture);
   if (!process.argv.includes('--effect') && family === 'statements') {
-    run(['test', '--locked', '-p', 'provenance-http-client', '--test', 'v2_wire']);
+    run(['test', '--locked', '-p', 'provenance-http-client', '--test', 'wire']);
   }
   if (!process.argv.includes('--effect') && family === 'discussions') {
     run(

@@ -14,15 +14,18 @@ mod discussion_writes;
 mod discussions;
 mod drafts;
 pub use drafts::*;
+mod discussion_reads;
 mod entry;
 mod evidence;
 mod failures;
 mod ideation;
 mod invoke;
 mod records;
+mod requirement_review;
 mod resource_lists;
 mod resource_members;
 mod resource_pages;
+mod review_reads;
 #[cfg(feature = "schema")]
 mod routes;
 #[cfg(feature = "schema")]
@@ -36,16 +39,13 @@ mod shapes;
 mod statement;
 mod target_discussion_writes;
 mod updates;
-mod v2_discussion_reads;
-mod v2_review;
-mod v2_review_reads;
 mod verification_resources;
 pub use discussion_discovery::*;
+pub use discussion_reads::*;
 pub use discussion_writes::*;
+pub use requirement_review::*;
+pub use review_reads::*;
 pub use updates::*;
-pub use v2_discussion_reads::*;
-pub use v2_review::*;
-pub use v2_review_reads::*;
 
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 #[cfg(feature = "schema")]
@@ -60,7 +60,7 @@ pub use context::{
     PreparedRepository, PreparedScope, RequestedContext,
 };
 pub use creation::{
-    AddSourceReference, CreateRequirement, CreateResolution, CreateRule, CreateSource,
+    AddSourceReference, CreateRequirementNative, CreateResolution, CreateRule, CreateSource,
     PostThreadMessage,
 };
 pub use discussions::{ListMessages, ListThreads};
@@ -88,7 +88,7 @@ pub use schema::{
     ResponseKind,
 };
 pub use statement::CheckStatement;
-pub use target_discussion_writes::WriteTargetDiscussionV2;
+pub use target_discussion_writes::WriteTargetDiscussion;
 
 #[cfg(test)]
 mod tests;

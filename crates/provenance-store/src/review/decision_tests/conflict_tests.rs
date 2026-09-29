@@ -36,7 +36,7 @@ fn repeated_decision_reports_the_current_review_identity() {
 #[test]
 fn stale_decision_reports_the_pending_submission_and_current_revision() {
     let (_temp, store, _, proposal) = enrolled();
-    let current_revision = edit(&store, "edit-2", "Statement v2");
+    let current_revision = edit(&store, "edit-2", "Revised statement");
 
     let error = decide(
         &store,
@@ -83,7 +83,7 @@ fn withdrawn_decision_reports_the_current_review_identity() {
 #[test]
 fn stale_and_terminal_withdrawals_are_review_conflicts() {
     let (_temp, store, _, proposal) = enrolled();
-    let current_revision = edit(&store, "edit-2", "Statement v2");
+    let current_revision = edit(&store, "edit-2", "Revised statement");
     let stale = WriteError(withdraw(&store, &proposal).unwrap_err());
     let current_proposal = state(&store).pending.unwrap().proposal_id;
     assert!(matches!(
@@ -112,7 +112,7 @@ fn stale_and_terminal_withdrawals_are_review_conflicts() {
 #[test]
 fn superseded_submission_allows_a_new_review_cycle() {
     let (_temp, store, _, proposal_1) = enrolled();
-    let revision_2 = edit(&store, "edit-2", "Statement v2");
+    let revision_2 = edit(&store, "edit-2", "Revised statement");
 
     let proposal_2 = state(&store).pending.unwrap().proposal_id;
     for error in [
@@ -151,7 +151,7 @@ fn stale_and_repeated_submissions_are_typed_conflicts() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let revision_1 = edit(&store, "edit-1", "Statement v1");
-    let revision_2 = edit(&store, "edit-2", "Statement v2");
+    let revision_2 = edit(&store, "edit-2", "Revised statement");
     let stale = WriteError(submit(&store, None, Some(revision_1.as_str())).unwrap_err());
     assert_eq!(stale.status(), 409);
     let submission = automatic_submission(&store);
@@ -189,7 +189,7 @@ fn server_creates_unique_identities_across_review_cycles() {
         &json!({}),
     )
     .unwrap();
-    edit(&store, "edit-2", "Statement v2");
+    edit(&store, "edit-2", "Revised statement");
     let submission_2 = automatic_submission(&store);
     let decision_2 = decide(
         &store,

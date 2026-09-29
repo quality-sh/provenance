@@ -16,7 +16,7 @@ const routes: ReadonlyArray<[RegExp, string]> = [
   [/^\/verification-runs\/[^/]+\/complete-verification$/, "complete-verification"],
 ];
 
-/** Records SDK orchestration over the v2 HTTP resource surface. */
+/** Records SDK orchestration over the HTTP resource surface. */
 export async function recordingHost(responses: Readonly<Record<string, unknown>> = {}): Promise<{
   settings: ConfigureOptions;
   requests: () => RecordedRequest[];

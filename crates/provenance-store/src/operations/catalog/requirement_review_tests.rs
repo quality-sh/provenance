@@ -89,14 +89,14 @@ async fn create_response_failure_refuses_before_publication() {
         anyhow::bail!("injected response construction failure")
     });
 
-    let result = CreateRequirementV2::run(context, create_request("create_a")).await;
+    let result = CreateRequirementResource::run(context, create_request("create_a")).await;
     crate::test_probes::disarm("requirement_resource_snapshot");
 
     assert!(result.is_err());
     assert!(store.list_requirements(&scope).unwrap().is_empty());
     assert!(store.review_entries(&scope).unwrap().is_empty());
 
-    let committed = CreateRequirementV2::run(
+    let committed = CreateRequirementResource::run(
         PreparedContext::for_scope(PreparedScope {
             root: store.layout.root().to_owned(),
             scope: scope.clone(),
@@ -117,14 +117,15 @@ async fn create_response_failure_refuses_before_publication() {
 #[tokio::test]
 async fn content_update_replaces_or_opens_the_current_submission() {
     let (_temp, context, store, scope) = fixture();
-    let created = CreateRequirementV2::run(context.clone(), create_request("create_a"))
+    let created = CreateRequirementResource::run(context.clone(), create_request("create_a"))
         .await
         .unwrap();
     let first = created.decision.pending.unwrap();
 
-    let updated = UpdateRequirementV2::run(context.clone(), update_request(&store, "update_a"))
-        .await
-        .unwrap();
+    let updated =
+        UpdateRequirementResource::run(context.clone(), update_request(&store, "update_a"))
+            .await
+            .unwrap();
     let second = updated.decision.pending.unwrap();
     assert_ne!(second.proposal_id, first.proposal_id);
     assert_ne!(second.revision, first.revision);
@@ -143,7 +144,7 @@ async fn content_update_replaces_or_opens_the_current_submission() {
         .requirement_edit_state(&scope, &StableId::new("req_a").unwrap())
         .unwrap()
         .etag;
-    let third = UpdateRequirementV2::run(
+    let third = UpdateRequirementResource::run(
         context,
         update_request_with_etag("update_b", &etag, "New text."),
     )
@@ -166,7 +167,7 @@ async fn content_update_replaces_or_opens_the_current_submission() {
 #[tokio::test]
 async fn lifecycle_update_keeps_the_current_submission() {
     let (_temp, context, store, _scope) = fixture();
-    let created = CreateRequirementV2::run(context.clone(), create_request("create_a"))
+    let created = CreateRequirementResource::run(context.clone(), create_request("create_a"))
         .await
         .unwrap();
     let pending = created.decision.pending.unwrap();
@@ -178,7 +179,9 @@ async fn lifecycle_update_keeps_the_current_submission() {
     }))
     .unwrap();
 
-    let updated = UpdateRequirementV2::run(context, request).await.unwrap();
+    let updated = UpdateRequirementResource::run(context, request)
+        .await
+        .unwrap();
 
     assert_eq!(updated.decision.pending.unwrap(), pending);
     assert_eq!(updated.edit.revision.unwrap(), pending.revision);
@@ -194,7 +197,7 @@ async fn lifecycle_update_keeps_the_current_submission() {
 #[tokio::test]
 async fn revision_keeps_the_prior_submission_and_feedback_readable() {
     let (_temp, context, store, scope) = fixture();
-    let created = CreateRequirementV2::run(context.clone(), create_request("create_a"))
+    let created = CreateRequirementResource::run(context.clone(), create_request("create_a"))
         .await
         .unwrap();
     let proposal = created.decision.pending.unwrap().proposal_id;
@@ -221,7 +224,7 @@ async fn revision_keeps_the_prior_submission_and_feedback_readable() {
         )
         .unwrap();
 
-    let revised = UpdateRequirementV2::run(context, update_request(&store, "update_a"))
+    let revised = UpdateRequirementResource::run(context, update_request(&store, "update_a"))
         .await
         .unwrap();
 
@@ -260,7 +263,7 @@ async fn update_response_failure_refuses_before_publication() {
         anyhow::bail!("injected response construction failure")
     });
 
-    let result = UpdateRequirementV2::run(context, request).await;
+    let result = UpdateRequirementResource::run(context, request).await;
     crate::test_probes::disarm("requirement_resource_snapshot");
 
     assert!(result.is_err());
@@ -268,7 +271,7 @@ async fn update_response_failure_refuses_before_publication() {
     assert_eq!(record.description, None);
     assert_eq!(store.review_entries(&scope).unwrap(), receipts_before);
 
-    let committed = UpdateRequirementV2::run(
+    let committed = UpdateRequirementResource::run(
         PreparedContext::for_scope(PreparedScope {
             root: store.layout.root().to_owned(),
             scope: scope.clone(),
@@ -288,26 +291,26 @@ async fn update_response_failure_refuses_before_publication() {
 #[tokio::test]
 async fn replay_precedes_stale_precondition_and_returns_current_state() {
     let (_temp, context, store, scope) = fixture();
-    CreateRequirementV2::run(context.clone(), create_request("create_a"))
+    CreateRequirementResource::run(context.clone(), create_request("create_a"))
         .await
         .unwrap();
     let id = StableId::new("req_a").unwrap();
     let first_etag = store.requirement_edit_state(&scope, &id).unwrap().etag;
-    UpdateRequirementV2::run(
+    UpdateRequirementResource::run(
         context.clone(),
         update_request_with_etag("update_a", &first_etag, "First text."),
     )
     .await
     .unwrap();
     let second_etag = store.requirement_edit_state(&scope, &id).unwrap().etag;
-    UpdateRequirementV2::run(
+    UpdateRequirementResource::run(
         context.clone(),
         update_request_with_etag("update_b", &second_etag, "Second text."),
     )
     .await
     .unwrap();
 
-    let replay = UpdateRequirementV2::run(
+    let replay = UpdateRequirementResource::run(
         context,
         update_request_with_etag("update_a", &first_etag, "First text."),
     )

@@ -62,7 +62,11 @@ async fn all_four_records_keep_created_and_update_only_for_changed_content() {
     ] {
         assert_eq!(before["created"]["commit"], first, "{kind}");
         assert_eq!(before["updated"], before["created"], "{kind}");
-        let operation = format!("update-{kind}");
+        let operation = if kind == "requirement" {
+            "update-requirement-native".to_owned()
+        } else {
+            format!("update-{kind}")
+        };
         let mut request = json!({"scope_id":"default","id":before["id"]});
         let unchanged = fixture.call(&operation, request.clone()).await.unwrap();
         assert_eq!(unchanged, before, "no-op {kind}");

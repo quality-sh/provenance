@@ -18,8 +18,8 @@ pub struct WriteDiscussionRequest {
 }
 
 scoped_write_operation!(
-    pub WriteDiscussionV2,
-    "write-discussion-v2",
+    pub WriteDiscussion,
+    "write-discussion",
     WriteDiscussionRequest,
     DiscussionEntry,
     &[409],

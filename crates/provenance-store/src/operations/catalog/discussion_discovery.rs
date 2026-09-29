@@ -1,12 +1,12 @@
-use super::{shapes::graph_read_operation, v2_review_reads::ReadResult, ExecutionNeed};
+use super::{review_reads::ReadResult, shapes::graph_read_operation, ExecutionNeed};
 use provenance_core::threads::{
     DiscussionConversationQuery, DiscussionConversationResult, DiscussionListQuery,
     DiscussionResultPage, DiscussionSummary,
 };
 
 graph_read_operation!(
-    pub ListDiscussionsV2,
-    "discussion-list-v2",
+    pub ListDiscussions,
+    "discussion-list",
     DiscussionListQuery,
     ReadResult<DiscussionResultPage<DiscussionSummary>>,
     &[409],
@@ -36,8 +36,8 @@ graph_read_operation!(
 );
 
 graph_read_operation!(
-    pub GetDiscussionConversationV2,
-    "discussion-conversation-v2",
+    pub GetDiscussionConversation,
+    "discussion-conversation",
     DiscussionConversationQuery,
     ReadResult<DiscussionConversationResult>,
     &[409],

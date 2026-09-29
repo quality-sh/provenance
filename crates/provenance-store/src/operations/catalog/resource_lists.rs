@@ -42,7 +42,7 @@ macro_rules! define_record_lists {
 crate::cache::record_families!(define_record_lists);
 
 scoped_list!(
-    ListVerificationRunsV2,
+    ListVerificationRuns,
     "list-verification-runs",
     VerificationRun,
     list_verification_runs

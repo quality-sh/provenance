@@ -4,7 +4,7 @@ use provenance_core::protocol::failure::OperationError;
 use provenance_core::threads::DiscussionStatus;
 use provenance_store::{
     layout::ProvenanceLayout,
-    operations::catalog::{invoke_typed, PreparedContext, PreparedScope, WriteTargetDiscussionV2},
+    operations::catalog::{invoke_typed, PreparedContext, PreparedScope, WriteTargetDiscussion},
     review::{DiscussionAction, TargetDiscussionWrite, WriteDiscussion},
     state_store::StateStore,
     write_error::{WriteError, WriteFailure},
@@ -273,14 +273,14 @@ async fn catalog_operation_uses_the_target_write_path() {
     let (temp, store) = fixture();
     let started = store.write_discussion(start("a")).unwrap();
     assert!(provenance_store::operations::catalog::contains(
-        "write-target-discussion-v2"
+        "write-target-discussion"
     ));
     let context = PreparedContext::for_scope(PreparedScope {
         root: camino::Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap(),
         scope: scope(),
         requested_target: "selected".into(),
     });
-    let receipt = invoke_typed::<WriteTargetDiscussionV2>(context, reply("catalog", &started))
+    let receipt = invoke_typed::<WriteTargetDiscussion>(context, reply("catalog", &started))
         .await
         .unwrap();
     assert_eq!(receipt.version, 2);
@@ -305,7 +305,7 @@ async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
     );
     mismatched.scope_id = provenance_core::ScopeId::new("other").unwrap();
 
-    let error = invoke_typed::<WriteTargetDiscussionV2>(context, mismatched)
+    let error = invoke_typed::<WriteTargetDiscussion>(context, mismatched)
         .await
         .unwrap_err();
     let OperationError::Handler(error) = error else {

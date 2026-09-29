@@ -38,7 +38,7 @@ fn history_and_evidence(out: &mut Vec<Definition>) {
         ],
     ));
     out.push(
-        backed::<operation::ReviewHistoryV2>(
+        backed::<operation::ReviewHistory>(
             "list-requirement-history",
             "listRequirementHistory",
             HttpMethod::Get,
@@ -52,7 +52,7 @@ fn history_and_evidence(out: &mut Vec<Definition>) {
         .pagination(),
     );
     out.push(
-        backed::<operation::ReviewHistoryEntryV2>(
+        backed::<operation::ReviewHistoryEntry>(
             "get-requirement-history-entry",
             "getRequirementHistoryEntry",
             HttpMethod::Get,
@@ -64,7 +64,7 @@ fn history_and_evidence(out: &mut Vec<Definition>) {
         .path_field("id", "requirement_id"),
     );
     out.push(
-        backed::<operation::ReviewEvidenceV2>(
+        backed::<operation::ReviewEvidence>(
             "get-requirement-history-evidence",
             "getRequirementHistoryEvidence",
             HttpMethod::Get,
@@ -127,7 +127,7 @@ fn proposal_facts(out: &mut Vec<Definition>) {
         .path_field("id", "proposal_id")
         .scope("scope_id"),
     );
-    proposal_fact::<pages::PageProposalAssertionsV2, members::GetProposalAssertionV2>(
+    proposal_fact::<pages::PageProposalAssertions, members::GetProposalAssertion>(
         out,
         "assertions",
         "assertion",
@@ -135,7 +135,7 @@ fn proposal_facts(out: &mut Vec<Definition>) {
         "listProposalAssertions",
         "getProposalAssertion",
     );
-    proposal_fact::<pages::PageProposalDispositionsV2, members::GetProposalDispositionV2>(
+    proposal_fact::<pages::PageProposalDispositions, members::GetProposalDisposition>(
         out,
         "dispositions",
         "disposition",
@@ -186,7 +186,7 @@ fn proposal_fact<L: Operation, G: Operation>(
 
 fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind: &'static str) {
     let base = leaked(format!("/{plural}/{{id}}/discussions"));
-    let list = discussion_route::<operation::ReviewDiscussionsV2>(
+    let list = discussion_route::<operation::ReviewDiscussions>(
         plural,
         kind,
         "list-discussions",
@@ -201,7 +201,7 @@ fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind: &'static s
     .pagination();
     out.push(list);
     out.push(
-        discussion_route::<operation::WriteDiscussionV2>(
+        discussion_route::<operation::WriteDiscussion>(
             plural,
             kind,
             "create-discussion",
@@ -222,7 +222,7 @@ fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind: &'static s
 
     let member = leaked(format!("{base}/{{discussion_id}}"));
     out.push(
-        discussion_route::<operation::ReviewDiscussionV2>(
+        discussion_route::<operation::ReviewDiscussion>(
             plural,
             kind,
             "get-discussion",
@@ -237,7 +237,7 @@ fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind: &'static s
         .with_etag("/discussion/version", true),
     );
     out.push(
-        discussion_route::<operation::WriteDiscussionV2>(
+        discussion_route::<operation::WriteDiscussion>(
             plural,
             kind,
             "update-discussion",
@@ -268,7 +268,7 @@ fn discussion_messages(
 ) {
     let messages = leaked(format!("{member}/messages"));
     out.push(
-        discussion_route::<operation::ReviewDiscussionMessagesV2>(
+        discussion_route::<operation::ReviewDiscussionMessages>(
             plural,
             kind,
             "list-discussion-messages",
@@ -292,7 +292,7 @@ fn discussion_messages(
         .pagination(),
     );
     out.push(
-        discussion_route::<operation::WriteDiscussionV2>(
+        discussion_route::<operation::WriteDiscussion>(
             plural,
             kind,
             "create-discussion-message",
@@ -313,7 +313,7 @@ fn discussion_messages(
     );
     let message = leaked(format!("{messages}/{{message_id}}"));
     out.push(
-        discussion_route::<operation::ReviewDiscussionMessageV2>(
+        discussion_route::<operation::ReviewDiscussionMessage>(
             plural,
             kind,
             "get-discussion-message",
@@ -341,7 +341,7 @@ fn legacy_messages(out: &mut Vec<Definition>, plural: &'static str, kind: &'stat
         "/{plural}/{{id}}/discussion-containers/{{container_id}}/legacy-messages"
     ));
     out.push(
-        discussion_route::<operation::ReviewDiscussionMessagesV2>(
+        discussion_route::<operation::ReviewDiscussionMessages>(
             plural,
             kind,
             "list-legacy-message",
@@ -366,7 +366,7 @@ fn legacy_messages(out: &mut Vec<Definition>, plural: &'static str, kind: &'stat
     );
     let member_path = leaked(format!("{list_path}/{{message_id}}"));
     out.push(
-        discussion_route::<operation::ReviewDiscussionMessageV2>(
+        discussion_route::<operation::ReviewDiscussionMessage>(
             plural,
             kind,
             "get-legacy-message",

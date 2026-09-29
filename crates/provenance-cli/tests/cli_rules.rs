@@ -55,7 +55,7 @@ fn repo_with_rule() -> tempfile::TempDir {
 }
 
 #[test]
-fn rule_list_and_member_read_use_v2_envelopes() {
+fn rule_list_and_member_read_use_response_envelopes() {
     let tmp = repo_with_rule();
     let repo = tmp.path().to_str().unwrap();
     provenance()

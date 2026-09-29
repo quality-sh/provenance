@@ -9,7 +9,7 @@ use provenance_core::{
 use provenance_macros::verifies;
 use provenance_store::{
     operations::{
-        catalog::{ListDiscussionsV2, Operation, PreparedContext, PreparedRead},
+        catalog::{ListDiscussions, Operation, PreparedContext, PreparedRead},
         read_policy::ReadPolicy,
     },
     review::{read_discussion_conversation, read_discussion_list},
@@ -335,15 +335,11 @@ async fn catalog_operation_applies_grants_before_paging() {
     });
     let mut query = list(None, 1);
     query.allowed_parent_kinds = vec![NodeType::Source];
-    let denied = ListDiscussionsV2::run(context.clone(), query)
-        .await
-        .unwrap();
+    let denied = ListDiscussions::run(context.clone(), query).await.unwrap();
     assert!(denied.result.entries.is_empty());
     assert!(!denied.result.has_more);
     assert!(denied.result.next_cursor.is_none());
-    let allowed = ListDiscussionsV2::run(context, list(None, 1))
-        .await
-        .unwrap();
+    let allowed = ListDiscussions::run(context, list(None, 1)).await.unwrap();
     assert_eq!(allowed.result.entries.len(), 1);
     assert!(allowed.result.has_more);
 }

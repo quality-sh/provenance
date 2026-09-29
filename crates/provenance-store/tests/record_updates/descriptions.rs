@@ -6,7 +6,7 @@ async fn requirement_statement_edit_raises_existing_reviews_and_keeps_relations(
     let fixture = Fixture::new();
     fixture.requirement().await;
     fixture.call("create-rule", json!({"scope_id":"default","id":"rule_one","statement":"The system saves the record.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]})).await.unwrap();
-    let updated = fixture.call("update-requirement", json!({"scope_id":"default","id":"req_one","statement":"The system reads the record.","description":"Details"})).await.unwrap();
+    let updated = fixture.call("update-requirement-native", json!({"scope_id":"default","id":"req_one","statement":"The system reads the record.","description":"Details"})).await.unwrap();
     assert_eq!(updated["statement"], "The system reads the record.");
     let reviews = fixture
         .store
@@ -86,7 +86,10 @@ async fn invalid_requirement_edits_leave_statements_and_reviews_unchanged() {
         let mut request = fields;
         request["scope_id"] = json!("default");
         request["id"] = json!("req_one");
-        assert!(fixture.call("update-requirement", request).await.is_err());
+        assert!(fixture
+            .call("update-requirement-native", request)
+            .await
+            .is_err());
         assert_eq!(
             fixture.store.list_requirements(&fixture.scope).unwrap(),
             before
@@ -109,7 +112,10 @@ async fn owned_requirement_and_rule_updates_preserve_declaration_identity() {
     let requirement =
         serde_json::to_value(&fixture.store.list_requirements(&fixture.scope).unwrap()[0]).unwrap();
     let rule = serde_json::to_value(&fixture.store.list_rules(&fixture.scope).unwrap()[0]).unwrap();
-    for (operation, before) in [("update-requirement", requirement), ("update-rule", rule)] {
+    for (operation, before) in [
+        ("update-requirement-native", requirement),
+        ("update-rule", rule),
+    ] {
         for owner in [None, Some("spec://other")] {
             let mut request =
                 json!({"scope_id":"default","id":before["id"],"description":"Changed"});
@@ -122,7 +128,7 @@ async fn owned_requirement_and_rule_updates_preserve_declaration_identity() {
         let after = fixture.call(operation, json!({"scope_id":"default","id":before["id"],"declared_by":"spec://fixture","description":"Changed"})).await.unwrap();
         let mut expected = before;
         expected["description"] = json!("Changed");
-        if operation == "update-requirement" {
+        if operation == "update-requirement-native" {
             expected["schema_version"] = json!(3);
         }
 
@@ -142,7 +148,7 @@ async fn metadata_only_and_unchanged_statements_do_not_create_reviews() {
     let fixture = Fixture::new();
     fixture.requirement().await;
     fixture.call("create-rule", json!({"scope_id":"default","id":"rule_one","statement":"The system saves the record.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]})).await.unwrap();
-    fixture.call("update-requirement", json!({"scope_id":"default","id":"req_one","description":"Details","statement":"The system saves the record."})).await.unwrap();
+    fixture.call("update-requirement-native", json!({"scope_id":"default","id":"req_one","description":"Details","statement":"The system saves the record."})).await.unwrap();
     assert!(fixture
         .store
         .open_requirement_reviews(&fixture.scope)

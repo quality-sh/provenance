@@ -3,8 +3,8 @@ use crate::review;
 use provenance_core::threads::DiscussionEntry;
 
 scoped_write_operation!(
-    pub WriteTargetDiscussionV2,
-    "write-target-discussion-v2",
+    pub WriteTargetDiscussion,
+    "write-target-discussion",
     review::TargetDiscussionWrite,
     DiscussionEntry,
     &[409],

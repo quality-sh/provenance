@@ -26,7 +26,7 @@ impl ContextResolver for Resolver {
 async fn discussion_write_scope_mismatch_keeps_its_safe_status() {
     let directory = tempfile::tempdir().unwrap();
     let error = invoke_with(
-        "write-discussion-v2",
+        "write-discussion",
         SDK_PROTOCOL_VERSION,
         json!({
             "context": {"repository": "fixture", "scope": "selected"},
@@ -98,7 +98,7 @@ async fn assert_review_scope_mismatch(operation: &str, request: Value) {
 #[tokio::test]
 async fn submit_requirement_review_rejects_a_scope_mismatch_without_writing() {
     assert_review_scope_mismatch(
-        "submit-requirement-review-v2",
+        "submit-requirement-review",
         json!({
             "scope_id": "other",
             "actor": "agent",
@@ -120,7 +120,7 @@ async fn submit_requirement_review_rejects_a_scope_mismatch_without_writing() {
 #[tokio::test]
 async fn decide_requirement_review_rejects_a_scope_mismatch_without_writing() {
     assert_review_scope_mismatch(
-        "decide-requirement-review-v2",
+        "decide-requirement-review",
         json!({
             "scope_id": "other",
             "requirement_id": "req_one",
@@ -139,7 +139,7 @@ async fn decide_requirement_review_rejects_a_scope_mismatch_without_writing() {
 #[tokio::test]
 async fn withdraw_requirement_review_rejects_a_scope_mismatch_without_writing() {
     assert_review_scope_mismatch(
-        "withdraw-requirement-review-v2",
+        "withdraw-requirement-review",
         json!({
             "scope_id": "other",
             "requirement_id": "req_one",

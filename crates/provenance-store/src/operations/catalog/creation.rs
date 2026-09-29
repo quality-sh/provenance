@@ -22,8 +22,8 @@ creation!(
     [GraphStorage]
 );
 creation!(
-    CreateRequirement,
-    "create-requirement",
+    CreateRequirementNative,
+    "create-requirement-native",
     CreateRequirementInput,
     provenance_core::Requirement,
     create_requirement,

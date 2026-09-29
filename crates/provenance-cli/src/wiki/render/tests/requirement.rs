@@ -47,7 +47,7 @@ fn requirement_page_renders_supersedes_depends_on_and_superseded_by_rows() {
     )];
     page.superseded_by = Some(link(
         PageKind::Requirement,
-        "req_split_v2",
+        "req_split_revised",
         "The split, second revision",
     ));
 

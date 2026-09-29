@@ -50,8 +50,8 @@ pub struct GetRequirementRequest {
 }
 
 scoped_read_operation!(
-    pub GetRequirementV2,
-    "get-requirement-v2",
+    pub GetRequirement,
+    "get-requirement",
     GetRequirementRequest,
     RequirementResource,
     &[409],
@@ -80,8 +80,8 @@ pub struct CreateRequirementRequest {
 }
 
 scoped_write_operation!(
-    pub CreateRequirementV2,
-    "create-requirement-v2",
+    pub CreateRequirementResource,
+    "create-requirement",
     CreateRequirementRequest,
     RequirementResource,
     &[409],
@@ -133,8 +133,8 @@ pub struct UpdateRequirementRequest {
 }
 
 scoped_write_operation!(
-    pub UpdateRequirementV2,
-    "update-requirement-v2",
+    pub UpdateRequirementResource,
+    "update-requirement",
     UpdateRequirementRequest,
     RequirementResource,
     &[409],
@@ -172,8 +172,8 @@ macro_rules! decision {
     };
 }
 decision!(
-    SubmitRequirementReviewV2,
-    "submit-requirement-review-v2",
+    SubmitRequirementReview,
+    "submit-requirement-review",
     review::SubmitRequirementReview,
     submit_requirement_review
 );
@@ -220,8 +220,8 @@ macro_rules! addressed_decision {
 }
 
 addressed_decision!(
-    DecideRequirementReviewV2,
-    "decide-requirement-review-v2",
+    DecideRequirementReview,
+    "decide-requirement-review",
     DecideRequirementReviewRequest,
     review::DecideRequirementReview,
     decide_requirement_review_for,
@@ -238,11 +238,11 @@ addressed_decision!(
 );
 
 #[cfg(test)]
-#[path = "v2_review_tests.rs"]
-mod v2_review_tests;
+#[path = "requirement_review_tests.rs"]
+mod requirement_review_tests;
 addressed_decision!(
-    WithdrawRequirementReviewV2,
-    "withdraw-requirement-review-v2",
+    WithdrawRequirementReview,
+    "withdraw-requirement-review",
     WithdrawRequirementReviewRequest,
     review::WithdrawRequirementReview,
     withdraw_requirement_review_for,

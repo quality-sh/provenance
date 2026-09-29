@@ -12,7 +12,7 @@ A connection binds one repository, one scope, and one credential. Calls do not
 repeat these facts in a path or request body. `GET /metadata` returns the
 compatibility tuple, the package identity, and the repository and scope that
 the connection can use. It is the only public version advertisement.
-The tuple does not change as part of the v2 route restructure.
+The tuple does not change as part of the route restructure.
 
 ## Resources
 
@@ -136,6 +136,6 @@ response envelope, and compare the complete compatibility tuple during
 `GET /metadata`. They never start a host or select another repository or scope
 for one call.
 
-Generation checks the live OpenAPI and MCP documents against the frozen route
+Generation checks the live OpenAPI and MCP documents against the declared route
 grammar. It rejects prohibited paths, methods, parameters, envelopes, statuses,
 payload identities, and tool descriptions before it writes generated output.

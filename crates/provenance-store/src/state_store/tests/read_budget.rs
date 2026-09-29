@@ -123,16 +123,11 @@ pub(super) async fn member_read(
     root: &camino::Utf8Path,
     id: &str,
 ) -> Result<serde_json::Value, String> {
-    operation_read(root, "get-source-v2", json!({"id": id})).await
+    operation_read(root, "get-source", json!({"id": id})).await
 }
 
 pub(super) async fn list_read(root: &camino::Utf8Path) -> Result<serde_json::Value, String> {
-    operation_read(
-        root,
-        "page-sources-v2",
-        json!({"limit": 50, "cursor": null}),
-    )
-    .await
+    operation_read(root, "page-sources", json!({"limit": 50, "cursor": null})).await
 }
 
 /// The trigger case: the request body fits the transport budget while the
@@ -397,7 +392,7 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
         .unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
     catalog::invoke_with(
-        "get-resolution-v2",
+        "get-resolution",
         SDK_PROTOCOL_VERSION,
         wire_call(json!({"id": "res_base"})),
         Arc::new(Target(root)),

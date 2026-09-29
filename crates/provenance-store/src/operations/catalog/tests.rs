@@ -51,6 +51,20 @@ async fn unknown_operations_never_claim_an_execution_identity() {
     assert_eq!(serde_json::to_value(error.meta).unwrap(), json!({}));
 }
 
+#[test]
+fn registered_operation_dispatch_names_are_unique() {
+    let names = super::registered_operation_names_for_test();
+    let unique = names
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        names.len(),
+        unique.len(),
+        "duplicate operation dispatch name"
+    );
+}
+
 #[tokio::test]
 async fn dispatch_refuses_incompatible_versions_before_decoding() {
     let error = invoke("check-statement", SDK_PROTOCOL_VERSION + 1, json!(null))

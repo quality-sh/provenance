@@ -53,7 +53,7 @@ const TAILS: &[&str] = &[
 /// shared tail, so that id is an ending of every sibling drawn from it.
 const HEADS: &[&str] = &[
     "req_sah",
-    "req_sah_v2",
+    "req_sah_revised",
     "req",
     "req_sah_2024",
     "",

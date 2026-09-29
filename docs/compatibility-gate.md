@@ -1,6 +1,6 @@
 # Compatibility gate
 
-The gate enforces Decision 5 of the API restructure (docs/api-contract-v2.md,
+The gate enforces Decision 5 of the API restructure (docs/api-contract.md,
 section 8): agents never bump a version, a release, or a compatibility value
 without express human authorization. A human writes the authorization. The gate
 checks it. The gate is bead provenance-if20.

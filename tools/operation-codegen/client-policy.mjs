@@ -26,7 +26,7 @@ async function refusal(run, name, failure) {
   });
 }
 
-/** Run the same v2 connection and transport policy through each public client. */
+/** Run the same connection and transport policy through each public client. */
 export function clientPolicyTests(label, connect, compatibility, maxResponseBytes) {
   test(`${label}: compatibility mismatch prevents operation dispatch`, async () => {
     let calls = 0;

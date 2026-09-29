@@ -51,7 +51,7 @@ node tools/operation-codegen/generate.mjs --check
 ```
 
 The candidate test compiles both languages against production shapes. It checks
-nullable required fields, omitted fields, v2 envelopes, tagged variants,
+nullable required fields, omitted fields, response envelopes, tagged variants,
 and issue 9. It then round-trips actual Rust wire values through generated Rust
 types in a temporary crate. The real-host script tests both named clients and
 waits for the test host to stop. This listener requires the transport test-fixture
@@ -66,8 +66,8 @@ file inventory and bytes. Differences and oversized files fail. It does not
 compare against a source-control snapshot or change the checkout.
 
 Generation runs the contract grammar linter before any output is written. The
-linter checks the live OpenAPI and MCP documents against the frozen v2 surface
-in `docs/api-contract-v2.md`. It rejects repository or scope path prefixes,
+linter checks the live OpenAPI and MCP documents against the declared surface
+in `docs/api-contract.md`. It rejects repository or scope path prefixes,
 relationship routes, legacy verb routes, `/query` subroutes, GET bodies,
 required-null requests, raw arrays, flattened envelopes, MCP-only wrappers,
 undeclared actions or queries, mutating GETs, read POSTs without
@@ -118,7 +118,7 @@ ajv-formats 3.0.1 and esbuild 0.25.11 to emit standalone browser ESM; there is
 no runtime compiler or schema download. The Rust runtime pins jsonschema
 0.18.3 without default network features, rejects external resolvers explicitly,
 and compiles validators once into a shared cache. Required nullable fields are
-validated before concrete deserialization. Metadata uses the generated v2
+validated before concrete deserialization. Metadata uses the generated
 envelope and checks the supported compatibility tuple explicitly.
 
 The TypeScript tool adapter moves reference conjunctions into allOf while keeping
@@ -173,7 +173,7 @@ npm run test:effect:packed --prefix packages/provenance
 ```
 
 The default host pass runs the Promise client. The statements pass also runs the
-consolidated Rust v2 wire test. The `--effect` pass runs the Effect client against
+consolidated Rust wire test. The `--effect` pass runs the Effect client against
 the same scenarios. The Promise and Effect test suites share the cases in `client-policy.mjs`
 for response validation, failure classification, credentials, and redirects.
 
