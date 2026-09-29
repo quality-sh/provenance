@@ -449,3 +449,5 @@ fn typed_cascade_captures_each_changed_enrolled_kind() {
     let domain = store.list_domains(&scope).unwrap()[0].clone().into();
     assert_eq!(store.head(&domain).unwrap().unwrap().sequence, 1);
 }
+
+mod typed_adoption_deletion_tests;
