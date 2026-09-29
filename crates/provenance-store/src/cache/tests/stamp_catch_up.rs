@@ -58,5 +58,5 @@ async fn catch_up_validates_a_malformed_stamp_only_change() {
     );
 
     let error = catch_up_state(&layout).await.unwrap_err().to_string();
-    assert!(error.contains("commit"), "{error}");
+    assert!(error.contains("invalid enrolled source"), "{error}");
 }
