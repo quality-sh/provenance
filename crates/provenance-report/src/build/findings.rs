@@ -56,10 +56,10 @@ impl BaselineView {
         self.missing_evidence_comparison(rule_id, |evidence| &evidence.verification_rule_ids)
     }
 
-    fn missing_evidence_comparison<'a>(
-        &'a self,
+    fn missing_evidence_comparison(
+        &self,
         rule_id: &str,
-        ids: impl FnOnce(&'a BaselineEvidence) -> &'a BTreeSet<String>,
+        ids: fn(&BaselineEvidence) -> &BTreeSet<String>,
     ) -> Comparison {
         match &self.evidence {
             Some(evidence)
@@ -228,13 +228,14 @@ pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding
         .sites
         .iter()
         .filter(|site| {
-            site.state == EvidenceDiffState::Gone
-                && matches!(
-                    site.kind,
-                    EvidenceSiteKind::RuleBinding | EvidenceSiteKind::Verification
-                )
-                || site.kind == EvidenceSiteKind::Verification
-                    && site.state == EvidenceDiffState::Moved
+            matches!(
+                (site.kind, site.state),
+                (EvidenceSiteKind::RuleBinding, EvidenceDiffState::Gone)
+                    | (
+                        EvidenceSiteKind::Verification,
+                        EvidenceDiffState::Gone | EvidenceDiffState::Moved
+                    )
+            )
         })
         .map(|site| {
             let (code, role) = match (site.kind, site.state) {
