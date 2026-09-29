@@ -120,6 +120,7 @@ fn empty_typed_replacement_refuses_enrolled_source_deletion() {
             serde_json::from_value::<UpdateSourceInput>(serde_json::json!({
                 "scope_id": "default",
                 "id": "source_typed_history",
+                "declared_by": "spec://review/history",
                 "review_date": 1
             }))
             .unwrap(),
@@ -142,6 +143,7 @@ fn empty_typed_rule_replacement_refuses_enrolled_rule_deletion() {
             serde_json::from_value::<UpdateRuleInput>(serde_json::json!({
                 "scope_id": "default",
                 "id": "rule_typed_history",
+                "declared_by": "spec://review/history",
                 "name": "Native rule name"
             }))
             .unwrap(),
