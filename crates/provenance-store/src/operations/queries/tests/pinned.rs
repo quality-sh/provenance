@@ -155,11 +155,14 @@ async fn answers() -> Vec<Value> {
         strip_additive(&mut answer);
         normalize_record_stamps(&mut answer);
         normalize_cursor(&mut answer);
-        answers.push(json!({
+        normalize_revision_digest(&mut answer);
+        let mut rendered = json!({
             "operation": request.operation(),
             "request": request.describe(),
             "answer": answer,
-        }));
+        });
+        normalize_revision_digest(&mut rendered);
+        answers.push(rendered);
     }
     answers
 }
@@ -210,8 +213,8 @@ fn normalize_record_stamps(value: &mut Value) {
 }
 
 // Cursor authentication and target binding have dedicated behavioral tests.
-// The golden file retains the revision digest, serial, derivation, and position;
-// only random instance, temporary repository identity, and signature vary.
+// The golden file retains the serial, derivation, and position. Occurrence,
+// instance, repository, and signature identities vary between fixtures.
 fn normalize_cursor(answer: &mut Value) {
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
     let Some(token) = answer.get("next_cursor").and_then(Value::as_str) else {
@@ -228,6 +231,33 @@ fn normalize_cursor(answer: &mut Value) {
     payload["identity"] = json!("<query identity>");
     payload["instance"] = json!("<projection instance>");
     answer["next_cursor"] = payload;
+}
+
+fn normalize_revision_digest(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            if object.get("operation") == Some(&json!("stale")) {
+                object.insert("request".into(), json!("base=<base commit>"));
+            }
+            if object.get("identity") == Some(&json!("<query identity>"))
+                && object.contains_key("digest")
+            {
+                object.insert("digest".into(), json!("<revision digest>"));
+            }
+            if object.contains_key("base")
+                && object.contains_key("head")
+                && object.contains_key("sites")
+            {
+                object.insert("base".into(), json!("<base commit>"));
+                object.insert("head".into(), json!("<head commit>"));
+            }
+            for value in object.values_mut() {
+                normalize_revision_digest(value);
+            }
+        }
+        Value::Array(values) => values.iter_mut().for_each(normalize_revision_digest),
+        _ => {}
+    }
 }
 
 fn digest(answers: &[Value]) -> String {
@@ -247,7 +277,9 @@ fn parse(file: &str) -> (Value, Vec<Value>) {
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).unwrap());
     let header = lines.next().expect("a header line");
-    (header, lines.collect())
+    let mut answers = lines.collect::<Vec<_>>();
+    answers.iter_mut().for_each(normalize_revision_digest);
+    (header, answers)
 }
 
 #[tokio::test]
