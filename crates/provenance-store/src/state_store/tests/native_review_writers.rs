@@ -8,14 +8,17 @@ use crate::state_store::{
 use provenance_core::review::SaveOutcome;
 use provenance_core::{
     NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus, RuleSeverity,
-    RuleStatus, Source, SourceType, StableId, TopicStatus,
+    RuleStatus, SourceType, StableId, TopicStatus,
 };
 
-fn id(value: &str) -> StableId {
+pub(super) fn id(value: &str) -> StableId {
     StableId::new(value).unwrap()
 }
 
-fn seed_native_records(store: &crate::state_store::StateStore, scope: &provenance_core::ScopeId) {
+pub(super) fn seed_native_records(
+    store: &crate::state_store::StateStore,
+    scope: &provenance_core::ScopeId,
+) {
     store
         .create_source(CreateSourceInput {
             scope_id: scope.clone(),
@@ -430,16 +433,16 @@ fn native_save_refuses_a_stale_etag_without_publishing_the_mutation() {
         )
         .unwrap();
 
-    let path = crate::shards::sources_path(&store.layout, &scope);
     let error = store
-        .save_native_record_with_etag(&path, &stale_etag, |records: &mut Vec<Source>| {
-            let record = records
-                .iter_mut()
-                .find(|record| record.id == id("source_native"))
-                .unwrap();
-            record.name = "Source C".into();
-            Ok(record.clone())
-        })
+        .update_source(
+            serde_json::from_value::<UpdateSourceInput>(serde_json::json!({
+                "scope_id": "default",
+                "id": "source_native",
+                "expected_etag": stale_etag,
+                "name": "Source C"
+            }))
+            .unwrap(),
+        )
         .unwrap_err();
     assert!(matches!(
         crate::write_error::WriteError(error).safe(),
