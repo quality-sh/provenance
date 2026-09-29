@@ -52,7 +52,6 @@ impl StateStore {
         addressed: Option<(NodeType, StableId)>,
         input: DecideRecordReview,
     ) -> anyhow::Result<CycleEntry> {
-        input.ensure_canonical_artifact_type_supported()?;
         let digest = request_digest(&input)?;
         let request_id = journal::new_id();
         let scope = input.scope_id.clone();

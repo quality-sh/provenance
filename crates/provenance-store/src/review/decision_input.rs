@@ -4,12 +4,6 @@ use provenance_core::{
 };
 use serde::{Deserialize, Serialize};
 
-impl DecideRecordReview {
-    pub(super) fn ensure_canonical_artifact_type_supported(&self) -> anyhow::Result<()> {
-        Ok(())
-    }
-}
-
 /// Submits the record's current review revision as an immutable `proposed`
 /// candidate. The store derives the binding; the caller never states it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

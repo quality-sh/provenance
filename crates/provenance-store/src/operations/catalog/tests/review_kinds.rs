@@ -65,6 +65,30 @@ fn generated_review_operation_ids_are_kind_specific() {
 }
 
 #[test]
+fn each_review_route_binds_its_record_kind() {
+    let routes = definitions();
+    for (plural, singular) in REVIEW_KINDS {
+        for suffix in [
+            "/{id}/submit",
+            "/{id}/submissions/{proposal_id}/decide",
+            "/{id}/submissions/{proposal_id}/withdraw",
+            "/{id}/history",
+            "/{id}/history/{entry_id}",
+            "/{id}/history/{entry_id}/evidence/{side}",
+        ] {
+            let path = format!("/{plural}{suffix}");
+            let route = routes.iter().find(|route| route.path == path).unwrap();
+            assert!(route
+                .registration
+                .request
+                .fixed
+                .iter()
+                .any(|binding| binding.field == "record_kind" && binding.value == singular));
+        }
+    }
+}
+
+#[test]
 fn only_discussion_parent_kinds_have_discussion_routes() {
     let routes = definitions();
     for (plural, _) in REVIEW_KINDS {
