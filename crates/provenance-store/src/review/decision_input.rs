@@ -12,9 +12,7 @@ use serde::{Deserialize, Serialize};
 pub struct SubmitRecordReview {
     pub scope_id: ScopeId,
     pub actor: String,
-    #[serde(default = "requirement_kind")]
     pub record_kind: provenance_core::NodeType,
-    #[serde(alias = "requirement_id")]
     pub record_id: StableId,
     /// The owning agent of the record, checked like an edit's `declared_by`.
     pub declared_by: Option<String>,
@@ -76,11 +74,3 @@ pub struct WithdrawRecordReview {
     /// Optional nonempty reason, kept as part of the withdrawal history.
     pub reason: Option<String>,
 }
-
-const fn requirement_kind() -> provenance_core::NodeType {
-    provenance_core::NodeType::Requirement
-}
-
-pub type SubmitRequirementReview = SubmitRecordReview;
-pub type DecideRequirementReview = DecideRecordReview;
-pub type WithdrawRequirementReview = WithdrawRecordReview;

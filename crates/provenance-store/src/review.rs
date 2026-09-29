@@ -59,8 +59,7 @@ mod discussion_recovery_tests;
 
 mod decision_input;
 pub use decision_input::{
-    DecideRecordReview, DecideRequirementReview, ReviewFeedback, SubmitRecordReview,
-    SubmitRequirementReview, WithdrawRecordReview, WithdrawRequirementReview,
+    DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
 mod automatic_submission;
 mod decision;

@@ -52,9 +52,9 @@ fn submit(
     revises: Option<&StableId>,
     expected: Option<&str>,
 ) -> anyhow::Result<CycleEntry> {
-    store.submit_requirement_review(
+    store.submit_record_review(
         serde_json::from_value(json!({
-            "scope_id":"default","actor":"agent","requirement_id":"req_a",
+            "scope_id":"default","actor":"agent","record_kind":"requirement","record_id":"req_a",
             "title":"Title", "summary":"Summary", "source_ids":[],
             "evidence_references":[], "builds_on":[],
             "revises":revises,"expected_revision":expected
@@ -76,7 +76,7 @@ fn decide(
     for (key, extra_value) in extra.as_object().unwrap() {
         value[key] = extra_value.clone();
     }
-    store.decide_requirement_review(serde_json::from_value(value).unwrap())
+    store.decide_record_review(serde_json::from_value(value).unwrap())
 }
 fn reviewer(id: &str) -> Value {
     json!({"identity_type":"human","id":id})
@@ -88,7 +88,7 @@ fn feedback(body: &str) -> Value {
     json!({"feedback":{"role":"user","body":body}})
 }
 fn withdraw(store: &StateStore, proposal: &StableId) -> anyhow::Result<CycleEntry> {
-    store.withdraw_requirement_review(
+    store.withdraw_record_review(
         serde_json::from_value(
             json!({"scope_id":"default","actor":"agent","proposal_id":proposal}),
         )
