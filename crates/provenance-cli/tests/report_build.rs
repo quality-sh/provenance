@@ -75,6 +75,8 @@ fn create_rule(repo: &Path, id: &str, requirement: &str, statement: &str) {
             requirement,
             "--statement",
             statement,
+            "--status",
+            "active",
         ])
         .assert()
         .success();

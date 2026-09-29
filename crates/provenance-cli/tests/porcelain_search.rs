@@ -65,6 +65,8 @@ fn seed(repo: &str) {
         "req_search",
         "--statement",
         "Shared needle rule.",
+        "--status",
+        "active",
         "--severity",
         "medium",
     ]);

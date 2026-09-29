@@ -51,6 +51,8 @@ impl Fixture {
             "req_anchor",
             "--statement",
             "Anchor the primary implementation",
+            "--status",
+            "active",
             "--severity",
             "high",
         ]);

@@ -182,7 +182,7 @@ pub struct CreateRuleInput {
     pub origin_message: Option<StableId>,
 }
 
-fn default_rule_status() -> RuleStatus {
+const fn default_rule_status() -> RuleStatus {
     RuleStatus::Draft
 }
 

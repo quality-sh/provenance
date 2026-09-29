@@ -320,6 +320,8 @@ fn cli_readable_get_includes_the_record_view_context_and_bounds() {
             "req_readable",
             "--statement",
             "Show related records in readable output.",
+            "--status",
+            "active",
             "--severity",
             "high",
         ])

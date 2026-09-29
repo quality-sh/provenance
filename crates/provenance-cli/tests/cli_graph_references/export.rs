@@ -290,6 +290,8 @@ fn implementation_binding_travels_in_the_exact_graph_and_changes_its_digest() {
             "req_runtime",
             "--statement",
             "Accepted workflows start",
+            "--status",
+            "active",
         ])
         .assert()
         .success();
