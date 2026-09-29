@@ -34,6 +34,31 @@ fn every_review_kind_has_actions_history_and_evidence() {
     }
 }
 
+#[cfg(feature = "schema")]
+#[test]
+fn every_review_kind_member_read_carries_edit_and_decision_state() {
+    let routes = definitions();
+    for (plural, _) in REVIEW_KINDS {
+        let path = format!("/{plural}/{{id}}");
+        let route = routes
+            .iter()
+            .find(|route| route.method == HttpMethod::Get && route.path == path)
+            .unwrap();
+        let schema = &route.registration.response.schema;
+        let mut data = &schema["properties"]["data"];
+        if let Some(reference) = data["$ref"].as_str() {
+            let name = reference.strip_prefix("#/$defs/").unwrap();
+            data = &schema["$defs"][name];
+        }
+        for field in ["edit", "decision"] {
+            assert!(
+                data["properties"].get(field).is_some(),
+                "{path} omits {field}: {schema}"
+            );
+        }
+    }
+}
+
 #[test]
 fn generated_review_operation_ids_are_kind_specific() {
     let routes = definitions();
