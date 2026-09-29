@@ -60,13 +60,7 @@ fn create_requirement(repo: &Path, id: &str, statement: &str) {
         .success();
 }
 
-fn create_rule(
-    repo: &Path,
-    id: &str,
-    requirement: &str,
-    statement: &str,
-    status: Option<&str>,
-) {
+fn create_rule(repo: &Path, id: &str, requirement: &str, statement: &str, status: Option<&str>) {
     let mut command = provenance(repo);
     command.args([
         "rules",
