@@ -152,7 +152,7 @@ fn source_cycle_binds_each_decision_to_the_exact_revision() {
 }
 
 #[test]
-fn domain_feedback_has_a_typed_refusal() {
+fn domain_decision_keeps_rationale_and_refuses_feedback() {
     let (_temp, store, scope) = fixture();
     let domain = id("domain_a");
     store
@@ -173,9 +173,9 @@ fn domain_feedback_has_a_typed_refusal() {
 
     let error = store
         .decide_record_review(DecideRecordReview {
-            scope_id: scope,
+            scope_id: scope.clone(),
             actor: reviewer(),
-            proposal_id: proposal,
+            proposal_id: proposal.clone(),
             decision: DispositionDecision::Rejected,
             rationale: Some("The classification is too broad.".into()),
             canonical_artifact: None,
@@ -193,4 +193,24 @@ fn domain_feedback_has_a_typed_refusal() {
             record_kind: NodeType::Domain
         }
     ));
+
+    let decided = store
+        .decide_record_review(DecideRecordReview {
+            scope_id: scope.clone(),
+            actor: reviewer(),
+            proposal_id: proposal,
+            decision: DispositionDecision::Rejected,
+            rationale: Some("The classification is too broad.".into()),
+            canonical_artifact: None,
+            feedback: None,
+            declared_by: None,
+        })
+        .unwrap();
+    let disposition = store
+        .list_dispositions(&scope)
+        .unwrap()
+        .into_iter()
+        .find(|disposition| Some(&disposition.id) == decided.disposition_id.as_ref())
+        .unwrap();
+    assert_eq!(disposition.rationale, "The classification is too broad.");
 }
