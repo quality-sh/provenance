@@ -8,7 +8,7 @@ use provenance_core::{
 };
 use provenance_macros::rule;
 
-use crate::{source_sites, FileScan, SourceSiteRole};
+use crate::{source_sites, FileScan, SourceSite, SourceSiteRole};
 
 /// Whether the supplied scans can establish evidence absence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,7 +129,7 @@ fn implemented_rule_ids(
     bindings: &[ImplementationBinding],
 ) -> BTreeSet<String> {
     source_sites(scans)
-        .filter(|site| site.role() == SourceSiteRole::Implementation)
+        .filter(|site| matches!(site.role(), SourceSiteRole::Implementation))
         .map(|site| site.rule_id().to_string())
         .chain(
             bindings
@@ -140,20 +140,9 @@ fn implemented_rule_ids(
 }
 
 fn verified_rule_ids(scans: &[FileScan], bindings: &[VerificationBinding]) -> BTreeSet<String> {
-    scans
-        .iter()
-        .flat_map(|scan| {
-            scan.bindings
-                .iter()
-                .filter(|binding| binding.verification.is_some())
-                .map(|binding| binding.rule_id.clone())
-                .chain(
-                    scan.annotations
-                        .iter()
-                        .filter(|location| location.annotation.verification.is_some())
-                        .map(|location| location.annotation.rule.clone()),
-                )
-        })
+    source_sites(scans)
+        .filter(|site| matches!(site.role(), SourceSiteRole::Verification(_)))
+        .map(|site| site.rule_id().to_string())
         .chain(
             bindings
                 .iter()
@@ -197,18 +186,20 @@ fn inactive_current_bindings(
         }
         for binding in &scan.bindings {
             if let Some(status) = inactive.get(binding.rule_id.as_str()) {
+                let (role, verification_method) = match SourceSite::Attribute(binding).role() {
+                    SourceSiteRole::Implementation => (InactiveBindingRole::Implementation, None),
+                    SourceSiteRole::Verification(method) => {
+                        (InactiveBindingRole::Verification, Some(method))
+                    }
+                };
                 current.push(InactiveCurrentBinding {
                     rule_id: binding.rule_id.clone(),
                     status: status.clone(),
                     origin: InactiveBindingOrigin::Scanned,
-                    role: if binding.verification.is_some() {
-                        InactiveBindingRole::Verification
-                    } else {
-                        InactiveBindingRole::Implementation
-                    },
+                    role,
                     file_path: binding.file_path.clone(),
                     line: Some(binding.line),
-                    verification_method: binding.verification,
+                    verification_method,
                 });
             }
         }

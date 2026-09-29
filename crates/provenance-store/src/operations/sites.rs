@@ -25,7 +25,7 @@ impl Evidence<'_> {
     fn implementations(&self, repo: &Utf8Path, id: &StableId) -> Vec<ImplementationSite> {
         let mut sites = source_sites(self.scans)
             .filter(|site| site.rule_id() == id.as_str())
-            .filter(|site| site.role() == SourceSiteRole::Implementation)
+            .filter(|site| matches!(site.role(), SourceSiteRole::Implementation))
             .map(|site| ImplementationSite {
                 file: relative(repo, site.file_path()),
                 line: Some(site.line()),
@@ -51,7 +51,10 @@ impl Evidence<'_> {
         let mut sites = source_sites(self.scans)
             .filter(|site| site.rule_id() == id.as_str())
             .filter_map(|site| {
-                site.verification().map(|method| VerificationSite {
+                let SourceSiteRole::Verification(method) = site.role() else {
+                    return None;
+                };
+                Some(VerificationSite {
                     key: None,
                     method: method.to_string(),
                     declared_by: None,

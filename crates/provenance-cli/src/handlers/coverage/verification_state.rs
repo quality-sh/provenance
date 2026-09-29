@@ -38,11 +38,12 @@ pub(super) fn load_validation_state(
     ));
     let implementations = store.active_implementation_bindings(&scope)?;
     for site in provenance_scanner::source_sites(scans).filter(|site| {
-        site.role() == provenance_scanner::SourceSiteRole::Implementation
-            && implementations.iter().any(|binding| {
-                binding.rule_id.as_str() == site.rule_id()
-                    && !same_implementation(*site, binding, repo)
-            })
+        matches!(
+            site.role(),
+            provenance_scanner::SourceSiteRole::Implementation
+        ) && implementations.iter().any(|binding| {
+            binding.rule_id.as_str() == site.rule_id() && !same_implementation(*site, binding, repo)
+        })
     }) {
         warnings.push(provenance_scanner::ValidationWarning {
             rule_id: site.rule_id().to_string(),

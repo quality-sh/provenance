@@ -44,7 +44,7 @@ fn site_core_reports_role_and_current_state() {
     assert!(site.is_current());
     site.verification = Some("examples".into());
     site.anchor_state = AnchorState::Gone;
-    assert_eq!(site.role(), SiteRole::Verification);
+    assert_eq!(site.role(), SiteRole::Verification("examples"));
     assert!(!site.is_current());
 }
 
@@ -64,7 +64,10 @@ fn anchored_sites_report_role_and_current_state() {
         item_name: Some("checks_overtime".into()),
     };
 
-    assert_eq!(AnchoredSite::role(&site), SiteRole::Verification);
+    assert_eq!(
+        AnchoredSite::role(&site),
+        SiteRole::Verification("examples")
+    );
     assert!(!AnchoredSite::is_current(&site));
 }
 
@@ -104,7 +107,7 @@ fn coverage_report_sites_have_one_order_and_one_shared_view() {
 
     assert_eq!(sites.len(), 2);
     assert_eq!(sites[0].core().rule_id, "rule_annotation");
-    assert_eq!(sites[0].role(), SiteRole::Verification);
+    assert_eq!(sites[0].role(), SiteRole::Verification("examples"));
     assert_eq!(sites[0].symbol(), Some("checks_overtime"));
     assert_eq!(sites[0].anchor_state(), AnchorState::Gone);
     assert!(!sites[0].is_current());

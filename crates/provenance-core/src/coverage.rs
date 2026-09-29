@@ -39,9 +39,9 @@ pub enum AnchorState {
 
 /// The relationship that one source site has to its Rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SiteRole {
+pub enum SiteRole<M> {
     Implementation,
-    Verification,
+    Verification(M),
 }
 
 /// How one graph evidence path relates to a selected Git diff.
@@ -149,12 +149,10 @@ pub struct SiteCore {
 }
 
 impl SiteCore {
-    pub const fn role(&self) -> SiteRole {
-        if self.verification.is_some() {
-            SiteRole::Verification
-        } else {
-            SiteRole::Implementation
-        }
+    pub fn role(&self) -> SiteRole<&str> {
+        self.verification
+            .as_deref()
+            .map_or(SiteRole::Implementation, SiteRole::Verification)
     }
 
     pub const fn is_current(&self) -> bool {
@@ -164,7 +162,7 @@ impl SiteCore {
 
 /// A result that exposes shared evidence-site fields through its `SiteCore`.
 pub trait AnchoredSite: Clone + Deref<Target = SiteCore> + DerefMut {
-    fn role(&self) -> SiteRole {
+    fn role(&self) -> SiteRole<&str> {
         self.deref().role()
     }
 
@@ -272,7 +270,7 @@ impl<'a> CoverageSite<'a> {
         }
     }
 
-    pub const fn role(self) -> SiteRole {
+    pub fn role(self) -> SiteRole<&'a str> {
         self.core().role()
     }
 

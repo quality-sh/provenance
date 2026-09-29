@@ -7,7 +7,8 @@ use provenance_core::{
 use provenance_macros::verifies;
 use provenance_scanner::{
     binding_findings_fail, derive_rule_evidence_facts, AttributeBinding, BindingFindingSeverity,
-    FileScan, InactiveBindingOrigin, Language, RuleEvidenceCompleteness, Verification,
+    FileScan, InactiveBindingOrigin, InactiveBindingRole, InactiveCurrentBinding, Language,
+    RuleEvidenceCompleteness, Verification,
 };
 
 fn rule(id: &str, status: RuleStatus) -> Rule {
@@ -159,7 +160,9 @@ fn portable_comment_implementation_satisfies_implementation() {
 #[test]
 fn portable_comment_verification_satisfies_only_verification() {
     let scan = scanned_comment(
-        "// @provenance rule: rule_claims\n// @provenance verification: examples\nfn checks_claims() {}\n",
+        "// @provenance rule: rule_claims\n\
+         // @provenance verification: examples\n\
+         fn checks_claims() {}\n",
     );
 
     let facts = derive_rule_evidence_facts(
@@ -249,7 +252,7 @@ fn non_active_rules_do_not_produce_absence_facts() {
 #[test]
 #[verifies("rule_inactive_rules_have_no_current_bindings", examples)]
 fn inactive_rules_report_scanned_and_typed_current_bindings() {
-    let scan = scanned_binding("rule_old", Some(Verification::Property));
+    let scan = scanned_comment("#[verifies(\"rule_old\", examples)]\nfn checks_old_rule() {}\n");
 
     let facts = derive_rule_evidence_facts(
         &[rule("rule_old", RuleStatus::Deprecated)],
@@ -260,11 +263,17 @@ fn inactive_rules_report_scanned_and_typed_current_bindings() {
     );
 
     assert_eq!(facts.inactive_current.len(), 3, "{facts:#?}");
-    assert_eq!(facts.inactive_current[0].rule_id, "rule_old");
-    assert_eq!(facts.inactive_current[0].status, RuleStatus::Deprecated);
     assert_eq!(
-        facts.inactive_current[0].origin,
-        InactiveBindingOrigin::Scanned
+        facts.inactive_current[0],
+        InactiveCurrentBinding {
+            rule_id: "rule_old".to_string(),
+            status: RuleStatus::Deprecated,
+            origin: InactiveBindingOrigin::Scanned,
+            role: InactiveBindingRole::Verification,
+            file_path: "src/lib.rs".into(),
+            line: Some(1),
+            verification_method: Some(VerificationMethod::Examples),
+        }
     );
     assert_eq!(
         facts.inactive_current[1].origin,

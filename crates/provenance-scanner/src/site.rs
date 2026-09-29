@@ -2,7 +2,7 @@ use camino::Utf8Path;
 
 use crate::{AnnotationLocation, AttributeBinding, FileScan, Verification};
 /// The semantic role of a native attribute or portable comment marker.
-pub use provenance_core::coverage::SiteRole as SourceSiteRole;
+pub type SourceSiteRole = provenance_core::coverage::SiteRole<Verification>;
 
 /// One source relationship, independent of the syntax that declared it.
 #[derive(Debug, Clone, Copy)]
@@ -13,10 +13,9 @@ pub enum SourceSite<'a> {
 
 impl<'a> SourceSite<'a> {
     pub const fn role(self) -> SourceSiteRole {
-        if self.verification().is_some() {
-            SourceSiteRole::Verification
-        } else {
-            SourceSiteRole::Implementation
+        match self.verification() {
+            Some(method) => SourceSiteRole::Verification(method),
+            None => SourceSiteRole::Implementation,
         }
     }
 
@@ -69,4 +68,23 @@ pub fn source_sites(scans: &[FileScan]) -> impl Iterator<Item = SourceSite<'_>> 
         sites.sort_by_key(|site| site.line());
         sites.into_iter()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{scan_file, Language};
+
+    #[test]
+    fn source_site_role_carries_typed_verification_method() {
+        let scan = scan_file(
+            Utf8Path::new("verification.rs"),
+            Language::Rust,
+            "#[verifies(\"rule_claims\", examples)]\nfn verifies_claim() {}",
+        );
+
+        let role = source_sites(&[scan]).next().unwrap().role();
+
+        assert_eq!(role, SourceSiteRole::Verification(Verification::Examples));
+    }
 }
