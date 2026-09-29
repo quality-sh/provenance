@@ -271,6 +271,13 @@ async fn target_edit_keeps_top_level_unknown_data_and_accepts_aliases() {
         .unwrap();
     record["extension"] = json!({"owner":"newer-tool","nested":{"value":7}});
     write_rows(&fixture, "sources", "source.jsonl", &[padded(&record)]);
+    std::fs::remove_dir_all(
+        fixture
+            .dir
+            .path()
+            .join(".provenance/state/scopes/default/review"),
+    )
+    .unwrap();
 
     let updated = fixture
         .call(
@@ -310,6 +317,13 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
     let mut clean = record.clone();
     clean["sourceRef"] = json!({"sourceId":"source_one","clause":"section 1"});
     write_rows(&fixture, "boundaries", "boundary.jsonl", &[padded(&clean)]);
+    std::fs::remove_dir_all(
+        fixture
+            .dir
+            .path()
+            .join(".provenance/state/scopes/default/review"),
+    )
+    .unwrap();
     fixture
         .call(
             "update-boundary",
