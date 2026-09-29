@@ -1,12 +1,12 @@
 //! Resource adapters for the guarded Requirement review interface.
 use super::{
-    shapes::{scoped_read_operation, scoped_write_operation},
+    shapes::scoped_write_operation,
     ExecutionNeed,
 };
 use crate::{
     review,
     state_store::{
-        CreateRequirementInput, RequirementClearField, StateStore, UpdateRequirementInput,
+        CreateRequirementInput, RequirementClearField, UpdateRequirementInput,
     },
 };
 use provenance_core::{
@@ -25,15 +25,6 @@ pub struct RequirementResource {
     pub decision: RequirementDecisionState,
 }
 
-fn resource(
-    store: &StateStore,
-    scope: &ScopeId,
-    id: &StableId,
-) -> anyhow::Result<RequirementResource> {
-    let snapshot = store.requirement_resource_snapshot(scope, id)?;
-    Ok(resource_from(snapshot))
-}
-
 fn resource_from(snapshot: review::RequirementResourceSnapshot) -> RequirementResource {
     RequirementResource {
         record: snapshot.record,
@@ -41,23 +32,6 @@ fn resource_from(snapshot: review::RequirementResourceSnapshot) -> RequirementRe
         decision: snapshot.decision,
     }
 }
-
-#[derive(Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-pub struct GetRequirementRequest {
-    pub id: StableId,
-}
-
-scoped_read_operation!(
-    pub GetRequirement,
-    "get-requirement",
-    GetRequirementRequest,
-    RequirementResource,
-    &[409],
-    &[ExecutionNeed::GraphStorage],
-    |store, scope, request| resource(store, scope, &request.id)
-);
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -176,7 +150,7 @@ decision!(
     SubmitRequirementReview,
     "submit-requirement-review",
     review::SubmitRequirementReview,
-    submit_requirement_review
+    submit_record_review
 );
 
 #[derive(Deserialize)]
@@ -184,7 +158,10 @@ decision!(
 #[serde(deny_unknown_fields)]
 pub struct DecideRequirementReviewRequest {
     pub scope_id: ScopeId,
-    pub requirement_id: StableId,
+    #[serde(default = "requirement_kind")]
+    pub record_kind: provenance_core::NodeType,
+    #[serde(alias = "requirement_id")]
+    pub record_id: StableId,
     pub actor: DispositionActor,
     pub proposal_id: StableId,
     pub decision: DispositionDecision,
@@ -199,7 +176,10 @@ pub struct DecideRequirementReviewRequest {
 #[serde(deny_unknown_fields)]
 pub struct WithdrawRequirementReviewRequest {
     pub scope_id: ScopeId,
-    pub requirement_id: StableId,
+    #[serde(default = "requirement_kind")]
+    pub record_kind: provenance_core::NodeType,
+    #[serde(alias = "requirement_id")]
+    pub record_id: StableId,
     pub actor: String,
     pub proposal_id: StableId,
     pub declared_by: Option<String>,
@@ -212,9 +192,10 @@ macro_rules! addressed_decision {
             pub $name, $wire, $request, CycleEntry, &[409], &[ExecutionNeed::GraphStorage],
             scope = scope_id,
             |store, _scope, request| {
-                let requirement_id = request.requirement_id.clone();
+                let record_kind = request.record_kind;
+                let record_id = request.record_id.clone();
                 let input: $input = ($convert)(request);
-                store.$method(&requirement_id, input)
+                store.$method(record_kind, &record_id, input)
             }
         );
     };
@@ -225,7 +206,7 @@ addressed_decision!(
     "decide-requirement-review",
     DecideRequirementReviewRequest,
     review::DecideRequirementReview,
-    decide_requirement_review_for,
+    decide_record_review_for,
     |request: DecideRequirementReviewRequest| review::DecideRequirementReview {
         scope_id: request.scope_id,
         actor: request.actor,
@@ -246,7 +227,7 @@ addressed_decision!(
     "withdraw-requirement-review",
     WithdrawRequirementReviewRequest,
     review::WithdrawRequirementReview,
-    withdraw_requirement_review_for,
+    withdraw_record_review_for,
     |request: WithdrawRequirementReviewRequest| review::WithdrawRequirementReview {
         scope_id: request.scope_id,
         actor: request.actor,
@@ -255,3 +236,7 @@ addressed_decision!(
         reason: request.reason,
     }
 );
+
+const fn requirement_kind() -> provenance_core::NodeType {
+    provenance_core::NodeType::Requirement
+}

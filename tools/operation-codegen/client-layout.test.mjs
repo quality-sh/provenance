@@ -20,3 +20,17 @@ test('each Rust operation owns its method file as the catalog grows', async () =
   assert.ok(!files['client.rs'].includes('pub async fn operation'));
   for (const [path, source] of Object.entries(files)) assert.ok(source.split('\n').length <= 500, path);
 });
+
+test('the Rust client root stays bounded with many operations', async () => {
+  assert.equal(typeof templates.rustClientFiles, 'function');
+  const doc = JSON.parse(await readFile(new URL('../../contracts/operations/openapi.json', import.meta.url)));
+  const compatibility = JSON.parse(await readFile(new URL('../../contracts/operations/compatibility.json', import.meta.url)));
+  const route = structuredClone(Object.values(doc.paths).find(entry => entry.post));
+  doc.paths = Object.fromEntries(Array.from({ length: 520 }, (_, i) => {
+    const entry = structuredClone(route);
+    entry.post.operationId = `operation${i}`;
+    return [`/fixtures/operation-${i}`, entry];
+  }));
+  const files = templates.rustClientFiles(doc, compatibility);
+  assert.ok(files['client.rs'].split('\n').length <= 500);
+});
