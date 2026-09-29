@@ -27,9 +27,9 @@ pub(super) struct BaselineView {
 }
 
 struct BaselineEvidence {
-    rule_ids: BTreeSet<String>,
-    implementation_rule_ids: BTreeSet<String>,
-    verification_rule_ids: BTreeSet<String>,
+    rules: BTreeSet<String>,
+    implementations: BTreeSet<String>,
+    verifications: BTreeSet<String>,
 }
 
 impl BaselineView {
@@ -42,18 +42,18 @@ impl BaselineView {
     /// `pre_existing`; any other baseline stays `uncertain`.
     fn comparison(&self, subject_id: &str) -> Comparison {
         match &self.evidence {
-            Some(evidence) if !evidence.rule_ids.contains(subject_id) => Comparison::New,
+            Some(evidence) if !evidence.rules.contains(subject_id) => Comparison::New,
             Some(_) => Comparison::PreExisting,
             None => Comparison::Uncertain,
         }
     }
 
     fn missing_implementation_comparison(&self, rule_id: &str) -> Comparison {
-        self.missing_evidence_comparison(rule_id, |evidence| &evidence.implementation_rule_ids)
+        self.missing_evidence_comparison(rule_id, |evidence| &evidence.implementations)
     }
 
     fn missing_verification_comparison(&self, rule_id: &str) -> Comparison {
-        self.missing_evidence_comparison(rule_id, |evidence| &evidence.verification_rule_ids)
+        self.missing_evidence_comparison(rule_id, |evidence| &evidence.verifications)
     }
 
     fn missing_evidence_comparison(
@@ -63,7 +63,7 @@ impl BaselineView {
     ) -> Comparison {
         match &self.evidence {
             Some(evidence)
-                if !evidence.rule_ids.contains(rule_id) || ids(evidence).contains(rule_id) =>
+                if !evidence.rules.contains(rule_id) || ids(evidence).contains(rule_id) =>
             {
                 Comparison::New
             }
@@ -102,12 +102,12 @@ impl BaselineView {
                 }
                 Self {
                     evidence: Some(BaselineEvidence {
-                        rule_ids: base_rules
+                        rules: base_rules
                             .iter()
                             .map(|rule| rule.id.as_str().to_string())
                             .collect(),
-                        implementation_rule_ids,
-                        verification_rule_ids,
+                        implementations: implementation_rule_ids,
+                        verifications: verification_rule_ids,
                     }),
                 }
             }
