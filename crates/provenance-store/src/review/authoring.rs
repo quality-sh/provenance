@@ -20,6 +20,51 @@ use provenance_core::{review::ReviewRecord, Requirement, ScopeId, SourceReferenc
 const AUTHORING_ACTOR: &str = "authoring";
 
 impl StateStore {
+    pub(crate) fn replace_native_records<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        mut replacement: Vec<T>,
+    ) -> anyhow::Result<()> {
+        let relative = path.strip_prefix(self.layout.root())?.to_owned();
+        self.with_repository_publication(|| {
+            with_staged_state(&self.layout, false, |layout| {
+                let staged = Self::new(layout.clone());
+                let staged_path = layout.root().join(&relative);
+                guard::with_writer(&staged_path, "*", || {
+                    for record in &mut replacement {
+                        record.set_schema_version(provenance_core::review::REVIEW_SCHEMA_VERSION);
+                    }
+                    let scope = replacement.first().map(|record| {
+                        let record: ReviewRecord = record.clone().into();
+                        record.scope_id().clone()
+                    });
+                    let before = staged
+                        .replace_graph_records_guarded(&staged_path, replacement.clone())?;
+                    for record in &before {
+                        let review: ReviewRecord = record.clone().into();
+                        anyhow::ensure!(
+                            review.schema_version()
+                                != provenance_core::review::REVIEW_SCHEMA_VERSION
+                                || replacement.iter().any(|after| after.id() == record.id()),
+                            "an enrolled graph record cannot be removed by replacement"
+                        );
+                    }
+                    for record in replacement {
+                        let previous = before.iter().find(|before| before.id() == record.id());
+                        let before = previous.cloned().map(Into::into);
+                        let after: ReviewRecord = record.into();
+                        staged.commit_native_occurrence(before.as_ref(), &after)?;
+                    }
+                    if let Some(scope) = scope {
+                        staged.validate_graph_scope(&scope)?;
+                        staged.enroll_review_manifest()?;
+                    }
+                    Ok(())
+                })
+            })
+        })
+    }
+
     pub(crate) fn save_native_record<T: GraphRecord>(
         &self,
         path: &Utf8Path,
@@ -39,22 +84,7 @@ impl StateStore {
                     let before: ReviewRecord = before.into();
                     let after = staged.enroll_graph_record::<T>(&staged_path, before.id())?;
                     let after: ReviewRecord = after.clone().into();
-                    let head = staged.head(&before)?;
-                    staged.validated_review_entries(after.scope_id())?;
-                    let request_id = journal::new_id();
-                    staged.commit_record_evidence(
-                        Some(&before),
-                        &after,
-                        RecordEvidenceContext {
-                            head,
-                            actor: AUTHORING_ACTOR.to_owned(),
-                            request_id,
-                            intent_digest: canonical_digest::digest(
-                                &canonical_digest::canonical_bytes(&after)?,
-                            ),
-                            origin: None,
-                        },
-                    )?;
+                    staged.commit_native_occurrence(Some(&before), &after)?;
                     staged.validate_graph_scope(after.scope_id())?;
                     staged.enroll_review_manifest()?;
                     Ok(after)
@@ -62,6 +92,30 @@ impl StateStore {
             })
         })
         .and_then(review_record_into)
+    }
+
+    fn commit_native_occurrence(
+        &self,
+        before: Option<&ReviewRecord>,
+        after: &ReviewRecord,
+    ) -> anyhow::Result<()> {
+        let head = before.map(|record| self.head(record)).transpose()?.flatten();
+        self.validated_review_entries(after.scope_id())?;
+        let request_id = journal::new_id();
+        self.commit_record_evidence(
+            before,
+            after,
+            RecordEvidenceContext {
+                head,
+                actor: AUTHORING_ACTOR.to_owned(),
+                request_id,
+                intent_digest: canonical_digest::digest(
+                    &canonical_digest::canonical_bytes(after)?,
+                ),
+                origin: None,
+            },
+        )?;
+        Ok(())
     }
 
     pub(crate) fn create_native_record<T: GraphRecord>(
