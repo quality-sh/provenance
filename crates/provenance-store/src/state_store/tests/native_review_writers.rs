@@ -207,3 +207,73 @@ fn native_updates_capture_each_occurrence_when_content_returns_to_an_earlier_val
         assert_eq!(matches[2].predecessor.as_ref(), Some(&matches[1].id));
     }
 }
+
+#[test]
+fn source_rule_and_resolution_creators_refuse_unaddressed_origins() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    let missing = id("message_missing");
+
+    let source = CreateSourceInput {
+        scope_id: scope.clone(),
+        id: id("source_bad_origin"),
+        name: "Source".into(),
+        source_type: SourceType::Policy,
+        url: None,
+        reference: None,
+        commit_pin: None,
+        effective_date: None,
+        review_date: None,
+        supersedes: Vec::new(),
+        origin_thread: None,
+        origin_message: Some(missing.clone()),
+    };
+    let resolution = CreateResolutionInput {
+        scope_id: scope.clone(),
+        id: id("resolution_bad_origin"),
+        title: "Resolution".into(),
+        requirement_ids: vec![id("req_overtime")],
+        supersedes: Vec::new(),
+        position: "Use the position".into(),
+        rationale: "The position satisfies the requirement".into(),
+        status: ResolutionStatus::Proposed,
+        context: None,
+        enforcement: None,
+        confidence: None,
+        inputs: Vec::new(),
+        made_by: None,
+        approved_by: None,
+        approved_at: None,
+        origin_thread: None,
+        origin_message: Some(missing.clone()),
+    };
+    let rule = CreateRuleInput {
+        scope_id: scope.clone(),
+        id: id("rule_bad_origin"),
+        name: None,
+        description: None,
+        requirement_ids: vec![id("req_overtime")],
+        resolution_ids: Vec::new(),
+        statement: "The system refuses a missing origin".into(),
+        status: RuleStatus::Active,
+        archived_in_commit: None,
+        severity: RuleSeverity::Medium,
+        source_document: None,
+        source_section: None,
+        origin_thread: None,
+        origin_message: Some(missing),
+    };
+
+    for result in [
+        store.create_source(source).map(|_| ()),
+        store.create_resolution(resolution).map(|_| ()),
+        store.create_rule(rule).map(|_| ()),
+    ] {
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("origin Message does not exist in this scope"));
+    }
+    assert!(store.list_sources(&scope).unwrap().is_empty());
+    assert!(store.list_resolutions(&scope).unwrap().is_empty());
+    assert!(store.list_rules(&scope).unwrap().is_empty());
+}
