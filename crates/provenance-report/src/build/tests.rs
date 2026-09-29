@@ -56,7 +56,7 @@ fn write_graph_with_statuses(repo: &Utf8Path, rules: &[(&str, &str)]) {
     let rules = rules
         .iter()
         .map(|(id, status)| {
-            json!({
+            let mut rule = json!({
                 "schema_version": SUPPORTED_SCHEMA_VERSION,
                 "scope_id": "default",
                 "id": id,
@@ -64,8 +64,11 @@ fn write_graph_with_statuses(repo: &Utf8Path, rules: &[(&str, &str)]) {
                 "status": status,
                 "severity": "high",
                 "requirement_ids": ["req_anchor"]
-            })
-            .to_string()
+            });
+            if *status == "archived" {
+                rule["archived_in_commit"] = json!({"commit": "a".repeat(40)});
+            }
+            rule.to_string()
         })
         .collect::<Vec<_>>()
         .join("\n");
