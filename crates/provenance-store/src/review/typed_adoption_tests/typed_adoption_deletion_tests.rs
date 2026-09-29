@@ -51,6 +51,9 @@ fn typed_cascade_refuses_enrolled_deletion_before_publication() {
             .contains("cannot delete enrolled resolution"),
         "{error:#}"
     );
-    assert_eq!(std::fs::read(requirement_path).unwrap(), requirements_before);
+    assert_eq!(
+        std::fs::read(requirement_path).unwrap(),
+        requirements_before
+    );
     assert_eq!(std::fs::read(resolution_path).unwrap(), resolutions_before);
 }

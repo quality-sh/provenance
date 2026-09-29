@@ -2,10 +2,7 @@
 
 use super::{classifier, guard, journal, save::RecordEvidenceContext};
 use crate::{
-    cache::review_families,
-    canonical_digest,
-    publication::with_staged_state,
-    shards,
+    cache::review_families, canonical_digest, publication::with_staged_state, shards,
     state_store::StateStore,
 };
 use provenance_core::{

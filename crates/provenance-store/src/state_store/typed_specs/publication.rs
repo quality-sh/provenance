@@ -61,23 +61,27 @@ impl Replacement {
             .collect::<Vec<_>>();
         desired.extend(store.list_domains(scope)?.into_iter().map(Into::into));
         self.cascade.extend_review_records(&mut desired);
-        store.publish_typed_spec(scope, &result.declared_by, &desired, |store| {
-            store
-                .replace_graph_records(&shards::sources_path(&store.layout, scope), self.sources)?;
-            crate::test_probes::at("typed_spec_sources_published")?;
-            store.replace_graph_records(
-                &shards::requirements_path(&store.layout, scope),
-                self.requirements,
-            )?;
-            store.replace_graph_records(&shards::rules_path(&store.layout, scope), self.rules)?;
-            replace_records(
-                store,
-                &shards::implementation_bindings_path(&store.layout, scope),
-                self.implementations,
-            )?;
-            self.cascade.publish(store, scope)?;
-            store.raise_requirement_reviews(scope, requirement_resources, rule_resources)
-        })
-        .map_err(publication_started)
+        store
+            .publish_typed_spec(scope, &result.declared_by, &desired, |store| {
+                store.replace_graph_records(
+                    &shards::sources_path(&store.layout, scope),
+                    self.sources,
+                )?;
+                crate::test_probes::at("typed_spec_sources_published")?;
+                store.replace_graph_records(
+                    &shards::requirements_path(&store.layout, scope),
+                    self.requirements,
+                )?;
+                store
+                    .replace_graph_records(&shards::rules_path(&store.layout, scope), self.rules)?;
+                replace_records(
+                    store,
+                    &shards::implementation_bindings_path(&store.layout, scope),
+                    self.implementations,
+                )?;
+                self.cascade.publish(store, scope)?;
+                store.raise_requirement_reviews(scope, requirement_resources, rule_resources)
+            })
+            .map_err(publication_started)
     }
 }
