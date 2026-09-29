@@ -107,6 +107,48 @@ async fn impact_says_when_the_scan_was_cut() {
     assert_eq!(cut.stamp.serial, whole.stamp.serial);
 }
 
+#[tokio::test]
+async fn scanned_impact_sites_name_their_items() {
+    let store = test_stores::seeded_queries();
+    crate::cache::tests::fixtures::create_rule_of(
+        &store.state_store(),
+        &store.scope,
+        "rule_overtime",
+        "req_overtime",
+    );
+    std::fs::write(
+        store.root.join("src/pay.rs"),
+        concat!(
+            "#[rule(\"rule_overtime\")]\n",
+            "fn pay() {}\n",
+            "#[verifies(\"rule_overtime\", examples)]\n",
+            "fn checks_pay() {}\n",
+        ),
+    )
+    .unwrap();
+
+    let answer = queries::impact(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        query("req_overtime"),
+    )
+    .await
+    .unwrap()
+    .result;
+
+    assert_eq!(
+        answer.affected_rules[0].implementations[0]
+            .symbol
+            .as_deref(),
+        Some("pay")
+    );
+    assert_eq!(
+        answer.affected_rules[0].verifications[0].symbol.as_deref(),
+        Some("checks_pay")
+    );
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn direct_reader_accepts_an_alias_of_the_repository_root() {

@@ -58,6 +58,23 @@ fn bind(store: &TestStore, id: &str, file: &str) {
     );
 }
 
+fn verify(store: &TestStore, id: &str, file: &str) {
+    append_record(
+        &shards::verification_bindings_path(&store.layout(), &store.scope),
+        &json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": store.scope.as_str(),
+            "id": id,
+            "rule_id": "rule_overtime",
+            "key": "checks_pay",
+            "method": "examples",
+            "declared_by": "spec://test",
+            "file": file,
+            "symbol": "checks_pay",
+        }),
+    );
+}
+
 fn rule_ids(rules: &[provenance_core::protocol::GraphNode]) -> Vec<&str> {
     rules.iter().map(|node| node.id().as_str()).collect()
 }
@@ -189,6 +206,7 @@ async fn an_exact_item_name_marks_the_symbol_match() {
 async fn resolve_symbol_on_an_unscanned_extension_answers_bindings_only() {
     let store = store_with_rule();
     bind(&store, "bind_md", "docs/pay.md");
+    verify(&store, "verify_md", "docs/pay.md");
     let note = store.root.join("docs/pay.md");
     std::fs::create_dir_all(note.parent().unwrap()).unwrap();
     std::fs::write(note, "#[rule(\"rule_from_prose\")]\nfn pay() {}\n").unwrap();
@@ -204,6 +222,24 @@ async fn resolve_symbol_on_an_unscanned_extension_answers_bindings_only() {
         rule_ids(&answer.result.rules),
         ["rule_overtime"],
         "the binding answers; the prose is not scanned"
+    );
+    assert_eq!(
+        serde_json::to_value(&answer.result.matches).unwrap(),
+        json!([
+            {
+                "rule_id": "rule_overtime",
+                "role": "implementation",
+                "item_name": "pay",
+                "match_kind": "file"
+            },
+            {
+                "rule_id": "rule_overtime",
+                "role": "verification",
+                "item_name": "checks_pay",
+                "verification_method": "examples",
+                "match_kind": "file"
+            }
+        ])
     );
     assert_eq!(
         answer.stamp.attested,
