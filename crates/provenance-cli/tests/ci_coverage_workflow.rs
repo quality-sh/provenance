@@ -204,11 +204,33 @@ fn pull_requests_render_the_comparison_report_without_failing_the_job() {
         "the new report must warn without failing the job: {report}"
     );
     assert!(
+        report.contains("BASE_SHA: ${{ github.event.pull_request.base.sha }}")
+            && report.contains("HEAD_SHA: ${{ github.event.pull_request.head.sha }}")
+            && report.contains("REPOSITORY: ${{ github.repository }}"),
+        "event values must enter the script through its environment: {report}"
+    );
+    assert!(
+        report.contains("git fetch --no-tags origin \"$HEAD_SHA\"")
+            && report.contains("git merge-base \"$BASE_SHA\" \"$HEAD_SHA\""),
+        "the report must compare from the fetched pull request merge base: {report}"
+    );
+    assert!(
         report.contains("report build")
-            && report.contains("--base \"${{ github.event.pull_request.base.sha }}\"")
-            && report.contains("--head HEAD")
-            && report.contains("--repository \"${{ github.repository }}\""),
-        "the envelope must compare the pull request with its base: {report}"
+            && report.contains("--base \"$REPORT_BASE\"")
+            && report.contains("--head \"$HEAD_SHA\"")
+            && report.contains("--repository \"$REPOSITORY\""),
+        "the envelope must compare the merge base with the pull request head: {report}"
+    );
+    assert!(
+        !report
+            .split_once("run: |")
+            .expect("the report step has a shell script")
+            .1
+            .split_once("- name: Report Rule binding findings")
+            .expect("the report script ends at the next step")
+            .0
+            .contains("${{"),
+        "event expressions must not be inlined in the shell script: {report}"
     );
     assert!(
         report.contains("$RUNNER_TEMP/provenance-report-envelope.json")
