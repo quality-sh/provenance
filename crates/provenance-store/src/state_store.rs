@@ -103,6 +103,7 @@ enum Access {
 pub struct StateStore {
     pub(crate) layout: ProvenanceLayout,
     access: Access,
+    record_stamp: Option<Option<provenance_core::Stamp>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -288,8 +289,21 @@ impl StateStore {
         Self {
             layout,
             access: Access::Lock,
+            record_stamp: None,
         }
     }
+
+    pub(crate) const fn staged(
+        layout: ProvenanceLayout,
+        stamp: Option<provenance_core::Stamp>,
+    ) -> Self {
+        Self {
+            layout,
+            access: Access::Lock,
+            record_stamp: Some(stamp),
+        }
+    }
+
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_read(|| {
             let path = self.layout.manifest_path();

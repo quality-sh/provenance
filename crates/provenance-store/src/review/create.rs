@@ -78,12 +78,13 @@ impl StateStore {
             )?;
             let scope = scope.clone();
             let id = input.create.id.clone();
+            let stamp = self.current_record_stamp()?;
             with_staged_state(&self.layout, false, |layout| {
                 guard::with_writer(
                     &shards::requirements_path(layout, &scope),
                     id.as_str(),
                     || {
-                        let staged = Self::new(layout.clone());
+                        let staged = Self::staged(layout.clone(), stamp);
                         let entry = staged.commit_creation(input, digest)?;
                         complete(&staged, entry)
                     },
