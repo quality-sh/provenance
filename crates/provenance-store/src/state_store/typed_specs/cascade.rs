@@ -227,18 +227,15 @@ impl Cascade {
             &shards::resolutions_path(&store.layout, scope),
             self.resolutions,
         )?;
-        super::replace_records(
-            store,
+        store.replace_graph_records(
             &shards::topics_path(&store.layout, scope),
             self.topics,
         )?;
-        super::replace_records(
-            store,
+        store.replace_graph_records(
             &shards::questions_path(&store.layout, scope),
             self.questions,
         )?;
-        super::replace_records(
-            store,
+        store.replace_graph_records(
             &shards::boundaries_path(&store.layout, scope),
             self.boundaries,
         )?;
