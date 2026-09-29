@@ -203,7 +203,10 @@ fn typed_omission_refuses_enrolled_deletion() {
 
     let error = store.apply_typed_spec(&scope, empty).unwrap_err();
 
-    assert!(error.to_string().contains("enrolled record"), "{error:#}");
+    assert!(
+        error.to_string().contains("cannot delete enrolled"),
+        "{error:#}"
+    );
     assert_eq!(
         std::fs::read(shards::requirements_path(&store.layout, &scope)).unwrap(),
         before
