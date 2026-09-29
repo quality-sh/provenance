@@ -27,7 +27,7 @@ impl StateStore {
             create: input,
             origin: None,
         }) {
-            Ok(entry) => self.requirement(&entry.scope_id, &entry.requirement_id),
+            Ok(entry) => self.requirement(&entry.scope_id, &entry.record_id),
             Err(error) => {
                 let duplicate = self
                     .list_requirements(&scope)

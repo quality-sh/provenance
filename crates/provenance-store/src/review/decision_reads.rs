@@ -24,7 +24,7 @@ impl StateStore {
         requirement_id: &StableId,
     ) -> anyhow::Result<RequirementDecisionState> {
         let record = self.requirement(scope, requirement_id)?;
-        let head = self.head(&record)?;
+        let head = self.head(&record.into())?;
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         let facts = CycleFacts::validated(self, scope)?;
@@ -40,7 +40,12 @@ impl StateStore {
             })
             .collect();
         let pending = facts
-            .pending_submission(self, scope, requirement_id)?
+            .pending_submission(
+                self,
+                scope,
+                provenance_core::NodeType::Requirement,
+                requirement_id,
+            )?
             .map(|entry| {
                 let proposal = submissions
                     .iter()
@@ -89,12 +94,14 @@ impl StateStore {
             })
             .cloned();
         Ok(RequirementDecisionState {
-            requirement_id: requirement_id.clone(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: requirement_id.clone(),
             current_revision: head.map(|entry| entry.revision),
             pending,
             current_acceptance,
             decisions: recorded,
-            withdrawn: facts.withdrawn_submissions(requirement_id),
+            withdrawn: facts
+                .withdrawn_submissions(provenance_core::NodeType::Requirement, requirement_id),
         })
     }
 }

@@ -1,87 +1,94 @@
-use crate::canonical_digest;
-use provenance_core::Requirement;
+use crate::{cache::review_families, canonical_digest};
+use provenance_core::NodeType;
+use serde::Serialize;
 
-/// The fields a lifecycle-only save may change. They never establish a new
-/// revision and never block a decision on the reviewed content. Record stamps
-/// never reach this list: `content_value` leaves them out of content entirely.
-const LIFECYCLE_FIELDS: [&str; 1] = ["status"];
-
-pub(super) fn changed_fields(
-    before: &Requirement,
-    after: &Requirement,
+pub(super) fn changed_fields<T: Serialize>(
+    kind: NodeType,
+    before: &T,
+    after: &T,
 ) -> anyhow::Result<Vec<String>> {
     let before = provenance_core::model::record_stamps::content_value(before)?;
     let after = provenance_core::model::record_stamps::content_value(after)?;
     let mut names = before
         .as_object()
-        .unwrap()
+        .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?
         .keys()
-        .chain(after.as_object().unwrap().keys())
+        .chain(
+            after
+                .as_object()
+                .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?
+                .keys(),
+        )
         .filter(|name| name.as_str() != "schema_version")
         .cloned()
         .collect::<Vec<_>>();
     names.sort();
     names.dedup();
     names.retain(|name| before.get(name) != after.get(name));
+    let facts = review_families::by_kind(kind);
+    anyhow::ensure!(
+        names.iter().all(|name| {
+            facts.content_fields.contains(&name.as_str())
+                || facts.lifecycle_fields.contains(&name.as_str())
+        }),
+        "record contains a field with no review classification"
+    );
     Ok(names)
 }
 
-pub(super) fn changes_revision(fields: &[String]) -> bool {
-    fields
-        .iter()
-        .any(|field| !LIFECYCLE_FIELDS.contains(&field.as_str()))
+pub(super) fn changes_revision(kind: NodeType, fields: &[String]) -> bool {
+    let content = review_families::by_kind(kind).content_fields;
+    fields.iter().any(|field| content.contains(&field.as_str()))
 }
 
 /// Digests the review-content fields of one record. Lifecycle fields and
 /// record stamps are left out, so a lifecycle-only save keeps the digest a
 /// submission bound, and a decision on the reviewed content stays possible
 /// after one.
-pub(super) fn content_digest(record: &Requirement) -> anyhow::Result<String> {
-    let mut value = provenance_core::model::record_stamps::content_value(record)?;
+pub(super) fn content_digest<T: Serialize>(kind: NodeType, record: &T) -> anyhow::Result<String> {
+    let value = provenance_core::model::record_stamps::content_value(record)?;
     let object = value
-        .as_object_mut()
+        .as_object()
         .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?;
-    object.remove("schema_version");
-    for field in LIFECYCLE_FIELDS {
-        object.remove(field);
-    }
+    let content = review_families::by_kind(kind).content_fields;
+    let filtered = object
+        .iter()
+        .filter(|(field, _)| content.contains(&field.as_str()))
+        .map(|(field, value)| (field.clone(), value.clone()))
+        .collect::<serde_json::Map<_, _>>();
     Ok(canonical_digest::digest(
-        &canonical_digest::canonical_bytes(&value)?,
+        &canonical_digest::canonical_bytes(&filtered)?,
     ))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::changed_fields;
-    use provenance_core::Requirement;
+    use super::{changed_fields, changes_revision, content_digest};
+    use crate::cache::review_families::REVIEW_FAMILIES;
     use serde_json::json;
 
     #[test]
-    fn stamp_only_changes_are_not_review_content_changes() {
-        let value = json!({
-            "schema_version": 2,
-            "scope_id": "default",
-            "id": "req_stamp",
-            "statement": "The system stores records.",
-            "status": "active"
-        });
-        let before: Requirement = serde_json::from_value(value.clone()).unwrap();
-        let mut after: Requirement = serde_json::from_value(value).unwrap();
-        after.created = Some(
-            serde_json::from_value(json!({
-                "commit": "a".repeat(40),
-                "at": "2026-09-12T00:00:00Z"
-            }))
-            .unwrap(),
-        );
-        after.updated = Some(
-            serde_json::from_value(json!({
-                "commit": "b".repeat(40),
-                "at": "2026-09-12T01:00:00Z"
-            }))
-            .unwrap(),
-        );
-
-        assert!(changed_fields(&before, &after).unwrap().is_empty());
+    fn every_kind_separates_review_content_from_lifecycle() {
+        for family in REVIEW_FAMILIES {
+            let content = family.content_fields[0];
+            let Some(lifecycle) = family
+                .lifecycle_fields
+                .iter()
+                .find(|field| !matches!(**field, "schema_version" | "scope_id" | "id"))
+                .copied()
+            else {
+                continue;
+            };
+            assert!(changes_revision(family.kind, &[content.to_string()]));
+            assert!(!changes_revision(family.kind, &[lifecycle.to_string()]));
+            let before = json!({(content):"A", (lifecycle):"old"});
+            let after = json!({(content):"A", (lifecycle):"new"});
+            assert_eq!(
+                content_digest(family.kind, &before).unwrap(),
+                content_digest(family.kind, &after).unwrap()
+            );
+            let changed = changed_fields(family.kind, &before, &after).unwrap();
+            assert!(changed.is_empty() || changed == [lifecycle.to_string()]);
+        }
     }
 }

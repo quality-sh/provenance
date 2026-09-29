@@ -103,13 +103,19 @@ pub fn ensure_supported_record_version(
         }
         return Ok(());
     }
-    if value["schema_version"] == 3
-        && path.file_name() == Some("req.jsonl")
-        && path.parent().and_then(Utf8Path::file_name) == Some("requirements")
-        && serde_json::from_value::<provenance_core::Requirement>(value.clone()).is_ok()
-    {
-        deserialize_closed::<provenance_core::Requirement>(&serde_json::to_string(value)?)
-            .with_context(|| format!("{path} line {line_number}: invalid enrolled Requirement"))?;
+    let family = path
+        .parent()
+        .and_then(Utf8Path::file_name)
+        .and_then(crate::cache::review_families::by_directory);
+    if let (true, Some(family)) = (value["schema_version"] == 3, family) {
+        crate::cache::review_families::deserialize_record(family.kind, value).with_context(
+            || {
+                format!(
+                    "{path} line {line_number}: invalid enrolled {}",
+                    family.kind.as_str()
+                )
+            },
+        )?;
         return Ok(());
     }
     let Some((id, version)) = first_unsupported_record(value) else {

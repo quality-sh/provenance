@@ -1,6 +1,6 @@
 #[allow(dead_code)]
 mod review_support;
-use provenance_core::review::{EvidenceQuery, RequirementSnapshot, ReviewHistoryQuery};
+use provenance_core::review::{EvidenceQuery, RecordSnapshot, ReviewHistoryQuery};
 use provenance_store::{
     operations::read_policy::ReadPolicy,
     review::{read_evidence, read_history, SaveRequirement},
@@ -25,7 +25,8 @@ async fn review_finding_cycle_rows_do_not_enter_edit_history_pages() {
         &scope(),
         ReadPolicy::default(),
         ReviewHistoryQuery {
-            requirement_id: id(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
             limit: 200,
             cursor: None,
         },
@@ -42,7 +43,8 @@ async fn review_finding_cycle_rows_do_not_enter_edit_history_pages() {
             &scope(),
             ReadPolicy::default(),
             ReviewHistoryQuery {
-                requirement_id: id(),
+                record_kind: provenance_core::NodeType::Requirement,
+                record_id: id(),
                 limit: 1,
                 cursor,
             },
@@ -83,7 +85,8 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
             &scope(),
             ReadPolicy::default(),
             EvidenceQuery {
-                requirement_id: id(),
+                record_kind: provenance_core::NodeType::Requirement,
+                record_id: id(),
                 entry_id: first.id.clone(),
                 before: false,
                 field: None,
@@ -104,14 +107,23 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
         provenance_store::canonical_digest::digest(bytes.as_bytes()),
         first.after.digest
     );
-    let snapshot: RequirementSnapshot = serde_json::from_str(&bytes).unwrap();
-    assert_eq!(snapshot.record.description.as_deref(), Some(text.as_str()));
+    let snapshot: RecordSnapshot = serde_json::from_str(&bytes).unwrap();
+    assert_eq!(
+        snapshot
+            .record
+            .as_requirement()
+            .unwrap()
+            .description
+            .as_deref(),
+        Some(text.as_str())
+    );
     let one = read_history(
         root,
         &scope(),
         ReadPolicy::default(),
         ReviewHistoryQuery {
-            requirement_id: id(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
             limit: 1,
             cursor: None,
         },
@@ -126,7 +138,8 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
         &scope(),
         ReadPolicy::default(),
         ReviewHistoryQuery {
-            requirement_id: id(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
             limit: 1,
             cursor: Some(cursor.clone()),
         },
@@ -141,7 +154,8 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
         &scope(),
         ReadPolicy::default(),
         ReviewHistoryQuery {
-            requirement_id: id(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
             limit: 1,
             cursor: Some(cursor.clone()),
         },
@@ -159,7 +173,8 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
         &scope(),
         ReadPolicy::default(),
         ReviewHistoryQuery {
-            requirement_id: id(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
             limit: 1,
             cursor: Some(cursor)
         }
@@ -171,7 +186,8 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
         &scope(),
         ReadPolicy::default(),
         ReviewHistoryQuery {
-            requirement_id: id(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
             limit: 201,
             cursor: None
         }

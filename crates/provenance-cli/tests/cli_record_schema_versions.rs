@@ -31,6 +31,8 @@ const STORED_FAMILIES: [(&str, &str); 16] = [
     ),
 ];
 
+const UNSUPPORTED_SCHEMA_VERSION: u32 = REVIEW_SCHEMA_VERSION.0 + 1;
+
 #[test]
 #[verifies("rule_reads_supported_version_only", examples)]
 fn wiki_and_check_refuse_v2_rows_in_every_stored_family() {
@@ -66,8 +68,7 @@ fn wiki_and_check_refuse_v2_rows_in_every_stored_family() {
                 .stderr(contains(format!("record {record_id}")))
                 .stderr(contains(format!(
                     "has schema_version {}, but this build reads schema_version {} only",
-                    SUPPORTED_SCHEMA_VERSION.0 + 1,
-                    SUPPORTED_SCHEMA_VERSION.0
+                    UNSUPPORTED_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION.0
                 )));
         }
     }
@@ -106,8 +107,7 @@ fn coverage_rule_validation_refuses_a_v2_rule_row() {
         .stderr(contains("record rule_future"))
         .stderr(contains(format!(
             "has schema_version {}, but this build reads schema_version {} only",
-            SUPPORTED_SCHEMA_VERSION.0 + 1,
-            SUPPORTED_SCHEMA_VERSION.0
+            UNSUPPORTED_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION.0
         )));
 }
 
@@ -272,10 +272,7 @@ fn plant_v2_row(repo: &std::path::Path, relative_path: &str, record_id: &str) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         path,
-        format!(
-            "{{\"schema_version\":{},\"id\":\"{record_id}\"}}\n",
-            SUPPORTED_SCHEMA_VERSION.0 + 1
-        ),
+        format!("{{\"schema_version\":{UNSUPPORTED_SCHEMA_VERSION},\"id\":\"{record_id}\"}}\n"),
     )
     .unwrap();
 }

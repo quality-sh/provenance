@@ -34,15 +34,15 @@ async fn history(
     let (cursor, mut position) = Cursor::open(
         ctx,
         "review-history",
-        &(&query.requirement_id, query.limit),
+        &(&query.record_kind, &query.record_id, query.limit),
         query.cursor.as_deref(),
     )?;
     ctx.snapshot().bound_page_work().await?;
     ctx.snapshot().attest("review_journal");
     let mut tx = ctx.snapshot().connection().await;
     let keys: Vec<(String, i64, i64)> = sqlx::query_as(
-        "SELECT id, sequence, length(CAST(payload AS BLOB)) FROM review_journal WHERE scope_id = ? AND kind = 'requirement' AND requirement_id = ? AND sequence > ? ORDER BY sequence LIMIT ?"
-    ).bind(ctx.snapshot().scope().as_str()).bind(query.requirement_id.as_str()).bind(position.counter)
+        "SELECT id, sequence, length(CAST(payload AS BLOB)) FROM review_journal WHERE scope_id = ? AND kind IN ('requirement', 'record') AND record_kind = ? AND record_id = ? AND sequence > ? ORDER BY sequence LIMIT ?"
+    ).bind(ctx.snapshot().scope().as_str()).bind(query.record_kind.as_str()).bind(query.record_id.as_str()).bind(position.counter)
         .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
     drop(tx);
     let mut more = keys.len() > query.limit;
@@ -58,7 +58,7 @@ async fn history(
         }
         let entry = ctx
             .snapshot()
-            .review_entry(&query.requirement_id, &id)
+            .review_entry(query.record_kind, &query.record_id, &id)
             .await?;
         bytes += serde_json::to_vec(&entry)?.len() + 1;
         entries.push(entry);
@@ -74,12 +74,17 @@ async fn history(
 }
 
 impl ReadSnapshot {
-    async fn review_entry(&self, requirement: &StableId, id: &str) -> anyhow::Result<ReviewEntry> {
+    async fn review_entry(
+        &self,
+        kind: provenance_core::NodeType,
+        record: &StableId,
+        id: &str,
+    ) -> anyhow::Result<ReviewEntry> {
         self.attest("review_journal");
         let mut tx = self.connection().await;
         let row: Option<(i64, Option<String>)> = sqlx::query_as(
-            "SELECT length(CAST(payload AS BLOB)), CASE WHEN length(CAST(payload AS BLOB)) <= ? THEN payload END FROM review_journal WHERE scope_id = ? AND kind = 'requirement' AND requirement_id = ? AND id = ?"
-        ).bind(i64::try_from(RECORD_BYTES)?).bind(self.scope().as_str()).bind(requirement.as_str()).bind(id)
+            "SELECT length(CAST(payload AS BLOB)), CASE WHEN length(CAST(payload AS BLOB)) <= ? THEN payload END FROM review_journal WHERE scope_id = ? AND kind IN ('requirement', 'record') AND record_kind = ? AND record_id = ? AND id = ?"
+        ).bind(i64::try_from(RECORD_BYTES)?).bind(self.scope().as_str()).bind(kind.as_str()).bind(record.as_str()).bind(id)
             .fetch_optional(&mut **tx).await?;
         drop(tx);
         let (size, payload) = row.ok_or(ReadFailure::ResourceNotFound)?;
@@ -102,7 +107,7 @@ pub async fn read_evidence(
             ctx.snapshot().bound_page_work().await?;
             let entry = ctx
                 .snapshot()
-                .review_entry(&query.requirement_id, query.entry_id.as_str())
+                .review_entry(query.record_kind, &query.record_id, query.entry_id.as_str())
                 .await?;
             let reference = if query.before {
                 entry
