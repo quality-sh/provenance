@@ -20,6 +20,50 @@ use provenance_core::{review::ReviewRecord, Requirement, ScopeId, SourceReferenc
 const AUTHORING_ACTOR: &str = "authoring";
 
 impl StateStore {
+    pub(crate) fn save_native_record<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        let relative = path.strip_prefix(self.layout.root())?.to_owned();
+        self.with_repository_publication(|| {
+            with_staged_state(&self.layout, false, |layout| {
+                let staged = Self::new(layout.clone());
+                let staged_path = layout.root().join(&relative);
+                guard::with_writer(&staged_path, "*", || {
+                    let (before, _) =
+                        staged.mutate_graph_record_guarded(&staged_path, mutate)?;
+                    let before = before.ok_or_else(|| {
+                        anyhow::anyhow!("native update cannot create a graph record")
+                    })?;
+                    let before: ReviewRecord = before.into();
+                    let after = staged.enroll_graph_record::<T>(&staged_path, before.id())?;
+                    let after: ReviewRecord = after.clone().into();
+                    let head = staged.head(&before)?;
+                    staged.validated_review_entries(after.scope_id())?;
+                    let request_id = journal::new_id();
+                    staged.commit_record_evidence(
+                        Some(&before),
+                        &after,
+                        RecordEvidenceContext {
+                            head,
+                            actor: AUTHORING_ACTOR.to_owned(),
+                            request_id,
+                            intent_digest: canonical_digest::digest(
+                                &canonical_digest::canonical_bytes(&after)?,
+                            ),
+                            origin: None,
+                        },
+                    )?;
+                    staged.validate_graph_scope(after.scope_id())?;
+                    staged.enroll_review_manifest()?;
+                    Ok(after)
+                })
+            })
+        })
+        .and_then(review_record_into)
+    }
+
     pub(crate) fn create_native_record<T: GraphRecord>(
         &self,
         path: &Utf8Path,
@@ -278,6 +322,13 @@ impl StateStore {
         })?;
         self.requirement(&scope, &id)
     }
+}
+
+fn review_record_into<T>(record: ReviewRecord) -> anyhow::Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    Ok(serde_json::from_value(serde_json::to_value(record)?)?)
 }
 
 fn retype_create_error(error: anyhow::Error, duplicate: bool) -> anyhow::Error {

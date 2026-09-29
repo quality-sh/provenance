@@ -142,6 +142,18 @@ impl StateStore {
         path: &Utf8Path,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
+        if !crate::review::guard::writer_allows_path(path) {
+            return self.save_native_record(path, mutate);
+        }
+        self.mutate_graph_record_guarded(path, mutate)
+            .map(|(_, record)| record)
+    }
+
+    pub(crate) fn mutate_graph_record_guarded<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<(Option<T>, T)> {
         self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
             let before = records.clone();
             let result = mutate(records)?;
@@ -152,7 +164,10 @@ impl StateStore {
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("record mutation returned a missing record"))?;
             ensure_within_read_budget(&stamped)?;
-            Ok(stamped)
+            let previous = before
+                .into_iter()
+                .find(|record| record.id() == stamped.id());
+            Ok((previous, stamped))
         })
     }
 
