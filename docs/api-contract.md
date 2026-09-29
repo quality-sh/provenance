@@ -105,11 +105,12 @@ operations have no public replacement.
 
 Graph record writes use one guarded path for each kind. The review layer is the
 editing interface. A collection POST creates a record. A collection member PATCH
-edits a record under its ETag and enrollment preconditions. No parallel write
-surface exists. The read side merges the same way: a graph record member GET
-returns one resource read carrying the edit state, the relationships, the ETag,
-and the decision state together. The separate edit-state and decision-state
-reads of the #273 review surface have no successor.
+edits a record under its enrollment preconditions. A Requirement PATCH also
+uses its ETag precondition. No parallel write surface exists. The read side
+merges the same way: a graph record member GET returns one resource read carrying
+the edit state, the relationships, the ETag, and the decision state together.
+The separate edit-state and decision-state reads of the #273 review surface have
+no successor.
 
 A collection POST publishes the new graph record and its first review submission
 in one state write. A PATCH that changes review content publishes the new
@@ -134,7 +135,7 @@ headers. MCP and native calls use the same typed controls. `Idempotency-Key`,
 `If-Match`, and the response `ETag` map to Store-supported identity and
 precondition checks. The surface never advertises an unsupported guarantee.
 
-Graph record edit requests keep `If-Match`. Submit, decide, and withdraw do not
+Requirement edit requests keep `If-Match`. Submit, decide, and withdraw do not
 accept `Idempotency-Key`. Their bodies do not accept a request ID. A submit body
 does not accept `proposal_id` or `proposal_key`, and a decide body does not
 accept `disposition_id`. The server creates these identities and returns them.
@@ -175,7 +176,7 @@ declares 409. A read POST declares `MUTATES=false`. The generator linter checks
 the live OpenAPI document. It requires the base set, 409 on a mutating route,
 and a declared status for each runtime failure variant.
 
-A stale graph record edit returns 409 with its typed edit conflict and the
+A stale Requirement edit returns 409 with `requirement_edit_conflict` and the
 current ETag. A decide or withdraw request returns 409 with
 `review_submission_conflict` when the named submission is superseded,
 withdrawn, or already decided. This failure carries the current Proposal ID,
