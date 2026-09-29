@@ -122,9 +122,10 @@ async fn content_update_replaces_or_opens_the_current_submission() {
         .unwrap();
     let first = created.decision.pending.unwrap();
 
-    let updated = UpdateRequirementResource::run(context.clone(), update_request(&store, "update_a"))
-        .await
-        .unwrap();
+    let updated =
+        UpdateRequirementResource::run(context.clone(), update_request(&store, "update_a"))
+            .await
+            .unwrap();
     let second = updated.decision.pending.unwrap();
     assert_ne!(second.proposal_id, first.proposal_id);
     assert_ne!(second.revision, first.revision);
@@ -178,7 +179,9 @@ async fn lifecycle_update_keeps_the_current_submission() {
     }))
     .unwrap();
 
-    let updated = UpdateRequirementResource::run(context, request).await.unwrap();
+    let updated = UpdateRequirementResource::run(context, request)
+        .await
+        .unwrap();
 
     assert_eq!(updated.decision.pending.unwrap(), pending);
     assert_eq!(updated.edit.revision.unwrap(), pending.revision);

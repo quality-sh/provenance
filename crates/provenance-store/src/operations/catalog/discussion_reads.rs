@@ -1,6 +1,6 @@
 //! Addressed Discussion reads that do not page through collection results.
 
-use super::{shapes::graph_read_operation, review_reads::ReadResult, ExecutionNeed};
+use super::{review_reads::ReadResult, shapes::graph_read_operation, ExecutionNeed};
 use provenance_core::{threads::DiscussionGroup, StableId, ThreadParent};
 use serde::Deserialize;
 

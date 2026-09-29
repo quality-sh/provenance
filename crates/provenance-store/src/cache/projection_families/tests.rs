@@ -111,11 +111,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some("resolutions"),
                 Some(30),
                 Resource,
-                &[
-                    "list-resolutions",
-                    "page-resolutions",
-                    "get-resolution",
-                ],
+                &["list-resolutions", "page-resolutions", "get-resolution"],
             ),
         ),
         (
@@ -211,11 +207,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 Some(160),
                 Resource,
-                &[
-                    "list-assertions",
-                    "page-assertions",
-                    "get-assertion",
-                ],
+                &["list-assertions", "page-assertions", "get-assertion"],
             ),
         ),
         (
@@ -227,11 +219,7 @@ fn every_family_keeps_its_independent_descriptor() {
                 None,
                 Some(170),
                 Resource,
-                &[
-                    "list-dispositions",
-                    "page-dispositions",
-                    "get-disposition",
-                ],
+                &["list-dispositions", "page-dispositions", "get-disposition"],
             ),
         ),
         (

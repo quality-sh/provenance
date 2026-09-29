@@ -127,12 +127,7 @@ pub(super) async fn member_read(
 }
 
 pub(super) async fn list_read(root: &camino::Utf8Path) -> Result<serde_json::Value, String> {
-    operation_read(
-        root,
-        "page-sources",
-        json!({"limit": 50, "cursor": null}),
-    )
-    .await
+    operation_read(root, "page-sources", json!({"limit": 50, "cursor": null})).await
 }
 
 /// The trigger case: the request body fits the transport budget while the
