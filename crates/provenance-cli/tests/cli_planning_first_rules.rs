@@ -116,9 +116,8 @@ fn provenance_stdin(args: &[&str], input: &str) -> String {
     String::from_utf8(output).unwrap()
 }
 
-/// Graph reads show the accepted, grounded Rule without a code verdict. The
-/// canonical coverage scan separately reports that its implementation binding
-/// is absent.
+/// Graph reads show the grounded draft Rule without a code verdict. The
+/// canonical coverage scan does not report active-Rule absence findings.
 #[test]
 fn planning_first_rule_is_grounded_before_code_exists() {
     let dir = planning_first_repo();
@@ -136,7 +135,7 @@ fn planning_first_rule_is_grounded_before_code_exists() {
     ]))
     .unwrap();
     let rule = &record["record"]["value"];
-    assert_eq!(rule["status"], "active");
+    assert_eq!(rule["status"], "draft");
     assert!(rule.get("implementation").is_none());
 
     let trace: Value = serde_json::from_str(&provenance(&[
@@ -175,12 +174,9 @@ fn planning_first_rule_is_grounded_before_code_exists() {
     .unwrap();
     let warnings = coverage["warnings"].as_array().unwrap();
     assert!(
-        warnings.iter().any(|warning| {
-            warning["rule_id"] == "rule_second_approver"
-                && warning["message"]
-                    .as_str()
-                    .is_some_and(|message| message.contains("has no implementation"))
-        }),
+        warnings
+            .iter()
+            .all(|warning| warning["rule_id"] != "rule_second_approver"),
         "{coverage}"
     );
 }
