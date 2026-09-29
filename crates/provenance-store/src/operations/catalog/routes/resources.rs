@@ -14,7 +14,7 @@ const CREATE_REQUIREMENT_DEFAULTS: &[CliDefault] = &[
     },
     CliDefault {
         field: "status",
-        value: CliDefaultValue::String("draft"),
+        value: CliDefaultValue::String("active"),
     },
     CliDefault {
         field: "depends_on",
@@ -50,7 +50,7 @@ const CREATE_RULE_DEFAULTS: &[CliDefault] = &[
     },
     CliDefault {
         field: "status",
-        value: CliDefaultValue::String("active"),
+        value: CliDefaultValue::String("draft"),
     },
     CliDefault {
         field: "severity",
