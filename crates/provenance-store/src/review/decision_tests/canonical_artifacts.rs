@@ -33,3 +33,26 @@ fn review_approval_rejects_a_canonical_artifact_for_another_record_kind() {
         );
     }
 }
+
+#[test]
+fn review_approval_rejects_a_canonical_artifact_for_another_record_id() {
+    let (_temp, store, _, proposal) = enrolled();
+    let error = decide(
+        &store,
+        &proposal,
+        "accepted",
+        &reviewer("reviewer"),
+        &json!({
+            "canonical_artifact": {
+                "artifact_type": "requirement",
+                "artifact_id": "req_b"
+            }
+        }),
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::InvalidUpdate
+    ));
+}
