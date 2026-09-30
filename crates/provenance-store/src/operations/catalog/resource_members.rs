@@ -167,7 +167,7 @@ graph_read_operation!(
             ExecutionNeed::ProjectionMaintenance,
         ]
     },
-    reviewed_member
+    |read, request| reviewed_member(read, request)
 );
 
 macro_rules! payload_member_operation {
