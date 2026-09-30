@@ -244,6 +244,7 @@ fn run_review_cycle(kind: NodeType) {
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
     assert!(created.pending.is_none());
+    let first_revision = created.current_revision.clone().unwrap();
     let first = store
         .submit_record_review(SubmitRecordReview {
             scope_id: scope.clone(),
@@ -287,6 +288,7 @@ fn run_review_cycle(kind: NodeType) {
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
     assert!(revised.pending.is_none());
+    let second_revision = revised.current_revision.clone().unwrap();
     let second = store
         .submit_record_review(SubmitRecordReview {
             scope_id: scope.clone(),
@@ -304,7 +306,7 @@ fn run_review_cycle(kind: NodeType) {
             revises: Some(first.proposal_id.clone()),
         })
         .unwrap();
-    assert_ne!(second.revision, first.revision);
+    assert_ne!(second_revision, first_revision);
 
     let before_approval = record_value(&store, &scope, kind, &record_id);
     let approved = store
@@ -333,8 +335,8 @@ fn run_review_cycle(kind: NodeType) {
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
     assert_eq!(decided.decisions.len(), 2);
-    assert_eq!(decided.decisions[0].revision, first.revision);
-    assert_eq!(decided.decisions[1].revision, Some(second.revision));
+    assert_eq!(decided.decisions[0].revision, Some(first_revision));
+    assert_eq!(decided.decisions[1].revision, Some(second_revision));
     assert_eq!(
         decided.current_acceptance.unwrap().disposition.proposal_id,
         second.proposal_id
