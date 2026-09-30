@@ -11,10 +11,9 @@ fn help(arguments: &[&str]) -> String {
         "help failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    // Windows help uses CRLF and names the executable `provenance.exe`.
+    // Windows help names the executable `provenance.exe`.
     String::from_utf8(output.stdout)
         .expect("help output is UTF-8")
-        .replace("\r\n", "\n")
         .replace("provenance.exe", "provenance")
 }
 
@@ -50,7 +49,8 @@ fn centralized_repository_context_keeps_command_help() {
 
     assert_eq!(
         actual,
-        include_str!("fixtures/repo_context_help.txt"),
+        // A Windows checkout can give the fixture CRLF line endings.
+        include_str!("fixtures/repo_context_help.txt").replace("\r\n", "\n"),
         "command help changed from origin/main"
     );
 }
