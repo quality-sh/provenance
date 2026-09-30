@@ -50,7 +50,7 @@ fn create_prerequisites(store: &StateStore, kind: NodeType) {
         store
             .create_requirement(input::<CreateRequirementInput>(json!({
                 "scope_id":"default", "id":"requirement_a",
-                "statement":"The system stores the record.", "status":"draft",
+                "statement":"The system stores the record.", "status":"active",
                 "depends_on":[], "supersedes":[]
             })))
             .unwrap();
