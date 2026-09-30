@@ -103,3 +103,55 @@ export const result = Effect.flatMap(
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('importing one union matcher does not load schemas or validators', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'matcher-layout-'));
+  try {
+    const fixture = structuredClone(document);
+    fixture.components.schemas.ListRulesSuccessGraphNode = {
+      oneOf: [
+        { type: 'object', required: ['node_type'], properties: { node_type: { const: 'rule' } } },
+        { type: 'object', required: ['node_type'], properties: { node_type: { const: 'source' } } },
+      ],
+    };
+    fixture.components.schemas.ListRulesSuccess.properties.data.items = reference('ListRulesSuccessGraphNode');
+    const files = {
+      ...await effectFiles(fixture),
+      ...await operationValidators(fixture),
+    };
+    for (const [name, source] of Object.entries(files)) {
+      await mkdir(dirname(join(directory, name)), { recursive: true });
+      await writeFile(join(directory, name), source);
+    }
+    await writeFile(join(directory, 'effect.ts'), `
+export * from './effect-contract.js';
+export * from './effect-matchers.js';
+`);
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ type: 'module', sideEffects: false }));
+    await writeFile(join(directory, 'entry.ts'), `
+import { matchListRulesSuccessGraphNode } from './effect.js';
+export const match = matchListRulesSuccessGraphNode;
+`);
+    const result = await build({
+      entryPoints: [join(directory, 'entry.ts')],
+      outfile: join(directory, 'bundle.js'),
+      bundle: true,
+      packages: 'external',
+      platform: 'browser',
+      format: 'esm',
+      minify: true,
+      metafile: true,
+      write: false,
+    });
+    const inputs = Object.keys(result.metafile.inputs);
+    const included = Object.values(result.metafile.outputs)[0].inputs;
+    assert.ok(inputs.some(input => input.endsWith('/effect-matchers.ts')));
+    assert.equal(Object.entries(included).find(([input]) => input.endsWith('/effect-contract.ts'))?.[1].bytesInOutput ?? 0, 0,
+      'a matcher must not load the Effect schema contract');
+    assert.ok(Object.entries(included).filter(([input]) => input.includes('/validators/'))
+      .every(([, value]) => value.bytesInOutput === 0),
+      'a matcher must not load operation validators');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
