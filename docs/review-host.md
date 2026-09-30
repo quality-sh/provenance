@@ -102,24 +102,21 @@ configured disposition actors, this field is an empty list. The response does
 not contain the bearer credential.
 
 The generic renderer does not read credentials, fetch host configuration, or
-mount itself. Its index is an empty shell. The reusable read adapter lives in
-Provenance Web. The concrete application in [tools/review-host](../tools/review-host/README.md)
-supplies credential entry, the generated client, explicit Requirement selection,
-refresh, and error handling, then calls `mountReview(element, { store })`.
+mount itself. Its index is an empty shell. The concrete application in
+[tools/review-host](../tools/review-host/README.md) supplies credential entry and
+explicit Requirement selection. It reads `/review-config` with the credential.
+It then calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
+`dispositionActorIds`, `bearer`, and `rootId`. The renderer creates and owns the
+generated Effect client.
 
-Build that application with the matching renderer and generated SDK to replace
-the shell with the local host entry. The credential stays in page memory and is
+Build that application with the matching renderer to replace the shell with the
+local host entry. The credential stays in page memory and is
 sent only in the Authorization header to the current origin. It does not enter
 URLs, logs, assets, or browser storage. The password input is cleared after each
-connection attempt. A failed refresh removes the previous document; a superseded
-request cannot replace a later result.
+connection attempt. A new connection removes the previous page. A superseded
+connection result cannot replace a later result.
 
-The browser entry is `@quality-sh/provenance/client`. It pins the complete
-compatibility tuple from `/metadata` before it reads a resource. The application
-uses `getRequirementDocument` and collection search from the generated
-client. Its adapter supplies the renderer's document and search views. The
-composer checks the generated schema before it builds the application.
-The generated client calls an existing host; it does not
+The renderer's generated Effect client calls an existing host; it does not
 start one. Asset code must use the same origin and local dependencies. Response
 policy permits local scripts, styles, fonts, images, and connections. It blocks
 framing, inline scripts, external connections, and service workers.
@@ -136,26 +133,29 @@ this host has no dependency on provenance-boc5.6.
 The pin in [`tools/review-assets.json`](../tools/review-assets.json) identifies:
 
 - Source repository: `quality-sh/provenance-web`.
-- Merged commit: `e795fcee703ffc1b4c69af08ceedaf0c72876817` (PR 11).
-- Validated author commit: `ecf7db6a5836b29b8374ae090a88e411d8c65430`.
-- Successful [Review assets run 34538158110](https://github.com/quality-sh/provenance-web/actions/runs/34538158110).
+- Merged commit: `207f63ec68a70c9b2483acfe6d77e769d30d88c6` (PR 20).
+- Validated author commit: `967c45c5dbeec49cdaf86c22bcdb575fb21c8b1a`.
+- Successful [Review assets run 36707725354](https://github.com/quality-sh/provenance-web/actions/runs/36707725354).
 - Archive: `provenance-review.tar.gz`.
-- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-e795fcee703f/provenance-review.tar.gz).
-- SHA-256: `44590144c929085453a57539c99afa9da65e32a08035bcdc294f72b6cab3f7c1`.
+- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-207f63ec68a7/provenance-review.tar.gz).
+- SHA-256: `394f4c04ad004eb90c75050256d967df00c99bb5890679617af0d199258d7fac`.
+- Archive size: 2,371,543 bytes.
+- Page JavaScript bundle size: 19,785,076 bytes (19.6 MB). Bead
+  `provenance-boc5.5.22` tracks size reduction.
 
 The upstream entry is `src/browser/main.tsx`; `vite.review.config.ts` builds
 `dist-review`. `scripts/package-review.mjs` archives that directory with stable
 metadata and emits a checksum sidecar. The archive includes `review.js`,
 `review.css`, local fonts under `assets/`, the empty `index.html`,
-`build-info.json`, and `licenses/provenance.txt`. Its renderer does not contain
-an SDK runtime or a configured application. See the merged
-[browser contract](https://github.com/quality-sh/provenance-web/blob/e795fcee703ffc1b4c69af08ceedaf0c72876817/src/browser/README.md)
-and [SDK contract](https://github.com/quality-sh/provenance-web/blob/e795fcee703ffc1b4c69af08ceedaf0c72876817/src/review/sdk-contract.md).
+`build-info.json`, and `licenses/provenance.txt`. Its renderer contains the
+generated Effect client, but it does not contain a configured application. See the merged
+[browser contract](https://github.com/quality-sh/provenance-web/blob/207f63ec68a70c9b2483acfe6d77e769d30d88c6/src/browser/main.tsx)
+and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/207f63ec68a70c9b2483acfe6d77e769d30d88c6/docs/review-data-layer.md).
 
-After the SDK and build dependencies are ready, prepare the application and build:
+After the build dependencies are ready, prepare the application and build:
 
 ```sh
-node tools/review-host/prepare.ts packages/provenance crates/provenance-cli/review-assets-generated
+node tools/review-host/prepare.ts crates/provenance-cli/review-assets-generated
 cargo build --locked -p provenance-cli --bin provenance
 ```
 
@@ -169,9 +169,9 @@ It supplies the exact pinned bytes independently of the private Actions artifact
 An unavailable download or changed checksum stops
 preparation. No network access occurs in the Cargo asset build step or at runtime.
 
-The composed application supplies explicit Requirement selection and paged
-document reads. The host supplies authorization, repository and scope access,
-embedded assets, and shutdown. Persistent review mutations remain separate.
+The composed application supplies explicit Requirement selection. The renderer
+supplies reads and writes through its generated Effect client. The host supplies
+authorization, repository and scope access, embedded assets, and shutdown.
 
 ## Validation
 
@@ -187,9 +187,9 @@ The separate raw renderer check is
 Set `PROVENANCE_REVIEW_ARCHIVE` to a saved copy of the public archive for this
 check. Its legacy download path uses authenticated access to the private run.
 
-The bundle check compares every served file with the verified archive. It copies
+The bundle check compares every served file with the verified composition. It copies
 the executable, deletes the build input, removes Node from its process search
-path, and checks authenticated existing reads, target refusal, and listener
+path, and checks authenticated reads, target refusal, and listener
 closure. It does not mount a fixture store or claim complete document integration.
 The host tests submit valid denied reads and writes and compare repository bytes
 and directory entries. They also test foreign origins, DNS-rebinding Host values,

@@ -6,8 +6,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const [sdkArg, outputArg] = process.argv.slice(2);
-if (!sdkArg || !outputArg) throw new Error('Usage: node prepare.ts SDK_PACKAGE NEW_OUTPUT');
+const [outputArg] = process.argv.slice(2);
+if (!outputArg) throw new Error('Usage: node prepare.ts NEW_OUTPUT');
 const pinPath = join(root, 'tools/review-assets.json');
 const pin = JSON.parse(await readFile(pinPath, 'utf8'));
 const work = await mkdtemp(join(tmpdir(), 'provenance-renderer-'));
@@ -35,7 +35,7 @@ try {
   await mkdir(renderer);
   execFileSync('tar', ['-xzf', resolve(archive), '-C', renderer], { stdio: 'inherit' });
   execFileSync(process.execPath, [join(root, 'tools/review-host/build.ts'), renderer,
-    resolve(sdkArg), resolve(outputArg), pinPath], { stdio: 'inherit' });
+    resolve(outputArg), pinPath], { stdio: 'inherit' });
 } finally {
   await rm(work, { recursive: true, force: true });
 }
