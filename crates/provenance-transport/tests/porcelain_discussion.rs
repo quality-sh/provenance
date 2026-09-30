@@ -145,6 +145,25 @@ async fn assert_conversation_continuations(
     assert_eq!(stale_cursor.is_error, Some(true));
 }
 
+async fn assert_repeated_start_creates_new_discussion(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    first_id: &str,
+) {
+    let repeated = call(
+        client,
+        "discuss",
+        json!({
+            "parent":{"node_type":"requirement","node_id":"req_shared"},
+            "actor":"ben", "role":"user", "body":"Opening text"
+        }),
+    )
+    .await;
+    assert_ne!(
+        repeated.structured_content.as_ref().unwrap()["receipt"]["discussion_id"],
+        first_id
+    );
+}
+
 #[tokio::test]
 #[verifies("rule_porcelain_discussion_targets", examples)]
 async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
@@ -174,19 +193,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
             .is_valid(started.structured_content.as_ref().unwrap())
     );
     let id = receipt["discussion_id"].as_str().unwrap();
-    let repeated = call(
-        &client,
-        "discuss",
-        json!({
-            "parent":{"node_type":"requirement","node_id":"req_shared"},
-            "actor":"ben", "role":"user", "body":"Opening text"
-        }),
-    )
-    .await;
-    assert_ne!(
-        repeated.structured_content.as_ref().unwrap()["receipt"]["discussion_id"],
-        receipt["discussion_id"]
-    );
+    assert_repeated_start_creates_new_discussion(&client, id).await;
     let changed_body = call(
         &client,
         "discuss",
