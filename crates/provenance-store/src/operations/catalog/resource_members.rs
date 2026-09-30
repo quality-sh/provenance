@@ -27,19 +27,15 @@ pub struct ReviewResource<T> {
 
 async fn review_resource<T: ProjectionRow>(
     context: &ReadContext,
-    scope: &provenance_core::ScopeId,
+    scope: provenance_core::ScopeId,
     kind: provenance_core::NodeType,
-    id: &StableId,
+    id: StableId,
 ) -> anyhow::Result<ReviewResource<T>> {
-    let record = projection_member::<T>(
-        context,
-        ResourceMemberRequest { id: id.clone() },
-    )
-    .await?;
+    let record = projection_member::<T>(context, ResourceMemberRequest { id: id.clone() }).await?;
     let store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
-    let snapshot = store.record_resource_snapshot(scope, kind, id)?;
+    let snapshot = store.record_resource_snapshot(&scope, kind, &id)?;
     Ok(ReviewResource {
         record,
         edit: snapshot.edit,
@@ -146,9 +142,9 @@ macro_rules! review_member_operation {
                 Ok(reader::answer(&read.root, &read.scope, read.policy, move |context| {
                     Box::pin(review_resource::<$result>(
                         context,
-                        &record_scope,
+                        record_scope,
                         provenance_core::NodeType::$kind,
-                        &request.id,
+                        request.id,
                     ))
                 })
                 .await?
