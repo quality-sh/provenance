@@ -44,6 +44,7 @@ impl StateStore {
         let kind = record.kind();
         let record_id = record.id();
         let head = self.head(record)?;
+        let current_revision = head.as_ref().map(|entry| entry.revision.clone());
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         let facts = CycleFacts::validated(self, scope)?;
@@ -58,7 +59,13 @@ impl StateStore {
             })
             .collect();
         let pending = facts
-            .pending_submission(self, scope, kind, record_id)?
+            .pending_submission_at_revision(
+                self,
+                scope,
+                kind,
+                record_id,
+                current_revision.as_ref(),
+            )?
             .map(|entry| {
                 let proposal = submissions
                     .iter()
@@ -103,13 +110,13 @@ impl StateStore {
             .filter(|decision| decision.disposition.decision == DispositionDecision::Accepted)
             .find(|decision| {
                 decision.revision.is_some()
-                    && decision.revision.as_ref() == head.as_ref().map(|entry| &entry.revision)
+                    && decision.revision.as_ref() == current_revision.as_ref()
             })
             .cloned();
         Ok(RequirementDecisionState {
             record_kind: kind,
             record_id: record_id.clone(),
-            current_revision: head.map(|entry| entry.revision),
+            current_revision,
             pending,
             current_acceptance,
             decisions: recorded,

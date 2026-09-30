@@ -222,6 +222,23 @@ impl CycleFacts {
     ) -> anyhow::Result<Option<CycleEntry>> {
         let record = crate::cache::review_families::record(store, scope, kind, record_id)?;
         let current_revision = store.head(&record)?.map(|entry| entry.revision);
+        self.pending_submission_at_revision(
+            store,
+            scope,
+            kind,
+            record_id,
+            current_revision.as_ref(),
+        )
+    }
+
+    pub(super) fn pending_submission_at_revision(
+        &self,
+        store: &StateStore,
+        scope: &ScopeId,
+        kind: NodeType,
+        record_id: &StableId,
+        current_revision: Option<&StableId>,
+    ) -> anyhow::Result<Option<CycleEntry>> {
         let proposals = store.list_proposal_definitions(scope)?;
         let dispositions = store.list_dispositions(scope)?;
         let decided: std::collections::BTreeSet<&str> = dispositions
@@ -242,7 +259,7 @@ impl CycleFacts {
                     .iter()
                     .find(|proposal| proposal.id == entry.proposal_id)
                     .and_then(|proposal| proposal.record_revision.as_ref())
-                    .is_some_and(|binding| Some(&binding.revision) == current_revision.as_ref())
+                    .is_some_and(|binding| Some(&binding.revision) == current_revision)
             })
             .cloned()
             .next_back())
