@@ -11,12 +11,13 @@ impl<'a> Assembler<'a> {
         &self,
         requirement: &'a Requirement,
     ) -> RequirementPage {
-        let resolving = self.resolving_resolutions(&requirement.id);
+        let resolving = self.query.resolving_resolutions(&requirement.id);
         let decisions: Vec<DecisionSection> = resolving
             .iter()
             .map(|resolution| self.decision_section(resolution))
             .collect();
         let produced_rules: Vec<RuleCard> = self
+            .query
             .produced_rules_for_requirement(&requirement.id)
             .into_iter()
             .map(|rule| self.rule_card(rule))
@@ -27,29 +28,23 @@ impl<'a> Assembler<'a> {
         for resolution in &resolving {
             threads.extend(self.threads_for(NodeType::Resolution, &resolution.id));
         }
-        // The relation fields hold ids; only an existing record renders a
-        // link, so a dangling entry shows nowhere here. The gap pass
-        // reports it.
+        // The join answers with the records the relation fields reach;
+        // a dangling entry renders no link, the gap pass reports it.
         let supersedes: Vec<PageLink> = self
-            .state
-            .requirements
-            .iter()
-            .filter(|candidate| requirement.supersedes.contains(&candidate.id))
+            .query
+            .requirement_supersedes(requirement)
+            .into_iter()
             .map(requirement_link)
             .collect();
         let depends_on: Vec<PageLink> = self
-            .state
-            .requirements
-            .iter()
-            .filter(|candidate| requirement.depends_on.contains(&candidate.id))
+            .query
+            .requirement_depends_on(requirement)
+            .into_iter()
             .map(requirement_link)
             .collect();
         let superseded_by = self
-            .state
-            .requirements
-            .iter()
-            .filter(|candidate| candidate.supersedes.contains(&requirement.id))
-            .min_by_key(|candidate| candidate.id.as_str())
+            .query
+            .requirement_superseded_by(&requirement.id)
             .map(requirement_link);
         RequirementPage {
             id: PageId::new(RecordKind::Requirement, requirement.id.as_str()),
@@ -63,11 +58,15 @@ impl<'a> Assembler<'a> {
                 .as_ref()
                 .map(|id| id.as_str().to_string()),
             domain_has_anchor: requirement.domain_id.is_some() && !self.state.domains.is_empty(),
-            back_link: self.parent_of(&requirement.id).map(requirement_link),
+            back_link: self
+                .query
+                .refines_parent(&requirement.id)
+                .map(requirement_link),
             lineage: self.lineage(requirement),
             decisions,
             produced_rules,
             children: self
+                .query
                 .children_of(&requirement.id)
                 .into_iter()
                 .map(requirement_link)
