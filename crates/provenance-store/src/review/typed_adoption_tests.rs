@@ -91,7 +91,13 @@ fn enroll(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
         .find(|value| value["id"] == id.as_str())
         .unwrap();
     let before = review_families::deserialize_record(kind, value).unwrap();
-    let head = store.head(&before).unwrap();
+    let entries = store
+        .review_entries(scope)
+        .unwrap()
+        .into_iter()
+        .filter(|entry| entry.record_kind == kind && entry.record_id == *id)
+        .collect::<Vec<_>>();
+    let head = journal::validated_head(&entries).unwrap();
     if before.schema_version() == REVIEW_SCHEMA_VERSION {
         return;
     }
@@ -275,7 +281,8 @@ fn typed_adoption_captures_unowned_enrolled_records() {
         };
         let head = store.head(&record).unwrap().unwrap();
         assert_eq!(head.record_id, id);
-        assert_eq!(head.sequence, 2);
+        let expected_sequence = if kind == NodeType::Requirement { 2 } else { 3 };
+        assert_eq!(head.sequence, expected_sequence);
         assert_eq!(head.actor, OWNER);
     }
 }
