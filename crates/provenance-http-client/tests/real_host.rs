@@ -57,7 +57,6 @@ async fn real_host_covers_read_guarded_mutation_and_typed_failure() {
         .source_create_discussion_message(
             "source_ts",
             discussion_id,
-            "discussion_rust",
             &version.to_string(),
             &message,
         )
@@ -73,7 +72,6 @@ async fn real_host_covers_read_guarded_mutation_and_typed_failure() {
         .source_create_discussion_message(
             "source_ts",
             discussion_id,
-            "discussion_rust_invalid",
             &created.data.version.to_string(),
             &invalid,
         )
