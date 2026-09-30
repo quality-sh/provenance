@@ -27,6 +27,7 @@ mod identity;
 mod impact;
 mod limits;
 mod live;
+mod lifecycle_visibility;
 mod order;
 mod pinned;
 mod reader;
