@@ -13,11 +13,36 @@ use serde_json::{json, Value};
 
 #[allow(dead_code)]
 #[derive(schemars::JsonSchema)]
-struct ReviewedResourceSchema<T> {
-    #[serde(flatten)]
-    record: T,
+struct ReviewStateSchema {
     edit: provenance_core::review::RequirementEditState,
     decision: provenance_core::review::RequirementDecisionState,
+}
+
+fn reviewed_resource_schema<T: schemars::JsonSchema>() -> Value {
+    let mut record = schema::type_schema::<T>(Contract::Serialize);
+    let mut state = schema::type_schema::<ReviewStateSchema>(Contract::Serialize);
+    for field in ["properties", "$defs"] {
+        let Some(additions) = state
+            .as_object_mut()
+            .and_then(|schema| schema.remove(field))
+            .and_then(|value| value.as_object().cloned())
+        else {
+            continue;
+        };
+        record
+            .as_object_mut()
+            .expect("record schema must be an object")
+            .entry(field)
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("record schema section must be an object")
+            .extend(additions);
+    }
+    record["required"]
+        .as_array_mut()
+        .expect("record schema must declare required fields")
+        .extend([json!("edit"), json!("decision")]);
+    record
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -221,7 +246,7 @@ impl Definition {
 
     fn reviewed_result<T: schemars::JsonSchema>(mut self) -> Self {
         self.registration.response.adapter = ResponseAdapter::Result;
-        let payload = schema::type_schema::<ReviewedResourceSchema<T>>(Contract::Serialize);
+        let payload = reviewed_resource_schema::<T>();
         self.registration.response.schema =
             schema::response_envelope(payload, self.registration.response.kind);
         self
