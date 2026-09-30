@@ -71,51 +71,65 @@ fn create_record(store: &StateStore, kind: NodeType) -> StableId {
     let record_id = id(&format!("{}_a", kind.as_str()));
     match kind {
         NodeType::Source => {
-            store.create_source(input::<CreateSourceInput>(json!({
-                "scope_id":"default", "id":record_id, "name":"Policy A",
-                "source_type":"policy", "supersedes":[]
-            }))).unwrap();
+            store
+                .create_source(input::<CreateSourceInput>(json!({
+                    "scope_id":"default", "id":record_id, "name":"Policy A",
+                    "source_type":"policy", "supersedes":[]
+                })))
+                .unwrap();
         }
         NodeType::Resolution => {
-            store.create_resolution(input::<CreateResolutionInput>(json!({
-                "scope_id":"default", "id":record_id, "title":"Storage",
-                "position":"Store records.", "rationale":"Records are required.",
-                "status":"draft", "requirement_ids":["requirement_a"],
-                "supersedes":[], "inputs":[]
-            }))).unwrap();
+            store
+                .create_resolution(input::<CreateResolutionInput>(json!({
+                    "scope_id":"default", "id":record_id, "title":"Storage",
+                    "position":"Store records.", "rationale":"Records are required.",
+                    "status":"draft", "requirement_ids":["requirement_a"],
+                    "supersedes":[], "inputs":[]
+                })))
+                .unwrap();
         }
         NodeType::Rule => {
-            store.create_rule(input::<CreateRuleInput>(json!({
-                "scope_id":"default", "id":record_id,
-                "statement":"The system stores each record.", "status":"draft",
-                "severity":"medium", "requirement_ids":["requirement_a"],
-                "resolution_ids":[]
-            }))).unwrap();
+            store
+                .create_rule(input::<CreateRuleInput>(json!({
+                    "scope_id":"default", "id":record_id,
+                    "statement":"The system stores each record.", "status":"draft",
+                    "severity":"medium", "requirement_ids":["requirement_a"],
+                    "resolution_ids":[]
+                })))
+                .unwrap();
         }
         NodeType::Domain => {
-            store.create_domain(input::<CreateDomainInput>(json!({
-                "scope_id":"default", "id":record_id, "name":"Storage"
-            }))).unwrap();
+            store
+                .create_domain(input::<CreateDomainInput>(json!({
+                    "scope_id":"default", "id":record_id, "name":"Storage"
+                })))
+                .unwrap();
         }
         NodeType::Boundary => {
-            store.create_boundary(input::<CreateBoundaryInput>(json!({
-                "scope_id":"default", "id":record_id,
-                "requirement_id":"requirement_a", "statement":"Storage only."
-            }))).unwrap();
+            store
+                .create_boundary(input::<CreateBoundaryInput>(json!({
+                    "scope_id":"default", "id":record_id,
+                    "requirement_id":"requirement_a", "statement":"Storage only."
+                })))
+                .unwrap();
         }
         NodeType::Topic => {
-            store.create_topic(input::<CreateTopicInput>(json!({
-                "scope_id":"default", "id":record_id,
-                "requirement_id":"requirement_a", "title":"Storage topic",
-                "status":"open", "links":[]
-            }))).unwrap();
+            store
+                .create_topic(input::<CreateTopicInput>(json!({
+                    "scope_id":"default", "id":record_id,
+                    "requirement_id":"requirement_a", "title":"Storage topic",
+                    "status":"open", "links":[]
+                })))
+                .unwrap();
         }
         NodeType::Question => {
-            store.create_question(input::<CreateQuestionInput>(json!({
-                "scope_id":"default", "id":record_id, "topic_id":"topic_parent",
-                "question":"Which storage?", "resolution_method":"research",
-                "status":"open", "links":[]
-            }))).unwrap();
+            store
+                .create_question(input::<CreateQuestionInput>(json!({
+                    "scope_id":"default", "id":record_id, "topic_id":"topic_parent",
+                    "question":"Which storage?", "resolution_method":"research",
+                    "status":"open", "links":[]
+                })))
+                .unwrap();
         }
         NodeType::Requirement => unreachable!("Requirement is the established review kind"),
     }
@@ -125,42 +139,86 @@ fn create_record(store: &StateStore, kind: NodeType) -> StableId {
 fn revise_record(store: &StateStore, kind: NodeType, record_id: &StableId) {
     let common = json!({"scope_id":"default", "id":record_id});
     match kind {
-        NodeType::Source => store.update_source(input::<UpdateSourceInput>(
-            common_with(common, "name", json!("Policy Alpha"))
-        )).map(|_| ()),
-        NodeType::Resolution => store.update_resolution(input::<UpdateResolutionInput>(
-            common_with(common, "title", json!("Durable storage"))
-        )).map(|_| ()),
-        NodeType::Rule => store.update_rule(input::<UpdateRuleInput>(
-            common_with(common, "statement", json!("The system stores each durable record."))
-        )).map(|_| ()),
-        NodeType::Domain => store.update_domain(input::<UpdateDomainInput>(
-            common_with(common, "name", json!("Durable storage"))
-        )).map(|_| ()),
-        NodeType::Boundary => store.update_boundary(input::<UpdateBoundaryInput>(
-            common_with(common, "statement", json!("Durable storage only."))
-        )).map(|_| ()),
-        NodeType::Topic => store.edit_topic(input::<UpdateTopicInput>(
-            common_with(common, "title", json!("Durable storage topic"))
-        )).map(|_| ()),
-        NodeType::Question => store.edit_question(input::<EditQuestionInput>(
-            common_with(common, "question", json!("Which durable storage?"))
-        )).map(|_| ()),
+        NodeType::Source => store
+            .update_source(input::<UpdateSourceInput>(common_with(
+                common,
+                "name",
+                json!("Policy Alpha"),
+            )))
+            .map(|_| ()),
+        NodeType::Resolution => store
+            .update_resolution(input::<UpdateResolutionInput>(common_with(
+                common,
+                "title",
+                json!("Durable storage"),
+            )))
+            .map(|_| ()),
+        NodeType::Rule => store
+            .update_rule(input::<UpdateRuleInput>(common_with(
+                common,
+                "statement",
+                json!("The system stores each durable record."),
+            )))
+            .map(|_| ()),
+        NodeType::Domain => store
+            .update_domain(input::<UpdateDomainInput>(common_with(
+                common,
+                "name",
+                json!("Durable storage"),
+            )))
+            .map(|_| ()),
+        NodeType::Boundary => store
+            .update_boundary(input::<UpdateBoundaryInput>(common_with(
+                common,
+                "statement",
+                json!("Durable storage only."),
+            )))
+            .map(|_| ()),
+        NodeType::Topic => store
+            .edit_topic(input::<UpdateTopicInput>(common_with(
+                common,
+                "title",
+                json!("Durable storage topic"),
+            )))
+            .map(|_| ()),
+        NodeType::Question => store
+            .edit_question(input::<EditQuestionInput>(common_with(
+                common,
+                "question",
+                json!("Which durable storage?"),
+            )))
+            .map(|_| ()),
         NodeType::Requirement => unreachable!("Requirement is the established review kind"),
     }
     .unwrap();
 }
 
-fn common_with(mut value: serde_json::Value, field: &str, content: serde_json::Value) -> serde_json::Value {
+fn common_with(
+    mut value: serde_json::Value,
+    field: &str,
+    content: serde_json::Value,
+) -> serde_json::Value {
     value[field] = content;
     value
 }
 
-fn record_value(store: &StateStore, scope: &ScopeId, kind: NodeType, record_id: &StableId) -> serde_json::Value {
+fn record_value(
+    store: &StateStore,
+    scope: &ScopeId,
+    kind: NodeType,
+    record_id: &StableId,
+) -> serde_json::Value {
     macro_rules! find {
         ($reader:ident) => {
-            serde_json::to_value(store.$reader(scope).unwrap().into_iter()
-                .find(|record| record.id == *record_id).unwrap()).unwrap()
+            serde_json::to_value(
+                store
+                    .$reader(scope)
+                    .unwrap()
+                    .into_iter()
+                    .find(|record| record.id == *record_id)
+                    .unwrap(),
+            )
+            .unwrap()
         };
     }
     match kind {
@@ -182,102 +240,111 @@ fn artifact_type(kind: NodeType) -> CanonicalArtifactType {
 #[test]
 fn every_added_kind_persists_the_exact_review_versions_without_lifecycle_change() {
     for kind in [
-        NodeType::Source, NodeType::Resolution, NodeType::Rule, NodeType::Domain,
-        NodeType::Boundary, NodeType::Topic, NodeType::Question,
+        NodeType::Source,
+        NodeType::Resolution,
+        NodeType::Rule,
+        NodeType::Domain,
+        NodeType::Boundary,
+        NodeType::Topic,
+        NodeType::Question,
     ] {
         let (_temp, store, scope) = fixture();
         let record_id = create_record(&store, kind);
-    let created = store
-        .record_decision_state(&scope, kind, &record_id)
-        .unwrap();
-    let first = created.pending.unwrap();
+        let created = store
+            .record_decision_state(&scope, kind, &record_id)
+            .unwrap();
+        let first = created.pending.unwrap();
 
         let withdrawn = store
-        .withdraw_record_review(WithdrawRecordReview {
-            scope_id: scope.clone(),
-            actor: "author".into(),
-            proposal_id: first.proposal_id.clone(),
-            declared_by: None,
-            reason: Some("The author will resubmit it.".into()),
-        })
-        .unwrap();
+            .withdraw_record_review(WithdrawRecordReview {
+                scope_id: scope.clone(),
+                actor: "author".into(),
+                proposal_id: first.proposal_id.clone(),
+                declared_by: None,
+                reason: Some("The author will resubmit it.".into()),
+            })
+            .unwrap();
         assert!(!withdrawn.request_id.as_str().is_empty());
-    let submitted = store
-        .submit_record_review(SubmitRecordReview {
-            scope_id: scope.clone(),
-            actor: "author".into(),
-            record_kind: kind,
-            record_id: record_id.clone(),
-            declared_by: None,
-            title: "Review Policy A".into(),
-            summary: "Review the source definition.".into(),
-            confidence: None,
-            source_ids: Vec::new(),
-            evidence_references: Vec::new(),
-            builds_on: Vec::new(),
-            expected_revision: created.current_revision.clone(),
-            revises: None,
-        })
-        .unwrap();
+        let submitted = store
+            .submit_record_review(SubmitRecordReview {
+                scope_id: scope.clone(),
+                actor: "author".into(),
+                record_kind: kind,
+                record_id: record_id.clone(),
+                declared_by: None,
+                title: "Review Policy A".into(),
+                summary: "Review the source definition.".into(),
+                confidence: None,
+                source_ids: Vec::new(),
+                evidence_references: Vec::new(),
+                builds_on: Vec::new(),
+                expected_revision: created.current_revision.clone(),
+                revises: None,
+            })
+            .unwrap();
         assert!(!submitted.request_id.as_str().is_empty());
         assert_ne!(submitted.proposal_id, first.proposal_id);
-        let feedback = (!matches!(kind, NodeType::Domain | NodeType::Boundary)).then(|| {
-            ReviewFeedback { role: provenance_core::MessageRole::User,
-                body: "Use the precise record text.".into() }
-        });
+        let feedback =
+            (!matches!(kind, NodeType::Domain | NodeType::Boundary)).then(|| ReviewFeedback {
+                role: provenance_core::MessageRole::User,
+                body: "Use the precise record text.".into(),
+            });
         let rejected = store
-        .decide_record_review(DecideRecordReview {
-            scope_id: scope.clone(),
-            actor: reviewer(),
-            proposal_id: submitted.proposal_id,
-            decision: DispositionDecision::Rejected,
-            rationale: Some("The source name is not precise.".into()),
-            canonical_artifact: None,
-            feedback,
-            declared_by: None,
-        })
-        .unwrap();
+            .decide_record_review(DecideRecordReview {
+                scope_id: scope.clone(),
+                actor: reviewer(),
+                proposal_id: submitted.proposal_id,
+                decision: DispositionDecision::Rejected,
+                rationale: Some("The source name is not precise.".into()),
+                canonical_artifact: None,
+                feedback,
+                declared_by: None,
+            })
+            .unwrap();
         assert!(!rejected.request_id.as_str().is_empty());
         assert!(rejected.disposition_id.is_some());
 
         revise_record(&store, kind, &record_id);
-    let revised = store
-        .record_decision_state(&scope, kind, &record_id)
-        .unwrap();
-    let second = revised.pending.clone().unwrap();
-    assert_ne!(second.revision, first.revision);
+        let revised = store
+            .record_decision_state(&scope, kind, &record_id)
+            .unwrap();
+        let second = revised.pending.clone().unwrap();
+        assert_ne!(second.revision, first.revision);
 
         let before_approval = record_value(&store, &scope, kind, &record_id);
         let approved = store
-        .decide_record_review(DecideRecordReview {
-            scope_id: scope.clone(),
-            actor: reviewer(),
-            proposal_id: second.proposal_id.clone(),
-            decision: DispositionDecision::Accepted,
-            rationale: None,
-            canonical_artifact: Some(provenance_core::CanonicalArtifact {
-                artifact_type: artifact_type(kind),
-                artifact_id: record_id.clone(),
-            }),
-            feedback: None,
-            declared_by: None,
-        })
-        .unwrap();
+            .decide_record_review(DecideRecordReview {
+                scope_id: scope.clone(),
+                actor: reviewer(),
+                proposal_id: second.proposal_id.clone(),
+                decision: DispositionDecision::Accepted,
+                rationale: None,
+                canonical_artifact: Some(provenance_core::CanonicalArtifact {
+                    artifact_type: artifact_type(kind),
+                    artifact_id: record_id.clone(),
+                }),
+                feedback: None,
+                declared_by: None,
+            })
+            .unwrap();
         assert!(!approved.request_id.as_str().is_empty());
         assert!(approved.disposition_id.is_some());
-        assert_eq!(record_value(&store, &scope, kind, &record_id), before_approval);
+        assert_eq!(
+            record_value(&store, &scope, kind, &record_id),
+            before_approval
+        );
 
-    let decided = store
-        .record_decision_state(&scope, kind, &record_id)
-        .unwrap();
-    assert_eq!(decided.decisions.len(), 2);
-    assert_eq!(decided.decisions[0].revision, created.current_revision);
-    assert_eq!(decided.decisions[1].revision, Some(second.revision));
-    assert_eq!(
-        decided.current_acceptance.unwrap().disposition.proposal_id,
-        second.proposal_id
-    );
-    assert_eq!(decided.withdrawn, [first.proposal_id]);
+        let decided = store
+            .record_decision_state(&scope, kind, &record_id)
+            .unwrap();
+        assert_eq!(decided.decisions.len(), 2);
+        assert_eq!(decided.decisions[0].revision, created.current_revision);
+        assert_eq!(decided.decisions[1].revision, Some(second.revision));
+        assert_eq!(
+            decided.current_acceptance.unwrap().disposition.proposal_id,
+            second.proposal_id
+        );
+        assert_eq!(decided.withdrawn, [first.proposal_id]);
     }
 }
 
@@ -286,54 +353,54 @@ fn domain_and_boundary_decisions_keep_rationale_and_refuse_feedback() {
     for kind in [NodeType::Domain, NodeType::Boundary] {
         let (_temp, store, scope) = fixture();
         let record_id = create_record(&store, kind);
-    let proposal = store
-        .record_decision_state(&scope, kind, &record_id)
-        .unwrap()
-        .pending
-        .unwrap()
-        .proposal_id;
+        let proposal = store
+            .record_decision_state(&scope, kind, &record_id)
+            .unwrap()
+            .pending
+            .unwrap()
+            .proposal_id;
 
-    let error = store
-        .decide_record_review(DecideRecordReview {
-            scope_id: scope.clone(),
-            actor: reviewer(),
-            proposal_id: proposal.clone(),
-            decision: DispositionDecision::Rejected,
-            rationale: Some("The classification is too broad.".into()),
-            canonical_artifact: None,
-            feedback: Some(ReviewFeedback {
-                role: provenance_core::MessageRole::User,
-                body: "Narrow the classification.".into(),
-            }),
-            declared_by: None,
-        })
-        .unwrap_err();
+        let error = store
+            .decide_record_review(DecideRecordReview {
+                scope_id: scope.clone(),
+                actor: reviewer(),
+                proposal_id: proposal.clone(),
+                decision: DispositionDecision::Rejected,
+                rationale: Some("The classification is too broad.".into()),
+                canonical_artifact: None,
+                feedback: Some(ReviewFeedback {
+                    role: provenance_core::MessageRole::User,
+                    body: "Narrow the classification.".into(),
+                }),
+                declared_by: None,
+            })
+            .unwrap_err();
 
-    assert!(matches!(
-        WriteError(error).safe(),
-        WriteFailure::UnsupportedReviewFeedback {
-            record_kind
-        } if record_kind == kind
-    ));
+        assert!(matches!(
+            WriteError(error).safe(),
+            WriteFailure::UnsupportedReviewFeedback {
+                record_kind
+            } if record_kind == kind
+        ));
 
-    let decided = store
-        .decide_record_review(DecideRecordReview {
-            scope_id: scope.clone(),
-            actor: reviewer(),
-            proposal_id: proposal,
-            decision: DispositionDecision::Rejected,
-            rationale: Some("The classification is too broad.".into()),
-            canonical_artifact: None,
-            feedback: None,
-            declared_by: None,
-        })
-        .unwrap();
-    let disposition = store
-        .list_dispositions(&scope)
-        .unwrap()
-        .into_iter()
-        .find(|disposition| Some(&disposition.id) == decided.disposition_id.as_ref())
-        .unwrap();
-    assert_eq!(disposition.rationale, "The classification is too broad.");
+        let decided = store
+            .decide_record_review(DecideRecordReview {
+                scope_id: scope.clone(),
+                actor: reviewer(),
+                proposal_id: proposal,
+                decision: DispositionDecision::Rejected,
+                rationale: Some("The classification is too broad.".into()),
+                canonical_artifact: None,
+                feedback: None,
+                declared_by: None,
+            })
+            .unwrap();
+        let disposition = store
+            .list_dispositions(&scope)
+            .unwrap()
+            .into_iter()
+            .find(|disposition| Some(&disposition.id) == decided.disposition_id.as_ref())
+            .unwrap();
+        assert_eq!(disposition.rationale, "The classification is too broad.");
     }
 }
