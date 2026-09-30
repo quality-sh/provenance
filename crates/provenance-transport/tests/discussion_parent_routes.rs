@@ -69,9 +69,7 @@ async fn addressed_discussion_member_reads_cover_all_six_parent_kinds() {
         ("rules", "rule_shared"),
         ("topics", "topic_shared"),
         ("questions", "question_shared"),
-    ]
-    .into_iter()
-    {
+    ] {
         let parent = format!("/{plural}/{id}/discussions");
         let (status, started) = call(
             &host,
