@@ -1,7 +1,9 @@
 use super::*;
 use crate::{
     layout::ProvenanceLayout,
-    operations::catalog::{Operation, PreparedContext, PreparedScope},
+    operations::catalog::{
+        Operation, PreparedContext, PreparedScope, WriteDiscussionRequest,
+    },
     state_store::StateStore,
 };
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
