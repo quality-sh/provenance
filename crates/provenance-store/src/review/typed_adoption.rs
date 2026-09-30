@@ -81,14 +81,19 @@ impl StateStore {
             changes.push(TypedChange {
                 before: None,
                 after: after.clone(),
-                head: None,
+                head: self.typed_history_head(after)?,
             });
         }
         Ok(changes)
     }
 
     fn commit_typed_change(&self, actor: &str, change: &TypedChange) -> anyhow::Result<()> {
-        let intent_digest = typed_intent(actor, change.before.as_ref(), &change.after)?;
+        let intent_digest = typed_intent(
+            actor,
+            change.before.as_ref(),
+            &change.after,
+            change.head.as_ref(),
+        )?;
         let request_id = StableId::new(canonical_digest::sha256(
             format!("typed-spec-review\u{1f}{intent_digest}").as_bytes(),
         ))?;
@@ -109,6 +114,15 @@ impl StateStore {
             }
         }
         Ok(())
+    }
+
+    fn typed_history_head(&self, record: &ReviewRecord) -> anyhow::Result<Option<ReviewEntry>> {
+        let entries = self
+            .review_entries(record.scope_id())?
+            .into_iter()
+            .filter(|entry| entry.record_kind == record.kind() && entry.record_id == *record.id())
+            .collect::<Vec<_>>();
+        journal::validated_head(&entries)
     }
 }
 
@@ -141,10 +155,18 @@ fn typed_intent(
     actor: &str,
     before: Option<&ReviewRecord>,
     after: &ReviewRecord,
+    head: Option<&ReviewEntry>,
 ) -> anyhow::Result<String> {
     let before = before.map(journal::record_digest).transpose()?;
     let after = journal::record_digest(after)?;
+    let predecessor = head.map(|entry| entry.id.as_str());
     Ok(canonical_digest::digest(
-        &canonical_digest::canonical_bytes(&("typed-spec-review", actor, before, after))?,
+        &canonical_digest::canonical_bytes(&(
+            "typed-spec-review",
+            actor,
+            before,
+            after,
+            predecessor,
+        ))?,
     ))
 }
