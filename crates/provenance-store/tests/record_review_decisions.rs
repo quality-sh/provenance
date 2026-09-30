@@ -298,7 +298,7 @@ fn run_review_cycle(kind: NodeType) {
     let revised = store
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
-    let second = revised.pending.clone().unwrap();
+    let second = revised.pending.unwrap();
     assert_ne!(second.revision, first.revision);
 
     let before_approval = record_value(&store, &scope, kind, &record_id);
