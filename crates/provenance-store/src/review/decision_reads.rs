@@ -43,7 +43,7 @@ impl StateStore {
         let scope = record.scope_id();
         let kind = record.kind();
         let record_id = record.id();
-        let head = self.head(&record)?;
+        let head = self.head(record)?;
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         let facts = CycleFacts::validated(self, scope)?;

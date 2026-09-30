@@ -33,8 +33,7 @@ async fn review_resource<T: ProjectionRow>(
     id: StableId,
 ) -> anyhow::Result<ReviewResource<T>> {
     let record = projection_member::<T>(context, ResourceMemberRequest { id: id.clone() }).await?;
-    let review_record =
-        ReviewRecord::deserialize_closed(kind, &serde_json::to_value(&record)?)?;
+    let review_record = ReviewRecord::deserialize_closed(kind, &serde_json::to_value(&record)?)?;
     let store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
