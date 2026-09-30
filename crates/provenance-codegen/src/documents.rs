@@ -184,7 +184,6 @@ struct SharedComponent {
     reference: Value,
     names: Vec<String>,
 }
-
 fn route_component(
     definition: &provenance_store::operations::catalog::Definition,
     role: &str,
@@ -239,7 +238,8 @@ fn alias_component_family(
             components
                 .insert(
                     target.clone(),
-                    json!({"$ref": format!("#/components/schemas/{source}")}),
+                    json!({"$ref": format!("#/components/schemas/{source}"),
+                        "x-provenance-model-family": name}),
                 )
                 .is_none(),
             "schema component name collision: {target}"
