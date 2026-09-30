@@ -9,4 +9,8 @@ test('the current review excludes terminal records', async () => {
     source,
     /getRequirementDocument\(\{\s*id, exclude_terminal: true, limit: 50, cursor,\s*\}\)/,
   );
+  assert.match(
+    source,
+    /listRequirements\(\{\s*query: 'search', text: request\.text, exclude_terminal: true,\s*limit: 50, cursor: request\.cursor,\s*\}\)/,
+  );
 });

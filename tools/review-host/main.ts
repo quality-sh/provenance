@@ -45,7 +45,8 @@ access.addEventListener('submit', async event => {
       };
       const search = async (request: { text: string; cursor?: string }) => {
         const answer = await client.listRequirements({
-          query: 'search', text: request.text, limit: 50, cursor: request.cursor,
+          query: 'search', text: request.text, exclude_terminal: true,
+          limit: 50, cursor: request.cursor,
         });
         return { nodes: answer.data.items, ...answer.meta };
       };

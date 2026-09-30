@@ -23,6 +23,12 @@ Search uses a GET query on a graph collection. For example:
 GET /requirements?query=search&text=review&limit=50
 ```
 
+The current review hides terminal records from collection lists and searches:
+
+```text
+GET /requirements?query=search&text=review&exclude_terminal=true&limit=50
+```
+
 The assembled Requirement document uses:
 
 ```text
@@ -35,11 +41,13 @@ The current review can omit archived Rules and abandoned Resolutions:
 GET /requirements/req_review/document?exclude_terminal=true&limit=50
 ```
 
-The default is `exclude_terminal=false`. A superseded Resolution stays visible.
-The filter evaluates each record's lifecycle independently. Thus, an active Rule
-stays visible when its only document link is an abandoned Resolution. The
-abandoned Resolution and its discussions stay hidden. The cursor binds the
-selected value.
+The default is `exclude_terminal=false`. Lists and searches exclude archived
+Rules and abandoned Resolutions when the selector is true. A superseded
+Resolution stays visible. The document filter evaluates each record's lifecycle
+independently. Thus, an active Rule stays visible when its only document link is
+an abandoned Resolution. The abandoned Resolution and its discussions stay
+hidden. Each cursor binds the selected value. The filter applies before page
+limits and `has_more` calculations.
 
 A successful list has this form:
 

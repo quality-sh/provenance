@@ -34,6 +34,10 @@ Collections:
   `verification-runs`, `verification-bindings`.
 - Read-only scope indexes: `discussion-containers`, `messages`, `assertions`,
   `dispositions`. An index entry carries the canonical parent address.
+- The optional `exclude_terminal` Boolean query parameter applies to graph
+  collection lists and searches. When it is `true`, the result excludes
+  archived Rules and abandoned Resolutions. A superseded Resolution stays in
+  the result. The default is `false`.
 
 Subresources have parent-owned addresses:
 
@@ -203,11 +207,11 @@ names, mutation classification, preconditions, receipts, paging, and statuses.
 Query parameter names use snake_case. A parameter that is omitted uses the
 default in its request schema.
 
-The document cursor binds `exclude_terminal`, the page limit, and the
-Requirement ID. A client must send the same values on each continuation. A
-filtered cursor is invalid in an unfiltered request, and an unfiltered cursor is
-invalid in a filtered request. The filter applies before the page limit and the
-`has_more` calculation.
+Collection, search, and document cursors bind `exclude_terminal`. The document
+cursor also binds the page limit and Requirement ID. A client must send the
+same values on each continuation. A filtered cursor is invalid in an
+unfiltered request, and an unfiltered cursor is invalid in a filtered request.
+The filter applies before the page limit and the `has_more` calculation.
 
 The generator linter rejects repository or scope path prefixes, relationship
 routes, legacy verb routes, duplicate bindings, unresolved path parameters,
