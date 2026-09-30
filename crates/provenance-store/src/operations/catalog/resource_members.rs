@@ -36,14 +36,14 @@ pub struct ReviewResource {
 
 fn review_resource(
     context: &ReadContext,
-    scope: provenance_core::ScopeId,
+    scope: &provenance_core::ScopeId,
     kind: provenance_core::NodeType,
-    id: StableId,
+    id: &StableId,
 ) -> anyhow::Result<ReviewResource> {
     let store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
-    let review_record = crate::cache::review_families::record(&store, &scope, kind, &id)?;
+    let review_record = crate::cache::review_families::record(&store, scope, kind, id)?;
     let record = serde_json::to_value(&review_record)?;
     let snapshot = store.record_review_state(&review_record)?;
     Ok(ReviewResource {
@@ -65,9 +65,9 @@ async fn reviewed_member(
         reader::answer(&read.root, &read.scope, read.policy, move |context| {
             Box::pin(std::future::ready(review_resource(
                 context,
-                record_scope,
+                &record_scope,
                 request.record_kind,
-                request.id,
+                &request.id,
             )))
         })
         .await?
