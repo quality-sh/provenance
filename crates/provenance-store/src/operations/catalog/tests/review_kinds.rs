@@ -60,6 +60,28 @@ fn every_review_kind_member_read_carries_edit_and_decision_state() {
 }
 
 #[test]
+fn review_actions_do_not_accept_idempotency_headers() {
+    for name in [
+        "submit-record-review",
+        "decide-record-review",
+        "withdraw-record-review",
+    ] {
+        let definitions = definitions()
+            .iter()
+            .filter(|entry| entry.registration.handler.operation == name)
+            .collect::<Vec<_>>();
+        assert_eq!(definitions.len(), 8, "{name} route count");
+        for definition in definitions {
+            assert!(
+                definition.registration.controls.headers.is_empty(),
+                "{} exposes a client request identity",
+                definition.name
+            );
+        }
+    }
+}
+
+#[test]
 fn generated_review_operation_ids_are_kind_specific() {
     let routes = definitions();
     for (_, singular) in REVIEW_KINDS {

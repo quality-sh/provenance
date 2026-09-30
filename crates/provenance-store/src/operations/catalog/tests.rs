@@ -237,29 +237,6 @@ fn resource_operations_have_unique_registered_contracts() {
 
 #[cfg(feature = "schema")]
 #[test]
-fn review_actions_do_not_accept_idempotency_headers() {
-    for name in [
-        "submit-record-review",
-        "decide-record-review",
-        "withdraw-record-review",
-    ] {
-        let definitions = super::definitions()
-            .iter()
-            .filter(|entry| entry.registration.handler.operation == name)
-            .collect::<Vec<_>>();
-        assert_eq!(definitions.len(), 8, "{name} route count");
-        for definition in definitions {
-            assert!(
-                definition.registration.controls.headers.is_empty(),
-                "{} exposes a client request identity",
-                definition.name
-            );
-        }
-    }
-}
-
-#[cfg(feature = "schema")]
-#[test]
 fn query_registrations_keep_typed_scalar_parameters() {
     let definition = super::definitions()
         .iter()
