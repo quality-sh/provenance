@@ -69,9 +69,10 @@ fn decide(
     actor: &Value,
     extra: &Value,
 ) -> anyhow::Result<CycleEntry> {
+    let rationale = (decision != "accepted").then_some("Because");
     let mut value = json!({
         "scope_id":"default","actor":actor,"proposal_id":proposal,
-        "decision":decision,"rationale":"Because"
+        "decision":decision,"rationale":rationale
     });
     for (key, extra_value) in extra.as_object().unwrap() {
         value[key] = extra_value.clone();
@@ -291,6 +292,23 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
             &json!({}),
         ),
         "asserted before disposition",
+    );
+    assert!(store.list_dispositions(&scope()).unwrap().is_empty());
+
+    refused(
+        decide(
+            &store,
+            &proposal,
+            "accepted",
+            &reviewer("reviewer"),
+            &json!({
+                "rationale":"No rationale is valid for an approval.",
+                "canonical_artifact":{
+                    "artifact_type":"requirement", "artifact_id":"req_a"
+                }
+            }),
+        ),
+        "approval does not take a rationale",
     );
     assert!(store.list_dispositions(&scope()).unwrap().is_empty());
 

@@ -13,7 +13,7 @@ use crate::{
 };
 use provenance_core::{
     review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
-    NodeType, StableId, ThreadParent,
+    CanonicalArtifactType, DispositionDecision, NodeType, StableId, ThreadParent,
 };
 use provenance_macros::rule;
 
@@ -56,6 +56,7 @@ impl StateStore {
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
             let record_id = &proposal.traceability.target.artifact_id;
             crate::cache::review_families::record(self, &scope, kind, record_id)?;
+            validate_decision_input(kind, record_id, &input)?;
             if input.feedback.is_some() && matches!(kind, NodeType::Domain | NodeType::Boundary) {
                 return Err(SourceFailure::wrap(
                     WriteFailure::UnsupportedReviewFeedback { record_kind: kind },
@@ -192,4 +193,36 @@ impl StateStore {
             .message_id
             .ok_or_else(|| anyhow::anyhow!("feedback published no Message"))
     }
+}
+
+fn validate_decision_input(
+    kind: NodeType,
+    record_id: &StableId,
+    input: &DecideRecordReview,
+) -> anyhow::Result<()> {
+    if input.decision == DispositionDecision::Accepted && input.rationale.is_some() {
+        return Err(SourceFailure::wrap(
+            WriteFailure::InvalidUpdate,
+            anyhow::anyhow!("an approval does not take a rationale"),
+        ));
+    }
+    if let Some(artifact) = &input.canonical_artifact {
+        let artifact_kind = match artifact.artifact_type {
+            CanonicalArtifactType::Source => NodeType::Source,
+            CanonicalArtifactType::Requirement => NodeType::Requirement,
+            CanonicalArtifactType::Resolution => NodeType::Resolution,
+            CanonicalArtifactType::Rule => NodeType::Rule,
+            CanonicalArtifactType::Domain => NodeType::Domain,
+            CanonicalArtifactType::Boundary => NodeType::Boundary,
+            CanonicalArtifactType::Topic => NodeType::Topic,
+            CanonicalArtifactType::Question => NodeType::Question,
+        };
+        if artifact_kind != kind || artifact.artifact_id != *record_id {
+            return Err(SourceFailure::wrap(
+                WriteFailure::InvalidUpdate,
+                anyhow::anyhow!("the approval artifact is not the reviewed record"),
+            ));
+        }
+    }
+    Ok(())
 }
