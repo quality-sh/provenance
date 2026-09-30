@@ -2,7 +2,7 @@
 
 use super::{shapes::scoped_write_operation, ExecutionNeed};
 use crate::review;
-use provenance_core::{threads::DiscussionEntry, ScopeId, StableId, ThreadParent};
+use provenance_core::{threads::DiscussionEntry, ScopeId, ThreadParent};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

@@ -311,15 +311,18 @@ async fn a_repeated_update_with_an_old_etag_returns_a_typed_conflict() {
     .await
     .unwrap();
 
-    let error = UpdateRequirementResource::run(
+    let error = match UpdateRequirementResource::run(
         context,
         update_request_with_etag("update_a", &first_etag, "First text."),
     )
     .await
-    .unwrap_err();
+    {
+        Ok(_) => panic!("the stale update succeeded"),
+        Err(error) => error,
+    };
 
     assert!(matches!(
-        error.error,
+        error.safe(),
         crate::write_error::WriteFailure::RequirementEditConflict { .. }
     ));
     assert_eq!(store.review_entries(&scope).unwrap().len(), 3);
