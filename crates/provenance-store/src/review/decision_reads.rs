@@ -33,6 +33,16 @@ impl StateStore {
         record_id: &StableId,
     ) -> anyhow::Result<RequirementDecisionState> {
         let record = crate::cache::review_families::record(self, scope, kind, record_id)?;
+        self.record_decision_state_for_record(&record)
+    }
+
+    pub(super) fn record_decision_state_for_record(
+        &self,
+        record: &provenance_core::review::ReviewRecord,
+    ) -> anyhow::Result<RequirementDecisionState> {
+        let scope = record.scope_id();
+        let kind = record.kind();
+        let record_id = record.id();
         let head = self.head(&record)?;
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;

@@ -16,6 +16,11 @@ pub struct RequirementResourceSnapshot {
     pub decision: RequirementDecisionState,
 }
 
+pub(crate) struct RecordReviewStateSnapshot {
+    pub edit: RequirementEditState,
+    pub decision: RequirementDecisionState,
+}
+
 impl StateStore {
     pub(super) fn requirement_resource_snapshot_unlocked(
         &self,
@@ -44,6 +49,18 @@ impl StateStore {
         id: &StableId,
     ) -> anyhow::Result<RecordResourceSnapshot> {
         self.with_repository_publication(|| self.record_resource_snapshot_unlocked(scope, kind, id))
+    }
+
+    pub(crate) fn record_review_state(
+        &self,
+        record: &ReviewRecord,
+    ) -> anyhow::Result<RecordReviewStateSnapshot> {
+        self.with_repository_publication(|| {
+            Ok(RecordReviewStateSnapshot {
+                edit: self.record_edit_state_for_record(record)?,
+                decision: self.record_decision_state_for_record(record)?,
+            })
+        })
     }
 
     fn record_resource_snapshot_unlocked(

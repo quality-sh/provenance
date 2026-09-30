@@ -37,15 +37,22 @@ impl StateStore {
     ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|| {
             let record = crate::cache::review_families::record(self, scope, kind, id)?;
-            let head = self.head(&record)?;
-            Ok(RequirementEditState {
-                etag: head
-                    .as_ref()
-                    .map(|e| e.etag.clone())
-                    .unwrap_or(journal::etag(&record, None)?),
-                revision: head.as_ref().map(|e| e.revision.clone()),
-                snapshot: head.map(|e| e.after),
-            })
+            self.record_edit_state_for_record(&record)
+        })
+    }
+
+    pub(super) fn record_edit_state_for_record(
+        &self,
+        record: &ReviewRecord,
+    ) -> anyhow::Result<RequirementEditState> {
+        let head = self.head(record)?;
+        Ok(RequirementEditState {
+            etag: head
+                .as_ref()
+                .map(|e| e.etag.clone())
+                .unwrap_or(journal::etag(record, None)?),
+            revision: head.as_ref().map(|e| e.revision.clone()),
+            snapshot: head.map(|e| e.after),
         })
     }
 

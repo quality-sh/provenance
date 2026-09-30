@@ -6,6 +6,7 @@ use crate::cache::read::payloads::{PayloadRow, ProposalPayloadRow};
 use crate::operations::reader::{self, ReadContext};
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::read_failure::ReadFailure;
+use provenance_core::review::ReviewRecord;
 use provenance_core::StableId;
 use serde::{Deserialize, Serialize};
 
@@ -32,10 +33,13 @@ async fn review_resource<T: ProjectionRow>(
     id: StableId,
 ) -> anyhow::Result<ReviewResource<T>> {
     let record = projection_member::<T>(context, ResourceMemberRequest { id: id.clone() }).await?;
+    let review_record =
+        ReviewRecord::deserialize_closed(kind, &serde_json::to_value(&record)?)?;
     let store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
-    let snapshot = store.record_resource_snapshot(&scope, kind, &id)?;
+    anyhow::ensure!(review_record.scope_id() == &scope && review_record.id() == &id);
+    let snapshot = store.record_review_state(&review_record)?;
     Ok(ReviewResource {
         record,
         edit: snapshot.edit,
