@@ -1,5 +1,6 @@
 #[allow(dead_code)]
 mod review_support;
+mod record_review_decisions;
 use provenance_core::{
     review::{JournalEntry, SaveOutcome},
     StableId, VerificationMethod,
