@@ -46,7 +46,7 @@ async fn review_resource<T: ProjectionRow>(
     })
 }
 
-async fn reviewed_member<T: ProjectionRow>(
+async fn reviewed_member<T: ProjectionRow + Send>(
     read: PreparedRead,
     request: ResourceMemberRequest,
     kind: provenance_core::NodeType,
