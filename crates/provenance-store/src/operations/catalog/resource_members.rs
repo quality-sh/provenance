@@ -1,7 +1,7 @@
 //! Direct typed reads for resource member routes.
 
 use super::review_reads::ReadResult;
-use super::{shapes::graph_read_operation, ExecutionNeed};
+use super::{failures::ReadError, shapes::graph_read_operation, ExecutionNeed, PreparedRead};
 use crate::cache::read::payloads::{PayloadRow, ProposalPayloadRow};
 use crate::operations::reader::{self, ReadContext};
 use provenance_core::model::ProjectionRow;
@@ -44,6 +44,26 @@ async fn review_resource<T: ProjectionRow>(
         edit: snapshot.edit,
         decision: snapshot.decision,
     })
+}
+
+async fn reviewed_member<T: ProjectionRow>(
+    read: PreparedRead,
+    request: ResourceMemberRequest,
+    kind: provenance_core::NodeType,
+) -> Result<ReadResult<ReviewResource<T>>, ReadError> {
+    let record_scope = read.scope.clone();
+    Ok(
+        reader::answer(&read.root, &read.scope, read.policy, move |context| {
+            Box::pin(review_resource::<T>(
+                context,
+                record_scope,
+                kind,
+                request.id,
+            ))
+        })
+        .await?
+        .into(),
+    )
 }
 
 #[derive(Deserialize)]
@@ -140,19 +160,11 @@ macro_rules! review_member_operation {
                     ExecutionNeed::ProjectionMaintenance,
                 ]
             },
-            |read, request| async move {
-                let record_scope = read.scope.clone();
-                Ok(reader::answer(&read.root, &read.scope, read.policy, move |context| {
-                    Box::pin(review_resource::<$result>(
-                        context,
-                        record_scope,
-                        provenance_core::NodeType::$kind,
-                        request.id,
-                    ))
-                })
-                .await?
-                .into())
-            }
+            |read, request| reviewed_member::<$result>(
+                read,
+                request,
+                provenance_core::NodeType::$kind,
+            )
         );
     };
 }
