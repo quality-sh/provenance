@@ -149,6 +149,7 @@ scoped_write_operation!(
                 update: UpdateRequirementInput {
                     scope_id: scope,
                     id: request.id,
+                    expected_etag: None,
                     declared_by: request.declared_by,
                     statement: request.statement,
                     description: request.description,

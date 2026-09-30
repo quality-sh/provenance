@@ -15,13 +15,18 @@ impl StateStore {
                 required_text(title)?;
             }
             let links = self.checked_update_links(&input.scope_id, input.links)?;
-            self.update_topic(&input.scope_id, &input.id, |topic| {
-                set(&mut topic.title, input.title);
-                set(&mut topic.status, input.status);
-                set(&mut topic.links, links);
-                clear_topic_claim_on_exit(topic);
-                Ok(())
-            })
+            self.update_topic_with_etag(
+                &input.scope_id,
+                &input.id,
+                input.expected_etag.as_deref(),
+                |topic| {
+                    set(&mut topic.title, input.title);
+                    set(&mut topic.status, input.status);
+                    set(&mut topic.links, links);
+                    clear_topic_claim_on_exit(topic);
+                    Ok(())
+                },
+            )
         })
     }
 
@@ -42,33 +47,38 @@ impl StateStore {
                 self.ensure_node_exists(&input.scope_id, NodeType::Requirement, id, "contradicts")?;
             }
             let links = self.checked_update_links(&input.scope_id, input.links)?;
-            self.mutate_question(&input.scope_id, &input.id, |question| {
-                if input.status == Some(QuestionStatus::Answered) && question.answer.is_none() {
-                    return Err(invalid(
-                        "use questions answer --answer to answer a question",
-                    ));
-                }
-                set(&mut question.question, input.question);
-                set(&mut question.resolution_method, input.resolution_method);
-                set(&mut question.status, input.status);
-                set(&mut question.links, links);
-                optional(
-                    &mut question.resolution_id,
-                    input.resolution_id,
-                    input
-                        .clear_fields
-                        .contains(&QuestionClearField::ResolutionId),
-                )?;
-                optional(
-                    &mut question.contradicts,
-                    input.contradicts,
-                    input
-                        .clear_fields
-                        .contains(&QuestionClearField::Contradicts),
-                )?;
-                clear_question_claim_on_exit(question);
-                Ok(())
-            })
+            self.mutate_question_with_etag(
+                &input.scope_id,
+                &input.id,
+                input.expected_etag.as_deref(),
+                |question| {
+                    if input.status == Some(QuestionStatus::Answered) && question.answer.is_none() {
+                        return Err(invalid(
+                            "use questions answer --answer to answer a question",
+                        ));
+                    }
+                    set(&mut question.question, input.question);
+                    set(&mut question.resolution_method, input.resolution_method);
+                    set(&mut question.status, input.status);
+                    set(&mut question.links, links);
+                    optional(
+                        &mut question.resolution_id,
+                        input.resolution_id,
+                        input
+                            .clear_fields
+                            .contains(&QuestionClearField::ResolutionId),
+                    )?;
+                    optional(
+                        &mut question.contradicts,
+                        input.contradicts,
+                        input
+                            .clear_fields
+                            .contains(&QuestionClearField::Contradicts),
+                    )?;
+                    clear_question_claim_on_exit(question);
+                    Ok(())
+                },
+            )
         })
     }
 

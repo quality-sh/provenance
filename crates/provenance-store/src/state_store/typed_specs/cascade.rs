@@ -12,6 +12,9 @@ use super::super::{
 };
 use crate::shards;
 
+#[cfg(test)]
+mod tests;
+
 pub(super) struct Cascade {
     pub(super) rules: BTreeSet<String>,
     resolutions: Vec<Resolution>,
@@ -224,18 +227,12 @@ impl Cascade {
             &shards::resolutions_path(&store.layout, scope),
             self.resolutions,
         )?;
-        super::replace_records(
-            store,
-            &shards::topics_path(&store.layout, scope),
-            self.topics,
-        )?;
-        super::replace_records(
-            store,
+        store.replace_graph_records(&shards::topics_path(&store.layout, scope), self.topics)?;
+        store.replace_graph_records(
             &shards::questions_path(&store.layout, scope),
             self.questions,
         )?;
-        super::replace_records(
-            store,
+        store.replace_graph_records(
             &shards::boundaries_path(&store.layout, scope),
             self.boundaries,
         )?;

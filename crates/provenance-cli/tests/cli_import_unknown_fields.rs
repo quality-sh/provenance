@@ -5,6 +5,9 @@
 use assert_cmd::Command;
 use std::path::{Path, PathBuf};
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 fn init(repo: &Path) {
     Command::cargo_bin("provenance")
         .unwrap()
@@ -43,6 +46,7 @@ fn create_source(repo: &Path, id: &str) {
 }
 
 fn export(repo: &Path, output: &Path) {
+    export_fixture_support::make_default_scope_portable(repo);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([

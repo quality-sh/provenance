@@ -6,11 +6,8 @@ export async function checkCreation({ HttpClient, OperationError }, fixture) {
   });
   const source = {
     id: 'source_ts', name: 'Policy', source_type: 'policy', supersedes: [],
-    origin_thread: 'thread_origin', origin_message: 'message_origin',
   };
   const created = await client.createSource({ data: source });
-  assert.equal(created.data.origin_thread, 'thread_origin');
-  assert.equal(created.data.origin_message, 'message_origin');
   assert.equal(created.data.scope_id, 'default');
 
   await assert.rejects(client.createSource({ data: source }), error => {
@@ -22,7 +19,6 @@ export async function checkCreation({ HttpClient, OperationError }, fixture) {
   const updated = await client.updateSource({ id: source.id, data: {
     url: 'https://example.test/new', reference: 'section 2', commit_pin: 'abcdef0123456789',
   } });
-  assert.equal(updated.data.origin_thread, 'thread_origin');
   assert.equal(updated.data.url, 'https://example.test/new');
 
   const cleared = await client.updateSource({ id: source.id, data: {

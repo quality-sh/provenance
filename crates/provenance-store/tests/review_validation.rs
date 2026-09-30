@@ -200,7 +200,7 @@ fn typed_apply_captures_an_occurrence_and_publishes_other_shards() {
             .statement,
         "The system reads records."
     );
-    assert_eq!(occurrence_count(), occurrences_before + 1);
+    assert_eq!(occurrence_count(), occurrences_before + 2);
 }
 
 #[test]

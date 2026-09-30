@@ -149,4 +149,22 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn every_review_record_type_maps_to_its_canonical_kind() {
+        fn kind<T: provenance_core::review::ReviewRecordKind>() -> NodeType {
+            T::KIND
+        }
+        assert_eq!(kind::<provenance_core::Source>(), NodeType::Source);
+        assert_eq!(
+            kind::<provenance_core::Requirement>(),
+            NodeType::Requirement
+        );
+        assert_eq!(kind::<provenance_core::Resolution>(), NodeType::Resolution);
+        assert_eq!(kind::<provenance_core::Rule>(), NodeType::Rule);
+        assert_eq!(kind::<provenance_core::Domain>(), NodeType::Domain);
+        assert_eq!(kind::<provenance_core::Boundary>(), NodeType::Boundary);
+        assert_eq!(kind::<provenance_core::Topic>(), NodeType::Topic);
+        assert_eq!(kind::<provenance_core::Question>(), NodeType::Question);
+    }
 }

@@ -2,114 +2,127 @@ use super::{
     inputs::{ResolutionClearField, UpdateResolutionInput},
     invalid, missing, optional, required_text, set, validate_final_relations,
 };
-use crate::{publication::with_staged_state, review, shards, state_store::StateStore};
+use crate::{review, shards, state_store::StateStore};
 use provenance_core::{
     validate_optional_confidence_score, validate_resolution_input_content, Resolution,
+    ResolutionInput,
 };
+
+fn validate_inputs(
+    inputs: Option<Vec<ResolutionInput>>,
+) -> anyhow::Result<Option<Vec<ResolutionInput>>> {
+    if let Some(values) = &inputs {
+        for value in values {
+            validate_resolution_input_content(&value.reference, &value.summary)
+                .map_err(|error| invalid(&error.to_string()))?;
+        }
+    }
+    Ok(inputs)
+}
 
 impl StateStore {
     pub fn update_resolution(&self, input: UpdateResolutionInput) -> anyhow::Result<Resolution> {
-        with_staged_state(&self.layout, false, |layout| {
-            Self::new(layout.clone()).prepare_resolution_update(input)
-        })
+        self.write_resolution_update(input)
     }
 
-    fn prepare_resolution_update(
-        &self,
-        input: UpdateResolutionInput,
-    ) -> anyhow::Result<Resolution> {
+    fn write_resolution_update(&self, input: UpdateResolutionInput) -> anyhow::Result<Resolution> {
         let scope = input.scope_id.clone();
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
-        let record = self.mutate_graph_record(&path, |records: &mut Vec<Resolution>| {
-            let position = records
-                .iter()
-                .position(|record| record.id == input.id)
-                .ok_or_else(missing)?;
-            self.validate_relation_targets(
-                &scope,
-                records,
-                &input.id,
-                &[
-                    (
-                        "requirement_ids",
-                        review::relationships::removal_targets(input.requirement_ids.as_ref()),
-                    ),
-                    (
-                        "supersedes",
-                        review::relationships::removal_targets(input.supersedes.as_ref()),
-                    ),
-                ],
-            )?;
-            let record = &mut records[position];
-            review::relationships::expand_list(
-                &mut record.requirement_ids,
-                input.requirement_ids.as_ref(),
-            );
-            review::relationships::expand_list(&mut record.supersedes, input.supersedes.as_ref());
-            for text in [&input.title, &input.position, &input.rationale]
-                .into_iter()
-                .flatten()
-            {
-                required_text(text)?;
-            }
-            set(&mut record.title, input.title);
-            set(&mut record.position, input.position);
-            set(&mut record.rationale, input.rationale);
-            set(&mut record.status, input.status);
-            if let Some(inputs) = input.inputs {
-                for value in &inputs {
-                    validate_resolution_input_content(&value.reference, &value.summary)
-                        .map_err(|error| invalid(&error.to_string()))?;
+        let expected_etag = input.expected_etag.clone();
+        let inputs = validate_inputs(input.inputs)?;
+        let record = self.mutate_graph_record_with_etag(
+            &path,
+            expected_etag.as_deref(),
+            |records: &mut Vec<Resolution>| {
+                let position = records
+                    .iter()
+                    .position(|record| record.id == input.id)
+                    .ok_or_else(missing)?;
+                self.validate_relation_targets(
+                    &scope,
+                    records,
+                    &input.id,
+                    &[
+                        (
+                            "requirement_ids",
+                            review::relationships::removal_targets(input.requirement_ids.as_ref()),
+                        ),
+                        (
+                            "supersedes",
+                            review::relationships::removal_targets(input.supersedes.as_ref()),
+                        ),
+                    ],
+                )?;
+                let record = &mut records[position];
+                review::relationships::expand_list(
+                    &mut record.requirement_ids,
+                    input.requirement_ids.as_ref(),
+                );
+                review::relationships::expand_list(
+                    &mut record.supersedes,
+                    input.supersedes.as_ref(),
+                );
+                for text in [&input.title, &input.position, &input.rationale]
+                    .into_iter()
+                    .flatten()
+                {
+                    required_text(text)?;
                 }
-                record.inputs = inputs;
-            }
-            optional(
-                &mut record.context,
-                input.context,
-                input.clear_fields.contains(&ResolutionClearField::Context),
-            )?;
-            optional(
-                &mut record.enforcement,
-                input.enforcement,
-                input
-                    .clear_fields
-                    .contains(&ResolutionClearField::Enforcement),
-            )?;
-            optional(
-                &mut record.confidence,
-                input.confidence,
-                input
-                    .clear_fields
-                    .contains(&ResolutionClearField::Confidence),
-            )?;
-            optional(
-                &mut record.made_by,
-                input.made_by,
-                input.clear_fields.contains(&ResolutionClearField::MadeBy),
-            )?;
-            optional(
-                &mut record.approved_by,
-                input.approved_by,
-                input
-                    .clear_fields
-                    .contains(&ResolutionClearField::ApprovedBy),
-            )?;
-            optional(
-                &mut record.approved_at,
-                input.approved_at,
-                input
-                    .clear_fields
-                    .contains(&ResolutionClearField::ApprovedAt),
-            )?;
-            optional(
-                &mut record.review_on,
-                input.review_on,
-                input.clear_fields.contains(&ResolutionClearField::ReviewOn),
-            )?;
-            validate_optional_confidence_score(record.confidence)
-                .map_err(|error| invalid(&error.to_string()))?;
-            Ok(record.clone())
-        })?;
+                set(&mut record.title, input.title);
+                set(&mut record.position, input.position);
+                set(&mut record.rationale, input.rationale);
+                set(&mut record.status, input.status);
+                if let Some(inputs) = inputs {
+                    record.inputs = inputs;
+                }
+                optional(
+                    &mut record.context,
+                    input.context,
+                    input.clear_fields.contains(&ResolutionClearField::Context),
+                )?;
+                optional(
+                    &mut record.enforcement,
+                    input.enforcement,
+                    input
+                        .clear_fields
+                        .contains(&ResolutionClearField::Enforcement),
+                )?;
+                optional(
+                    &mut record.confidence,
+                    input.confidence,
+                    input
+                        .clear_fields
+                        .contains(&ResolutionClearField::Confidence),
+                )?;
+                optional(
+                    &mut record.made_by,
+                    input.made_by,
+                    input.clear_fields.contains(&ResolutionClearField::MadeBy),
+                )?;
+                optional(
+                    &mut record.approved_by,
+                    input.approved_by,
+                    input
+                        .clear_fields
+                        .contains(&ResolutionClearField::ApprovedBy),
+                )?;
+                optional(
+                    &mut record.approved_at,
+                    input.approved_at,
+                    input
+                        .clear_fields
+                        .contains(&ResolutionClearField::ApprovedAt),
+                )?;
+                optional(
+                    &mut record.review_on,
+                    input.review_on,
+                    input.clear_fields.contains(&ResolutionClearField::ReviewOn),
+                )?;
+                validate_optional_confidence_score(record.confidence)
+                    .map_err(|error| invalid(&error.to_string()))?;
+                Ok(record.clone())
+            },
+        )?;
         validate_final_relations(self, &scope, &record)?;
         Ok(record)
     }

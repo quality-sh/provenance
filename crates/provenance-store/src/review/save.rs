@@ -125,8 +125,9 @@ impl StateStore {
                     anyhow::anyhow!("stale Requirement edit etag"),
                 ));
             }
+            let stamp = self.current_record_stamp()?;
             with_staged_state(&self.layout, false, |layout| {
-                let staged = Self::new(layout.clone());
+                let staged = Self::staged(layout.clone(), stamp);
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
@@ -171,7 +172,7 @@ impl StateStore {
         let before_record = ReviewRecord::from(before.clone());
         let after_record = ReviewRecord::from(after.clone());
         let entry = self.commit_record_evidence(
-            &before_record,
+            Some(&before_record),
             &after_record,
             RecordEvidenceContext {
                 head,
@@ -189,7 +190,7 @@ impl StateStore {
 
     pub(super) fn commit_record_evidence(
         &self,
-        before: &ReviewRecord,
+        before: Option<&ReviewRecord>,
         after: &ReviewRecord,
         context: RecordEvidenceContext,
     ) -> anyhow::Result<ReviewEntry> {
@@ -200,17 +201,30 @@ impl StateStore {
             intent_digest,
             origin,
         } = context;
-        let kind = before.kind();
-        anyhow::ensure!(
-            after.kind() == kind
-                && after.scope_id() == before.scope_id()
-                && after.id() == before.id(),
-            "a review save cannot change its record address"
-        );
-        let scope = before.scope_id().clone();
-        let id = before.id().clone();
-        let fields = classifier::changed_fields(kind, before, after)?;
-        let outcome = if head.is_none() {
+        let kind = after.kind();
+        if let Some(before) = before {
+            anyhow::ensure!(
+                before.kind() == kind
+                    && after.scope_id() == before.scope_id()
+                    && after.id() == before.id(),
+                "a review save cannot change its record address"
+            );
+        }
+        let scope = after.scope_id().clone();
+        let id = after.id().clone();
+        let fields = match before {
+            Some(before) => classifier::changed_fields(kind, before, after)?,
+            None => serde_json::to_value(after)?
+                .as_object()
+                .unwrap()
+                .keys()
+                .filter(|key| key.as_str() != "schema_version")
+                .cloned()
+                .collect(),
+        };
+        let outcome = if before.is_none() {
+            SaveOutcome::Created
+        } else if head.is_none() {
             SaveOutcome::Enrolled
         } else if fields.is_empty() {
             SaveOutcome::NoChange
@@ -223,12 +237,15 @@ impl StateStore {
             Some(head) if !classifier::changes_revision(kind, &fields) => head.revision.clone(),
             _ => journal::new_id(),
         };
-        let before_snapshot = match &head {
-            Some(entry) => entry.after.clone(),
-            None => journal::snapshot(&self.layout, before)?,
+        let before_snapshot = match (before, &head) {
+            (None, _) => None,
+            (_, Some(entry)) => Some(entry.after.clone()),
+            (Some(before), None) => Some(journal::snapshot(&self.layout, before)?),
         };
         let after_snapshot = if outcome == SaveOutcome::NoChange {
-            before_snapshot.clone()
+            before_snapshot
+                .clone()
+                .expect("a no-change occurrence has a prior snapshot")
         } else {
             journal::snapshot(&self.layout, after)?
         };
@@ -248,7 +265,7 @@ impl StateStore {
             predecessor: head.as_ref().map(|e| e.id.clone()),
             revision,
             prior_revision: head.map(|e| e.revision),
-            before: Some(before_snapshot),
+            before: before_snapshot,
             after: after_snapshot,
             changed_fields: fields,
             actor,
@@ -368,7 +385,7 @@ mod tests {
         let after = ReviewRecord::from(after);
         let entry = store
             .commit_record_evidence(
-                &before,
+                Some(&before),
                 &after,
                 RecordEvidenceContext {
                     head: None,
