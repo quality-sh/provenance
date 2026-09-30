@@ -237,6 +237,106 @@ fn artifact_type(kind: NodeType) -> CanonicalArtifactType {
     serde_json::from_value(json!(kind.as_str())).unwrap()
 }
 
+fn run_review_cycle(kind: NodeType) {
+    let (_temp, store, scope) = fixture();
+    let record_id = create_record(&store, kind);
+    let created = store
+        .record_decision_state(&scope, kind, &record_id)
+        .unwrap();
+    let first = created.pending.unwrap();
+
+    let withdrawn = store
+        .withdraw_record_review(WithdrawRecordReview {
+            scope_id: scope.clone(),
+            actor: "author".into(),
+            proposal_id: first.proposal_id.clone(),
+            declared_by: None,
+            reason: Some("The author will resubmit it.".into()),
+        })
+        .unwrap();
+    assert!(!withdrawn.request_id.as_str().is_empty());
+    let submitted = store
+        .submit_record_review(SubmitRecordReview {
+            scope_id: scope.clone(),
+            actor: "author".into(),
+            record_kind: kind,
+            record_id: record_id.clone(),
+            declared_by: None,
+            title: "Review Policy A".into(),
+            summary: "Review the source definition.".into(),
+            confidence: None,
+            source_ids: Vec::new(),
+            evidence_references: Vec::new(),
+            builds_on: Vec::new(),
+            expected_revision: created.current_revision.clone(),
+            revises: None,
+        })
+        .unwrap();
+    assert!(!submitted.request_id.as_str().is_empty());
+    assert_ne!(submitted.proposal_id, first.proposal_id);
+    let feedback =
+        (!matches!(kind, NodeType::Domain | NodeType::Boundary)).then(|| ReviewFeedback {
+            role: provenance_core::MessageRole::User,
+            body: "Use the precise record text.".into(),
+        });
+    let rejected = store
+        .decide_record_review(DecideRecordReview {
+            scope_id: scope.clone(),
+            actor: reviewer(),
+            proposal_id: submitted.proposal_id,
+            decision: DispositionDecision::Rejected,
+            rationale: Some("The source name is not precise.".into()),
+            canonical_artifact: None,
+            feedback,
+            declared_by: None,
+        })
+        .unwrap();
+    assert!(!rejected.request_id.as_str().is_empty());
+    assert!(rejected.disposition_id.is_some());
+
+    revise_record(&store, kind, &record_id);
+    let revised = store
+        .record_decision_state(&scope, kind, &record_id)
+        .unwrap();
+    let second = revised.pending.clone().unwrap();
+    assert_ne!(second.revision, first.revision);
+
+    let before_approval = record_value(&store, &scope, kind, &record_id);
+    let approved = store
+        .decide_record_review(DecideRecordReview {
+            scope_id: scope.clone(),
+            actor: reviewer(),
+            proposal_id: second.proposal_id.clone(),
+            decision: DispositionDecision::Accepted,
+            rationale: None,
+            canonical_artifact: Some(provenance_core::CanonicalArtifact {
+                artifact_type: artifact_type(kind),
+                artifact_id: record_id.clone(),
+            }),
+            feedback: None,
+            declared_by: None,
+        })
+        .unwrap();
+    assert!(!approved.request_id.as_str().is_empty());
+    assert!(approved.disposition_id.is_some());
+    assert_eq!(
+        record_value(&store, &scope, kind, &record_id),
+        before_approval
+    );
+
+    let decided = store
+        .record_decision_state(&scope, kind, &record_id)
+        .unwrap();
+    assert_eq!(decided.decisions.len(), 2);
+    assert_eq!(decided.decisions[0].revision, created.current_revision);
+    assert_eq!(decided.decisions[1].revision, Some(second.revision));
+    assert_eq!(
+        decided.current_acceptance.unwrap().disposition.proposal_id,
+        second.proposal_id
+    );
+    assert_eq!(decided.withdrawn, [first.proposal_id]);
+}
+
 #[test]
 fn every_added_kind_persists_the_exact_review_versions_without_lifecycle_change() {
     for kind in [
@@ -248,103 +348,7 @@ fn every_added_kind_persists_the_exact_review_versions_without_lifecycle_change(
         NodeType::Topic,
         NodeType::Question,
     ] {
-        let (_temp, store, scope) = fixture();
-        let record_id = create_record(&store, kind);
-        let created = store
-            .record_decision_state(&scope, kind, &record_id)
-            .unwrap();
-        let first = created.pending.unwrap();
-
-        let withdrawn = store
-            .withdraw_record_review(WithdrawRecordReview {
-                scope_id: scope.clone(),
-                actor: "author".into(),
-                proposal_id: first.proposal_id.clone(),
-                declared_by: None,
-                reason: Some("The author will resubmit it.".into()),
-            })
-            .unwrap();
-        assert!(!withdrawn.request_id.as_str().is_empty());
-        let submitted = store
-            .submit_record_review(SubmitRecordReview {
-                scope_id: scope.clone(),
-                actor: "author".into(),
-                record_kind: kind,
-                record_id: record_id.clone(),
-                declared_by: None,
-                title: "Review Policy A".into(),
-                summary: "Review the source definition.".into(),
-                confidence: None,
-                source_ids: Vec::new(),
-                evidence_references: Vec::new(),
-                builds_on: Vec::new(),
-                expected_revision: created.current_revision.clone(),
-                revises: None,
-            })
-            .unwrap();
-        assert!(!submitted.request_id.as_str().is_empty());
-        assert_ne!(submitted.proposal_id, first.proposal_id);
-        let feedback =
-            (!matches!(kind, NodeType::Domain | NodeType::Boundary)).then(|| ReviewFeedback {
-                role: provenance_core::MessageRole::User,
-                body: "Use the precise record text.".into(),
-            });
-        let rejected = store
-            .decide_record_review(DecideRecordReview {
-                scope_id: scope.clone(),
-                actor: reviewer(),
-                proposal_id: submitted.proposal_id,
-                decision: DispositionDecision::Rejected,
-                rationale: Some("The source name is not precise.".into()),
-                canonical_artifact: None,
-                feedback,
-                declared_by: None,
-            })
-            .unwrap();
-        assert!(!rejected.request_id.as_str().is_empty());
-        assert!(rejected.disposition_id.is_some());
-
-        revise_record(&store, kind, &record_id);
-        let revised = store
-            .record_decision_state(&scope, kind, &record_id)
-            .unwrap();
-        let second = revised.pending.clone().unwrap();
-        assert_ne!(second.revision, first.revision);
-
-        let before_approval = record_value(&store, &scope, kind, &record_id);
-        let approved = store
-            .decide_record_review(DecideRecordReview {
-                scope_id: scope.clone(),
-                actor: reviewer(),
-                proposal_id: second.proposal_id.clone(),
-                decision: DispositionDecision::Accepted,
-                rationale: None,
-                canonical_artifact: Some(provenance_core::CanonicalArtifact {
-                    artifact_type: artifact_type(kind),
-                    artifact_id: record_id.clone(),
-                }),
-                feedback: None,
-                declared_by: None,
-            })
-            .unwrap();
-        assert!(!approved.request_id.as_str().is_empty());
-        assert!(approved.disposition_id.is_some());
-        assert_eq!(
-            record_value(&store, &scope, kind, &record_id),
-            before_approval
-        );
-
-        let decided = store
-            .record_decision_state(&scope, kind, &record_id)
-            .unwrap();
-        assert_eq!(decided.decisions.len(), 2);
-        assert_eq!(decided.decisions[0].revision, created.current_revision);
-        assert_eq!(decided.decisions[1].revision, Some(second.revision));
-        assert_eq!(
-            decided.current_acceptance.unwrap().disposition.proposal_id,
-            second.proposal_id
-        );
-        assert_eq!(decided.withdrawn, [first.proposal_id]);
+        run_review_cycle(kind);
     }
 }
 
