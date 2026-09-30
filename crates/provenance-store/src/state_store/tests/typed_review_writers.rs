@@ -97,6 +97,28 @@ fn typed_source_and_rule_record_creation_and_each_repeated_value_change() {
     }
 }
 
+#[test]
+fn typed_source_and_rule_recreation_links_a_second_creation_occurrence() {
+    let (_temp, store, scope) = initialized_store();
+    let input = document("Policy A", "The system retains A.");
+    store.apply_typed_spec(&scope, input.clone()).unwrap();
+
+    let mut empty = input.clone();
+    empty.sources.clear();
+    empty.requirements.clear();
+    empty.rules.clear();
+    store.apply_typed_spec(&scope, empty).unwrap();
+    store.apply_typed_spec(&scope, input).unwrap();
+
+    for kind in [NodeType::Source, NodeType::Rule] {
+        let entries = entries_for(&store, &scope, kind);
+        assert_eq!(entries.len(), 2, "{kind:?}");
+        assert_eq!(entries[0].outcome, SaveOutcome::Created, "{kind:?}");
+        assert_eq!(entries[1].outcome, SaveOutcome::Created, "{kind:?}");
+        assert_eq!(entries[1].predecessor.as_ref(), Some(&entries[0].id));
+    }
+}
+
 fn assert_deletion_conflict(error: anyhow::Error, kind: NodeType, id: &str) {
     let error = WriteError(error);
     assert!(matches!(
