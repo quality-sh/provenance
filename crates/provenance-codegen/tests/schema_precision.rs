@@ -148,7 +148,9 @@ fn member_successes_keep_a_metadata_free_meta() {
         .unwrap()
         .iter()
         .find(|variant| {
-            let reference = variant["properties"]["data"]["$ref"].as_str().unwrap();
+            let Some(reference) = variant["properties"]["data"]["$ref"].as_str() else {
+                return false;
+            };
             let data = openapi
                 .pointer(reference.strip_prefix('#').unwrap())
                 .unwrap();

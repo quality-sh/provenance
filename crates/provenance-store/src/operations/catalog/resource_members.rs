@@ -212,7 +212,9 @@ macro_rules! catalog_member {
         ),
         $record:ty,
         review($kind:ident)
-    ) => {};
+    ) => {
+        projection_member_operation!($member, $wire, $record);
+    };
     (
         projection(
             $list:ident,

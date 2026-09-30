@@ -63,7 +63,11 @@ fn every_family_keeps_its_independent_descriptor() {
                 Some("requirements"),
                 Some(20),
                 Resource,
-                &["list-requirements", "page-requirements"],
+                &[
+                    "list-requirements",
+                    "page-requirements",
+                    "get-requirement",
+                ],
             ),
         ),
         (
