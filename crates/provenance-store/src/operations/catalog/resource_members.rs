@@ -34,7 +34,7 @@ pub struct ReviewResource {
     pub decision: provenance_core::review::RequirementDecisionState,
 }
 
-async fn review_resource(
+fn review_resource(
     context: &ReadContext,
     scope: provenance_core::ScopeId,
     kind: provenance_core::NodeType,
@@ -63,12 +63,12 @@ async fn reviewed_member(
     let record_scope = read.scope.clone();
     Ok(
         reader::answer(&read.root, &read.scope, read.policy, move |context| {
-            Box::pin(review_resource(
+            Box::pin(std::future::ready(review_resource(
                 context,
                 record_scope,
                 request.record_kind,
                 request.id,
-            ))
+            )))
         })
         .await?
         .into(),
