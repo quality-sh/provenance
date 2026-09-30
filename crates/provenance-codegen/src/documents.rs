@@ -80,24 +80,45 @@ pub fn pascal(name: &str) -> String {
 
 pub fn documents() -> (Value, Value) {
     let mut schemas = Map::new();
+    let mut shared_components = BTreeMap::new();
     let mut paths: Map<String, Value> = Map::new();
     let mut tools = Vec::new();
     let definitions = provenance_store::operations::catalog::definitions();
     check_names(definitions);
     for definition in definitions {
         let family = pascal(definition.name);
+        let variants = definition.query_variants();
+        let share = variants.is_empty();
         let request = definition
             .request_schema()
             .cloned()
-            .map(|schema| component(&format!("{family}Request"), schema, &mut schemas));
-        let success = component(
+            .map(|schema| {
+                route_component(
+                    definition,
+                    "request",
+                    &format!("{family}Request"),
+                    schema,
+                    share,
+                    &mut shared_components,
+                    &mut schemas,
+                )
+            });
+        let success = route_component(
+            definition,
+            "success",
             &format!("{family}Success"),
             definition.success_schema(),
+            share,
+            &mut shared_components,
             &mut schemas,
         );
-        let failure = component(
+        let failure = route_component(
+            definition,
+            "failure",
             &format!("{family}Failure"),
             definition.failure_schema().clone(),
+            share,
+            &mut shared_components,
             &mut schemas,
         );
         let parameters = definition
@@ -131,7 +152,6 @@ pub fn documents() -> (Value, Value) {
             operation["requestBody"] = json!({"required":true,
                 "content":{"application/json":{"schema":request}}});
         }
-        let variants = definition.query_variants();
         if !variants.is_empty() {
             operation["x-provenance-query-variants"] =
                 Value::Array(query_variant_documents(variants, &family, &mut schemas));
@@ -157,6 +177,31 @@ pub fn documents() -> (Value, Value) {
             "paths":paths,"components":{"schemas":schemas}}),
         json!({"tools":tools}),
     )
+}
+
+fn route_component(
+    definition: &provenance_store::operations::catalog::Definition,
+    role: &str,
+    name: &str,
+    schema: Value,
+    share: bool,
+    shared: &mut BTreeMap<(String, String, String), Value>,
+    components: &mut Map<String, Value>,
+) -> Value {
+    if !share {
+        return component(name, schema, components);
+    }
+    let key = (
+        definition.registration.handler.operation.to_owned(),
+        role.to_owned(),
+        schema.to_string(),
+    );
+    if let Some(reference) = shared.get(&key) {
+        return reference.clone();
+    }
+    let reference = component(name, schema, components);
+    shared.insert(key, reference.clone());
+    reference
 }
 
 fn query_variant_documents(
