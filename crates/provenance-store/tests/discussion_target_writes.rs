@@ -4,7 +4,10 @@ use provenance_core::protocol::failure::OperationError;
 use provenance_core::threads::DiscussionStatus;
 use provenance_store::{
     layout::ProvenanceLayout,
-    operations::catalog::{invoke_typed, PreparedContext, PreparedScope, WriteTargetDiscussion},
+    operations::catalog::{
+        invoke_typed, PreparedContext, PreparedScope, WriteTargetDiscussion,
+        WriteTargetDiscussionRequest,
+    },
     review::{DiscussionAction, TargetDiscussionWrite, WriteDiscussion},
     state_store::StateStore,
     write_error::{WriteError, WriteFailure},
@@ -46,6 +49,19 @@ fn reply(
             "expected_version": discussion.version, "role": "user", "body": id
         }),
     )
+}
+
+fn catalog_reply(
+    body: &str,
+    discussion: &provenance_core::threads::DiscussionEntry,
+) -> WriteTargetDiscussionRequest {
+    serde_json::from_value(json!({
+        "scope_id":"default", "actor":"ben", "declared_by":null,
+        "allowed_parent_kinds":["requirement"],
+        "discussion_id":discussion.discussion_id,
+        "expected_version":discussion.version, "role":"user", "body":body
+    }))
+    .unwrap()
 }
 
 fn failure(result: anyhow::Result<provenance_core::threads::DiscussionEntry>) -> WriteFailure {
@@ -280,9 +296,12 @@ async fn catalog_operation_uses_the_target_write_path() {
         scope: scope(),
         requested_target: "selected".into(),
     });
-    let receipt = invoke_typed::<WriteTargetDiscussion>(context, reply("catalog", &started))
-        .await
-        .unwrap();
+    let receipt = invoke_typed::<WriteTargetDiscussion>(
+        context,
+        catalog_reply("catalog", &started),
+    )
+    .await
+    .unwrap();
     assert_eq!(receipt.version, 2);
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 2);
 }
@@ -299,10 +318,12 @@ async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
         scope: scope(),
         requested_target: "selected".into(),
     });
-    let mut mismatched = request(
-        "wrong_scope",
-        &json!({"discussion_id":"missing","expected_version":1,"role":"user","body":"x"}),
-    );
+    let mut mismatched: WriteTargetDiscussionRequest = serde_json::from_value(json!({
+        "scope_id":"default", "actor":"ben", "declared_by":null,
+        "allowed_parent_kinds":["requirement"], "discussion_id":"missing",
+        "expected_version":1, "role":"user", "body":"x"
+    }))
+    .unwrap();
     mismatched.scope_id = provenance_core::ScopeId::new("other").unwrap();
 
     let error = invoke_typed::<WriteTargetDiscussion>(context, mismatched)
