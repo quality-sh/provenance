@@ -430,7 +430,7 @@ impl HttpClient {
   }));
   const failures = packedLines(['    Metadata(Box<crate::types::MetadataFailure>),', ...routes.map(({ op }) => {
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
-    if (queryVariants(op).length) return `    ${variant}(Box<crate::types::${variant}Failure>),`;
+    if (queryVariants(op).length) return `    ${variant}(Box<${variant}Failure>),`;
     return `    ${variant}(Box<crate::types::${ref(op.responses['400'].content['application/json'].schema)}>),`;
   })]);
   const failureFile = `// Generated from OpenAPI. Do not edit.
