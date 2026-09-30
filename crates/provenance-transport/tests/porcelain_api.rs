@@ -64,7 +64,6 @@ async fn api_selects_methods_bodies_and_headers_for_one_public_mutation() {
         .call(json!({
             "path": "sources",
             "method": "post",
-            "headers": {"Idempotency-Key": "api-create-one"},
             "body": {"id": "source_api", "name": "Created by api", "source_type": "document", "supersedes": []}
         }))
         .await;
@@ -254,8 +253,7 @@ async fn api_arguments_follow_the_http_router() {
     let no_body = session
         .call(json!({
             "path": "sources",
-            "method": "post",
-            "headers": {"Idempotency-Key": "api-no-body"}
+            "method": "post"
         }))
         .await;
     let refused = refusal(&no_body);

@@ -43,8 +43,6 @@ fn api_reads_and_writes_in_the_selected_scope() {
         "post",
         "--input",
         &body,
-        "--header",
-        "Idempotency-Key: cli-scoped-create",
     ]);
 
     let scoped = json(&[

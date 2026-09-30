@@ -84,8 +84,8 @@ clears the field where the schema allows null, while a plain flag on a
 string-typed field always supplies text. Arrays and objects can also come from one JSON object on
 standard input with `--stdin`, which fills only the body fields that no flag
 assigned and refuses a field that a flag already set. Path identity comes from
-the command address. Query parameters and the `Idempotency-Key` and
-`If-Match` controls use the flags that the catalog declares.
+the command address. Query parameters and `If-Match` controls use the flags
+that the catalog declares.
 
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
 records in `data.items`.

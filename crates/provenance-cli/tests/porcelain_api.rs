@@ -151,8 +151,6 @@ fn api_post_creates_from_a_file_body_with_selected_method_and_headers() {
         "post",
         "--input",
         &body,
-        "--header",
-        "Idempotency-Key: cli-file-create",
     ]);
 
     let created = json(&["source_file", "get", "--repo", &repo, "--format", "json"]);
@@ -173,8 +171,6 @@ fn api_stdin_body_creates_from_standard_input() {
             "post",
             "--input",
             "-",
-            "--header",
-            "Idempotency-Key: cli-stdin-create",
         ])
         .write_stdin(
             json!({
@@ -261,10 +257,7 @@ fn api_discovery_describes_the_live_catalog() {
         readable.contains("  inputs: id (path, required)\n"),
         "{readable}"
     );
-    assert!(
-        readable.contains("Idempotency-Key (header, required)"),
-        "{readable}"
-    );
+    assert!(!readable.contains("Idempotency-Key"), "{readable}");
     assert!(
         readable.contains("  inputs with query=neighbors: "),
         "{readable}"
