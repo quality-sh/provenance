@@ -104,3 +104,52 @@ async fn addressed_discussion_member_reads_cover_all_six_parent_kinds() {
         assert_eq!(read["data"]["discussion"]["discussion_id"], discussion_id);
     }
 }
+
+#[tokio::test]
+async fn repeated_discussion_start_after_a_lost_response_creates_another_discussion() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let host = host(&repo);
+    let body = json!({"data":{
+        "actor":"reviewer", "declared_by":null, "role":"user",
+        "body":"A response can be lost."
+    }});
+
+    let (_, first) = call(
+        &host,
+        "POST",
+        "/requirements/req_shared/discussions",
+        Some(body.clone()),
+        None,
+    )
+    .await;
+    let (status, second) = call(
+        &host,
+        "POST",
+        "/requirements/req_shared/discussions",
+        Some(body),
+        None,
+    )
+    .await;
+
+    assert_eq!(status, 200, "{second}");
+    assert_ne!(first["data"]["discussion_id"], second["data"]["discussion_id"]);
+    assert_ne!(first["data"]["request_id"], second["data"]["request_id"]);
+}
+
+#[tokio::test]
+async fn repeated_requirement_create_returns_a_typed_conflict() {
+    let repo = Repository::new("The shared graph is readable.");
+    let host = host(&repo);
+    let body = json!({"data":{
+        "actor":"reviewer", "id":"req_created", "statement":"One statement.",
+        "status":"discovery", "depends_on":[], "supersedes":[]
+    }});
+
+    let (status, first) = call(&host, "POST", "/requirements", Some(body.clone()), None).await;
+    assert_eq!(status, 200, "{first}");
+    let (status, repeated) = call(&host, "POST", "/requirements", Some(body), None).await;
+
+    assert_eq!(status, 409, "{repeated}");
+    assert_eq!(repeated["error"]["kind"], "already_exists");
+}

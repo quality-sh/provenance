@@ -429,3 +429,41 @@ fn review_action_requests_exclude_server_created_identities() {
         .is_err()
     );
 }
+
+#[test]
+fn remaining_review_write_requests_exclude_client_request_identities() {
+    let create = json!({
+        "actor":"agent", "id":"req_a", "statement":"One statement.",
+        "description":null, "status":"discovery", "domain_id":null,
+        "refines":null, "depends_on":[], "supersedes":[], "spawned_by":null,
+        "origin_thread":null, "origin_message":null, "origin":null
+    });
+    assert!(serde_json::from_value::<CreateRequirementRequest>(create.clone()).is_ok());
+
+    let update = json!({
+        "actor":"agent", "expected_etag":"etag", "declared_by":null,
+        "statement":null, "description":"New text.", "fog":null, "status":null,
+        "domain_id":null, "clear_fields":[], "relationships":null, "id":"req_a"
+    });
+    assert!(serde_json::from_value::<UpdateRequirementRequest>(update.clone()).is_ok());
+
+    let discussion = json!({
+        "scope_id":"default", "parent":{
+            "node_type":"requirement", "node_id":"req_a"
+        }, "actor":"agent", "declared_by":null,
+        "action":{"kind":"start", "role":"user", "body":"Concern."}
+    });
+    assert!(serde_json::from_value::<WriteDiscussionRequest>(discussion.clone()).is_ok());
+
+    let mut create_with_identity = create;
+    create_with_identity["request_id"] = json!("client-request");
+    assert!(serde_json::from_value::<CreateRequirementRequest>(create_with_identity).is_err());
+
+    let mut update_with_identity = update;
+    update_with_identity["request_id"] = json!("client-request");
+    assert!(serde_json::from_value::<UpdateRequirementRequest>(update_with_identity).is_err());
+
+    let mut discussion_with_identity = discussion;
+    discussion_with_identity["request_id"] = json!("client-request");
+    assert!(serde_json::from_value::<WriteDiscussionRequest>(discussion_with_identity).is_err());
+}
