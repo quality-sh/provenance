@@ -367,11 +367,37 @@ fn check_names(definitions: &[provenance_store::operations::catalog::Definition]
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
+    fn schema_reference<'a>(document: &'a Value, pointer: &str) -> &'a Value {
+        document
+            .pointer(pointer)
+            .unwrap_or_else(|| panic!("missing schema reference: {pointer}"))
+    }
+
     #[test]
     #[should_panic(expected = "operationId collision")]
     fn operation_ids_cannot_collide() {
         let mut definitions = provenance_store::operations::catalog::definitions().to_vec();
         definitions[1].operation_id = definitions[0].operation_id;
         super::check_names(&definitions[..2]);
+    }
+
+    #[test]
+    fn routes_for_one_handler_share_identical_models() {
+        let (openapi, _) = super::documents();
+        let source = "/paths/~1sources~1{id}~1submit/post";
+        let domain = "/paths/~1domains~1{id}~1submit/post";
+
+        for suffix in [
+            "/requestBody/content/application~1json/schema",
+            "/responses/200/content/application~1json/schema",
+            "/responses/409/content/application~1json/schema",
+        ] {
+            assert_eq!(
+                schema_reference(&openapi, &format!("{source}{suffix}")),
+                schema_reference(&openapi, &format!("{domain}{suffix}")),
+            );
+        }
     }
 }
