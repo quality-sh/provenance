@@ -80,7 +80,6 @@ macro_rules! register_family_catalog {
     ) => {
         $entries.push(register::<super::resource_lists::$list>());
         $entries.push(register::<super::resource_pages::$page>());
-        $entries.push(register::<super::resource_members::$member>());
     };
     (
         $entries:ident,
@@ -96,6 +95,7 @@ macro_rules! register_family_catalog {
     ) => {
         $entries.push(register::<super::resource_lists::$list>());
         $entries.push(register::<super::resource_pages::$page>());
+        $entries.push(register::<super::resource_members::$member>());
     };
     (
         $entries:ident,
