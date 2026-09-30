@@ -43,7 +43,7 @@ async fn review_resource(
     let store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
-    let review_record = crate::cache::review_families::record(store, &scope, kind, &id)?;
+    let review_record = crate::cache::review_families::record(&store, &scope, kind, &id)?;
     let record = serde_json::to_value(&review_record)?;
     let snapshot = store.record_review_state(&review_record)?;
     Ok(ReviewResource {

@@ -44,7 +44,7 @@ pub use discussion_discovery::*;
 pub use discussion_reads::*;
 pub use discussion_writes::*;
 pub use requirement_review::*;
-pub use resource_members::GetRequirement;
+pub use resource_members::GetReviewedResource;
 pub use review_reads::*;
 pub use updates::*;
 
