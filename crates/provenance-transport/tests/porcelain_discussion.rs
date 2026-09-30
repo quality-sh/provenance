@@ -215,7 +215,12 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
             .unwrap()
             .is_valid(list.structured_content.as_ref().unwrap())
     );
-    let entry = &list.structured_content.as_ref().unwrap()["result"]["entries"][0];
+    let entry = list.structured_content.as_ref().unwrap()["result"]["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["discussion_id"] == id)
+        .unwrap();
     assert_eq!(entry["discussion_id"], id);
     assert_eq!(entry["opening_excerpt"], "Opening text");
     let readable = &list.content[0].as_text().unwrap().text;
