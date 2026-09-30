@@ -25,9 +25,9 @@ mod hydration;
 mod hydration_support;
 mod identity;
 mod impact;
+mod lifecycle_visibility;
 mod limits;
 mod live;
-mod lifecycle_visibility;
 mod order;
 mod pinned;
 mod reader;
@@ -136,6 +136,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
         SearchQuery {
             cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
+            exclude_terminal: false,
             text: Some("pay".into()),
             node_types: vec![NodeType::Domain, NodeType::Boundary],
             limit: 10,
@@ -197,6 +198,7 @@ async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
         SearchQuery {
             cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
+            exclude_terminal: false,
             text: Some("pay".into()),
             node_types: Vec::new(),
             limit: 10,
@@ -244,6 +246,7 @@ async fn search_answers_new_kinds_after_every_settled_kind() {
         SearchQuery {
             cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
+            exclude_terminal: false,
             text: Some("a".into()),
             node_types: vec![
                 NodeType::Source,

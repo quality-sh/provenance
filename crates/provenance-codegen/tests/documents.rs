@@ -57,18 +57,20 @@ fn array_query_parameters_use_one_comma_separated_wire_form() {
 }
 
 #[test]
-fn requirement_document_exposes_the_terminal_filter() {
+fn review_reads_expose_the_terminal_filter() {
     let (openapi, _) = provenance_codegen::documents();
-    let parameters = operation(&openapi, "/requirements/{id}/document", "get")["parameters"]
-        .as_array()
-        .unwrap();
-    let filter = parameters
-        .iter()
-        .find(|parameter| parameter["name"] == "exclude_terminal")
-        .expect("document read declares the lifecycle filter");
-    assert_eq!(filter["in"], "query");
-    assert_eq!(filter["required"], false);
-    assert_eq!(filter["schema"], json!({"type":"boolean","default":false}));
+    for path in ["/requirements", "/requirements/{id}/document"] {
+        let parameters = operation(&openapi, path, "get")["parameters"]
+            .as_array()
+            .unwrap();
+        let filter = parameters
+            .iter()
+            .find(|parameter| parameter["name"] == "exclude_terminal")
+            .unwrap_or_else(|| panic!("{path} declares the lifecycle filter"));
+        assert_eq!(filter["in"], "query");
+        assert_eq!(filter["required"], false);
+        assert_eq!(filter["schema"], json!({"type":"boolean","default":false}));
+    }
 }
 
 #[test]

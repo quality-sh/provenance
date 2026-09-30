@@ -54,12 +54,7 @@ fn add_rule(store: &StateStore, scope: &ScopeId, id: &str, status: RuleStatus) {
         .unwrap();
 }
 
-fn add_resolution(
-    store: &StateStore,
-    scope: &ScopeId,
-    id: &str,
-    status: ResolutionStatus,
-) {
+fn add_resolution(store: &StateStore, scope: &ScopeId, id: &str, status: ResolutionStatus) {
     store
         .create_resolution(CreateResolutionInput {
             scope_id: scope.clone(),
@@ -87,12 +82,7 @@ fn seed_lifecycle_records(store: &StateStore, scope: &ScopeId) {
     add_rule(store, scope, "rule_a_archived", RuleStatus::Archived);
     add_rule(store, scope, "rule_b_active", RuleStatus::Active);
     add_rule(store, scope, "rule_c_active", RuleStatus::Active);
-    add_resolution(
-        store,
-        scope,
-        "res_a_abandoned",
-        ResolutionStatus::Abandoned,
-    );
+    add_resolution(store, scope, "res_a_abandoned", ResolutionStatus::Abandoned);
     add_resolution(
         store,
         scope,
@@ -133,7 +123,9 @@ async fn lifecycle_filter_hides_only_terminal_records_from_lists_and_search() {
     seed_lifecycle_records(&store, &scope);
     let root = root_of(&dir);
 
-    let rules = list_rules(&root, json!({"exclude_terminal":true,"limit":50})).await.unwrap();
+    let rules = list_rules(&root, json!({"exclude_terminal":true,"limit":50}))
+        .await
+        .unwrap();
     let listed = serde_json::to_string(&rules["result"]["items"]).unwrap();
     assert!(!listed.contains("rule_a_archived"));
     assert!(listed.contains("rule_b_active"));
@@ -158,7 +150,9 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
     seed_lifecycle_records(&store, &scope);
     let root = root_of(&dir);
 
-    let first = list_rules(&root, json!({"exclude_terminal":true,"limit":1})).await.unwrap();
+    let first = list_rules(&root, json!({"exclude_terminal":true,"limit":1}))
+        .await
+        .unwrap();
     assert_eq!(first["result"]["items"][0]["id"], "rule_b_active");
     assert_eq!(first["result"]["has_more"], true);
     let cursor = first["result"]["next_cursor"].clone();

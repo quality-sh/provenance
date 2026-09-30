@@ -49,11 +49,11 @@ pub fn byte_expression(columns: &[&str]) -> String {
 /// Returns the SQL text for one keyset page of at most `LIMIT` IDs after a
 /// key, in primary-key order. An ID over 1024 bytes comes back as NULL.
 ///
-/// Bind the scope, the previous key, the filter value when `filter` is not
-/// empty, and the limit, in that order. `filter` is trusted SQL text from a
-/// fixed set of literals and never holds caller input. `ORDER BY` names the
-/// table column: a bare `id` binds to the guarded output alias, and `SQLite`
-/// then sorts every remaining row for each page.
+/// Bind the scope, the previous key, values named by `filter`, and the limit,
+/// in that order. `filter` is trusted SQL text from a fixed set of literals and
+/// never holds caller input. `ORDER BY` names the table column: a bare `id`
+/// binds to the guarded output alias, and `SQLite` then sorts every remaining
+/// row for each page.
 pub fn id_page_sql(table: &str, filter: &str) -> String {
     let table = quoted(table);
     format!(
@@ -126,8 +126,13 @@ impl<K: ProjectionRow> Table<'_, K> {
         &self,
         after: &str,
         limit: usize,
+        exclude_terminal: bool,
     ) -> anyhow::Result<Vec<String>> {
-        let sql = id_page_sql(K::TABLE, "");
+        let filter = crate::cache::projection_families::exclude_terminal_predicate(
+            K::TABLE,
+            exclude_terminal,
+        );
+        let sql = id_page_sql(K::TABLE, &filter);
         let mut tx = self.snapshot().connection().await;
         let rows = sqlx::query(&sql)
             .bind(self.snapshot().scope().as_str())

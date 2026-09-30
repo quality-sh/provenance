@@ -172,9 +172,13 @@ pub(super) async fn search_ids(
     node_type: NodeType,
     after: &str,
     limit: usize,
+    exclude_terminal: bool,
 ) -> anyhow::Result<Vec<String>> {
     for_kind!(node_type, K => {
-        snapshot.table::<K>().search_ids(after, limit).await
+        snapshot
+            .table::<K>()
+            .search_ids(after, limit, exclude_terminal)
+            .await
     })
 }
 

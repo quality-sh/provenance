@@ -79,6 +79,7 @@ async fn filter_only_search_uses_the_canonical_query_and_result() {
     let query = SearchQuery {
         protocol_version: None,
         cursor: None,
+        exclude_terminal: false,
         text: None,
         node_types: vec![NodeType::Requirement, NodeType::Rule],
         limit: 7,
@@ -101,6 +102,7 @@ async fn search_refuses_a_request_without_text_or_kinds_before_the_port() {
     let query = SearchQuery {
         protocol_version: None,
         cursor: None,
+        exclude_terminal: false,
         text: None,
         node_types: Vec::new(),
         limit: 50,

@@ -207,6 +207,26 @@ macro_rules! terminal_statuses {
     };
 }
 
+/// Returns the SQL suffix that hides terminal rows from one family table.
+pub(super) fn exclude_terminal_predicate(table: &str, exclude_terminal: bool) -> String {
+    if !exclude_terminal {
+        return String::new();
+    }
+    let statuses = FAMILIES
+        .iter()
+        .find(|family| family.table_name == table)
+        .map_or(&[][..], |family| family.terminal_statuses);
+    if statuses.is_empty() {
+        return String::new();
+    }
+    let statuses = statuses
+        .iter()
+        .map(|status| format!("'{status}'"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(" AND status NOT IN ({statuses})")
+}
+
 /// Returns the SQL predicate for terminal-and-dead record identities.
 pub(super) fn terminal_and_dead_predicate(kind: &str, id: &str, scope: &str) -> String {
     FAMILIES

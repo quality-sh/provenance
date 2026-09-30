@@ -235,6 +235,10 @@ fn response_binding(raw_schema: Value, kind: ResponseKind) -> ResponseBinding {
 
 fn list_parameters(searchable: bool, rule: bool) -> Vec<Parameter> {
     let mut parameters = vec![
+        schema::query(
+            "exclude_terminal",
+            json!({"type":"boolean","default":false}),
+        ),
         schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
         schema::query("cursor", json!({"type":"string"})),
     ];
@@ -298,7 +302,10 @@ fn with_query_results(mut definition: Definition, queries: Vec<QueryRoute>) -> D
             .parameters
             .retain(|parameter| {
                 parameter.location == "path"
-                    || matches!(parameter.name, "limit" | "cursor" | "rule")
+                    || matches!(
+                        parameter.name,
+                        "exclude_terminal" | "limit" | "cursor" | "rule"
+                    )
             });
     } else {
         definition
