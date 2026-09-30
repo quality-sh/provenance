@@ -26,7 +26,10 @@ impl StateStore {
         scope: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<RequirementEditState> {
-        self.record_edit_state(scope, provenance_core::NodeType::Requirement, id)
+        self.with_repository_publication(|| {
+            let record = self.requirement(scope, id)?;
+            self.record_edit_state_for_record(&record.into())
+        })
     }
 
     pub fn record_edit_state(

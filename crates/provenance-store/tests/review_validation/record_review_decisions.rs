@@ -4,7 +4,7 @@ use provenance_core::{
 };
 use provenance_store::{
     layout::ProvenanceLayout,
-    review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview},
+    review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview},
     state_store::{
         CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
         CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput,
@@ -243,19 +243,8 @@ fn run_review_cycle(kind: NodeType) {
     let created = store
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
-    let first = created.pending.unwrap();
-
-    let withdrawn = store
-        .withdraw_record_review(WithdrawRecordReview {
-            scope_id: scope.clone(),
-            actor: "author".into(),
-            proposal_id: first.proposal_id.clone(),
-            declared_by: None,
-            reason: Some("The author will resubmit it.".into()),
-        })
-        .unwrap();
-    assert!(!withdrawn.request_id.as_str().is_empty());
-    let submitted = store
+    assert!(created.pending.is_none());
+    let first = store
         .submit_record_review(SubmitRecordReview {
             scope_id: scope.clone(),
             actor: "author".into(),
@@ -272,8 +261,7 @@ fn run_review_cycle(kind: NodeType) {
             revises: None,
         })
         .unwrap();
-    assert!(!submitted.request_id.as_str().is_empty());
-    assert_ne!(submitted.proposal_id, first.proposal_id);
+    assert!(!first.request_id.as_str().is_empty());
     let feedback =
         (!matches!(kind, NodeType::Domain | NodeType::Boundary)).then(|| ReviewFeedback {
             role: provenance_core::MessageRole::User,
@@ -283,7 +271,7 @@ fn run_review_cycle(kind: NodeType) {
         .decide_record_review(DecideRecordReview {
             scope_id: scope.clone(),
             actor: reviewer(),
-            proposal_id: submitted.proposal_id,
+            proposal_id: first.proposal_id.clone(),
             decision: DispositionDecision::Rejected,
             rationale: Some("The source name is not precise.".into()),
             canonical_artifact: None,
@@ -298,7 +286,24 @@ fn run_review_cycle(kind: NodeType) {
     let revised = store
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
-    let second = revised.pending.unwrap();
+    assert!(revised.pending.is_none());
+    let second = store
+        .submit_record_review(SubmitRecordReview {
+            scope_id: scope.clone(),
+            actor: "author".into(),
+            record_kind: kind,
+            record_id: record_id.clone(),
+            declared_by: None,
+            title: "Review the revised record".into(),
+            summary: "Review the precise record text.".into(),
+            confidence: None,
+            source_ids: Vec::new(),
+            evidence_references: Vec::new(),
+            builds_on: Vec::new(),
+            expected_revision: revised.current_revision.clone(),
+            revises: Some(first.proposal_id.clone()),
+        })
+        .unwrap();
     assert_ne!(second.revision, first.revision);
 
     let before_approval = record_value(&store, &scope, kind, &record_id);
@@ -328,13 +333,13 @@ fn run_review_cycle(kind: NodeType) {
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
     assert_eq!(decided.decisions.len(), 2);
-    assert_eq!(decided.decisions[0].revision, created.current_revision);
+    assert_eq!(decided.decisions[0].revision, first.revision);
     assert_eq!(decided.decisions[1].revision, Some(second.revision));
     assert_eq!(
         decided.current_acceptance.unwrap().disposition.proposal_id,
         second.proposal_id
     );
-    assert_eq!(decided.withdrawn, [first.proposal_id]);
+    assert!(decided.withdrawn.is_empty());
 }
 
 #[test]
@@ -357,10 +362,26 @@ fn domain_and_boundary_decisions_keep_rationale_and_refuse_feedback() {
     for kind in [NodeType::Domain, NodeType::Boundary] {
         let (_temp, store, scope) = fixture();
         let record_id = create_record(&store, kind);
-        let proposal = store
+        let current_revision = store
             .record_decision_state(&scope, kind, &record_id)
             .unwrap()
-            .pending
+            .current_revision;
+        let proposal = store
+            .submit_record_review(SubmitRecordReview {
+                scope_id: scope.clone(),
+                actor: "author".into(),
+                record_kind: kind,
+                record_id: record_id.clone(),
+                declared_by: None,
+                title: "Review classification".into(),
+                summary: "Review the classification.".into(),
+                confidence: None,
+                source_ids: Vec::new(),
+                evidence_references: Vec::new(),
+                builds_on: Vec::new(),
+                expected_revision: current_revision,
+                revises: None,
+            })
             .unwrap()
             .proposal_id;
 

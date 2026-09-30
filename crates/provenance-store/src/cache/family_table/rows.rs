@@ -77,8 +77,7 @@ macro_rules! expand_record_family_rows {
                     graph: [export("requirement", Requirement, requirement_record, "req_pinned")],
                     import: [node_budget],
                     catalog: [projection(ListRequirements, "list-requirements",
-                        PageRequirements, "page-requirements", GetRequirement,
-                        "get-requirement")],
+                        PageRequirements, "page-requirements", none)],
                     route: [requirements], review: REQUIREMENT
                 };
                 Boundaries {

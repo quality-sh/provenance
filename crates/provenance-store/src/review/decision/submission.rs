@@ -85,7 +85,7 @@ impl StateStore {
         {
             return Err(SourceFailure::wrap(
                 facts.conflict_failure(self, &scope, input.record_kind, &input.record_id)?,
-                anyhow::anyhow!("stale review submission revision"),
+                anyhow::anyhow!("stale submission revision"),
             ));
         }
         if facts
