@@ -448,6 +448,7 @@ fn requirements(out: &mut Vec<Definition>) {
         ResponseKind::Resource,
         member_parameters(true),
     )
+    .result()
     .with_etag("/edit/etag", false);
     let queries = member_queries(&member, "requirement");
     out.push(with_query_results(member, queries));

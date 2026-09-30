@@ -148,6 +148,7 @@ macro_rules! review_resource {
             ResponseKind::Resource,
             member_parameters_for!($mode),
         )
+        .result()
         .with_etag("/edit/etag", false);
         let queries = registered_member_queries!($mode, &member, $singular);
         $out.push(with_query_results(member, queries));
