@@ -31,16 +31,12 @@ async fn call(
     method: &str,
     path: &str,
     body: Option<Value>,
-    key: Option<&str>,
 ) -> (u16, Value) {
     let mut request = Request::builder()
         .method(method)
         .uri(path)
         .header("host", "fixture.test")
         .header("authorization", "Bearer fixture-secret");
-    if let Some(key) = key {
-        request = request.header("idempotency-key", key);
-    }
     let has_body = body.is_some();
     let body = body.map_or_else(Body::empty, |value| Body::from(value.to_string()));
     if has_body {
@@ -66,7 +62,7 @@ async fn addressed_discussion_member_reads_cover_all_six_parent_kinds() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo);
-    for (index, (plural, id)) in [
+    for (plural, id) in [
         ("sources", "source_shared"),
         ("requirements", "req_shared"),
         ("resolutions", "resolution_shared"),
@@ -75,10 +71,8 @@ async fn addressed_discussion_member_reads_cover_all_six_parent_kinds() {
         ("questions", "question_shared"),
     ]
     .into_iter()
-    .enumerate()
     {
         let parent = format!("/{plural}/{id}/discussions");
-        let key = format!("six_kind_discussion_{index}");
         let (status, started) = call(
             &host,
             "POST",
@@ -87,7 +81,6 @@ async fn addressed_discussion_member_reads_cover_all_six_parent_kinds() {
                 "actor":"reviewer", "declared_by":null, "role":"user",
                 "body":format!("Discussion for {plural}.")
             }})),
-            Some(&key),
         )
         .await;
         assert_eq!(status, 200, "{plural}: {started}");
@@ -96,7 +89,6 @@ async fn addressed_discussion_member_reads_cover_all_six_parent_kinds() {
             &host,
             "GET",
             &format!("{parent}/{discussion_id}"),
-            None,
             None,
         )
         .await;
@@ -120,7 +112,6 @@ async fn repeated_discussion_start_after_a_lost_response_creates_another_discuss
         "POST",
         "/requirements/req_shared/discussions",
         Some(body.clone()),
-        None,
     )
     .await;
     let (status, second) = call(
@@ -128,7 +119,6 @@ async fn repeated_discussion_start_after_a_lost_response_creates_another_discuss
         "POST",
         "/requirements/req_shared/discussions",
         Some(body),
-        None,
     )
     .await;
 
@@ -146,9 +136,9 @@ async fn repeated_requirement_create_returns_a_typed_conflict() {
         "status":"discovery", "depends_on":[], "supersedes":[]
     }});
 
-    let (status, first) = call(&host, "POST", "/requirements", Some(body.clone()), None).await;
+    let (status, first) = call(&host, "POST", "/requirements", Some(body.clone())).await;
     assert_eq!(status, 200, "{first}");
-    let (status, repeated) = call(&host, "POST", "/requirements", Some(body), None).await;
+    let (status, repeated) = call(&host, "POST", "/requirements", Some(body)).await;
 
     assert_eq!(status, 409, "{repeated}");
     assert_eq!(repeated["error"]["kind"], "already_exists");

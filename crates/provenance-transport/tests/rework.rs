@@ -175,10 +175,7 @@ async fn requirement_get_pairs_content_with_the_etag_from_one_publication_snapsh
             "PATCH",
             "/requirements/req_shared",
             Some(json!({"data":{"actor":"writer","statement":"The graph changed."}})),
-            &[
-                ("idempotency-key", "concurrent_save"),
-                ("if-match", &writer_etag),
-            ],
+            &[("if-match", &writer_etag)],
         ));
         let _ = done_tx.send(());
         result
@@ -220,7 +217,7 @@ async fn relationship_patches_accept_deltas_and_final_sets_atomically() {
     create(
         &host,
         "/requirements",
-        Some("create_req_second"),
+        None,
         json!({"actor":"agent","id":"req_second","statement":"The second record exists.",
             "status":"active","depends_on":[],"supersedes":[]}),
     )

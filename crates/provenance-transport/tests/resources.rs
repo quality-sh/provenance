@@ -91,7 +91,7 @@ async fn all_addressed_discussion_routes_work_for_questions() {
         "POST",
         parent,
         Some(start),
-        &[("idempotency-key", "discussion_start")],
+        &[],
     )
     .await;
     assert_eq!(status, 200, "{started}");
@@ -135,10 +135,7 @@ async fn all_addressed_discussion_routes_work_for_questions() {
         "POST",
         &messages,
         Some(reply),
-        &[
-            ("idempotency-key", "discussion_reply"),
-            ("if-match", "\"1\""),
-        ],
+        &[("if-match", "\"1\"")],
     )
     .await;
     assert_eq!(status, 200, "{replied}");
@@ -152,10 +149,7 @@ async fn all_addressed_discussion_routes_work_for_questions() {
         "PATCH",
         &discussion,
         Some(update),
-        &[
-            ("idempotency-key", "discussion_resolve"),
-            ("if-match", "\"2\""),
-        ],
+        &[("if-match", "\"2\"")],
     )
     .await;
     assert_eq!(status, 200, "{resolved}");
@@ -179,7 +173,7 @@ async fn a_discussion_member_read_is_addressed_beyond_the_first_list_page() {
                 "actor":"reviewer", "declared_by":null,
                 "role":"user", "body":format!("Discussion {index}.")
             }})),
-            &[("idempotency-key", &format!("discussion_{index}"))],
+            &[],
         )
         .await;
         assert_eq!(status, 200, "{started}");
@@ -210,7 +204,7 @@ async fn list_controls_paginate_and_member_controls_are_rejected() {
         "POST",
         "/requirements",
         Some(second),
-        &[("idempotency-key", "create_second_requirement")],
+        &[],
     )
     .await;
     assert_eq!(status, 200, "{created}");

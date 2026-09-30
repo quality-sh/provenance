@@ -33,7 +33,6 @@ async fn discussion_write_scope_mismatch_keeps_its_safe_status() {
             "request": {
                 "scope_id": "other",
                 "parent": {"node_type": "requirement", "node_id": "req_one"},
-                "request_id": "request_one",
                 "actor": "ben",
                 "declared_by": null,
                 "action": {"kind": "start", "role": "user", "body": "Concern"}

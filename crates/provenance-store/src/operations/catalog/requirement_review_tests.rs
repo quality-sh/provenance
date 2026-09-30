@@ -3,6 +3,7 @@ use crate::{
     layout::ProvenanceLayout,
     operations::catalog::{
         Operation, PreparedContext, PreparedScope, WriteDiscussionRequest,
+        WriteTargetDiscussionRequest,
     },
     state_store::StateStore,
 };
@@ -32,9 +33,8 @@ fn fixture() -> (tempfile::TempDir, PreparedContext, StateStore, ScopeId) {
     (temp, context, StateStore::new(layout), scope)
 }
 
-fn create_request(request_id: &str) -> CreateRequirementRequest {
+fn create_request(_request_id: &str) -> CreateRequirementRequest {
     serde_json::from_value(json!({
-        "request_id": request_id,
         "actor": "ben",
         "id": "req_a",
         "statement": "The system stores records.",
@@ -63,12 +63,11 @@ fn update_request(store: &StateStore, request_id: &str) -> UpdateRequirementRequ
 }
 
 fn update_request_with_etag(
-    request_id: &str,
+    _request_id: &str,
     expected_etag: &str,
     description: &str,
 ) -> UpdateRequirementRequest {
     serde_json::from_value(json!({
-        "request_id": request_id,
         "actor": "ben",
         "expected_etag": expected_etag,
         "declared_by": null,
@@ -174,7 +173,7 @@ async fn lifecycle_update_keeps_the_current_submission() {
         .unwrap();
     let pending = created.decision.pending.unwrap();
     let request: UpdateRequirementRequest = serde_json::from_value(json!({
-        "request_id":"activate", "actor":"ben", "expected_etag":created.edit.etag,
+        "actor":"ben", "expected_etag":created.edit.etag,
         "declared_by":null, "statement":null, "description":null, "fog":null,
         "status":"active", "domain_id":null, "clear_fields":[],
         "relationships":null, "id":"req_a"
@@ -291,7 +290,7 @@ async fn update_response_failure_refuses_before_publication() {
 }
 
 #[tokio::test]
-async fn replay_precedes_stale_precondition_and_returns_current_state() {
+async fn a_repeated_update_with_an_old_etag_returns_a_typed_conflict() {
     let (_temp, context, store, scope) = fixture();
     CreateRequirementResource::run(context.clone(), create_request("create_a"))
         .await
@@ -312,18 +311,17 @@ async fn replay_precedes_stale_precondition_and_returns_current_state() {
     .await
     .unwrap();
 
-    let replay = UpdateRequirementResource::run(
+    let error = UpdateRequirementResource::run(
         context,
         update_request_with_etag("update_a", &first_etag, "First text."),
     )
     .await
-    .unwrap();
+    .unwrap_err();
 
-    assert_eq!(replay.record.description.as_deref(), Some("Second text."));
-    assert_eq!(
-        replay.edit.etag,
-        store.requirement_edit_state(&scope, &id).unwrap().etag
-    );
+    assert!(matches!(
+        error.error,
+        crate::write_error::WriteFailure::RequirementEditConflict { .. }
+    ));
     assert_eq!(store.review_entries(&scope).unwrap().len(), 3);
 }
 
@@ -457,6 +455,13 @@ fn remaining_review_write_requests_exclude_client_request_identities() {
     });
     assert!(serde_json::from_value::<WriteDiscussionRequest>(discussion.clone()).is_ok());
 
+    let reply = json!({
+        "scope_id":"default", "actor":"agent", "declared_by":null,
+        "allowed_parent_kinds":["requirement"], "discussion_id":"discussion_a",
+        "expected_version":1, "role":"user", "body":"Reply."
+    });
+    assert!(serde_json::from_value::<WriteTargetDiscussionRequest>(reply.clone()).is_ok());
+
     let mut create_with_identity = create;
     create_with_identity["request_id"] = json!("client-request");
     assert!(serde_json::from_value::<CreateRequirementRequest>(create_with_identity).is_err());
@@ -468,4 +473,10 @@ fn remaining_review_write_requests_exclude_client_request_identities() {
     let mut discussion_with_identity = discussion;
     discussion_with_identity["request_id"] = json!("client-request");
     assert!(serde_json::from_value::<WriteDiscussionRequest>(discussion_with_identity).is_err());
+
+    let mut reply_with_identity = reply;
+    reply_with_identity["request_id"] = json!("client-request");
+    assert!(
+        serde_json::from_value::<WriteTargetDiscussionRequest>(reply_with_identity).is_err()
+    );
 }

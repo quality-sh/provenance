@@ -135,8 +135,7 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
     ))
     .await;
 
-    // create-requirement requires an Idempotency-Key header.
-    let no_idempotency = session
+    let created = session
         .call(json!({
             "path": "requirements",
             "method": "post",
@@ -144,16 +143,13 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
                      "status": "active", "depends_on": [], "supersedes": []}
         }))
         .await;
-    let refused = refusal(&no_idempotency);
-    assert_eq!(refused["kind"], "invalid_input");
-    assert_eq!(refused["field"], "Idempotency-Key");
+    assert_ne!(created.is_error, Some(true), "{created:?}");
 
-    // update-requirement requires If-Match and an Idempotency-Key.
+    // update-requirement requires If-Match.
     let no_version = session
         .call(json!({
             "path": "requirements/req_shared",
             "method": "patch",
-            "headers": {"Idempotency-Key": "api-patch-one"},
             "body": {"description": "One description."}
         }))
         .await;
@@ -168,17 +164,17 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
         .as_str()
         .expect("the requirement read carries its etag")
         .to_owned();
-    let edit = |key: &str, description: &str| {
+    let edit = |description: &str| {
         json!({
             "path": "requirements/req_shared",
             "method": "patch",
-            "headers": {"Idempotency-Key": key, "If-Match": etag},
+            "headers": {"If-Match": etag},
             "body": {"actor": "api", "description": description}
         })
     };
 
     let current = session
-        .call(edit("api-patch-current", "Edited through api."))
+        .call(edit("Edited through api."))
         .await;
     assert_ne!(current.is_error, Some(true), "{current:?}");
     assert_eq!(
@@ -186,13 +182,12 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
         "Edited through api."
     );
 
-    let stale = session.call(edit("api-patch-stale", "A stale edit.")).await;
+    let stale = session.call(edit("A stale edit.")).await;
     let named = session
         .call_named(
             "update-requirement",
             json!({
                 "id": "req_shared",
-                "idempotency_key": "named-patch-stale",
                 "if_match": etag,
                 "data": {"actor": "api", "description": "A stale edit."}
             }),
@@ -226,7 +221,7 @@ async fn api_refuses_header_names_that_differ_only_in_case() {
         .call(json!({
             "path": "requirements/req_shared",
             "method": "patch",
-            "headers": {"Idempotency-Key": "api-patch-case", "If-Match": "\"1\"", "if-match": "\"2\""},
+            "headers": {"If-Match": "\"1\"", "if-match": "\"2\""},
             "body": {"actor": "api", "description": "One description."}
         }))
         .await;

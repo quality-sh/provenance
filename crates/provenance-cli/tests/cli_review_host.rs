@@ -319,7 +319,6 @@ fn discussion_writes_use_the_bound_scope() {
             request(&host, "POST", "/requirements/req_example/discussions", true)
                 .set("Origin", host.config["endpoint"].as_str().unwrap())
                 .set("Content-Type", "application/json")
-                .set("Idempotency-Key", "request_review_discussion")
                 .send_string(&body.to_string()),
         )
     };
@@ -328,7 +327,7 @@ fn discussion_writes_use_the_bound_scope() {
     let saved = post(&body);
     assert_eq!(saved.status(), 200);
     let saved: Value = serde_json::from_str(&saved.into_string().unwrap()).unwrap();
-    assert_eq!(saved["data"]["request_id"], "request_review_discussion");
+    assert!(uuid::Uuid::parse_str(saved["data"]["request_id"].as_str().unwrap()).is_ok());
     assert_eq!(saved["data"]["actor"], "ben");
     let discussions: Value =
         serde_json::from_str(&list_discussions(&host).into_string().unwrap()).unwrap();
@@ -401,7 +400,7 @@ fn termination_releases_the_listener() {
         .unwrap()
         .to_owned();
     let mut stalled = TcpStream::connect(&address).unwrap();
-    write!(stalled, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {}\r\nIdempotency-Key: request_stalled\r\nContent-Length: 1000\r\n\r\n{{", host.config["bearer"].as_str().unwrap()).unwrap();
+    write!(stalled, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {}\r\nContent-Length: 1000\r\n\r\n{{", host.config["bearer"].as_str().unwrap()).unwrap();
     let mut partial_headers = TcpStream::connect(&address).unwrap();
     partial_headers.write_all(b"GET / HTTP/1.1\r\nHo").unwrap();
     assert!(Command::new("kill")

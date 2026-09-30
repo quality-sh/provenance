@@ -22,7 +22,7 @@ async fn edit(session: &ApiSession, description: &str) -> (String, String) {
     let saved = session
         .call(json!({
             "path":"requirements/req_shared", "method":"patch",
-            "headers":{"Idempotency-Key":format!("edit-{description}"),"If-Match":etag},
+            "headers":{"If-Match":etag},
             "body":{"actor":"agent","description":description}
         }))
         .await;

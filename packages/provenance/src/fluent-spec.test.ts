@@ -79,7 +79,7 @@ function seedResolution(repo: string): void {
   catalogCreate(repo, "requirements", {
     actor: "sdk-test", id: "req_seed", statement: "The seed requirement stands",
     status: "discovery", depends_on: [], supersedes: [],
-  }, ["--idempotency-key", "request_seed_requirement"]);
+  });
   catalogCreate(repo, "resolutions", {
     id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
     supersedes: [], position: "Adopt", rationale: "Seeds the relations",

@@ -67,7 +67,6 @@ pub struct ConversationInput {
 #[serde(deny_unknown_fields)]
 pub struct StartInput {
     pub parent: ThreadParent,
-    pub request_id: StableId,
     pub actor: String,
     pub declared_by: Option<String>,
     pub role: MessageRole,
@@ -79,7 +78,6 @@ pub struct StartInput {
 #[serde(deny_unknown_fields)]
 pub struct ReplyInput {
     pub discussion_id: StableId,
-    pub request_id: StableId,
     pub actor: String,
     pub declared_by: Option<String>,
     pub expected_version: u64,

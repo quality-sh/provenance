@@ -393,7 +393,6 @@ fn requirements(out: &mut Vec<Definition>) {
             ResponseKind::Resource,
             Vec::new(),
         )
-        .header("Idempotency-Key", "request_id", false)
         .cli_defaults(CREATE_REQUIREMENT_DEFAULTS)
         .target(TargetAction::Create, Some(NodeType::Requirement))
         .with_etag("/edit/etag", false),
@@ -408,7 +407,6 @@ fn requirements(out: &mut Vec<Definition>) {
             ResponseKind::Resource,
             vec![schema::path("id")],
         )
-        .header("Idempotency-Key", "request_id", false)
         .header("If-Match", "expected_etag", true)
         .cli_defaults(UPDATE_REQUIREMENT_DEFAULTS)
         .public_patch(&[

@@ -87,7 +87,7 @@ async fn assert_conversation_continuations(
         "discuss",
         json!({
             "parent":{"node_type":"requirement","node_id":"req_shared"},
-            "request_id":"request_other", "actor":"ben", "role":"user", "body":"Other root"
+            "actor":"ben", "role":"user", "body":"Other root"
         }),
     )
     .await;
@@ -120,7 +120,7 @@ async fn assert_conversation_continuations(
         client,
         "reply",
         json!({
-            "discussion_id":id, "request_id":"request_stale", "actor":"ben",
+            "discussion_id":id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Stale message"
         }),
     )
@@ -130,7 +130,7 @@ async fn assert_conversation_continuations(
         client,
         "reply",
         json!({
-            "discussion_id":id, "request_id":"request_later", "actor":"ben",
+            "discussion_id":id, "actor":"ben",
             "expected_version":2, "role":"user", "body":"Later message"
         }),
     )
@@ -161,7 +161,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         "discuss",
         json!({
             "parent":{"node_type":"requirement","node_id":"req_shared"},
-            "request_id":"request_start", "actor":"ben", "role":"user", "body":"Opening text"
+            "actor":"ben", "role":"user", "body":"Opening text"
         }),
     )
     .await;
@@ -174,29 +174,29 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
             .is_valid(started.structured_content.as_ref().unwrap())
     );
     let id = receipt["discussion_id"].as_str().unwrap();
-    let replay = call(
+    let repeated = call(
         &client,
         "discuss",
         json!({
             "parent":{"node_type":"requirement","node_id":"req_shared"},
-            "request_id":"request_start", "actor":"ben", "role":"user", "body":"Opening text"
+            "actor":"ben", "role":"user", "body":"Opening text"
         }),
     )
     .await;
-    assert_eq!(
-        replay.structured_content.as_ref().unwrap()["receipt"],
-        *receipt
+    assert_ne!(
+        repeated.structured_content.as_ref().unwrap()["receipt"]["discussion_id"],
+        receipt["discussion_id"]
     );
-    let changed_intent = call(
+    let changed_body = call(
         &client,
         "discuss",
         json!({
             "parent":{"node_type":"requirement","node_id":"req_shared"},
-            "request_id":"request_start", "actor":"ben", "role":"user", "body":"Changed"
+            "actor":"ben", "role":"user", "body":"Changed"
         }),
     )
     .await;
-    assert_eq!(changed_intent.is_error, Some(true));
+    assert_ne!(changed_body.is_error, Some(true));
     let list = call(&client, "discussions", json!({})).await;
     assert_eq!(
         list.structured_content.as_ref().unwrap()["scope_id"],
@@ -236,7 +236,7 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         &client,
         "reply",
         json!({
-            "discussion_id":id, "request_id":"request_reply", "actor":"ben",
+            "discussion_id":id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Second message"
         }),
     )
@@ -283,7 +283,7 @@ async fn reply_grant_does_not_admit_start() {
         "discuss",
         json!({
             "parent":{"node_type":"requirement","node_id":"req_shared"},
-            "request_id":"denied_start", "actor":"ben", "role":"user", "body":"Denied start"
+            "actor":"ben", "role":"user", "body":"Denied start"
         }),
     )
     .await;
@@ -292,7 +292,7 @@ async fn reply_grant_does_not_admit_start() {
         &client,
         "reply",
         json!({
-            "discussion_id":receipt.discussion_id, "request_id":"reply_only", "actor":"ben",
+            "discussion_id":receipt.discussion_id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Permitted reply"
         }),
     )
@@ -363,7 +363,7 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
         &client,
         "reply",
         json!({
-            "discussion_id":source.discussion_id, "request_id":"denied_reply", "actor":"ben",
+            "discussion_id":source.discussion_id, "actor":"ben",
             "expected_version":1, "role":"user", "body":"Denied"
         }),
     )

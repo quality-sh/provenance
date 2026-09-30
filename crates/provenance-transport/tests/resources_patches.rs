@@ -89,7 +89,6 @@ async fn requirement_patch_binds_receipt_and_precondition_headers() {
         .header("host", "fixture.test")
         .header("authorization", "Bearer fixture-secret")
         .header("content-type", "application/json")
-        .header("idempotency-key", "request_transport_edit")
         .header("if-match", etag)
         .body(Body::from(
             json!({"data":{"actor":"ben","description":"Edited through the resource route."}})

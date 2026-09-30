@@ -208,7 +208,7 @@ fn api_reports_the_typed_requirement_edit_conflict() {
         "json",
     ]);
     let old_etag = created["data"]["edit"]["etag"].as_str().unwrap();
-    let patch = |key: &str, description: &str| {
+    let patch = |description: &str| {
         provenance()
             .args([
                 "api",
@@ -220,8 +220,6 @@ fn api_reports_the_typed_requirement_edit_conflict() {
                 "--input",
                 "-",
                 "--header",
-                &format!("Idempotency-Key: {key}"),
-                "--header",
                 &format!("If-Match: {old_etag}"),
                 "--format",
                 "json",
@@ -230,7 +228,7 @@ fn api_reports_the_typed_requirement_edit_conflict() {
             .output()
             .unwrap()
     };
-    let current = patch("current-edit", "The current description applies.");
+    let current = patch("The current description applies.");
     assert!(
         current.status.success(),
         "{}",
@@ -238,7 +236,7 @@ fn api_reports_the_typed_requirement_edit_conflict() {
     );
     let current: Value = serde_json::from_slice(&current.stdout).unwrap();
 
-    let stale = patch("stale-edit", "The stale description does not apply.");
+    let stale = patch("The stale description does not apply.");
     assert!(!stale.status.success());
     let failure = envelope(&String::from_utf8_lossy(&stale.stderr));
     assert_eq!(failure["error"]["kind"], "requirement_edit_conflict");

@@ -138,7 +138,7 @@ fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
         .unwrap();
-    write!(stream, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nIdempotency-Key: request_shutdown\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}", host.address, host.token, body.len()).unwrap();
+    write!(stream, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}", host.address, host.token, body.len()).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match rustix::fs::open(

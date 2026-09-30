@@ -15,7 +15,7 @@ use provenance_porcelain::{
 };
 use provenance_store::{
     operations::catalog::{self, DiscussionWriteKind, Operation as _},
-    review::{DiscussionAction, TargetDiscussionWrite},
+    review::DiscussionAction,
 };
 
 /// Bind shared Discussion actions to canonical typed operations and host grants.
@@ -152,7 +152,6 @@ impl DiscussionPort for HostDiscussionPort {
                 .invoke_scope_typed::<catalog::WriteDiscussion>(catalog::WriteDiscussionRequest {
                     scope_id: self.scope()?,
                     parent: input.parent,
-                    request_id: input.request_id,
                     actor: input.actor,
                     declared_by: input.declared_by,
                     action: DiscussionAction::Start {
@@ -172,17 +171,18 @@ impl DiscussionPort for HostDiscussionPort {
                 return Err(ActionError::AccessDenied);
             }
             self.host
-                .invoke_scope_typed::<catalog::WriteTargetDiscussion>(TargetDiscussionWrite {
-                    scope_id: self.scope()?,
-                    request_id: input.request_id,
-                    actor: input.actor,
-                    declared_by: input.declared_by,
-                    allowed_parent_kinds: kinds,
-                    discussion_id: input.discussion_id,
-                    expected_version: input.expected_version,
-                    role: input.role,
-                    body: input.body,
-                })
+                .invoke_scope_typed::<catalog::WriteTargetDiscussion>(
+                    catalog::WriteTargetDiscussionRequest {
+                        scope_id: self.scope()?,
+                        actor: input.actor,
+                        declared_by: input.declared_by,
+                        allowed_parent_kinds: kinds,
+                        discussion_id: input.discussion_id,
+                        expected_version: input.expected_version,
+                        role: input.role,
+                        body: input.body,
+                    },
+                )
                 .await
                 .map_err(|error| operation_error(&error))
         })

@@ -64,12 +64,12 @@ Parent-owned resources keep their parent address:
 provenance requirements req_review document get --limit 50
 provenance requirements req_review history get
 provenance requirements req_review history entry_1 evidence before get --field statement
-provenance requirements req_review submit --idempotency-key request_1 --stdin
-provenance requirements req_review submissions proposal_review decide --idempotency-key request_2 --stdin
+provenance requirements req_review submit --stdin
+provenance requirements req_review submissions proposal_review decide --stdin
 provenance sources source_policy discussions get
-provenance sources source_policy discussions create --idempotency-key request_3 --stdin
+provenance sources source_policy discussions create --stdin
 provenance sources source_policy discussions discussion_1 messages create \
-  --idempotency-key request_4 --if-match '"1"' --stdin
+  --if-match '"1"' --stdin
 provenance proposals proposal_1 assertions create --stdin
 provenance verification-runs begin-verification --stdin
 provenance verification-runs run_1 complete-verification --status passed

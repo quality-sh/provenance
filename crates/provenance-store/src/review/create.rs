@@ -55,7 +55,8 @@ impl StateStore {
             if let Some(receipt) = self.creation_receipt(&input, &digest)? {
                 return complete(self, receipt);
             }
-            anyhow::ensure!(
+            crate::write_error::ensure!(
+                AlreadyExists,
                 !self
                     .list_requirements(scope)?
                     .iter()
