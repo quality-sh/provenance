@@ -28,6 +28,26 @@ fn success<'a>(document: &'a Value, path: &str, method: &str) -> &'a Value {
         .unwrap()
 }
 
+fn schema_has_property(document: &Value, schema: &Value, property: &str) -> bool {
+    if schema["properties"].get(property).is_some() {
+        return true;
+    }
+    if let Some(reference) = schema["$ref"].as_str() {
+        return schema_has_property(
+            document,
+            document
+                .pointer(reference.strip_prefix('#').unwrap())
+                .unwrap(),
+            property,
+        );
+    }
+    ["allOf", "anyOf"]
+        .into_iter()
+        .filter_map(|keyword| schema[keyword].as_array())
+        .flatten()
+        .any(|part| schema_has_property(document, part, property))
+}
+
 #[test]
 fn path_parameters_carry_the_stable_id_pattern_across_families() {
     let (openapi, _) = provenance_codegen::documents();
@@ -147,15 +167,7 @@ fn member_successes_keep_a_metadata_free_meta() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|variant| {
-            let Some(reference) = variant["properties"]["data"]["$ref"].as_str() else {
-                return false;
-            };
-            let data = openapi
-                .pointer(reference.strip_prefix('#').unwrap())
-                .unwrap();
-            data["properties"].get("url").is_some()
-        })
+        .find(|variant| schema_has_property(&openapi, &variant["properties"]["data"], "url"))
         .expect("the member variant");
     let meta = &base["properties"]["meta"];
     assert!(
