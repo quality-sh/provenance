@@ -64,13 +64,14 @@ test('union declarations break one alternative per line when long', () => {
 // factored name is declared.
 test('generated Effect contract is factored and self-contained', async () => {
   const source = await readFile(new URL('../../packages/provenance/src/generated/effect-contract.ts', import.meta.url), 'utf8');
+  const matchers = await readFile(new URL('../../packages/provenance/src/generated/effect-matchers.ts', import.meta.url), 'utf8');
   const declared = new Set([...source.matchAll(/^export (?:type|const|function|class) (\w+)/gm)].map(match => match[1]));
   for (const match of source.matchAll(/\b(FailureVariant\w+)\b/g)) {
     assert.ok(declared.has(match[1]), `${match[1]} referenced but never declared`);
   }
   assert.match(source, /^export type UpdateSourceFailureWriteFailure =/m,
     'a write operation should retain its typed failure family');
-  assert.match(source, /^export function matchUpdateSourceFailureWriteFailure</m,
+  assert.match(matchers, /^export function matchUpdateSourceFailureWriteFailure</m,
     'typed failure families should have exhaustive matchers');
   for (const operation of ['ListRulesSearchSuccess', 'ListResolutionsSearchSuccess']) {
     for (const node of ['Rule', 'Resolution']) {
