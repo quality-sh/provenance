@@ -91,20 +91,17 @@ pub fn documents() -> (Value, Value) {
         let share = variants.is_empty()
             && shared_review_handler(definition.registration.handler.operation)
             && !definition.name.contains("requirement");
-        let request = definition
-            .request_schema()
-            .cloned()
-            .map(|schema| {
-                route_component(
-                    definition,
-                    "request",
-                    &format!("{family}Request"),
-                    schema,
-                    share,
-                    &mut shared_components,
-                    &mut schemas,
-                )
-            });
+        let request = definition.request_schema().cloned().map(|schema| {
+            route_component(
+                definition,
+                "request",
+                &format!("{family}Request"),
+                schema,
+                share,
+                &mut shared_components,
+                &mut schemas,
+            )
+        });
         let success = route_component(
             definition,
             "success",
