@@ -24,9 +24,7 @@ impl StateStore {
         kind: NodeType,
         id: &StableId,
     ) -> anyhow::Result<RecordResourceSnapshot> {
-        self.with_repository_publication(|| {
-            self.record_resource_snapshot_unlocked(scope, kind, id)
-        })
+        self.with_repository_publication(|| self.record_resource_snapshot_unlocked(scope, kind, id))
     }
 
     pub(super) fn requirement_resource_snapshot_unlocked(
