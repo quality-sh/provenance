@@ -1,16 +1,13 @@
 //! Direct typed reads for resource member routes.
 
 use super::review_reads::ReadResult;
-use super::{
-    shapes::{graph_read_operation, scoped_read_operation},
-    ExecutionNeed,
-};
+use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::cache::read::payloads::{PayloadRow, ProposalPayloadRow};
 use crate::operations::reader::{self, ReadContext};
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::StableId;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -28,15 +25,23 @@ pub struct ReviewResource<T> {
     pub decision: provenance_core::review::RequirementDecisionState,
 }
 
-fn review_resource<T: DeserializeOwned>(
-    store: &crate::state_store::StateStore,
+async fn review_resource<T: ProjectionRow>(
+    context: &ReadContext,
     scope: &provenance_core::ScopeId,
     kind: provenance_core::NodeType,
     id: &StableId,
 ) -> anyhow::Result<ReviewResource<T>> {
+    let record = projection_member::<T>(
+        context,
+        ResourceMemberRequest { id: id.clone() },
+    )
+    .await?;
+    let store = context
+        .live(crate::operations::reader::Live::Canonical)
+        .store();
     let snapshot = store.record_resource_snapshot(scope, kind, id)?;
     Ok(ReviewResource {
-        record: serde_json::from_value(serde_json::to_value(snapshot.record)?)?,
+        record,
         edit: snapshot.edit,
         decision: snapshot.decision,
     })
@@ -124,19 +129,31 @@ macro_rules! projection_member_operation {
 
 macro_rules! review_member_operation {
     ($name:ident, $wire:literal, $result:ty, $kind:ident) => {
-        scoped_read_operation!(
+        graph_read_operation!(
             pub $name,
             $wire,
             ResourceMemberRequest,
-            ReviewResource<$result>,
+            ReadResult<ReviewResource<$result>>,
             &[404, 409],
-            &[ExecutionNeed::GraphStorage],
-            |store, scope, request| review_resource::<$result>(
-                store,
-                scope,
-                provenance_core::NodeType::$kind,
-                &request.id,
-            )
+            |_| {
+                &[
+                    ExecutionNeed::GraphStorage,
+                    ExecutionNeed::ProjectionMaintenance,
+                ]
+            },
+            |read, request| async move {
+                let record_scope = read.scope.clone();
+                Ok(reader::answer(&read.root, &read.scope, read.policy, move |context| {
+                    Box::pin(review_resource::<$result>(
+                        context,
+                        &record_scope,
+                        provenance_core::NodeType::$kind,
+                        &request.id,
+                    ))
+                })
+                .await?
+                .into())
+            }
         );
     };
 }

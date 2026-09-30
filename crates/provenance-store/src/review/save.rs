@@ -291,9 +291,6 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
-        if classifier::changes_revision(kind, &entry.changed_fields) {
-            self.commit_automatic_submission(after, &entry)?;
-        }
         Ok(entry)
     }
 }

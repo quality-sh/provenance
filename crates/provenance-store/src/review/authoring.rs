@@ -127,7 +127,7 @@ impl StateStore {
             .flatten();
         self.validated_review_entries(after.scope_id())?;
         let request_id = journal::new_id();
-        self.commit_record_evidence(
+        let entry = self.commit_record_evidence(
             before,
             after,
             RecordEvidenceContext {
@@ -138,6 +138,9 @@ impl StateStore {
                 origin: None,
             },
         )?;
+        if super::classifier::changes_revision(entry.record_kind, &entry.changed_fields) {
+            self.commit_automatic_submission(after, &entry)?;
+        }
         Ok(())
     }
 
@@ -158,7 +161,7 @@ impl StateStore {
                     let created = staged.enroll_graph_record::<T>(&staged_path, id)?;
                     let after: ReviewRecord = created.clone().into();
                     let request_id = journal::new_id();
-                    staged.commit_record_evidence(
+                    let entry = staged.commit_record_evidence(
                         None,
                         &after,
                         RecordEvidenceContext {
@@ -171,6 +174,7 @@ impl StateStore {
                             origin: None,
                         },
                     )?;
+                    staged.commit_automatic_submission(&after, &entry)?;
                     staged.enroll_review_manifest()?;
                     Ok(created)
                 })
