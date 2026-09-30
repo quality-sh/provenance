@@ -237,6 +237,13 @@ fn artifact_type(kind: NodeType) -> CanonicalArtifactType {
     serde_json::from_value(json!(kind.as_str())).unwrap()
 }
 
+fn review_feedback(kind: NodeType) -> Option<ReviewFeedback> {
+    (!matches!(kind, NodeType::Domain | NodeType::Boundary)).then(|| ReviewFeedback {
+        role: provenance_core::MessageRole::User,
+        body: "Use the precise record text.".into(),
+    })
+}
+
 fn run_review_cycle(kind: NodeType) {
     let (_temp, store, scope) = fixture();
     let record_id = create_record(&store, kind);
@@ -244,7 +251,7 @@ fn run_review_cycle(kind: NodeType) {
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
     assert!(created.pending.is_none());
-    let first_revision = created.current_revision.clone().unwrap();
+    let first_revision = created.current_revision.unwrap();
     let first = store
         .submit_record_review(SubmitRecordReview {
             scope_id: scope.clone(),
@@ -258,16 +265,11 @@ fn run_review_cycle(kind: NodeType) {
             source_ids: Vec::new(),
             evidence_references: Vec::new(),
             builds_on: Vec::new(),
-            expected_revision: created.current_revision.clone(),
+            expected_revision: Some(first_revision.clone()),
             revises: None,
         })
         .unwrap();
     assert!(!first.request_id.as_str().is_empty());
-    let feedback =
-        (!matches!(kind, NodeType::Domain | NodeType::Boundary)).then(|| ReviewFeedback {
-            role: provenance_core::MessageRole::User,
-            body: "Use the precise record text.".into(),
-        });
     let rejected = store
         .decide_record_review(DecideRecordReview {
             scope_id: scope.clone(),
@@ -276,7 +278,7 @@ fn run_review_cycle(kind: NodeType) {
             decision: DispositionDecision::Rejected,
             rationale: Some("The source name is not precise.".into()),
             canonical_artifact: None,
-            feedback,
+            feedback: review_feedback(kind),
             declared_by: None,
         })
         .unwrap();
@@ -288,7 +290,7 @@ fn run_review_cycle(kind: NodeType) {
         .record_decision_state(&scope, kind, &record_id)
         .unwrap();
     assert!(revised.pending.is_none());
-    let second_revision = revised.current_revision.clone().unwrap();
+    let second_revision = revised.current_revision.unwrap();
     let second = store
         .submit_record_review(SubmitRecordReview {
             scope_id: scope.clone(),
@@ -302,8 +304,8 @@ fn run_review_cycle(kind: NodeType) {
             source_ids: Vec::new(),
             evidence_references: Vec::new(),
             builds_on: Vec::new(),
-            expected_revision: revised.current_revision.clone(),
-            revises: Some(first.proposal_id.clone()),
+            expected_revision: Some(second_revision.clone()),
+            revises: Some(first.proposal_id),
         })
         .unwrap();
     assert_ne!(second_revision, first_revision);
