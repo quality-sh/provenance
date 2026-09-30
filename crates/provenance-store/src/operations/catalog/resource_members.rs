@@ -43,13 +43,8 @@ fn review_resource(
     let store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
-    let review_record = crate::cache::review_families::record(&store, scope, kind, id)?;
-    #[cfg(feature = "test-fixture")]
-    if kind == provenance_core::NodeType::Requirement {
-        crate::fixture_probe::at("requirement_resource_record_read");
-    }
-    let record = serde_json::to_value(&review_record)?;
-    let snapshot = store.record_review_state(&review_record)?;
+    let snapshot = store.record_resource_snapshot(scope, kind, id)?;
+    let record = serde_json::to_value(&snapshot.record)?;
     Ok(ReviewResource {
         record: record
             .as_object()

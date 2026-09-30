@@ -16,12 +16,19 @@ pub struct RequirementResourceSnapshot {
     pub decision: RequirementDecisionState,
 }
 
-pub struct RecordReviewStateSnapshot {
-    pub edit: RequirementEditState,
-    pub decision: RequirementDecisionState,
-}
-
 impl StateStore {
+    /// Reads one reviewable record and its review state under one lock.
+    pub(crate) fn record_resource_snapshot(
+        &self,
+        scope: &ScopeId,
+        kind: NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<RecordResourceSnapshot> {
+        self.with_repository_publication(|| {
+            self.record_resource_snapshot_unlocked(scope, kind, id)
+        })
+    }
+
     pub(super) fn requirement_resource_snapshot_unlocked(
         &self,
         scope: &ScopeId,
@@ -33,24 +40,10 @@ impl StateStore {
             .as_requirement()
             .expect("Requirement lookup returns a Requirement")
             .clone();
-        #[cfg(feature = "test-fixture")]
-        crate::fixture_probe::at("requirement_resource_record_read");
         Ok(RequirementResourceSnapshot {
             record,
             edit: snapshot.edit,
             decision: snapshot.decision,
-        })
-    }
-
-    pub(crate) fn record_review_state(
-        &self,
-        record: &ReviewRecord,
-    ) -> anyhow::Result<RecordReviewStateSnapshot> {
-        self.with_repository_publication(|| {
-            Ok(RecordReviewStateSnapshot {
-                edit: self.record_edit_state_for_record(record)?,
-                decision: self.record_decision_state_for_record(record)?,
-            })
         })
     }
 
@@ -61,10 +54,15 @@ impl StateStore {
         id: &StableId,
     ) -> anyhow::Result<RecordResourceSnapshot> {
         crate::test_probes::at("requirement_resource_snapshot")?;
+        let record = crate::cache::review_families::record(self, scope, kind, id)?;
+        #[cfg(feature = "test-fixture")]
+        if kind == NodeType::Requirement {
+            crate::fixture_probe::at("requirement_resource_record_read");
+        }
         Ok(RecordResourceSnapshot {
-            record: crate::cache::review_families::record(self, scope, kind, id)?,
-            edit: self.record_edit_state(scope, kind, id)?,
-            decision: self.record_decision_state(scope, kind, id)?,
+            edit: self.record_edit_state_for_record(&record)?,
+            decision: self.record_decision_state_for_record(&record)?,
+            record,
         })
     }
 }
