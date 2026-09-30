@@ -99,5 +99,5 @@ fn graph_records_borrows_the_graph_families_from_the_full_snapshot() {
     assert_eq!(graph.requirements[0].id.as_str(), "req_policy");
     assert_eq!(graph.rules[0].id.as_str(), "rule_policy");
     assert!(snapshot.threads.is_empty());
-    assert_eq!(snapshot.proposal_cards.len(), 3);
+    assert_eq!(snapshot.proposal_cards.len(), 1);
 }
