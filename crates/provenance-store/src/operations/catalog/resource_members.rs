@@ -6,7 +6,6 @@ use crate::cache::read::payloads::{PayloadRow, ProposalPayloadRow};
 use crate::operations::reader::{self, ReadContext};
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::read_failure::ReadFailure;
-use provenance_core::review::ReviewRecord;
 use provenance_core::StableId;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -15,6 +14,14 @@ use serde_json::{Map, Value};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ResourceMemberRequest {
+    pub id: StableId,
+}
+
+#[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct ReviewedResourceRequest {
+    pub record_kind: provenance_core::NodeType,
     pub id: StableId,
 }
 
@@ -27,19 +34,17 @@ pub struct ReviewResource {
     pub decision: provenance_core::review::RequirementDecisionState,
 }
 
-async fn review_resource<T: ProjectionRow>(
+async fn review_resource(
     context: &ReadContext,
     scope: provenance_core::ScopeId,
     kind: provenance_core::NodeType,
     id: StableId,
 ) -> anyhow::Result<ReviewResource> {
-    let record = projection_member::<T>(context, ResourceMemberRequest { id: id.clone() }).await?;
-    let record = serde_json::to_value(record)?;
-    let review_record = ReviewRecord::deserialize_closed(kind, &record)?;
     let store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
-    anyhow::ensure!(review_record.scope_id() == &scope && review_record.id() == &id);
+    let review_record = crate::cache::review_families::record(store, &scope, kind, &id)?;
+    let record = serde_json::to_value(&review_record)?;
     let snapshot = store.record_review_state(&review_record)?;
     Ok(ReviewResource {
         record: record
@@ -51,18 +56,17 @@ async fn review_resource<T: ProjectionRow>(
     })
 }
 
-async fn reviewed_member<T: ProjectionRow + Send + 'static>(
+async fn reviewed_member(
     read: PreparedRead,
-    request: ResourceMemberRequest,
-    kind: provenance_core::NodeType,
+    request: ReviewedResourceRequest,
 ) -> Result<ReadResult<ReviewResource>, ReadError> {
     let record_scope = read.scope.clone();
     Ok(
         reader::answer(&read.root, &read.scope, read.policy, move |context| {
-            Box::pin(review_resource::<T>(
+            Box::pin(review_resource(
                 context,
                 record_scope,
-                kind,
+                request.record_kind,
                 request.id,
             ))
         })
@@ -151,28 +155,20 @@ macro_rules! projection_member_operation {
     };
 }
 
-macro_rules! review_member_operation {
-    ($name:ident, $wire:literal, $result:ty, $kind:ident) => {
-        graph_read_operation!(
-            pub $name,
-            $wire,
-            ResourceMemberRequest,
-            ReadResult<ReviewResource>,
-            &[404, 409],
-            |_| {
-                &[
-                    ExecutionNeed::GraphStorage,
-                    ExecutionNeed::ProjectionMaintenance,
-                ]
-            },
-            |read, request| reviewed_member::<$result>(
-                read,
-                request,
-                provenance_core::NodeType::$kind,
-            )
-        );
-    };
-}
+graph_read_operation!(
+    pub GetReviewedResource,
+    "get-reviewed-resource",
+    ReviewedResourceRequest,
+    ReadResult<ReviewResource>,
+    &[404, 409],
+    |_| {
+        &[
+            ExecutionNeed::GraphStorage,
+            ExecutionNeed::ProjectionMaintenance,
+        ]
+    },
+    reviewed_member
+);
 
 macro_rules! payload_member_operation {
     ($name:ident, $wire:literal, $result:ty) => {
@@ -216,9 +212,7 @@ macro_rules! catalog_member {
         ),
         $record:ty,
         review($kind:ident)
-    ) => {
-        review_member_operation!($member, $wire, $record, $kind);
-    };
+    ) => {};
     (
         projection(
             $list:ident,

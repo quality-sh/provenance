@@ -44,6 +44,10 @@ fn every_review_kind_member_read_carries_edit_and_decision_state() {
             .iter()
             .find(|route| route.method == HttpMethod::Get && route.path == path)
             .unwrap();
+        assert_eq!(
+            route.registration.handler.operation,
+            "get-reviewed-resource"
+        );
         let schema = &route.registration.response.schema;
         let mut data = &schema["properties"]["data"];
         if let Some(reference) = data["$ref"].as_str() {

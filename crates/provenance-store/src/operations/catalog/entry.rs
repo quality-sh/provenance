@@ -72,39 +72,41 @@ fn register<O: Operation>() -> Entry {
 }
 
 macro_rules! register_family_catalog {
-    ($entries:ident, none) => {};
+    ($entries:ident, [none], [$($review:tt)*]) => {};
     (
         $entries:ident,
-        projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none)
+        [projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none)],
+        [$($review:tt)*]
     ) => {
         $entries.push(register::<super::resource_lists::$list>());
         $entries.push(register::<super::resource_pages::$page>());
     };
     (
         $entries:ident,
-        $kind:ident(
+        [$kind:ident(
             $list:ident,
             $list_wire:literal,
             $page:ident,
             $page_wire:literal,
             $member:ident,
             $member_wire:literal
-        )
+        )],
+        [$review:ident]
     ) => {
         $entries.push(register::<super::resource_lists::$list>());
         $entries.push(register::<super::resource_pages::$page>());
-        $entries.push(register::<super::resource_members::$member>());
     };
     (
         $entries:ident,
-        verification(
+        [$kind:ident(
             $list:ident,
             $list_wire:literal,
             $page:ident,
             $page_wire:literal,
             $member:ident,
             $member_wire:literal
-        )
+        )],
+        []
     ) => {
         $entries.push(register::<super::resource_lists::$list>());
         $entries.push(register::<super::resource_pages::$page>());
@@ -115,26 +117,31 @@ macro_rules! register_family_catalog {
 macro_rules! register_family_entries {
     (
         $entries:ident;
-        $(
-            $group:ident {
-                $(
-                    $variant:ident {
-                        record: $record:ty,
-                        field: $field:ident,
-                        path: $path:ident,
-                        node: [$($node:tt)*],
-                        reader: $reader:ident,
-                        closed: [$($closed:tt)*],
-                        strategy: $strategy:ident,
-                        id: $id:ident,
-                        loader: [$($loader:tt)*],
-                        catalog: [$($catalog:tt)*]
-                    };
-                )*
-            }
-        )*
+        $($group:ident {
+            $($variant:ident {
+                record: $record:ty,
+                field: $field:ident,
+                path: $path:ident,
+                meta: $meta:tt,
+                node: [$($node:tt)*],
+                reader: {
+                    open: $reader:ident,
+                    closed: [$($closed:tt)*],
+                    strategy: $strategy:ident
+                },
+                id: $id:ident,
+                loader: [$($loader:tt)*],
+                graph: [$($graph:tt)*],
+                import: [$($import:tt)*],
+                catalog: [$($catalog:tt)*],
+                route: [$($route:tt)*]
+                $(, review: $review:ident)?
+            };)*
+        })*
     ) => {
-        $($(register_family_catalog!($entries, $($catalog)*);)*)*
+        $($(register_family_catalog!(
+            $entries, [$($catalog)*], [$($review)?]
+        );)*)*
     };
 }
 
@@ -218,6 +225,7 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::verification_resources::GetVerificationRun>(),
         register::<super::resource_members::GetProposalAssertion>(),
         register::<super::resource_members::GetProposalDisposition>(),
+        register::<super::resource_members::GetReviewedResource>(),
         register::<super::resource_lists::ListVerificationRuns>(),
         register::<super::CreateRequirementResource>(),
         register::<super::UpdateRequirementResource>(),
@@ -236,6 +244,6 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::WriteDiscussion>(),
         register::<super::WriteTargetDiscussion>(),
     ];
-    crate::cache::record_families!(register_family_entries, entries);
+    crate::cache::family_table::record_family_rows!(register_family_entries, entries);
     entries
 }

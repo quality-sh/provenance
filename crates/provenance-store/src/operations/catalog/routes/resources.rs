@@ -439,7 +439,7 @@ fn requirements(out: &mut Vec<Definition>) {
     .pagination();
     let queries = searchable_queries(&list, "requirement");
     out.push(with_query_results(list, queries));
-    let member = backed::<super::super::GetRequirement>(
+    let member = backed::<members::GetReviewedResource>(
         "get-requirement",
         "getRequirement",
         HttpMethod::Get,
@@ -448,7 +448,8 @@ fn requirements(out: &mut Vec<Definition>) {
         ResponseKind::Resource,
         member_parameters(true),
     )
-    .result()
+    .reviewed_result::<provenance_core::Requirement>()
+    .fixed("record_kind", NodeType::Requirement.as_str())
     .with_etag("/edit/etag", false);
     let queries = member_queries(&member, "requirement");
     out.push(with_query_results(member, queries));

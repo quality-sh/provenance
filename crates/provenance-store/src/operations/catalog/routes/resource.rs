@@ -139,7 +139,7 @@ macro_rules! review_resource {
         $out.push(collection!(
             $mode, $ty, $list, $plural, $plural_id, $singular
         ));
-        let member = backed::<$member>(
+        let member = backed::<members::GetReviewedResource>(
             concat!("get-", $singular),
             concat!("get", $singular_id),
             HttpMethod::Get,
@@ -149,6 +149,10 @@ macro_rules! review_resource {
             member_parameters_for!($mode),
         )
         .reviewed_result::<$ty>()
+        .fixed(
+            "record_kind",
+            <$ty as provenance_core::review::ReviewRecordKind>::KIND.as_str(),
+        )
         .with_etag("/edit/etag", false);
         let queries = registered_member_queries!($mode, &member, $singular);
         $out.push(with_query_results(member, queries));
