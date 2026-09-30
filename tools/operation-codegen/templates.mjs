@@ -338,7 +338,7 @@ ${inputVariants}
 pub enum ${output} {
 ${outputs}
 }
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug)]
 pub enum ${failure} {
 ${failures}
 }
@@ -435,8 +435,7 @@ impl HttpClient {
   })]);
   const failureFile = `// Generated from OpenAPI. Do not edit.
 #[rustfmt::skip]
-#[derive(Debug, serde::Serialize)]
-#[serde(untagged)]
+#[derive(Debug)]
 pub enum OperationFailure {
 ${failures}
 }

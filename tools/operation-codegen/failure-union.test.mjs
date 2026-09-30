@@ -12,10 +12,12 @@ test('each method preserves its own failure family in both clients', async () =>
   second.responses['400'].content['application/json'].schema.$ref = '#/components/schemas/CheckStatementFailure';
   document.paths['/fixtures/read-graph'] = { post: second };
   const ts = typescriptClient(document);
-  const rust = Object.values(rustClientFiles(document, compatibility)).join('\n');
+  const rustFiles = rustClientFiles(document, compatibility);
+  const rust = Object.values(rustFiles).join('\n');
   assert.match(ts, /export type OperationFailure =[^;]*CheckStatementFailure/s);
   assert.match(rust, /pub enum OperationFailure[\s\S]*ReadGraph\(.*CheckStatementFailure/);
   assert.match(rust, /return Err\(Error::Operation \{[^}]*OperationFailure::ReadGraph/s);
+  assert.doesNotMatch(rustFiles['operation_failures.rs'], /serde::Serialize|serde\(untagged\)/);
 });
 
 test('metadata uses the declared failure contract in both clients', async () => {
