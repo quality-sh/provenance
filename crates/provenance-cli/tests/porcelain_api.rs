@@ -143,14 +143,7 @@ fn api_post_creates_from_a_file_body_with_selected_method_and_headers() {
     );
 
     success(&[
-        "api",
-        "sources",
-        "--repo",
-        &repo,
-        "--method",
-        "post",
-        "--input",
-        &body,
+        "api", "sources", "--repo", &repo, "--method", "post", "--input", &body,
     ]);
 
     let created = json(&["source_file", "get", "--repo", &repo, "--format", "json"]);
@@ -163,14 +156,7 @@ fn api_stdin_body_creates_from_standard_input() {
 
     provenance()
         .args([
-            "api",
-            "sources",
-            "--repo",
-            &repo,
-            "--method",
-            "post",
-            "--input",
-            "-",
+            "api", "sources", "--repo", &repo, "--method", "post", "--input", "-",
         ])
         .write_stdin(
             json!({

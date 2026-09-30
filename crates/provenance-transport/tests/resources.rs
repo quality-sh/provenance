@@ -86,14 +86,7 @@ async fn all_addressed_discussion_routes_work_for_questions() {
     let start = json!({"data":{
         "actor":"reviewer", "declared_by":null, "role":"user", "body":"First message."
     }});
-    let (status, started) = call_with_headers(
-        &host,
-        "POST",
-        parent,
-        Some(start),
-        &[],
-    )
-    .await;
+    let (status, started) = call_with_headers(&host, "POST", parent, Some(start), &[]).await;
     assert_eq!(status, 200, "{started}");
     let discussion_id = started["data"]["discussion_id"].as_str().unwrap();
     let root_message_id = started["data"]["message_id"].as_str().unwrap();
@@ -199,14 +192,8 @@ async fn list_controls_paginate_and_member_controls_are_rejected() {
         "actor":"reviewer", "id":"req_second", "statement":"The second record is readable.",
         "status":"discovery", "depends_on":[], "supersedes":[]
     }});
-    let (status, created) = call_with_headers(
-        &host,
-        "POST",
-        "/requirements",
-        Some(second),
-        &[],
-    )
-    .await;
+    let (status, created) =
+        call_with_headers(&host, "POST", "/requirements", Some(second), &[]).await;
     assert_eq!(status, 200, "{created}");
     let (status, first) = call(&host, "GET", "/requirements?limit=1", None).await;
     assert_eq!(status, 200, "{first}");

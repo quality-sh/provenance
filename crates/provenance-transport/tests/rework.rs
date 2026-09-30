@@ -73,8 +73,7 @@ async fn call(
 }
 
 async fn create(host: &StatementHost, path: &str, data: Value) -> Value {
-    let (status, value, _) =
-        call(host, "POST", path, Some(json!({"data": data})), &[]).await;
+    let (status, value, _) = call(host, "POST", path, Some(json!({"data": data})), &[]).await;
     assert_eq!(status, 200, "{value}");
     value
 }

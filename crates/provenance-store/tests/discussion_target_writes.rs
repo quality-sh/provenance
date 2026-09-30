@@ -296,12 +296,10 @@ async fn catalog_operation_uses_the_target_write_path() {
         scope: scope(),
         requested_target: "selected".into(),
     });
-    let receipt = invoke_typed::<WriteTargetDiscussion>(
-        context,
-        catalog_reply("catalog", &started),
-    )
-    .await
-    .unwrap();
+    let receipt =
+        invoke_typed::<WriteTargetDiscussion>(context, catalog_reply("catalog", &started))
+            .await
+            .unwrap();
     assert_eq!(receipt.version, 2);
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 2);
 }

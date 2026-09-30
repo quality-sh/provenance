@@ -478,7 +478,5 @@ fn remaining_review_write_requests_exclude_client_request_identities() {
 
     let mut reply_with_identity = reply;
     reply_with_identity["request_id"] = json!("client-request");
-    assert!(
-        serde_json::from_value::<WriteTargetDiscussionRequest>(reply_with_identity).is_err()
-    );
+    assert!(serde_json::from_value::<WriteTargetDiscussionRequest>(reply_with_identity).is_err());
 }

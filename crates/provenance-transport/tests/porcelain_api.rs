@@ -172,9 +172,7 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
         })
     };
 
-    let current = session
-        .call(edit("Edited through api."))
-        .await;
+    let current = session.call(edit("Edited through api.")).await;
     assert_ne!(current.is_error, Some(true), "{current:?}");
     assert_eq!(
         current.structured_content.as_ref().unwrap()["data"]["description"],
