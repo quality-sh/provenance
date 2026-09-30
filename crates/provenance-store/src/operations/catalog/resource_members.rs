@@ -9,6 +9,7 @@ use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::review::ReviewRecord;
 use provenance_core::StableId;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -19,9 +20,9 @@ pub struct ResourceMemberRequest {
 
 #[derive(Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct ReviewResource<T> {
+pub struct ReviewResource {
     #[serde(flatten)]
-    pub record: T,
+    pub record: Map<String, Value>,
     pub edit: provenance_core::review::RequirementEditState,
     pub decision: provenance_core::review::RequirementDecisionState,
 }
@@ -31,16 +32,20 @@ async fn review_resource<T: ProjectionRow>(
     scope: provenance_core::ScopeId,
     kind: provenance_core::NodeType,
     id: StableId,
-) -> anyhow::Result<ReviewResource<T>> {
+) -> anyhow::Result<ReviewResource> {
     let record = projection_member::<T>(context, ResourceMemberRequest { id: id.clone() }).await?;
-    let review_record = ReviewRecord::deserialize_closed(kind, &serde_json::to_value(&record)?)?;
+    let record = serde_json::to_value(record)?;
+    let review_record = ReviewRecord::deserialize_closed(kind, &record)?;
     let store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
     anyhow::ensure!(review_record.scope_id() == &scope && review_record.id() == &id);
     let snapshot = store.record_review_state(&review_record)?;
     Ok(ReviewResource {
-        record,
+        record: record
+            .as_object()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("reviewed record is not an object"))?,
         edit: snapshot.edit,
         decision: snapshot.decision,
     })
@@ -50,7 +55,7 @@ async fn reviewed_member<T: ProjectionRow + Send + 'static>(
     read: PreparedRead,
     request: ResourceMemberRequest,
     kind: provenance_core::NodeType,
-) -> Result<ReadResult<ReviewResource<T>>, ReadError> {
+) -> Result<ReadResult<ReviewResource>, ReadError> {
     let record_scope = read.scope.clone();
     Ok(
         reader::answer(&read.root, &read.scope, read.policy, move |context| {
@@ -152,7 +157,7 @@ macro_rules! review_member_operation {
             pub $name,
             $wire,
             ResourceMemberRequest,
-            ReadResult<ReviewResource<$result>>,
+            ReadResult<ReviewResource>,
             &[404, 409],
             |_| {
                 &[

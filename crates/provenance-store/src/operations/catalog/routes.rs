@@ -11,6 +11,15 @@ use provenance_core::NodeType;
 use schemars::generate::Contract;
 use serde_json::{json, Value};
 
+#[allow(dead_code)]
+#[derive(schemars::JsonSchema)]
+struct ReviewedResourceSchema<T> {
+    #[serde(flatten)]
+    record: T,
+    edit: provenance_core::review::RequirementEditState,
+    decision: provenance_core::review::RequirementDecisionState,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn backed<O: Operation>(
     name: &'static str,
@@ -205,6 +214,14 @@ impl Definition {
     fn result(mut self) -> Self {
         self.registration.response.adapter = ResponseAdapter::Result;
         let payload = schema::property_schema(&self.registration.response.raw_schema, &["result"]);
+        self.registration.response.schema =
+            schema::response_envelope(payload, self.registration.response.kind);
+        self
+    }
+
+    fn reviewed_result<T: schemars::JsonSchema>(mut self) -> Self {
+        self.registration.response.adapter = ResponseAdapter::Result;
+        let payload = schema::type_schema::<ReviewedResourceSchema<T>>(Contract::Serialize);
         self.registration.response.schema =
             schema::response_envelope(payload, self.registration.response.kind);
         self
