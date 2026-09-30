@@ -305,6 +305,13 @@ macro_rules! family_route {
 macro_rules! review_family_route_definitions {
     (
         $out:ident, $record:ty,
+        projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none),
+        requirements
+    ) => {
+        requirements(&mut $out);
+    };
+    (
+        $out:ident, $record:ty,
         projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal,
             $member:ident, $member_wire:literal),
         requirements
