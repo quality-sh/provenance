@@ -88,7 +88,9 @@ pub fn documents() -> (Value, Value) {
     for definition in definitions {
         let family = pascal(definition.name);
         let variants = definition.query_variants();
-        let share = variants.is_empty();
+        let share = variants.is_empty()
+            && shared_review_handler(definition.registration.handler.operation)
+            && !definition.name.contains("requirement");
         let request = definition
             .request_schema()
             .cloned()
@@ -179,18 +181,26 @@ pub fn documents() -> (Value, Value) {
     )
 }
 
-#[derive(Clone)]
-struct SharedComponent {
-    reference: Value,
-    names: Vec<String>,
+fn shared_review_handler(handler: &str) -> bool {
+    matches!(
+        handler,
+        "submit-record-review"
+            | "decide-record-review"
+            | "withdraw-record-review"
+            | "review-history"
+            | "review-history-entry"
+            | "review-evidence"
+            | "get-reviewed-resource"
+    )
 }
+
 fn route_component(
     definition: &provenance_store::operations::catalog::Definition,
     role: &str,
     name: &str,
     schema: Value,
     share: bool,
-    shared: &mut BTreeMap<(String, String, String), SharedComponent>,
+    shared: &mut BTreeMap<(String, String, String), Value>,
     components: &mut Map<String, Value>,
 ) -> Value {
     if !share {
@@ -201,51 +211,12 @@ fn route_component(
         role.to_owned(),
         schema.to_string(),
     );
-    if let Some(canonical) = shared.get(&key) {
-        return alias_component_family(name, canonical, components);
+    if let Some(reference) = shared.get(&key) {
+        return reference.clone();
     }
-    let previous = components.keys().cloned().collect::<BTreeSet<_>>();
     let reference = component(name, schema, components);
-    let names = components
-        .keys()
-        .filter(|candidate| !previous.contains(*candidate))
-        .cloned()
-        .collect();
-    shared.insert(
-        key,
-        SharedComponent {
-            reference: reference.clone(),
-            names,
-        },
-    );
+    shared.insert(key, reference.clone());
     reference
-}
-
-fn alias_component_family(
-    name: &str,
-    canonical: &SharedComponent,
-    components: &mut Map<String, Value>,
-) -> Value {
-    let canonical_name = canonical.reference["$ref"]
-        .as_str()
-        .unwrap()
-        .strip_prefix("#/components/schemas/")
-        .unwrap();
-    for source in &canonical.names {
-        let suffix = source.strip_prefix(canonical_name).unwrap();
-        let target = format!("{name}{suffix}");
-        assert!(
-            components
-                .insert(
-                    target.clone(),
-                    json!({"$ref": format!("#/components/schemas/{source}"),
-                        "x-provenance-model-family": name}),
-                )
-                .is_none(),
-            "schema component name collision: {target}"
-        );
-    }
-    json!({"$ref": format!("#/components/schemas/{name}")})
 }
 
 fn query_variant_documents(
@@ -483,17 +454,9 @@ mod tests {
             "/responses/200/content/application~1json/schema",
             "/responses/409/content/application~1json/schema",
         ] {
-            let source_reference = schema_reference(&openapi, &format!("{source}{suffix}"));
-            let domain_reference = schema_reference(&openapi, &format!("{domain}{suffix}"));
-            let domain_name = domain_reference["$ref"]
-                .as_str()
-                .unwrap()
-                .strip_prefix("#/components/schemas/")
-                .unwrap();
-            assert_ne!(source_reference, domain_reference);
             assert_eq!(
-                openapi["components"]["schemas"][domain_name]["$ref"],
-                source_reference["$ref"],
+                schema_reference(&openapi, &format!("{source}{suffix}")),
+                schema_reference(&openapi, &format!("{domain}{suffix}")),
             );
         }
     }
