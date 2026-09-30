@@ -311,14 +311,13 @@ async fn a_repeated_update_with_an_old_etag_returns_a_typed_conflict() {
     .await
     .unwrap();
 
-    let error = match UpdateRequirementResource::run(
+    let Err(error) = UpdateRequirementResource::run(
         context,
         update_request_with_etag("update_a", &first_etag, "First text."),
     )
     .await
-    {
-        Ok(_) => panic!("the stale update succeeded"),
-        Err(error) => error,
+    else {
+        panic!("the stale update succeeded");
     };
 
     assert!(matches!(
