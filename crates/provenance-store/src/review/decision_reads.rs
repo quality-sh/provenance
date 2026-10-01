@@ -8,12 +8,77 @@
 use super::decision_state::CycleFacts;
 use crate::state_store::StateStore;
 use provenance_core::{
+    protocol::{DocumentReviewSummary, DocumentReviewTotals},
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
-    DispositionDecision, NodeType, ProposalType, ScopeId, StableId,
+    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
+    StableId,
 };
 use provenance_macros::rule;
 
+pub struct DocumentReviewState {
+    pub records: Vec<(NodeType, StableId, DocumentReviewSummary)>,
+    pub totals: DocumentReviewTotals,
+    pub digest: String,
+}
+
+impl DocumentReviewState {
+    pub fn summary(&self, kind: NodeType, id: &StableId) -> DocumentReviewSummary {
+        self.records
+            .iter()
+            .find(|(record_kind, record_id, _)| *record_kind == kind && record_id == id)
+            .map(|(_, _, summary)| summary)
+            .cloned()
+            .unwrap_or_default()
+    }
+}
+
 impl StateStore {
+    pub(crate) fn document_review_state(
+        &self,
+        scope: &ScopeId,
+        records: &[(NodeType, StableId)],
+    ) -> anyhow::Result<DocumentReviewState> {
+        self.with_repository_publication(|| {
+            let proposals = self.list_proposal_definitions(scope)?;
+            let dispositions = self.list_dispositions(scope)?;
+            let facts = CycleFacts::validated(self, scope)?;
+            let states = records
+                .iter()
+                .map(|(kind, id)| {
+                    let record = crate::cache::review_families::record(self, scope, *kind, id)?;
+                    self.record_decision_state_from_parts(
+                        &record,
+                        &proposals,
+                        &dispositions,
+                        &facts,
+                    )
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            let digest = crate::canonical_digest::digest(
+                &crate::canonical_digest::canonical_bytes(&states)?,
+            );
+            let records = states
+                .iter()
+                .map(|state| {
+                    (
+                        state.record_kind,
+                        state.record_id.clone(),
+                        DocumentReviewSummary::from(state),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let mut totals = DocumentReviewTotals::default();
+            for (_, _, summary) in &records {
+                totals.include(summary);
+            }
+            Ok(DocumentReviewState {
+                records,
+                totals,
+                digest,
+            })
+        })
+    }
+
     /// Reads the decision state of one Requirement: the submission still
     /// waiting, the acceptance that matches current content, every terminal
     /// decision, and every withdrawal.
@@ -41,13 +106,23 @@ impl StateStore {
         record: &provenance_core::review::ReviewRecord,
     ) -> anyhow::Result<RequirementDecisionState> {
         let scope = record.scope_id();
+        let proposals = self.list_proposal_definitions(scope)?;
+        let dispositions = self.list_dispositions(scope)?;
+        let facts = CycleFacts::validated(self, scope)?;
+        self.record_decision_state_from_parts(record, &proposals, &dispositions, &facts)
+    }
+
+    fn record_decision_state_from_parts(
+        &self,
+        record: &provenance_core::review::ReviewRecord,
+        proposals: &[ProposalCard],
+        dispositions: &[DispositionRecord],
+        facts: &CycleFacts,
+    ) -> anyhow::Result<RequirementDecisionState> {
         let kind = record.kind();
         let record_id = record.id();
         let head = self.head(record)?;
         let current_revision = head.as_ref().map(|entry| entry.revision.clone());
-        let proposals = self.list_proposal_definitions(scope)?;
-        let dispositions = self.list_dispositions(scope)?;
-        let facts = CycleFacts::validated(self, scope)?;
         let targets_record = |target: &provenance_core::IdeationTarget| {
             NodeType::from(target.artifact_type) == kind && target.artifact_id == *record_id
         };
@@ -59,13 +134,13 @@ impl StateStore {
             })
             .collect();
         let pending = facts
-            .pending_submission_at_revision(
-                self,
-                scope,
+            .pending_submission_at_revision_in(
+                proposals,
+                dispositions,
                 kind,
                 record_id,
                 current_revision.as_ref(),
-            )?
+            )
             .map(|entry| {
                 let proposal = submissions
                     .iter()

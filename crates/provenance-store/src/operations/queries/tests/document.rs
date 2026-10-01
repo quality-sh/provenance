@@ -87,6 +87,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
     assert_eq!(first["requirements"].as_array().unwrap().len(), 1);
     let mut child =
         serde_json::to_value(store.list_requirements(&scope).unwrap()[0].clone()).unwrap();
+    child["schema_version"] = json!(2);
     child["refines"] = json!("req_overtime");
     let path = crate::shards::requirements_path(&store.layout, &scope);
     for i in 0..205 {
@@ -116,7 +117,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
             "{family}"
         );
     }
-    assert_eq!(next["stamp"]["live"], json!([]));
+    assert_eq!(next["stamp"]["live"], json!(["canonical"]));
     std::fs::write(path, "invalid JSON\n").unwrap();
     let failed = catalog::invoke_with(
         "read-document",
@@ -237,6 +238,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
             assert_eq!(ctx.snapshot().table::<provenance_core::Requirement>().count().await?, 1);
             let path = crate::shards::requirements_path(&layout, &write_scope);
             let mut child: Value = serde_json::from_str(std::fs::read_to_string(&path)?.lines().next().unwrap())?;
+            child["schema_version"] = json!(2);
             child["id"] = json!("req_concurrent");
             child["refines"] = json!("req_overtime");
             crate::cache::tests::fixtures::append_record(&path, &child);
@@ -282,6 +284,7 @@ async fn document_page_requires_continuation_and_excludes_other_roots() {
     let (dir, store, scope) = seeded_store();
     let path = crate::shards::requirements_path(&store.layout, &scope);
     let mut child = json!(store.list_requirements(&scope).unwrap()[0]);
+    child["schema_version"] = json!(2);
     for i in 0..205 {
         child["id"] = json!(format!("req_aaa_{i:03}"));
         child["refines"] = json!("req_overtime");

@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use std::collections::BTreeSet;
 
 fn operation<'a>(document: &'a Value, path: &str, method: &str) -> &'a Value {
     &document["paths"][path][method]
@@ -9,6 +10,39 @@ fn variants(schema: &Value) -> Vec<&Value> {
         .as_array()
         .or_else(|| schema["anyOf"].as_array())
         .map_or_else(|| vec![schema], |variants| variants.iter().collect())
+}
+
+fn reaches_property(
+    document: &Value,
+    schema: &Value,
+    property: &str,
+    seen: &mut BTreeSet<String>,
+) -> bool {
+    if schema["properties"].get(property).is_some() {
+        return true;
+    }
+    if let Some(reference) = schema["$ref"].as_str() {
+        if !seen.insert(reference.to_owned()) {
+            return false;
+        }
+        return reaches_property(
+            document,
+            document
+                .pointer(reference.strip_prefix('#').unwrap())
+                .unwrap(),
+            property,
+            seen,
+        );
+    }
+    match schema {
+        Value::Array(values) => values
+            .iter()
+            .any(|value| reaches_property(document, value, property, seen)),
+        Value::Object(fields) => fields
+            .values()
+            .any(|value| reaches_property(document, value, property, seen)),
+        _ => false,
+    }
 }
 
 #[test]
@@ -70,6 +104,33 @@ fn review_reads_expose_the_terminal_filter() {
         assert_eq!(filter["in"], "query");
         assert_eq!(filter["required"], false);
         assert_eq!(filter["schema"], json!({"type":"boolean","default":false}));
+    }
+}
+
+#[test]
+fn document_contract_carries_review_summaries_and_totals() {
+    let (openapi, _) = provenance_codegen::documents();
+    let response = operation(&openapi, "/requirements/{id}/document", "get")["responses"]["200"]
+        ["content"]["application/json"]["schema"]["$ref"]
+        .as_str()
+        .unwrap();
+    let schema = openapi
+        .pointer(response.strip_prefix('#').unwrap())
+        .unwrap();
+    for property in [
+        "review",
+        "outcome",
+        "pending_proposal_id",
+        "comment_count",
+        "review_totals",
+        "pending",
+        "accepted",
+        "rejected",
+    ] {
+        assert!(
+            reaches_property(&openapi, schema, property, &mut BTreeSet::new()),
+            "document response does not reach {property}"
+        );
     }
 }
 

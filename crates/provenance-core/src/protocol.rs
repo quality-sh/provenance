@@ -1,6 +1,9 @@
 mod document;
 mod envelope;
-pub use document::{DocumentEntry, ReadDocumentQuery, ReadDocumentResult};
+pub use document::{
+    DocumentEntry, DocumentReviewOutcome, DocumentReviewSummary, DocumentReviewTotals,
+    ReadDocumentQuery, ReadDocumentResult,
+};
 pub use envelope::{ListData, ResponseMeta, SuccessEnvelope};
 pub mod failure;
 mod node;

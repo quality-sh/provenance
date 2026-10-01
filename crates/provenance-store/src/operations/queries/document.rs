@@ -57,15 +57,33 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
     request
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
-    let (cursor, mut position) = Cursor::open(
+    nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
+        .await?
+        .ok_or(ReadFailure::DocumentRootMissing)?;
+    let review_keys = ctx
+        .snapshot()
+        .document_keys(
+            &request.id,
+            &crate::operations::reader::Position::default(),
+            8193,
+            request.exclude_terminal,
+        )
+        .await?
+        .into_iter()
+        .filter(|(_, key)| key.stage < 2)
+        .map(|(kind, key)| Ok((NodeType::parse(&kind)?, StableId::new(key.id)?)))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let review_state = ctx
+        .live(crate::operations::reader::Live::Canonical)
+        .store()
+        .document_review_state(ctx.snapshot().scope(), &review_keys)?;
+    let (cursor, mut position) = Cursor::open_live(
         ctx,
         "read-document",
         &(&request.id, request.limit, request.exclude_terminal),
         request.cursor.as_deref(),
+        &review_state.digest,
     )?;
-    nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
-        .await?
-        .ok_or(ReadFailure::DocumentRootMissing)?;
     let keys = ctx
         .snapshot()
         .document_keys(
@@ -97,10 +115,11 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             stage => nodes::page_node(ctx.snapshot(), NodeType::parse(&kind)?, &key.id)
                 .await?
                 .map(|node| {
+                    let review = review_state.summary(node.node_type(), node.id());
                     if stage == 0 {
-                        DocumentEntry::Member { node }
+                        DocumentEntry::Member { node, review }
                     } else {
-                        DocumentEntry::Reference { node }
+                        DocumentEntry::Reference { node, review }
                     }
                 }),
         };
@@ -124,6 +143,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             None
         },
         has_more,
+        review_totals: review_state.totals,
         entries,
     })
 }

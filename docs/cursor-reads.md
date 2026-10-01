@@ -49,6 +49,14 @@ an abandoned Resolution. The abandoned Resolution and its discussions stay
 hidden. Each cursor binds the selected value. The filter applies before page
 limits and `has_more` calculations.
 
+Each record entry carries `review.outcome`, `review.pending_proposal_id`, and
+`review.comment_count`. The result-level `review_totals` object counts pending,
+accepted, and rejected records across the complete filtered document. The
+totals do not describe only the current page. They repeat on each page in a
+successful sequence. The document cursor also binds the live decision-state
+digest, so a changed outcome refuses the continuation instead of mixing totals
+from two review states.
+
 A successful list has this form:
 
 ```json

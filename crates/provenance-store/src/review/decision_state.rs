@@ -241,12 +241,28 @@ impl CycleFacts {
     ) -> anyhow::Result<Option<CycleEntry>> {
         let proposals = store.list_proposal_definitions(scope)?;
         let dispositions = store.list_dispositions(scope)?;
+        Ok(self.pending_submission_at_revision_in(
+            &proposals,
+            &dispositions,
+            kind,
+            record_id,
+            current_revision,
+        ))
+    }
+
+    pub(super) fn pending_submission_at_revision_in(
+        &self,
+        proposals: &[provenance_core::ProposalCard],
+        dispositions: &[provenance_core::DispositionRecord],
+        kind: NodeType,
+        record_id: &StableId,
+        current_revision: Option<&StableId>,
+    ) -> Option<CycleEntry> {
         let decided: std::collections::BTreeSet<&str> = dispositions
             .iter()
             .map(|d| d.proposal_id.as_str())
             .collect();
-        Ok(self
-            .entries
+        self.entries
             .iter()
             .filter(|e| {
                 e.record_kind == kind && e.record_id == *record_id && e.fact == CycleFact::Submitted
@@ -262,7 +278,7 @@ impl CycleFacts {
                     .is_some_and(|binding| Some(&binding.revision) == current_revision)
             })
             .cloned()
-            .next_back())
+            .next_back()
     }
 
     pub(super) fn conflict_failure(
