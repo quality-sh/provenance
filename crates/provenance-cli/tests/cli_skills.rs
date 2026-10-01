@@ -96,14 +96,10 @@ fn fork_tournament_skill_documents_the_assertable_winner_lifecycle() {
     let skill = include_str!("../skills/provenance-fork-tournament/SKILL.md");
 
     assert!(skill.contains("provenance schema show proposal --format json"));
-    assert!(
-        skill.contains("provenance proposals prop_<question>_<winner_slot> assertions create")
-    );
+    assert!(skill.contains("provenance proposals prop_<question>_<winner_slot> assertions create"));
     assert!(skill.contains("--id assertion_<question>_<winner_slot>"));
     assert!(skill.contains("--supporting-claim-ids claim_<question>_<winner_slot>"));
-    assert!(
-        skill.contains("provenance proposals prop_<question>_<slot> dispositions create")
-    );
+    assert!(skill.contains("provenance proposals prop_<question>_<slot> dispositions create"));
     assert!(skill.contains("--canonical-artifact-json"));
 }
 
