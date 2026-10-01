@@ -8,10 +8,10 @@
 use super::decision_state::CycleFacts;
 use crate::state_store::StateStore;
 use provenance_core::{
-    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
-    StableId,
     protocol::{DocumentReviewSummary, DocumentReviewTotals},
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
+    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
+    StableId,
 };
 use provenance_macros::rule;
 
