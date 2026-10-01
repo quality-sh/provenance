@@ -18,6 +18,14 @@ fn input<T: serde::de::DeserializeOwned>(value: Value) -> T {
     serde_json::from_value(value).unwrap()
 }
 
+fn allow_reviewer(store: &StateStore) {
+    std::fs::write(
+        store.layout.manifest_path(),
+        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
+    )
+    .unwrap();
+}
+
 async fn page(root: &camino::Utf8Path, limit: usize, exclude_terminal: bool) -> Value {
     let result = queries::read_document(
         Some(root.to_owned()),
@@ -221,14 +229,24 @@ fn with(mut value: Value, field: &str, content: &str) -> Value {
 #[tokio::test]
 async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle() {
     let (dir, store, scope) = seeded_store();
+    allow_reviewer(&store);
     let records = create_document_records(&store, &scope);
     let root = root_of(&dir);
 
     for (kind, id) in records {
         let initial = page(&root, 50, false).await;
-        assert_eq!(review(&initial, id.as_str())["outcome"], Value::Null);
-
-        let first = submit(&store, &scope, kind, &id);
+        let first = if kind == NodeType::Requirement {
+            assert_eq!(review(&initial, id.as_str())["outcome"], "pending");
+            store
+                .record_decision_state(&scope, kind, &id)
+                .unwrap()
+                .pending
+                .unwrap()
+                .proposal_id
+        } else {
+            assert_eq!(review(&initial, id.as_str())["outcome"], Value::Null);
+            submit(&store, &scope, kind, &id)
+        };
         let pending = page(&root, 50, false).await;
         assert_eq!(review(&pending, id.as_str())["outcome"], "pending");
         assert_eq!(review(&pending, id.as_str())["pending_proposal_id"], first.as_str());
@@ -240,9 +258,18 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
 
         revise(&store, kind, &id);
         let revised = page(&root, 50, false).await;
-        assert_eq!(review(&revised, id.as_str())["outcome"], Value::Null);
-
-        let second = submit(&store, &scope, kind, &id);
+        let second = if kind == NodeType::Requirement {
+            assert_eq!(review(&revised, id.as_str())["outcome"], "pending");
+            store
+                .record_decision_state(&scope, kind, &id)
+                .unwrap()
+                .pending
+                .unwrap()
+                .proposal_id
+        } else {
+            assert_eq!(review(&revised, id.as_str())["outcome"], Value::Null);
+            submit(&store, &scope, kind, &id)
+        };
         decide(&store, &scope, kind, &id, second, DispositionDecision::Rejected);
         let rejected = page(&root, 50, false).await;
         assert_eq!(review(&rejected, id.as_str())["outcome"], "rejected");
@@ -254,6 +281,7 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
 #[tokio::test]
 async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     let (dir, store, scope) = seeded_store();
+    allow_reviewer(&store);
     create_document_records(&store, &scope);
     let pending = store
         .record_decision_state(&scope, NodeType::Requirement, &sid("req_overtime"))
