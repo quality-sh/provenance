@@ -17,7 +17,7 @@ graph before you move on. The graph holds state between turns, not the conversat
    in conversation state.
 2. **Do not outrun context.** Stop before the map is too large to hand off accurately.
 3. **Do not proceed past unratified decisions.** If the human has not accepted the
-   position, it is a proposal, open question, or blocked-on-human fork, not a decision.
+   position, it is a Proposal, open Question, or `blocked_on_human` fork, not a decision.
 4. **Leave the map consistent at handoff.** Claims, fog, questions, and frontier must tell
    the next session what to do without reconstructing your chat.
 
@@ -327,7 +327,7 @@ Neither setting is a reason to write a test that asserts nothing.
 Use the `provenance-fork-tournament` skill. This is two-phase work:
 
 1. Phase 1 spawns stance-based agents and lands proposals/contributions/synthesis.
-2. Mark the question `blocked-on-human` and stop the session.
+2. Mark the Question `blocked_on_human` and stop the session.
 3. Phase 2 presents proposals, extracts reactions, lands the resolution, disposes of
    proposals with dispositions, spawns the requirements and Rules the direction actually
    implies, then continues or hands off. A tournament often settles direction above the
@@ -347,7 +347,7 @@ question, answer that actual question too rather than burying the fact in a summ
 Use adversarial refuters for claims that are expensive if wrong. Land refuter output as
 contributions and synthesis: consensus, contested claims, minority objections, evidence
 gaps, and required human decisions stay separate. If the result needs human disposal, mark
-the question `blocked-on-human` and stop.
+the Question `blocked_on_human` and stop.
 
 #### `task`
 

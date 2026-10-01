@@ -17,7 +17,7 @@ graph before you move on. The graph holds state between turns, not the conversat
    in conversation state.
 2. **Do not outrun context.** Stop before the map is too large to hand off accurately.
 3. **Do not proceed past unratified decisions.** If the human has not accepted the
-   position, it is a proposal, open question, or blocked-on-human fork, not a decision.
+   position, it is a Proposal, open Question, or `blocked_on_human` fork, not a decision.
 4. **Leave the map consistent at handoff.** Claims, fog, questions, and frontier must tell
    the next session what to do without reconstructing your chat.
 
@@ -61,7 +61,7 @@ disagree, update the binary first, then shape.
    provenance rules list --scope <scope> --format json
    provenance gaps --scope <scope> --format json
    provenance graph <anchor_requirement_id> --scope <scope> --format json
-   provenance requirements fog show --scope <scope> --requirement-id <anchor_requirement_id> --format json
+   provenance requirements <anchor_requirement_id> get --scope <scope> --format json
    provenance topics list --scope <scope> --format json
    provenance questions list --scope <scope> --format json
    provenance boundaries list --scope <scope> --format json
@@ -96,10 +96,9 @@ resolve the questions you create.
    exists.
 
    ```sh
-   provenance requirements source-ref add --scope <scope> \
-     --requirement-id <anchor_requirement_id> \
-     --source-id <source_id> \
-     --clause "<clause or section>" \
+   provenance requirements <anchor_requirement_id> update --scope <scope> \
+     --relationships-json '{"cites":{"add":[{"source_id":"<source_id>","clause":"<clause or section>"}]}}' \
+     --if-match <etag> \
      --format json
    ```
 
@@ -115,8 +114,7 @@ resolve the questions you create.
      --id boundary_<stable_slug> \
      --requirement-id <anchor_requirement_id> \
      --statement "<constraint on solution space>" \
-     --source-id <source_id> \
-     --source-clause "<clause or section>" \
+     --source-ref-json '{"source_id":"<source_id>","clause":"<clause or section>"}' \
      --format json
    ```
 
@@ -124,9 +122,9 @@ resolve the questions you create.
    decisions that cannot yet be stated precisely.
 
    ```sh
-   provenance requirements fog set --scope <scope> \
-     --requirement-id <anchor_requirement_id> \
-     --text "<not-yet-sharp investigations and worries>" \
+   provenance requirements <anchor_requirement_id> update --scope <scope> \
+     --fog "<not-yet-sharp investigations and worries>" \
+     --if-match <etag> \
      --format json
    ```
 
@@ -153,10 +151,9 @@ resolve the questions you create.
    rationale on the requirement thread.
 
    ```sh
-   provenance thread post --scope <scope> \
-     --parent-type requirement --parent-id <anchor_requirement_id> \
+   provenance requirements <anchor_requirement_id> discussions create --scope <scope> \
      --role assistant \
-     "CHART: appetite=<...>; boundaries=<...>; fog=<...>; first frontier=<...>" \
+     --body "CHART: appetite=<...>; boundaries=<...>; fog=<...>; first frontier=<...>" \
      --format json
    ```
 
@@ -189,13 +186,11 @@ separate question. An unimplemented Rule is an ordinary state and should remain 
 as such rather than being replaced by a vague Rule merely to close the gap.
 
 Proposals are not part of the computed graph frontier and are not a batch-review inbox.
-Claiming a topic atomically consults and returns undisposed `proposed` and `asserted`
-proposals targeting the topic, its anchor requirement, or its explicit artifact links;
-each result includes its derived state and deterministic reasons. For diff-driven work,
-run `provenance proposals surface
---scope <scope> --changed-path <repo-relative-path> --format json` (repeat the path flag).
-Review only those surfaced proposals. Use a complete list only for a deliberately bounded
-set of competing, contested, or conflicting proposals that jointly blocks the turn.
+Claiming a Topic atomically returns undisposed `proposed` and `asserted` proposals in its
+explicit territory. The CLI has no standalone proposal-surface command. For diff-driven
+work, use `provenance proposals list --scope <scope> --format json` and inspect explicit
+evidence paths. Do not infer territory from titles or graph proximity. Use a complete list
+only for a deliberately bounded set of proposals that jointly blocks the turn.
 
 Do not hand-wire a private frontier in chat. If the graph says a different thing than your
 notes, fix the graph or trust the graph.
@@ -206,10 +201,10 @@ Claim before work so concurrent sessions skip what you are touching.
 
 | Method | Claim | Command |
 |---|---|---|
-| `grill` | whole topic | `provenance topics claim --scope <scope> --id <topic_id> --actor <agent> --format json` |
-| `prototype` | single question | `provenance questions claim --scope <scope> --id <question_id> --actor <agent> --format json` |
-| `research` | single question | `provenance questions claim --scope <scope> --id <question_id> --actor <agent> --format json` |
-| `verify` | single question | `provenance questions claim --scope <scope> --id <question_id> --actor <agent> --format json` |
+| `grill` | whole topic | `provenance topics <topic_id> claim --scope <scope> --actor <agent> --format json` |
+| `prototype` | single question | `provenance questions <question_id> claim --scope <scope> --actor <agent> --format json` |
+| `research` | single question | `provenance questions <question_id> claim --scope <scope> --actor <agent> --format json` |
+| `verify` | single question | `provenance questions <question_id> claim --scope <scope> --actor <agent> --format json` |
 | `task` | single question | claim its open question if represented; there is no separate task record or task claim |
 
 If claim fails, do not work that item. Pick another frontier item or hand off that it is
@@ -232,10 +227,9 @@ land immediately before asking the next question.
 Do not land a rich answer as a bare answered-question. Fan out into the graph:
 
 ```sh
-provenance thread post --scope <scope> \
-  --parent-type requirement --parent-id <anchor_requirement_id> \
+provenance requirements <anchor_requirement_id> discussions create --scope <scope> \
   --role user \
-  "Q <question_id>: <human answer>" \
+  --body "Q <question_id>: <human answer>" \
   --format json
 
 provenance resolutions create --scope <scope> \
@@ -254,20 +248,19 @@ provenance requirements create --scope <scope> \
   --status discovery \
   --format json
 
-provenance requirements spawned-by set --scope <scope> \
-  --requirement-id req_<spawned_slug> \
-  --target-id res_<stable_slug> \
+provenance requirements req_<spawned_slug> update --scope <scope> \
+  --relationships-json '{"spawned_by":"res_<stable_slug>"}' \
+  --if-match <etag> \
   --format json
 
-provenance questions answer --scope <scope> \
-  --id <question_id> \
+provenance questions <question_id> answer --scope <scope> \
   --answer "<short answer gist; canonical decision is res_<stable_slug>>" \
   --resolution-id res_<stable_slug> \
   --format json
 ```
 
 Only create the artifacts the answer actually implies. If it only answers the question,
-`questions answer` is enough. If it implies a requirement, boundary, contradiction, or
+`questions <id> answer` is enough. If it implies a Requirement, Boundary, contradiction, or
 source gap, land that too before continuing. If it implies a Rule, land the Rule and any
 known bindings—next.
 
@@ -334,7 +327,7 @@ Neither setting is a reason to write a test that asserts nothing.
 Use the `provenance-fork-tournament` skill. This is two-phase work:
 
 1. Phase 1 spawns stance-based agents and lands proposals/contributions/synthesis.
-2. Mark the question `blocked-on-human` and stop the session.
+2. Mark the Question `blocked_on_human` and stop the session.
 3. Phase 2 presents proposals, extracts reactions, lands the resolution, disposes of
    proposals with dispositions, spawns the requirements and Rules the direction actually
    implies, then continues or hands off. A tournament often settles direction above the
@@ -354,7 +347,7 @@ question, answer that actual question too rather than burying the fact in a summ
 Use adversarial refuters for claims that are expensive if wrong. Land refuter output as
 contributions and synthesis: consensus, contested claims, minority objections, evidence
 gaps, and required human decisions stay separate. If the result needs human disposal, mark
-the question `blocked-on-human` and stop.
+the Question `blocked_on_human` and stop.
 
 #### `task`
 
@@ -372,14 +365,15 @@ After each landed answer, revisit fog on the anchor requirement.
 - Do not pre-slice fog into speculative question nodes.
 
 ```sh
-provenance requirements fog set --scope <scope> \
-  --requirement-id <anchor_requirement_id> \
-  --text "<remaining fog only>" \
+provenance requirements <anchor_requirement_id> update --scope <scope> \
+  --fog "<remaining fog only>" \
+  --if-match <etag> \
   --format json
 
 # If no fog remains:
-provenance requirements fog clear --scope <scope> \
-  --requirement-id <anchor_requirement_id> \
+provenance requirements <anchor_requirement_id> update --scope <scope> \
+  --fog-json null \
+  --if-match <etag> \
   --format json
 
 provenance questions create --scope <scope> \
@@ -407,18 +401,17 @@ Before final response:
    claims automatically, while unanswered questions should be released.
 
    ```sh
-   provenance topics close --scope <scope> --id <topic_id> --format json
-   provenance topics release --scope <scope> --id <topic_id> --format json
-   provenance questions release --scope <scope> --id <question_id> --format json
+   provenance topics <topic_id> close --scope <scope> --format json
+   provenance topics <topic_id> release --scope <scope> --format json
+   provenance questions <question_id> release --scope <scope> --format json
    ```
 
 2. Post a handoff on the requirement thread:
 
    ```sh
-   provenance thread post --scope <scope> \
-     --parent-type requirement --parent-id <anchor_requirement_id> \
+   provenance requirements <anchor_requirement_id> discussions create --scope <scope> \
      --role assistant \
-     "HANDOFF: landed=<named artifacts>; remaining fog=<...>; frontier=<copy-paste commands>" \
+     --body "HANDOFF: landed=<named artifacts>; remaining fog=<...>; frontier=<copy-paste commands>" \
      --format json
    ```
 
