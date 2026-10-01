@@ -3,7 +3,7 @@ use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview};
 use crate::state_store::{
     AddSourceReferenceInput, CreateQuestionInput, CreateResolutionInput, CreateRuleInput,
-    CreateSourceInput, CreateTopicInput, EditQuestionInput, StateStore, UpdateBoundaryInput,
+    CreateTopicInput, EditQuestionInput, StateStore, UpdateBoundaryInput,
     UpdateDomainInput, UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput,
     UpdateSourceInput, UpdateTopicInput,
 };
@@ -255,7 +255,12 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
 async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     let (dir, store, scope) = seeded_store();
     create_document_records(&store, &scope);
-    let pending = submit(&store, &scope, NodeType::Requirement, &sid("req_overtime"));
+    let pending = store
+        .record_decision_state(&scope, NodeType::Requirement, &sid("req_overtime"))
+        .unwrap()
+        .pending
+        .unwrap()
+        .proposal_id;
     assert!(!pending.as_str().is_empty());
     let accepted = submit(&store, &scope, NodeType::Resolution, &sid("resolution_policy"));
     decide(

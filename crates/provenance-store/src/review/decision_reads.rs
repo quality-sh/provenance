@@ -8,12 +8,54 @@
 use super::decision_state::CycleFacts;
 use crate::state_store::StateStore;
 use provenance_core::{
+    protocol::{DocumentReviewSummary, DocumentReviewTotals},
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
     DispositionDecision, NodeType, ProposalType, ScopeId, StableId,
 };
 use provenance_macros::rule;
 
+pub(crate) struct DocumentReviewState {
+    pub records: Vec<(NodeType, StableId, DocumentReviewSummary)>,
+    pub totals: DocumentReviewTotals,
+    pub digest: String,
+}
+
 impl StateStore {
+    pub(crate) fn document_review_state(
+        &self,
+        scope: &ScopeId,
+        records: &[(NodeType, StableId)],
+    ) -> anyhow::Result<DocumentReviewState> {
+        self.with_repository_publication(|| {
+            let states = records
+                .iter()
+                .map(|(kind, id)| self.record_decision_state(scope, *kind, id))
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            let digest = crate::canonical_digest::digest(
+                &crate::canonical_digest::canonical_bytes(&states)?,
+            );
+            let records = states
+                .iter()
+                .map(|state| {
+                    (
+                        state.record_kind,
+                        state.record_id.clone(),
+                        DocumentReviewSummary::from(state),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let mut totals = DocumentReviewTotals::default();
+            for (_, _, summary) in &records {
+                totals.include(summary);
+            }
+            Ok(DocumentReviewState {
+                records,
+                totals,
+                digest,
+            })
+        })
+    }
+
     /// Reads the decision state of one Requirement: the submission still
     /// waiting, the acceptance that matches current content, every terminal
     /// decision, and every withdrawal.
