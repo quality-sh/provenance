@@ -79,18 +79,16 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         )
     };
 
-    let reviewer_notice = if !manifest_exists
-        && disposition_actor_ids.is_empty()
-        && !clear_disposition_actors
-    {
-        let reviewer = crate::reviewer::select(path)?;
-        if let Some(actor_id) = reviewer.actor_id {
-            manifest.disposition_actor_ids.push(actor_id);
-        }
-        Some(reviewer.notice)
-    } else {
-        None
-    };
+    let reviewer_notice =
+        if !manifest_exists && disposition_actor_ids.is_empty() && !clear_disposition_actors {
+            let reviewer = crate::reviewer::select(path)?;
+            if let Some(actor_id) = reviewer.actor_id {
+                manifest.disposition_actor_ids.push(actor_id);
+            }
+            Some(reviewer.notice)
+        } else {
+            None
+        };
 
     if manifest_exists {
         update_scope(&mut manifest, scope, path_prefix)?;

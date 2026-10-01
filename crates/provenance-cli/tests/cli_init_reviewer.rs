@@ -4,10 +4,8 @@ use serde_json::Value;
 use std::path::Path;
 
 fn manifest(repo: &Path) -> Value {
-    serde_json::from_slice(
-        &std::fs::read(repo.join(".provenance/state/manifest.json")).unwrap(),
-    )
-    .unwrap()
+    serde_json::from_slice(&std::fs::read(repo.join(".provenance/state/manifest.json")).unwrap())
+        .unwrap()
 }
 
 fn init(repo: &Path) -> Command {
