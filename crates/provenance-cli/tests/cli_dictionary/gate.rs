@@ -112,8 +112,7 @@ fn rule_preflight_matches_the_typed_write_for_the_trial_statement() {
 #[test]
 fn requirement_preflight_matches_the_typed_write_for_the_trial_statement() {
     let (_scratch, repo, index_directory) = setup_dictionary();
-    let statement =
-        "Staff must attach at least one receipt before they submit an expense claim";
+    let statement = "Staff must attach at least one receipt before they submit an expense claim";
     let preflight = check_statement(&repo, &index_directory, statement);
     assert_named_rule_one_one_finding(&preflight["data"], "attach");
     assert_named_rule_one_one_finding(&preflight["data"], "claim");
