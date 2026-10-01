@@ -12,6 +12,7 @@ mod onboarding;
 mod output;
 use provenance_cli::{repo_context, store};
 mod review;
+mod reviewer;
 mod skills;
 mod ste_onboarding;
 mod wiki;

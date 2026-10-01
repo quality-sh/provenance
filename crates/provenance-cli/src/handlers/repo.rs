@@ -33,6 +33,7 @@ pub(super) struct InitPlan {
     skills: crate::skills::InitSkillPlan,
     dictionary: crate::ste_onboarding::Plan,
     scope_ids: Vec<String>,
+    reviewer_notice: Option<String>,
 }
 
 #[rule("rule_init_plans_all_project_writes")]
@@ -78,6 +79,17 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         )
     };
 
+    let reviewer_notice =
+        if !manifest_exists && disposition_actor_ids.is_empty() && !clear_disposition_actors {
+            let reviewer = crate::reviewer::select(path)?;
+            if let Some(actor_id) = reviewer.actor_id {
+                manifest.disposition_actor_ids.push(actor_id);
+            }
+            Some(reviewer.notice)
+        } else {
+            None
+        };
+
     if manifest_exists {
         update_scope(&mut manifest, scope, path_prefix)?;
     }
@@ -104,6 +116,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         skills,
         dictionary,
         scope_ids,
+        reviewer_notice,
     })
 }
 
@@ -328,7 +341,8 @@ impl InitPlan {
         .map_or_else(
             || already_ending(&self.scope_ids, &self.path, &self.dictionary),
             |summary| InitEnding::applied(summary, self.dictionary.warning()),
-        ))
+        )
+        .with_notice(self.reviewer_notice))
     }
 }
 

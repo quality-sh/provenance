@@ -5,6 +5,11 @@ The repository must contain an initialized Provenance manifest and the selected
 scope. All three options are required. `--port 0` selects an available port;
 a specified port binds only to `127.0.0.1`.
 
+The host prints a warning at startup when the repository has no reviewer. The
+review page is read-only in this state. Add or replace reviewers with
+`provenance init --path REPOSITORY --disposition-actor-id REVIEWER-ID`. Repeat
+the reviewer option to permit more than one reviewer.
+
 The CLI owns the listener. Ctrl-C or SIGTERM stops admission, waits for started
 operations, and closes the listener. After operations finish, HTTP connections
 have one second to drain. Incomplete headers or bodies cannot hold the process
