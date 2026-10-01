@@ -29,7 +29,7 @@ use test_stores::TestStore;
 
 /// Fields the served answer carries beside the answer bytes; the pinned
 /// answers file holds the answers without them.
-const ADDITIVE_FIELDS: [&str; 7] = [
+const ADDITIVE_FIELDS: [&str; 8] = [
     "stamp",
     "freshness_error",
     "implementation_bindings_has_more",
@@ -37,6 +37,7 @@ const ADDITIVE_FIELDS: [&str; 7] = [
     "verification_runs_has_more",
     "reviews_has_more",
     "scan_cut",
+    "matches",
 ];
 
 pub fn strip_additive(value: &mut Value) {
@@ -44,6 +45,26 @@ pub fn strip_additive(value: &mut Value) {
         for field in ADDITIVE_FIELDS {
             map.remove(field);
         }
+    }
+    strip_scanned_item_names(value);
+}
+
+fn strip_scanned_item_names(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            if fields.contains_key("line") {
+                fields.remove("symbol");
+            }
+            for child in fields.values_mut() {
+                strip_scanned_item_names(child);
+            }
+        }
+        Value::Array(values) => {
+            for child in values {
+                strip_scanned_item_names(child);
+            }
+        }
+        _ => {}
     }
 }
 

@@ -29,7 +29,7 @@ impl Evidence<'_> {
             .map(|site| ImplementationSite {
                 file: relative(repo, site.file_path()),
                 line: Some(site.line()),
-                symbol: None,
+                symbol: site.item_name().map(str::to_string),
             })
             .chain(
                 self.implementations
@@ -60,7 +60,7 @@ impl Evidence<'_> {
                     declared_by: None,
                     file: relative(repo, site.file_path()),
                     line: Some(site.line()),
-                    symbol: None,
+                    symbol: site.item_name().map(str::to_string),
                 })
             })
             .chain(

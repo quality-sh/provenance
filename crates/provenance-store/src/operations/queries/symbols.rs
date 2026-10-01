@@ -1,5 +1,8 @@
 use crate::operations::reader::{Live, ReadContext};
-use provenance_core::protocol::{GraphNode, ResolveSymbolQuery, ResolveSymbolResult};
+use provenance_core::protocol::{
+    GraphNode, ResolveSymbolMatch, ResolveSymbolMatchKind, ResolveSymbolQuery, ResolveSymbolResult,
+    ResolveSymbolRole,
+};
 use provenance_core::{ImplementationBinding, Rule, StableId, VerificationBinding};
 use provenance_macros::rule;
 use provenance_scanner::source_sites;
@@ -26,27 +29,20 @@ pub(super) async fn resolve(
     let file = &request.file;
     let symbol = request.symbol.as_deref();
     let snapshot = ctx.snapshot();
-    let mut ids = BTreeSet::new();
     let scanned = ctx.live(Live::ScannedSites).scan_file(file)?;
-    for site in source_sites(scanned.as_slice()) {
-        if symbol.is_none_or(|wanted| site.item_name() == Some(wanted))
-            && request.line.is_none_or(|line| site.line() == line)
-        {
-            ids.insert(site.rule_id().to_string());
-        }
-    }
+    let (mut ids, mut sites) = scanned_matches(scanned.as_slice(), &request);
     if request.line.is_none() {
         let by_file = file.as_str();
         for rule_id in snapshot
             .table::<ImplementationBinding>()
-            .rule_ids_for_file(by_file, symbol)
+            .rule_ids_for_file(by_file, None)
             .await?
         {
             ids.insert(rule_id);
         }
         for rule_id in snapshot
             .table::<VerificationBinding>()
-            .rule_ids_for_file(by_file, symbol)
+            .rule_ids_for_file(by_file, None)
             .await?
         {
             ids.insert(rule_id);
@@ -56,19 +52,108 @@ pub(super) async fn resolve(
         .into_iter()
         .filter_map(|id| StableId::new(id).ok())
         .collect::<Vec<_>>();
-    let (matched, has_more) = snapshot
+    let (page_rules, has_more) = snapshot
         .table::<Rule>()
         .page_by_ids(&wanted, request.limit)
         .await?;
-    let rules = matched
+    let rules = page_rules
         .into_iter()
         .map(|rule| GraphNode::Rule(Box::new(rule)))
         .collect::<Vec<_>>();
+    let served = rules
+        .iter()
+        .map(|rule| rule.id().as_str())
+        .collect::<Vec<_>>();
+    sites.retain(|site| served.contains(&site.rule_id.as_str()));
+    if request.line.is_none() {
+        for site in snapshot
+            .table::<ImplementationBinding>()
+            .implementation_sites_for_file(file.as_str(), &served)
+            .await?
+        {
+            sites.push(ResolveSymbolMatch {
+                match_kind: match_kind(symbol, Some(&site.symbol)),
+                rule_id: StableId::new(site.rule_id)?,
+                role: ResolveSymbolRole::Implementation,
+                line: None,
+                item_name: Some(site.symbol),
+                verification_method: None,
+            });
+        }
+        for site in snapshot
+            .table::<VerificationBinding>()
+            .verification_sites_for_file(file.as_str(), &served)
+            .await?
+        {
+            sites.push(ResolveSymbolMatch {
+                match_kind: match_kind(symbol, site.symbol.as_deref()),
+                rule_id: StableId::new(site.rule_id)?,
+                role: ResolveSymbolRole::Verification,
+                line: None,
+                item_name: site.symbol,
+                verification_method: Some(site.method),
+            });
+        }
+    }
+    sites.sort_by(|left, right| {
+        left.rule_id
+            .as_str()
+            .cmp(right.rule_id.as_str())
+            .then(left.role.cmp(&right.role))
+            .then(left.line.cmp(&right.line))
+            .then(left.item_name.cmp(&right.item_name))
+            .then(left.verification_method.cmp(&right.verification_method))
+            .then(left.match_kind.cmp(&right.match_kind))
+    });
+    sites.dedup();
     Ok(ResolveSymbolResult {
         file: request.file,
         symbol: request.symbol,
         limit: request.limit,
         has_more,
         rules,
+        matches: sites,
     })
+}
+
+fn scanned_matches(
+    scans: &[provenance_scanner::FileScan],
+    request: &ResolveSymbolQuery,
+) -> (BTreeSet<String>, Vec<ResolveSymbolMatch>) {
+    let mut ids = BTreeSet::new();
+    let mut sites = Vec::new();
+    for site in source_sites(scans) {
+        if request.line.is_some_and(|line| site.line() != line) {
+            continue;
+        }
+        let Ok(rule_id) = StableId::new(site.rule_id()) else {
+            continue;
+        };
+        ids.insert(rule_id.as_str().to_string());
+        let (role, verification_method) = match site.role() {
+            provenance_scanner::SourceSiteRole::Implementation => {
+                (ResolveSymbolRole::Implementation, None)
+            }
+            provenance_scanner::SourceSiteRole::Verification(method) => {
+                (ResolveSymbolRole::Verification, Some(method.to_string()))
+            }
+        };
+        sites.push(ResolveSymbolMatch {
+            rule_id,
+            role,
+            line: Some(site.line()),
+            item_name: site.item_name().map(str::to_string),
+            verification_method,
+            match_kind: match_kind(request.symbol.as_deref(), site.item_name()),
+        });
+    }
+    (ids, sites)
+}
+
+fn match_kind(symbol: Option<&str>, item_name: Option<&str>) -> ResolveSymbolMatchKind {
+    if symbol.is_some_and(|wanted| item_name == Some(wanted)) {
+        ResolveSymbolMatchKind::Symbol
+    } else {
+        ResolveSymbolMatchKind::File
+    }
 }

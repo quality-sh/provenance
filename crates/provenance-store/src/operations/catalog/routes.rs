@@ -230,9 +230,13 @@ impl Definition {
 
     fn items_field(mut self, field: &'static str) -> Self {
         self.registration.response.adapter = ResponseAdapter::ResultItems(field);
-        let payload =
-            schema::property_schema(&self.registration.response.raw_schema, &["result", field]);
-        self.registration.response.schema = schema::response_envelope(payload, ResponseKind::Items);
+        let payload = schema::renamed_items_schema(
+            &self.registration.response.raw_schema,
+            &["result"],
+            field,
+        );
+        self.registration.response.schema =
+            schema::response_envelope(payload, ResponseKind::Result);
         self
     }
 
@@ -375,7 +379,6 @@ fn query_route<O: Operation>(
     node_type: Option<&'static str>,
     node_types: bool,
     adapter: ResponseAdapter,
-    payload_path: &[&str],
 ) -> QueryRoute {
     let raw = schema::raw_definition::<O>();
     let request = QueryRequestBinding {
@@ -388,10 +391,16 @@ fn query_route<O: Operation>(
         &definition.registration.request,
         &request,
     );
-    let payload = if payload_path.is_empty() {
-        raw.success_schema.clone()
-    } else {
-        schema::property_schema(&raw.success_schema, payload_path)
+    let schema = match adapter {
+        ResponseAdapter::ObjectItems(field) => {
+            let payload = schema::renamed_items_schema(&raw.success_schema, &[], field);
+            schema::response_envelope(payload, ResponseKind::Result)
+        }
+        ResponseAdapter::ResultItems(field) => {
+            let payload = schema::renamed_items_schema(&raw.success_schema, &["result"], field);
+            schema::response_envelope(payload, ResponseKind::Result)
+        }
+        _ => schema::response_envelope(raw.success_schema.clone(), kind),
     };
     QueryRoute {
         name: O::NAME,
@@ -408,7 +417,7 @@ fn query_route<O: Operation>(
             kind,
             adapter,
             raw_schema: raw.success_schema,
-            schema: schema::response_envelope(payload, kind),
+            schema,
         },
     }
 }
@@ -420,7 +429,6 @@ fn searchable_queries(definition: &Definition, node_type: &'static str) -> Vec<Q
         Some(node_type),
         true,
         ResponseAdapter::ObjectItems("nodes"),
-        &["nodes"],
     )]
 }
 
@@ -432,7 +440,6 @@ fn member_queries(definition: &Definition, node_type: &'static str) -> Vec<Query
             Some(node_type),
             false,
             ResponseAdapter::Direct,
-            &[],
         ),
         query_route::<super::Neighbors>(
             definition,
@@ -440,7 +447,6 @@ fn member_queries(definition: &Definition, node_type: &'static str) -> Vec<Query
             Some(node_type),
             false,
             ResponseAdapter::Direct,
-            &[],
         ),
         query_route::<super::Impact>(
             definition,
@@ -448,7 +454,6 @@ fn member_queries(definition: &Definition, node_type: &'static str) -> Vec<Query
             Some(node_type),
             false,
             ResponseAdapter::Direct,
-            &[],
         ),
     ]
 }

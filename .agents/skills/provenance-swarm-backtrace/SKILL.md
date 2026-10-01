@@ -2,7 +2,7 @@
 name: provenance-swarm-backtrace
 description: Reverse-engineer candidate requirements from an existing codebase with a multi-agent swarm. Use when the user wants to extract, mine, backtrace, or reverse-engineer requirements or rules from existing code, bootstrap a Provenance graph from a legacy system, or asks "what must be true for this code to be correct". Lands everything as proposals (promotion_state=proposed) against a commit-pinned source — never as active requirements.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:6cfb1e350df5343a -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:da056e1909805838 -->
 
 # Swarm backtrace
 
@@ -14,6 +14,9 @@ land everything as
 `proposed` proposals with the codebase (pinned to a commit) as the source.
 
 ## Ground rules
+
+Before you call code redundant or delete tests, run
+`provenance rules resolve-symbol --file <path>` on the file.
 
 1. **Proposals only.** Every candidate lands with `promotion_state=proposed` — never as
    an active requirement, never pre-accepted. Extracted claims describe *current

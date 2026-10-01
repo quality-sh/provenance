@@ -24,6 +24,13 @@ fn resolve(file: &str, line: Option<usize>) -> ResolveSymbolQuery {
     }
 }
 
+fn resolve_named(file: &str, symbol: &str) -> ResolveSymbolQuery {
+    ResolveSymbolQuery {
+        symbol: Some(symbol.to_string()),
+        ..resolve(file, None)
+    }
+}
+
 /// The seeded store with a rule record behind the source file's site.
 fn store_with_rule() -> TestStore {
     let store = test_stores::seeded_queries();
@@ -47,6 +54,23 @@ fn bind(store: &TestStore, id: &str, file: &str) {
             "declared_by": "spec://test",
             "file": file,
             "symbol": "pay",
+        }),
+    );
+}
+
+fn verify(store: &TestStore, id: &str, file: &str) {
+    append_record(
+        &shards::verification_bindings_path(&store.layout(), &store.scope),
+        &json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": store.scope.as_str(),
+            "id": id,
+            "rule_id": "rule_overtime",
+            "key": "checks_pay",
+            "method": "examples",
+            "declared_by": "spec://test",
+            "file": file,
+            "symbol": "checks_pay",
         }),
     );
 }
@@ -99,9 +123,90 @@ async fn resolve_symbol_reads_the_named_file_only() {
 
 #[tokio::test]
 #[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
+async fn a_symbol_miss_keeps_the_named_files_rules_and_sites() {
+    let store = store_with_rule();
+    create_rule_of(
+        &store.state_store(),
+        &store.scope,
+        "rule_audit",
+        "req_overtime",
+    );
+    std::fs::write(
+        store.root.join("src/pay.rs"),
+        concat!(
+            "#[rule(\"rule_overtime\")]\n",
+            "fn pay() {}\n",
+            "#[verifies(\"rule_audit\", examples)]\n",
+            "fn checks_pay() {}\n",
+        ),
+    )
+    .unwrap();
+    let answer = queries::resolve_symbol(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        resolve_named("src/pay.rs", "missing"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        rule_ids(&answer.result.rules),
+        ["rule_audit", "rule_overtime"]
+    );
+    assert_eq!(
+        serde_json::to_value(&answer.result.matches).unwrap(),
+        json!([
+            {
+                "rule_id": "rule_audit",
+                "role": "verification",
+                "line": 3,
+                "item_name": "checks_pay",
+                "verification_method": "examples",
+                "match_kind": "file"
+            },
+            {
+                "rule_id": "rule_overtime",
+                "role": "implementation",
+                "line": 1,
+                "item_name": "pay",
+                "match_kind": "file"
+            }
+        ])
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
+async fn an_exact_item_name_marks_the_symbol_match() {
+    let store = store_with_rule();
+    let answer = queries::resolve_symbol(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        resolve_named("src/pay.rs", "pay"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        serde_json::to_value(&answer.result.matches).unwrap(),
+        json!([{
+            "rule_id": "rule_overtime",
+            "role": "implementation",
+            "line": 1,
+            "item_name": "pay",
+            "match_kind": "symbol"
+        }])
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
 async fn resolve_symbol_on_an_unscanned_extension_answers_bindings_only() {
     let store = store_with_rule();
     bind(&store, "bind_md", "docs/pay.md");
+    verify(&store, "verify_md", "docs/pay.md");
     let note = store.root.join("docs/pay.md");
     std::fs::create_dir_all(note.parent().unwrap()).unwrap();
     std::fs::write(note, "#[rule(\"rule_from_prose\")]\nfn pay() {}\n").unwrap();
@@ -109,7 +214,7 @@ async fn resolve_symbol_on_an_unscanned_extension_answers_bindings_only() {
         Some(store.root.clone()),
         &store.scope,
         ReadPolicy::default(),
-        resolve("docs/pay.md", None),
+        resolve_named("docs/pay.md", "pay"),
     )
     .await
     .unwrap();
@@ -117,6 +222,24 @@ async fn resolve_symbol_on_an_unscanned_extension_answers_bindings_only() {
         rule_ids(&answer.result.rules),
         ["rule_overtime"],
         "the binding answers; the prose is not scanned"
+    );
+    assert_eq!(
+        serde_json::to_value(&answer.result.matches).unwrap(),
+        json!([
+            {
+                "rule_id": "rule_overtime",
+                "role": "implementation",
+                "item_name": "pay",
+                "match_kind": "symbol"
+            },
+            {
+                "rule_id": "rule_overtime",
+                "role": "verification",
+                "item_name": "checks_pay",
+                "verification_method": "examples",
+                "match_kind": "file"
+            }
+        ])
     );
     assert_eq!(
         answer.stamp.attested,

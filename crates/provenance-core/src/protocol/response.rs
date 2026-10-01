@@ -5,6 +5,7 @@ use crate::coverage::{EvidenceDiffSite, EvidenceDiffSummary};
 use crate::model::{
     ImplementationBinding, RequirementReview, VerificationBinding, VerificationRun,
 };
+use crate::StableId;
 
 use super::{AffectedRule, GraphNode, Neighbor, Stamp, Stamped, TracedNode, SDK_PROTOCOL_VERSION};
 
@@ -167,4 +168,39 @@ pub struct ResolveSymbolResult {
     pub limit: usize,
     pub has_more: bool,
     pub rules: Vec<GraphNode>,
+    #[serde(default)]
+    pub matches: Vec<ResolveSymbolMatch>,
+}
+
+/// One code site that relates a Rule to the requested file.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ResolveSymbolMatch {
+    pub rule_id: StableId,
+    pub role: ResolveSymbolRole,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification_method: Option<String>,
+    pub match_kind: ResolveSymbolMatchKind,
+}
+
+/// How a matched site relates code to its Rule.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResolveSymbolRole {
+    Implementation,
+    Verification,
+}
+
+/// Why a site appears in a symbol resolution answer.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResolveSymbolMatchKind {
+    File,
+    Symbol,
 }

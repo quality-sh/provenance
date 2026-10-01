@@ -7,7 +7,8 @@ use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
+    Boundary, Domain, ImplementationBinding, NodeType, Question, Requirement, Resolution, Rule,
+    Source, StableId, Topic, VerificationBinding,
 };
 use provenance_macros::rule;
 use sqlx::sqlite::SqliteRow;
@@ -71,9 +72,14 @@ impl<K: ProjectionRow> Table<'_, K> {
         for chunk in values.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
-                "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND {} IN ({marks})",
-                quoted(K::TABLE),
-                quoted(column)
+                concat!(
+                    "SELECT {expression} AS record_bytes FROM {table} ",
+                    "WHERE scope_id = ? AND {column} IN ({marks})"
+                ),
+                expression = expression,
+                table = quoted(K::TABLE),
+                column = quoted(column),
+                marks = marks,
             );
             let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
             for value in chunk {
@@ -130,9 +136,15 @@ impl<K: ProjectionRow> Table<'_, K> {
         for chunk in values.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
-                "SELECT id FROM {} WHERE scope_id = ? AND {} IN ({marks}){filter} ORDER BY id LIMIT ?",
-                quoted(K::TABLE),
-                quoted(column)
+                concat!(
+                    "SELECT id FROM {table} WHERE scope_id = ? ",
+                    "AND {column} IN ({marks}){filter} ",
+                    "ORDER BY id LIMIT ?"
+                ),
+                table = quoted(K::TABLE),
+                column = quoted(column),
+                marks = marks,
+                filter = filter,
             );
             let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
             for value in chunk {
@@ -197,8 +209,13 @@ impl<K: ProjectionRow> Table<'_, K> {
         for chunk in wanted.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
-                "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND id IN ({marks})",
-                quoted(K::TABLE)
+                concat!(
+                    "SELECT {expression} AS record_bytes FROM {table} ",
+                    "WHERE scope_id = ? AND id IN ({marks})"
+                ),
+                expression = expression,
+                table = quoted(K::TABLE),
+                marks = marks,
             );
             let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
             for value in chunk {
@@ -308,6 +325,83 @@ impl<K: ProjectionRow> Table<'_, K> {
         };
         rows.iter().map(decode::<K>).collect()
     }
+}
+
+pub struct ImplementationSymbolSite {
+    pub rule_id: String,
+    pub symbol: String,
+}
+
+pub struct VerificationSymbolSite {
+    pub rule_id: String,
+    pub symbol: Option<String>,
+    pub method: String,
+}
+
+impl Table<'_, ImplementationBinding> {
+    pub(crate) async fn implementation_sites_for_file(
+        &self,
+        file: &str,
+        rule_ids: &[&str],
+    ) -> anyhow::Result<Vec<ImplementationSymbolSite>> {
+        let rows = symbol_rows(self, "rule_id, symbol", file, rule_ids).await?;
+        rows.iter()
+            .map(|row| {
+                Ok(ImplementationSymbolSite {
+                    rule_id: row.try_get("rule_id")?,
+                    symbol: row.try_get("symbol")?,
+                })
+            })
+            .collect()
+    }
+}
+
+impl Table<'_, VerificationBinding> {
+    pub(crate) async fn verification_sites_for_file(
+        &self,
+        file: &str,
+        rule_ids: &[&str],
+    ) -> anyhow::Result<Vec<VerificationSymbolSite>> {
+        let rows = symbol_rows(self, "rule_id, symbol, method", file, rule_ids).await?;
+        rows.iter()
+            .map(|row| {
+                Ok(VerificationSymbolSite {
+                    rule_id: row.try_get("rule_id")?,
+                    symbol: row.try_get("symbol")?,
+                    method: row.try_get("method")?,
+                })
+            })
+            .collect()
+    }
+}
+
+async fn symbol_rows<K: ProjectionRow>(
+    table: &Table<'_, K>,
+    select: &str,
+    file: &str,
+    rule_ids: &[&str],
+) -> anyhow::Result<Vec<SqliteRow>> {
+    let mut rows = Vec::new();
+    for chunk in rule_ids.chunks(BIND_CHUNK) {
+        let marks = vec!["?"; chunk.len()].join(", ");
+        let sql = format!(
+            "SELECT {select} FROM {} WHERE scope_id = ? AND file = ? AND rule_id IN ({marks}) \
+             ORDER BY rule_id, id",
+            quoted(K::TABLE)
+        );
+        let mut query = sqlx::query(&sql)
+            .bind(table.snapshot().scope().as_str())
+            .bind(file);
+        for rule_id in chunk {
+            query = query.bind(*rule_id);
+        }
+        let fetched = {
+            let mut tx = table.snapshot().connection().await;
+            query.fetch_all(&mut **tx).await?
+        };
+        rows.extend(fetched);
+    }
+    Ok(rows)
 }
 
 /// The kind of a record named without one: the first kind, in rank

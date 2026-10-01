@@ -177,9 +177,9 @@ async fn resolve_symbol_hydrates_only_the_rule_page() {
     let result = answer.unwrap().result;
     assert_eq!(
         rule_ids(&result),
-        ["rule_overtime", "rule_site_000"],
-        "the symbol filters"
+        ["rule_audit", "rule_overtime"],
+        "the file matches remain when a symbol is present"
     );
-    assert!(result.has_more, "rule_site_001 remains past the page");
+    assert!(result.has_more, "rule_site_000 remains past the page");
     assert!(hydrations <= 3, "binding rows must never decode");
 }
