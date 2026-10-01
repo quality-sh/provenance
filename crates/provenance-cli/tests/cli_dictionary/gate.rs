@@ -5,9 +5,128 @@ use crate::support::{
 use provenance_macros::verifies;
 use provenance_ste100::store_dictionary_index;
 use serde_json::Value;
+use std::path::Path;
 
 fn statement() -> String {
     format!("The {UNAPPROVED_WORD} item stops.")
+}
+
+fn check_statement(repo: &Path, index_directory: &Path, statement: &str) -> Value {
+    let output = provenance()
+        .env("PROVENANCE_STE100_INDEX_DIR", index_directory)
+        .write_stdin(serde_json::json!({"statement": statement}).to_string())
+        .args([
+            "statement-checks",
+            "create",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--stdin",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "the preflight must succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+
+fn setup_dictionary() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let scratch = tempfile::tempdir().unwrap();
+    let repo = scratch.path().join("repo");
+    let index_directory = scratch.path().join("index");
+    std::fs::create_dir_all(&repo).unwrap();
+    init(&repo);
+    let dictionary = imported_dictionary();
+    store_dictionary_index(dictionary, &index_directory).unwrap();
+    write_reference(&repo, dictionary);
+    (scratch, repo, index_directory)
+}
+
+fn assert_named_rule_one_one_finding(report: &Value, word: &str) {
+    let finding = report["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|finding| {
+            finding["rule"] == "1.1" && finding["message"].as_str().unwrap().contains(word)
+        })
+        .unwrap_or_else(|| panic!("the report must name {word} and Rule 1.1: {report}"));
+    assert!(
+        finding["message"].as_str().unwrap().contains("Rule 1.1"),
+        "the finding must name the rule in plain text: {finding}"
+    );
+}
+
+#[test]
+fn rule_preflight_matches_the_typed_write_for_the_trial_statement() {
+    let (_scratch, repo, index_directory) = setup_dictionary();
+    let statement = "A claim amount must use AUD";
+    let preflight = check_statement(&repo, &index_directory, statement);
+    assert_named_rule_one_one_finding(&preflight, "claim");
+
+    create_requirement(
+        &repo,
+        &index_directory,
+        "req_anchor",
+        "The anchor requirement holds",
+    )
+    .status
+    .success()
+    .then_some(())
+    .expect("the anchor Requirement must be valid");
+    let output = provenance()
+        .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
+        .args([
+            "rules",
+            "create",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--id",
+            "rule_trial",
+            "--requirement-id",
+            "req_anchor",
+            "--statement",
+            statement,
+            "--status",
+            "review",
+            "--severity",
+            "high",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "the typed write must refuse the statement"
+    );
+    let refusal = error_json(&output);
+    assert_named_rule_one_one_finding(&refusal["report"], "claim");
+    assert_eq!(preflight["findings"], refusal["report"]["findings"]);
+}
+
+#[test]
+fn requirement_preflight_matches_the_typed_write_for_the_trial_statement() {
+    let (_scratch, repo, index_directory) = setup_dictionary();
+    let statement =
+        "Staff must attach at least one receipt before they submit an expense claim";
+    let preflight = check_statement(&repo, &index_directory, statement);
+    assert_named_rule_one_one_finding(&preflight, "attach");
+    assert_named_rule_one_one_finding(&preflight, "claim");
+
+    let output = create_requirement(&repo, &index_directory, "req_trial", statement);
+    assert!(
+        !output.status.success(),
+        "the typed write must refuse the statement"
+    );
+    let refusal = error_json(&output);
+    assert_named_rule_one_one_finding(&refusal["report"], "attach");
+    assert_named_rule_one_one_finding(&refusal["report"], "claim");
+    assert_eq!(preflight["findings"], refusal["report"]["findings"]);
 }
 
 #[test]
