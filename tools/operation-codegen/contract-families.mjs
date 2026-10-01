@@ -3,22 +3,32 @@
 // Protocol truth stays generator-emitted: every emitted name, alias, and
 // matcher derived from this module traces back to the OpenAPI document that
 // the Rust catalog exported. The transforms never change what a schema
-// accepts; they only name structurally identical per-operation copies once and
-// point every reference at the shared name. Equality is checked structurally,
-// and any mismatch inside a family leaves the whole family per-operation, so a
-// shared name can never lie about the wire.
+// accepts. They name structurally identical per-operation copies once and
+// point every reference at the shared name. The comparison resolves all
+// component references. A different shape stays per-operation.
 
-const ENVELOPE_SUFFIXES = ['RequestInput', 'SuccessOutput', 'FailureOutput'];
 const MAX_DEPTH = 64;
 
-function envelopeSuffix(name) {
-  return ENVELOPE_SUFFIXES.find(suffix => name.endsWith(suffix)) ?? null;
-}
-
-/** Full envelope component names, e.g. `GetFailureOutput`. */
+/** Component names used as operation request or response envelopes. */
 export function envelopeNames(document) {
-  return new Set(Object.keys(document.components.schemas)
-    .filter(name => envelopeSuffix(name) !== null));
+  const names = new Set();
+  const add = schema => {
+    if (typeof schema?.$ref === 'string') names.add(schema.$ref.split('/').at(-1));
+  };
+  for (const route of Object.values(document.paths)) {
+    for (const operation of Object.values(route)) {
+      if (operation === null || typeof operation !== 'object') continue;
+      add(operation.requestBody?.content?.['application/json']?.schema);
+      for (const response of Object.values(operation.responses ?? {})) {
+        add(response.content?.['application/json']?.schema);
+      }
+      for (const variant of operation['x-provenance-query-variants'] ?? []) {
+        add(variant.success);
+        add(variant.failure);
+      }
+    }
+  }
+  return names;
 }
 
 /**
@@ -40,35 +50,33 @@ export function envelopeOf(name, envelopes) {
   return best;
 }
 
-/** Stable structural string used only for equality, never emitted. */
-function canonical(value) {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
-}
-
-/**
- * Normalize a schema subtree for family equality: every `$ref` becomes a
- * reference to the target's family path (or its full name when the target has
- * no family). Siblings of a `$ref` are kept, because `{$ref, properties}` is a
- * conjunction, not a pure reference. Depth-bounded; cycles fail generation.
- */
-function normalize(node, familyFor, depth, stack) {
-  if (depth > MAX_DEPTH) throw new Error(`contract-families: schema nesting exceeds ${MAX_DEPTH} levels`);
-  if (node === null || typeof node !== 'object') return node;
-  if (Array.isArray(node)) return node.map(item => normalize(item, familyFor, depth + 1, stack));
-  if (typeof node.$ref === 'string') {
-    const target = node.$ref.split('/').at(-1);
-    if (stack.includes(target)) throw new Error(`contract-families: recursive $ref chain through ${target}`);
-    const rest = { ...node };
-    delete rest.$ref;
-    const normalized = { $family: familyFor(target) ?? `#${target}` };
-    for (const key of Object.keys(rest).sort()) normalized[key] = normalize(rest[key], familyFor, depth + 1, stack);
-    return normalized;
-  }
-  const result = {};
-  for (const key of Object.keys(node).sort()) result[key] = normalize(node[key], familyFor, depth + 1, stack);
-  return result;
+function schemaShapes(schemas) {
+  const cache = new Map();
+  const active = new Set();
+  const shape = (node, depth = 0) => {
+    if (depth > MAX_DEPTH) throw new Error(`contract-families: schema nesting exceeds ${MAX_DEPTH} levels`);
+    if (node === null || typeof node !== 'object') return JSON.stringify(node);
+    if (Array.isArray(node)) return `[${node.map(item => shape(item, depth + 1)).join(',')}]`;
+    const entries = [];
+    for (const key of Object.keys(node).sort()) {
+      if (key === '$ref' && typeof node[key] === 'string' && node[key].startsWith('#/components/schemas/')) {
+        const target = node[key].split('/').at(-1);
+        entries.push(`${JSON.stringify('$resolved')}:${named(target)}`);
+      } else entries.push(`${JSON.stringify(key)}:${shape(node[key], depth + 1)}`);
+    }
+    return `{${entries.join(',')}}`;
+  };
+  const named = name => {
+    if (cache.has(name)) return cache.get(name);
+    if (active.has(name)) throw new Error(`contract-families: recursive $ref chain through ${name}`);
+    if (!Object.hasOwn(schemas, name)) return JSON.stringify({ $ref: name });
+    active.add(name);
+    const result = shape(schemas[name]);
+    active.delete(name);
+    cache.set(name, result);
+    return result;
+  };
+  return { node: shape, named };
 }
 
 function rewriteRefs(node, rename) {
@@ -100,18 +108,25 @@ function pascal(value) {
     .map(part => part[0].toUpperCase() + part.slice(1)).join('');
 }
 
+function sharedNameFor(family, body, envelopes) {
+  if (family !== 'OperationError' || !Array.isArray(body.anyOf)) return null;
+  const kinds = body.anyOf.flatMap(part => typeof part.$ref === 'string'
+    ? [familyOf(part.$ref.split('/').at(-1), envelopes) ?? part.$ref.split('/').at(-1)] : [])
+    .filter(name => name !== 'OperationFailure' && name.endsWith('Failure'));
+  return kinds.length === 1 ? `${kinds[0].slice(0, -'Failure'.length)}OperationError` : null;
+}
+
 /**
  * Name identical response-side and request-side family components once.
  *
  * Response envelopes repeat their failure and payload families once per
  * operation, and request envelopes repeat their input families the same way.
- * When every member of a family is structurally identical, one shared
- * component keeps the family name and every reference points at it. Families
- * with any structural difference stay per-operation, preserving
- * per-operation narrowing truth. Request and response shapes never merge with
- * each other: request objects carry `additionalProperties: false` (the wire
- * refuses unknown fields there) while response objects stay open, so the
- * structural comparison itself keeps the two sides apart.
+ * Each structurally identical group gets one shared component and every
+ * reference points at it. A family can contain multiple groups. This keeps
+ * operation-specific narrowing while it shares all equal shapes. Request and
+ * response shapes stay separate when their strictness differs: request
+ * objects carry `additionalProperties: false`, while most response objects
+ * stay open.
  *
  * Hoisted unions whose variants are inline discriminated objects keep their
  * variants as named shared components (`FailureVariant*`), so no generated
@@ -122,13 +137,9 @@ export function hoistSharedFamilies(document) {
   const transformed = structuredClone(document);
   const schemas = transformed.components.schemas;
   const envelopes = envelopeNames(transformed);
-  const familyFor = name => familyOf(name, envelopes);
   // Every envelope kind participates: identical input families are named once
   // exactly like identical failure and payload families.
-  const familyEnvelope = name => {
-    const envelope = envelopeOf(name, envelopes);
-    return envelope !== null && ENVELOPE_SUFFIXES.some(suffix => envelope.endsWith(suffix)) ? envelope : null;
-  };
+  const familyEnvelope = name => envelopeOf(name, envelopes);
 
   const families = new Map();
   for (const name of Object.keys(schemas)) {
@@ -140,14 +151,35 @@ export function hoistSharedFamilies(document) {
 
   const renames = new Map();
   const sharedBodies = new Map();
+  const shapes = schemaShapes(schemas);
   for (const family of [...families.keys()].sort()) {
     const members = families.get(family).sort();
-    if (members.length < 2 || Object.hasOwn(schemas, family)) continue;
-    const shape = body => canonical(normalize(body, familyFor, 0, []));
-    const target = shape(schemas[members[0]]);
-    if (!members.every(member => shape(schemas[member]) === target)) continue;
-    for (const member of members) renames.set(member, family);
-    sharedBodies.set(family, structuredClone(schemas[members[0]]));
+    if (members.length < 2) continue;
+    const groups = new Map();
+    for (const member of members) {
+      const shape = shapes.named(member);
+      if (!groups.has(shape)) groups.set(shape, []);
+      groups.get(shape).push(member);
+    }
+    const shared = [...groups.values()].filter(group => group.length > 1)
+      .sort((a, b) => b.length - a.length || a[0].localeCompare(b[0]));
+    let index = 0;
+    for (const group of shared) {
+      const body = schemas[group[0]];
+      const specific = sharedNameFor(family, body, envelopes);
+      const candidates = specific === null
+        ? index === 0 ? [family, `Shared${family}`] : [`Shared${family}`, `Shared${family}${index + 1}`]
+        : [specific, `Shared${specific}`];
+      let name = candidates.find(candidate => !Object.hasOwn(schemas, candidate) && !sharedBodies.has(candidate));
+      while (name === undefined) {
+        index++;
+        const candidate = `Shared${specific ?? family}${index + 1}`;
+        if (!Object.hasOwn(schemas, candidate) && !sharedBodies.has(candidate)) name = candidate;
+      }
+      for (const member of group) renames.set(member, name);
+      sharedBodies.set(name, structuredClone(body));
+      index++;
+    }
   }
   if (renames.size === 0) return transformed;
 
@@ -164,7 +196,7 @@ export function hoistSharedFamilies(document) {
     for (const variant of body.oneOf) {
       const [, value] = constDiscriminant(variant);
       const name = `FailureVariant${pascal(value)}`;
-      const shape = canonical(normalize(variant, familyFor, 0, []));
+      const shape = shapes.node(variant);
       const existing = variantBodies.get(name);
       if (existing && existing.shape !== shape) {
         throw new Error(`contract-families: failure variant ${name} has two different wire shapes`);
@@ -183,21 +215,7 @@ export function hoistSharedFamilies(document) {
   transformed.paths = rewriteRefs(transformed.paths, renames);
   transformed.components.schemas = rewriteRefs(schemas, renames);
   for (const member of [...renames.keys()].sort()) delete transformed.components.schemas[member];
-  // `$family` markers exist only inside equality keys; a leaked marker would
-  // silently corrupt every downstream consumer of the transformed document.
-  for (const [name, body] of Object.entries(transformed.components.schemas)) {
-    if (canonicalContains(body, '$family')) throw new Error(`contract-families: internal $family marker leaked into ${name}`);
-  }
   return transformed;
-}
-
-function canonicalContains(node, marker) {
-  if (node === null || typeof node !== 'object') return false;
-  if (Array.isArray(node)) return node.some(item => canonicalContains(item, marker));
-  for (const [key, value] of Object.entries(node)) {
-    if (key === marker || canonicalContains(value, marker)) return true;
-  }
-  return false;
 }
 
 /**

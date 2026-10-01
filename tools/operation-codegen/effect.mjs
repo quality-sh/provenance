@@ -3,7 +3,9 @@ import * as OpenApiGenerator from '@effect/openapi-generator/OpenApiGenerator';
 import { validators, operationResponseSchemas, responseSchemas } from './validators.mjs';
 import { clientTypeSchema } from './typescript-schema.mjs';
 import { hoistSharedFamilies, discriminatedUnions } from './contract-families.mjs';
-import { renderNested, substitute, declaration, formatLongTypes } from './contract-render.mjs';
+import {
+  renderNested, substitute, declaration, formatLongTypes, reuseSchemaDeclarations, eraseSchemaInferences,
+} from './contract-render.mjs';
 import { FAILURE_STATUS, failureKinds } from './grammar-lint.mjs';
 import { exactQuerySuccesses } from './query-successes.mjs';
 
@@ -86,10 +88,10 @@ export async function effectFiles(document) {
     .map(([name, body]) => declaration(name, body))
     .join('\n');
   const views = unionViews(contract);
-  const assembled = formatLongTypes(rewritten + '\n'
+  const assembled = eraseSchemaInferences(reuseSchemaDeclarations(formatLongTypes(rewritten + '\n'
     + '// Factored families: one declaration per shared component, bodies byte-equal\n'
     + '// to what the generator inlined before factoring.\n'
-    + declarations + views.types);
+    + declarations + views.types)));
 
   return {
     'effect-client.ts': effectClient(contract),
@@ -99,6 +101,8 @@ export async function effectFiles(document) {
       + '// matchers) are derived views of the same document.\n'
       + 'import * as wire from "./effect-validators.mjs";\n'
       + validatorImports.join('\n') + '\n'
+      + 'type GeneratedSchema<A> = Schema.Schema<A> & { readonly "Encoded": A; readonly "DecodingServices": never; readonly "EncodingServices": never };\n'
+      + 'const generatedSchema = <A>(value: Schema.Schema<any>): GeneratedSchema<A> => value as GeneratedSchema<A>;\n'
       + assembled,
     'effect-matchers.ts': '// Generated from OpenAPI. Do not edit.\n' + views.matchers,
     ...await validators(contract, names, 'effect-validators', false),
