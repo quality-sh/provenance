@@ -129,7 +129,7 @@ fn remove_if_owned_with_hook(
     }
     before_commit();
     let backup = displace_to_backup(path)
-        .with_context(|| format!("{} changed during removal", path.display()))?;
+        .map_err(|error| displacement_error(path, "removal", error))?;
     let displaced = FileSnapshot::read(&backup)?;
     if &displaced != expected {
         restore_displaced(&backup, path)?;
@@ -201,7 +201,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
         FileSnapshot::Missing => None,
         FileSnapshot::Regular { .. } => {
             let backup = displace_to_backup(path)
-                .with_context(|| format!("{} changed during replacement", path.display()))?;
+                .map_err(|error| displacement_error(path, "replacement", error))?;
             let displaced = FileSnapshot::read(&backup)?;
             if &displaced != expected {
                 restore_displaced(&backup, path)?;
@@ -217,7 +217,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
             restore_displaced(backup, path)?;
         }
         let _ = std::fs::remove_file(temporary);
-        return Err(error).context(format!("{} changed during replacement", path.display()));
+        return Err(replacement_install_error(path, error));
     }
     let _ = std::fs::remove_file(temporary);
     if let Some(backup) = backup {
@@ -226,13 +226,40 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
     Ok(())
 }
 
+fn replacement_install_error(path: &Path, error: std::io::Error) -> anyhow::Error {
+    if error.kind() == ErrorKind::AlreadyExists {
+        error.context(format!("{} changed during replacement", path.display()))
+    } else {
+        error.context(format!("failed to install {}", path.display()))
+    }
+}
+
+fn displacement_error(path: &Path, action: &str, error: std::io::Error) -> anyhow::Error {
+    if error.kind() == ErrorKind::Unsupported {
+        error.context(format!(
+            "failed to preserve {} during {action}",
+            path.display()
+        ))
+    } else {
+        error.context(format!("{} changed during {action}", path.display()))
+    }
+}
+
 fn restore_displaced(backup: &Path, path: &Path) -> anyhow::Result<()> {
-    provenance_store::operations::files::rename_no_replace(backup, path).with_context(|| {
-        format!(
-            "could not restore concurrently changed {}; displaced bytes remain at {}",
-            path.display(),
-            backup.display()
-        )
+    provenance_store::operations::files::rename_no_replace(backup, path).map_err(|error| {
+        if error.kind() == ErrorKind::Unsupported {
+            error.context(format!(
+                "failed to restore {} from {}",
+                path.display(),
+                backup.display()
+            ))
+        } else {
+            error.context(format!(
+                "could not restore concurrently changed {}; displaced bytes remain at {}",
+                path.display(),
+                backup.display()
+            ))
+        }
     })
 }
 
