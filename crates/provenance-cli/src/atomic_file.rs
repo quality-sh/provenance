@@ -344,6 +344,24 @@ mod tests {
         assert_eq!(std::fs::read(collision).unwrap(), b"unrelated\n");
     }
 
+    #[test]
+    fn unsupported_install_is_not_reported_as_a_concurrent_change() {
+        let path = Path::new(".provenance/state/manifest.json");
+        let error = replacement_install_error(
+            path,
+            std::io::Error::new(
+                ErrorKind::Unsupported,
+                "filesystem does not support atomic no-replace installation: link failed",
+            ),
+        );
+        let report = format!("{error:#}");
+
+        assert!(report.contains("failed to install"));
+        assert!(report.contains("manifest.json"));
+        assert!(report.contains("does not support"));
+        assert!(!report.contains("changed during replacement"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn snapshots_include_permissions_in_file_ownership() {
