@@ -122,7 +122,11 @@ fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
         .with_draft(jsonschema::Draft::Draft202012)
         .compile(&schema)
         .unwrap();
-    let mut rule = json!({"schema_version":2,"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"]});
+    let mut rule = json!({
+        "schema_version":2, "scope_id":"default", "id":"rule_one",
+        "statement":"The system saves records.", "status":"draft", "severity":"medium",
+        "requirement_ids":["req_one"]
+    });
     assert!(compiled.is_valid(&rule));
     rule["status"] = json!("archived");
     assert!(!compiled.is_valid(&rule));
@@ -147,7 +151,22 @@ fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
         .with_draft(jsonschema::Draft::Draft202012)
         .compile(&input_schema)
         .unwrap();
-    let mut input = json!({"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]});
+    let defaulted: CreateRuleInput = serde_json::from_value(json!({
+        "scope_id":"default", "id":"rule_default", "statement":"The system saves records.",
+        "severity":"medium", "requirement_ids":["req_one"], "resolution_ids":[]
+    }))
+    .unwrap();
+    assert_eq!(defaulted.status, provenance_core::RuleStatus::Draft);
+    assert_eq!(input_schema["properties"]["status"]["default"], "draft");
+    assert!(input_contract.is_valid(&json!({
+        "scope_id":"default", "id":"rule_default", "statement":"The system saves records.",
+        "severity":"medium", "requirement_ids":["req_one"], "resolution_ids":[]
+    })));
+    let mut input = json!({
+        "scope_id":"default", "id":"rule_one", "statement":"The system saves records.",
+        "status":"draft", "severity":"medium", "requirement_ids":["req_one"],
+        "resolution_ids":[]
+    });
     assert!(input_contract.is_valid(&input));
     input["archived_in_commit"] = json!({"commit":"a".repeat(40)});
     assert!(!input_contract.is_valid(&input));

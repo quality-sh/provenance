@@ -36,6 +36,10 @@ The writable collections are `sources`, `requirements`, `resolutions`,
 `verification-runs`, `verification-bindings`, `discussion-containers`,
 `messages`, `assertions`, and `dispositions`.
 
+Rule creation defaults to `draft` in the CLI, catalog operations, and typed
+specifications. Pass `--status active` only when a person ratifies the Rule.
+Coverage reports do not produce active-Rule absence findings for a draft Rule.
+
 A member uses its ID in the command address:
 
 ```text

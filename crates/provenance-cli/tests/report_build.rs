@@ -60,30 +60,34 @@ fn create_requirement(repo: &Path, id: &str, statement: &str) {
         .success();
 }
 
-fn create_rule(repo: &Path, id: &str, requirement: &str, statement: &str) {
-    provenance(repo)
-        .args([
-            "rules",
-            "create",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--id",
-            id,
-            "--requirement-id",
-            requirement,
-            "--statement",
-            statement,
-        ])
-        .assert()
-        .success();
+fn create_rule(repo: &Path, id: &str, requirement: &str, statement: &str, status: Option<&str>) {
+    let mut command = provenance(repo);
+    command.args([
+        "rules",
+        "create",
+        "--repo",
+        repo.to_str().unwrap(),
+        "--scope",
+        "default",
+        "--id",
+        id,
+        "--requirement-id",
+        requirement,
+        "--statement",
+        statement,
+    ]);
+    if let Some(status) = status {
+        command.args(["--status", status]);
+    }
+    command.assert().success();
 }
 
 /// A real repository with two commits: the base commit holds one Requirement
 /// and one active Rule; the head commit adds a Resolution, a second Rule and
 /// the `produced_by` relation. The working tree stays clean at head.
-fn two_commit_repo() -> (tempfile::TempDir, String, String) {
+fn two_commit_repo_with_added_rule_status(
+    status: Option<&str>,
+) -> (tempfile::TempDir, String, String) {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_path_buf();
     let show = repo.to_str().unwrap();
@@ -109,6 +113,7 @@ fn two_commit_repo() -> (tempfile::TempDir, String, String) {
         "rule_anchor",
         "req_anchor",
         "The anchor rule holds for the anchor requirement",
+        Some("active"),
     );
     let base = commit(&repo, "base: anchor requirement and rule");
 
@@ -117,11 +122,16 @@ fn two_commit_repo() -> (tempfile::TempDir, String, String) {
         "rule_added",
         "req_anchor",
         "The added rule holds for the anchor requirement",
+        status,
     );
     let head = commit(&repo, "head: added rule");
 
     assert!(base != head, "fixture must produce two distinct commits");
     (dir, base, head)
+}
+
+fn two_commit_repo() -> (tempfile::TempDir, String, String) {
+    two_commit_repo_with_added_rule_status(Some("active"))
 }
 
 fn build_envelope(repo: &Path, base: &str, head: &str) -> Value {
@@ -235,6 +245,26 @@ fn active_rule_without_verification_is_reported_and_no_run_is_invented() {
         })
         .expect("the base rule without verification is pre-existing");
     assert_eq!(anchor_absence["comparison"], "pre_existing");
+}
+
+#[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+fn draft_rule_omits_active_rule_binding_findings() {
+    let (dir, base, head) = two_commit_repo_with_added_rule_status(None);
+    let envelope = build_envelope(dir.path(), &base, &head);
+    let findings = envelope["findings"].as_array().unwrap();
+
+    for code in [
+        "active_rule_missing_implementation",
+        "active_rule_missing_verification",
+    ] {
+        assert!(
+            !findings.iter().any(|finding| {
+                finding["code"] == code && finding["subject"]["id"] == "rule_added"
+            }),
+            "a draft Rule must not produce {code}"
+        );
+    }
 }
 
 #[test]

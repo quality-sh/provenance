@@ -136,6 +136,8 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
             "res_schads_overtime",
             "--statement",
             "Pay overtime after the threshold",
+            "--status",
+            "active",
             "--severity",
             "high",
         ])

@@ -359,6 +359,8 @@ fn api_query_values_follow_their_contracts() {
             "req_q",
             "--statement",
             "Shared needle rule.",
+            "--status",
+            "active",
             "--severity",
             "medium",
         ])

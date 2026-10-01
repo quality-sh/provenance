@@ -79,6 +79,36 @@ fn rule_list_and_member_read_use_response_envelopes() {
 }
 
 #[test]
+fn rule_create_defaults_to_draft_and_accepts_explicit_active_status() {
+    let tmp = repo_with_rule();
+    let repo = tmp.path().to_str().unwrap();
+    provenance()
+        .args(["rules", "rule_overtime", "get", "--repo", repo])
+        .assert()
+        .success()
+        .stdout(contains("\"status\": \"draft\""));
+
+    provenance()
+        .args([
+            "rules",
+            "create",
+            "--repo",
+            repo,
+            "--id",
+            "rule_ratified",
+            "--requirement-id",
+            "req_overtime",
+            "--statement",
+            "A person ratified this Rule",
+            "--status",
+            "active",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"status\": \"active\""));
+}
+
+#[test]
 fn missing_rule_returns_the_typed_read_failure() {
     let tmp = repo_with_rule();
     let repo = tmp.path().to_str().unwrap();
@@ -108,4 +138,17 @@ fn catalog_commands_offer_help_at_each_address() {
             .success()
             .stdout(contains(usage));
     }
+}
+
+#[test]
+fn rule_create_help_shows_only_the_new_draft_default() {
+    provenance()
+        .args(["rules", "create", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "--status <draft|review|active|deprecated|archived>",
+        ))
+        .stdout(contains("default: \"draft\""))
+        .stdout(predicates::str::contains("default: \"active\"").not());
 }

@@ -50,7 +50,7 @@ const CREATE_RULE_DEFAULTS: &[CliDefault] = &[
     },
     CliDefault {
         field: "status",
-        value: CliDefaultValue::String("active"),
+        value: CliDefaultValue::String("draft"),
     },
     CliDefault {
         field: "severity",

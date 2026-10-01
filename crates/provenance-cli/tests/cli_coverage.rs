@@ -242,6 +242,8 @@ fn strict_scan_reports_unverified_and_unimplemented_as_independent_findings() {
             "req_anchor",
             "--statement",
             "Pay overtime after the threshold",
+            "--status",
+            "active",
             "--severity",
             "high",
         ])
@@ -332,6 +334,8 @@ fn partial_scan_does_not_claim_scope_wide_binding_absence() {
             "req_anchor",
             "--statement",
             "A Rule outside the selected scan territory",
+            "--status",
+            "active",
         ])
         .assert()
         .success();

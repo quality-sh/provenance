@@ -20,10 +20,14 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     (dir, StateStore::new(layout), scope)
 }
 fn document() -> crate::state_store::TypedSpecInput {
-    serde_json::from_value(json!({"schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,"spec":"example","declared_by":"test",
+    serde_json::from_value(json!({
+        "schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+        "spec":"example","declared_by":"test",
         "sources":[{"key":"policy","name":"Policy","kind":"document"}],
         "requirements":[{"key":"ready","statement":"The system is ready.","sources":["policy"]}],
-        "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]})).unwrap()
+        "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]
+    }))
+    .unwrap()
 }
 #[test]
 fn missing_references_are_typed_without_changing_the_native_message() {
@@ -65,7 +69,11 @@ fn already_complete_is_typed_and_retains_native_text() {
         .iter()
         .find(|value| value.kind == crate::state_store::TypedResourceKind::Rule)
         .unwrap();
-    let input = serde_json::from_value(json!({"rule":rule.id,"key":"test","method":"examples","declared_by":"test","file":"test.rs"})).unwrap();
+    let input = serde_json::from_value(json!({
+        "rule":rule.id, "key":"test", "method":"examples", "declared_by":"test",
+        "file":"test.rs"
+    }))
+    .unwrap();
     let run = store
         .begin_verification(scope.clone(), input, VerificationMethod::Examples)
         .unwrap();
@@ -75,6 +83,17 @@ fn already_complete_is_typed_and_retains_native_text() {
     assert!(error.to_string().contains("already complete"));
     assert!(matches!(error.safe(), WriteFailure::AlreadyComplete));
 }
+
+#[test]
+fn typed_rule_creation_defaults_to_draft() {
+    let (_dir, store, scope) = fixture();
+    store.apply_typed_spec(&scope, document()).unwrap();
+
+    let rules = store.list_rules(&scope).unwrap();
+    assert_eq!(rules.len(), 1);
+    assert_eq!(rules[0].status, provenance_core::RuleStatus::Draft);
+}
+
 #[test]
 fn native_schema_diagnostic_is_not_duplicated_in_the_error_chain() {
     let (_dir, store, scope) = fixture();
@@ -105,7 +124,11 @@ fn begin_keeps_the_publication_lock_and_reports_saved_binding_on_failure() {
     });
     let result = store.begin_verification(
         scope.clone(),
-        serde_json::from_value(json!({"rule":rule.id,"key":"test","method":"examples","declared_by":"test","file":"test.rs"})).unwrap(),
+        serde_json::from_value(json!({
+            "rule":rule.id, "key":"test", "method":"examples", "declared_by":"test",
+            "file":"test.rs"
+        }))
+        .unwrap(),
         VerificationMethod::Examples,
     );
     crate::test_probes::disarm("verification_binding_published");

@@ -67,6 +67,8 @@ pub fn create_rule(repo: &Path, id: &str, statement: &str) {
             "req_rule_anchor",
             "--statement",
             statement,
+            "--status",
+            "active",
         ])
         .assert()
         .success();

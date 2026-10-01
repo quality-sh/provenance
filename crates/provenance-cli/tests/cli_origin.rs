@@ -165,6 +165,8 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
         "res_origin",
         "--statement",
         "Artifacts shall keep their origin conversation",
+        "--status",
+        "active",
         "--origin-thread",
         &origin_thread,
         "--origin-message",

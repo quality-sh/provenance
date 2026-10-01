@@ -57,7 +57,7 @@ impl DeclarationRecord for Rule {
             name: declaration.name.clone(),
             description: declaration.description.clone(),
             statement: declaration.statement.clone(),
-            status: RuleStatus::Active,
+            status: RuleStatus::Draft,
             severity: RuleSeverity::Medium,
             requirement_ids: Vec::new(),
             resolution_ids: Vec::new(),
