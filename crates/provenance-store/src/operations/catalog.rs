@@ -51,9 +51,9 @@ pub use updates::*;
 pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 #[cfg(feature = "schema")]
 pub use binding::{
-    ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, Controls, DiscussionWriteKind,
-    EtagBinding, FixedBinding, HandlerBinding, HeaderBinding, NullClearBinding, ParentBinding,
-    PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestAdapter,
+    ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, CliExecution, Controls,
+    DiscussionWriteKind, EtagBinding, HandlerBinding, HeaderBinding, NullClearBinding,
+    ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestAdapter,
     RequestAdapterError, RequestBinding, ResponseAdapter, ResponseBinding, SelectorBinding,
     TargetAction, TargetBinding,
 };

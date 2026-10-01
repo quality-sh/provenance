@@ -27,6 +27,11 @@ impl Operation for CheckStatement {
         _: PreparedContext,
         request: Self::Request,
     ) -> OperationFuture<Report, StatementFailure> {
-        Box::pin(async move { Ok(provenance_ste100::check_descriptive(&request.statement)) })
+        Box::pin(async move {
+            Ok(crate::statement_analysis::check_statement(
+                &request.statement,
+                None,
+            ))
+        })
     }
 }
