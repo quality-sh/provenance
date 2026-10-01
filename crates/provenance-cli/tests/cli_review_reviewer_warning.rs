@@ -3,6 +3,8 @@ use predicates::prelude::*;
 use std::{
     io::{BufRead, BufReader},
     process::{Command, Stdio},
+    sync::mpsc,
+    time::Duration,
 };
 
 #[test]
@@ -34,12 +36,17 @@ fn review_startup_warns_when_no_reviewer_is_configured() {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    let mut warning = String::new();
-    BufReader::new(child.stderr.take().unwrap())
-        .read_line(&mut warning)
-        .unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut warning = String::new();
+        BufReader::new(stderr).read_line(&mut warning).unwrap();
+        let _ = send.send(warning);
+    });
+    let warning = receive.recv_timeout(Duration::from_secs(5));
     child.kill().unwrap();
     child.wait().unwrap();
+    let warning = warning.expect("review startup warning");
 
     assert!(predicate::str::contains(format!(
         "Warning: No reviewer is configured. The review page will be read-only. Add a reviewer with `provenance init --path {} --disposition-actor-id <reviewer-id>`.",
