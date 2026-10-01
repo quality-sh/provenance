@@ -11,7 +11,7 @@ attempt. The application does not store the token or put it in a URL. The host's
 existing origin, repository, scope, and file-access checks remain in effect.
 The renderer owns the generated Effect client and its reads and writes.
 
-The renderer pin uses the successful main build from web PR 22 and SDK 0.2.3.
+The renderer pin uses the successful main build from web PR 23 and SDK 0.2.3.
 The composer checks the archive SHA-256, source commit, and clean build state
 before it creates the output.
 
@@ -76,7 +76,7 @@ node --test tools/review-host/*.test.ts
 node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
 ```
 
-The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-9ace8e98394a/provenance-review.tar.gz)
+The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-f9e60a1c9523/provenance-review.tar.gz)
 contains the exact bytes from the pinned upstream build. The release contains
 only the renderer. It is separate from the CLI releases and is not the latest
 CLI release. CI and release preparation use this archive without access to the
