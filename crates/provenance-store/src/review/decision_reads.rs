@@ -10,7 +10,8 @@ use crate::state_store::StateStore;
 use provenance_core::{
     protocol::{DocumentReviewSummary, DocumentReviewTotals},
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
-    DispositionDecision, NodeType, ProposalType, ScopeId, StableId,
+    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
+    StableId,
 };
 use provenance_macros::rule;
 
@@ -27,9 +28,21 @@ impl StateStore {
         records: &[(NodeType, StableId)],
     ) -> anyhow::Result<DocumentReviewState> {
         self.with_repository_publication(|| {
+            let proposals = self.list_proposal_definitions(scope)?;
+            let dispositions = self.list_dispositions(scope)?;
+            let facts = CycleFacts::validated(self, scope)?;
             let states = records
                 .iter()
-                .map(|(kind, id)| self.record_decision_state(scope, *kind, id))
+                .map(|(kind, id)| {
+                    let record =
+                        crate::cache::review_families::record(self, scope, *kind, id)?;
+                    self.record_decision_state_from_parts(
+                        &record,
+                        &proposals,
+                        &dispositions,
+                        &facts,
+                    )
+                })
                 .collect::<anyhow::Result<Vec<_>>>()?;
             let digest = crate::canonical_digest::digest(
                 &crate::canonical_digest::canonical_bytes(&states)?,
@@ -83,13 +96,23 @@ impl StateStore {
         record: &provenance_core::review::ReviewRecord,
     ) -> anyhow::Result<RequirementDecisionState> {
         let scope = record.scope_id();
+        let proposals = self.list_proposal_definitions(scope)?;
+        let dispositions = self.list_dispositions(scope)?;
+        let facts = CycleFacts::validated(self, scope)?;
+        self.record_decision_state_from_parts(record, &proposals, &dispositions, &facts)
+    }
+
+    fn record_decision_state_from_parts(
+        &self,
+        record: &provenance_core::review::ReviewRecord,
+        proposals: &[ProposalCard],
+        dispositions: &[DispositionRecord],
+        facts: &CycleFacts,
+    ) -> anyhow::Result<RequirementDecisionState> {
         let kind = record.kind();
         let record_id = record.id();
         let head = self.head(record)?;
         let current_revision = head.as_ref().map(|entry| entry.revision.clone());
-        let proposals = self.list_proposal_definitions(scope)?;
-        let dispositions = self.list_dispositions(scope)?;
-        let facts = CycleFacts::validated(self, scope)?;
         let targets_record = |target: &provenance_core::IdeationTarget| {
             NodeType::from(target.artifact_type) == kind && target.artifact_id == *record_id
         };
@@ -101,13 +124,13 @@ impl StateStore {
             })
             .collect();
         let pending = facts
-            .pending_submission_at_revision(
-                self,
-                scope,
+            .pending_submission_at_revision_in(
+                proposals,
+                dispositions,
                 kind,
                 record_id,
                 current_revision.as_ref(),
-            )?
+            )
             .map(|entry| {
                 let proposal = submissions
                     .iter()
