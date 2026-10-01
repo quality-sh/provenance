@@ -2,7 +2,7 @@
 name: provenance-fork-tournament
 description: Run a fork tournament when a shaping session hits a genuine design fork — mutually exclusive directions, expensive to reverse, and the human's preference unknowable without concrete artifacts to react to. Implements the `prototype` resolution method from docs/shaping.md - spawn stance-based agents producing competing artifacts as proposals (phase 1, end session), then present them for human disposal and land the decision as a Resolution (phase 2).
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:e83ad3dfbf9323ed -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:c92be51ce541f603 -->
 
 # Fork tournament (`prototype`)
 
@@ -63,8 +63,8 @@ Prerequisite: the fork exists as a Question with `resolution_method: prototype`.
 Claim the **single question** before spawning (see the methods table in docs/shaping.md):
 
 ```sh
-provenance questions claim --scope <scope> \
-  --id <question_id> --actor <agent> --format json
+provenance questions <question_id> claim --scope <scope> \
+  --actor <agent> --format json
 ```
 
 1. **Spawn N agents in parallel** — one Agent tool call per stance, all in one message.
@@ -80,27 +80,11 @@ provenance questions claim --scope <scope> \
 2. **Land each artifact as a contribution + proposal** linked to the question:
 
    ```sh
-   provenance contributions create --scope <scope> \
-     --id contrib_<question>_<slot> \
-     --target-type question --target-id <question_id> \
-     --participant-slot <stance_slug> \
-     --stance support \
-     --strongest-finding "<one-line: the artifact's central claim>" \
-     --claims-json '[{"claim_id":"claim_<question>_<slot>","statement":"<central claim>","evidence_type":"artifact","evidence_reference_ids":["evidence_<question>_<slot>"]}]' \
-     --evidence-json '[{"reference_id":"evidence_<question>_<slot>","evidence_type":"artifact","summary":"<what the artifact demonstrates>","file_path":"<artifact path>"}]' \
-     --unsupported-recommendations-json '<speculation, explicitly marked>' \
-     --uncertainty-level <low|medium|high> \
-     --uncertainty-rationale "<why>"
+   provenance schema show contribution --format json
+   provenance contributions create --scope <scope> --stdin --format json < contribution.json
 
-   provenance proposals create --scope <scope> \
-     --id prop_<question>_<slot> \
-     --proposal-key <question>_<slot> \
-     --proposal-type resolution_candidate \
-     --title "<stance>: <artifact one-liner>" \
-     --summary "<manifesto, then the artifact body or a file pointer>" \
-     --target-type question --target-id <question_id> \
-     --evidence-json '<same refs>' \
-     --supporting-claim-id claim_<question>_<slot>
+   provenance schema show proposal --format json
+   provenance proposals create --scope <scope> --stdin --format json < proposal.json
    ```
 
    Note `--stance` on contributions is the enum stance toward the target
@@ -113,30 +97,22 @@ provenance questions claim --scope <scope> \
    minority objections kept separate; the human decision explicit:
 
    ```sh
-   provenance synthesis-packets create --scope <scope> \
-     --id synth_<question> \
-     --target-type question --target-id <question_id> \
-     --summary "<the fork in one line; where stances converged and split>" \
-     --consensus-json '<claims all stances landed on — convergence is signal, record it>' \
-     --contested-claims-json '<the actual fork>' \
-     --minority-objections-json '<kept, never averaged away>' \
-     --suggested-artifacts-json '[{"proposal_id":"prop_<question>_<slot>","proposal_key":"<question>_<slot>","proposal_type":"resolution_candidate","summary":"<candidate summary>","origin_participant_slots":["<stance_slug>"]}]' \
-     --required-human-decisions-json '[{"decision_key":"pick_<question>_winner","prompt":"Pick winner and grafts","blocks_promotion":true}]'
+   provenance schema show synthesis-packet --format json
+   provenance synthesis-packets create --scope <scope> --stdin --format json < synthesis.json
    ```
 
     Include one exact `suggested_artifacts` entry for every competing proposal. Each
     entry's `proposal_id`, key, and type must match its proposal definition.
 
-4. **Mark the question blocked-on-human** and post the proposal ids to its thread:
+4. **Mark the Question `blocked_on_human`** and post the Proposal IDs to a Discussion:
 
     ```sh
     provenance questions <question_id> update --scope <scope> \
-      --status blocked-on-human
+      --status blocked_on_human
 
-    provenance thread post --scope <scope> \
-      --parent-type question --parent-id <question_id> \
+    provenance questions <question_id> discussions create --scope <scope> \
       --role assistant \
-      "BLOCKED-ON-HUMAN: fork tournament landed. Competing proposals: prop_<...>, prop_<...>. Awaiting disposal."
+      --body "BLOCKED-ON-HUMAN: fork tournament landed. Competing proposals: prop_<...>, prop_<...>. Awaiting disposal."
     ```
 
 5. **END THE SESSION.** The fork spawn is a two-phase boundary — a stop condition in the
@@ -152,10 +128,10 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
    manifesto + artifact side by side. Lead with the contested claims from the synthesis
    packet, not a neutral tour.
 
-2. **Extract reactions** — the reactions are the point. As the human reacts, post each
-   onto the question's thread (`thread post ... --role user`) so nothing lives only in
-   conversation state. Push past "I like B": *which property* of B, and what from the
-   losers still matters?
+2. **Extract reactions** — the reactions are the point. As the human reacts, start a
+   Discussion on the Question or append Messages to an existing Discussion. Use
+   `questions <id> discussions create` or the nested `messages create` command. Push past
+   "I like B": *which property* of B, and what from the losers still matters?
 
 3. **Land the decision the moment it resolves:**
 
@@ -166,53 +142,45 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
      --requirement-id <anchor_requirement_id> \
      --position "<winning direction + grafts>" \
      --rationale "<the extracted reactions: why winner won, why losers lost, what was grafted and from where>" \
-     --input-type technical --input-reference prop_<winner> --input-summary "winning artifact" \
-     --input-type technical --input-reference prop_<loser>  --input-summary "runner-up; grafted <idea>" \
+     --inputs-json '[{"input_type":"technical","reference":"prop_<winner>","summary":"winning artifact"},{"input_type":"technical","reference":"prop_<loser>","summary":"runner-up; grafted <idea>"}]' \
      --made-by "<human>"
    ```
 
-   One `--input-type/--input-reference/--input-summary` triple **per competing
-   proposal** — this is what keeps grafted ideas traceable to their origin proposal. Run
+   Add one entry to `--inputs-json` for each competing Proposal. This keeps grafted ideas
+   traceable to their origin Proposal. Run
    `--position` and `--rationale` through the `provenance-grounded-writing` skill's naming test before
    landing.
 
 4. **Mark the question answered.** Creating the resolution does not update question state:
 
    ```sh
-   provenance questions answer --scope <scope> \
-     --id <question_id> \
+   provenance questions <question_id> answer --scope <scope> \
      --answer "<winning direction + grafts>" \
      --resolution-id res_<question> \
      --format json
    ```
 
 5. **Clear the winner's human gate and assert it.** After recording the human's decision,
-   atomically replace the synthesis packet without its resolved blocking decisions and
-   create the assertion. `--resolve-human-gate` preserves the rest of the packet's
-   adjudication; first ensure the winner's supporting claim is not contested. Assert with
-   the exact claim wired in phase 1:
+   update the Synthesis Packet so it has no resolved blocking decision. Then create the
+   Assertion with the exact supporting claim from phase 1:
 
     ```sh
-    provenance proposals assert --scope <scope> \
+    provenance proposals prop_<question>_<winner_slot> assertions create --scope <scope> \
       --id assertion_<question>_<winner_slot> \
-      --proposal-id prop_<question>_<winner_slot> \
       --synthesis-packet-id synth_<question> \
-      --supporting-claim-id claim_<question>_<winner_slot> \
-      --resolve-human-gate \
-      --decision-key pick_<question>_winner
+      --supporting-claim-ids claim_<question>_<winner_slot>
     ```
 
 6. **Dispose of every proposal** — winner accepted with the resolution as canonical
    artifact; losers rejected (rationale names the superseding resolution — see Gaps):
 
    ```sh
-   provenance dispositions create --scope <scope> \
+   provenance proposals prop_<question>_<slot> dispositions create --scope <scope> \
      --id pd_<question>_<slot> \
-     --proposal-id prop_<question>_<slot> \
      --decision accepted \
      --rationale "<from the reactions>" \
-     --actor-id <human_id> --actor-type human \
-     --canonical-artifact-type resolution --canonical-artifact-id res_<question>
+     --actor-json '{"identity_type":"human","id":"<human_id>"}' \
+     --canonical-artifact-json '{"artifact_type":"resolution","artifact_id":"res_<question>"}'
    # losers: --decision rejected --rationale "superseded by res_<question>; grafted: <idea>"
    ```
 
@@ -247,17 +215,16 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
 ## CLI gaps and conventions (as of this writing)
 
 - **Question status and method are first-class** — use `questions <id> update --status
-  blocked-on-human` for the phase boundary, and `questions <id> update --method prototype`
-  if an existing question was minted with the wrong method. Keep the thread post because
-  proposal ids are not question link targets.
+  blocked_on_human` for the phase boundary, and `questions <id> update --method prototype`
+  if an existing Question has the wrong method. Keep the Discussion Message because the
+  Proposal IDs are not Question link targets.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an
   assertion only when the exact proposal suggestion has positive owned evidence and no
   contested claim or blocking adjudication. `dispositions` is the sole authority for
   `accepted|rejected|deferred`; reject losers with rationale naming the winning resolution.
   The actor ID must be repository-allowlisted and is an audit attestation, not a signature.
-- **References are fields on the records, not edges.** A spawned requirement points at the
-  resolution it came out of with `requirements spawned-by set`; a rule names the requirement
-  it serves and the decision that produced it with `rules requirement add` and
-  `rules resolution add`; a replacement is recorded with `requirements supersedes add` and
-  `resolutions supersedes add`. Proposals are not graph endpoints, so graft traceability to
-  competing proposals rides on resolution input references.
+- **References are fields on the records, not separate commands.** Use each owning record's
+  create or update command. Requirement relationship changes use guarded
+  `requirements <id> update --relationships-json <json> --if-match <etag>`. Proposals are
+  not graph endpoints, so graft traceability to competing Proposals rides on Resolution
+  input references.
