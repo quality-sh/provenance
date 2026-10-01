@@ -40,12 +40,6 @@ fn create_requirement(repo: &str) {
 fn edit(repo: &str, description: &str) -> (String, String) {
     let read = json(&["api", "requirements/req_review", "--repo", repo]);
     let etag = read["data"]["edit"]["etag"].as_str().unwrap();
-    let request_id: String = description
-        .chars()
-        .filter(char::is_ascii_alphanumeric)
-        .flat_map(char::to_lowercase)
-        .collect();
-    let key = format!("Idempotency-Key: {request_id}");
     let result = provenance()
         .args([
             "api",
@@ -56,8 +50,6 @@ fn edit(repo: &str, description: &str) -> (String, String) {
             "patch",
             "--input",
             "-",
-            "--header",
-            &key,
             "--header",
             &format!("If-Match: {etag}"),
         ])

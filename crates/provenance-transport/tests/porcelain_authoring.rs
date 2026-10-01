@@ -124,7 +124,6 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         json!({
             "target":"req_mcp_target",
             "type":"requirement",
-            "idempotency_key":"create_req_mcp_target",
             "data":{
                 "actor":"agent",
                 "statement":"The MCP action submits the target Requirement.",
@@ -157,7 +156,6 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         json!({
             "target":"req_mcp_dependency",
             "type":"requirement",
-            "idempotency_key":"create_req_mcp_dependency",
             "data":{
                 "actor":"agent",
                 "statement":"The MCP dependency exists.",
@@ -175,7 +173,6 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         "update",
         json!({
             "target":"req_mcp_target",
-            "idempotency_key":"update_req_mcp_target",
             "if_match":requirement.structured_content.as_ref().unwrap()["data"]["edit"]["etag"],
             "data":{
                 "actor":"agent",

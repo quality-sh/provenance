@@ -9,6 +9,10 @@ pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
+pub(crate) fn new_request_id() -> provenance_core::StableId {
+    journal::new_id()
+}
+
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
     let value = serde_json::to_value(record)?;
     let declared_by = value.get("declared_by").and_then(serde_json::Value::as_str);

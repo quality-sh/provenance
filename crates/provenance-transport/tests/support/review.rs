@@ -10,10 +10,7 @@ async fn enroll(host: &StatementHost) -> (String, String) {
         "PATCH",
         "/requirements/req_shared",
         Some(json!({"data":{"actor":"agent","description":"Enrolled."}})),
-        &[
-            ("idempotency-key", "enroll_requirement"),
-            ("if-match", &etag),
-        ],
+        &[("if-match", &etag)],
     )
     .await;
     assert_eq!(status, 200, "{saved}");
@@ -57,14 +54,14 @@ async fn submit_at(host: &StatementHost, revision: &str) -> String {
     proposal
 }
 
-async fn edit(host: &StatementHost, key: &str, description: &str) -> (String, String) {
+async fn edit(host: &StatementHost, _key: &str, description: &str) -> (String, String) {
     let (_, _, etag) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
     let (status, saved, _) = call(
         host,
         "PATCH",
         "/requirements/req_shared",
         Some(json!({"data":{"actor":"agent","description":description}})),
-        &[("idempotency-key", key), ("if-match", &etag.unwrap())],
+        &[("if-match", &etag.unwrap())],
     )
     .await;
     assert_eq!(status, 200, "{saved}");
@@ -112,7 +109,7 @@ async fn stale_requirement_edit_returns_the_current_etag() {
         "PATCH",
         "/requirements/req_shared",
         body("Current edit."),
-        &[("idempotency-key", "edit-current"), ("if-match", &old_etag)],
+        &[("if-match", &old_etag)],
     )
     .await;
     assert_eq!(status, 200, "{current}");
@@ -121,7 +118,7 @@ async fn stale_requirement_edit_returns_the_current_etag() {
         "PATCH",
         "/requirements/req_shared",
         body("Stale edit."),
-        &[("idempotency-key", "edit-stale"), ("if-match", &old_etag)],
+        &[("if-match", &old_etag)],
     )
     .await;
     assert_eq!(status, 409, "{conflict}");
@@ -141,7 +138,6 @@ async fn review_decide_dispatches_and_reports_a_repeated_decision() {
     create(
         &host,
         "/requirements",
-        Some("create_req_other"),
         json!({"actor":"agent","id":"req_other","statement":"The other record exists.",
             "status":"active","depends_on":[],"supersedes":[]}),
     )

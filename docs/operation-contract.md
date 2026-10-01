@@ -116,9 +116,9 @@ The runtime uses the status of the typed failure variant.
 
 HTTP checks the credential, Host, Origin, admission state, and body size before
 it invokes a Store operation. The connection controls repository and scope.
-The transport binds `Idempotency-Key` and `If-Match` only where the Store
-supports receipts or preconditions. A successful supported resource response
-carries `ETag`.
+The transport binds `If-Match` only where the Store supports preconditions.
+Review writes do not bind `Idempotency-Key`; the server creates their request
+identities. A successful supported resource response carries `ETag`.
 
 A write has one terminal client result: success or a typed error. Clients do not
 keep an uncertain-write ledger and do not retry a mutation. The Store resolves

@@ -135,14 +135,24 @@ unchanged from the current surface — stamps, freshness policy, the HMAC-bound
 cursor, and limits — per the plan's kept-unchanged list.
 
 A body-bearing request uses `{data}`. HTTP binds catalog-defined controls to
-headers. MCP and native calls use the same typed controls. `Idempotency-Key`,
-`If-Match`, and the response `ETag` map to Store-supported identity and
-precondition checks. The surface never advertises an unsupported guarantee.
+headers. MCP and native calls use the same typed controls. `If-Match` and the
+response `ETag` map to Store-supported precondition checks. The surface never
+advertises an unsupported guarantee.
 
-Requirement edit requests keep `If-Match`. Submit, decide, and withdraw do not
-accept `Idempotency-Key`. Their bodies do not accept a request ID. A submit body
-does not accept `proposal_id` or `proposal_key`, and a decide body does not
-accept `disposition_id`. The server creates these identities and returns them.
+Review writes do not accept `Idempotency-Key`, and their bodies do not accept a
+request ID. The server creates the request identity. Requirement edit requests
+and versioned Discussion writes keep `If-Match`. A repeated Requirement create
+with the same caller-selected Stable ID returns `already_exists` with status
+409.
+
+A repeated Discussion start after a lost response creates a new Discussion. A
+repeated Discussion reply or status change uses the old `If-Match` value and
+returns `discussion_version_conflict` with status 409. The client reads the
+Discussion before it sends another write.
+
+A submit body does not accept `proposal_id` or `proposal_key`, and a decide
+body does not accept `disposition_id`. The server creates these identities and
+returns them.
 
 A decide request can omit `rationale` for an accepted or deferred decision. A
 rejected decision must include a nonempty `rationale`.

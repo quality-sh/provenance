@@ -38,7 +38,7 @@ try {
   for (const [id, parent] of [['req_root', undefined], ['req_child', 'req_root']]) {
     execFileSync(binary, [
       'requirements', 'create', '--repo', repository, '--scope', 'default',
-      '--idempotency-key', `request_${id}`, '--stdin',
+      '--stdin',
     ], {
       cwd: work, encoding: 'utf8', timeout: 30_000,
       input: JSON.stringify({

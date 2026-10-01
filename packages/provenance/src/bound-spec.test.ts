@@ -72,7 +72,7 @@ const requirementData = (id: string, statement: string) => ({
 function seedResolution(repo: string): void {
   catalogWrite(repo, ["requirements", "create"], requirementData(
     "req_seed", "The seed requirement stands",
-  ), ["--idempotency-key", "request_seed_requirement"]);
+  ));
   catalogWrite(repo, ["resolutions", "create"], {
     id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
     supersedes: [], position: "Adopt", rationale: "Seeds the relations",
@@ -209,10 +209,10 @@ test("spec-bound declarations adopt exact unowned engine records", async () => {
   });
   const requirement = catalogWrite(repo, ["requirements", "create"], requirementData(
     "req_existing", "The canonical Requirement keeps its identity",
-  ), ["--idempotency-key", "request_existing_requirement"]);
+  ));
   catalogWrite(repo, ["requirements", "req_existing", "update"], {
     actor: "sdk-test", relationships: { cites: [{ source_id: "source_existing" }] },
-  }, ["--idempotency-key", "request_seed_citation", "--if-match", requirement.data.edit.etag]);
+  }, ["--if-match", requirement.data.edit.etag]);
   catalogWrite(repo, ["rules", "create"], {
     id: "rule_existing", requirement_ids: ["req_existing"], resolution_ids: [],
     statement: "The canonical Rule keeps its identity", status: "draft", severity: "high",
@@ -286,11 +286,11 @@ test("spec-bound declarations adopt an unowned external_integration Source", asy
   });
   const requirement = catalogWrite(repo, ["requirements", "create"], requirementData(
     "req_env_key_at_invocation", "The provider reads the environment value at invocation",
-  ), ["--idempotency-key", "request_external_requirement"]);
+  ));
   catalogWrite(repo, ["requirements", "req_env_key_at_invocation", "update"], {
     actor: "sdk-test",
     relationships: { cites: [{ source_id: "source_workflowd_integration_brief" }] },
-  }, ["--idempotency-key", "request_seed_external_citation", "--if-match", requirement.data.edit.etag]);
+  }, ["--if-match", requirement.data.edit.etag]);
 
   const provenance = defineSpec("noscope");
   const brief = provenance

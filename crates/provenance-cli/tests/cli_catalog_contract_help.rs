@@ -60,8 +60,7 @@ fn guarded_requirement_update_help_describes_real_inputs_and_controls() {
     assert!(update.contains("default: \"cli\""), "{update}");
     assert!(update.contains("--if-match <string>"), "{update}");
     assert!(update.contains("required"), "{update}");
-    assert!(update.contains("--idempotency-key <string>"), "{update}");
-    assert!(update.contains("generated if omitted"), "{update}");
+    assert!(!update.contains("--idempotency-key"), "{update}");
     assert!(update.contains("--stdin"), "{update}");
 }
 
@@ -121,7 +120,7 @@ fn addressed_update_help_excludes_other_operations_inputs() {
     assert!(output.contains("--statement <string>"), "{output}");
     assert!(output.contains("--relationships-json <json>"), "{output}");
     assert!(output.contains("--if-match <string>"), "{output}");
-    assert!(output.contains("--idempotency-key <string>"), "{output}");
+    assert!(!output.contains("--idempotency-key"), "{output}");
     assert!(!output.contains("--id <string>"), "{output}");
     assert!(!output.contains("--depends-on"), "{output}");
     assert!(!output.contains("--max-depth"), "{output}");

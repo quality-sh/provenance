@@ -110,14 +110,14 @@ adopt a record, change its owner, or move its declaration address.
 behavior. A later declaration application can restate the fields it owns.
 
 The Requirement PATCH is the one guarded write path. The client sends the
-current ETag in `If-Match` and a request identity in `Idempotency-Key`. The
-member read returns the ETag. The response carries the record with its edit
-state, decision state, and the new ETag. A statement change uses the statement
-write gate and raises the existing Requirement reviews for its Rules. Rule
-statements use the same write gate. Reviews keep their before/after values and
-clearing behavior. Requirement and review publication uses more than one
-shard. The Store resolves an interrupted publication. The wire returns
-`write_failed` when it cannot return the saved result.
+current ETag in `If-Match`. The server creates the request identity. The member
+read returns the ETag. The response carries the record with its edit state,
+decision state, and the new ETag. A statement change uses the statement write
+gate and raises the existing Requirement reviews for its Rules. Rule statements
+use the same write gate. Reviews keep their before/after values and clearing
+behavior. Requirement and review publication uses more than one shard. The
+Store resolves an interrupted publication. The wire returns `write_failed` when
+it cannot return the saved result.
 
 Rule deprecation and archival use the existing `status` values. An archived
 Rule must have `archived_in_commit`; the other Rule statuses must not have it.
@@ -143,7 +143,7 @@ Here `null` clears `reference`, as on the route. A body that carries `id`,
 `scope_id`, or a header fact is refused.
 
 A Requirement update sends the ETag of the last read. The CLI supplies the
-`actor` default and makes an `Idempotency-Key` when the route needs one:
+`actor` default:
 
 ```sh
 printf '%s' '{"description":"Reviewed wording."}' |

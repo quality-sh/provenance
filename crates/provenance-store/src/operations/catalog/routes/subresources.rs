@@ -161,7 +161,6 @@ pub(super) fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind:
         .scope("scope_id")
         .adapter(request::DISCUSSION_START)
         .with_request_schema::<operation::StartDiscussionData>()
-        .header("Idempotency-Key", "request_id", false)
         .cli_default("actor", CliDefaultValue::String("cli"))
         .with_etag("/version", true),
     );
@@ -197,7 +196,6 @@ pub(super) fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind:
         .scope("scope_id")
         .adapter(request::DISCUSSION_STATUS)
         .with_request_schema::<operation::UpdateDiscussionData>()
-        .header("Idempotency-Key", "request_id", false)
         .numeric_header("If-Match", "expected_version")
         .with_etag("/version", true),
     );
@@ -252,7 +250,6 @@ fn discussion_messages(
         .scope("scope_id")
         .adapter(request::DISCUSSION_REPLY)
         .with_request_schema::<operation::ReplyDiscussionData>()
-        .header("Idempotency-Key", "request_id", false)
         .numeric_header("If-Match", "expected_version")
         .cli_default("actor", CliDefaultValue::String("cli"))
         .with_etag("/version", true),

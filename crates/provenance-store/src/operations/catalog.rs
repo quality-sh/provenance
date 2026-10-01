@@ -90,7 +90,7 @@ pub use schema::{
     ResponseKind,
 };
 pub use statement::CheckStatement;
-pub use target_discussion_writes::WriteTargetDiscussion;
+pub use target_discussion_writes::{WriteTargetDiscussion, WriteTargetDiscussionRequest};
 
 #[cfg(test)]
 mod tests;

@@ -143,16 +143,7 @@ fn api_post_creates_from_a_file_body_with_selected_method_and_headers() {
     );
 
     success(&[
-        "api",
-        "sources",
-        "--repo",
-        &repo,
-        "--method",
-        "post",
-        "--input",
-        &body,
-        "--header",
-        "Idempotency-Key: cli-file-create",
+        "api", "sources", "--repo", &repo, "--method", "post", "--input", &body,
     ]);
 
     let created = json(&["source_file", "get", "--repo", &repo, "--format", "json"]);
@@ -165,16 +156,7 @@ fn api_stdin_body_creates_from_standard_input() {
 
     provenance()
         .args([
-            "api",
-            "sources",
-            "--repo",
-            &repo,
-            "--method",
-            "post",
-            "--input",
-            "-",
-            "--header",
-            "Idempotency-Key: cli-stdin-create",
+            "api", "sources", "--repo", &repo, "--method", "post", "--input", "-",
         ])
         .write_stdin(
             json!({
@@ -208,7 +190,7 @@ fn api_reports_the_typed_requirement_edit_conflict() {
         "json",
     ]);
     let old_etag = created["data"]["edit"]["etag"].as_str().unwrap();
-    let patch = |key: &str, description: &str| {
+    let patch = |description: &str| {
         provenance()
             .args([
                 "api",
@@ -220,8 +202,6 @@ fn api_reports_the_typed_requirement_edit_conflict() {
                 "--input",
                 "-",
                 "--header",
-                &format!("Idempotency-Key: {key}"),
-                "--header",
                 &format!("If-Match: {old_etag}"),
                 "--format",
                 "json",
@@ -230,7 +210,7 @@ fn api_reports_the_typed_requirement_edit_conflict() {
             .output()
             .unwrap()
     };
-    let current = patch("current-edit", "The current description applies.");
+    let current = patch("The current description applies.");
     assert!(
         current.status.success(),
         "{}",
@@ -238,7 +218,7 @@ fn api_reports_the_typed_requirement_edit_conflict() {
     );
     let current: Value = serde_json::from_slice(&current.stdout).unwrap();
 
-    let stale = patch("stale-edit", "The stale description does not apply.");
+    let stale = patch("The stale description does not apply.");
     assert!(!stale.status.success());
     let failure = envelope(&String::from_utf8_lossy(&stale.stderr));
     assert_eq!(failure["error"]["kind"], "requirement_edit_conflict");
@@ -263,10 +243,7 @@ fn api_discovery_describes_the_live_catalog() {
         readable.contains("  inputs: id (path, required)\n"),
         "{readable}"
     );
-    assert!(
-        readable.contains("Idempotency-Key (header, required)"),
-        "{readable}"
-    );
+    assert!(!readable.contains("Idempotency-Key"), "{readable}");
     assert!(
         readable.contains("  inputs with query=neighbors: "),
         "{readable}"

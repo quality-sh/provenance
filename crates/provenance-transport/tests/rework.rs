@@ -72,9 +72,8 @@ async fn call(
     (status, value, etag)
 }
 
-async fn create(host: &StatementHost, path: &str, key: Option<&str>, data: Value) -> Value {
-    let headers = key.map_or_else(Vec::new, |key| vec![("idempotency-key", key)]);
-    let (status, value, _) = call(host, "POST", path, Some(json!({"data": data})), &headers).await;
+async fn create(host: &StatementHost, path: &str, data: Value) -> Value {
+    let (status, value, _) = call(host, "POST", path, Some(json!({"data": data})), &[]).await;
     assert_eq!(status, 200, "{value}");
     value
 }
@@ -175,10 +174,7 @@ async fn requirement_get_pairs_content_with_the_etag_from_one_publication_snapsh
             "PATCH",
             "/requirements/req_shared",
             Some(json!({"data":{"actor":"writer","statement":"The graph changed."}})),
-            &[
-                ("idempotency-key", "concurrent_save"),
-                ("if-match", &writer_etag),
-            ],
+            &[("if-match", &writer_etag)],
         ));
         let _ = done_tx.send(());
         result
@@ -216,11 +212,10 @@ async fn relationship_patches_accept_deltas_and_final_sets_atomically() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo);
-    create(&host, "/sources", None, source("source_old", "Old source")).await;
+    create(&host, "/sources", source("source_old", "Old source")).await;
     create(
         &host,
         "/requirements",
-        Some("create_req_second"),
         json!({"actor":"agent","id":"req_second","statement":"The second record exists.",
             "status":"active","depends_on":[],"supersedes":[]}),
     )
@@ -228,7 +223,6 @@ async fn relationship_patches_accept_deltas_and_final_sets_atomically() {
     create(
         &host,
         "/resolutions",
-        None,
         resolution("resolution_old", "req_shared"),
     )
     .await;
@@ -319,7 +313,7 @@ async fn resolution_context_is_record_data_but_object_context_is_identity_inject
     let host = host(&repo);
     let mut declared = resolution("resolution_context", "req_shared");
     declared["context"] = json!("Codebase scan");
-    let created = create(&host, "/resolutions", None, declared).await;
+    let created = create(&host, "/resolutions", declared).await;
     assert_eq!(created["data"]["context"], "Codebase scan");
 
     let mut injected = resolution("resolution_injected", "req_shared");
@@ -342,14 +336,14 @@ async fn list_cursor_refuses_a_revision_changed_by_an_insert_before_the_window()
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo);
-    create(&host, "/sources", None, source("source_z", "Last source")).await;
+    create(&host, "/sources", source("source_z", "Last source")).await;
     let (status, first, _) = call(&host, "GET", "/sources?limit=1", None, &[]).await;
     assert_eq!(status, 200, "{first}");
     assert_eq!(first["data"]["items"][0]["id"], "source_shared");
     let cursor = first["meta"]["next_cursor"].as_str().unwrap();
     assert!(cursor.contains('.'), "cursor is not signed: {cursor}");
     assert!(!cursor.starts_with("list:"), "plain offset cursor escaped");
-    create(&host, "/sources", None, source("source_a", "First source")).await;
+    create(&host, "/sources", source("source_a", "First source")).await;
 
     let (status, failure, _) = call(
         &host,

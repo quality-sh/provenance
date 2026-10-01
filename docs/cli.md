@@ -64,12 +64,12 @@ Parent-owned resources keep their parent address:
 provenance requirements req_review document get --limit 50
 provenance requirements req_review history get
 provenance requirements req_review history entry_1 evidence before get --field statement
-provenance requirements req_review submit --idempotency-key request_1 --stdin
-provenance requirements req_review submissions proposal_review decide --idempotency-key request_2 --stdin
+provenance requirements req_review submit --stdin
+provenance requirements req_review submissions proposal_review decide --stdin
 provenance sources source_policy discussions get
-provenance sources source_policy discussions create --idempotency-key request_3 --stdin
+provenance sources source_policy discussions create --stdin
 provenance sources source_policy discussions discussion_1 messages create \
-  --idempotency-key request_4 --if-match '"1"' --stdin
+  --if-match '"1"' --stdin
 provenance proposals proposal_1 assertions create --stdin
 provenance verification-runs begin-verification --stdin
 provenance verification-runs run_1 complete-verification --status passed
@@ -84,8 +84,8 @@ clears the field where the schema allows null, while a plain flag on a
 string-typed field always supplies text. Arrays and objects can also come from one JSON object on
 standard input with `--stdin`, which fills only the body fields that no flag
 assigned and refuses a field that a flag already set. Path identity comes from
-the command address. Query parameters and the `Idempotency-Key` and
-`If-Match` controls use the flags that the catalog declares.
+the command address. Query parameters and `If-Match` controls use the flags
+that the catalog declares.
 
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
 records in `data.items`.

@@ -52,7 +52,6 @@ export async function checkIdeation({ HttpClient, OperationError }, fixture) {
     repository: 'fixture', scope: 'default',
   });
   await client.createRequirement({
-    idempotency_key: 'create-ideation-target',
     data: {
       actor: 'fixture', id: 'req_overtime', statement: 'The system defines overtime.',
       status: 'active', depends_on: [], supersedes: [],
