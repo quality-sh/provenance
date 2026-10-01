@@ -370,14 +370,8 @@ fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<
         Path::new(to),
         || rustix_rename_no_replace(parent, from, parent, to),
         || {
-            rustix::fs::linkat(
-                parent,
-                from,
-                parent,
-                to,
-                rustix::fs::AtFlags::empty(),
-            )
-            .map_err(std::io::Error::from)
+            rustix::fs::linkat(parent, from, parent, to, rustix::fs::AtFlags::empty())
+                .map_err(std::io::Error::from)
         },
         || {
             rustix::fs::unlinkat(parent, from, rustix::fs::AtFlags::empty())

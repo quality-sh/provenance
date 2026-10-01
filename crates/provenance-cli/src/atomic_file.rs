@@ -128,8 +128,8 @@ fn remove_if_owned_with_hook(
         return Ok(());
     }
     before_commit();
-    let backup = displace_to_backup(path)
-        .map_err(|error| displacement_error(path, "removal", error))?;
+    let backup =
+        displace_to_backup(path).map_err(|error| displacement_error(path, "removal", error))?;
     let displaced = FileSnapshot::read(&backup)?;
     if &displaced != expected {
         restore_displaced(&backup, path)?;
@@ -228,8 +228,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
 
 fn replacement_install_error(path: &Path, error: std::io::Error) -> anyhow::Error {
     if error.kind() == ErrorKind::AlreadyExists {
-        anyhow::Error::new(error)
-            .context(format!("{} changed during replacement", path.display()))
+        anyhow::Error::new(error).context(format!("{} changed during replacement", path.display()))
     } else {
         anyhow::Error::new(error).context(format!("failed to install {}", path.display()))
     }

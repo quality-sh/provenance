@@ -103,10 +103,7 @@ mod fallback {
 
         assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
         assert_eq!(std::fs::read_to_string(source).unwrap(), "source");
-        assert_eq!(
-            std::fs::read_to_string(destination).unwrap(),
-            "destination"
-        );
+        assert_eq!(std::fs::read_to_string(destination).unwrap(), "destination");
     }
 
     #[test]
