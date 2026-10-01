@@ -1,9 +1,9 @@
-use super::{nodes, served, ReadContext, ReadPolicy};
+use super::{ReadContext, ReadPolicy, nodes, served};
 use crate::operations::reader::Cursor;
 use camino::Utf8PathBuf;
 use provenance_core::protocol::{
-    read_failure::ReadFailure, DocumentEntry, DocumentReviewSummary, ReadDocumentQuery,
-    ReadDocumentResult, StampPolicy, Stamped,
+    DocumentEntry, ReadDocumentQuery, ReadDocumentResult, StampPolicy, Stamped,
+    read_failure::ReadFailure,
 };
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_macros::rule;
@@ -115,18 +115,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             stage => nodes::page_node(ctx.snapshot(), NodeType::parse(&kind)?, &key.id)
                 .await?
                 .map(|node| {
-                    let review = review_state
-                        .records
-                        .iter()
-                        .find(|(record_kind, record_id, _)| {
-                            *record_kind == node.node_type() && record_id == node.id()
-                        })
-                        .map(|(_, _, review)| review.clone())
-                        .unwrap_or(DocumentReviewSummary {
-                            outcome: None,
-                            pending_proposal_id: None,
-                            comment_count: 0,
-                        });
+                    let review = review_state.summary(node.node_type(), node.id());
                     if stage == 0 {
                         DocumentEntry::Member { node, review }
                     } else {

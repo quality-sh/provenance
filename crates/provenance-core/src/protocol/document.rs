@@ -53,7 +53,7 @@ pub enum DocumentReviewOutcome {
 
 /// The compact review state for one record in a document.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct DocumentReviewSummary {
     pub outcome: Option<DocumentReviewOutcome>,
     pub pending_proposal_id: Option<StableId>,
