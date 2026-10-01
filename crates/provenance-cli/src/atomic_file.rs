@@ -228,33 +228,34 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
 
 fn replacement_install_error(path: &Path, error: std::io::Error) -> anyhow::Error {
     if error.kind() == ErrorKind::AlreadyExists {
-        error.context(format!("{} changed during replacement", path.display()))
+        anyhow::Error::new(error)
+            .context(format!("{} changed during replacement", path.display()))
     } else {
-        error.context(format!("failed to install {}", path.display()))
+        anyhow::Error::new(error).context(format!("failed to install {}", path.display()))
     }
 }
 
 fn displacement_error(path: &Path, action: &str, error: std::io::Error) -> anyhow::Error {
     if error.kind() == ErrorKind::Unsupported {
-        error.context(format!(
+        anyhow::Error::new(error).context(format!(
             "failed to preserve {} during {action}",
             path.display()
         ))
     } else {
-        error.context(format!("{} changed during {action}", path.display()))
+        anyhow::Error::new(error).context(format!("{} changed during {action}", path.display()))
     }
 }
 
 fn restore_displaced(backup: &Path, path: &Path) -> anyhow::Result<()> {
     provenance_store::operations::files::rename_no_replace(backup, path).map_err(|error| {
         if error.kind() == ErrorKind::Unsupported {
-            error.context(format!(
+            anyhow::Error::new(error).context(format!(
                 "failed to restore {} from {}",
                 path.display(),
                 backup.display()
             ))
         } else {
-            error.context(format!(
+            anyhow::Error::new(error).context(format!(
                 "could not restore concurrently changed {}; displaced bytes remain at {}",
                 path.display(),
                 backup.display()
