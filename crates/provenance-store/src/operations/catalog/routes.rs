@@ -2,10 +2,10 @@
 
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
-    ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, FixedBinding, HandlerBinding,
-    HeaderBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
-    Registration, RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction,
-    TargetBinding,
+    ArgumentAlias, CliDefault, CliDefaultValue, CliExecution, EtagBinding, FixedBinding,
+    HandlerBinding, HeaderBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding,
+    QueryRoute, Registration, RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding,
+    TargetAction, TargetBinding,
 };
 use provenance_core::NodeType;
 use schemars::generate::Contract;
@@ -262,6 +262,11 @@ impl Definition {
 
     fn cli_defaults(mut self, defaults: &[CliDefault]) -> Self {
         self.registration.cli.defaults.extend_from_slice(defaults);
+        self
+    }
+
+    const fn cli_execution(mut self, execution: CliExecution) -> Self {
+        self.registration.cli.execution = execution;
         self
     }
 

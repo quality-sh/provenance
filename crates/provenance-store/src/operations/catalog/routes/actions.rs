@@ -228,15 +228,18 @@ fn native<O: Operation>(
 }
 
 fn computations(out: &mut Vec<Definition>) {
-    out.push(backed::<operation::CheckStatement>(
-        "check-statement",
-        "checkStatement",
-        HttpMethod::Post,
-        "/statement-checks",
-        "Check one statement against the configured writing standard.",
-        ResponseKind::Result,
-        Vec::new(),
-    ));
+    out.push(
+        backed::<operation::CheckStatement>(
+            "check-statement",
+            "checkStatement",
+            HttpMethod::Post,
+            "/statement-checks",
+            "Check one statement against the configured writing standard.",
+            ResponseKind::Result,
+            Vec::new(),
+        )
+        .cli_execution(CliExecution::ProjectStatementCheck),
+    );
     out.push(backed::<operation::Plan>(
         "plan-authoring",
         "planAuthoring",

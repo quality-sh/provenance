@@ -90,9 +90,19 @@ pub struct CliDefault {
     pub value: CliDefaultValue,
 }
 
+#[derive(Clone, Copy, Default)]
+pub enum CliExecution {
+    /// Invoke the operation through its registered transport adapter.
+    #[default]
+    RegisteredOperation,
+    /// Check the statement with the local repository dictionary.
+    ProjectStatementCheck,
+}
+
 #[derive(Clone, Default)]
 pub struct CliBinding {
     pub defaults: Vec<CliDefault>,
+    pub execution: CliExecution,
 }
 
 #[derive(Clone)]

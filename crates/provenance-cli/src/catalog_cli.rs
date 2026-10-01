@@ -122,6 +122,23 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         warn_if_skills_missing(context.repo.repo.as_str(), context.quiet)?;
     }
     let host = context.repo.local_host()?;
+    if matches!(
+        definition.registration.cli.execution,
+        catalog::CliExecution::ProjectStatementCheck
+    ) {
+        let request: provenance_core::protocol::CheckStatementRequest =
+            serde_json::from_value(data)?;
+        let root = std::fs::canonicalize(&context.repo.repo)?;
+        let layout = provenance_store::layout::ProvenanceLayout::new(
+            camino::Utf8PathBuf::from_path_buf(root)
+                .map_err(|_| anyhow::anyhow!("the repository path is not valid UTF-8"))?,
+        );
+        let report = provenance_store::statement_analysis::check_project_statement(
+            &layout,
+            &request.statement,
+        );
+        return crate::output::print_json(&serde_json::json!({"data": report, "meta": {}}));
+    }
     match host
         .invoke_resource(method, &path, data, query, headers)
         .await
