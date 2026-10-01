@@ -83,9 +83,9 @@ impl From<&crate::review::RequirementDecisionState> for DocumentReviewSummary {
         Self {
             outcome: rejection.map(|_| DocumentReviewOutcome::Rejected),
             pending_proposal_id: None,
-            comment_count: rejection
-                .map(|decision| usize::from(decision.feedback_message_id.is_some()))
-                .unwrap_or(0),
+            comment_count: rejection.map_or(0, |decision| {
+                usize::from(decision.feedback_message_id.is_some())
+            }),
         }
     }
 }
@@ -100,7 +100,7 @@ pub struct DocumentReviewTotals {
 }
 
 impl DocumentReviewTotals {
-    pub fn include(&mut self, summary: &DocumentReviewSummary) {
+    pub const fn include(&mut self, summary: &DocumentReviewSummary) {
         match summary.outcome {
             Some(DocumentReviewOutcome::Pending) => self.pending += 1,
             Some(DocumentReviewOutcome::Accepted) => self.accepted += 1,
