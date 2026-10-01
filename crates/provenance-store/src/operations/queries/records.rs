@@ -64,7 +64,7 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
     let (cursor, mut position) = Cursor::open(
         ctx,
         "search",
-        &(&needle, &wanted, request.limit),
+        &(&needle, &wanted, request.limit, request.exclude_terminal),
         request.cursor.as_deref(),
     )?;
     let mut matched = Vec::new();
@@ -82,7 +82,14 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
         };
         loop {
             let count = (request.limit + 1 - matched.len()).min(512 - scanned);
-            let ids = nodes::search_ids(ctx.snapshot(), kind, &after, count).await?;
+            let ids = nodes::search_ids(
+                ctx.snapshot(),
+                kind,
+                &after,
+                count,
+                request.exclude_terminal,
+            )
+            .await?;
             let exhausted = ids.len() < count;
             for id in ids {
                 let node = nodes::page_node(ctx.snapshot(), kind, &id)

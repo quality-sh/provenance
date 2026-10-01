@@ -15,7 +15,7 @@ test('the host passes the named configuration, token, and Requirement to the ren
   assert.match(source, /session\.open\(requirement\.value\.trim\(\)\)/);
 });
 
-test('the host does not keep the retired store adapter or SDK client', () => {
+test('the host does not keep the old store adapter or SDK client', () => {
   assert.doesNotMatch(source, /loadReviewStore|CursorReviewStore|DocumentLoader|HttpClient/);
   assert.doesNotMatch(source, /@quality-sh\/provenance\/client/);
 });

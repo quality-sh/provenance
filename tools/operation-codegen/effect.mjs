@@ -5,6 +5,7 @@ import { clientTypeSchema } from './typescript-schema.mjs';
 import { hoistSharedFamilies, discriminatedUnions } from './contract-families.mjs';
 import { renderNested, substitute, declaration, formatLongTypes } from './contract-render.mjs';
 import { FAILURE_STATUS, failureKinds } from './grammar-lint.mjs';
+import { exactQuerySuccesses } from './query-successes.mjs';
 
 function pascal(value) {
   return value.split(/[^a-zA-Z0-9]+/).filter(Boolean)
@@ -12,6 +13,7 @@ function pascal(value) {
 }
 
 export async function effectFiles(document) {
+  document = exactQuerySuccesses(document);
   // Family hoisting names structurally identical per-operation schemas once.
   // It runs on the raw document so the wire validators below keep the full
   // validation truth, including validation-only cross-field anyOf conditions.
@@ -83,10 +85,11 @@ export async function effectFiles(document) {
   const declarations = [...bodies.entries()].sort(([a], [b]) => a.localeCompare(b))
     .map(([name, body]) => declaration(name, body))
     .join('\n');
+  const views = unionViews(contract);
   const assembled = formatLongTypes(rewritten + '\n'
     + '// Factored families: one declaration per shared component, bodies byte-equal\n'
     + '// to what the generator inlined before factoring.\n'
-    + declarations + unionViews(contract));
+    + declarations + views.types);
 
   return {
     'effect-client.ts': effectClient(contract),
@@ -97,6 +100,7 @@ export async function effectFiles(document) {
       + 'import * as wire from "./effect-validators.mjs";\n'
       + validatorImports.join('\n') + '\n'
       + assembled,
+    'effect-matchers.ts': '// Generated from OpenAPI. Do not edit.\n' + views.matchers,
     ...await validators(contract, names, 'effect-validators', false),
   };
 }
@@ -275,7 +279,9 @@ export function unionViews(contract) {
       reserved.add(name);
     }
   }
-  const sections = namesFor.map(({ union, aliases, matcher }) => {
+  const typeSections = [];
+  const matcherSections = [];
+  for (const { union, aliases, matcher } of namesFor) {
     const { name, discriminant, consts } = union;
     const literal = value => `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
     const alias = value => aliases.get(value);
@@ -283,9 +289,11 @@ export function unionViews(contract) {
       `export type ${alias(value)} = Extract<${name}, { ${discriminant}: ${literal(value)} }>`);
     const handlerLines = consts.map(value =>
       `  readonly ${validKey(value)}: (value: ${alias(value)}) => K;`);
-    return [
+    typeSections.push([
       `/** Variants and exhaustive dispatch for the ${name} union, derived from the OpenAPI document. */`,
       ...aliasLines,
+    ].join('\n'));
+    matcherSections.push([
       `export function ${matcher}<K>(value: ${name}, handlers: {`,
       ...handlerLines,
       `}): K;`,
@@ -301,13 +309,18 @@ export function unionViews(contract) {
       `  if (handlers._) return handlers._(value);`,
       `  throw new Error(\`unknown ${discriminant} for ${name}: \${String(value.${discriminant})}\`);`,
       `}`,
-    ].join('\n');
-  });
-  if (sections.length === 0) return '';
-  return '\n\n// Derived union views: per-variant aliases and exhaustive matchers.\n'
+    ].join('\n'));
+  }
+  if (typeSections.length === 0) return { types: '', matchers: 'export {};\n' };
+  const imports = namesFor.flatMap(({ union, aliases }) => [union.name, ...aliases.values()]);
+  const header = '\n\n// Derived union views: per-variant aliases and exhaustive matchers.\n'
     + '// These are generated views of the schemas above; the wire keeps its\n'
-    + '// discriminant fields and no runtime representation changes.\n'
-    + sections.join('\n\n') + '\n';
+    + '// discriminant fields and no runtime representation changes.\n';
+  return {
+    types: header + typeSections.join('\n\n') + '\n',
+    matchers: `import type { ${imports.join(', ')} } from './effect-contract.js';\n`
+      + matcherSections.join('\n\n') + '\n',
+  };
 }
 
 /** Handler keys are the wire consts; quote any that are not plain identifiers. */
