@@ -3,6 +3,14 @@
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+#[path = "safe_fs_no_replace.rs"]
+mod no_replace;
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+use no_replace::with_fallback as rename_no_replace_with;
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+pub use no_replace::NoReplaceUnsupported;
+
 /// A directory handle and the path that anchored it.
 pub struct Directory {
     file: File,
@@ -205,7 +213,13 @@ fn reparse_point_error(role: &str) -> std::io::Error {
 
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
 pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
-    rustix_rename_no_replace(rustix::fs::CWD, from, rustix::fs::CWD, to)
+    rename_no_replace_with(
+        from,
+        to,
+        || rustix_rename_no_replace(rustix::fs::CWD, from, rustix::fs::CWD, to),
+        || std::fs::hard_link(from, to),
+        || std::fs::remove_file(from),
+    )
 }
 
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
@@ -351,7 +365,25 @@ fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<
 
 #[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
 fn rename_no_replace_at(parent: &File, from: &str, to: &str) -> std::io::Result<()> {
-    rustix_rename_no_replace(parent, from, parent, to)
+    rename_no_replace_with(
+        Path::new(from),
+        Path::new(to),
+        || rustix_rename_no_replace(parent, from, parent, to),
+        || {
+            rustix::fs::linkat(
+                parent,
+                from,
+                parent,
+                to,
+                rustix::fs::AtFlags::empty(),
+            )
+            .map_err(std::io::Error::from)
+        },
+        || {
+            rustix::fs::unlinkat(parent, from, rustix::fs::AtFlags::empty())
+                .map_err(std::io::Error::from)
+        },
+    )
 }
 
 #[cfg(target_os = "macos")]
