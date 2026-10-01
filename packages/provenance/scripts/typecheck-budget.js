@@ -25,13 +25,17 @@ export function checkBudgets({ memoryKiB, instantiations }) {
   if (failures.length > 0) throw new Error(`TypeScript budget exceeded: ${failures.join('; ')}`);
 }
 
+export function writeDiagnostics(output, stream = process.stderr) {
+  stream.write(output);
+}
+
 function run() {
   const root = dirname(dirname(fileURLToPath(import.meta.url)));
   const result = spawnSync(process.execPath, [
     join(root, 'node_modules/typescript/bin/tsc'),
     '-p', join(root, 'tsconfig.json'), '--extendedDiagnostics',
   ], { cwd: root, encoding: 'utf8' });
-  process.stdout.write(result.stdout);
+  writeDiagnostics(result.stdout);
   process.stderr.write(result.stderr);
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
