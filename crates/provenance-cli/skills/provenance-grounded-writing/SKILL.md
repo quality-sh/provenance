@@ -46,8 +46,9 @@ reports rather than hiding.
 - **Name.** Does it name a mechanism, threshold, actor, or error condition — or a category
   ("identity," "reporting," "comms")? Categories aren't requirements.
 - **Evidence.** Is there a real locator for the claim — a source clause or a place in the
-  code — or is it explicitly provisional? For graph grounding, attach a requirement source with
-  `requirements source-ref add`; otherwise gap reporting emits `missing_source_refs`. `fog`
+  code — or is it explicitly provisional? For graph grounding, add a citation with
+  `requirements <id> update --relationships-json <json> --if-match <etag>`; otherwise gap
+  reporting emits `missing_source_refs`. `fog`
   is unstructured text attached to a Requirement, while `unsupported` / `exploratory`
   mark ideation evidence or speculation. The CLI reports grounding gaps; it does not
   prevent an ungrounded Requirement or Rule from being active. A Rule's
