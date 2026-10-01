@@ -1,74 +1,66 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSession } from './session.ts';
+import { createSession, type ReviewConfig } from './session.ts';
 
-function document(name: string) {
-  return { name, disposed: 0, dispose() { this.disposed++; } };
-}
+const config: ReviewConfig = {
+  endpoint: 'http://127.0.0.1:1234',
+  repositoryId: 'repo',
+  scope: 'default',
+  dispositionActorIds: ['maintainer'],
+};
 
-test('refresh clears the previous view and refuses failed or superseded loads', async () => {
-  const shown: string[] = [];
+test('open passes all named connection fields and the selected Requirement', async () => {
+  const mounted: unknown[] = [];
+  const session = createSession({
+    mount(options) { mounted.push(options); return () => {}; },
+    connected() {},
+    status() {},
+  });
+  await session.connect('secret', async () => config);
+  session.open('req_root');
+  assert.deepEqual(mounted, [{ ...config, bearer: 'secret', rootId: 'req_root' }]);
+});
+
+test('a new connection unmounts the page and a failed connection clears access', async () => {
   let unmounted = 0;
-  const status: string[] = [];
-  const session = createSession<ReturnType<typeof document>>({
-    mount(value) { shown.push(value.name); return () => { unmounted++; value.dispose(); }; },
-    status(message) { status.push(message); },
+  const statuses: string[] = [];
+  const session = createSession({
+    mount: () => () => { unmounted++; },
+    connected() {},
+    status(message) { statuses.push(message); },
   });
-  const first = document('first');
-  const older = document('older');
-  const newer = document('newer');
-  await session.refresh(async () => first);
-  let finish!: (value: typeof older) => void;
-  const pending = session.refresh(() => new Promise(resolve => { finish = resolve; }));
+  await session.connect('first', async () => config);
+  session.open('req_root');
+  await session.connect('second', async () => { throw new Error('private credential'); });
   assert.equal(unmounted, 1);
-  await session.refresh(async () => newer);
-  finish(older);
+  assert.match(statuses.at(-1)!, /connection refused/i);
+  assert.equal(session.open('req_other'), false);
+  assert.ok(!statuses.join().includes('private credential'));
+});
+
+test('a superseded connection result cannot replace a later one', async () => {
+  const connected: string[] = [];
+  const session = createSession({
+    mount: () => () => {},
+    connected(value) { connected.push(value.repositoryId); },
+    status() {},
+  });
+  let finish!: (value: ReviewConfig) => void;
+  const pending = session.connect('older', () => new Promise(resolve => { finish = resolve; }));
+  await session.connect('newer', async () => ({ ...config, repositoryId: 'newer' }));
+  finish({ ...config, repositoryId: 'older' });
   await pending;
-  assert.deepEqual(shown, ['first', 'newer']);
-  assert.equal(older.disposed, 1);
-  assert.equal(first.disposed, 1);
-  assert.equal(newer.disposed, 0);
-  await session.refresh(async () => { throw new Error('catch_up_failed'); });
-  assert.equal(unmounted, 2);
-  assert.equal(newer.disposed, 1);
-  assert.match(status.at(-1)!, /complete document.*unavailable/i);
-  assert.ok(!status.join().includes('catch_up_failed'));
+  assert.deepEqual(connected, ['newer']);
 });
 
-test('uses only a supplied safe explanation for a known document refusal', async () => {
-  const status: string[] = [];
-  const session = createSession<ReturnType<typeof document>>({ mount: () => () => {}, status: message => { status.push(message); },
-    failure: () => 'Catch-up failed. Refresh after the saved graph is valid.',
-  });
-  await session.refresh(async () => { throw new Error('private credential'); });
-  assert.match(status.at(-1)!, /Catch-up failed/);
-  assert.ok(!status.join().includes('private credential'));
-});
-
-test('mounting a store leaves document completeness and failure to the renderer', async () => {
-  const status: string[] = [];
-  const session = createSession<ReturnType<typeof document>>({
-    mount: value => () => value.dispose(),
-    status: message => { status.push(message); },
-  });
-  for (const state of ['partial', 'error', 'stale', 'complete']) {
-    await session.refresh(async () => document(state));
-    assert.match(status.at(-1)!, /document.*status.*below/i);
-    assert.doesNotMatch(status.at(-1)!, /current|complete|saved working-copy/i);
-  }
-});
-
-test('a superseded failure does not replace the latest status', async () => {
-  const status: string[] = [];
-  const session = createSession<ReturnType<typeof document>>({
-    mount: value => () => value.dispose(),
-    status: message => { status.push(message); },
-  });
+test('a superseded failure cannot replace the latest status', async () => {
+  const statuses: string[] = [];
+  const session = createSession({ mount: () => () => {}, connected() {}, status(message) { statuses.push(message); } });
   let reject!: (error: Error) => void;
-  const pending = session.refresh(() => new Promise((_, fail) => { reject = fail; }));
-  await session.refresh(async () => document('newer'));
-  const latest = [...status];
+  const pending = session.connect('older', () => new Promise((_, fail) => { reject = fail; }));
+  await session.connect('newer', async () => config);
+  const latest = [...statuses];
   reject(new Error('private credential'));
   await pending;
-  assert.deepEqual(status, latest);
+  assert.deepEqual(statuses, latest);
 });
