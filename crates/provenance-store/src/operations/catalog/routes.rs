@@ -2,13 +2,48 @@
 
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
-    ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, HandlerBinding, HeaderBinding,
-    Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration,
-    RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
+    ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, FixedBinding, HandlerBinding,
+    HeaderBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute,
+    Registration, RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction,
+    TargetBinding,
 };
 use provenance_core::NodeType;
 use schemars::generate::Contract;
 use serde_json::{json, Value};
+
+#[allow(dead_code)]
+#[derive(schemars::JsonSchema)]
+struct ReviewStateSchema {
+    edit: provenance_core::review::RequirementEditState,
+    decision: provenance_core::review::RequirementDecisionState,
+}
+
+fn reviewed_resource_schema<T: schemars::JsonSchema>() -> Value {
+    let mut record = schema::type_schema::<T>(Contract::Serialize);
+    let mut state = schema::type_schema::<ReviewStateSchema>(Contract::Serialize);
+    for field in ["properties", "$defs"] {
+        let Some(additions) = state
+            .as_object_mut()
+            .and_then(|schema| schema.remove(field))
+            .and_then(|value| value.as_object().cloned())
+        else {
+            continue;
+        };
+        record
+            .as_object_mut()
+            .expect("record schema must be an object")
+            .entry(field)
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("record schema section must be an object")
+            .extend(additions);
+    }
+    record["required"]
+        .as_array_mut()
+        .expect("record schema must declare required fields")
+        .extend([json!("edit"), json!("decision")]);
+    record
+}
 
 #[allow(clippy::too_many_arguments)]
 fn backed<O: Operation>(
@@ -114,6 +149,14 @@ impl Definition {
         self
     }
 
+    fn fixed(mut self, field: &'static str, value: &'static str) -> Self {
+        self.registration
+            .request
+            .fixed
+            .push(FixedBinding { field, value });
+        self
+    }
+
     fn header(mut self, name: &'static str, field: &'static str, trim_quotes: bool) -> Self {
         self.registration.controls.headers.push(HeaderBinding {
             name,
@@ -196,6 +239,14 @@ impl Definition {
     fn result(mut self) -> Self {
         self.registration.response.adapter = ResponseAdapter::Result;
         let payload = schema::property_schema(&self.registration.response.raw_schema, &["result"]);
+        self.registration.response.schema =
+            schema::response_envelope(payload, self.registration.response.kind);
+        self
+    }
+
+    fn reviewed_result<T: schemars::JsonSchema>(mut self) -> Self {
+        self.registration.response.adapter = ResponseAdapter::Result;
+        let payload = reviewed_resource_schema::<T>();
         self.registration.response.schema =
             schema::response_envelope(payload, self.registration.response.kind);
         self
@@ -409,6 +460,7 @@ pub(super) mod request;
 #[macro_use]
 mod resource;
 mod resources;
+mod review_subresources;
 mod subresources;
 
 pub(super) fn definitions() -> Vec<Definition> {

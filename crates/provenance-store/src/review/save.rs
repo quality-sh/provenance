@@ -28,16 +28,34 @@ impl StateStore {
     ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|| {
             let record = self.requirement(scope, id)?;
-            let review_record = provenance_core::review::ReviewRecord::from(record);
-            let head = self.head(&review_record)?;
-            Ok(RequirementEditState {
-                etag: head
-                    .as_ref()
-                    .map(|e| e.etag.clone())
-                    .unwrap_or(journal::etag(&review_record, None)?),
-                revision: head.as_ref().map(|e| e.revision.clone()),
-                snapshot: head.map(|e| e.after),
-            })
+            self.record_edit_state_for_record(&record.into())
+        })
+    }
+
+    pub fn record_edit_state(
+        &self,
+        scope: &ScopeId,
+        kind: provenance_core::NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<RequirementEditState> {
+        self.with_repository_publication(|| {
+            let record = crate::cache::review_families::record(self, scope, kind, id)?;
+            self.record_edit_state_for_record(&record)
+        })
+    }
+
+    pub(super) fn record_edit_state_for_record(
+        &self,
+        record: &ReviewRecord,
+    ) -> anyhow::Result<RequirementEditState> {
+        let head = self.head(record)?;
+        Ok(RequirementEditState {
+            etag: head
+                .as_ref()
+                .map(|e| e.etag.clone())
+                .unwrap_or(journal::etag(record, None)?),
+            revision: head.as_ref().map(|e| e.revision.clone()),
+            snapshot: head.map(|e| e.after),
         })
     }
 
@@ -380,6 +398,11 @@ mod tests {
         .unwrap();
         let mut after = before.clone();
         after.name = "Policy B".into();
+        let path = crate::shards::sources_path(&store.layout, &after.scope_id);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut bytes = serde_json::to_vec(&after).unwrap();
+        bytes.push(b'\n');
+        std::fs::write(path, bytes).unwrap();
 
         let before = ReviewRecord::from(before);
         let after = ReviewRecord::from(after);

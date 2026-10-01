@@ -7,10 +7,10 @@ use provenance_store::{
     state_store::{
         CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
         CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
+        UpdateRuleInput,
     },
 };
-use serde_json::{json, Value};
-use std::fmt::Write;
+use serde_json::json;
 
 pub struct Repository {
     pub dir: tempfile::TempDir,
@@ -198,19 +198,16 @@ impl Repository {
         found
     }
     pub fn edit(&self, scope: &str, text: &str) {
-        let path =
-            provenance_store::shards::rules_path(&self.layout, &ScopeId::new(scope).unwrap());
-        let mut records: Vec<Value> = std::fs::read_to_string(&path)
-            .unwrap()
-            .lines()
-            .map(|line| serde_json::from_str(line).unwrap())
-            .collect();
-        records[0]["statement"] = json!(text);
-        let mut encoded = String::new();
-        for record in records {
-            writeln!(encoded, "{record}").unwrap();
-        }
-        std::fs::write(path, encoded).unwrap();
+        StateStore::new(self.layout.clone())
+            .update_rule(
+                serde_json::from_value::<UpdateRuleInput>(json!({
+                    "scope_id": scope,
+                    "id": "rule_shared",
+                    "statement": text
+                }))
+                .unwrap(),
+            )
+            .unwrap();
     }
 }
 fn sid(value: &str) -> StableId {

@@ -75,6 +75,21 @@ macro_rules! define_review_families {
         ) -> Vec<camino::Utf8PathBuf> {
             vec![$(crate::shards::$path(layout, scope),)*]
         }
+
+        pub fn record(
+            store: &crate::state_store::StateStore,
+            scope: &provenance_core::ScopeId,
+            kind: NodeType,
+            id: &provenance_core::StableId,
+        ) -> anyhow::Result<ReviewRecord> {
+            match kind {
+                $(NodeType::$kind => store.$reader(scope)?
+                    .into_iter()
+                    .find(|record| record.id == *id)
+                    .map(Into::into),)*
+            }
+            .ok_or_else(|| provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound.into())
+        }
     };
 }
 

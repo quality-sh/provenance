@@ -52,9 +52,9 @@ fn submit(
     revises: Option<&StableId>,
     expected: Option<&str>,
 ) -> anyhow::Result<CycleEntry> {
-    store.submit_requirement_review(
+    store.submit_record_review(
         serde_json::from_value(json!({
-            "scope_id":"default","actor":"agent","requirement_id":"req_a",
+            "scope_id":"default","actor":"agent","record_kind":"requirement","record_id":"req_a",
             "title":"Title", "summary":"Summary", "source_ids":[],
             "evidence_references":[], "builds_on":[],
             "revises":revises,"expected_revision":expected
@@ -69,14 +69,15 @@ fn decide(
     actor: &Value,
     extra: &Value,
 ) -> anyhow::Result<CycleEntry> {
+    let rationale = (decision != "accepted").then_some("Because");
     let mut value = json!({
         "scope_id":"default","actor":actor,"proposal_id":proposal,
-        "decision":decision,"rationale":"Because"
+        "decision":decision,"rationale":rationale
     });
     for (key, extra_value) in extra.as_object().unwrap() {
         value[key] = extra_value.clone();
     }
-    store.decide_requirement_review(serde_json::from_value(value).unwrap())
+    store.decide_record_review(serde_json::from_value(value).unwrap())
 }
 fn reviewer(id: &str) -> Value {
     json!({"identity_type":"human","id":id})
@@ -88,7 +89,7 @@ fn feedback(body: &str) -> Value {
     json!({"feedback":{"role":"user","body":body}})
 }
 fn withdraw(store: &StateStore, proposal: &StableId) -> anyhow::Result<CycleEntry> {
-    store.withdraw_requirement_review(
+    store.withdraw_record_review(
         serde_json::from_value(
             json!({"scope_id":"default","actor":"agent","proposal_id":proposal}),
         )
@@ -294,6 +295,23 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
     );
     assert!(store.list_dispositions(&scope()).unwrap().is_empty());
 
+    refused(
+        decide(
+            &store,
+            &proposal,
+            "accepted",
+            &reviewer("reviewer"),
+            &json!({
+                "rationale":"No rationale is valid for an approval.",
+                "canonical_artifact":{
+                    "artifact_type":"requirement", "artifact_id":"req_a"
+                }
+            }),
+        ),
+        "approval does not take a rationale",
+    );
+    assert!(store.list_dispositions(&scope()).unwrap().is_empty());
+
     // The human existing-artifact path is the qualified exception.
     decide(
         &store,
@@ -448,44 +466,5 @@ mod bypass_tests;
 mod canonical_artifacts;
 #[path = "decision_tests/conflict_tests.rs"]
 mod conflict_tests;
-
-#[test]
-fn legacy_unbound_decisions_read_correctly_and_stay_frozen() {
-    let (_temp, store, _, _) = enrolled();
-    store.create_proposal_card(serde_json::from_value(json!({
-        "scope_id":"default","id":"prop-legacy","proposal_key":"legacy","proposal_type":"requirement_candidate",
-        "title":"Legacy","summary":"Summary","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_a"},
-        "source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"builds_on":[],
-        "promotion_state":"proposed"})).unwrap()).unwrap();
-    store
-        .create_disposition(serde_json::from_value(json!({
-            "scope_id":"default","id":"disp-legacy","proposal_id":"prop-legacy","decision":"accepted",
-            "rationale":"Ratified offline","actor":{"identity_type":"human","id":"reviewer"},
-            "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"}})).unwrap())
-        .unwrap();
-
-    let recorded = state(&store);
-    assert_eq!(recorded.decisions.len(), 1);
-    assert!(
-        recorded.decisions[0].revision.is_none(),
-        "a legacy disposition binds no revision"
-    );
-    assert!(
-        recorded.current_acceptance.is_none(),
-        "a legacy acceptance attests no current content"
-    );
-
-    edit(&store, "edit-2", "Revised statement");
-    assert!(
-        state(&store).current_acceptance.is_none(),
-        "editing keeps historical acceptance only"
-    );
-
-    refused(
-        store.create_disposition(serde_json::from_value(json!({
-            "scope_id":"default","id":"disp-legacy-2","proposal_id":"prop-legacy","decision":"rejected",
-            "rationale":"Rewriting history","actor":{"identity_type":"human","id":"reviewer"}})).unwrap()),
-        "authoritative disposition",
-    );
-    assert_eq!(store.list_dispositions(&scope()).unwrap().len(), 1);
-}
+#[path = "decision_tests/legacy.rs"]
+mod legacy;

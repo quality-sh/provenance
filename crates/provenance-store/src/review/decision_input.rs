@@ -4,35 +4,16 @@ use provenance_core::{
 };
 use serde::{Deserialize, Serialize};
 
-impl DecideRequirementReview {
-    pub(super) fn ensure_canonical_artifact_type_supported(&self) -> anyhow::Result<()> {
-        let Some(artifact) = &self.canonical_artifact else {
-            return Ok(());
-        };
-        crate::write_error::ensure!(
-            InvalidUpdate,
-            matches!(
-                artifact.artifact_type,
-                provenance_core::CanonicalArtifactType::Source
-                    | provenance_core::CanonicalArtifactType::Requirement
-                    | provenance_core::CanonicalArtifactType::Resolution
-                    | provenance_core::CanonicalArtifactType::Rule
-            ),
-            "requirement review decisions support source, requirement, resolution, or rule canonical artifacts"
-        );
-        Ok(())
-    }
-}
-
 /// Submits the record's current review revision as an immutable `proposed`
 /// candidate. The store derives the binding; the caller never states it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SubmitRequirementReview {
+pub struct SubmitRecordReview {
     pub scope_id: ScopeId,
     pub actor: String,
-    pub requirement_id: StableId,
+    pub record_kind: provenance_core::NodeType,
+    pub record_id: StableId,
     /// The owning agent of the record, checked like an edit's `declared_by`.
     pub declared_by: Option<String>,
     pub title: String,
@@ -55,7 +36,7 @@ pub struct SubmitRequirementReview {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DecideRequirementReview {
+pub struct DecideRecordReview {
     pub scope_id: ScopeId,
     pub actor: DispositionActor,
     pub proposal_id: StableId,
@@ -85,7 +66,7 @@ pub struct ReviewFeedback {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct WithdrawRequirementReview {
+pub struct WithdrawRecordReview {
     pub scope_id: ScopeId,
     pub actor: String,
     pub proposal_id: StableId,

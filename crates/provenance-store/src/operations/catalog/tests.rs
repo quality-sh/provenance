@@ -5,6 +5,8 @@ use serde_json::json;
 
 mod ideation;
 #[cfg(feature = "schema")]
+mod review_kinds;
+#[cfg(feature = "schema")]
 mod schema_precision;
 mod scope_mismatch;
 
@@ -230,25 +232,6 @@ fn resource_operations_have_unique_registered_contracts() {
     }
     for retired in ["get", "upsert-contribution", "post-thread-message"] {
         assert!(!unique.contains(retired), "{retired}");
-    }
-}
-
-#[cfg(feature = "schema")]
-#[test]
-fn review_actions_do_not_accept_idempotency_headers() {
-    for name in [
-        "submit-requirement-review",
-        "decide-requirement-review",
-        "withdraw-requirement-review",
-    ] {
-        let definition = super::definitions()
-            .iter()
-            .find(|entry| entry.name == name)
-            .unwrap();
-        assert!(
-            definition.registration.controls.headers.is_empty(),
-            "{name} exposes a client request identity"
-        );
     }
 }
 

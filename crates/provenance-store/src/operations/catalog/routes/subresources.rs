@@ -6,16 +6,7 @@ use crate::operations::catalog::{resource_members as members, resource_pages as 
 
 pub(super) fn register(out: &mut Vec<Definition>) {
     history_and_evidence(out);
-    for (plural, kind) in [
-        ("sources", "source"),
-        ("requirements", "requirement"),
-        ("resolutions", "resolution"),
-        ("rules", "rule"),
-        ("topics", "topic"),
-        ("questions", "question"),
-    ] {
-        discussions(out, plural, kind);
-    }
+    super::review_subresources::register(out);
     proposal_facts(out);
 }
 
@@ -37,51 +28,6 @@ fn history_and_evidence(out: &mut Vec<Definition>) {
             cursor(),
         ],
     ));
-    out.push(
-        backed::<operation::ReviewHistory>(
-            "list-requirement-history",
-            "listRequirementHistory",
-            HttpMethod::Get,
-            "/requirements/{id}/history",
-            "List immutable outcomes for one Requirement.",
-            ResponseKind::Items,
-            vec![schema::path("id"), limit(), cursor()],
-        )
-        .path_field("id", "requirement_id")
-        .items_field("entries")
-        .pagination(),
-    );
-    out.push(
-        backed::<operation::ReviewHistoryEntry>(
-            "get-requirement-history-entry",
-            "getRequirementHistoryEntry",
-            HttpMethod::Get,
-            "/requirements/{id}/history/{entry_id}",
-            "Read one immutable Requirement outcome.",
-            ResponseKind::Result,
-            vec![schema::path("id"), schema::path("entry_id")],
-        )
-        .path_field("id", "requirement_id"),
-    );
-    out.push(
-        backed::<operation::ReviewEvidence>(
-            "get-requirement-history-evidence",
-            "getRequirementHistoryEvidence",
-            HttpMethod::Get,
-            "/requirements/{id}/history/{entry_id}/evidence/{side}",
-            "Read the before or after evidence for one Requirement outcome.",
-            ResponseKind::Result,
-            vec![
-                schema::path("id"),
-                schema::path("entry_id"),
-                schema::path("side"),
-                schema::query("field", json!({"type":"string"})),
-                schema::query("offset", json!({"type":"integer","minimum":0})),
-            ],
-        )
-        .path_field("id", "requirement_id")
-        .result(),
-    );
     out.push(
         backed::<operation::Evidence>(
             "get-rule-evidence",
@@ -184,7 +130,7 @@ fn proposal_fact<L: Operation, G: Operation>(
     );
 }
 
-fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind: &'static str) {
+pub(super) fn discussions(out: &mut Vec<Definition>, plural: &'static str, kind: &'static str) {
     let base = leaked(format!("/{plural}/{{id}}/discussions"));
     let list = discussion_route::<operation::ReviewDiscussions>(
         plural,

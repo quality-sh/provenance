@@ -22,6 +22,26 @@ fn names_of(parameters: &[ApiParameter]) -> Vec<&str> {
         .collect()
 }
 
+fn schema_has_property(document: &Value, schema: &Value, property: &str) -> bool {
+    if schema["properties"].get(property).is_some() {
+        return true;
+    }
+    if let Some(reference) = schema["$ref"].as_str() {
+        return schema_has_property(
+            document,
+            document
+                .pointer(reference.strip_prefix('#').unwrap())
+                .unwrap(),
+            property,
+        );
+    }
+    ["allOf", "anyOf"]
+        .into_iter()
+        .filter_map(|keyword| schema[keyword].as_array())
+        .flatten()
+        .any(|part| schema_has_property(document, part, property))
+}
+
 #[tokio::test]
 #[verifies("rule_porcelain_api_catalog_discovery", examples)]
 async fn api_discovery_describes_the_live_catalog_routes() {
@@ -78,11 +98,13 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         .collect::<Vec<_>>();
     assert_eq!(names, ["id"], "the member base form binds only the path");
     let base_success = base["success_schema"].as_object().unwrap();
-    assert_eq!(
-        base_success["properties"]["data"]["$ref"],
-        json!("#/$defs/Source"),
-        "the base form publishes the source-resource envelope"
-    );
+    let data = &base_success["properties"]["data"];
+    for property in ["name", "edit", "decision"] {
+        assert!(
+            schema_has_property(&Value::Object(base_success.clone()), data, property),
+            "the base form publishes the reviewed source field {property}"
+        );
+    }
     assert_eq!(base_success["required"], json!(["data", "meta"]));
     let neighbors = forms
         .iter()

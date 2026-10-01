@@ -1,3 +1,5 @@
+#[path = "review_validation/record_review_decisions.rs"]
+mod record_review_decisions;
 #[allow(dead_code)]
 mod review_support;
 use provenance_core::{
