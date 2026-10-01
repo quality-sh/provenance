@@ -304,7 +304,7 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
     rule: "1.1",
     disposition: "violation",
     span: { start: 4, end: 18 },
-    message: "Do not use unapproved dictionary words in descriptive text.",
+    message: "The word or phrase \"bunapprovedaaa\" is not approved by ASD-STE100 Rule 1.1.",
   }]);
 }
 
