@@ -406,55 +406,5 @@ pub(super) fn rename_no_replace_in(parent: &File, from: &str, to: &str) -> std::
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reparse_point_messages_include_the_directory_role() {
-        assert_eq!(
-            reparse_point_error("output parent").to_string(),
-            "output parent is a reparse point"
-        );
-        assert_eq!(
-            reparse_point_error("directory").to_string(),
-            "directory is a reparse point"
-        );
-    }
-
-    #[test]
-    fn directory_interface_classifies_children() {
-        let temp = tempfile::tempdir().unwrap();
-        std::fs::create_dir(temp.path().join("directory")).unwrap();
-        std::fs::write(temp.path().join("file"), "content").unwrap();
-        let directory = Directory::open(temp.path(), "directory").unwrap();
-
-        assert_eq!(directory.child_kind("missing").unwrap(), None);
-        assert_eq!(
-            directory.child_kind("directory").unwrap(),
-            Some(ChildKind::Directory)
-        );
-        assert_eq!(directory.child_kind("file").unwrap(), Some(ChildKind::File));
-    }
-
-    #[test]
-    fn directory_rename_does_not_replace_an_existing_child() {
-        let temp = tempfile::tempdir().unwrap();
-        std::fs::write(temp.path().join("source"), "source").unwrap();
-        std::fs::write(temp.path().join("destination"), "destination").unwrap();
-        let directory = Directory::open(temp.path(), "directory").unwrap();
-
-        let error = directory
-            .rename_no_replace("source", "destination")
-            .unwrap_err();
-
-        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
-        assert_eq!(
-            std::fs::read_to_string(temp.path().join("destination")).unwrap(),
-            "destination"
-        );
-        assert_eq!(
-            std::fs::read_to_string(temp.path().join("source")).unwrap(),
-            "source"
-        );
-    }
-}
+#[path = "safe_fs_tests.rs"]
+mod tests;
