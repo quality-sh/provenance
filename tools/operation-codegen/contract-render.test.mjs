@@ -107,16 +107,14 @@ test('generated Effect contract is factored and self-contained', async () => {
   for (const match of source.matchAll(/\b(FailureVariant\w+)\b/g)) {
     assert.ok(declared.has(match[1]), `${match[1]} referenced but never declared`);
   }
-  assert.match(source, /^export type UpdateSourceFailureWriteFailure =/m,
-    'a write operation should retain its typed failure family');
-  assert.match(matchers, /^export function matchUpdateSourceFailureWriteFailure</m,
-    'typed failure families should have exhaustive matchers');
-  for (const operation of ['ListRulesSearchSuccess', 'ListResolutionsSearchSuccess']) {
-    for (const node of ['Rule', 'Resolution']) {
-      const body = source.match(new RegExp(`export type ${operation}${node} = \\{([\\s\\S]*?)\\n\\} &`))?.[1];
-      assert.ok(body, `${operation}${node} should be declared`);
-      assert.match(body, new RegExp(`readonly "created"\\?: ${operation}Stamp2 \\| null`));
-      assert.match(body, new RegExp(`readonly "updated"\\?: ${operation}Stamp2 \\| null`));
-    }
+  assert.match(source, /^export type WriteFailure =/m,
+    'write operations should share one typed failure family');
+  assert.match(matchers, /^export function matchWriteFailure</m,
+    'the shared failure family should have an exhaustive matcher');
+  for (const node of ['Rule', 'Resolution']) {
+    const body = source.match(new RegExp(`export type ${node} = \\{([\\s\\S]*?)\\n\\} &`))?.[1];
+    assert.ok(body, `${node} should be declared once`);
+    assert.match(body, /readonly "created"\?: SharedStamp \| null/);
+    assert.match(body, /readonly "updated"\?: SharedStamp \| null/);
   }
 });

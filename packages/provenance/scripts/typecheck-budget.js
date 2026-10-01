@@ -2,8 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const MAX_MEMORY_KIB = 2_200_000;
-export const MAX_INSTANTIATIONS = 3_300_000;
+export const MAX_MEMORY_KIB = 750_000;
+export const MAX_INSTANTIATIONS = 300_000;
 
 export function parseDiagnostics(output) {
   const memoryKiB = Number(output.match(/^Memory used:\s+(\d+)K$/m)?.[1]);

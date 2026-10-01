@@ -14,13 +14,13 @@ Check time: 39.31s`), {
 
 test('checkBudgets rejects compiler growth above either limit', () => {
   assert.throws(
-    () => checkBudgets({ memoryKiB: 2_200_001, instantiations: 3_300_001 }),
-    /memory 2200001 KiB exceeds 2200000 KiB; instantiations 3300001 exceed 3300000/,
+    () => checkBudgets({ memoryKiB: 750_001, instantiations: 300_001 }),
+    /memory 750001 KiB exceeds 750000 KiB; instantiations 300001 exceed 300000/,
   );
 });
 
 test('checkBudgets accepts diagnostics within both limits', () => {
-  assert.doesNotThrow(() => checkBudgets({ memoryKiB: 2_200_000, instantiations: 3_300_000 }));
+  assert.doesNotThrow(() => checkBudgets({ memoryKiB: 750_000, instantiations: 300_000 }));
 });
 
 test('writeDiagnostics keeps machine-readable stdout clean', () => {
