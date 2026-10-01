@@ -10,6 +10,21 @@ Initialize a repository before you use resource commands:
 provenance init --path . --scope default --path-prefix .
 ```
 
+On a terminal, `init` asks for the human reviewer ID. The prompt uses the Git
+email address or name as its default when one is available. In a
+non-interactive run, `init` uses that default automatically. It converts the
+default to lowercase and replaces other character groups with underscores.
+
+To replace the reviewer list after initialization, run:
+
+```sh
+provenance init --path . --disposition-actor-id reviewer-id
+```
+
+Repeat `--disposition-actor-id` to permit more than one reviewer. Use
+`--clear-disposition-actors` to remove all reviewers. If the reviewer list is
+empty, `provenance review` permits reads but not review decisions.
+
 ## Resource commands
 
 The CLI derives its resource dialect from the operation catalog. The same
