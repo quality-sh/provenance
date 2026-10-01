@@ -109,6 +109,10 @@ It then calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
 `dispositionActorIds`, `bearer`, and `rootId`. The renderer creates and owns the
 generated Effect client.
 
+The pinned renderer reads documents with `exclude_terminal=true`. A refresh
+reloads the document text, submissions, review outcomes, totals, and open
+discussions. It shows the saved review outcome for each supported record kind.
+
 Build that application with the matching renderer to replace the shell with the
 local host entry. The credential stays in page memory and is
 sent only in the Authorization header to the current origin. It does not enter
@@ -133,14 +137,14 @@ this host has no dependency on provenance-boc5.6.
 The pin in [`tools/review-assets.json`](../tools/review-assets.json) identifies:
 
 - Source repository: `quality-sh/provenance-web`.
-- Merged commit: `207f63ec68a70c9b2483acfe6d77e769d30d88c6` (PR 20).
-- Validated author commit: `967c45c5dbeec49cdaf86c22bcdb575fb21c8b1a`.
-- Successful [Review assets run 36707725354](https://github.com/quality-sh/provenance-web/actions/runs/36707725354).
+- Merged commit: `9ace8e98394a49481260f003064a6700bcf4cc96` (PR 22).
+- Validated author commit: `0d8af02b23c470f296a64eadb983d98d57844130`.
+- Successful [Review assets run 36836129206](https://github.com/quality-sh/provenance-web/actions/runs/36836129206).
 - Archive: `provenance-review.tar.gz`.
-- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-207f63ec68a7/provenance-review.tar.gz).
-- SHA-256: `394f4c04ad004eb90c75050256d967df00c99bb5890679617af0d199258d7fac`.
-- Archive size: 2,371,543 bytes.
-- Page JavaScript bundle size: 19,785,076 bytes (19.6 MB). Bead
+- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-9ace8e98394a/provenance-review.tar.gz).
+- SHA-256: `8d9a6c98b42332087b593b66309fd815cfb79eef8bd003c751ff2a7cf6fc99a8`.
+- Archive size: 2,635,962 bytes.
+- Page JavaScript bundle size: 19,121,767 bytes (19.1 MB). Bead
   `provenance-boc5.5.22` tracks size reduction.
 
 The upstream entry is `src/browser/main.tsx`; `vite.review.config.ts` builds
@@ -149,8 +153,8 @@ metadata and emits a checksum sidecar. The archive includes `review.js`,
 `review.css`, local fonts under `assets/`, the empty `index.html`,
 `build-info.json`, and `licenses/provenance.txt`. Its renderer contains the
 generated Effect client, but it does not contain a configured application. See the merged
-[browser contract](https://github.com/quality-sh/provenance-web/blob/207f63ec68a70c9b2483acfe6d77e769d30d88c6/src/browser/main.tsx)
-and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/207f63ec68a70c9b2483acfe6d77e769d30d88c6/docs/review-data-layer.md).
+[browser contract](https://github.com/quality-sh/provenance-web/blob/9ace8e98394a49481260f003064a6700bcf4cc96/src/browser/main.tsx)
+and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/9ace8e98394a49481260f003064a6700bcf4cc96/docs/review-data-layer.md).
 
 After the build dependencies are ready, prepare the application and build:
 
