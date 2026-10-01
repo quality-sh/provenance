@@ -164,6 +164,29 @@ export function declaration(name, rendering, limit = 200) {
   return `export type ${name} = ${rendering}`;
 }
 
+/** Keep public names, but reuse a byte-identical type and runtime schema pair. */
+export function reuseSchemaDeclarations(source) {
+  const pattern = /^export type (\w+) = ([\s\S]*?)^export const \1 = (.+)$/gm;
+  const declarations = new Map();
+  return source.replace(pattern, (declaration, name, body, expression) => {
+    const key = `${body.trimEnd()}\0${expression}`;
+    const canonical = declarations.get(key);
+    if (canonical === undefined) {
+      declarations.set(key, name);
+      return declaration;
+    }
+    return `export type ${name} = ${canonical}\nexport const ${name} = ${canonical}`;
+  });
+}
+
+/** Stop declaration emit from expanding the inferred schema behind each named type. */
+export function eraseSchemaInferences(source) {
+  const types = new Set([...source.matchAll(/^export type (\w+) =/gm)].map(match => match[1]));
+  return source.replace(/^export const (\w+) = (.+)$/gm, (line, name, expression) => types.has(name)
+    ? `export const ${name} = generatedSchema<${name}>(${expression})`
+    : line);
+}
+
 const INDEX_SUFFIX = ' & { readonly [x: string]: Schema.Json }';
 
 /**

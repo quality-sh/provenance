@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { topLevelSplit, substitute, declaration } from './contract-render.mjs';
+import {
+  topLevelSplit, substitute, declaration, reuseSchemaDeclarations, eraseSchemaInferences,
+} from './contract-render.mjs';
 
 test('topLevelSplit ignores separators nested in brackets, angles, and strings', () => {
   assert.deepEqual(topLevelSplit('a, b', ', '), ['a', 'b']);
@@ -57,6 +59,42 @@ test('union declarations break one alternative per line when long', () => {
   assert.equal(short, 'export type Short = A | B');
   const long = declaration('Long', `${'A'.repeat(90)} | ${'B'.repeat(90)} | ${'C'.repeat(90)}`);
   assert.match(long, /^export type Long =\n  \| A{90}\n  \| B{90}\n  \| C{90}$/);
+});
+
+test('reuseSchemaDeclarations aliases byte-identical types and runtime schemas', () => {
+  const source = `export type First = {
+  readonly value: string,
+}
+export const First = schema
+export type Second = {
+  readonly value: string,
+}
+export const Second = schema
+export type Distinct = { readonly value: number }
+export const Distinct = schema`;
+  assert.equal(reuseSchemaDeclarations(source), `export type First = {
+  readonly value: string,
+}
+export const First = schema
+export type Second = First
+export const Second = First
+export type Distinct = { readonly value: number }
+export const Distinct = schema`);
+});
+
+test('reuseSchemaDeclarations keeps schemas with different runtime expressions', () => {
+  const source = `export type First = string
+export const First = Schema.String
+export type Second = string
+export const Second = Schema.String.annotate({ identifier: 'Second' })`;
+  assert.equal(reuseSchemaDeclarations(source), source);
+});
+
+test('eraseSchemaInferences gives each exported schema its named type', () => {
+  const source = `export type Item = string
+export const Item = Schema.String`;
+  assert.equal(eraseSchemaInferences(source), `export type Item = string
+export const Item = generatedSchema<Item>(Schema.String)`);
 });
 
 // Invariants of the real generated contract: no thousand-char type lines, the

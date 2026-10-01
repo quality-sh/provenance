@@ -62,7 +62,7 @@
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "build": "npm run prepare:generated && node scripts/clean-build.js && node scripts/generate-release-consumers.js --check && tsc -p tsconfig.json && node scripts/copy-client-validators.js",
+    "build": "npm run prepare:generated && node scripts/clean-build.js && node scripts/generate-release-consumers.js --check && node scripts/typecheck-budget.js && node scripts/copy-client-validators.js",
     "generate:release-consumers": "node scripts/generate-release-consumers.js",
     "prepack": "npm run build && node -e \"require('node:fs').copyFileSync('../../LICENSE', 'LICENSE')\"",
     "test": "npm run build && npm run test:runtime && npm run test:types && npm run test:packed && npm run test:effect:packed",

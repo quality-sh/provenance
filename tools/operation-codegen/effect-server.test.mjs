@@ -94,8 +94,8 @@ test('Effect HttpApi output is shaped for independently served resource groups',
 
 test('Effect HttpApi input schemas use server header casing and optional query keys', async () => {
   const source = (await effectFiles(serverDocument()))['effect-contract.ts'];
-  assert.match(source, /UpdateRuleHeaders = Schema\.Struct\(\{ "if-match": Schema\.String \}\)/);
-  assert.match(source, /ListRulesQuery = Schema\.Struct\(\{ "query": Schema\.String, "base": Schema\.optionalKey\(Schema\.String\), "file": Schema\.optionalKey\(Schema\.String\) \}\)/);
+  assert.match(source, /UpdateRuleHeaders = generatedSchema<UpdateRuleHeaders>\(UpdateRuleParams\)/);
+  assert.match(source, /ListRulesQuery = generatedSchema<ListRulesQuery>\(ListRulesParams\)/);
 });
 
 test('Effect HttpApi failure responses distinguish the status of each failure kind', async () => {
@@ -103,6 +103,12 @@ test('Effect HttpApi failure responses distinguish the status of each failure ki
   const declaration = source.split('\n').find(line => line.startsWith('export type UpdateRule409 ='));
   assert.match(declaration, /"stale"/);
   assert.doesNotMatch(declaration, /"invalid_input"/);
+});
+
+test('Effect schemas expose named types without inferred schema expansion', async () => {
+  const source = (await effectFiles(serverDocument()))['effect-contract.ts'];
+  assert.match(source, /^export const UpdateRule409 = generatedSchema<UpdateRule409>\(Schema\./m);
+  assert.match(source, /^export const ListRulesQuery = generatedSchema<ListRulesQuery>\(/m);
 });
 
 test('an in-memory Effect server accepts writes and optional rule searches with declared statuses', async () => {
