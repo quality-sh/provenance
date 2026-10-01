@@ -262,8 +262,7 @@ impl CycleFacts {
             .iter()
             .map(|d| d.proposal_id.as_str())
             .collect();
-        self
-            .entries
+        self.entries
             .iter()
             .filter(|e| {
                 e.record_kind == kind && e.record_id == *record_id && e.fact == CycleFact::Submitted

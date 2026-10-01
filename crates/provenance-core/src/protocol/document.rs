@@ -33,8 +33,12 @@ pub enum DocumentEntry {
         node: GraphNode,
         review: DocumentReviewSummary,
     },
-    Thread { thread: Thread },
-    Message { message: Message },
+    Thread {
+        thread: Thread,
+    },
+    Message {
+        message: Message,
+    },
 }
 
 /// The current review outcome of one record in a document.

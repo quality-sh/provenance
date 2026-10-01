@@ -34,8 +34,7 @@ impl StateStore {
             let states = records
                 .iter()
                 .map(|(kind, id)| {
-                    let record =
-                        crate::cache::review_families::record(self, scope, *kind, id)?;
+                    let record = crate::cache::review_families::record(self, scope, *kind, id)?;
                     self.record_decision_state_from_parts(
                         &record,
                         &proposals,

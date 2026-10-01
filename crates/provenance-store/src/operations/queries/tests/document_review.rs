@@ -3,9 +3,9 @@ use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview};
 use crate::state_store::{
     AddSourceReferenceInput, CreateQuestionInput, CreateResolutionInput, CreateRuleInput,
-    CreateTopicInput, EditQuestionInput, StateStore, UpdateBoundaryInput,
-    UpdateDomainInput, UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput,
-    UpdateSourceInput, UpdateTopicInput,
+    CreateTopicInput, EditQuestionInput, StateStore, UpdateBoundaryInput, UpdateDomainInput,
+    UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
+    UpdateTopicInput,
 };
 use provenance_core::protocol::ReadDocumentQuery;
 use provenance_core::{
@@ -174,7 +174,11 @@ fn revise(store: &StateStore, kind: NodeType, id: &StableId) {
     let common = json!({"scope_id":"default", "id":id});
     match kind {
         NodeType::Source => store
-            .update_source(input::<UpdateSourceInput>(with(common, "name", "Policy revised")))
+            .update_source(input::<UpdateSourceInput>(with(
+                common,
+                "name",
+                "Policy revised",
+            )))
             .map(|_| ()),
         NodeType::Requirement => store
             .update_requirement(input::<UpdateRequirementInput>(with(
@@ -198,7 +202,11 @@ fn revise(store: &StateStore, kind: NodeType, id: &StableId) {
             )))
             .map(|_| ()),
         NodeType::Domain => store
-            .update_domain(input::<UpdateDomainInput>(with(common, "name", "Payroll policy")))
+            .update_domain(input::<UpdateDomainInput>(with(
+                common,
+                "name",
+                "Payroll policy",
+            )))
             .map(|_| ()),
         NodeType::Boundary => store
             .update_boundary(input::<UpdateBoundaryInput>(with(
@@ -208,7 +216,11 @@ fn revise(store: &StateStore, kind: NodeType, id: &StableId) {
             )))
             .map(|_| ()),
         NodeType::Topic => store
-            .edit_topic(input::<UpdateTopicInput>(with(common, "title", "Revised policy topic")))
+            .edit_topic(input::<UpdateTopicInput>(with(
+                common,
+                "title",
+                "Revised policy topic",
+            )))
             .map(|_| ()),
         NodeType::Question => store
             .edit_question(input::<EditQuestionInput>(with(
@@ -249,9 +261,19 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
         };
         let pending = page(&root, 50, false).await;
         assert_eq!(review(&pending, id.as_str())["outcome"], "pending");
-        assert_eq!(review(&pending, id.as_str())["pending_proposal_id"], first.as_str());
+        assert_eq!(
+            review(&pending, id.as_str())["pending_proposal_id"],
+            first.as_str()
+        );
 
-        decide(&store, &scope, kind, &id, first, DispositionDecision::Accepted);
+        decide(
+            &store,
+            &scope,
+            kind,
+            &id,
+            first,
+            DispositionDecision::Accepted,
+        );
         let accepted = page(&root, 50, false).await;
         assert_eq!(review(&accepted, id.as_str())["outcome"], "accepted");
         assert_eq!(review(&accepted, id.as_str())["comment_count"], 0);
@@ -270,11 +292,21 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
             assert_eq!(review(&revised, id.as_str())["outcome"], Value::Null);
             submit(&store, &scope, kind, &id)
         };
-        decide(&store, &scope, kind, &id, second, DispositionDecision::Rejected);
+        decide(
+            &store,
+            &scope,
+            kind,
+            &id,
+            second,
+            DispositionDecision::Rejected,
+        );
         let rejected = page(&root, 50, false).await;
         assert_eq!(review(&rejected, id.as_str())["outcome"], "rejected");
         let expected_comments = usize::from(!matches!(kind, NodeType::Domain | NodeType::Boundary));
-        assert_eq!(review(&rejected, id.as_str())["comment_count"], expected_comments);
+        assert_eq!(
+            review(&rejected, id.as_str())["comment_count"],
+            expected_comments
+        );
     }
 }
 
@@ -290,7 +322,12 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
         .unwrap()
         .proposal_id;
     assert!(!pending.as_str().is_empty());
-    let accepted = submit(&store, &scope, NodeType::Resolution, &sid("resolution_policy"));
+    let accepted = submit(
+        &store,
+        &scope,
+        NodeType::Resolution,
+        &sid("resolution_policy"),
+    );
     decide(
         &store,
         &scope,
@@ -316,13 +353,19 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
         .unwrap();
 
     let root = root_of(&dir);
-    assert_eq!(page(&root, 50, false).await["review_totals"], json!({
-        "pending":1, "accepted":1, "rejected":1
-    }));
+    assert_eq!(
+        page(&root, 50, false).await["review_totals"],
+        json!({
+            "pending":1, "accepted":1, "rejected":1
+        })
+    );
     let filtered = page(&root, 1, true).await;
-    assert_eq!(filtered["review_totals"], json!({
-        "pending":1, "accepted":1, "rejected":0
-    }));
+    assert_eq!(
+        filtered["review_totals"],
+        json!({
+            "pending":1, "accepted":1, "rejected":0
+        })
+    );
     let cursor = filtered["next_cursor"].as_str().unwrap();
     let next = queries::read_document(
         Some(root),
@@ -337,5 +380,8 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     )
     .await
     .unwrap();
-    assert_eq!(serde_json::to_value(next.result).unwrap()["review_totals"], filtered["review_totals"]);
+    assert_eq!(
+        serde_json::to_value(next.result).unwrap()["review_totals"],
+        filtered["review_totals"]
+    );
 }
