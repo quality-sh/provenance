@@ -117,7 +117,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
             "{family}"
         );
     }
-    assert_eq!(next["stamp"]["live"], json!([]));
+    assert_eq!(next["stamp"]["live"], json!(["canonical"]));
     std::fs::write(path, "invalid JSON\n").unwrap();
     let failed = catalog::invoke_with(
         "read-document",
