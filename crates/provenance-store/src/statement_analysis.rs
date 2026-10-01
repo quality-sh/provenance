@@ -9,6 +9,28 @@ use provenance_ste100::{
 use serde::Serialize;
 use std::collections::BTreeMap;
 
+/// Checks a statement with an optional project dictionary.
+#[must_use]
+pub fn check_statement(
+    statement: &str,
+    dictionary: Option<&DictionaryImport>,
+) -> provenance_ste100::Report {
+    dictionary.map_or_else(
+        || check_descriptive(statement),
+        |dictionary| check_descriptive_with_dictionary(statement, dictionary),
+    )
+}
+
+/// Applies the same statement rules and dictionary selection as direct writes.
+#[must_use]
+pub fn check_project_statement(
+    layout: &crate::layout::ProvenanceLayout,
+    statement: &str,
+) -> provenance_ste100::Report {
+    let dictionary = crate::dictionary_reference::load_project_dictionary(layout);
+    check_statement(statement, dictionary.as_ref())
+}
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StatementRecordKind {
@@ -141,10 +163,7 @@ fn analyze_records<'a>(
         {
             continue;
         }
-        let report = dictionary.map_or_else(
-            || check_descriptive(statement),
-            |dictionary| check_descriptive_with_dictionary(statement, dictionary),
-        );
+        let report = check_statement(statement, dictionary);
         diagnostics.extend(
             report
                 .findings

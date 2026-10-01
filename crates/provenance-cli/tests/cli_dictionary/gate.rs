@@ -66,7 +66,7 @@ fn rule_preflight_matches_the_typed_write_for_the_trial_statement() {
     let (_scratch, repo, index_directory) = setup_dictionary();
     let statement = "A claim amount must use AUD";
     let preflight = check_statement(&repo, &index_directory, statement);
-    assert_named_rule_one_one_finding(&preflight, "claim");
+    assert_named_rule_one_one_finding(&preflight["data"], "claim");
 
     create_requirement(
         &repo,
@@ -106,7 +106,7 @@ fn rule_preflight_matches_the_typed_write_for_the_trial_statement() {
     );
     let refusal = error_json(&output);
     assert_named_rule_one_one_finding(&refusal["report"], "claim");
-    assert_eq!(preflight["findings"], refusal["report"]["findings"]);
+    assert_eq!(preflight["data"]["findings"], refusal["report"]["findings"]);
 }
 
 #[test]
@@ -115,8 +115,8 @@ fn requirement_preflight_matches_the_typed_write_for_the_trial_statement() {
     let statement =
         "Staff must attach at least one receipt before they submit an expense claim";
     let preflight = check_statement(&repo, &index_directory, statement);
-    assert_named_rule_one_one_finding(&preflight, "attach");
-    assert_named_rule_one_one_finding(&preflight, "claim");
+    assert_named_rule_one_one_finding(&preflight["data"], "attach");
+    assert_named_rule_one_one_finding(&preflight["data"], "claim");
 
     let output = create_requirement(&repo, &index_directory, "req_trial", statement);
     assert!(
@@ -126,7 +126,7 @@ fn requirement_preflight_matches_the_typed_write_for_the_trial_statement() {
     let refusal = error_json(&output);
     assert_named_rule_one_one_finding(&refusal["report"], "attach");
     assert_named_rule_one_one_finding(&refusal["report"], "claim");
-    assert_eq!(preflight["findings"], refusal["report"]["findings"]);
+    assert_eq!(preflight["data"]["findings"], refusal["report"]["findings"]);
 }
 
 #[test]
