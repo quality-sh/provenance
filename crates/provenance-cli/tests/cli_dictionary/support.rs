@@ -133,7 +133,11 @@ fn approved_entry(index: usize) -> FixtureEntry {
 }
 
 fn unapproved_entry(index: usize) -> FixtureEntry {
-    let headword = format!("bunapproved{}", alpha_suffix(index));
+    let headword = match index {
+        0 => "attach".to_owned(),
+        index if index + 1 == UNAPPROVED_TABLE_ROWS => "claim".to_owned(),
+        index => format!("bunapproved{}", alpha_suffix(index - 1)),
+    };
     FixtureEntry {
         word: format!("{headword} (n)"),
         meaning: "ITEM (n)".to_owned(),
