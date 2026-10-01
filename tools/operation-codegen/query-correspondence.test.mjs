@@ -80,6 +80,7 @@ test('Promise generation overloads selectors and validates the selected contract
 test('Rust generation uses a closed query input and decodes the selected result', () => {
   const files = rustClientFiles(document, { wire: 2, state: 1, review_journal: 1, read_derivation: 1 });
   const source = files['operations/get_rule.rs'];
+  const operationFailures = files['operation_failures.rs'];
   assert.match(source, /pub enum GetRuleInput<'a>/);
   assert.match(source, /Base\(Box<GetRuleBaseSuccess>\)/);
   assert.match(source, /GetRuleInput::Base \{ id \} => self\.get_rule_base\(id\)\.await/);
@@ -88,6 +89,8 @@ test('Rust generation uses a closed query input and decodes the selected result'
   assert.doesNotMatch(source, /"\/rules\/\{id\}"/);
   assert.match(source, /runtime::validate\(&value, "GetRuleTraceSuccess"/);
   assert.match(source, /GetRuleOutput::Trace/);
+  assert.match(operationFailures, /GetRule\(Box<GetRuleFailure>\)/);
+  assert.doesNotMatch(operationFailures, /GetRule\(Box<crate::types::GetRuleFailure>\)/);
 });
 
 test('Rust generation distinguishes required and optional query fields', () => {

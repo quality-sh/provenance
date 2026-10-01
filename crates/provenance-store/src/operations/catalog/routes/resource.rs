@@ -133,3 +133,59 @@ macro_rules! resource {
         );
     }};
 }
+
+macro_rules! review_resource {
+    ($out:ident, $mode:ident, $ty:ty, $list:ty, $member:ty, $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal, $create:ty, $update:ty, $create_defaults:expr, $create_aliases:expr, $update_defaults:expr, $update_aliases:expr, $nullable:expr, $target_kind:expr) => {{
+        $out.push(collection!(
+            $mode, $ty, $list, $plural, $plural_id, $singular
+        ));
+        let member = backed::<members::GetReviewedResource>(
+            concat!("get-", $singular),
+            concat!("get", $singular_id),
+            HttpMethod::Get,
+            concat!("/", $plural, "/{id}"),
+            concat!("Read one ", $singular, " with its edit and decision state."),
+            ResponseKind::Resource,
+            member_parameters_for!($mode),
+        )
+        .reviewed_result::<$ty>()
+        .fixed(
+            "record_kind",
+            <$ty as provenance_core::review::ReviewRecordKind>::KIND.as_str(),
+        )
+        .with_etag("/edit/etag", false);
+        let queries = registered_member_queries!($mode, &member, $singular);
+        $out.push(with_query_results(member, queries));
+        $out.push(
+            backed::<$create>(
+                concat!("create-", $singular),
+                concat!("create", $singular_id),
+                HttpMethod::Post,
+                concat!("/", $plural),
+                concat!("Create one ", $singular, " in the bound scope."),
+                ResponseKind::Resource,
+                Vec::new(),
+            )
+            .scope("scope_id")
+            .cli_defaults($create_defaults)
+            .argument_aliases($create_aliases)
+            .target(TargetAction::Create, $target_kind),
+        );
+        $out.push(
+            backed::<$update>(
+                concat!("update-", $singular),
+                concat!("update", $singular_id),
+                HttpMethod::Patch,
+                concat!("/", $plural, "/{id}"),
+                concat!("Apply a partial change to one ", $singular, "."),
+                ResponseKind::Resource,
+                vec![schema::path("id")],
+            )
+            .scope("scope_id")
+            .cli_defaults($update_defaults)
+            .argument_aliases($update_aliases)
+            .public_patch($nullable)
+            .target(TargetAction::Update, $target_kind),
+        );
+    }};
+}

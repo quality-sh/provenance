@@ -13,8 +13,10 @@ pub(crate) fn new_request_id() -> provenance_core::StableId {
     journal::new_id()
 }
 
-fn owner_matches(record: &provenance_core::Requirement, owner: Option<&str>) -> anyhow::Result<()> {
-    if record.declared_by.as_deref() != owner {
+fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
+    let value = serde_json::to_value(record)?;
+    let declared_by = value.get("declared_by").and_then(serde_json::Value::as_str);
+    if declared_by != owner {
         return Err(crate::write_error::SourceFailure::wrap(
             crate::write_error::WriteFailure::RecordOwnershipConflict,
             anyhow::anyhow!("declared_by must match the existing owner"),
@@ -63,7 +65,7 @@ mod discussion_recovery_tests;
 
 mod decision_input;
 pub use decision_input::{
-    DecideRequirementReview, ReviewFeedback, SubmitRequirementReview, WithdrawRequirementReview,
+    DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
 mod automatic_submission;
 mod decision;

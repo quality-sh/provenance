@@ -95,13 +95,13 @@ fn history_evidence_requests_refuse_invented_sides_at_the_type() {
     for side in ["sideways", "", "BEFORE"] {
         let request: Result<crate::operations::catalog::HistoryEvidenceRequest, _> =
             serde_json::from_value(
-                json!({"requirement_id": "requirement_a", "entry_id": "entry_a", "side": side}),
+                json!({"record_kind": "requirement", "record_id": "requirement_a", "entry_id": "entry_a", "side": side}),
             );
         assert!(request.is_err(), "side {side} is not a published value");
     }
     let request: crate::operations::catalog::HistoryEvidenceRequest =
         serde_json::from_value(json!({
-            "requirement_id": "requirement_a", "entry_id": "entry_a", "side": "after"
+            "record_kind": "requirement", "record_id": "requirement_a", "entry_id": "entry_a", "side": "after"
         }))
         .unwrap();
     assert_eq!(

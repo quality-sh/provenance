@@ -31,6 +31,23 @@ fn growing_catalog_uses_schema_family_indexes() {
 }
 
 #[test]
+fn many_schema_families_use_bounded_root_indexes() {
+    let mut schemas = Map::new();
+    for family in 0..520 {
+        component(
+            &format!("Family{family}Output"),
+            json!({"type":"object","properties":{"value":{"type":"string"}}}),
+            &mut schemas,
+        );
+    }
+    let files = rust_types(&json!({"components":{"schemas":schemas}})).unwrap();
+    assert!(files.keys().any(|path| path.starts_with("family_indexes/")));
+    for (path, source) in &files {
+        assert!(source.lines().count() <= 500, "oversized {path}");
+    }
+}
+
+#[test]
 fn primitive_conversions_stay_with_the_model_that_owns_them() {
     let mut schemas = Map::new();
     component(

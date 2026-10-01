@@ -6,6 +6,8 @@ use serde_json::json;
 mod ideation;
 mod review_identity;
 #[cfg(feature = "schema")]
+mod review_kinds;
+#[cfg(feature = "schema")]
 mod schema_precision;
 mod scope_mismatch;
 

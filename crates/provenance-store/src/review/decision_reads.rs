@@ -9,7 +9,7 @@ use super::decision_state::CycleFacts;
 use crate::state_store::StateStore;
 use provenance_core::{
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
-    DispositionDecision, IdeationTargetType, ProposalType, ScopeId, StableId,
+    DispositionDecision, NodeType, ProposalType, ScopeId, StableId,
 };
 use provenance_macros::rule;
 
@@ -23,14 +23,33 @@ impl StateStore {
         scope: &ScopeId,
         requirement_id: &StableId,
     ) -> anyhow::Result<RequirementDecisionState> {
-        let record = self.requirement(scope, requirement_id)?;
-        let head = self.head(&record.into())?;
+        self.record_decision_state(scope, NodeType::Requirement, requirement_id)
+    }
+
+    pub fn record_decision_state(
+        &self,
+        scope: &ScopeId,
+        kind: NodeType,
+        record_id: &StableId,
+    ) -> anyhow::Result<RequirementDecisionState> {
+        let record = crate::cache::review_families::record(self, scope, kind, record_id)?;
+        self.record_decision_state_for_record(&record)
+    }
+
+    pub(super) fn record_decision_state_for_record(
+        &self,
+        record: &provenance_core::review::ReviewRecord,
+    ) -> anyhow::Result<RequirementDecisionState> {
+        let scope = record.scope_id();
+        let kind = record.kind();
+        let record_id = record.id();
+        let head = self.head(record)?;
+        let current_revision = head.as_ref().map(|entry| entry.revision.clone());
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         let facts = CycleFacts::validated(self, scope)?;
         let targets_record = |target: &provenance_core::IdeationTarget| {
-            target.artifact_type == IdeationTargetType::Requirement
-                && target.artifact_id == *requirement_id
+            NodeType::from(target.artifact_type) == kind && target.artifact_id == *record_id
         };
         let submissions: Vec<_> = proposals
             .iter()
@@ -40,11 +59,12 @@ impl StateStore {
             })
             .collect();
         let pending = facts
-            .pending_submission(
+            .pending_submission_at_revision(
                 self,
                 scope,
-                provenance_core::NodeType::Requirement,
-                requirement_id,
+                kind,
+                record_id,
+                current_revision.as_ref(),
             )?
             .map(|entry| {
                 let proposal = submissions
@@ -90,18 +110,17 @@ impl StateStore {
             .filter(|decision| decision.disposition.decision == DispositionDecision::Accepted)
             .find(|decision| {
                 decision.revision.is_some()
-                    && decision.revision.as_ref() == head.as_ref().map(|entry| &entry.revision)
+                    && decision.revision.as_ref() == current_revision.as_ref()
             })
             .cloned();
         Ok(RequirementDecisionState {
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: requirement_id.clone(),
-            current_revision: head.map(|entry| entry.revision),
+            record_kind: kind,
+            record_id: record_id.clone(),
+            current_revision,
             pending,
             current_acceptance,
             decisions: recorded,
-            withdrawn: facts
-                .withdrawn_submissions(provenance_core::NodeType::Requirement, requirement_id),
+            withdrawn: facts.withdrawn_submissions(kind, record_id),
         })
     }
 }

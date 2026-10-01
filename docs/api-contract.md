@@ -34,6 +34,10 @@ Collections:
   `verification-runs`, `verification-bindings`.
 - Read-only scope indexes: `discussion-containers`, `messages`, `assertions`,
   `dispositions`. An index entry carries the canonical parent address.
+- The optional `exclude_terminal` Boolean query parameter applies to graph
+  collection lists and searches. When it is `true`, the result excludes
+  archived Rules and abandoned Resolutions. A superseded Resolution stays in
+  the result. The default is `false`.
 
 Subresources have parent-owned addresses:
 
@@ -44,13 +48,15 @@ Subresources have parent-owned addresses:
   document when its only document link is an abandoned Resolution. The
   abandoned Resolution and its discussions stay out of the document. The
   default is `false` so that omission keeps the complete historical view.
-- `GET /requirements/{id}/history[/{entry_id}]` reads immutable outcomes.
-- `GET /requirements/{id}/history/{entry_id}/evidence/{side}` reads a
-  before or after snapshot span.
+- `GET /{collection}/{id}/history[/{entry_id}]` reads immutable outcomes for
+  each graph record kind.
+- `GET /{collection}/{id}/history/{entry_id}/evidence/{side}` reads a before or
+  after snapshot span for each graph record kind.
 - `GET /rules/{id}/evidence` reads implementation, verification, and
   Requirement-change evidence.
-- `GET|POST /{collection}/{id}/discussions` lists or starts concerns for the six
-  supported parent kinds.
+- `GET|POST /{collection}/{id}/discussions` lists or starts concerns for Source,
+  Requirement, Resolution, Rule, Topic, and Question records. Domain and
+  Boundary records have no Discussion routes.
 - `GET|PATCH /{collection}/{id}/discussions/{discussion_id}` reads a concern or
   changes its permitted status.
 - `GET|POST /{collection}/{id}/discussions/{discussion_id}/messages[/{message_id}]`
@@ -66,8 +72,9 @@ Subresources have parent-owned addresses:
 Actions are POSTs on a resource path with one declared action name:
 
 - Topics: `claim`, `release`, `close`. Questions: `claim`, `release`, `answer`.
-- Requirement review: `POST /requirements/{id}/submit`, and
-  `POST /requirements/{id}/submissions/{proposal_id}/decide|withdraw`.
+- Record review: `POST /{collection}/{id}/submit`, and
+  `POST /{collection}/{id}/submissions/{proposal_id}/decide|withdraw`, for each
+  graph record kind.
   Submit creates the Proposal ID and Proposal key and returns both values. A
   client uses the returned Proposal ID in a later decide or withdraw path.
   Decide creates and returns the Disposition ID. The separate submit and
@@ -100,22 +107,24 @@ replay a write, and no client-side uncertain-write ledger exists. The journal
 resolves an interrupted publication inside the Store. The legacy receipt
 operations have no public replacement.
 
-Requirement writes use one guarded path. The review layer is the editing
-interface. `POST /requirements` creates a Requirement. `PATCH /requirements/{id}`
-edits one under its ETag and enrollment preconditions. No parallel write surface
-exists. The read side merges the same way: `GET /requirements/{id}` returns one
-resource read carrying the edit state, the relationships, the ETag, and the
-decision state together, so the separate edit-state and decision-state reads of
-the #273 review surface have no successor.
+Graph record writes use one guarded path for each kind. The review layer is the
+editing interface. A collection POST creates a record. A collection member PATCH
+edits a record under its enrollment preconditions. A Requirement PATCH also
+uses its ETag precondition. No parallel write surface exists. The read side
+merges the same way: a graph record member GET returns one resource read carrying
+the edit state, the relationships, the ETag, and the decision state together.
+The separate edit-state and decision-state reads of the #273 review surface have
+no successor.
 
-`POST /requirements` publishes the new Requirement and its first review
-submission in one state write. A PATCH that changes review content publishes the
-new revision and a new submission in one state write. The prior pending
-submission becomes superseded; the client does not withdraw it. A PATCH that
-changes only lifecycle status keeps the current revision and submission. Create
-and PATCH responses carry the current submission under `decision.pending`,
-including its server-created Proposal ID and revision. Superseded Proposals,
-decisions, and feedback remain readable through their history resources.
+A collection POST publishes the new graph record and its first review submission
+in one state write. A PATCH that changes review content publishes the new
+revision and a new submission in one state write. The prior pending submission
+becomes superseded; the client does not withdraw it. A PATCH that changes only
+lifecycle status keeps the current revision and submission. The current member
+read carries the current submission under `decision.pending`, including its
+server-created Proposal ID and revision. Each decision binds the exact submitted
+record revision. Superseded Proposals, decisions, feedback, and before and after
+evidence remain readable through their history resources.
 
 ## 3. Envelope
 
@@ -147,6 +156,10 @@ returns them.
 
 A decide request can omit `rationale` for an accepted or deferred decision. A
 rejected decision must include a nonempty `rationale`.
+
+A decision on a Domain or Boundary can carry a Disposition rationale. It cannot
+carry Discussion feedback. The server refuses such feedback with the typed
+`unsupported_review_feedback` error.
 
 ## 4. PATCH semantics
 
@@ -213,11 +226,11 @@ names, mutation classification, preconditions, receipts, paging, and statuses.
 Query parameter names use snake_case. A parameter that is omitted uses the
 default in its request schema.
 
-The document cursor binds `exclude_terminal`, the page limit, and the
-Requirement ID. A client must send the same values on each continuation. A
-filtered cursor is invalid in an unfiltered request, and an unfiltered cursor is
-invalid in a filtered request. The filter applies before the page limit and the
-`has_more` calculation.
+Collection, search, and document cursors bind `exclude_terminal`. The document
+cursor also binds the page limit and Requirement ID. A client must send the
+same values on each continuation. A filtered cursor is invalid in an
+unfiltered request, and an unfiltered cursor is invalid in a filtered request.
+The filter applies before the page limit and the `has_more` calculation.
 
 The generator linter rejects repository or scope path prefixes, relationship
 routes, legacy verb routes, duplicate bindings, unresolved path parameters,

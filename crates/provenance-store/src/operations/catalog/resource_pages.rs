@@ -17,6 +17,8 @@ pub struct ResourcePageRequest {
     #[serde(default = "default_limit")]
     pub limit: usize,
     pub cursor: Option<String>,
+    #[serde(default)]
+    pub exclude_terminal: bool,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -118,11 +120,13 @@ async fn projection_page<K: ProjectionRow>(
     request: ResourcePageRequest,
 ) -> anyhow::Result<ResourcePage<K>> {
     validate_limit(request.limit)?;
-    let (cursor, position) =
-        Cursor::open(ctx, operation, &request.limit, request.cursor.as_deref())?;
+    let selector = (request.limit, request.exclude_terminal);
+    let (cursor, position) = Cursor::open(ctx, operation, &selector, request.cursor.as_deref())?;
     ctx.snapshot().bound_page_work().await?;
     let table = ctx.snapshot().table::<K>();
-    let ids = table.search_ids(&position.id, request.limit + 1).await?;
+    let ids = table
+        .search_ids(&position.id, request.limit + 1, request.exclude_terminal)
+        .await?;
     let table = &table;
     let (items, position, has_more) = collect_page(ids, request.limit, position, |id| async move {
         table.resource_record(&id).await
@@ -137,8 +141,8 @@ async fn payload_page<T: PayloadRow>(
     request: ResourcePageRequest,
 ) -> anyhow::Result<ResourcePage<T>> {
     validate_limit(request.limit)?;
-    let (cursor, position) =
-        Cursor::open(ctx, operation, &request.limit, request.cursor.as_deref())?;
+    let selector = (request.limit, request.exclude_terminal);
+    let (cursor, position) = Cursor::open(ctx, operation, &selector, request.cursor.as_deref())?;
     ctx.snapshot().bound_page_work().await?;
     let payloads = ctx.snapshot().payloads::<T>();
     let ids = payloads.ids(&position.id, request.limit + 1).await?;

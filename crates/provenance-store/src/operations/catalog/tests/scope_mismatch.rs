@@ -95,13 +95,14 @@ async fn assert_review_scope_mismatch(operation: &str, request: Value) {
 }
 
 #[tokio::test]
-async fn submit_requirement_review_rejects_a_scope_mismatch_without_writing() {
+async fn submit_record_review_rejects_a_scope_mismatch_without_writing() {
     assert_review_scope_mismatch(
-        "submit-requirement-review",
+        "submit-record-review",
         json!({
             "scope_id": "other",
             "actor": "agent",
-            "requirement_id": "req_one",
+            "record_kind": "requirement",
+            "record_id": "req_one",
             "declared_by": null,
             "title": "Review title",
             "summary": "Review summary",
@@ -117,12 +118,13 @@ async fn submit_requirement_review_rejects_a_scope_mismatch_without_writing() {
 }
 
 #[tokio::test]
-async fn decide_requirement_review_rejects_a_scope_mismatch_without_writing() {
+async fn decide_record_review_rejects_a_scope_mismatch_without_writing() {
     assert_review_scope_mismatch(
-        "decide-requirement-review",
+        "decide-record-review",
         json!({
             "scope_id": "other",
-            "requirement_id": "req_one",
+            "record_kind": "requirement",
+            "record_id": "req_one",
             "actor": {"identity_type": "human", "id": "reviewer"},
             "proposal_id": "proposal_one",
             "decision": "rejected",
@@ -136,12 +138,13 @@ async fn decide_requirement_review_rejects_a_scope_mismatch_without_writing() {
 }
 
 #[tokio::test]
-async fn withdraw_requirement_review_rejects_a_scope_mismatch_without_writing() {
+async fn withdraw_record_review_rejects_a_scope_mismatch_without_writing() {
     assert_review_scope_mismatch(
-        "withdraw-requirement-review",
+        "withdraw-record-review",
         json!({
             "scope_id": "other",
-            "requirement_id": "req_one",
+            "record_kind": "requirement",
+            "record_id": "req_one",
             "actor": "agent",
             "proposal_id": "proposal_one",
             "declared_by": null,

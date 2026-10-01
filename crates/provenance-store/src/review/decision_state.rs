@@ -4,7 +4,7 @@
 use crate::state_store::StateStore;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
-    DispositionDecision, IdeationTargetType, NodeType, ProposalType, ScopeId, StableId,
+    DispositionDecision, NodeType, ProposalType, ScopeId, StableId,
 };
 
 const MAX_SAFE_SEQUENCE: u64 = (1 << 53) - 1;
@@ -138,11 +138,14 @@ impl CycleFacts {
             .any(|e| e.fact == CycleFact::Decided && e.proposal_id == *proposal)
     }
 
-    pub(super) fn submission_requirement(&self, proposal: &StableId) -> anyhow::Result<&StableId> {
+    pub(super) fn submission_address(
+        &self,
+        proposal: &StableId,
+    ) -> anyhow::Result<(NodeType, &StableId)> {
         self.entries
             .iter()
             .find(|entry| entry.fact == CycleFact::Submitted && entry.proposal_id == *proposal)
-            .map(|entry| &entry.record_id)
+            .map(|entry| (entry.record_kind, &entry.record_id))
             .ok_or_else(|| anyhow::anyhow!("the proposal has no review submission cycle entry"))
     }
 
@@ -215,10 +218,27 @@ impl CycleFacts {
         store: &StateStore,
         scope: &ScopeId,
         kind: NodeType,
-        requirement: &StableId,
+        record_id: &StableId,
     ) -> anyhow::Result<Option<CycleEntry>> {
-        let record = store.requirement(scope, requirement)?;
-        let current_revision = store.head(&record.into())?.map(|entry| entry.revision);
+        let record = crate::cache::review_families::record(store, scope, kind, record_id)?;
+        let current_revision = store.head(&record)?.map(|entry| entry.revision);
+        self.pending_submission_at_revision(
+            store,
+            scope,
+            kind,
+            record_id,
+            current_revision.as_ref(),
+        )
+    }
+
+    pub(super) fn pending_submission_at_revision(
+        &self,
+        store: &StateStore,
+        scope: &ScopeId,
+        kind: NodeType,
+        record_id: &StableId,
+        current_revision: Option<&StableId>,
+    ) -> anyhow::Result<Option<CycleEntry>> {
         let proposals = store.list_proposal_definitions(scope)?;
         let dispositions = store.list_dispositions(scope)?;
         let decided: std::collections::BTreeSet<&str> = dispositions
@@ -229,9 +249,7 @@ impl CycleFacts {
             .entries
             .iter()
             .filter(|e| {
-                e.record_kind == kind
-                    && e.record_id == *requirement
-                    && e.fact == CycleFact::Submitted
+                e.record_kind == kind && e.record_id == *record_id && e.fact == CycleFact::Submitted
             })
             .filter(|e| {
                 !decided.contains(e.proposal_id.as_str()) && !self.is_withdrawn(&e.proposal_id)
@@ -241,7 +259,7 @@ impl CycleFacts {
                     .iter()
                     .find(|proposal| proposal.id == entry.proposal_id)
                     .and_then(|proposal| proposal.record_revision.as_ref())
-                    .is_some_and(|binding| Some(&binding.revision) == current_revision.as_ref())
+                    .is_some_and(|binding| Some(&binding.revision) == current_revision)
             })
             .cloned()
             .next_back())
@@ -251,15 +269,16 @@ impl CycleFacts {
         &self,
         store: &StateStore,
         scope: &ScopeId,
-        requirement: &StableId,
+        kind: NodeType,
+        record_id: &StableId,
     ) -> anyhow::Result<crate::write_error::WriteFailure> {
-        let record = store.requirement(scope, requirement)?;
+        let record = crate::cache::review_families::record(store, scope, kind, record_id)?;
         let current_revision = store
-            .head(&record.into())?
+            .head(&record)?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?
             .revision;
         let current_submission = self
-            .pending_submission(store, scope, NodeType::Requirement, requirement)?
+            .pending_submission(store, scope, kind, record_id)?
             .map(|entry| entry.proposal_id);
         Ok(crate::write_error::WriteFailure::ReviewSubmissionConflict {
             current_submission,
@@ -268,10 +287,8 @@ impl CycleFacts {
     }
 }
 
-/// The proposal must be a bound review submission of a Requirement, because
-/// the decision cycle addresses exactly that. Other proposals keep the
-/// ordinary disposition paths, and a Question opens discussion without a
-/// disposition.
+/// The proposal must be a bound record-review submission. Other proposals
+/// keep the ordinary disposition paths.
 pub(super) fn review_submission(
     store: &StateStore,
     scope: &ScopeId,
@@ -286,10 +303,6 @@ pub(super) fn review_submission(
         proposal.proposal_type == ProposalType::RecordRevision && proposal.record_revision.is_some(),
         "decision-cycle operations address record_revision submissions; other proposals keep their own disposition paths"
     );
-    anyhow::ensure!(
-        proposal.traceability.target.artifact_type == IdeationTargetType::Requirement,
-        "the decision cycle currently addresses Requirements"
-    );
     Ok(proposal)
 }
 
@@ -300,7 +313,8 @@ pub(super) fn validated_resubmission(
     store: &StateStore,
     scope: &ScopeId,
     predecessor: &StableId,
-    requirement: &StableId,
+    kind: NodeType,
+    record_id: &StableId,
 ) -> anyhow::Result<StableId> {
     let proposals = store.list_proposal_definitions(scope)?;
     let predecessor = proposals
@@ -312,8 +326,8 @@ pub(super) fn validated_resubmission(
         "a resubmission revises a review submission"
     );
     anyhow::ensure!(
-        predecessor.traceability.target.artifact_type == IdeationTargetType::Requirement
-            && predecessor.traceability.target.artifact_id == *requirement,
+        NodeType::from(predecessor.traceability.target.artifact_type) == kind
+            && predecessor.traceability.target.artifact_id == *record_id,
         "a resubmission revises a submission of the same record"
     );
     let rejections: Vec<_> = store

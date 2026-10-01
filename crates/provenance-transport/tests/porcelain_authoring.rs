@@ -218,7 +218,7 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
         .unwrap()
         .proposal_id;
     store
-        .withdraw_requirement_review(
+        .withdraw_record_review(
             serde_json::from_value(
                 json!({"scope_id":"default","actor":"agent","proposal_id":proposal}),
             )
