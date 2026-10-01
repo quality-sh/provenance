@@ -59,7 +59,11 @@ mod fallback {
 
     #[test]
     fn installs_with_a_hard_link_after_unsupported_rename_errors() {
-        for code in [rustix::io::Errno::INVAL, rustix::io::Errno::NOSYS] {
+        for code in [
+            rustix::io::Errno::INVAL,
+            rustix::io::Errno::NOSYS,
+            rustix::io::Errno::OPNOTSUPP,
+        ] {
             let temp = tempfile::tempdir().unwrap();
             let source = temp.path().join("source");
             let destination = temp.path().join("destination");
@@ -80,6 +84,7 @@ mod fallback {
     }
 
     #[test]
+    #[provenance_macros::verifies("rule_install_never_clobbers", examples)]
     fn fallback_refuses_an_existing_destination() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("source");
