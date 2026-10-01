@@ -128,8 +128,8 @@ fn remove_if_owned_with_hook(
         return Ok(());
     }
     before_commit();
-    let backup = displace_to_backup(path)
-        .with_context(|| format!("{} changed during removal", path.display()))?;
+    let backup =
+        displace_to_backup(path).map_err(|error| displacement_error(path, "removal", error))?;
     let displaced = FileSnapshot::read(&backup)?;
     if &displaced != expected {
         restore_displaced(&backup, path)?;
@@ -201,7 +201,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
         FileSnapshot::Missing => None,
         FileSnapshot::Regular { .. } => {
             let backup = displace_to_backup(path)
-                .with_context(|| format!("{} changed during replacement", path.display()))?;
+                .map_err(|error| displacement_error(path, "replacement", error))?;
             let displaced = FileSnapshot::read(&backup)?;
             if &displaced != expected {
                 restore_displaced(&backup, path)?;
@@ -217,7 +217,7 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
             restore_displaced(backup, path)?;
         }
         let _ = std::fs::remove_file(temporary);
-        return Err(error).context(format!("{} changed during replacement", path.display()));
+        return Err(replacement_install_error(path, error));
     }
     let _ = std::fs::remove_file(temporary);
     if let Some(backup) = backup {
@@ -226,13 +226,40 @@ fn commit_prepared(path: &Path, expected: &FileSnapshot, temporary: &Path) -> an
     Ok(())
 }
 
+fn replacement_install_error(path: &Path, error: std::io::Error) -> anyhow::Error {
+    if error.kind() == ErrorKind::AlreadyExists {
+        anyhow::Error::new(error).context(format!("{} changed during replacement", path.display()))
+    } else {
+        anyhow::Error::new(error).context(format!("failed to install {}", path.display()))
+    }
+}
+
+fn displacement_error(path: &Path, action: &str, error: std::io::Error) -> anyhow::Error {
+    if error.kind() == ErrorKind::Unsupported {
+        anyhow::Error::new(error).context(format!(
+            "failed to preserve {} during {action}",
+            path.display()
+        ))
+    } else {
+        anyhow::Error::new(error).context(format!("{} changed during {action}", path.display()))
+    }
+}
+
 fn restore_displaced(backup: &Path, path: &Path) -> anyhow::Result<()> {
-    provenance_store::operations::files::rename_no_replace(backup, path).with_context(|| {
-        format!(
-            "could not restore concurrently changed {}; displaced bytes remain at {}",
-            path.display(),
-            backup.display()
-        )
+    provenance_store::operations::files::rename_no_replace(backup, path).map_err(|error| {
+        if error.kind() == ErrorKind::Unsupported {
+            anyhow::Error::new(error).context(format!(
+                "failed to restore {} from {}",
+                path.display(),
+                backup.display()
+            ))
+        } else {
+            anyhow::Error::new(error).context(format!(
+                "could not restore concurrently changed {}; displaced bytes remain at {}",
+                path.display(),
+                backup.display()
+            ))
+        }
     })
 }
 
@@ -342,6 +369,24 @@ mod tests {
 
         assert_eq!(std::fs::read(path).unwrap(), b"planned\n");
         assert_eq!(std::fs::read(collision).unwrap(), b"unrelated\n");
+    }
+
+    #[test]
+    fn unsupported_install_is_not_reported_as_a_concurrent_change() {
+        let path = Path::new(".provenance/state/manifest.json");
+        let error = replacement_install_error(
+            path,
+            std::io::Error::new(
+                ErrorKind::Unsupported,
+                "filesystem does not support atomic no-replace installation: link failed",
+            ),
+        );
+        let report = format!("{error:#}");
+
+        assert!(report.contains("failed to install"));
+        assert!(report.contains("manifest.json"));
+        assert!(report.contains("does not support"));
+        assert!(!report.contains("changed during replacement"));
     }
 
     #[cfg(unix)]
