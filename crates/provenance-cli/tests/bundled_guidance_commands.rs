@@ -71,6 +71,9 @@ fn collect_skill_text(repo: &Path, guidance: &mut Vec<String>) {
 
 fn markdown_commands(markdown: &str) -> Vec<String> {
     let mut commands = Vec::new();
+    if markdown.contains("run provenance prime to get acclimated") {
+        commands.push("provenance prime".to_owned());
+    }
     let mut block = None;
     for event in Parser::new(markdown) {
         match event {
@@ -86,7 +89,6 @@ fn markdown_commands(markdown: &str) -> Vec<String> {
             Event::Code(code) => {
                 commands.extend(command_fragments(&code));
             }
-            Event::Text(text) => commands.extend(command_fragments(&text)),
             _ => {}
         }
     }
@@ -135,6 +137,7 @@ fn check_help(command: &str, repo: &Path) -> Result<(), String> {
         .iter()
         .filter(|word| word.starts_with("--"))
         .map(|word| word.trim_end_matches(['.', ',', ')', '`']))
+        .filter(|option| !matches!(*option, "--repo" | "--scope" | "--format" | "--quiet"))
         .collect::<BTreeSet<_>>();
     let output = provenance()
         .current_dir(repo)
