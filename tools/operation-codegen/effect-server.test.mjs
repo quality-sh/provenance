@@ -107,6 +107,9 @@ test('Effect HttpApi failure responses distinguish the status of each failure ki
 
 test('Effect schemas expose named types without inferred schema expansion', async () => {
   const source = (await effectFiles(serverDocument()))['effect-contract.ts'];
+  assert.match(source, /type GeneratedSchema<A> = Schema\.Schema<A> &/);
+  assert.match(source, /readonly "DecodingServices": never/);
+  assert.match(source, /generatedSchema = <A>\(value: Schema\.Schema<any>\): GeneratedSchema<A>/);
   assert.match(source, /^export const UpdateRule409 = generatedSchema<UpdateRule409>\(Schema\./m);
   assert.match(source, /^export const ListRulesQuery = generatedSchema<ListRulesQuery>\(/m);
 });

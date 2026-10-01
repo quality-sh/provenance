@@ -76,16 +76,19 @@ export class HttpClient {
     await writeFile(join(temporary, 'assertions.ts'), `
 import type * as Effect from 'effect/Effect';
 import type * as Layer from 'effect/Layer';
+import * as Schema from 'effect/Schema';
 import { EffectHttpClient, ProvenanceClient } from './generated/effect-client.js';
-import type { GetDocumentSuccess, GetDocumentFailure, MetadataFailure } from './generated/effect-contract.js';
+import { GetDocumentSuccess, type GetDocumentFailure, type MetadataFailure } from './generated/effect-contract.js';
 import type { ClientFailure } from './effect-runtime.js';
 declare const client: EffectHttpClient;
 const result: Effect.Effect<GetDocumentSuccess, ClientFailure<GetDocumentFailure>> = client.getDocument({ id: 'requirement_x' });
+const decoded: GetDocumentSuccess = Schema.decodeUnknownSync(GetDocumentSuccess)({ data: 'document' });
 const layer = ProvenanceClient.layer({ baseUrl: 'http://localhost' });
 type Assert<T extends true> = T;
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
 type LayerFailure = Assert<Equal<Layer.Error<typeof layer>, ClientFailure<MetadataFailure>>>;
 void result;
+void decoded;
 `);
     const result = spawnSync(process.execPath, [
       join(root, 'tools/operation-codegen/node_modules/typescript/bin/tsc'),

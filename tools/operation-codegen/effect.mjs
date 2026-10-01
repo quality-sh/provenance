@@ -101,7 +101,8 @@ export async function effectFiles(document) {
       + '// matchers) are derived views of the same document.\n'
       + 'import * as wire from "./effect-validators.mjs";\n'
       + validatorImports.join('\n') + '\n'
-      + 'const generatedSchema = <A>(value: Schema.Schema<any>): Schema.Schema<A> => value;\n'
+      + 'type GeneratedSchema<A> = Schema.Schema<A> & { readonly "Encoded": A; readonly "DecodingServices": never; readonly "EncodingServices": never };\n'
+      + 'const generatedSchema = <A>(value: Schema.Schema<any>): GeneratedSchema<A> => value as GeneratedSchema<A>;\n'
       + assembled,
     'effect-matchers.ts': '// Generated from OpenAPI. Do not edit.\n' + views.matchers,
     ...await validators(contract, names, 'effect-validators', false),
