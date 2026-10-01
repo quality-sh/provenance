@@ -4,12 +4,12 @@ use camino::Utf8Path;
 use provenance_core::StableId;
 use std::io::{IsTerminal, Write};
 
-pub(super) struct InitialReviewer {
-    pub(super) actor_id: Option<String>,
-    pub(super) notice: String,
+pub struct InitialReviewer {
+    pub actor_id: Option<String>,
+    pub notice: String,
 }
 
-pub(super) fn select(path: &Utf8Path) -> anyhow::Result<InitialReviewer> {
+pub fn select(path: &Utf8Path) -> anyhow::Result<InitialReviewer> {
     let git_identity = git_actor_id(path);
     let actor_id = if std::io::stdin().is_terminal() {
         Some(prompt(git_identity.as_deref().unwrap_or("reviewer"))?)
@@ -30,7 +30,7 @@ fn read_only_warning(path: &std::path::Path) -> String {
     )
 }
 
-pub(super) fn review_page_warning(path: &std::path::Path) -> String {
+pub fn review_page_warning(path: &std::path::Path) -> String {
     format!(
         "Warning: No reviewer is configured. The review page will be read-only. Add a reviewer with `provenance init --path {} --disposition-actor-id <reviewer-id>`.",
         path.display()
