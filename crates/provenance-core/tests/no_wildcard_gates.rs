@@ -112,7 +112,7 @@ fn the_scanner_sees_self_matches_inside_a_vocabulary_impl() {
 #[test]
 fn the_scanner_leaves_unrelated_matches_alone() {
     let unrelated = "fn f(v: Option<u8>) -> u8 {\n    match v {\n        Some(v) => v,\n        _ => 0,\n    }\n}\n";
-    assert!(offenses(unrelated).is_empty());
+    assert_eq!(offenses(unrelated), [] as [std::string::String; 0]);
     // An inner match over an unrelated enum, inside a vocabulary match's
     // arm expression, is judged on its own scrutinee and patterns.
     let nested = "fn f(k: NodeType, v: Option<u8>) -> u8 {\n    match k {\n        NodeType::Source => match v {\n            Some(v) => v,\n            _ => 0,\n        },\n        NodeType::Requirement => 1,\n    }\n}\n";
@@ -125,9 +125,9 @@ fn the_scanner_leaves_unrelated_matches_alone() {
 #[test]
 fn the_scanner_ignores_test_modules_with_either_brace_style() {
     let same_line = "#[cfg(test)]\nmod tests {\n    fn f(k: NodeType) -> u8 {\n        match k {\n            NodeType::Source => 0,\n            _ => 9,\n        }\n    }\n}\nfn production() {}\n";
-    assert!(offenses(&production_lines(same_line)).is_empty());
+    assert_eq!(offenses(&production_lines(same_line)), [] as [std::string::String; 0]);
     let next_line = "#[cfg(test)]\nmod tests\n{\n    fn f(k: NodeType) -> u8 {\n        match k {\n            NodeType::Source => 0,\n            _ => 9,\n        }\n    }\n}\nfn production() {}\n";
-    assert!(offenses(&production_lines(next_line)).is_empty());
+    assert_eq!(offenses(&production_lines(next_line)), [] as [std::string::String; 0]);
     let kept = production_lines(same_line);
     assert!(kept.contains("fn production()"), "production lines stay");
     let one_liner = "#[cfg(test)]\nmod tests {}\nfn f(k: NodeType) -> u8 {\n    match k {\n        NodeType::Source => 0,\n        _ => 9,\n    }\n}\n";

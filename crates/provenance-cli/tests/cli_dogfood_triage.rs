@@ -114,7 +114,7 @@ fn handle_marks_note_handled_persists_and_reopens() {
     assert_eq!(handled.len(), 1);
     assert_eq!(handled[0]["id"], id);
     assert_eq!(handled[0]["reason"], "fixed by provenance-9mvv");
-    assert!(entries_with_status(temp.path(), "unhandled").is_empty());
+    assert_eq!(entries_with_status(temp.path(), "unhandled"), [] as [serde_json::Value; 0]);
 
     dogfood_cmd(temp.path())
         .args(["dogfood", "triage", "reopen", id])

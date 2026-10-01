@@ -329,11 +329,11 @@ fn removing_any_single_required_link_from_a_complete_graph_opens_a_gap() {
 fn a_rule_reaches_its_requirement_directly_or_through_a_resolution() {
     let mut requirement_only = complete_graph(1);
     requirement_only.rules[0].resolution_ids.clear();
-    assert!(requirement_only.gaps().is_empty());
+    assert_eq!(requirement_only.gaps(), [] as [cache::gaps::model::GapItem; 0]);
 
     let mut through_resolution = complete_graph(1);
     through_resolution.rules[0].requirement_ids.clear();
-    assert!(through_resolution.gaps().is_empty());
+    assert_eq!(through_resolution.gaps(), [] as [cache::gaps::model::GapItem; 0]);
 
     let mut unattached = complete_graph(1);
     unattached.rules[0].requirement_ids.clear();

@@ -41,5 +41,5 @@ fn analyzer_output_validates_against_its_serialize_schema() {
         .unwrap();
     assert!(compiled.is_valid(&value));
     assert_eq!(value["issue"], 9);
-    assert!(!value["findings"].as_array().unwrap().is_empty());
+    assert_ne!(value["findings"].as_array().unwrap().as_slice(), []);
 }

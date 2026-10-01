@@ -42,7 +42,7 @@ fn requirement_page_assembles_lineage_decision_rules_and_sources() {
     assert_eq!(page.sources[0].link.target.record_id, "source_schads");
     assert_eq!(page.sources[0].clause.as_deref(), Some("clause 10.3"));
 
-    assert!(page.gaps.is_empty());
+    assert_eq!(page.gaps, [] as [wiki::model::GapNotice; 0]);
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn requirement_page_borrows_decision_threads_without_unscanned_links() {
     assert_eq!(thread_ids, vec!["thr_req_child", "thr_res_split"]);
     assert_eq!(page.threads[1].parent_type, NodeType::Resolution);
     let note = &page.threads[1].messages[0];
-    assert!(note.refs.is_empty());
+    assert_eq!(note.refs, [] as [wiki::links::evidence::InlineRef; 0]);
 }
 
 /// The relation fields the requirement makes the claim about, and the
@@ -110,7 +110,7 @@ fn requirement_page_carries_supersedes_depends_on_and_the_reverse_superseded_by(
     let superseded_by = &old_page.superseded_by;
     let superseded_by = superseded_by.as_ref().expect("the successor names it");
     assert_eq!(superseded_by.target.record_id, "req_successor");
-    assert!(old_page.supersedes.is_empty());
+    assert_eq!(old_page.supersedes, [] as [wiki::model::PageLink; 0]);
 }
 
 #[test]
@@ -163,9 +163,8 @@ fn requirement_page_lists_siblings_under_the_same_parent_without_self_in_record_
         .map(|link| link.target.record_id.as_str())
         .collect();
     assert_eq!(sibling_ids, vec!["req_sibling_beta", "req_sibling_alpha"]);
-    assert!(requirement_page(&corpus, "req_parent_a")
-        .siblings
-        .is_empty());
+    assert_eq!(requirement_page(&corpus, "req_parent_a")
+        .siblings, [] as [wiki::model::PageLink; 0]);
 }
 
 #[test]
@@ -221,7 +220,7 @@ fn requirement_and_unfinished_pages_flag_requirements_without_domain_id_only() {
 fn requirement_page_flags_dangling_refs_and_frontier_gaps() {
     let corpus = fixture_corpus();
     let page = requirement_page(&corpus, "req_stuck");
-    assert!(page.sources.is_empty());
+    assert_eq!(page.sources, [] as [wiki::model::SourceCitation; 0]);
     let kinds = gap_kinds(&page.gaps);
     assert!(kinds.contains(&GapKind::DanglingReference));
     assert!(kinds.contains(&GapKind::MissingSourceRefs));

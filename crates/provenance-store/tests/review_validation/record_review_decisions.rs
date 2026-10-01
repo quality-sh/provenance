@@ -269,7 +269,7 @@ fn run_review_cycle(kind: NodeType) {
             revises: None,
         })
         .unwrap();
-    assert!(!first.request_id.as_str().is_empty());
+    assert_ne!(first.request_id.as_str(), "");
     let rejected = store
         .decide_record_review(DecideRecordReview {
             scope_id: scope.clone(),
@@ -282,7 +282,7 @@ fn run_review_cycle(kind: NodeType) {
             declared_by: None,
         })
         .unwrap();
-    assert!(!rejected.request_id.as_str().is_empty());
+    assert_ne!(rejected.request_id.as_str(), "");
     assert!(rejected.disposition_id.is_some());
 
     revise_record(&store, kind, &record_id);
@@ -326,7 +326,7 @@ fn run_review_cycle(kind: NodeType) {
             declared_by: None,
         })
         .unwrap();
-    assert!(!approved.request_id.as_str().is_empty());
+    assert_ne!(approved.request_id.as_str(), "");
     assert!(approved.disposition_id.is_some());
     assert_eq!(
         record_value(&store, &scope, kind, &record_id),
@@ -343,7 +343,7 @@ fn run_review_cycle(kind: NodeType) {
         decided.current_acceptance.unwrap().disposition.proposal_id,
         second.proposal_id
     );
-    assert!(decided.withdrawn.is_empty());
+    assert_eq!(decided.withdrawn, [] as [provenance_core::StableId; 0]);
 }
 
 #[test]

@@ -321,7 +321,7 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
         .pending
         .unwrap()
         .proposal_id;
-    assert!(!pending.as_str().is_empty());
+    assert_ne!(pending.as_str(), "");
     let accepted = submit(
         &store,
         &scope,

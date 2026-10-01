@@ -250,6 +250,6 @@ mod tests {
         let denied = write_parent_kinds(&definitions, DiscussionWriteKind::Start, |name| {
             name == "requirements-create-discussion-message"
         });
-        assert!(denied.is_empty());
+        assert_eq!(denied, [] as [provenance_core::NodeType; 0]);
     }
 }

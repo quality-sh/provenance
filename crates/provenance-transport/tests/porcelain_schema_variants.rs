@@ -252,7 +252,7 @@ async fn emitted_get_schema_accepts_each_canonical_record_and_tagged_related_kin
     assert_eq!(live, &serde_json::to_value(shared).unwrap());
     assert!(schema.is_valid(live), "live related records: {live}");
     let live_related = live["related"].as_array().unwrap();
-    assert!(!live_related.is_empty());
+    assert_ne!(live_related.as_slice(), []);
     for item in live_related {
         assert_eq!(item["value"]["node_type"], item["kind"]);
     }

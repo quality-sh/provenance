@@ -121,7 +121,7 @@ fn a_synthesis_packet_naming_a_missing_target_is_refused() {
         error.contains("question_gone"),
         "upsert refuses too: {error}"
     );
-    assert!(store.list_synthesis_packets(&scope).unwrap().is_empty());
+    assert_eq!(store.list_synthesis_packets(&scope).unwrap(), [] as [provenance_core::SynthesisPacket; 0]);
 }
 
 #[test]
@@ -204,8 +204,8 @@ fn a_landed_batch_naming_a_missing_target_is_refused() {
             .to_string();
         assert!(error.contains(missing), "{error}");
     }
-    assert!(store.list_contributions(&scope).unwrap().is_empty());
-    assert!(store.list_synthesis_packets(&scope).unwrap().is_empty());
+    assert_eq!(store.list_contributions(&scope).unwrap(), [] as [provenance_core::Contribution; 0]);
+    assert_eq!(store.list_synthesis_packets(&scope).unwrap(), [] as [provenance_core::SynthesisPacket; 0]);
     assert!(store.list_ideation_landings(&scope).unwrap().is_empty());
 }
 

@@ -42,7 +42,7 @@ async fn search_visits_kinds_in_rank_order_and_stops_at_the_limit() {
         ["requirements", "sources"],
         "the kinds before the limit are read; the kinds after it are not"
     );
-    assert!(answer.stamp.live.is_empty());
+    assert_eq!(answer.stamp.live, [] as [std::string::String; 0]);
 }
 
 /// `req_top` has four records one hop away, so a limit of two cuts
@@ -71,5 +71,5 @@ async fn trace_stops_at_the_limit_and_says_has_more() {
         answer.stamp.attested,
         ["domains", "relations", "requirements", "rules", "sources"]
     );
-    assert!(answer.stamp.live.is_empty());
+    assert_eq!(answer.stamp.live, [] as [std::string::String; 0]);
 }

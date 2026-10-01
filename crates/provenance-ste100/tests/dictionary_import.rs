@@ -77,7 +77,7 @@ fn imports_a_complete_positioned_dictionary_deterministically() {
     assert_eq!(first.identity.issue, StandardIssue::Nine);
     assert_eq!(first.identity.source_sha256.len(), 64);
     assert_eq!(first.identity.data_sha256.len(), 64);
-    assert!(!first.identity.extractor_version.is_empty());
+    assert_ne!(first.identity.extractor_version, "");
     assert_eq!(
         first.entries.len(),
         APPROVED_TABLE_ROWS + UNAPPROVED_TABLE_ROWS

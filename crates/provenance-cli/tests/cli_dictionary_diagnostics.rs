@@ -29,7 +29,7 @@ fn cache_setup_failure_reports_its_cause_without_claiming_download_attempts() {
         .unwrap();
 
     assert!(output.status.success());
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(
         stderr.contains("create the shared STE asset cache: "),

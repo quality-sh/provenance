@@ -262,13 +262,13 @@ fn api_discovery_describes_the_live_catalog() {
         .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
         .expect("the source member route is described");
     let forms = member["queries"].as_array().unwrap();
-    assert!(!forms.is_empty());
+    assert_ne!(forms.as_slice(), []);
     let base = forms
         .iter()
         .find(|form| form["query"].is_null())
         .expect("the base form is described");
     assert!(!base["success_schema"].as_object().unwrap().is_empty());
-    assert!(!base["parameters"].as_array().unwrap().is_empty());
+    assert_ne!(base["parameters"].as_array().unwrap().as_slice(), []);
 }
 
 #[test]

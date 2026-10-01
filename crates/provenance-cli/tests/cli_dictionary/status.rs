@@ -35,7 +35,7 @@ fn status_reports_the_referenced_identity_and_a_present_index_after_an_import() 
     assert_eq!(status["issue"], 9);
     assert_eq!(status["source_sha256"].as_str().unwrap().len(), 64);
     assert_eq!(status["data_sha256"].as_str().unwrap().len(), 64);
-    assert!(!status["extractor_version"].as_str().unwrap().is_empty());
+    assert_ne!(status["extractor_version"].as_str().unwrap(), "");
     assert_eq!(status["index_present"], true);
     assert_eq!(status["analyzer"], "project_dictionary");
     assert!(status["load_problem"].is_null());

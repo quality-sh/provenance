@@ -186,8 +186,8 @@ fn invalid_lifecycle_batch_is_rejected_without_partial_writes() {
         .unwrap();
 
     store.land_ideation_batch(&scope, batch, false).unwrap_err();
-    assert!(store.list_contributions(&scope).unwrap().is_empty());
-    assert!(store.list_assertion_records(&scope).unwrap().is_empty());
+    assert_eq!(store.list_contributions(&scope).unwrap(), [] as [provenance_core::Contribution; 0]);
+    assert_eq!(store.list_assertion_records(&scope).unwrap(), [] as [provenance_core::AssertionRecord; 0]);
 }
 
 #[test]

@@ -29,7 +29,7 @@ fn a_writer_refuses_a_command_keyword_as_a_new_record_id() {
         error.to_string().contains("reserved record ID search"),
         "{error}"
     );
-    assert!(store.list_sources(&scope).unwrap().is_empty());
+    assert_eq!(store.list_sources(&scope).unwrap(), [] as [provenance_core::Source; 0]);
 }
 
 #[test]

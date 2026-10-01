@@ -140,7 +140,7 @@ async fn a_bounded_empty_search_page_can_continue_to_an_unloaded_match() {
     )
     .await
     .unwrap();
-    assert!(first["nodes"].as_array().unwrap().is_empty());
+    assert_eq!(first["nodes"].as_array().unwrap().as_slice(), []);
     assert_eq!(first["has_more"], true);
     let second = search(
         &root_of(&dir),

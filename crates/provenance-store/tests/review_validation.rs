@@ -140,7 +140,7 @@ fn statement_edits_keep_existing_verification_review_behavior() {
             serde_json::from_value(json!({"run":run.id,"status":"passed"})).unwrap(),
         )
         .unwrap();
-    assert!(store.open_requirement_reviews(&scope()).unwrap().is_empty());
+    assert_eq!(store.open_requirement_reviews(&scope()).unwrap(), [] as [provenance_core::RequirementReview; 0]);
     assert_eq!(store.list_requirement_reviews(&scope()).unwrap().len(), 1);
 }
 

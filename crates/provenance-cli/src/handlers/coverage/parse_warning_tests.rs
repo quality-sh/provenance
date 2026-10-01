@@ -73,5 +73,5 @@ fn parse_warnings_do_not_need_rule_validation() {
 fn a_clean_file_warns_about_nothing() {
     let report = scan("// @provenance rule: rule_overtime\nfn pays_overtime() {}\n");
 
-    assert!(report.warnings.is_empty());
+    assert_eq!(report.warnings, [] as [provenance_scanner::ValidationWarning; 0]);
 }

@@ -262,7 +262,7 @@ fn failed_dictionary_acquisition_keeps_init_successful_and_warns_even_when_quiet
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     let warning = String::from_utf8(output.stderr).unwrap();
     assert!(warning.contains("Warning: the official Issue 9 dictionary could not be added"));
     assert!(warning.contains("request the official Issue 9 PDF"));

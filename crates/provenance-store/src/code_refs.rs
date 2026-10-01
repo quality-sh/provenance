@@ -118,7 +118,7 @@ mod tests {
     fn parse_code_ref_reads_a_plain_path() {
         let code_ref = parse_code_ref("docs/save-invoice.md").unwrap();
         assert_eq!(code_ref.path, "docs/save-invoice.md");
-        assert!(code_ref.lines.is_empty());
+        assert_eq!(code_ref.lines, [] as [code_refs::LineRange; 0]);
     }
 
     #[test]
@@ -205,7 +205,7 @@ mod tests {
     fn parse_code_ref_reads_a_directory_path_without_an_extension() {
         let code_ref = parse_code_ref("src/UseCase").unwrap();
         assert_eq!(code_ref.path, "src/UseCase");
-        assert!(code_ref.lines.is_empty());
+        assert_eq!(code_ref.lines, [] as [code_refs::LineRange; 0]);
     }
 
     #[test]
