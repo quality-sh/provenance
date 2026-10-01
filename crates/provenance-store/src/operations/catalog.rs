@@ -52,10 +52,10 @@ pub use authoring::{Apply, BeginVerification, CompleteVerification, Plan};
 #[cfg(feature = "schema")]
 pub use binding::{
     ArgumentAlias, CliBinding, CliDefault, CliDefaultValue, CliExecution, Controls,
-    DiscussionWriteKind, EtagBinding, FixedBinding, HandlerBinding, HeaderBinding, NullClearBinding,
-    ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration, RequestAdapter,
-    RequestAdapterError, RequestBinding, ResponseAdapter, ResponseBinding, SelectorBinding,
-    TargetAction, TargetBinding,
+    DiscussionWriteKind, EtagBinding, FixedBinding, HandlerBinding, HeaderBinding,
+    NullClearBinding, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration,
+    RequestAdapter, RequestAdapterError, RequestBinding, ResponseAdapter, ResponseBinding,
+    SelectorBinding, TargetAction, TargetBinding,
 };
 pub use context::{
     ContextKind, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
