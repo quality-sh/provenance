@@ -311,7 +311,7 @@ fn target_first_mutations_keep_parent_version_and_existence_preconditions() {
             "--repo",
             &repo,
             "--if-match",
-            "stale-etag",
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000",
             "--description",
             "This write is stale.",
         ])

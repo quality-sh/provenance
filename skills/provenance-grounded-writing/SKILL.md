@@ -5,6 +5,13 @@ description: Write specific, evidence-grounded statements for requirements, rule
 
 # Grounded writing
 
+## Review feedback and revision
+
+Read the current decision, rejection comment, and bounded Discussion messages with
+`provenance <record-id> get --view review`. Copy `review.edit.etag` unchanged to the
+`--if-match` option of the guarded update. A guarded update after a rejection opens the
+new submission. Do not submit or withdraw manually.
+
 Atomic Rule statements read sharp. Requirements above them read like a
 capability list — "provides identity, reporting, comms, integrations" — vague enough to fit
 any product. The cause is usually altitude, not wording.
