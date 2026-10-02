@@ -150,7 +150,7 @@ pub enum ViewResult {
     Children(Traversal),
     Grounding(Traversal),
     Impact(Impact),
-    Review(Review),
+    Review(Box<Review>),
 }
 
 impl ViewResult {
@@ -314,9 +314,9 @@ impl<P: GetPort> crate::Porcelain<P> {
             View::Impact => {
                 ViewResult::Impact(self.port.impact(&record, input.limit.unwrap_or(50)).await?)
             }
-            View::Review => {
-                ViewResult::Review(self.port.review(&record, input.limit.unwrap_or(50)).await?)
-            }
+            View::Review => ViewResult::Review(Box::new(
+                self.port.review(&record, input.limit.unwrap_or(50)).await?,
+            )),
         };
         Ok(GetOutcome {
             record,
