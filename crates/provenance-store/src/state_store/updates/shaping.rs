@@ -6,27 +6,66 @@ use crate::state_store::shaping_writers::{
     clear_question_claim_on_exit, clear_topic_claim_on_exit,
 };
 use crate::state_store::StateStore;
-use provenance_core::{NodeType, Question, QuestionStatus, Topic};
+use provenance_core::{NodeType, Question, QuestionStatus, Topic, TopicStatus};
 
 impl StateStore {
     pub fn edit_topic(&self, input: UpdateTopicInput) -> anyhow::Result<Topic> {
-        self.with_repository_publication(|| {
-            if let Some(title) = &input.title {
-                required_text(title)?;
-            }
-            let links = self.checked_update_links(&input.scope_id, input.links)?;
-            self.update_topic_with_etag(
+        if input.status == Some(TopicStatus::Archived) {
+            let stamp = self.current_record_stamp()?;
+            return crate::publication::with_staged_state(&self.layout, false, |layout| {
+                StateStore::staged(layout.clone(), stamp).write_topic_update(input)
+            });
+        }
+        self.with_repository_publication(|| self.write_topic_update(input))
+    }
+
+    fn write_topic_update(&self, input: UpdateTopicInput) -> anyhow::Result<Topic> {
+        if let Some(title) = &input.title {
+            required_text(title)?;
+        }
+        let links = self.checked_update_links(&input.scope_id, input.links)?;
+        let archived_in_commit = input.archived_in_commit.clone();
+        let topic = self.update_topic_with_etag(
+            &input.scope_id,
+            &input.id,
+            input.expected_etag.as_deref(),
+            |topic| {
+                set(&mut topic.title, input.title);
+                set(&mut topic.status, input.status);
+                set(&mut topic.links, links);
+                if archived_in_commit.is_some() {
+                    topic.archived_in_commit = archived_in_commit.clone();
+                }
+                clear_topic_claim_on_exit(topic);
+                Ok(())
+            },
+        )?;
+        if topic.status == TopicStatus::Archived {
+            self.archive_topic_questions(
                 &input.scope_id,
                 &input.id,
-                input.expected_etag.as_deref(),
-                |topic| {
-                    set(&mut topic.title, input.title);
-                    set(&mut topic.status, input.status);
-                    set(&mut topic.links, links);
-                    clear_topic_claim_on_exit(topic);
-                    Ok(())
-                },
-            )
+                topic.archived_in_commit.as_ref().unwrap(),
+            )?;
+        }
+        Ok(topic)
+    }
+
+    fn archive_topic_questions(
+        &self,
+        scope: &provenance_core::ScopeId,
+        topic_id: &provenance_core::StableId,
+        stamp: &provenance_core::ArchivedStamp,
+    ) -> anyhow::Result<()> {
+        let path = crate::shards::questions_path(&self.layout, scope);
+        self.mutate_native_records(&path, |questions: &mut Vec<Question>| {
+            for question in questions.iter_mut().filter(|question| {
+                &question.topic_id == topic_id && question.status != QuestionStatus::Archived
+            }) {
+                question.status = QuestionStatus::Archived;
+                question.archived_in_commit = Some(stamp.clone());
+                clear_question_claim_on_exit(question);
+            }
+            Ok(())
         })
     }
 
@@ -60,6 +99,9 @@ impl StateStore {
                     set(&mut question.question, input.question);
                     set(&mut question.resolution_method, input.resolution_method);
                     set(&mut question.status, input.status);
+                    if input.archived_in_commit.is_some() {
+                        question.archived_in_commit = input.archived_in_commit;
+                    }
                     set(&mut question.links, links);
                     optional(
                         &mut question.resolution_id,

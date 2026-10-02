@@ -406,6 +406,17 @@ Before final response:
    provenance questions <question_id> release --scope <scope> --format json
    ```
 
+   To drop a Question or Topic, archive it with the commit that contains the
+   change. Archiving a Topic also archives all Questions in that Topic.
+   Discussions stay readable as history.
+
+   ```sh
+   printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | \
+     provenance questions <question_id> update --scope <scope> --stdin --format json
+   printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | \
+     provenance topics <topic_id> update --scope <scope> --stdin --format json
+   ```
+
 2. Post a handoff on the requirement thread:
 
    ```sh

@@ -3,6 +3,7 @@ use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
 use crate::operations::{queries, read_policy::ReadPolicy};
+use crate::review::SubmitRecordReview;
 use crate::state_store::{
     CreateQuestionInput, CreateResolutionInput, CreateRuleInput, CreateTopicInput,
     EditQuestionInput, StateStore, UpdateTopicInput,
@@ -144,12 +145,43 @@ fn seed_archived_shaping_records(store: &StateStore, scope: &ScopeId) {
             })
             .unwrap();
     }
+    for (kind, id) in [
+        (NodeType::Topic, "topic_archived"),
+        (NodeType::Question, "question_archived_one"),
+        (NodeType::Question, "question_archived_two"),
+    ] {
+        let id = sid(id);
+        let revision = store
+            .record_decision_state(scope, kind, &id)
+            .unwrap()
+            .current_revision
+            .unwrap();
+        store
+            .submit_record_review(SubmitRecordReview {
+                scope_id: scope.clone(),
+                actor: "author".into(),
+                record_kind: kind,
+                record_id: id,
+                declared_by: None,
+                title: "Review archive candidate".into(),
+                summary: "Review this shaping record.".into(),
+                confidence: None,
+                source_ids: Vec::new(),
+                evidence_references: Vec::new(),
+                builds_on: Vec::new(),
+                expected_revision: Some(revision),
+                revises: None,
+            })
+            .unwrap();
+    }
     store
-        .edit_topic(serde_json::from_value::<UpdateTopicInput>(json!({
-            "scope_id":scope, "id":"topic_archived", "status":"archived",
-            "archived_in_commit":{"commit":"b".repeat(40)}
-        }))
-        .unwrap())
+        .edit_topic(
+            serde_json::from_value::<UpdateTopicInput>(json!({
+                "scope_id":scope, "id":"topic_archived", "status":"archived",
+                "archived_in_commit":{"commit":"b".repeat(40)}
+            }))
+            .unwrap(),
+        )
         .unwrap();
 }
 
@@ -282,6 +314,24 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     .unwrap();
     assert!(found["nodes"].as_array().unwrap().is_empty());
 
+    let unfiltered_document = queries::read_document(
+        Some(root.clone()),
+        &scope,
+        ReadPolicy::default(),
+        provenance_core::protocol::ReadDocumentQuery {
+            id: "req_overtime".into(),
+            exclude_terminal: false,
+            cursor: None,
+            limit: 50,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(unfiltered_document.result).unwrap()["review_totals"],
+        json!({"pending":4,"accepted":0,"rejected":0})
+    );
+
     let document = queries::read_document(
         Some(root),
         &scope,
@@ -297,9 +347,15 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     .unwrap();
     let document = serde_json::to_value(document.result).unwrap();
     assert!(document["entries"].as_array().unwrap().iter().all(|entry| {
-        !matches!(entry["kind"].as_str(), Some("topic" | "question"))
+        !matches!(
+            entry["node"]["node_type"].as_str(),
+            Some("topic" | "question")
+        )
     }));
-    assert_eq!(document["review_totals"], json!({"pending":1,"accepted":0,"rejected":0}));
+    assert_eq!(
+        document["review_totals"],
+        json!({"pending":1,"accepted":0,"rejected":0})
+    );
 }
 
 #[test]

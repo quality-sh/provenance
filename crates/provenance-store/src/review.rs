@@ -50,6 +50,7 @@ mod discussion_writes;
 mod create;
 pub use create::CreateReviewRequirement;
 mod authoring;
+mod bulk_authoring;
 mod discussion_discovery;
 mod discussion_messages;
 mod discussion_page;

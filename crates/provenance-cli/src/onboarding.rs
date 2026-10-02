@@ -21,6 +21,10 @@ it in the same change.
   with code.
 - To change a Requirement, Rule, or past decision, create a Proposal. A human decides each
   Proposal.
+- To drop a Question or Topic, archive it with its commit evidence. Archiving a
+  Topic also archives its Questions. Discussion history stays readable:
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope default --stdin --format json`
+  or replace `questions <question_id>` with `topics <topic_id>`.
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` directly.
 - Pre-commit: `{command} check --quiet` and

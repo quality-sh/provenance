@@ -116,7 +116,7 @@ impl StateStore {
         .and_then(review_record_into)
     }
 
-    fn commit_native_occurrence(
+    pub(super) fn commit_native_occurrence(
         &self,
         before: Option<&ReviewRecord>,
         after: &ReviewRecord,
