@@ -218,8 +218,7 @@ fn update_help_and_invalid_if_match_name_the_exact_input() {
 #[test]
 fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
     let (_directory, repo) = init();
-    let requirement = create_requirement(&repo, "req_terminal");
-    let etag = requirement["data"]["edit"]["etag"].as_str().unwrap();
+    create_requirement(&repo, "req_terminal");
     provenance()
         .args([
             "rules",
@@ -265,7 +264,7 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
         "--format",
         "json",
     ]));
-    assert!(searched["result"]["nodes"].as_array().unwrap().is_empty());
+    assert!(searched["nodes"].as_array().unwrap().is_empty());
     let searched = json_output(provenance().args([
         "search",
         "--repo",
@@ -276,9 +275,7 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
         "--format",
         "json",
     ]));
-    assert_eq!(searched["result"]["nodes"][0]["id"], "rule_archived");
-
-    let _ = etag;
+    assert_eq!(searched["nodes"][0]["id"], "rule_archived");
 }
 
 #[test]
@@ -294,5 +291,5 @@ fn installed_guidance_documents_feedback_and_rejected_revision_paths() {
 
     assert!(guidance.contains("provenance <record-id> get --view review"));
     assert!(guidance.contains("A guarded update after a rejection opens the new submission"));
-    assert!(guidance.contains("data.edit.etag"));
+    assert!(guidance.contains("review.edit.etag"));
 }
