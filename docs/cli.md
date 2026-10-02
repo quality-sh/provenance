@@ -61,6 +61,17 @@ provenance <collection> <id> neighbors [--direction in|out|both] [--limit <count
 provenance <collection> <id> impact
 ```
 
+Read the current review decision, the rejection comment, and bounded Discussion
+messages without the collection name:
+
+```sh
+provenance <record-id> get --view review
+```
+
+The result shows `review.edit.etag` and the exact `--if-match` value for the next
+guarded update. A guarded update after a rejection opens the replacement
+submission. Do not submit or withdraw the pending submission before the update.
+
 Examples:
 
 ```sh
@@ -100,7 +111,12 @@ string-typed field always supplies text. Arrays and objects can also come from o
 standard input with `--stdin`, which fills only the body fields that no flag
 assigned and refuses a field that a flag already set. Path identity comes from
 the command address. Query parameters and `If-Match` controls use the flags
-that the catalog declares.
+that the catalog declares. The `--if-match` option for a guarded record update
+must contain `data.edit.etag` from the latest member read, unchanged.
+
+`provenance api` shows at most 50 routes by default. Use `--filter <text>` to
+select routes or `--limit <number>` to increase the bound. Use `--format json`
+only when you need all request and response schemas.
 
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
 records in `data.items`.

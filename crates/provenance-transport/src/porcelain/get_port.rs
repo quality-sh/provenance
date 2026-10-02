@@ -3,8 +3,8 @@ use provenance_core::protocol::{
 };
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
 use provenance_porcelain::get::{
-    Bounds, GetPort, Impact, PortFuture, ReadError, RecordResolution, Traversal, TraversalRequest,
-    View,
+    Bounds, GetPort, Impact, PortFuture, ReadError, RecordResolution, Review, Traversal,
+    TraversalRequest, View,
 };
 use provenance_store::operations::catalog::{self, Operation as _};
 
@@ -142,6 +142,78 @@ impl GetPort for HostGetPort {
                 },
                 detail: result,
                 response_metadata: Some(metadata),
+            })
+        })
+    }
+
+    fn review<'a>(
+        &'a self,
+        record: &'a provenance_core::protocol::GraphNode,
+        limit: usize,
+    ) -> PortFuture<'a, Review> {
+        Box::pin(async move {
+            use provenance_core::threads::{
+                DiscussionConversationQuery, DiscussionListQuery, DiscussionResultPage,
+                DiscussionStatusFilter,
+            };
+            let kind = record.node_type();
+            let id = record.id().clone();
+            let resource = self
+                .host
+                .invoke_scoped_typed::<catalog::GetReviewedResource>(
+                    catalog::ReviewedResourceRequest {
+                        record_kind: kind,
+                        id: id.clone(),
+                    },
+                )
+                .await
+                .map_err(|error| operation_error(&error))?;
+            let listed = self
+                .host
+                .invoke_scoped_typed::<catalog::ListDiscussions>(DiscussionListQuery {
+                    parent: Some(provenance_core::ThreadParent {
+                        node_type: kind,
+                        node_id: id,
+                    }),
+                    allowed_parent_kinds: vec![kind],
+                    status: DiscussionStatusFilter::All,
+                    limit,
+                    cursor: None,
+                })
+                .await
+                .map_err(|error| operation_error(&error))?;
+            let mut conversations = Vec::with_capacity(listed.result.entries.len());
+            for summary in &listed.result.entries {
+                let conversation = self
+                    .host
+                    .invoke_scoped_typed::<catalog::GetDiscussionConversation>(
+                        DiscussionConversationQuery {
+                            discussion_id: summary.discussion_id.clone(),
+                            allowed_parent_kinds: vec![kind],
+                            limit,
+                            cursor: None,
+                        },
+                    )
+                    .await
+                    .map_err(|error| operation_error(&error))?;
+                conversations.push(conversation.result);
+            }
+            let edit = resource.result.edit;
+            Ok(Review {
+                update_precondition: format!("--if-match {}", edit.etag),
+                edit,
+                decision: resource.result.decision,
+                discussions: DiscussionResultPage {
+                    entries: conversations,
+                    limit,
+                    has_more: listed.result.has_more,
+                    next_cursor: listed.result.next_cursor,
+                },
+                response_metadata: Some(provenance_core::protocol::ResponseMeta {
+                    stamp: Some(listed.stamp),
+                    freshness_error: listed.freshness_error,
+                    ..provenance_core::protocol::ResponseMeta::default()
+                }),
             })
         })
     }

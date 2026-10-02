@@ -196,6 +196,8 @@ fn print_options(help: &mut String, address: &address::Address) {
         let mut details = Vec::new();
         if parameter.location == "header" && parameter.name == "Idempotency-Key" {
             details.push("generated if omitted".into());
+        } else if parameter.location == "header" && parameter.name == "If-Match" {
+            details.push("pass data.edit.etag from the latest record read unchanged".into());
         } else if parameter.required {
             details.push("required".into());
         }

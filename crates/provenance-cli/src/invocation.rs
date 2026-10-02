@@ -178,7 +178,7 @@ impl SearchArgs {
         let query = SearchQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             cursor: self.cursor,
-            exclude_terminal: false,
+            exclude_terminal: !self.include_terminal,
             text: self.text,
             node_types: self.kind,
             limit: self.limit.unwrap_or(QUERY_DEFAULT_LIMIT),

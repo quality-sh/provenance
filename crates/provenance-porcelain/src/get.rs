@@ -3,7 +3,11 @@
 use provenance_core::protocol::{
     GraphNode, ImpactResult, RecordResolution as CoreRecordResolution, ResponseMeta, TracedNode,
 };
-use provenance_core::NodeType;
+use provenance_core::{
+    review::{RequirementDecisionState, RequirementEditState},
+    threads::{DiscussionConversationResult, DiscussionResultPage},
+    NodeType,
+};
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, future::Future, pin::Pin};
@@ -32,10 +36,17 @@ pub enum View {
     Children,
     Grounding,
     Impact,
+    Review,
 }
 
 impl View {
-    pub const ALL: [Self; 4] = [Self::Record, Self::Children, Self::Grounding, Self::Impact];
+    pub const ALL: [Self; 5] = [
+        Self::Record,
+        Self::Children,
+        Self::Grounding,
+        Self::Impact,
+        Self::Review,
+    ];
 
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -43,6 +54,7 @@ impl View {
             Self::Children => "children",
             Self::Grounding => "grounding",
             Self::Impact => "impact",
+            Self::Review => "review",
         }
     }
 
@@ -120,6 +132,17 @@ pub struct Impact {
     pub response_metadata: Option<ResponseMeta>,
 }
 
+/// Current review state and bounded Discussion conversations for one record.
+#[derive(Clone, Debug, Serialize, schemars::JsonSchema)]
+pub struct Review {
+    pub edit: RequirementEditState,
+    pub decision: RequirementDecisionState,
+    pub update_precondition: String,
+    pub discussions: DiscussionResultPage<DiscussionConversationResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_metadata: Option<ResponseMeta>,
+}
+
 /// The data selected by one named view.
 #[derive(Clone, Debug)]
 pub enum ViewResult {
@@ -127,6 +150,7 @@ pub enum ViewResult {
     Children(Traversal),
     Grounding(Traversal),
     Impact(Impact),
+    Review(Review),
 }
 
 impl ViewResult {
@@ -136,13 +160,14 @@ impl ViewResult {
             Self::Children(_) => View::Children,
             Self::Grounding(_) => View::Grounding,
             Self::Impact(_) => View::Impact,
+            Self::Review(_) => View::Review,
         }
     }
 
     pub fn related(&self) -> &[TracedNode] {
         match self {
             Self::Children(traversal) | Self::Grounding(traversal) => &traversal.records,
-            Self::Record | Self::Impact(_) => &[],
+            Self::Record | Self::Impact(_) | Self::Review(_) => &[],
         }
     }
 
@@ -153,11 +178,18 @@ impl ViewResult {
         }
     }
 
+    pub const fn review(&self) -> Option<&Review> {
+        match self {
+            Self::Review(review) => Some(review),
+            _ => None,
+        }
+    }
+
     pub const fn bounds(&self) -> Option<&Bounds> {
         match self {
             Self::Children(traversal) | Self::Grounding(traversal) => Some(&traversal.bounds),
             Self::Impact(impact) => Some(&impact.bounds),
-            Self::Record => None,
+            Self::Record | Self::Review(_) => None,
         }
     }
 
@@ -167,6 +199,7 @@ impl ViewResult {
                 traversal.response_metadata.as_ref()
             }
             Self::Impact(impact) => impact.response_metadata.as_ref(),
+            Self::Review(review) => review.response_metadata.as_ref(),
             Self::Record => None,
         }
     }
@@ -191,6 +224,10 @@ impl GetOutcome {
 
     pub const fn impact(&self) -> Option<&ImpactResult> {
         self.result.impact()
+    }
+
+    pub const fn review(&self) -> Option<&Review> {
+        self.result.review()
     }
 
     pub const fn bounds(&self) -> Option<&Bounds> {
@@ -229,6 +266,9 @@ pub trait GetPort: Send + Sync {
     fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, RecordResolution>;
     fn traverse(&self, request: TraversalRequest) -> PortFuture<'_, Traversal>;
     fn impact<'a>(&'a self, record: &'a GraphNode, limit: usize) -> PortFuture<'a, Impact>;
+    fn review<'a>(&'a self, _record: &'a GraphNode, _limit: usize) -> PortFuture<'a, Review> {
+        Box::pin(async { Err(ReadError::InvalidOptions) })
+    }
 }
 
 impl<P: GetPort> crate::Porcelain<P> {
@@ -274,6 +314,9 @@ impl<P: GetPort> crate::Porcelain<P> {
             View::Impact => {
                 ViewResult::Impact(self.port.impact(&record, input.limit.unwrap_or(50)).await?)
             }
+            View::Review => {
+                ViewResult::Review(self.port.review(&record, input.limit.unwrap_or(50)).await?)
+            }
         };
         Ok(GetOutcome {
             record,
@@ -291,7 +334,7 @@ fn validate(input: &GetInput) -> Result<(), ReadError> {
     let unsupported = match input.view {
         View::Record => has_traversal_options || input.limit.is_some(),
         View::Children | View::Grounding => false,
-        View::Impact => has_traversal_options,
+        View::Impact | View::Review => has_traversal_options,
     };
     if unsupported || input.max_depth == Some(0) || input.limit == Some(0) {
         return Err(ReadError::InvalidOptions);

@@ -25,18 +25,29 @@ pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<R
         .into_iter()
         .filter(|address| address.words.len() == supplied.len())
         .collect::<Vec<_>>();
-    let address = select_address(candidates, supplied).ok_or_else(|| {
-        anyhow::anyhow!(
-            "the catalog does not declare the {collection} command: {}",
-            supplied.join(" ")
-        )
-    })?;
+    let address =
+        select_address(candidates, supplied).ok_or_else(|| unknown(collection, supplied))?;
     let values = address_values(address, supplied).expect("selected address matches");
     Ok(Resolved {
         address,
         path: render_path(address.definition.path, &values)?,
         query: address.query,
     })
+}
+
+fn unknown(collection: &str, supplied: &[String]) -> anyhow::Error {
+    let mut message = format!(
+        "the catalog does not declare the {collection} command: {}",
+        supplied.join(" ")
+    );
+    if let [id, form] = supplied {
+        if matches!(form.as_str(), "feedback" | "review") {
+            message.push_str(&format!(
+                "; to read review feedback, run `provenance {id} get --view review`"
+            ));
+        }
+    }
+    anyhow::anyhow!(message)
 }
 
 fn addresses() -> &'static [Address] {

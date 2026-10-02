@@ -480,7 +480,7 @@ fn requirements(out: &mut Vec<Definition>) {
             "updateRequirement",
             HttpMethod::Patch,
             "/requirements/{id}",
-            "Apply one guarded Requirement text and relationship delta.",
+        "Apply one guarded Requirement text and relationship delta. After rejection, this guarded update opens the new submission.",
             ResponseKind::Resource,
             vec![schema::path("id")],
         )

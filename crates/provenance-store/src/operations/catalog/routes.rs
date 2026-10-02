@@ -291,10 +291,7 @@ fn response_binding(raw_schema: Value, kind: ResponseKind) -> ResponseBinding {
 
 fn list_parameters(searchable: bool, rule: bool) -> Vec<Parameter> {
     let mut parameters = vec![
-        schema::query(
-            "exclude_terminal",
-            json!({"type":"boolean","default":false}),
-        ),
+        schema::query("exclude_terminal", json!({"type":"boolean","default":true})),
         schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
         schema::query("cursor", json!({"type":"string"})),
     ];

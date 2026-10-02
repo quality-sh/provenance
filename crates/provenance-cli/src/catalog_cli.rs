@@ -144,7 +144,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         .await
     {
         Ok(value) => crate::output::print_json(&value)?,
-        Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
+        Err(failure) => return Err(actionable_failure(&failure, record_id(&path))),
     }
     Ok(())
 }
@@ -186,7 +186,7 @@ pub async fn dispatch_target(
     let value = host
         .invoke_target(&route, data, headers)
         .await
-        .map_err(|failure| anyhow::anyhow!(serde_json::to_string(&failure).unwrap()))?;
+        .map_err(|failure| actionable_failure(&failure, Some(&target)))?;
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&value)?;
     } else {
@@ -196,6 +196,27 @@ pub async fn dispatch_target(
         );
     }
     Ok(())
+}
+
+fn record_id(path: &str) -> Option<&str> {
+    path.trim_matches('/').split('/').nth(1)
+}
+
+fn actionable_failure(
+    failure: &provenance_core::protocol::failure::ErasedFailure,
+    record_id: Option<&str>,
+) -> anyhow::Error {
+    let value = serde_json::to_value(failure).unwrap_or_default();
+    let error = &value["error"];
+    if error["kind"] == "review_submission_conflict" {
+        if let (Some(id), Some(submission)) = (record_id, error["current_submission"].as_str()) {
+            return anyhow::anyhow!(
+                "record {id} already has pending submission {submission}; \
+                 run `provenance {id} get --view review` to see it"
+            );
+        }
+    }
+    anyhow::anyhow!(serde_json::to_string(failure).unwrap_or_else(|_| "operation failed".into()))
 }
 
 pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {

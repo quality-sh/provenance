@@ -121,7 +121,11 @@ macro_rules! resource {
                 concat!("update", $singular_id),
                 HttpMethod::Patch,
                 concat!("/", $plural, "/{id}"),
-                concat!("Apply a partial change to one ", $singular, "."),
+                concat!(
+                    "Apply a partial change to one ",
+                    $singular,
+                    ". After rejection, this guarded update opens the new submission."
+                ),
                 ResponseKind::Resource,
                 vec![schema::path("id")],
             )

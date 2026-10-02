@@ -166,6 +166,15 @@ fn bind_parameter(
             query.insert(parameter.name.to_owned(), encoded);
         }
         "header" => {
+            if parameter.name == "If-Match"
+                && parameter.schema.get("type") == Some(&json!("string"))
+                && !valid_review_etag(value)
+            {
+                anyhow::bail!(
+                    "--if-match must equal data.edit.etag from the latest record read; \
+                     expected sha256:<64 lowercase hexadecimal characters>"
+                );
+            }
             headers.insert(
                 HeaderName::from_bytes(parameter.name.as_bytes())?,
                 HeaderValue::from_str(value)?,
@@ -174,6 +183,14 @@ fn bind_parameter(
         _ => anyhow::bail!("unknown catalog parameter location"),
     }
     Ok(())
+}
+
+fn valid_review_etag(value: &str) -> bool {
+    value.len() == 71
+        && value.starts_with("sha256:")
+        && value[7..]
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 /// Bind plain flag values for one body field: one item per use.

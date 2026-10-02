@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[serde(deny_unknown_fields)]
 pub struct ReadDocumentQuery {
     pub id: String,
-    #[serde(default)]
+    #[serde(default = "default_exclude_terminal")]
     pub exclude_terminal: bool,
     #[serde(default)]
     pub cursor: Option<String>,
@@ -18,6 +18,9 @@ pub struct ReadDocumentQuery {
 }
 const fn default_limit() -> usize {
     super::QUERY_DEFAULT_LIMIT
+}
+const fn default_exclude_terminal() -> bool {
+    true
 }
 
 /// A record's role in this document. References never expand membership.

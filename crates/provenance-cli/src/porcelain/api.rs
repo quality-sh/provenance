@@ -10,6 +10,8 @@ pub async fn dispatch_api(
     scope: &str,
     format: Option<OutputFormat>,
     request: ApiRequest,
+    filter: Option<&str>,
+    limit: Option<usize>,
 ) -> anyhow::Result<()> {
     let host = RepoContext::new(repo, scope).local_host()?;
     let service = host.porcelain().api();
@@ -18,8 +20,34 @@ pub async fn dispatch_api(
             if format == Some(OutputFormat::Json) {
                 println!("{}", serde_json::to_string_pretty(&catalog)?);
             } else {
-                println!("{}", render_discovery_readable(&catalog));
-                println!("Use --format json for the full request and response schemas.");
+                let total = catalog.routes.len();
+                let needle = filter.map(str::to_ascii_lowercase);
+                let mut routes = catalog
+                    .routes
+                    .into_iter()
+                    .filter(|route| {
+                        needle.as_ref().is_none_or(|needle| {
+                            format!(
+                                "{} {} {}",
+                                route.method.as_str(),
+                                route.path,
+                                route.description
+                            )
+                            .to_ascii_lowercase()
+                            .contains(needle)
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                let matching = routes.len();
+                routes.truncate(limit.unwrap_or(50));
+                println!(
+                    "{}",
+                    render_discovery_readable(&provenance_porcelain::api::ApiCatalog { routes })
+                );
+                if matching > limit.unwrap_or(50) || (filter.is_none() && matching < total) {
+                    println!("Use --filter <text> or --limit <number> to see more.");
+                }
+                println!("Use --format json for all schemas.");
             }
         }
         Ok(ApiOutcome::Invoked(value)) => println!("{}", serde_json::to_string_pretty(&value)?),

@@ -21,6 +21,11 @@ it in the same change.
   with code.
 - To change a Requirement, Rule, or past decision, create a Proposal. A human decides each
   Proposal.
+- Read a record's decision and all bounded feedback with
+  `{command} <record-id> get --view review`. The `review.edit.etag` value is
+  the exact value for `--if-match` on the next update.
+- A guarded update after a rejection opens the new submission. Do not submit
+  or withdraw a second submission.
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` directly.
 - Pre-commit: `{command} check --quiet` and

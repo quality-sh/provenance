@@ -72,7 +72,7 @@ fn reject_pending(repo: &str, id: &str, created: &Value) {
                 "decision": "rejected",
                 "rationale": "The statement needs one precise condition.",
                 "canonical_artifact": null,
-                "feedback": {"role":"reviewer", "body":"Name the condition before resubmission."},
+                "feedback": {"role":"user", "body":"Name the condition before resubmission."},
                 "declared_by": null
             })
             .to_string(),
@@ -121,6 +121,24 @@ fn review_view_returns_decision_comment_discussions_and_update_precondition() {
 }
 
 #[test]
+fn wrong_feedback_form_names_the_review_command() {
+    let (_directory, repo) = init();
+    create_requirement(&repo, "req_wrong_form");
+
+    provenance()
+        .args([
+            "requirements",
+            "req_wrong_form",
+            "feedback",
+            "--repo",
+            &repo,
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("provenance req_wrong_form get --view review"));
+}
+
+#[test]
 fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
     let (_directory, repo) = init();
     let created = create_requirement(&repo, "req_pending");
@@ -130,13 +148,7 @@ fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
     let revision = created["data"]["edit"]["revision"].as_str().unwrap();
 
     provenance()
-        .args([
-            "req_pending",
-            "submit",
-            "--repo",
-            &repo,
-            "--stdin",
-        ])
+        .args(["req_pending", "submit", "--repo", &repo, "--stdin"])
         .write_stdin(
             json!({
                 "actor":"agent", "declared_by":null, "title":"Review",
@@ -151,9 +163,7 @@ fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
         .stderr(contains(format!(
             "already has pending submission {proposal}"
         )))
-        .stderr(contains(
-            "provenance req_pending get --view review",
-        ));
+        .stderr(contains("provenance req_pending get --view review"));
 }
 
 #[test]
@@ -224,20 +234,14 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
             "req_terminal",
             "--status",
             "archived",
-            "--archived-in-commit",
-            "abc123",
+            "--archived-in-commit-json",
+            &json!({"commit":"a".repeat(40),"at":null}).to_string(),
         ])
         .assert()
         .success();
 
-    let listed = json_output(provenance().args([
-        "rules",
-        "list",
-        "--repo",
-        &repo,
-        "--format",
-        "json",
-    ]));
+    let listed =
+        json_output(provenance().args(["rules", "list", "--repo", &repo, "--format", "json"]));
     assert!(listed["data"]["items"].as_array().unwrap().is_empty());
 
     let included = json_output(provenance().args([
@@ -261,7 +265,7 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
         "--format",
         "json",
     ]));
-    assert!(searched["data"].as_array().unwrap().is_empty());
+    assert!(searched["result"]["nodes"].as_array().unwrap().is_empty());
     let searched = json_output(provenance().args([
         "search",
         "--repo",
@@ -272,7 +276,7 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
         "--format",
         "json",
     ]));
-    assert_eq!(searched["data"][0]["id"], "rule_archived");
+    assert_eq!(searched["result"]["nodes"][0]["id"], "rule_archived");
 
     let _ = etag;
 }
@@ -283,9 +287,7 @@ fn installed_guidance_documents_feedback_and_rejected_revision_paths() {
     let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
     let skills = std::fs::read_dir(directory.path().join(".agents/skills"))
         .unwrap()
-        .map(|entry| {
-            std::fs::read_to_string(entry.unwrap().path().join("SKILL.md")).unwrap()
-        })
+        .map(|entry| std::fs::read_to_string(entry.unwrap().path().join("SKILL.md")).unwrap())
         .collect::<Vec<_>>()
         .join("\n");
     let guidance = format!("{agents}\n{skills}");

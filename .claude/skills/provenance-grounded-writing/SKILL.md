@@ -2,9 +2,16 @@
 name: provenance-grounded-writing
 description: Write specific, evidence-grounded statements for requirements, rules, sources, resolutions, and boundaries — not generic capability language. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:95ec464e57b3d02e -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:23301df83361204a -->
 
 # Grounded writing
+
+## Review feedback and revision
+
+Read the current decision, rejection comment, and bounded Discussion messages with
+`provenance <record-id> get --view review`. Copy `review.edit.etag` unchanged to the
+`--if-match` option of the guarded update. A guarded update after a rejection opens the
+new submission. Do not submit or withdraw a second submission.
 
 Atomic Rule statements read sharp. Requirements above them read like a
 capability list — "provides identity, reporting, comms, integrations" — vague enough to fit
