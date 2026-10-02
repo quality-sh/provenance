@@ -41,7 +41,7 @@ impl HostRuntime {
 
 impl Drop for HostRuntime {
     fn drop(&mut self) {
-        if std::fs::read(&self.path).as_deref() == Ok(self.contents.as_slice()) {
+        if std::fs::read(&self.path).is_ok_and(|contents| contents == self.contents) {
             let _ = std::fs::remove_file(&self.path);
         }
     }
