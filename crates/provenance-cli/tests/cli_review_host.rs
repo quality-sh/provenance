@@ -5,7 +5,7 @@ use std::{
     net::TcpListener,
     process::{Child, Command, Stdio},
     sync::mpsc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 struct Host {
@@ -83,6 +83,20 @@ fn start(root: &std::path::Path) -> Host {
     );
     host.config = serde_json::from_str(&line).unwrap();
     host
+}
+
+#[cfg(unix)]
+fn stop(host: &mut Host) {
+    assert!(Command::new("kill")
+        .args(["-TERM", &host.child.id().to_string()])
+        .status()
+        .unwrap()
+        .success());
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while host.child.try_wait().unwrap().is_none() {
+        assert!(Instant::now() < deadline, "review host did not stop");
+        std::thread::sleep(Duration::from_millis(25));
+    }
 }
 
 fn request(host: &Host, method: &str, path: &str, auth: bool) -> ureq::Request {
@@ -163,6 +177,25 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
             404
         );
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_file_contains_the_host_location_and_is_removed_on_shutdown() {
+    let repo = repository();
+    let runtime = repo
+        .path()
+        .join(".provenance/cache/review-hosts/default.json");
+    let mut host = start(repo.path());
+
+    let published: Value = serde_json::from_slice(&std::fs::read(&runtime).unwrap()).unwrap();
+    assert_eq!(published["endpoint"], host.config["endpoint"]);
+    assert_eq!(published["repositoryId"], "A");
+    assert_eq!(published["scope"], "default");
+    assert!(published.get("bearer").is_none());
+
+    stop(&mut host);
+    assert!(!runtime.exists());
 }
 
 #[test]
