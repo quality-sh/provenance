@@ -162,5 +162,28 @@ fn explicit_link_read_explains_how_to_start_the_host() {
         "json",
     ]);
     assert!(output["review_url"].is_null());
-    assert!(output["message"].as_str().unwrap().contains("provenance review"));
+    assert!(output["message"]
+        .as_str()
+        .unwrap()
+        .contains("provenance review"));
+}
+
+#[test]
+fn write_without_a_requirement_document_remains_unchanged() {
+    let (_directory, repo) = initialized_repo();
+    let created = json_output(&[
+        "sources",
+        "create",
+        "--repo",
+        &repo,
+        "--id",
+        "source_without_document",
+        "--name",
+        "Source without document",
+        "--format",
+        "json",
+    ]);
+
+    assert!(created["data"].get("review_url").is_none());
+    assert!(created["data"].get("review_message").is_none());
 }

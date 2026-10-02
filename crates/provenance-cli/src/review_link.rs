@@ -21,7 +21,11 @@ pub async fn print(
     format: Option<provenance_cli::porcelain::OutputFormat>,
 ) -> anyhow::Result<()> {
     let host = context.local_host()?;
-    let output = link_output(context, &host, record_id).await?;
+    let output = link_output(context, &host, record_id)
+        .await?
+        .ok_or_else(|| {
+            anyhow::anyhow!("record {record_id} is not in a Requirement review document")
+        })?;
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&output)
     } else {
@@ -46,7 +50,9 @@ pub async fn annotate_write(
     let Some(record_id) = affected_record(value, record_write).map(str::to_owned) else {
         return Ok(());
     };
-    let output = link_output(context, host, &record_id).await?;
+    let Some(output) = link_output(context, host, &record_id).await? else {
+        return Ok(());
+    };
     if let Some(url) = output.review_url {
         value["data"]["review_url"] = Value::String(url);
     } else if let Some(message) = output.message {
@@ -59,28 +65,33 @@ async fn link_output(
     context: &RepoContext,
     host: &StatementHost,
     record_id: &str,
-) -> anyhow::Result<LinkOutput> {
-    let root = containing_requirement(host, record_id).await?;
+) -> anyhow::Result<Option<LinkOutput>> {
+    let Some(root) = containing_requirement(host, record_id).await? else {
+        return Ok(None);
+    };
     let Some(runtime) = crate::review_runtime::read(context.repo.as_std_path(), &context.scope)?
         .filter(host_is_running)
     else {
-        return Ok(LinkOutput {
+        return Ok(Some(LinkOutput {
             review_url: None,
             message: Some(start_message(context)),
-        });
+        }));
     };
     let focus = (root != record_id).then_some(record_id);
-    Ok(LinkOutput {
+    Ok(Some(LinkOutput {
         review_url: Some(build_url(&runtime.endpoint, &root, focus)?),
         message: None,
-    })
+    }))
 }
 
-async fn containing_requirement(host: &StatementHost, record_id: &str) -> anyhow::Result<String> {
+async fn containing_requirement(
+    host: &StatementHost,
+    record_id: &str,
+) -> anyhow::Result<Option<String>> {
     let get = host.porcelain().get();
     let record = get.get(GetInput::new(record_id, View::Record)).await?;
     if record.record.node_type() == NodeType::Requirement {
-        return Ok(record_id.to_owned());
+        return Ok(Some(record_id.to_owned()));
     }
     let mut requirements = Vec::new();
     for view in [View::Grounding, View::Children] {
@@ -98,9 +109,7 @@ async fn containing_requirement(host: &StatementHost, record_id: &str) -> anyhow
     }
     requirements.sort();
     requirements.dedup();
-    requirements.into_iter().next().ok_or_else(|| {
-        anyhow::anyhow!("record {record_id} is not in a Requirement review document")
-    })
+    Ok(requirements.into_iter().next())
 }
 
 fn affected_record(value: &Value, record_write: bool) -> Option<&str> {
