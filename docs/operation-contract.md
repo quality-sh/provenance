@@ -61,11 +61,13 @@ outcome is `pending`. `review.comment_count` is the number of feedback comments
 attached to the current terminal decision.
 
 The document result also includes `review_totals.pending`,
-`review_totals.accepted`, and `review_totals.rejected`. These totals count all
-record entries selected by `exclude_terminal`, not only the entries on the
-current cursor page. Each page in one successful cursor sequence repeats the
-same totals. A review-state change refuses the continuation, so the caller must
-restart the document read.
+`review_totals.accepted`, and `review_totals.rejected`. These totals exclude
+`reference` entries. They count all `member` entries selected by
+`exclude_terminal` across the complete document. Thus, they do not describe
+only the current cursor page. Reference entries keep their individual `review`
+objects. Each page in one successful cursor sequence repeats the same totals. A
+review-state change refuses the continuation, so the caller must restart the
+document read.
 
 Sources, Requirements, Resolutions, Rules, Topics, and Questions own addressed
 Discussions:

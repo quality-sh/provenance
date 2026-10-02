@@ -2,8 +2,8 @@ use super::{nodes, served, ReadContext, ReadPolicy};
 use crate::operations::reader::Cursor;
 use camino::Utf8PathBuf;
 use provenance_core::protocol::{
-    read_failure::ReadFailure, DocumentEntry, ReadDocumentQuery, ReadDocumentResult, StampPolicy,
-    Stamped,
+    read_failure::ReadFailure, DocumentEntry, DocumentReviewTotals, ReadDocumentQuery,
+    ReadDocumentResult, StampPolicy, Stamped,
 };
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_macros::rule;
@@ -71,12 +71,28 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         .await?
         .into_iter()
         .filter(|(_, key)| key.stage < 2)
-        .map(|(kind, key)| Ok((NodeType::parse(&kind)?, StableId::new(key.id)?)))
+        .map(|(kind, key)| {
+            Ok((
+                NodeType::parse(&kind)?,
+                StableId::new(key.id)?,
+                key.stage == 0,
+            ))
+        })
         .collect::<anyhow::Result<Vec<_>>>()?;
+    let review_records = review_keys
+        .iter()
+        .map(|(kind, id, _)| (*kind, id.clone()))
+        .collect::<Vec<_>>();
     let review_state = ctx
         .live(crate::operations::reader::Live::Canonical)
         .store()
-        .document_review_state(ctx.snapshot().scope(), &review_keys)?;
+        .document_review_state(ctx.snapshot().scope(), &review_records)?;
+    let mut review_totals = DocumentReviewTotals::default();
+    for (kind, id, is_member) in &review_keys {
+        if *is_member {
+            review_totals.include(&review_state.summary(*kind, id));
+        }
+    }
     let (cursor, mut position) = Cursor::open_live(
         ctx,
         "read-document",
@@ -143,7 +159,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             None
         },
         has_more,
-        review_totals: review_state.totals,
+        review_totals,
         entries,
     })
 }
