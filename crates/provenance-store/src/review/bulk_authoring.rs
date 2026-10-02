@@ -47,14 +47,14 @@ impl StateStore {
                                 })
                                 .collect::<Vec<_>>())
                         })?;
-                    let scope = changes
-                        .first()
-                        .map(|(_, after)| ReviewRecord::from(after.clone()).scope_id().clone());
+                    let scope = changes.first().map(|(_, after)| {
+                        let after: ReviewRecord = after.clone().into();
+                        after.scope_id().clone()
+                    });
                     for (before, after) in changes {
-                        staged.commit_native_occurrence(
-                            Some(&ReviewRecord::from(before)),
-                            &ReviewRecord::from(after),
-                        )?;
+                        let before: ReviewRecord = before.into();
+                        let after: ReviewRecord = after.into();
+                        staged.commit_native_occurrence(Some(&before), &after)?;
                     }
                     if let Some(scope) = scope {
                         staged.validate_graph_scope(&scope)?;

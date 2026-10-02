@@ -143,7 +143,7 @@ impl StateStore {
         }))
     }
 
-    pub(super) fn stamp_records<T: GraphRecord>(
+    pub(crate) fn stamp_records<T: GraphRecord>(
         &self,
         before: &[T],
         after: &mut [T],
