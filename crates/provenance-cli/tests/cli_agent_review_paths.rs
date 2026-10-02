@@ -241,7 +241,7 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
 
     let listed =
         json_output(provenance().args(["rules", "list", "--repo", &repo, "--format", "json"]));
-    assert_eq!(listed["data"]["items"].as_array().unwrap().as_slice(), []);
+    assert_eq!(listed["data"]["items"], serde_json::json!([]));
 
     let included = json_output(provenance().args([
         "rules",
@@ -264,7 +264,7 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
         "--format",
         "json",
     ]));
-    assert_eq!(searched["nodes"].as_array().unwrap().as_slice(), []);
+    assert_eq!(searched["nodes"], serde_json::json!([]));
     let searched = json_output(provenance().args([
         "search",
         "--repo",
