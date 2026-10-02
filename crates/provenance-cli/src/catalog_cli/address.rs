@@ -1,5 +1,5 @@
 use provenance_store::operations::catalog::{self, Definition, HttpMethod};
-use std::{collections::BTreeMap, sync::OnceLock};
+use std::{collections::BTreeMap, fmt::Write as _, sync::OnceLock};
 
 pub(super) struct Resolved {
     pub address: &'static Address,
@@ -42,9 +42,11 @@ fn unknown(collection: &str, supplied: &[String]) -> anyhow::Error {
     );
     if let [id, form] = supplied {
         if matches!(form.as_str(), "feedback" | "review") {
-            message.push_str(&format!(
+            write!(
+                message,
                 "; to read review feedback, run `provenance {id} get --view review`"
-            ));
+            )
+            .expect("writing to a String cannot fail");
         }
     }
     anyhow::anyhow!(message)
