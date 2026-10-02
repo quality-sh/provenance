@@ -249,9 +249,13 @@ fn api_discovery_describes_the_live_catalog() {
         "{readable}"
     );
     assert!(
+        readable.contains("Use --filter <text> or --limit <number> to see more."),
+        "{readable}"
+    );
+    assert!(
         readable
             .trim_end()
-            .ends_with("Use --format json for the full request and response schemas."),
+            .ends_with("Use --format json for all schemas."),
         "{readable}"
     );
 
