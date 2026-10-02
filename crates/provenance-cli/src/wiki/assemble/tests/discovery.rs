@@ -339,6 +339,6 @@ fn missing_domain_classification_links_when_the_gap_group_is_rendered() {
 #[test]
 fn empty_scope_still_has_discovery_pages() {
     let corpus = build_corpus(&empty_state(), &LinkResolver::new(None));
-    assert_eq!(corpus.domains.groups, [] as [wiki::model::discovery::DomainGroup; 0]);
-    assert_eq!(corpus.search.entries, [] as [wiki::model::discovery::SearchEntry; 0]);
+    assert_eq!(corpus.domains.groups, [] as [crate::wiki::model::discovery::DomainGroup; 0]);
+    assert_eq!(corpus.search.entries, [] as [crate::wiki::model::discovery::SearchEntry; 0]);
 }
