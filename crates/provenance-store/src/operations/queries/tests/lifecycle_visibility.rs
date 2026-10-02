@@ -166,7 +166,7 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
     assert_eq!(second["result"]["has_more"], false);
     assert!(list_rules(
         &root,
-        json!({"exclude_terminal":false,"limit":1,"cursor":cursor})
+        json!({"exclude_terminal":false,"limit":1,"cursor":cursor}),
     )
         .await
         .unwrap_err()
