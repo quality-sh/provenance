@@ -123,8 +123,8 @@ fn affected_record(value: &Value, record_write: bool) -> Option<&str> {
     {
         return None;
     }
-    data.get("id")
-        .or_else(|| data.get("requirement_id"))
+    data.get("requirement_id")
+        .or_else(|| data.get("id"))
         .and_then(Value::as_str)
 }
 
