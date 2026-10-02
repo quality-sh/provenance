@@ -24,10 +24,10 @@ pub(super) const fn claim_blocking_status(status: ShapingStatus) -> Option<&'sta
         ShapingStatus::Topic(TopicStatus::Open | TopicStatus::Explored)
         | ShapingStatus::Question(QuestionStatus::Open) => None,
         ShapingStatus::Topic(TopicStatus::Closed) => Some("closed"),
-        ShapingStatus::Topic(TopicStatus::Archived) => Some("archived"),
+        ShapingStatus::Topic(TopicStatus::Archived)
+        | ShapingStatus::Question(QuestionStatus::Archived) => Some("archived"),
         ShapingStatus::Question(QuestionStatus::BlockedOnHuman) => Some("blocked_on_human"),
         ShapingStatus::Question(QuestionStatus::Answered) => Some("answered"),
-        ShapingStatus::Question(QuestionStatus::Archived) => Some("archived"),
     }
 }
 

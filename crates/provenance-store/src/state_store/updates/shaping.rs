@@ -13,7 +13,7 @@ impl StateStore {
         if input.status == Some(TopicStatus::Archived) {
             let stamp = self.current_record_stamp()?;
             return crate::publication::with_staged_state(&self.layout, false, |layout| {
-                StateStore::staged(layout.clone(), stamp).write_topic_update(input)
+                Self::staged(layout.clone(), stamp).write_topic_update(input)
             });
         }
         self.with_repository_publication(|| self.write_topic_update(input))
@@ -34,7 +34,7 @@ impl StateStore {
                 set(&mut topic.status, input.status);
                 set(&mut topic.links, links);
                 if archived_in_commit.is_some() {
-                    topic.archived_in_commit = archived_in_commit.clone();
+                    topic.archived_in_commit.clone_from(&archived_in_commit);
                 }
                 clear_topic_claim_on_exit(topic);
                 Ok(())

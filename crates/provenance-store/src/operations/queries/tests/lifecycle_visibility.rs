@@ -295,7 +295,13 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
         let unfiltered = list_family(&root, operation, json!({"limit":50}))
             .await
             .unwrap();
-        assert!(!unfiltered["result"]["items"].as_array().unwrap().is_empty());
+        assert_ne!(
+            unfiltered["result"]["items"]
+                .as_array()
+                .unwrap()
+                .as_slice(),
+            []
+        );
         let filtered = list_family(
             &root,
             operation,
@@ -303,7 +309,10 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
         )
         .await
         .unwrap();
-        assert!(filtered["result"]["items"].as_array().unwrap().is_empty());
+        assert_eq!(
+            filtered["result"]["items"].as_array().unwrap().as_slice(),
+            []
+        );
     }
 
     let found = search(
@@ -312,7 +321,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     )
     .await
     .unwrap();
-    assert!(found["nodes"].as_array().unwrap().is_empty());
+    assert_eq!(found["nodes"].as_array().unwrap().as_slice(), []);
 
     let unfiltered_document = queries::read_document(
         Some(root.clone()),
