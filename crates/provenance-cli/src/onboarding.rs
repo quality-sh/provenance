@@ -21,6 +21,11 @@ it in the same change.
   with code.
 - To change a Requirement, Rule, or past decision, create a Proposal. A human decides each
   Proposal.
+- Before you ask a person to review a record, start the review host if it is not running:
+  `{command} review --repo . --repository-id local --scope default`.
+- Get the review URL with
+  `{command} <record-id> get --review-link --format json`. Give the person the
+  review URL. Never give the person a record ID.
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` directly.
 - Pre-commit: `{command} check --quiet` and

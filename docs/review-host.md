@@ -36,6 +36,23 @@ operations for the configured repository and scope. Native validation, file
 access checks, publication locks, and disposition actor grants still apply.
 Record actor and role fields do not authenticate a caller.
 
+While the host runs, it writes its credential-free location to
+`.provenance/cache/review-hosts/SCOPE.json`. The file contains `endpoint`,
+`repositoryId`, and `scope`. The host removes the file during shutdown if it
+still owns the file. The bearer token is never in this file. CLI commands use
+this file to add review links to writes that open or change a review submission.
+If the host is not running, these writes explain how to start it.
+
+An agent can get a link for any record with:
+
+```sh
+provenance RECORD_ID get --review-link --format json
+```
+
+For a non-Requirement record, the command uses graph reads to find the
+Requirement document that contains the record. If no host is running, the
+command explains how to start one instead of returning a URL.
+
 The selected repository, its control files, Git configuration, and ancestor
 directories must be under the local caller's control. The host uses the existing
 [repository file access](operation-file-access.md) contract. It does not sandbox
@@ -109,10 +126,14 @@ not contain the bearer credential.
 The generic renderer does not read credentials, fetch host configuration, or
 mount itself. Its index is an empty shell. The concrete application in
 [tools/review-host](../tools/review-host/README.md) supplies credential entry and
-explicit Requirement selection. It reads `/review-config` with the credential.
-It then calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
-`dispositionActorIds`, `bearer`, and `rootId`. The renderer creates and owns the
-generated Effect client.
+Requirement selection. The page accepts `root=REQUIREMENT_ID` and an optional
+`focus=RECORD_ID` query parameter. The URL never contains the credential. After
+the person enters the token, the application opens `root` directly and hides
+the manual Requirement ID field. The field remains available when `root` is
+absent. The application reads `/review-config` with the credential. It then
+calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
+`dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. The
+renderer creates and owns the generated Effect client.
 
 The pinned renderer reads documents with `exclude_terminal=true`. A refresh
 reloads the current search and the document text, submissions, review outcomes,
