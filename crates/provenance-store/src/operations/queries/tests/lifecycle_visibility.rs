@@ -168,10 +168,10 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
         &root,
         json!({"exclude_terminal":false,"limit":1,"cursor":cursor}),
     )
-        .await
-        .unwrap_err()
-        .to_string()
-        .contains("cursor"));
+    .await
+    .unwrap_err()
+    .to_string()
+    .contains("cursor"));
 
     let first = search(
         &root,
