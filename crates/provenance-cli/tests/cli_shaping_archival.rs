@@ -106,7 +106,7 @@ fn archiving_a_question_keeps_its_topic_and_discussion_history() {
     let archived = archive(repo, "questions", "question_one");
     assert_eq!(archived["data"]["status"], "archived");
     assert_eq!(
-        run(repo, &["topics", "topic_archive", "get"])["result"]["status"],
+        run(repo, &["topics", "topic_archive", "get"])["record"]["value"]["status"],
         "open"
     );
     assert_eq!(
@@ -124,9 +124,9 @@ fn archiving_a_topic_archives_all_of_its_questions_in_one_update() {
     assert_eq!(topic["data"]["status"], "archived");
     for id in ["question_one", "question_two"] {
         let question = run(repo, &["questions", id, "get"]);
-        assert_eq!(question["result"]["status"], "archived");
+        assert_eq!(question["record"]["value"]["status"], "archived");
         assert_eq!(
-            question["result"]["archived_in_commit"]["commit"],
+            question["record"]["value"]["archived_in_commit"]["commit"],
             "a".repeat(40)
         );
     }
