@@ -28,8 +28,14 @@ fn concerns_resolve_independently_and_reopen_without_record_changes() {
         ThreadStatus::Active
     );
     assert_eq!(before, store.list_requirements(&scope()).unwrap());
-    assert_eq!(store.list_questions(&scope()).unwrap(), [] as [provenance_core::Question; 0]);
-    assert_eq!(store.list_dispositions(&scope()).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_questions(&scope()).unwrap(),
+        [] as [provenance_core::Question; 0]
+    );
+    assert_eq!(
+        store.list_dispositions(&scope()).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
     let reopened = store
         .write_discussion(status(&resolved, "reopen", "active"))
         .unwrap();

@@ -43,7 +43,10 @@ fn determinate_limit_is_exactly_25_words() {
 
 #[test]
 fn exactly_25_passes_and_exactly_26_has_one_finding() {
-    assert_eq!(check_descriptive(&sentence(25)).findings, [] as [provenance_ste100::Finding; 0]);
+    assert_eq!(
+        check_descriptive(&sentence(25)).findings,
+        [] as [provenance_ste100::Finding; 0]
+    );
 
     let text = sentence(26);
     let report = check_descriptive(&text);
@@ -108,7 +111,10 @@ fn six_short_sentences_are_not_a_sentence_length_violation() {
 #[verifies("rule_ste100_parenthetical_counting", examples)]
 fn parenthetical_text_counts_once_outside_and_as_a_sentence_inside() {
     let outer_passes = format!("{} ({}).", words(24), words(10));
-    assert_eq!(rule_6_3_spans(&outer_passes), [] as [provenance_ste100::Span; 0]);
+    assert_eq!(
+        rule_6_3_spans(&outer_passes),
+        [] as [provenance_ste100::Span; 0]
+    );
 
     let inner = words(26);
     let text = format!("{} ({inner}).", words(2));
@@ -152,8 +158,14 @@ fn mechanically_unambiguous_numbers_each_count_as_one_word() {
 fn unresolved_rule_8_6_meaning_prevents_a_strict_finding() {
     let possible_unit = format!("{} 10 widgets remain.", words(24));
     let possible_multiword_name = format!("{} Alpha Beta remain.", words(24));
-    assert_eq!(rule_6_3_spans(&possible_unit), [] as [provenance_ste100::Span; 0]);
-    assert_eq!(rule_6_3_spans(&possible_multiword_name), [] as [provenance_ste100::Span; 0]);
+    assert_eq!(
+        rule_6_3_spans(&possible_unit),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_3_spans(&possible_multiword_name),
+        [] as [provenance_ste100::Span; 0]
+    );
 }
 
 #[test]
@@ -161,9 +173,18 @@ fn unbalanced_parentheses_and_quotes_cannot_produce_strict_findings() {
     let unbalanced_parenthesis = format!("({}.", words(26));
     let unbalanced_quote = format!("\"{}.", words(26));
     let unbalanced_curly_quote = format!("“{}.", words(26));
-    assert_eq!(rule_6_3_spans(&unbalanced_parenthesis), [] as [provenance_ste100::Span; 0]);
-    assert_eq!(rule_6_3_spans(&unbalanced_quote), [] as [provenance_ste100::Span; 0]);
-    assert_eq!(rule_6_3_spans(&unbalanced_curly_quote), [] as [provenance_ste100::Span; 0]);
+    assert_eq!(
+        rule_6_3_spans(&unbalanced_parenthesis),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_3_spans(&unbalanced_quote),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_3_spans(&unbalanced_curly_quote),
+        [] as [provenance_ste100::Span; 0]
+    );
 }
 
 #[test]
@@ -172,7 +193,10 @@ fn nested_parentheses_and_unclear_internal_punctuation_are_indeterminate() {
     let apostrophes = format!("{}.", vec!["operator's"; 13].join(" "));
     let slashes = format!("{}.", vec!["input/output"; 13].join(" "));
     assert_eq!(rule_6_3_spans(&nested), [] as [provenance_ste100::Span; 0]);
-    assert_eq!(rule_6_3_spans(&apostrophes), [] as [provenance_ste100::Span; 0]);
+    assert_eq!(
+        rule_6_3_spans(&apostrophes),
+        [] as [provenance_ste100::Span; 0]
+    );
     assert_eq!(rule_6_3_spans(&slashes), [] as [provenance_ste100::Span; 0]);
 }
 
@@ -212,8 +236,14 @@ fn digit_hyphen_letter_measurement_candidates_are_indeterminate() {
 fn unresolved_multiword_names_are_indeterminate_without_grouping_them() {
     let uppercase = format!("{}.", vec!["ALPHA BETA"; 13].join(" "));
     let lowercase_connector = format!("{} Bank of America.", words(23));
-    assert_eq!(rule_6_3_spans(&uppercase), [] as [provenance_ste100::Span; 0]);
-    assert_eq!(rule_6_3_spans(&lowercase_connector), [] as [provenance_ste100::Span; 0]);
+    assert_eq!(
+        rule_6_3_spans(&uppercase),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_3_spans(&lowercase_connector),
+        [] as [provenance_ste100::Span; 0]
+    );
 }
 
 #[test]

@@ -173,7 +173,10 @@ fn scope_import_does_not_grandfather_a_keyword_id_from_another_canonical_kind() 
     );
     assert!(!staged.layout.publication_lock_path().exists());
     assert_eq!(staged.list_sources(&scope).unwrap(), vec![old]);
-    assert_eq!(staged.list_requirements(&scope).unwrap(), [] as [provenance_core::Requirement; 0]);
+    assert_eq!(
+        staged.list_requirements(&scope).unwrap(),
+        [] as [provenance_core::Requirement; 0]
+    );
 }
 
 #[test]

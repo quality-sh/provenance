@@ -29,7 +29,10 @@ async fn evidence_reports_which_list_was_cut() {
     assert!(!answer.implementation_bindings_has_more);
     assert_eq!(answer.verification_bindings.len(), 2);
     assert!(answer.verification_bindings_has_more);
-    assert_eq!(answer.verification_runs, [] as [provenance_core::VerificationRun; 0]);
+    assert_eq!(
+        answer.verification_runs,
+        [] as [provenance_core::VerificationRun; 0]
+    );
     assert!(!answer.verification_runs_has_more);
     assert_eq!(answer.reviews.len(), 2);
     assert!(!answer.reviews_has_more);

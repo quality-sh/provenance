@@ -101,7 +101,10 @@ async fn impact_says_when_the_scan_was_cut() {
 
     let cut = impact_under(&store, 0).await.unwrap();
     assert!(cut.result.scan_cut, "a limit of zero cuts before the file");
-    assert_eq!(cut.result.affected_rules[0].implementations, [] as [provenance_core::protocol::ImplementationSite; 0]);
+    assert_eq!(
+        cut.result.affected_rules[0].implementations,
+        [] as [provenance_core::protocol::ImplementationSite; 0]
+    );
     assert_eq!(cut.result.affected_rules[0].id.as_str(), "rule_overtime");
     assert_eq!(cut.stamp.live, ["scanned_sites"]);
     assert_eq!(cut.stamp.serial, whole.stamp.serial);

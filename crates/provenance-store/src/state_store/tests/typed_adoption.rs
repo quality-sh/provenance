@@ -49,7 +49,10 @@ fn typed_spec_cannot_reuse_another_canonical_kind_id() {
     let error = store.apply_typed_spec(&scope, input).unwrap_err();
 
     assert!(error.to_string().contains("record ID already exists"));
-    assert_eq!(store.list_requirements(&scope).unwrap(), [] as [provenance_core::Requirement; 0]);
+    assert_eq!(
+        store.list_requirements(&scope).unwrap(),
+        [] as [provenance_core::Requirement; 0]
+    );
 }
 
 fn target(kind: TypedDeclarationKind, id: &str) -> TypedAdoptionTarget {
@@ -291,7 +294,10 @@ fn invalid_adoption_targets_are_rejected_before_reconciliation() {
         let (_dir, store, scope) = initialized_store();
         let error = store.plan_typed_spec(&scope, input).unwrap_err();
         assert!(error.to_string().contains(message), "{error:#}");
-        assert_eq!(store.list_requirements(&scope).unwrap(), [] as [provenance_core::Requirement; 0]);
+        assert_eq!(
+            store.list_requirements(&scope).unwrap(),
+            [] as [provenance_core::Requirement; 0]
+        );
     }
 }
 

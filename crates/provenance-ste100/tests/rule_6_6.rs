@@ -26,7 +26,10 @@ fn rule_6_6_spans(text: &str) -> Vec<Span> {
 #[test]
 #[verifies("rule_ste100_paragraph_sentence_limit", examples)]
 fn a_paragraph_permits_six_sentences_and_reports_seven() {
-    assert_eq!(rule_6_6_spans(&sentence_sequence(6)), [] as [provenance_ste100::Span; 0]);
+    assert_eq!(
+        rule_6_6_spans(&sentence_sequence(6)),
+        [] as [provenance_ste100::Span; 0]
+    );
 
     let text = sentence_sequence(7);
     assert_eq!(
@@ -112,9 +115,18 @@ fn indeterminate_sentence_or_paragraph_boundaries_produce_no_strict_finding() {
     let unbalanced_parenthesis = format!("({}", sentence_sequence(7));
     let unbalanced_quote = format!("\"{}", sentence_sequence(7));
 
-    assert_eq!(rule_6_6_spans(&list_like), [] as [provenance_ste100::Span; 0]);
-    assert_eq!(rule_6_6_spans(&unbalanced_parenthesis), [] as [provenance_ste100::Span; 0]);
-    assert_eq!(rule_6_6_spans(&unbalanced_quote), [] as [provenance_ste100::Span; 0]);
+    assert_eq!(
+        rule_6_6_spans(&list_like),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_6_spans(&unbalanced_parenthesis),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_6_spans(&unbalanced_quote),
+        [] as [provenance_ste100::Span; 0]
+    );
 }
 
 #[test]

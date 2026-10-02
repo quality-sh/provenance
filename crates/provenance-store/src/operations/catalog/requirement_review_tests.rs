@@ -94,8 +94,14 @@ async fn create_response_failure_refuses_before_publication() {
     crate::test_probes::disarm("requirement_resource_snapshot");
 
     assert!(result.is_err());
-    assert_eq!(store.list_requirements(&scope).unwrap(), [] as [provenance_core::Requirement; 0]);
-    assert_eq!(store.review_entries(&scope).unwrap(), [] as [provenance_core::review::ReviewEntry; 0]);
+    assert_eq!(
+        store.list_requirements(&scope).unwrap(),
+        [] as [provenance_core::Requirement; 0]
+    );
+    assert_eq!(
+        store.review_entries(&scope).unwrap(),
+        [] as [provenance_core::review::ReviewEntry; 0]
+    );
 
     let committed = CreateRequirementResource::run(
         PreparedContext::for_scope(PreparedScope {

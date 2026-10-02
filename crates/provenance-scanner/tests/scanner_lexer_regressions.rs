@@ -46,7 +46,10 @@ fn rust_doc_marker_inside_a_paired_code_span_stays_hidden() {
         "/// Write `@provenance rule: quoted_only` on the implementation line\nfn real_rule() {}";
     let scan = scan_file(Utf8Path::new("fixture.rs"), Language::Rust, source);
 
-    assert_eq!(scan.annotations, [] as [provenance_scanner::AnnotationLocation; 0]);
+    assert_eq!(
+        scan.annotations,
+        [] as [provenance_scanner::AnnotationLocation; 0]
+    );
     assert_eq!(scan.warnings, [] as [provenance_scanner::ParseWarning; 0]);
 }
 
@@ -66,7 +69,10 @@ fn marker_after_a_backslash_inside_paired_quotes_stays_hidden() {
     let source = "// \"a \\@provenance rule: string_only\"\nfn real_rule() {}";
     let scan = scan_file(Utf8Path::new("fixture.rs"), Language::Rust, source);
 
-    assert_eq!(scan.annotations, [] as [provenance_scanner::AnnotationLocation; 0]);
+    assert_eq!(
+        scan.annotations,
+        [] as [provenance_scanner::AnnotationLocation; 0]
+    );
     assert_eq!(scan.warnings, [] as [provenance_scanner::ParseWarning; 0]);
 }
 
@@ -75,7 +81,10 @@ fn go_comment_marker_inside_backticks_stays_hidden() {
     let source = "// Example: `@provenance rule: quoted_only`\nfunc realRule() {}";
     let scan = scan_file(Utf8Path::new("fixture.go"), Language::Go, source);
 
-    assert_eq!(scan.annotations, [] as [provenance_scanner::AnnotationLocation; 0]);
+    assert_eq!(
+        scan.annotations,
+        [] as [provenance_scanner::AnnotationLocation; 0]
+    );
     assert_eq!(scan.warnings, [] as [provenance_scanner::ParseWarning; 0]);
 }
 

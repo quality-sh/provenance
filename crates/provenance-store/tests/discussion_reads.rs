@@ -232,8 +232,14 @@ async fn oversized_discussion_messages_are_refused_before_publication() {
         json!({"kind":"start","role":"user","body":"a".repeat(70_000)}),
     ));
     assert!(refused.is_err());
-    assert_eq!(store.list_messages(&scope()).unwrap(), [] as [provenance_core::Message; 0]);
-    assert_eq!(store.list_threads(&scope()).unwrap(), [] as [provenance_core::Thread; 0]);
+    assert_eq!(
+        store.list_messages(&scope()).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
+    assert_eq!(
+        store.list_threads(&scope()).unwrap(),
+        [] as [provenance_core::Thread; 0]
+    );
 }
 
 #[tokio::test]
@@ -280,7 +286,10 @@ async fn legacy_message_appends_refuse_oversized_bodies() {
         .unwrap(),
     );
     assert!(refused.is_err());
-    assert_eq!(store.list_messages(&scope()).unwrap(), [] as [provenance_core::Message; 0]);
+    assert_eq!(
+        store.list_messages(&scope()).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
     store
         .post_thread_message(
             serde_json::from_value(json!({

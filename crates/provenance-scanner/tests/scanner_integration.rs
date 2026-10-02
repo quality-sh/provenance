@@ -182,7 +182,10 @@ fn ignores_call_shaped_text_in_strings_and_trailing_comments() {
 const value = 1; // rule("rule_not_bound", implementation)"#,
     );
 
-    assert_eq!(scan.bindings, [] as [provenance_scanner::AttributeBinding; 0]);
+    assert_eq!(
+        scan.bindings,
+        [] as [provenance_scanner::AttributeBinding; 0]
+    );
 }
 
 #[test]
@@ -204,7 +207,10 @@ fn python_ordinary_rule_method_call_is_not_a_decorator_binding() {
         "registry.rule('rule_not_bound')\ndef unrelated():\n    pass",
     );
 
-    assert_eq!(scan.bindings, [] as [provenance_scanner::AttributeBinding; 0]);
+    assert_eq!(
+        scan.bindings,
+        [] as [provenance_scanner::AttributeBinding; 0]
+    );
 }
 
 #[test]
@@ -262,7 +268,10 @@ fn ignores_annotations_inside_string_literals() {
         r#"const fixture = "@provenance rule: rule_not_bound";"#,
     );
 
-    assert_eq!(scan.annotations, [] as [provenance_scanner::AnnotationLocation; 0]);
+    assert_eq!(
+        scan.annotations,
+        [] as [provenance_scanner::AnnotationLocation; 0]
+    );
 }
 
 #[test]
@@ -458,5 +467,8 @@ fn template_literal_after_inline_block_comment_hides_its_contents() {
         "/* note */ const s = `start\nconst fake = rule(\"rule_not_bound\", fn);\n`;\n",
     );
 
-    assert_eq!(scan.bindings, [] as [provenance_scanner::AttributeBinding; 0]);
+    assert_eq!(
+        scan.bindings,
+        [] as [provenance_scanner::AttributeBinding; 0]
+    );
 }

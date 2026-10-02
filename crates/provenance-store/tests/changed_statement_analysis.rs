@@ -164,7 +164,9 @@ fn non_statement_changes_and_clean_changed_statements_have_no_findings() {
     let clean = requirement("req_clean", "Clean statement");
 
     assert_eq!(
-        analyze_changed_statements(&[base], &[], &[metadata_change, clean], &[], None), [] as [provenance_store::statement_analysis::StatementDiagnostic; 0]);
+        analyze_changed_statements(&[base], &[], &[metadata_change, clean], &[], None),
+        [] as [provenance_store::statement_analysis::StatementDiagnostic; 0]
+    );
 }
 
 #[test]

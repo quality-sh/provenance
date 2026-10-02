@@ -13,7 +13,10 @@ fn ignores_comment_markers_inside_same_line_string_literals() {
         let source = format!(r#"const FIXTURE: &str = "// {marker} rule: string_only";"#);
         let scan = scan_file(Utf8Path::new("fixture.rs"), Language::Rust, &source);
 
-        assert_eq!(scan.annotations, [] as [provenance_scanner::AnnotationLocation; 0]);
+        assert_eq!(
+            scan.annotations,
+            [] as [provenance_scanner::AnnotationLocation; 0]
+        );
         assert_eq!(scan.warnings, [] as [provenance_scanner::ParseWarning; 0]);
     }
 }
@@ -113,7 +116,10 @@ fn ignores_a_marker_inside_a_same_line_raw_string() {
     let source = r##"let fixture = r#"" @provenance rule: string_only "#;"##;
     let scan = scan_file(Utf8Path::new("fixture.rs"), Language::Rust, source);
 
-    assert_eq!(scan.annotations, [] as [provenance_scanner::AnnotationLocation; 0]);
+    assert_eq!(
+        scan.annotations,
+        [] as [provenance_scanner::AnnotationLocation; 0]
+    );
     assert_eq!(scan.warnings, [] as [provenance_scanner::ParseWarning; 0]);
 }
 
@@ -136,7 +142,10 @@ fn ignores_a_quoted_fixture_marker_shown_inside_a_rust_comment() {
     let source = r#"// const FIXTURE: &str = "// @provenance rule: string_only";"#;
     let scan = scan_file(Utf8Path::new("fixture.rs"), Language::Rust, source);
 
-    assert_eq!(scan.annotations, [] as [provenance_scanner::AnnotationLocation; 0]);
+    assert_eq!(
+        scan.annotations,
+        [] as [provenance_scanner::AnnotationLocation; 0]
+    );
     assert_eq!(scan.warnings, [] as [provenance_scanner::ParseWarning; 0]);
 }
 
@@ -180,6 +189,9 @@ fn ignores_a_marker_inside_a_same_line_backtick_string() {
     let source = "value := `// @provenance rule: string_only`";
     let scan = scan_file(Utf8Path::new("fixture.go"), Language::Go, source);
 
-    assert_eq!(scan.annotations, [] as [provenance_scanner::AnnotationLocation; 0]);
+    assert_eq!(
+        scan.annotations,
+        [] as [provenance_scanner::AnnotationLocation; 0]
+    );
     assert_eq!(scan.warnings, [] as [provenance_scanner::ParseWarning; 0]);
 }

@@ -151,14 +151,12 @@ async fn archive_requires_a_permalink_and_refuses_every_exit() {
         .dir
         .path()
         .join(".provenance/state/scopes/default/rules/rule.jsonl");
-    assert_eq!(std::fs::read_to_string(&rule_path)
-        .unwrap_or_default(), "");
+    assert_eq!(std::fs::read_to_string(&rule_path).unwrap_or_default(), "");
     let permalink = json!({"commit":"a".repeat(40),"at":"2026-09-12T00:00:00Z"});
     assert!(rule(&fixture, "draft", Some(permalink.clone()))
         .await
         .is_err());
-    assert_eq!(std::fs::read_to_string(&rule_path)
-        .unwrap_or_default(), "");
+    assert_eq!(std::fs::read_to_string(&rule_path).unwrap_or_default(), "");
     rule(&fixture, "draft", None).await.unwrap();
     assert!(fixture
         .call(

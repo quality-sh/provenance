@@ -385,25 +385,34 @@ fn annotate_links_a_leading_test_name_to_the_next_file_reference() {
 #[verifies("rule_wiki_reference_links", examples)]
 fn annotate_leaves_code_refs_unlinked_without_scan_data() {
     let resolver = LinkResolver::new(None);
-    assert_eq!(resolver
-        .annotate("src/UseCase.php:211-233 confirmed by testCreateGapInvoiceOnly."), [] as [crate::wiki::links::evidence::InlineRef; 0]);
+    assert_eq!(
+        resolver.annotate("src/UseCase.php:211-233 confirmed by testCreateGapInvoiceOnly."),
+        [] as [crate::wiki::links::evidence::InlineRef; 0]
+    );
 }
 
 #[test]
 fn annotate_skips_test_names_without_a_file_reference() {
-    assert_eq!(scanned_resolver("src/UseCase.php")
-        .annotate("Confirmed by testCreateGapInvoiceOnly."), [] as [crate::wiki::links::evidence::InlineRef; 0]);
+    assert_eq!(
+        scanned_resolver("src/UseCase.php").annotate("Confirmed by testCreateGapInvoiceOnly."),
+        [] as [crate::wiki::links::evidence::InlineRef; 0]
+    );
 }
 
 #[test]
 #[verifies("rule_wiki_reference_links", examples)]
 fn annotate_returns_nothing_for_plain_prose() {
-    assert_eq!(LinkResolver::new(None)
-        .annotate("The award requires overtime pay."), [] as [crate::wiki::links::evidence::InlineRef; 0]);
+    assert_eq!(
+        LinkResolver::new(None).annotate("The award requires overtime pay."),
+        [] as [crate::wiki::links::evidence::InlineRef; 0]
+    );
 }
 
 #[test]
 fn annotate_leaves_unscanned_path_tokens_as_plain_text() {
-    assert_eq!(scanned_resolver("src/UseCase.php")
-        .annotate("The partial/failure path remains under review."), [] as [crate::wiki::links::evidence::InlineRef; 0]);
+    assert_eq!(
+        scanned_resolver("src/UseCase.php")
+            .annotate("The partial/failure path remains under review."),
+        [] as [crate::wiki::links::evidence::InlineRef; 0]
+    );
 }

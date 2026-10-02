@@ -40,8 +40,14 @@ fn rule_page_traces_back_to_requirements_and_sources() {
     assert_eq!(page.requirements[0].target.record_id, "req_child");
     assert_eq!(page.sources.len(), 1);
     assert_eq!(page.sources[0].target.record_id, "source_schads");
-    assert_eq!(page.implementations, [] as [crate::wiki::model::ImplementationBinding; 0]);
-    assert_eq!(page.verifications, [] as [crate::wiki::model::VerificationSite; 0]);
+    assert_eq!(
+        page.implementations,
+        [] as [crate::wiki::model::ImplementationBinding; 0]
+    );
+    assert_eq!(
+        page.verifications,
+        [] as [crate::wiki::model::VerificationSite; 0]
+    );
     assert_eq!(page.gaps, [] as [crate::wiki::model::GapNotice; 0]);
 }
 
@@ -139,5 +145,8 @@ fn source_page_flags_unreferenced_sources() {
     let corpus = fixture_corpus();
     let page = source_page(&corpus, "source_unused");
     assert_eq!(gap_kinds(&page.gaps), vec![GapKind::UnreferencedSource]);
-    assert_eq!(page.referenced_requirements, [] as [crate::wiki::model::PageLink; 0]);
+    assert_eq!(
+        page.referenced_requirements,
+        [] as [crate::wiki::model::PageLink; 0]
+    );
 }

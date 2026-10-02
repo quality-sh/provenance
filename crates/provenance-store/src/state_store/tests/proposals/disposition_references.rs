@@ -30,7 +30,10 @@ fn direct_disposition_rejects_missing_canonical_artifact_without_writing() {
         error.contains("canonical artifact does not exist"),
         "{error}"
     );
-    assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 }
 
 #[test]
@@ -82,7 +85,10 @@ fn direct_disposition_rejects_each_missing_canonical_artifact_kind() {
             error.contains("canonical artifact does not exist"),
             "{artifact_type}: {error}"
         );
-        assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+        assert_eq!(
+            store.list_dispositions(&scope).unwrap(),
+            [] as [provenance_core::DispositionRecord; 0]
+        );
     }
 }
 
@@ -123,7 +129,10 @@ fn direct_disposition_rejects_wrong_kind_and_wrong_scope_targets() {
             error.contains("canonical artifact does not exist"),
             "{error}"
         );
-        assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+        assert_eq!(
+            store.list_dispositions(&scope).unwrap(),
+            [] as [provenance_core::DispositionRecord; 0]
+        );
     }
 }
 
@@ -155,7 +164,10 @@ fn direct_disposition_rejects_every_canonical_kind_misfiled_in_the_scope_shard()
             error.contains("canonical artifact does not exist"),
             "{artifact_type}: {error}"
         );
-        assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+        assert_eq!(
+            store.list_dispositions(&scope).unwrap(),
+            [] as [provenance_core::DispositionRecord; 0]
+        );
     }
 }
 
@@ -259,7 +271,10 @@ fn batch_rejects_a_misfiled_canonical_artifact_without_landing() {
         error.contains("canonical artifact does not exist"),
         "{error}"
     );
-    assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 }
 
 #[test]

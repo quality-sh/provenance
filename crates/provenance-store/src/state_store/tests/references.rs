@@ -378,7 +378,10 @@ fn a_citation_clears_by_source() {
     let requirement = store
         .clear_source_reference(&scope, &sid("req_overtime"), &sid("source_schads"))
         .unwrap();
-    assert_eq!(requirement.source_refs, [] as [provenance_core::SourceReference; 0]);
+    assert_eq!(
+        requirement.source_refs,
+        [] as [provenance_core::SourceReference; 0]
+    );
     let repeated = store
         .clear_source_reference(&scope, &sid("req_overtime"), &sid("source_schads"))
         .unwrap();

@@ -13,7 +13,10 @@ fn typed_rule_declaration_call_is_not_an_implementation_binding() {
         r#"const fixture = requirement.rule("expiry", {statement: "Expires after 30 days"});"#,
     );
 
-    assert_eq!(scan.bindings, [] as [provenance_scanner::AttributeBinding; 0]);
+    assert_eq!(
+        scan.bindings,
+        [] as [provenance_scanner::AttributeBinding; 0]
+    );
 }
 
 #[test]

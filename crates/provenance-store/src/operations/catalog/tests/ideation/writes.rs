@@ -19,7 +19,10 @@ async fn request_scope_must_equal_the_selected_scope_and_leaves_no_effects() {
         .await
         .unwrap_err();
     assert_eq!(refusal_kind(error), "scope_mismatch");
-    assert_eq!(store.list_proposal_cards(&scope).unwrap(), [] as [provenance_core::ProposalCard; 0]);
+    assert_eq!(
+        store.list_proposal_cards(&scope).unwrap(),
+        [] as [provenance_core::ProposalCard; 0]
+    );
     assert!(!store.layout.scopes_dir().join("other").exists());
 }
 
@@ -57,7 +60,10 @@ async fn disposition_actor_allowlist_and_its_empty_list_are_retained() {
             .contains("disposition actor is not in the repository allowlist"),
         "{error}"
     );
-    assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 }
 
 #[tokio::test]
@@ -189,7 +195,10 @@ async fn missing_proposal_and_missing_canonical_artifact_are_refused_before_publ
         .await
         .unwrap_err();
     assert!(error.to_string().contains("canonical artifact"), "{error}");
-    assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 }
 
 #[tokio::test]
@@ -212,7 +221,10 @@ async fn empty_rationale_is_refused_with_the_native_words() {
             .contains("disposition rationale must not be empty"),
         "{error}"
     );
-    assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 }
 
 #[tokio::test]
@@ -241,7 +253,10 @@ async fn an_assertion_cannot_reenter_a_disposed_proposal() {
             .contains("disposed proposal cannot re-enter assertion"),
         "{error}"
     );
-    assert_eq!(store.list_assertion_records(&scope).unwrap(), [] as [provenance_core::AssertionRecord; 0]);
+    assert_eq!(
+        store.list_assertion_records(&scope).unwrap(),
+        [] as [provenance_core::AssertionRecord; 0]
+    );
 }
 
 #[tokio::test]
@@ -318,5 +333,8 @@ async fn a_publication_that_cannot_write_reports_a_write_failure() {
     permissions.set_mode(0o755);
     std::fs::set_permissions(&dispositions_dir, permissions).unwrap();
     assert_eq!(refusal_kind(result.unwrap_err()), "write_failed");
-    assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 }

@@ -125,9 +125,15 @@ fn the_scanner_leaves_unrelated_matches_alone() {
 #[test]
 fn the_scanner_ignores_test_modules_with_either_brace_style() {
     let same_line = "#[cfg(test)]\nmod tests {\n    fn f(k: NodeType) -> u8 {\n        match k {\n            NodeType::Source => 0,\n            _ => 9,\n        }\n    }\n}\nfn production() {}\n";
-    assert_eq!(offenses(&production_lines(same_line)), [] as [std::string::String; 0]);
+    assert_eq!(
+        offenses(&production_lines(same_line)),
+        [] as [std::string::String; 0]
+    );
     let next_line = "#[cfg(test)]\nmod tests\n{\n    fn f(k: NodeType) -> u8 {\n        match k {\n            NodeType::Source => 0,\n            _ => 9,\n        }\n    }\n}\nfn production() {}\n";
-    assert_eq!(offenses(&production_lines(next_line)), [] as [std::string::String; 0]);
+    assert_eq!(
+        offenses(&production_lines(next_line)),
+        [] as [std::string::String; 0]
+    );
     let kept = production_lines(same_line);
     assert!(kept.contains("fn production()"), "production lines stay");
     let one_liner = "#[cfg(test)]\nmod tests {}\nfn f(k: NodeType) -> u8 {\n    match k {\n        NodeType::Source => 0,\n        _ => 9,\n    }\n}\n";

@@ -110,7 +110,10 @@ async fn an_appended_run_moves_evidence_and_not_the_stamp() {
     )
     .await
     .unwrap();
-    assert_eq!(first.result.verification_runs, [] as [provenance_core::VerificationRun; 0]);
+    assert_eq!(
+        first.result.verification_runs,
+        [] as [provenance_core::VerificationRun; 0]
+    );
     assert!(first.result.latest_verification_run.is_none());
 
     append_record(

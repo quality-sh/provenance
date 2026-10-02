@@ -27,7 +27,10 @@ fn refuses_a_disposition_naming_a_proposal_that_was_never_created() {
         .to_string();
 
     assert!(error.contains("proposal does not exist"), "{error}");
-    assert_eq!(store.list_dispositions(&scope).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 }
 
 #[test]

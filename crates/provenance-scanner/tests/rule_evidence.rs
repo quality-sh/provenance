@@ -133,7 +133,10 @@ fn complete_evidence_reports_each_active_rule_absence() {
     );
 
     assert_eq!(implementation_only_absence.unimplemented, ["rule_claims"]);
-    assert_eq!(implementation_only_absence.unverified, [] as [std::string::String; 0]);
+    assert_eq!(
+        implementation_only_absence.unverified,
+        [] as [std::string::String; 0]
+    );
     assert_eq!(implementation_only_absence.governed_finding_count(), 0);
     assert!(!binding_findings_fail(
         BindingFindingSeverity::Error,

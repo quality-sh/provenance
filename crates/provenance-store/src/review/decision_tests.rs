@@ -264,7 +264,10 @@ fn stale_submission_and_stale_selection_are_refused() {
         ),
         "stale review selection",
     );
-    assert_eq!(store.list_dispositions(&scope()).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope()).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
     refused(withdraw(&store, &proposal), "no longer current and pending");
 }
 
@@ -281,7 +284,10 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
         ),
         "allowlist",
     );
-    assert_eq!(store.list_dispositions(&scope()).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope()).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 
     refused(
         decide(
@@ -293,7 +299,10 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
         ),
         "asserted before disposition",
     );
-    assert_eq!(store.list_dispositions(&scope()).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope()).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 
     refused(
         decide(
@@ -310,7 +319,10 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
         ),
         "approval does not take a rationale",
     );
-    assert_eq!(store.list_dispositions(&scope()).unwrap(), [] as [provenance_core::DispositionRecord; 0]);
+    assert_eq!(
+        store.list_dispositions(&scope()).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 
     // The human existing-artifact path is the qualified exception.
     decide(
@@ -371,7 +383,10 @@ fn feedback_publishes_with_the_decision_or_neither() {
         store.list_threads(&scope()).unwrap().is_empty(),
         "no feedback without its decision"
     );
-    assert_eq!(store.list_messages(&scope()).unwrap(), [] as [provenance_core::Message; 0]);
+    assert_eq!(
+        store.list_messages(&scope()).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
 
     decide(
         &store,

@@ -9,8 +9,14 @@ use provenance_core::{NodeType, QuestionStatus, RequirementStatus, TopicStatus};
 fn build_corpus_on_a_truly_empty_scope_is_honestly_empty() {
     let resolver = LinkResolver::new(None);
     let corpus = build_corpus(&empty_state(), &resolver);
-    assert_eq!(corpus.requirements, [] as [crate::wiki::model::RequirementPage; 0]);
-    assert_eq!(corpus.resolutions, [] as [crate::wiki::model::ResolutionPage; 0]);
+    assert_eq!(
+        corpus.requirements,
+        [] as [crate::wiki::model::RequirementPage; 0]
+    );
+    assert_eq!(
+        corpus.resolutions,
+        [] as [crate::wiki::model::ResolutionPage; 0]
+    );
     assert_eq!(corpus.rules, [] as [crate::wiki::model::RulePage; 0]);
     assert_eq!(corpus.sources, [] as [crate::wiki::model::SourcePage; 0]);
     assert_eq!(corpus.index.counts, CorpusCounts::default());

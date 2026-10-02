@@ -125,7 +125,10 @@ fn ignored_symlinks_are_not_entered_and_cuts_count_only_source_files() {
     let (scans, cut) = root.scan_tree(1).unwrap();
     assert_eq!(scans.len(), 1);
     assert!(!cut);
-    assert_eq!(scans[0].bindings, [] as [provenance_scanner::AttributeBinding; 0]);
+    assert_eq!(
+        scans[0].bindings,
+        [] as [provenance_scanner::AttributeBinding; 0]
+    );
     assert!(root.scan_tree(0).unwrap().1);
 }
 

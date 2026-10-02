@@ -163,8 +163,10 @@ fn requirement_page_lists_siblings_under_the_same_parent_without_self_in_record_
         .map(|link| link.target.record_id.as_str())
         .collect();
     assert_eq!(sibling_ids, vec!["req_sibling_beta", "req_sibling_alpha"]);
-    assert_eq!(requirement_page(&corpus, "req_parent_a")
-        .siblings, [] as [crate::wiki::model::PageLink; 0]);
+    assert_eq!(
+        requirement_page(&corpus, "req_parent_a").siblings,
+        [] as [crate::wiki::model::PageLink; 0]
+    );
 }
 
 #[test]
