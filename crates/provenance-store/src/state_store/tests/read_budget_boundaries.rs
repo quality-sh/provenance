@@ -70,7 +70,7 @@ async fn source_above_json_page_boundary_is_refused_before_publication() {
     );
     assert_eq!(list_read(&root).await.unwrap()["result"]["items"]
         .as_array()
-        .unwrap().as_slice(), []);
+        .unwrap().as_slice(), [] as [serde_json::Value; 0]);
 }
 
 #[tokio::test]
@@ -82,7 +82,7 @@ async fn long_source_id_is_refused_before_resource_page_scan() {
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
     assert_eq!(list_read(&root).await.unwrap()["result"]["items"]
         .as_array()
-        .unwrap().as_slice(), []);
+        .unwrap().as_slice(), [] as [serde_json::Value; 0]);
 }
 
 fn parent(id: String) -> ThreadParent {

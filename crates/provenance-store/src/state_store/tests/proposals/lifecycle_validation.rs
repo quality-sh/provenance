@@ -162,7 +162,7 @@ fn rejected_disposition_does_not_require_an_assertion() {
                 artifact_id: StableId::new("req_overtime").unwrap(),
             }),
         )
-        .unwrap(), [] as [state_store::proposal_surfaces::SurfacedProposal; 0]);
+        .unwrap(), [] as [crate::state_store::proposal_surfaces::SurfacedProposal; 0]);
 }
 
 #[test]

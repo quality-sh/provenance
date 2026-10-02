@@ -231,7 +231,10 @@ async fn the_verification_page_lists_only_the_bindings_of_the_named_rule() {
     assert_eq!(named["result"]["has_more"], false);
 
     let other = verification_page(&root, "rule_other").await;
-    assert_eq!(other["result"]["items"].as_array().unwrap().as_slice(), []);
+    assert_eq!(
+        other["result"]["items"].as_array().unwrap().as_slice(),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 async fn verification_page(root: &camino::Utf8Path, rule: &str) -> serde_json::Value {

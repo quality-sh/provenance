@@ -212,7 +212,7 @@ fn topic_claim_atomically_surfaces_matching_asserted_proposal_with_derived_state
 
     assert_eq!(store
         .surface_proposals(&scope, &ProposalDemand::for_changed_paths(["src/other.rs"]),)
-        .unwrap(), [] as [state_store::proposal_surfaces::SurfacedProposal; 0]);
+        .unwrap(), [] as [crate::state_store::proposal_surfaces::SurfacedProposal; 0]);
     assert_eq!(
         store
             .surface_proposals(

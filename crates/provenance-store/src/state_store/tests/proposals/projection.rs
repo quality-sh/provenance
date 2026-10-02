@@ -175,7 +175,7 @@ fn ratification_records_a_disposition_without_mutating_proposal_definition() {
         store.list_proposal_cards(&scope).unwrap()[0].promotion_state,
         PromotionState::Accepted
     );
-    assert_eq!(store.surface_proposals(&scope, &demand).unwrap(), [] as [state_store::proposal_surfaces::SurfacedProposal; 0]);
+    assert_eq!(store.surface_proposals(&scope, &demand).unwrap(), [] as [crate::state_store::proposal_surfaces::SurfacedProposal; 0]);
 }
 
 #[test]

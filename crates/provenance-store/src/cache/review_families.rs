@@ -127,8 +127,8 @@ mod tests {
             let facts = by_kind(kind);
             assert_eq!(facts.kind, kind);
             assert_eq!(facts.owner_field, "id");
-            assert_ne!(facts.content_fields, []);
-            assert_ne!(facts.lifecycle_fields, []);
+            assert_ne!(facts.content_fields, [] as [&str; 0]);
+            assert_ne!(facts.lifecycle_fields, [] as [&str; 0]);
         }
     }
 

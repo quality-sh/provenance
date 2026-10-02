@@ -41,5 +41,8 @@ fn analyzer_output_validates_against_its_serialize_schema() {
         .unwrap();
     assert!(compiled.is_valid(&value));
     assert_eq!(value["issue"], 9);
-    assert_ne!(value["findings"].as_array().unwrap().as_slice(), []);
+    assert_ne!(
+        value["findings"].as_array().unwrap().as_slice(),
+        [] as [serde_json::Value; 0]
+    );
 }
