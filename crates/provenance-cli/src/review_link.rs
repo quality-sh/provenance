@@ -50,7 +50,7 @@ pub async fn annotate_write(
     if let Some(url) = output.review_url {
         value["data"]["review_url"] = Value::String(url);
     } else if let Some(message) = output.message {
-        value["meta"]["review"] = Value::String(message);
+        value["data"]["review_message"] = Value::String(message);
     }
     Ok(())
 }
