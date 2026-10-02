@@ -296,10 +296,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
             .await
             .unwrap();
         assert_ne!(
-            unfiltered["result"]["items"]
-                .as_array()
-                .unwrap()
-                .as_slice(),
+            unfiltered["result"]["items"].as_array().unwrap().as_slice(),
             []
         );
         let filtered = list_family(
