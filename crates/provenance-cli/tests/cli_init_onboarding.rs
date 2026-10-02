@@ -68,6 +68,24 @@ fn init_installs_bundled_skills_and_ratified_instructions() {
 }
 
 #[test]
+fn init_guidance_explains_how_to_drop_questions_and_topics() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+
+    init(&repo).success();
+
+    let agents = read_agents(&repo);
+    let shaping =
+        std::fs::read_to_string(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
+    for text in [&agents, &shaping] {
+        assert!(text.contains("questions <question_id> update"), "{text}");
+        assert!(text.contains("topics <topic_id> update"), "{text}");
+        assert!(text.contains("\"status\":\"archived\""), "{text}");
+        assert!(text.contains("archived_in_commit"), "{text}");
+    }
+}
+
+#[test]
 #[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_owns_agents_provenance_section", examples)]
 fn init_onboarding_is_idempotent() {
