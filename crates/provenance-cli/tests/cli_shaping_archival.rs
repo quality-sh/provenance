@@ -85,6 +85,8 @@ fn initialized_records() -> tempfile::TempDir {
                 "topic_archive",
                 "--question",
                 "Keep this history?",
+                "--method",
+                "research",
             ],
         );
     }
