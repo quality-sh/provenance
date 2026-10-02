@@ -41,8 +41,9 @@ pub async fn annotate_write(
     context: &RepoContext,
     host: &StatementHost,
     value: &mut Value,
+    record_write: bool,
 ) -> anyhow::Result<()> {
-    let Some(record_id) = affected_record(value).map(str::to_owned) else {
+    let Some(record_id) = affected_record(value, record_write).map(str::to_owned) else {
         return Ok(());
     };
     let output = link_output(context, host, &record_id).await?;
@@ -102,11 +103,12 @@ async fn containing_requirement(host: &StatementHost, record_id: &str) -> anyhow
     })
 }
 
-fn affected_record(value: &Value) -> Option<&str> {
+fn affected_record(value: &Value, record_write: bool) -> Option<&str> {
     let data = value.get("data")?;
-    if !data
-        .pointer("/decision/pending")
-        .is_some_and(|pending| !pending.is_null())
+    if !record_write
+        && !data
+            .pointer("/decision/pending")
+            .is_some_and(|pending| !pending.is_null())
         && !matches!(
             data.get("fact").and_then(Value::as_str),
             Some("submitted" | "decided" | "withdrawn")

@@ -155,7 +155,13 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         .await
     {
         Ok(mut value) => {
-            crate::review_link::annotate_write(&repo, &host, &mut value).await?;
+            let record_write = definition.registration.target.is_some_and(|binding| {
+                matches!(
+                    binding.action,
+                    TargetAction::Create | TargetAction::Update | TargetAction::Submit
+                ) && provenance_core::review::REVIEW_RECORD_KINDS.contains(&binding.kind)
+            });
+            crate::review_link::annotate_write(&repo, &host, &mut value, record_write).await?;
             crate::output::print_json(&value)?;
         }
         Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
@@ -202,7 +208,9 @@ pub async fn dispatch_target(
         .invoke_target(&route, data, headers)
         .await
         .map_err(|failure| anyhow::anyhow!(serde_json::to_string(&failure).unwrap()))?;
-    crate::review_link::annotate_write(&repo, &host, &mut value).await?;
+    let record_write = matches!(action, Action::Create | Action::Update | Action::Submit)
+        && provenance_core::review::REVIEW_RECORD_KINDS.contains(&route.kind);
+    crate::review_link::annotate_write(&repo, &host, &mut value, record_write).await?;
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&value)?;
     } else {
