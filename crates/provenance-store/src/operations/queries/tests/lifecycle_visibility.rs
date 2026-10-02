@@ -164,7 +164,10 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
     .unwrap();
     assert_eq!(second["result"]["items"][0]["id"], "rule_c_active");
     assert_eq!(second["result"]["has_more"], false);
-    assert!(list_rules(&root, json!({"limit":1,"cursor":cursor}))
+    assert!(list_rules(
+        &root,
+        json!({"exclude_terminal":false,"limit":1,"cursor":cursor})
+    )
         .await
         .unwrap_err()
         .to_string()
@@ -197,7 +200,7 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
         &root,
         json!({
             "text":"lifecycle search", "node_types":[NodeType::Rule],
-            "limit":1, "cursor":cursor
+            "exclude_terminal":false, "limit":1, "cursor":cursor
         }),
     )
     .await
