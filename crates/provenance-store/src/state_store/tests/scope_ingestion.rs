@@ -52,7 +52,7 @@ fn scope_import_writes_only_the_imported_shards() {
         ) {
             assert!(!path.exists(), "{path} must stay outside scope import");
         } else {
-            assert!(std::fs::read(path).unwrap().is_empty());
+            assert_eq!(std::fs::read(path).unwrap(), [] as [u8; 0]);
         }
     }
     assert_eq!(
@@ -173,7 +173,10 @@ fn scope_import_does_not_grandfather_a_keyword_id_from_another_canonical_kind() 
     );
     assert!(!staged.layout.publication_lock_path().exists());
     assert_eq!(staged.list_sources(&scope).unwrap(), vec![old]);
-    assert!(staged.list_requirements(&scope).unwrap().is_empty());
+    assert_eq!(
+        staged.list_requirements(&scope).unwrap(),
+        [] as [provenance_core::Requirement; 0]
+    );
 }
 
 #[test]

@@ -265,8 +265,14 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
     }).await.unwrap();
     let old = collections(serde_json::to_value(&answer.result).unwrap());
     assert_eq!(old["requirements"].as_array().unwrap().len(), 1);
-    assert!(old["threads"].as_array().unwrap().is_empty());
-    assert!(old["messages"].as_array().unwrap().is_empty());
+    assert_eq!(
+        old["threads"].as_array().unwrap().as_slice(),
+        [] as [serde_json::Value; 0]
+    );
+    assert_eq!(
+        old["messages"].as_array().unwrap().as_slice(),
+        [] as [serde_json::Value; 0]
+    );
     assert_eq!(answer.stamp.digest, initial["stamp"]["digest"]);
     let refreshed = complete(root).await;
     assert_eq!(refreshed["requirements"].as_array().unwrap().len(), 2);

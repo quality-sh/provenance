@@ -47,8 +47,8 @@ async fn a_fact_page_lists_the_facts_of_the_named_proposal_only() {
     assert_eq!(dispositions["result"]["has_more"], false);
 
     let other = fact_page(&root, "page-proposal-dispositions", "proposal_leave").await;
-    assert!(items(&other).is_empty());
+    assert_eq!(items(&other).as_slice(), [] as [Value; 0]);
 
     let assertions = fact_page(&root, "page-proposal-assertions", "proposal_overtime").await;
-    assert!(items(&assertions).is_empty());
+    assert_eq!(items(&assertions).as_slice(), [] as [Value; 0]);
 }

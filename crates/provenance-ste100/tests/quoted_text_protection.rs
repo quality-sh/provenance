@@ -67,38 +67,56 @@ fn several_balanced_quotes_protect_each_delimited_span() {
 #[test]
 #[verifies("rule_ste100_quoted_text_protection", examples)]
 fn unmatched_opening_quote_makes_strict_checks_indeterminate() {
-    assert!(findings("\"can't; outside;").is_empty());
+    assert_eq!(
+        findings("\"can't; outside;"),
+        [] as [(provenance_ste100::RuleNumber, provenance_ste100::Span); 0]
+    );
 }
 
 #[test]
 #[verifies("rule_ste100_quoted_text_protection", examples)]
 fn unmatched_curly_close_makes_strict_checks_indeterminate() {
-    assert!(findings("can't;” outside;").is_empty());
+    assert_eq!(
+        findings("can't;” outside;"),
+        [] as [(provenance_ste100::RuleNumber, provenance_ste100::Span); 0]
+    );
 }
 
 #[test]
 #[verifies("rule_ste100_quoted_text_protection", examples)]
 fn mixed_delimiters_make_strict_checks_indeterminate() {
-    assert!(findings("“can't;\" outside;").is_empty());
+    assert_eq!(
+        findings("“can't;\" outside;"),
+        [] as [(provenance_ste100::RuleNumber, provenance_ste100::Span); 0]
+    );
 }
 
 #[test]
 #[verifies("rule_ste100_quoted_text_protection", examples)]
 fn nested_quotes_make_strict_checks_indeterminate() {
-    assert!(findings("“outer “can't;” outside;”").is_empty());
+    assert_eq!(
+        findings("“outer “can't;” outside;”"),
+        [] as [(provenance_ste100::RuleNumber, provenance_ste100::Span); 0]
+    );
 }
 
 #[test]
 fn indeterminate_quotes_prevent_a_strict_sentence_length_finding() {
     let text = format!("“{} “can't;” outside;”.", words(26));
-    assert!(findings(&text).is_empty());
+    assert_eq!(
+        findings(&text),
+        [] as [(provenance_ste100::RuleNumber, provenance_ste100::Span); 0]
+    );
 }
 
 #[test]
 #[verifies("rule_ste100_explicit_quotation_counting", examples)]
 fn protected_quotation_still_counts_as_one_word() {
     let at_limit = format!("{} \"can't; use these eight source words\".", words(24));
-    assert!(findings(&at_limit).is_empty());
+    assert_eq!(
+        findings(&at_limit),
+        [] as [(provenance_ste100::RuleNumber, provenance_ste100::Span); 0]
+    );
 
     let above_limit = format!("{} “won’t; use these eight source words”.", words(25));
     assert_eq!(

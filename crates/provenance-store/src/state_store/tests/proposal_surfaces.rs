@@ -210,10 +210,12 @@ fn topic_claim_atomically_surfaces_matching_asserted_proposal_with_derived_state
     let (_dir, store, scope) = initialized_store();
     seed_asserted_proposal(&store, &scope);
 
-    assert!(store
-        .surface_proposals(&scope, &ProposalDemand::for_changed_paths(["src/other.rs"]),)
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        store
+            .surface_proposals(&scope, &ProposalDemand::for_changed_paths(["src/other.rs"]),)
+            .unwrap(),
+        [] as [crate::state_store::proposal_surfaces::SurfacedProposal; 0]
+    );
     assert_eq!(
         store
             .surface_proposals(

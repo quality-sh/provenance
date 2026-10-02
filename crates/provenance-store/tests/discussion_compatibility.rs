@@ -92,6 +92,9 @@ fn a_message_read_failure_prevents_legacy_thread_publication() {
         provenance_store::write_error::WriteError::from(error).safe(),
         provenance_store::write_error::WriteFailure::WriteFailed
     ));
-    assert!(store.list_threads(&scope()).unwrap().is_empty());
+    assert_eq!(
+        store.list_threads(&scope()).unwrap(),
+        [] as [provenance_core::Thread; 0]
+    );
     assert_eq!(std::fs::read_to_string(path).unwrap(), "invalid JSON\n");
 }

@@ -163,8 +163,9 @@ fn non_statement_changes_and_clean_changed_statements_have_no_findings() {
     metadata_change.description = Some("Unrelated metadata".to_owned());
     let clean = requirement("req_clean", "Clean statement");
 
-    assert!(
-        analyze_changed_statements(&[base], &[], &[metadata_change, clean], &[], None).is_empty()
+    assert_eq!(
+        analyze_changed_statements(&[base], &[], &[metadata_change, clean], &[], None),
+        [] as [provenance_store::statement_analysis::StatementDiagnostic; 0]
     );
 }
 

@@ -224,7 +224,10 @@ fn bulk_replacement_reviews_existing_unenrolled_and_enrolled_records() {
     store
         .replace_graph_records(&path, vec![source.clone()])
         .unwrap();
-    assert!(entries(&store, &scope, NodeType::Source).is_empty());
+    assert_eq!(
+        entries(&store, &scope, NodeType::Source),
+        [] as [provenance_core::review::ReviewEntry; 0]
+    );
 
     let mut changed = source;
     changed.name = "Source B".into();

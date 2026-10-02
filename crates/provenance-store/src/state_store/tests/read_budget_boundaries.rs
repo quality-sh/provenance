@@ -68,10 +68,13 @@ async fn source_above_json_page_boundary_is_refused_before_publication() {
         member_read(&root, id).await.unwrap_err(),
         "resource_not_found"
     );
-    assert!(list_read(&root).await.unwrap()["result"]["items"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        list_read(&root).await.unwrap()["result"]["items"]
+            .as_array()
+            .unwrap()
+            .as_slice(),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[tokio::test]
@@ -81,10 +84,13 @@ async fn long_source_id_is_refused_before_resource_page_scan() {
     let id = "x".repeat(1025);
     assert_too_large(store.create_source(source_of_stored_bytes(&scope, &id, 4096)));
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
-    assert!(list_read(&root).await.unwrap()["result"]["items"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        list_read(&root).await.unwrap()["result"]["items"]
+            .as_array()
+            .unwrap()
+            .as_slice(),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 fn parent(id: String) -> ThreadParent {
@@ -133,8 +139,14 @@ fn long_parent_refuses_new_thread_before_thread_or_message_publication() {
     let (_dir, store, scope) = initialized_store();
     let parent = parent("x".repeat(40_000));
     assert_too_large(store.post_thread_message(post(&scope, &parent)));
-    assert!(store.list_threads(&scope).unwrap().is_empty());
-    assert!(store.list_messages(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_threads(&scope).unwrap(),
+        [] as [provenance_core::Thread; 0]
+    );
+    assert_eq!(
+        store.list_messages(&scope).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
 }
 
 #[test]
@@ -143,8 +155,14 @@ fn generated_thread_id_above_document_key_limit_is_refused() {
     let (_dir, store, scope) = initialized_store();
     let parent = parent("x".repeat(1010));
     assert_too_large(store.post_thread_message(post(&scope, &parent)));
-    assert!(store.list_threads(&scope).unwrap().is_empty());
-    assert!(store.list_messages(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_threads(&scope).unwrap(),
+        [] as [provenance_core::Thread; 0]
+    );
+    assert_eq!(
+        store.list_messages(&scope).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
 }
 
 #[test]
@@ -162,7 +180,10 @@ fn long_parent_refuses_existing_thread_before_message_publication() {
     let before = std::fs::read(&path).unwrap();
     assert_too_large(store.post_thread_message(post(&scope, &parent)));
     assert_eq!(std::fs::read(path).unwrap(), before);
-    assert!(store.list_messages(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_messages(&scope).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
 }
 
 #[test]
@@ -180,5 +201,8 @@ fn archiving_sibling_over_document_boundary_refuses_whole_post() {
     let before = std::fs::read(&path).unwrap();
     assert_too_large(store.post_thread_message(post(&scope, &parent)));
     assert_eq!(std::fs::read(path).unwrap(), before);
-    assert!(store.list_messages(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_messages(&scope).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
 }

@@ -329,8 +329,14 @@ fn oversized_post_refuses_before_creating_or_archiving_threads() {
         WriteError(error).safe(),
         WriteFailure::RecordTooLarge
     ));
-    assert!(store.list_threads(&scope).unwrap().is_empty());
-    assert!(store.list_messages(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_threads(&scope).unwrap(),
+        [] as [provenance_core::Thread; 0]
+    );
+    assert_eq!(
+        store.list_messages(&scope).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
 
     let first = store.post_thread_message(post("small".into())).unwrap();
     let sibling = Thread {

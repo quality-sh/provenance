@@ -131,7 +131,10 @@ async fn requirement_history_pages_report_limit_has_more_and_cursor() {
 
     let (status, empty) = call(&host, "GET", "/requirements/req_absent/history?limit=3").await;
     assert_eq!(status, 200, "{empty}");
-    assert!(empty["data"]["items"].as_array().unwrap().is_empty());
+    assert_eq!(
+        empty["data"]["items"].as_array().unwrap().as_slice(),
+        [] as [serde_json::Value; 0]
+    );
     assert_eq!(empty["meta"]["limit"], 3);
     assert_eq!(empty["meta"]["has_more"], false);
 }

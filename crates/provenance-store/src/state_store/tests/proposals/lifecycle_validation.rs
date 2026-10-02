@@ -73,7 +73,10 @@ fn direct_modern_proposal_write_rejects_terminal_ingress() {
         .to_string();
 
     assert!(error.contains("must begin proposed"), "{error}");
-    assert!(store.list_proposal_cards(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_proposal_cards(&scope).unwrap(),
+        [] as [provenance_core::ProposalCard; 0]
+    );
 }
 
 #[test]
@@ -154,16 +157,18 @@ fn rejected_disposition_does_not_require_an_assertion() {
             .collect::<Vec<_>>(),
         vec![PromotionState::Deferred, PromotionState::Rejected]
     );
-    assert!(store
-        .surface_proposals(
-            &scope,
-            &ProposalDemand::for_target(IdeationTarget {
-                artifact_type: IdeationTargetType::Requirement,
-                artifact_id: StableId::new("req_overtime").unwrap(),
-            }),
-        )
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        store
+            .surface_proposals(
+                &scope,
+                &ProposalDemand::for_target(IdeationTarget {
+                    artifact_type: IdeationTargetType::Requirement,
+                    artifact_id: StableId::new("req_overtime").unwrap(),
+                }),
+            )
+            .unwrap(),
+        [] as [crate::state_store::proposal_surfaces::SurfacedProposal; 0]
+    );
 }
 
 #[test]

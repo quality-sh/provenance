@@ -11,7 +11,7 @@ fn resolution_page_links_requirements_rules_and_spawned_work() {
     assert_eq!(page.spawned[0].target.record_id, "req_stuck");
     assert_eq!(page.produced_rules.len(), 1);
     assert_eq!(page.produced_rules[0].link.target.record_id, "rule_001");
-    assert!(page.gaps.is_empty());
+    assert_eq!(page.gaps, [] as [crate::wiki::model::GapNotice; 0]);
     assert_eq!(page.threads.len(), 1);
     assert_eq!(page.threads[0].thread_id, "thr_res_split");
 }
@@ -20,9 +20,9 @@ fn resolution_page_links_requirements_rules_and_spawned_work() {
 fn a_detached_decision_page_lists_nothing_and_raises_no_gap() {
     let corpus = fixture_corpus();
     let page = resolution_page(&corpus, "res_orphan");
-    assert!(page.resolves.is_empty());
-    assert!(page.produced_rules.is_empty());
-    assert!(page.gaps.is_empty());
+    assert_eq!(page.resolves, [] as [crate::wiki::model::PageLink; 0]);
+    assert_eq!(page.produced_rules, [] as [crate::wiki::model::RuleCard; 0]);
+    assert_eq!(page.gaps, [] as [crate::wiki::model::GapNotice; 0]);
 }
 
 #[test]
@@ -40,9 +40,15 @@ fn rule_page_traces_back_to_requirements_and_sources() {
     assert_eq!(page.requirements[0].target.record_id, "req_child");
     assert_eq!(page.sources.len(), 1);
     assert_eq!(page.sources[0].target.record_id, "source_schads");
-    assert!(page.implementations.is_empty());
-    assert!(page.verifications.is_empty());
-    assert!(page.gaps.is_empty());
+    assert_eq!(
+        page.implementations,
+        [] as [crate::wiki::model::ImplementationBinding; 0]
+    );
+    assert_eq!(
+        page.verifications,
+        [] as [crate::wiki::model::VerificationSite; 0]
+    );
+    assert_eq!(page.gaps, [] as [crate::wiki::model::GapNotice; 0]);
 }
 
 #[test]
@@ -50,8 +56,8 @@ fn rule_page_titles_a_nameless_rule_by_its_statement() {
     let corpus = fixture_corpus();
     let page = rule_page(&corpus, "rule_orphan");
     assert_eq!(page.title, "Claim items shall be grouped by participant");
-    assert!(page.gaps.is_empty());
-    assert!(page.produced_by.is_empty());
+    assert_eq!(page.gaps, [] as [crate::wiki::model::GapNotice; 0]);
+    assert_eq!(page.produced_by, [] as [crate::wiki::model::PageLink; 0]);
 }
 
 #[test]
@@ -131,7 +137,7 @@ fn source_page_lists_referencing_requirements_and_pins_links() {
         page.reference.as_ref().unwrap().href.as_deref(),
         Some("https://github.com/exampleorg/ex-api/blob/abc1234/docs/award.md")
     );
-    assert!(page.gaps.is_empty());
+    assert_eq!(page.gaps, [] as [crate::wiki::model::GapNotice; 0]);
 }
 
 #[test]
@@ -139,5 +145,8 @@ fn source_page_flags_unreferenced_sources() {
     let corpus = fixture_corpus();
     let page = source_page(&corpus, "source_unused");
     assert_eq!(gap_kinds(&page.gaps), vec![GapKind::UnreferencedSource]);
-    assert!(page.referenced_requirements.is_empty());
+    assert_eq!(
+        page.referenced_requirements,
+        [] as [crate::wiki::model::PageLink; 0]
+    );
 }

@@ -28,9 +28,6 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 must_use_candidate = "allow"
 module_name_repetitions = "allow"
-# Rust 1.99 reports the existing empty-collection assertion style as a pedantic lint.
-assert_is_empty = "allow"
-
 [workspace.package]
 version = "0.2.3"
 edition = "2021"

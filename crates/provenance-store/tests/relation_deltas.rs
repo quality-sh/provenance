@@ -350,7 +350,7 @@ fn validation_runs_on_the_final_resource_exactly_as_one_edit() {
         store.save_requirement(swap).unwrap().outcome,
         SaveOutcome::NoChange
     );
-    assert!(depends_on(&store).is_empty());
+    assert_eq!(depends_on(&store), [] as [std::string::String; 0]);
 
     let wrong_kind = relations(&store, "wrong_kind", json!({"spawned_by": "req_b"}));
     assert!(store.save_requirement(wrong_kind).is_err());

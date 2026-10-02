@@ -321,7 +321,7 @@ fn coverage_bindings_become_commit_pinned_implementation_and_verification_sites(
         .flat_map(|thread| &thread.messages)
         .flat_map(|message| &message.refs)
         .collect::<Vec<_>>();
-    assert!(!references.is_empty());
+    assert_ne!(references, [] as [&crate::wiki::links::InlineRef; 0]);
     assert!(references.iter().all(|reference| reference
         .href
         .as_deref()
@@ -338,8 +338,14 @@ fn a_corpus_built_without_a_report_records_no_code_scan() {
     let page = rule_page(&corpus, "rule_001");
 
     assert!(page.code_scan.is_none());
-    assert!(page.implementations.is_empty());
-    assert!(page.verifications.is_empty());
+    assert_eq!(
+        page.implementations,
+        [] as [crate::wiki::model::ImplementationBinding; 0]
+    );
+    assert_eq!(
+        page.verifications,
+        [] as [crate::wiki::model::VerificationSite; 0]
+    );
 }
 
 #[test]
@@ -368,8 +374,14 @@ fn gone_bindings_are_not_presented_as_current_code_sites() {
     let corpus = build_corpus_with_coverage(&fixture_state(), &resolver, Some(&report));
     let page = rule_page(&corpus, "rule_001");
 
-    assert!(page.implementations.is_empty());
-    assert!(page.verifications.is_empty());
+    assert_eq!(
+        page.implementations,
+        [] as [crate::wiki::model::ImplementationBinding; 0]
+    );
+    assert_eq!(
+        page.verifications,
+        [] as [crate::wiki::model::VerificationSite; 0]
+    );
 }
 
 #[test]

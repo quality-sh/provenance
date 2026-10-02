@@ -189,7 +189,16 @@ async fn catch_up_rebuilds_the_rows_of_a_scope_whose_owner_family_moved() {
 async fn a_departed_scope_takes_its_rows_with_it() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&layout).await.unwrap();
-    assert!(!relation_rows(&layout).await.is_empty());
+    assert_ne!(
+        relation_rows(&layout).await,
+        [] as [(
+            std::string::String,
+            std::string::String,
+            std::string::String,
+            std::string::String,
+            std::string::String
+        ); 0]
+    );
 
     let mut manifest: provenance_core::Manifest =
         serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
@@ -201,6 +210,15 @@ async fn a_departed_scope_takes_its_rows_with_it() {
     .unwrap();
 
     catch_up_state(&layout).await.unwrap();
-    assert!(relation_rows(&layout).await.is_empty());
+    assert_eq!(
+        relation_rows(&layout).await,
+        [] as [(
+            std::string::String,
+            std::string::String,
+            std::string::String,
+            std::string::String,
+            std::string::String
+        ); 0]
+    );
     assert_catch_up_equals_rebuild(&layout).await;
 }

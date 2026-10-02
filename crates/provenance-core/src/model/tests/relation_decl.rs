@@ -120,7 +120,7 @@ fn relation_slot_mut_lends_the_slot_a_declaration_names() {
         Some(RelationSlot::List(list)) => list.clear(),
         _ => panic!("a list lends a List slot"),
     }
-    assert!(question.depends_on.is_empty());
+    assert_eq!(question.depends_on, [] as [StableId; 0]);
     assert!(
         question.relation_slot_mut("topic_id").is_none(),
         "a required bare single lends no slot"

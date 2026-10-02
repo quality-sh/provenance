@@ -277,9 +277,18 @@ fn source_rule_and_resolution_creators_refuse_unaddressed_origins() {
             .to_string()
             .contains("origin Message does not exist in this scope"));
     }
-    assert!(store.list_sources(&scope).unwrap().is_empty());
-    assert!(store.list_resolutions(&scope).unwrap().is_empty());
-    assert!(store.list_rules(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_sources(&scope).unwrap(),
+        [] as [provenance_core::Source; 0]
+    );
+    assert_eq!(
+        store.list_resolutions(&scope).unwrap(),
+        [] as [provenance_core::Resolution; 0]
+    );
+    assert_eq!(
+        store.list_rules(&scope).unwrap(),
+        [] as [provenance_core::Rule; 0]
+    );
 }
 
 #[test]

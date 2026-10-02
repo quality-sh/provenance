@@ -336,8 +336,14 @@ async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
     );
     assert_eq!(error.status(), 400);
     assert_eq!(std::fs::read_dir(journal).unwrap().count(), receipt_count);
-    assert!(store.list_threads(&scope()).unwrap().is_empty());
-    assert!(store.list_messages(&scope()).unwrap().is_empty());
+    assert_eq!(
+        store.list_threads(&scope()).unwrap(),
+        [] as [provenance_core::Thread; 0]
+    );
+    assert_eq!(
+        store.list_messages(&scope()).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
     assert_eq!(
         store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         requirement.etag

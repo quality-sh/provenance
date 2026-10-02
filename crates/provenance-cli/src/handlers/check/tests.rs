@@ -101,7 +101,7 @@ async fn scoped_check_does_not_read_another_scope() {
     let CategoryRun::Graph { findings, .. } = run else {
         panic!("graph run")
     };
-    assert!(findings.is_empty());
+    assert_eq!(findings, [] as [provenance_porcelain::check::Finding; 0]);
 }
 
 #[tokio::test]

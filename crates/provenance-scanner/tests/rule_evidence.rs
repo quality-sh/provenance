@@ -103,8 +103,8 @@ fn incomplete_evidence_withholds_absence_facts() {
         RuleEvidenceCompleteness::Incomplete,
     );
 
-    assert!(facts.unimplemented.is_empty());
-    assert!(facts.unverified.is_empty());
+    assert_eq!(facts.unimplemented, [] as [std::string::String; 0]);
+    assert_eq!(facts.unverified, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -133,7 +133,10 @@ fn complete_evidence_reports_each_active_rule_absence() {
     );
 
     assert_eq!(implementation_only_absence.unimplemented, ["rule_claims"]);
-    assert!(implementation_only_absence.unverified.is_empty());
+    assert_eq!(
+        implementation_only_absence.unverified,
+        [] as [std::string::String; 0]
+    );
     assert_eq!(implementation_only_absence.governed_finding_count(), 0);
     assert!(!binding_findings_fail(
         BindingFindingSeverity::Error,
@@ -229,7 +232,7 @@ fn verification_does_not_count_as_an_implementation() {
     );
 
     assert_eq!(facts.unimplemented, ["rule_claims"]);
-    assert!(facts.unverified.is_empty());
+    assert_eq!(facts.unverified, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -245,8 +248,8 @@ fn non_active_rules_do_not_produce_absence_facts() {
         RuleEvidenceCompleteness::Complete,
     );
 
-    assert!(facts.unimplemented.is_empty());
-    assert!(facts.unverified.is_empty());
+    assert_eq!(facts.unimplemented, [] as [std::string::String; 0]);
+    assert_eq!(facts.unverified, [] as [std::string::String; 0]);
 }
 
 #[test]

@@ -66,5 +66,5 @@ async fn neighbors_keep_the_rank_id_declaration_direction_order() {
         ],
         "the kind probe reads sources first; every table behind an endpoint is named"
     );
-    assert!(answer.stamp.live.is_empty());
+    assert_eq!(answer.stamp.live, [] as [std::string::String; 0]);
 }

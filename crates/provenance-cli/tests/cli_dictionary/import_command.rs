@@ -39,7 +39,7 @@ fn the_import_command_stores_an_index_that_later_checks_use() {
     assert_eq!(summary["issue"], 9);
     assert_eq!(summary["source_sha256"].as_str().unwrap().len(), 64);
     assert_eq!(summary["data_sha256"].as_str().unwrap().len(), 64);
-    assert!(!summary["extractor_version"].as_str().unwrap().is_empty());
+    assert_ne!(summary["extractor_version"].as_str().unwrap(), "");
     assert_eq!(summary["approved_rows"], APPROVED_TABLE_ROWS);
     assert_eq!(summary["unapproved_rows"], UNAPPROVED_TABLE_ROWS);
     assert_eq!(
