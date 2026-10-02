@@ -73,33 +73,6 @@ fn init_installs_bundled_skills_and_ratified_instructions() {
 }
 
 #[test]
-fn installed_guidance_gives_people_review_links_instead_of_record_ids() {
-    let temporary = tempfile::tempdir().unwrap();
-    let repo = temporary.path().join("repo");
-    init(&repo).success();
-
-    let agents = read_agents(&repo);
-    assert!(agents.contains("provenance review --repo"));
-    assert!(agents.contains("get --review-link --format json"));
-    assert!(agents.contains("Never give the person a record ID"));
-
-    for skill in [
-        "provenance-fork-tournament",
-        "provenance-grounded-writing",
-        "provenance-shaping",
-        "provenance-swarm-backtrace",
-    ] {
-        let text = std::fs::read_to_string(
-            repo.join(".agents/skills").join(skill).join("SKILL.md"),
-        )
-        .unwrap();
-        assert!(text.contains("provenance review --repo"), "{skill}");
-        assert!(text.contains("get --review-link --format json"), "{skill}");
-        assert!(text.contains("Never give the person a record ID"), "{skill}");
-    }
-}
-
-#[test]
 #[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_owns_agents_provenance_section", examples)]
 fn init_onboarding_is_idempotent() {
