@@ -51,6 +51,10 @@ The writable collections are `sources`, `requirements`, `resolutions`,
 `verification-runs`, `verification-bindings`, `discussion-containers`,
 `messages`, `assertions`, and `dispositions`.
 
+Collection lists and root search hide archived and other terminal records by
+default. Use `--exclude-terminal false` on a collection list or
+`--include-terminal` on root search to include them.
+
 A member uses its ID in the command address:
 
 ```text
