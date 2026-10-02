@@ -27,15 +27,19 @@ impl HostRuntime {
         let path = path(repo, scope);
         let directory = path.parent().expect("runtime file has a parent");
         std::fs::create_dir_all(directory).with_context(|| {
-            format!("cannot create review host runtime directory {directory:?}")
+            format!(
+                "cannot create review host runtime directory {}",
+                directory.display()
+            )
         })?;
         let contents = serde_json::to_vec(&RunningHost {
             endpoint: endpoint.to_owned(),
             repository_id: repository_id.to_owned(),
             scope: scope.to_owned(),
         })?;
-        std::fs::write(&path, &contents)
-            .with_context(|| format!("cannot publish review host runtime file {path:?}"))?;
+        std::fs::write(&path, &contents).with_context(|| {
+            format!("cannot publish review host runtime file {}", path.display())
+        })?;
         Ok(Self { path, contents })
     }
 }
@@ -52,10 +56,10 @@ pub fn read(repo: &Path, scope: &str) -> anyhow::Result<Option<RunningHost>> {
     let path = path(repo, scope);
     match std::fs::read(&path) {
         Ok(contents) => serde_json::from_slice(&contents)
-            .with_context(|| format!("review host runtime file is invalid: {path:?}"))
+            .with_context(|| format!("review host runtime file is invalid: {}", path.display()))
             .map(Some),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error).with_context(|| format!("cannot read {path:?}")),
+        Err(error) => Err(error).with_context(|| format!("cannot read {}", path.display())),
     }
 }
 

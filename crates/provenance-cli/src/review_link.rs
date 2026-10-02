@@ -115,9 +115,7 @@ async fn containing_requirement(
 fn affected_record(value: &Value, record_write: bool) -> Option<&str> {
     let data = value.get("data")?;
     if !record_write
-        && !data
-            .pointer("/decision/pending")
-            .is_some_and(|pending| !pending.is_null())
+        && data.pointer("/decision/pending").is_none_or(Value::is_null)
         && !matches!(
             data.get("fact").and_then(Value::as_str),
             Some("submitted" | "decided" | "withdrawn")
