@@ -61,6 +61,12 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         ),
     ));
     let endpoint = format!("http://{address}");
+    let _runtime = crate::review_runtime::HostRuntime::publish(
+        &options.repo,
+        &options.scope,
+        &endpoint,
+        &options.repository_id,
+    )?;
     let config = json!({
         "endpoint": endpoint, "repositoryId": options.repository_id, "scope": options.scope,
         "compatibility": provenance_core::protocol::host::COMPATIBILITY,
