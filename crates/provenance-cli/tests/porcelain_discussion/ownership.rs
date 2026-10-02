@@ -58,7 +58,10 @@ fn owned_requirement_discussions_require_the_owner_for_start_and_reply() {
             "json"
         ])["result"]["entries"]
             .as_array()
-            .unwrap().as_slice(), []);
+            .unwrap()
+            .as_slice(),
+            [] as [serde_json::Value; 0]
+        );
     }
 
     let start = json(&[
@@ -205,7 +208,10 @@ fn topic_and_question_discussions_refuse_a_declared_owner() {
         assert_eq!(
             json(&[id, "discussions", "--repo", repo, "--format", "json"])["result"]["entries"]
                 .as_array()
-                .unwrap().as_slice(), []);
+                .unwrap()
+                .as_slice(),
+            [] as [serde_json::Value; 0]
+        );
         assert_eq!(
             json(&[id, "discuss", "--repo", repo, "--body", "Question", "--format", "json"])
                 ["receipt"]["version"],
