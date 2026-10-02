@@ -24,7 +24,7 @@ it in the same change.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a
   Topic also archives its Questions. Discussion history stays readable:
   `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope default --stdin --format json`
-  or replace `questions <question_id>` with `topics <topic_id>`.
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} topics <topic_id> update --scope default --stdin --format json`
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` directly.
 - Pre-commit: `{command} check --quiet` and
