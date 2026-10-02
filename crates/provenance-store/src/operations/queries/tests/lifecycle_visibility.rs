@@ -297,7 +297,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
             .unwrap();
         assert_ne!(
             unfiltered["result"]["items"].as_array().unwrap().as_slice(),
-            []
+            &[] as &[Value]
         );
         let filtered = list_family(
             &root,
@@ -308,7 +308,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
         .unwrap();
         assert_eq!(
             filtered["result"]["items"].as_array().unwrap().as_slice(),
-            []
+            &[] as &[Value]
         );
     }
 
@@ -318,7 +318,10 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     )
     .await
     .unwrap();
-    assert_eq!(found["nodes"].as_array().unwrap().as_slice(), []);
+    assert_eq!(
+        found["nodes"].as_array().unwrap().as_slice(),
+        &[] as &[Value]
+    );
 
     let unfiltered_document = queries::read_document(
         Some(root.clone()),

@@ -1,7 +1,7 @@
 use super::assert_kind_round_trips;
 use crate::model::{
-    ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Question, QuestionStatus,
-    ResolutionMethod, ScopeId, SourceReference, StableId, Topic, TopicStatus,
+    ArchivedStamp, ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, Question,
+    QuestionStatus, ResolutionMethod, ScopeId, SourceReference, StableId, Topic, TopicStatus,
 };
 use crate::SUPPORTED_SCHEMA_VERSION;
 
@@ -58,8 +58,11 @@ fn filled_topic() -> Topic {
         id: sid("topic_rates"),
         requirement_id: sid("req_overtime"),
         title: "Rates".into(),
-        status: TopicStatus::Explored,
-        archived_in_commit: None,
+        status: TopicStatus::Archived,
+        archived_in_commit: Some(ArchivedStamp {
+            commit: "a".repeat(40),
+            at: None,
+        }),
         claimed_by: Some("ben".into()),
         claimed_at: Some(1_700_000_000),
         links: links(),
@@ -90,8 +93,11 @@ fn filled_question() -> Question {
         requirement_id: sid("req_overtime"),
         question: "Which threshold applies?".into(),
         resolution_method: ResolutionMethod::Research,
-        status: QuestionStatus::Answered,
-        archived_in_commit: None,
+        status: QuestionStatus::Archived,
+        archived_in_commit: Some(ArchivedStamp {
+            commit: "a".repeat(40),
+            at: None,
+        }),
         claimed_by: Some("ben".into()),
         claimed_at: Some(1_700_000_000),
         answer: Some("The award threshold".into()),
