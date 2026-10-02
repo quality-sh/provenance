@@ -103,7 +103,7 @@ fn review_reads_expose_the_terminal_filter() {
             .unwrap_or_else(|| panic!("{path} declares the lifecycle filter"));
         assert_eq!(filter["in"], "query");
         assert_eq!(filter["required"], false);
-        assert_eq!(filter["schema"], json!({"type":"boolean","default":false}));
+        assert_eq!(filter["schema"], json!({"type":"boolean","default":true}));
     }
 }
 
