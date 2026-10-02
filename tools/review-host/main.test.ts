@@ -15,6 +15,13 @@ test('the host passes the named configuration, token, and Requirement to the ren
   assert.match(source, /session\.open\(requirement\.value\.trim\(\)\)/);
 });
 
+test('the host opens the linked root after connection and passes the focus record', () => {
+  assert.match(source, /searchParams\.get\('root'\)/);
+  assert.match(source, /searchParams\.get\('focus'\)/);
+  assert.match(source, /session\.open\(linkedRoot, linkedFocus/);
+  assert.match(source, /selection\.hidden = linkedRoot !== null/);
+});
+
 test('the host does not keep the old store adapter or SDK client', () => {
   assert.doesNotMatch(source, /loadReviewStore|CursorReviewStore|DocumentLoader|HttpClient/);
   assert.doesNotMatch(source, /@quality-sh\/provenance\/client/);

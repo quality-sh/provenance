@@ -8,6 +8,9 @@ const selection = document.getElementById('selection') as HTMLFormElement;
 const credential = document.getElementById('credential') as HTMLInputElement;
 const requirement = document.getElementById('requirement') as HTMLInputElement;
 const status = document.getElementById('status')!;
+const searchParams = new URLSearchParams(location.search);
+const linkedRoot = searchParams.get('root');
+const linkedFocus = searchParams.get('focus') ?? undefined;
 
 function reviewConfig(value: unknown): ReviewConfig {
   if (typeof value !== 'object' || value === null ||
@@ -30,8 +33,12 @@ const session = createSession({
   mount: options => mountReview(root, options),
   connected: () => {
     access.hidden = true;
-    selection.hidden = false;
-    requirement.focus();
+    selection.hidden = linkedRoot !== null;
+    if (linkedRoot !== null) {
+      session.open(linkedRoot, linkedFocus);
+    } else {
+      requirement.focus();
+    }
   },
   status: message => { status.textContent = message; },
 });
