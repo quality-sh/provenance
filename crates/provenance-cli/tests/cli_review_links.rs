@@ -69,7 +69,25 @@ fn write_output_explains_how_to_start_a_missing_review_host() {
     ]);
 
     assert!(created["data"].get("review_url").is_none());
-    assert!(created["meta"]["review"].as_str().unwrap().contains("provenance review"));
+    assert!(created["data"]["review_message"]
+        .as_str()
+        .unwrap()
+        .contains("provenance review"));
+
+    provenance()
+        .args([
+            "req_readable_link",
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            &repo,
+            "--statement",
+            "The readable output explains how to start review.",
+        ])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("provenance review --repo"));
 }
 
 #[test]
