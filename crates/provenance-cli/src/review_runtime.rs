@@ -26,8 +26,9 @@ impl HostRuntime {
     ) -> anyhow::Result<Self> {
         let path = path(repo, scope);
         let directory = path.parent().expect("runtime file has a parent");
-        std::fs::create_dir_all(directory)
-            .with_context(|| format!("cannot create review host runtime directory {directory:?}"))?;
+        std::fs::create_dir_all(directory).with_context(|| {
+            format!("cannot create review host runtime directory {directory:?}")
+        })?;
         let contents = serde_json::to_vec(&RunningHost {
             endpoint: endpoint.to_owned(),
             repository_id: repository_id.to_owned(),
