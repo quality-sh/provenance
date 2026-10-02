@@ -87,7 +87,7 @@ async fn containing_requirement(host: &StatementHost, record_id: &str) -> anyhow
         let mut input = GetInput::new(record_id, view);
         input.max_depth = Some(provenance_core::protocol::TRACE_MAX_DEPTH);
         input.returned_kinds = vec![NodeType::Requirement];
-        input.limit = Some(1_000);
+        input.limit = Some(provenance_core::protocol::QUERY_MAX_LIMIT);
         requirements.extend(
             get.get(input)
                 .await?
