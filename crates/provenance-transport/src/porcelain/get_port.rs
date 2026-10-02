@@ -199,16 +199,24 @@ impl GetPort for HostGetPort {
                 conversations.push(conversation.result);
             }
             let edit = resource.result.edit;
+            let discussions = DiscussionResultPage {
+                entries: conversations,
+                limit,
+                has_more: listed.result.has_more,
+                next_cursor: listed.result.next_cursor,
+            };
             Ok(Review {
                 update_precondition: format!("--if-match {}", edit.etag),
                 edit,
                 decision: resource.result.decision,
-                discussions: DiscussionResultPage {
-                    entries: conversations,
-                    limit,
-                    has_more: listed.result.has_more,
-                    next_cursor: listed.result.next_cursor,
+                bounds: Bounds {
+                    limit: discussions.limit,
+                    max_depth: None,
+                    has_more: discussions.has_more,
+                    continuation: discussions.next_cursor.clone(),
+                    truncated: discussions.has_more,
                 },
+                discussions,
                 response_metadata: Some(provenance_core::protocol::ResponseMeta {
                     stamp: Some(listed.stamp),
                     freshness_error: listed.freshness_error,

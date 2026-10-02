@@ -139,6 +139,7 @@ pub struct Review {
     pub decision: RequirementDecisionState,
     pub update_precondition: String,
     pub discussions: DiscussionResultPage<DiscussionConversationResult>,
+    pub bounds: Bounds,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_metadata: Option<ResponseMeta>,
 }
@@ -189,7 +190,8 @@ impl ViewResult {
         match self {
             Self::Children(traversal) | Self::Grounding(traversal) => Some(&traversal.bounds),
             Self::Impact(impact) => Some(&impact.bounds),
-            Self::Record | Self::Review(_) => None,
+            Self::Review(review) => Some(&review.bounds),
+            Self::Record => None,
         }
     }
 
