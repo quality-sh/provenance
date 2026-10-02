@@ -70,7 +70,7 @@ provenance <record-id> get --view review
 
 The result shows `review.edit.etag` and the exact `--if-match` value for the next
 guarded update. A guarded update after a rejection opens the replacement
-submission. Do not submit or withdraw the pending submission before the update.
+submission. Do not submit or withdraw manually.
 
 Examples:
 

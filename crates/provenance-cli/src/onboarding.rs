@@ -25,7 +25,7 @@ it in the same change.
   `{command} <record-id> get --view review`. The `review.edit.etag` value is
   the exact value for `--if-match` on the next update.
 - A guarded update after a rejection opens the new submission. Do not submit
-  or withdraw a second submission.
+  or withdraw manually.
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` directly.
 - Pre-commit: `{command} check --quiet` and
