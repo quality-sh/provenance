@@ -275,7 +275,10 @@ fn explicit_id_after_adoption_returns_to_ordinary_identity_selection() {
         .unwrap()
         .materialize("spec://rust/migration");
 
-    assert_eq!(document.adopt_unowned, [] as [protocol::typed_spec::TypedAdoptionTarget; 0]);
+    assert_eq!(
+        document.adopt_unowned.as_slice(),
+        &document.adopt_unowned[..0]
+    );
     assert_eq!(document.sources[0].id.as_deref(), Some("source_existing"));
     assert_eq!(document.requirements[0].id.as_deref(), Some("req_existing"));
     assert_eq!(document.rules[0].id.as_deref(), Some("rule_existing"));

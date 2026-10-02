@@ -61,7 +61,7 @@ fn statesman_marker_warns_once_per_comment_block() {
 fn provenance_marker_draws_no_legacy_warning() {
     let parsed = parse_annotations("@provenance rule: SCHADS-PAY-001");
 
-    assert_eq!(parsed.warnings, [] as [parser::ParseWarning; 0]);
+    assert_eq!(parsed.warnings, [] as [ParseWarning; 0]);
 }
 
 /// A block that mixes markers is warned about once, at the first legacy
@@ -124,7 +124,7 @@ fn preserves_in_range_confidence() {
     let parsed = parse_annotations("@provenance confidence: 0.75\n@provenance rule: RULE-001");
 
     assert!((parsed.annotations[0].confidence - 0.75).abs() < f64::EPSILON);
-    assert_eq!(parsed.warnings, [] as [parser::ParseWarning; 0]);
+    assert_eq!(parsed.warnings, [] as [ParseWarning; 0]);
 }
 
 /// A field after a rule belongs to that rule only. A field before the
@@ -199,7 +199,7 @@ fn unusable_directives_warn_on_their_line_and_change_nothing() {
 fn directives_without_a_rule_warn_that_no_rule_was_found() {
     let parsed = parse_annotations("@provenance name: Payroll thresholds");
 
-    assert_eq!(parsed.annotations, [] as [parser::Annotation; 0]);
+    assert_eq!(parsed.annotations, [] as [Annotation; 0]);
     assert_eq!(
         parsed.warnings,
         vec![ParseWarning {

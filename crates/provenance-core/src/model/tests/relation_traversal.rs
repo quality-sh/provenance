@@ -132,7 +132,10 @@ fn a_domain_only_ever_appears_as_a_target() {
 fn an_unknown_record_reaches_nothing() {
     let records = fixture();
     let front = front(&records);
-    assert_eq!(related_nodes(&front, NodeType::Rule, &sid("rule_missing")), [] as [model::relations::front::RelatedNode; 0]);
+    assert_eq!(
+        related_nodes(&front, NodeType::Rule, &sid("rule_missing")),
+        [] as [RelatedNode; 0]
+    );
 }
 
 #[test]
