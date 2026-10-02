@@ -52,21 +52,17 @@ pub(super) async fn read(
         .map_err(crate::operations::reader::page_error)
 }
 
-async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<ReadDocumentResult> {
-    use crate::operations::reader::PAGE_BYTES;
-    request
-        .validate()
-        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
-    nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
-        .await?
-        .ok_or(ReadFailure::DocumentRootMissing)?;
-    let review_keys = ctx
-        .snapshot()
+async fn review_keys(
+    ctx: &ReadContext,
+    root: &str,
+    exclude_terminal: bool,
+) -> anyhow::Result<Vec<(NodeType, StableId, bool)>> {
+    ctx.snapshot()
         .document_keys(
-            &request.id,
+            root,
             &crate::operations::reader::Position::default(),
             8193,
-            request.exclude_terminal,
+            exclude_terminal,
         )
         .await?
         .into_iter()
@@ -78,7 +74,18 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
                 key.stage == 0,
             ))
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect()
+}
+
+async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<ReadDocumentResult> {
+    use crate::operations::reader::PAGE_BYTES;
+    request
+        .validate()
+        .map_err(provenance_core::protocol::QueryValidation::into_native)?;
+    nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
+        .await?
+        .ok_or(ReadFailure::DocumentRootMissing)?;
+    let review_keys = review_keys(ctx, &request.id, request.exclude_terminal).await?;
     let review_records = review_keys
         .iter()
         .map(|(kind, id, _)| (*kind, id.clone()))
