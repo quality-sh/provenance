@@ -321,7 +321,7 @@ fn coverage_bindings_become_commit_pinned_implementation_and_verification_sites(
         .flat_map(|thread| &thread.messages)
         .flat_map(|message| &message.refs)
         .collect::<Vec<_>>();
-    assert_ne!(references, [] as [&wiki::links::evidence::InlineRef; 0]);
+    assert_ne!(references, [] as [&crate::wiki::links::InlineRef; 0]);
     assert!(references.iter().all(|reference| reference
         .href
         .as_deref()

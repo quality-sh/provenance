@@ -57,7 +57,7 @@ fn requirement_page_borrows_decision_threads_without_unscanned_links() {
     assert_eq!(thread_ids, vec!["thr_req_child", "thr_res_split"]);
     assert_eq!(page.threads[1].parent_type, NodeType::Resolution);
     let note = &page.threads[1].messages[0];
-    assert_eq!(note.refs, [] as [crate::wiki::links::evidence::InlineRef; 0]);
+    assert_eq!(note.refs, [] as [crate::wiki::links::InlineRef; 0]);
 }
 
 /// The relation fields the requirement makes the claim about, and the
