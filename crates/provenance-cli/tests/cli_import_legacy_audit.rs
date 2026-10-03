@@ -1,5 +1,8 @@
 use assert_cmd::Command;
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 #[test]
 fn altered_replaced_or_omitted_shipped_disposition_audit_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
@@ -233,12 +236,14 @@ fn export_shipped(dir: &tempfile::TempDir) -> serde_json::Value {
         .unwrap()
         .parent()
         .unwrap();
+    let portable = dir.path().join("portable-shipped");
+    export_fixture_support::copy_portable_state(shipped, &portable);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
             "export",
             "--repo",
-            shipped.to_str().unwrap(),
+            portable.to_str().unwrap(),
             "--scope",
             "default",
             "--format",
