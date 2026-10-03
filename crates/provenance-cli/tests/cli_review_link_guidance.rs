@@ -20,7 +20,9 @@ fn installed_guidance_gives_people_review_links_instead_of_record_ids() {
     let agents = std::fs::read_to_string(repo.join("AGENTS.md")).unwrap();
     assert!(agents.contains("provenance review --repo"));
     assert!(agents.contains("get --review-link --format json"));
-    assert!(agents.contains("Never give the person a record ID"));
+    assert!(agents.contains("open the review link yourself"));
+    assert!(agents.contains("browser or preview"));
+    assert!(agents.contains("Never ask the person to copy a link, an ID, or a token"));
 
     for skill in [
         "provenance-fork-tournament",
@@ -33,8 +35,10 @@ fn installed_guidance_gives_people_review_links_instead_of_record_ids() {
                 .unwrap();
         assert!(text.contains("provenance review --repo"), "{skill}");
         assert!(text.contains("get --review-link --format json"), "{skill}");
+        assert!(text.contains("open the review link yourself"), "{skill}");
+        assert!(text.contains("browser or preview"), "{skill}");
         assert!(
-            text.contains("Never give the person a record ID"),
+            text.contains("Never ask the person to copy a link, an ID, or a token"),
             "{skill}"
         );
     }

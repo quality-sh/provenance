@@ -9,18 +9,12 @@
 </head>
 <body>
   <div class="host">
-    <form id="access">
-      <label for="credential">Local access token</label>
-      <input id="credential" type="password" autocomplete="off" required>
-      <button type="submit">Connect</button>
-      <p>Use the token from the running review host. It stays in this page's memory.</p>
-    </form>
     <form id="selection" hidden>
       <label for="requirement">Requirement ID</label>
       <input id="requirement" autocomplete="off" required>
       <button type="submit">Open / Refresh</button>
     </form>
-    <p id="status" role="status" aria-live="polite">Review page</p>
+    <p id="status" role="status" aria-live="polite">Opening review…</p>
   </div>
   <div id="root"></div>
   <script type="module" src="./host.js"></script>

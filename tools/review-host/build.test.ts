@@ -9,6 +9,11 @@ import test from 'node:test';
 const pinPath = fileURLToPath(new URL('../review-assets.json', import.meta.url));
 const pin = JSON.parse(await readFile(pinPath, 'utf8'));
 
+test('the host page has no manual credential entry', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /credential|access token|type="password"/i);
+});
+
 test('composition needs only the renderer and output paths', async t => {
   const work = await mkdtemp(join(tmpdir(), 'review-build-'));
   t.after(() => rm(work, { recursive: true, force: true }));

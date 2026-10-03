@@ -14,23 +14,40 @@ interface BrowserDocument {
 
 interface BrowserLocation {
   readonly origin: string;
+  readonly pathname?: string;
   readonly search: string;
+}
+
+interface BrowserHistory {
+  replaceState(state: unknown, unused: string, url?: string | URL | null): void;
 }
 
 interface FetchResponse {
   readonly ok: boolean;
   json(): Promise<unknown>;
+  text(): Promise<string>;
 }
 
 interface BootstrapDependencies {
   readonly document: BrowserDocument;
+  readonly history: BrowserHistory;
   readonly location: BrowserLocation;
   readonly fetch: (path: string, init: {
-    headers: { authorization: string };
+    method?: 'POST';
+    headers?: { authorization?: string; 'content-type'?: string };
+    body?: string;
     redirect: 'error';
     cache: 'no-store';
   }) => Promise<FetchResponse>;
   readonly mount: (root: BrowserElement, options: ReviewMountOptions) => () => void;
+}
+
+function launchCredential(value: unknown): string {
+  if (typeof value !== 'object' || value === null ||
+    !('bearer' in value) || typeof value.bearer !== 'string' || value.bearer.length === 0) {
+    throw new Error('Invalid launch response');
+  }
+  return value.bearer;
 }
 
 function element(document: BrowserDocument, id: string): BrowserElement {
@@ -58,18 +75,21 @@ function reviewConfig(value: unknown, origin: string): ReviewConfig {
 
 export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   const root = element(dependencies.document, 'root');
-  const access = element(dependencies.document, 'access');
   const selection = element(dependencies.document, 'selection');
-  const credential = element(dependencies.document, 'credential');
   const requirement = element(dependencies.document, 'requirement');
   const status = element(dependencies.document, 'status');
   const searchParams = new URLSearchParams(dependencies.location.search);
+  const code = searchParams.get('code');
   const linkedRoot = searchParams.get('root');
   const linkedFocus = searchParams.get('focus') ?? undefined;
+  searchParams.delete('code');
+  const visibleQuery = searchParams.toString();
+  dependencies.history.replaceState(
+    null, '', `${dependencies.location.pathname ?? '/'}${visibleQuery ? `?${visibleQuery}` : ''}`,
+  );
   const session = createSession({
     mount: options => dependencies.mount(root, options),
     connected: () => {
-      access.hidden = true;
       selection.hidden = linkedRoot !== null;
       if (linkedRoot !== null) session.open(linkedRoot, linkedFocus);
       else requirement.focus();
@@ -77,10 +97,16 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
     status: message => { status.textContent = message; },
   });
 
-  access.addEventListener('submit', event => {
-    event.preventDefault();
-    const bearer = credential.value;
-    credential.value = '';
+  if (code === null) {
+    status.textContent = 'Connection refused. Run `provenance <record-id> get --review-link` to get a fresh link.';
+  } else {
+    void (async () => {
+      const exchange = await dependencies.fetch('/review-launch/exchange', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code }), redirect: 'error', cache: 'no-store',
+      });
+      if (!exchange.ok) throw new Error(await exchange.text());
+      const bearer = launchCredential(await exchange.json());
     void session.connect(bearer, async () => {
       const response = await dependencies.fetch('/review-config', {
         headers: { authorization: `Bearer ${bearer}` }, redirect: 'error', cache: 'no-store',
@@ -88,7 +114,10 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
       if (!response.ok) throw new Error('Access refused');
       return reviewConfig(await response.json(), dependencies.location.origin);
     });
-  });
+    })().catch(() => {
+      status.textContent = 'Connection refused. Run `provenance <record-id> get --review-link` to get a fresh link.';
+    });
+  }
   selection.addEventListener('submit', event => {
     event.preventDefault();
     session.open(requirement.value.trim());

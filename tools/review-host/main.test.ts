@@ -22,35 +22,44 @@ class ElementFixture implements BrowserElement {
 
 function fixture(search: string) {
   const elements = Object.fromEntries(
-    ['root', 'access', 'selection', 'credential', 'requirement', 'status']
+    ['root', 'selection', 'requirement', 'status']
       .map(id => [id, new ElementFixture()]),
   );
   const mounted: unknown[] = [];
+  const fetched: Array<{ path: string; authorization?: string }> = [];
+  const replaced: string[] = [];
   bootstrapReviewPage({
     document: { getElementById: id => elements[id] },
     location: { origin: 'http://127.0.0.1:1234', search },
-    fetch: async () => ({
-      ok: true,
-      async json() {
-        return {
-          endpoint: 'http://127.0.0.1:1234', repositoryId: 'repo', scope: 'default',
-          dispositionActorIds: ['maintainer'],
-        };
-      },
-    }),
+    history: { replaceState: (_state, _unused, url) => { replaced.push(url); } },
+    fetch: async (path, init) => {
+      fetched.push({ path, authorization: init.headers?.authorization });
+      return {
+        ok: true,
+        async json() {
+          if (path === '/review-launch/exchange') return { bearer: 'secret' };
+          return {
+            endpoint: 'http://127.0.0.1:1234', repositoryId: 'repo', scope: 'default',
+            dispositionActorIds: ['maintainer'],
+          };
+        },
+        async text() { return ''; },
+      };
+    },
     mount: (_root, options) => { mounted.push(options); return () => {}; },
   });
-  elements.credential.value = 'secret';
-  return { elements, mounted };
+  return { elements, fetched, mounted, replaced };
 }
 
-test('the linked root and focus reach the renderer after connection', async () => {
-  const { elements, mounted } = fixture('?root=req_root&focus=rule_focus');
-  elements.access.submit();
+test('a launch code is removed before exchange and opens the linked record', async () => {
+  const { fetched, mounted, replaced } = fixture('?code=launch-secret&root=req_root&focus=rule_focus');
   await new Promise(resolve => setImmediate(resolve));
 
-  assert.equal(elements.access.hidden, true);
-  assert.equal(elements.selection.hidden, true);
+  assert.deepEqual(replaced, ['/?root=req_root&focus=rule_focus']);
+  assert.deepEqual(fetched, [
+    { path: '/review-launch/exchange', authorization: undefined },
+    { path: '/review-config', authorization: 'Bearer secret' },
+  ]);
   assert.deepEqual(mounted, [{
     endpoint: 'http://127.0.0.1:1234', repositoryId: 'repo', scope: 'default',
     dispositionActorIds: ['maintainer'], bearer: 'secret', rootId: 'req_root',
@@ -59,8 +68,7 @@ test('the linked root and focus reach the renderer after connection', async () =
 });
 
 test('manual Requirement selection remains available without a linked root', async () => {
-  const { elements, mounted } = fixture('');
-  elements.access.submit();
+  const { elements, mounted } = fixture('?code=launch-secret');
   await new Promise(resolve => setImmediate(resolve));
 
   assert.equal(elements.selection.hidden, false);
@@ -68,4 +76,12 @@ test('manual Requirement selection remains available without a linked root', asy
   elements.requirement.value = 'req_manual';
   elements.selection.submit();
   assert.equal((mounted.at(-1) as { rootId: string }).rootId, 'req_manual');
+});
+
+test('a page without a launch code asks for a fresh link without a token input', async () => {
+  const { elements, fetched } = fixture('?root=req_root');
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(fetched, []);
+  assert.match(elements.status.textContent!, /get --review-link/);
 });
