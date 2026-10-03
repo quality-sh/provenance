@@ -270,7 +270,7 @@ impl GetPort for HostGetPort {
 fn discussion_parent_is_supported(host: &crate::StatementHost, kind: NodeType) -> bool {
     catalog::definitions().iter().any(|definition| {
         host.advertises(definition.name)
-            && definition.registration.handler.operation == catalog::ListDiscussions::NAME
+            && definition.registration.handler.operation == catalog::ReviewDiscussions::NAME
             && definition
                 .registration
                 .request
