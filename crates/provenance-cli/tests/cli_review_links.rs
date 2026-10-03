@@ -119,8 +119,8 @@ fn assert_review_url(value: &Value, endpoint: &str, root: &str, focus: Option<&s
     let pairs = url
         .query_pairs()
         .collect::<std::collections::HashMap<_, _>>();
-    assert_eq!(pairs.get("root").map(|value| value.as_ref()), Some(root));
-    assert_eq!(pairs.get("focus").map(|value| value.as_ref()), focus);
+    assert_eq!(pairs.get("root").map(AsRef::as_ref), Some(root));
+    assert_eq!(pairs.get("focus").map(AsRef::as_ref), focus);
 }
 
 #[test]
