@@ -71,7 +71,7 @@ npx --yes @quality-sh/create-provenance
 
 # put something in the graph
 npx provenance requirements create --scope default --id req_exports \
-  --statement "Exports finish in under a minute"
+  --statement "The system must complete each export in one minute."
 
 # see where things stand
 npx provenance prime
@@ -87,11 +87,11 @@ npx provenance prime
 | `provenance graph <requirement>` | Show the neighbourhood of a requirement |
 | `provenance graph-reference issue\|show\|verify\|exact-export` | Hand off an immutable pinned graph |
 | `provenance traceability <rule>` | Walk a Rule back to its Requirement and any producing Resolution |
-| `provenance proposals surface --scope default --changed-path <path>` | Surface undisposed proposals when current work touches their evidence or explicit territory |
+| `provenance proposals list --scope default --exclude-terminal true` | List proposals that do not have a terminal disposition |
 | `provenance wiki build` / `provenance wiki serve` | Build or serve the generated wiki with domain browsing and offline search |
 | `provenance coverage scan --path . --validate-rules` | Check bindings and report active Rules with no implementation or verification |
 | `provenance statement-checks create --stdin` / `provenance authoring-changes create --stdin` / `provenance verification-runs list` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
-| `provenance stale --since main` | Report whether a diff touched, moved, or removed any graph evidence path |
+| `provenance rules stale --base main` | Report Rules with evidence paths that changed after `main` |
 | `provenance skills install` | Install the bundled agent skills (`provenance-shaping`, `provenance-fork-tournament`, `provenance-swarm-backtrace`, `provenance-grounded-writing`) |
 
 The repository uses the `skills/<name>/SKILL.md` layout, so the bundled skills can also

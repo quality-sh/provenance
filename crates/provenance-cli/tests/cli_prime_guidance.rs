@@ -33,6 +33,8 @@ fn prime_teaches_domain_without_reading_or_writing_repository_state() {
         "An active Rule can precede its implementation.",
         "A source citation does not count as an Implementation binding.",
         "A graph read does not scan code or establish a coverage verdict.",
+        "provenance search --text <text> --scope <scope> --format json",
+        "provenance <id> get --view children --depth <N> --scope <scope> --format json",
     ] {
         assert!(text.contains(term), "guidance omits {term}: {text}");
     }
