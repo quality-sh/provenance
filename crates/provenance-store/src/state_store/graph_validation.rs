@@ -30,7 +30,13 @@ impl StateStore {
             rule.validate_archive()?;
         }
         let topics = self.list_topics(scope)?;
+        for topic in &topics {
+            topic.validate_archive()?;
+        }
         let questions = self.list_questions(scope)?;
+        for question in &questions {
+            question.validate_archive()?;
+        }
         let boundaries = self.list_boundaries(scope)?;
         ensure_required(&sources)?;
         ensure_required(&requirements)?;

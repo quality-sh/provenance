@@ -86,6 +86,7 @@ mod reserved_ids;
 mod scope_ingestion;
 mod scope_ingestion_order;
 mod shaping;
+mod shaping_archive_atomicity;
 mod source_requirements;
 mod source_supersedes_concurrency;
 mod threads;

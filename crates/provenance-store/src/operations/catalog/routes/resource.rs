@@ -171,21 +171,27 @@ macro_rules! review_resource {
             .argument_aliases($create_aliases)
             .target(TargetAction::Create, $target_kind),
         );
+        let update = backed::<$update>(
+            concat!("update-", $singular),
+            concat!("update", $singular_id),
+            HttpMethod::Patch,
+            concat!("/", $plural, "/{id}"),
+            concat!("Apply a partial change to one ", $singular, "."),
+            ResponseKind::Resource,
+            vec![schema::path("id")],
+        )
+        .scope("scope_id");
+        let update = if matches!($target_kind, Some(NodeType::Topic | NodeType::Question)) {
+            update.header("If-Match", "expected_etag", true)
+        } else {
+            update
+        };
         $out.push(
-            backed::<$update>(
-                concat!("update-", $singular),
-                concat!("update", $singular_id),
-                HttpMethod::Patch,
-                concat!("/", $plural, "/{id}"),
-                concat!("Apply a partial change to one ", $singular, "."),
-                ResponseKind::Resource,
-                vec![schema::path("id")],
-            )
-            .scope("scope_id")
-            .cli_defaults($update_defaults)
-            .argument_aliases($update_aliases)
-            .public_patch($nullable)
-            .target(TargetAction::Update, $target_kind),
+            update
+                .cli_defaults($update_defaults)
+                .argument_aliases($update_aliases)
+                .public_patch($nullable)
+                .target(TargetAction::Update, $target_kind),
         );
     }};
 }

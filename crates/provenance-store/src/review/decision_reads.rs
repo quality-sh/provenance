@@ -8,7 +8,7 @@
 use super::decision_state::CycleFacts;
 use crate::state_store::StateStore;
 use provenance_core::{
-    protocol::{DocumentReviewSummary, DocumentReviewTotals},
+    protocol::DocumentReviewSummary,
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
     DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
     StableId,
@@ -17,7 +17,6 @@ use provenance_macros::rule;
 
 pub struct DocumentReviewState {
     pub records: Vec<(NodeType, StableId, DocumentReviewSummary)>,
-    pub totals: DocumentReviewTotals,
     pub digest: String,
 }
 
@@ -70,15 +69,7 @@ impl StateStore {
                     )
                 })
                 .collect::<Vec<_>>();
-            let mut totals = DocumentReviewTotals::default();
-            for (_, _, summary) in &records {
-                totals.include(summary);
-            }
-            Ok(DocumentReviewState {
-                records,
-                totals,
-                digest,
-            })
+            Ok(DocumentReviewState { records, digest })
         })
     }
 

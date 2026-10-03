@@ -74,6 +74,7 @@ pub(super) fn add_question_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapIt
             QuestionStatus::Open => "open question",
             QuestionStatus::BlockedOnHuman => "blocked_on_human question",
             QuestionStatus::Answered => unreachable!("answered questions are filtered out"),
+            QuestionStatus::Archived => unreachable!("archived questions are filtered out"),
         };
         gaps.push(
             GapItem::new(
