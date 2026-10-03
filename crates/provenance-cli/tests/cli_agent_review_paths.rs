@@ -1,5 +1,5 @@
 use assert_cmd::Command;
-use predicates::str::contains;
+use predicates::{prelude::PredicateBooleanExt as _, str::contains};
 use serde_json::{json, Value};
 
 fn provenance() -> Command {
@@ -213,6 +213,90 @@ fn update_help_and_invalid_if_match_name_the_exact_input() {
         .failure()
         .stderr(contains("--if-match must equal data.edit.etag"))
         .stderr(contains("sha256:<64 lowercase hexadecimal characters>"));
+}
+
+#[test]
+fn discussion_guards_name_numeric_versions_in_help() {
+    for address in [
+        ["sources", "source_id", "discussions", "discussion_id", "update"].as_slice(),
+        [
+            "sources",
+            "source_id",
+            "discussions",
+            "discussion_id",
+            "messages",
+            "create",
+        ]
+        .as_slice(),
+    ] {
+        provenance()
+            .args(address)
+            .arg("--help")
+            .assert()
+            .success()
+            .stdout(contains("pass the latest Discussion version unchanged"))
+            .stdout(contains("data.edit.etag").not());
+    }
+}
+
+#[test]
+fn review_view_gives_commands_for_each_truncated_feedback_page() {
+    let (_directory, repo) = init();
+    create_requirement(&repo, "req_bounded_feedback");
+    for number in 1..=2 {
+        let started = json_output(provenance().args([
+            "req_bounded_feedback",
+            "discuss",
+            "--repo",
+            &repo,
+            "--body",
+            &format!("Opening {number}"),
+            "--format",
+            "json",
+        ]));
+        let discussion_id = started["receipt"]["discussion_id"].as_str().unwrap();
+        json_output(provenance().args([
+            discussion_id,
+            "reply",
+            "--repo",
+            &repo,
+            "--body",
+            &format!("Reply {number}"),
+            "--expected-version",
+            "1",
+            "--format",
+            "json",
+        ]));
+    }
+
+    let review = json_output(provenance().args([
+        "req_bounded_feedback",
+        "get",
+        "--view",
+        "review",
+        "--limit",
+        "1",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]));
+    let commands = review["review"]["follow_up_commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|command| command.as_str().unwrap())
+        .collect::<Vec<_>>();
+    let shown_id = review["review"]["discussions"]["entries"][0]["head"]
+        ["discussion_id"]
+        .as_str()
+        .unwrap();
+    assert!(commands.iter().any(|command| command.starts_with(
+        "provenance req_bounded_feedback discussions --limit 1 --cursor "
+    )));
+    assert!(commands.iter().any(|command| command.starts_with(&format!(
+        "provenance discussions {shown_id} get --limit 1 --cursor "
+    ))));
 }
 
 #[test]

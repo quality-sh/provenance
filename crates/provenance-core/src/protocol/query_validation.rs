@@ -172,13 +172,13 @@ mod tests {
     }
 
     #[test]
-    fn omitted_terminal_filters_hide_terminal_records() {
-        assert!(search(serde_json::json!({"text":"needle"})).exclude_terminal);
+    fn omitted_terminal_filters_include_terminal_records() {
+        assert!(!search(serde_json::json!({"text":"needle"})).exclude_terminal);
         let document = serde_json::from_value::<super::super::ReadDocumentQuery>(
             serde_json::json!({"id":"req_review"}),
         )
         .unwrap();
-        assert!(document.exclude_terminal);
+        assert!(!document.exclude_terminal);
     }
 
     #[test]

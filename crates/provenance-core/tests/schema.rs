@@ -33,7 +33,7 @@ fn query_defaults_and_domain_bounds_are_explicit() {
     assert!(!search["required"]
         .as_array()
         .is_some_and(|required| required.contains(&json!("text"))));
-    assert_eq!(search["properties"]["exclude_terminal"]["default"], true);
+    assert_eq!(search["properties"]["exclude_terminal"]["default"], false);
     assert_eq!(search["properties"]["limit"]["default"], 50);
     for limit in [0, 201] {
         assert!(

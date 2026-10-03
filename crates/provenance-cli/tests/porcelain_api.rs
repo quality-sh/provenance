@@ -126,6 +126,34 @@ fn api_get_defaults_to_get_and_prints_the_envelope() {
 }
 
 #[test]
+fn json_catalog_applies_filter_and_limit() {
+    let (_directory, repo) = init();
+    let catalog = json(&[
+        "api",
+        "--repo",
+        &repo,
+        "--filter",
+        "requirements/{id}",
+        "--limit",
+        "2",
+        "--format",
+        "json",
+    ]);
+    let routes = catalog["routes"].as_array().unwrap();
+    assert_eq!(routes.len(), 2);
+    assert!(routes.iter().all(|route| {
+        format!(
+            "{} {} {}",
+            route["method"].as_str().unwrap(),
+            route["path"].as_str().unwrap(),
+            route["description"].as_str().unwrap()
+        )
+        .to_ascii_lowercase()
+        .contains("requirements/{id}")
+    }));
+}
+
+#[test]
 #[verifies("rule_porcelain_api_body_inputs", examples)]
 fn api_post_creates_from_a_file_body_with_selected_method_and_headers() {
     let (_directory, repo) = init();
