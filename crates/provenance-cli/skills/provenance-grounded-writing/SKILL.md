@@ -7,9 +7,10 @@ description: Write specific, evidence-grounded statements for requirements, rule
 
 Before you ask a person to review a record, start the review host if it is not
 running: `provenance review --repo . --repository-id local --scope default`.
-Get the review URL with
-`provenance <record-id> get --review-link --format json`. Give the person the
-review URL. Never give the person a record ID.
+When you ask a person to review, open the review link yourself. First use your
+app's browser or preview, if it has one (for example, Claude Desktop or the Codex app).
+Otherwise, run `provenance <record-id> get --review-link --format json`; the command opens
+the person's default browser. Never ask the person to copy a link, an ID, or a token.
 
 # Grounded writing
 

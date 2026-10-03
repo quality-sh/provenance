@@ -20,12 +20,17 @@ struct LinkOutput {
     message: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct HostIdentity {
     repository_id: String,
     scope: String,
     instance_nonce: String,
+}
+
+#[derive(Deserialize)]
+struct LaunchCode {
+    code: String,
 }
 
 pub async fn print(
@@ -126,10 +131,29 @@ async fn link_output(
         }));
     };
     let focus = (root.as_str() != record.id).then_some(record.id.as_str());
+    let code = mint_code(&runtime).await?;
     Ok(Some(LinkOutput {
-        review_url: Some(build_url(&runtime.endpoint, root.as_str(), focus)?),
+        review_url: Some(build_url(&runtime.endpoint, root.as_str(), focus, &code)?),
         message: None,
     }))
+}
+
+async fn mint_code(runtime: &crate::review_runtime::RunningHost) -> anyhow::Result<String> {
+    let runtime = runtime.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut url = crate::review_runtime::validate_endpoint(&runtime.endpoint)?;
+        url.set_path("/review-launch");
+        let identity = HostIdentity {
+            repository_id: runtime.repository_id,
+            scope: runtime.scope,
+            instance_nonce: runtime.instance_nonce,
+        };
+        let response = ureq::post(url.as_str())
+            .set("Content-Type", "application/json")
+            .send_string(&serde_json::to_string(&identity)?)?;
+        Ok::<_, anyhow::Error>(serde_json::from_reader::<_, LaunchCode>(response.into_reader())?.code)
+    })
+    .await?
 }
 
 async fn running_host(context: &RepoContext) -> Option<crate::review_runtime::RunningHost> {
@@ -182,7 +206,7 @@ fn start_message(context: &RepoContext) -> String {
     )
 }
 
-fn build_url(endpoint: &str, root: &str, focus: Option<&str>) -> anyhow::Result<String> {
+fn build_url(endpoint: &str, root: &str, focus: Option<&str>, code: &str) -> anyhow::Result<String> {
     let mut url = crate::review_runtime::validate_endpoint(endpoint)?;
     {
         let mut query = url.query_pairs_mut();
@@ -190,6 +214,7 @@ fn build_url(endpoint: &str, root: &str, focus: Option<&str>) -> anyhow::Result<
         if let Some(focus) = focus {
             query.append_pair("focus", focus);
         }
+        query.append_pair("code", code);
     }
     Ok(url.into())
 }
@@ -200,10 +225,16 @@ mod tests {
 
     #[test]
     fn link_builder_encodes_record_ids_and_never_adds_a_credential() {
-        let url = build_url("http://127.0.0.1:1234/", "req root", Some("rule/focus")).unwrap();
+        let url = build_url(
+            "http://127.0.0.1:1234/",
+            "req root",
+            Some("rule/focus"),
+            "one-use-code",
+        )
+        .unwrap();
         assert_eq!(
             url,
-            "http://127.0.0.1:1234/?root=req+root&focus=rule%2Ffocus"
+            "http://127.0.0.1:1234/?root=req+root&focus=rule%2Ffocus&code=one-use-code"
         );
         assert!(!url.contains("bearer"));
     }

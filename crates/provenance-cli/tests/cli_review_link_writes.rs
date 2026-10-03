@@ -101,10 +101,13 @@ fn fake_host(identity: &Value) -> FakeHost {
             };
             let mut request = [0_u8; 2048];
             let count = stream.read(&mut request).unwrap_or(0);
-            let path_matches = String::from_utf8_lossy(&request[..count])
-                .starts_with("GET /review-host-identity HTTP/1.1");
-            let (status, response) = if path_matches {
+            let request = String::from_utf8_lossy(&request[..count]);
+            let identity_matches = request.starts_with("GET /review-host-identity HTTP/1.1");
+            let launch_matches = request.starts_with("POST /review-launch HTTP/1.1");
+            let (status, response) = if identity_matches {
                 ("200 OK", body.as_str())
+            } else if launch_matches {
+                ("200 OK", r#"{"code":"launch-code"}"#)
             } else {
                 ("404 Not Found", "{}")
             };
@@ -153,7 +156,7 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
             "instanceNonce":"nonce"
         }),
     );
-    let expected = format!("{}/?root=req_flow", host.endpoint);
+    let expected = format!("{}/?root=req_flow&code=launch-code", host.endpoint);
     let created = json_output(&[
         "req_flow",
         "create",

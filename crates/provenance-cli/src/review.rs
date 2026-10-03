@@ -6,7 +6,7 @@ use axum::{
     http::{header, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json,
 };
 use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
@@ -27,6 +27,9 @@ pub struct Options {
     /// Loopback port. Zero selects an available port.
     #[arg(long, default_value_t = 0)]
     port: u16,
+    /// Print the review link without opening a browser.
+    #[arg(long)]
+    no_open: bool,
 }
 
 pub async fn run(options: Options) -> anyhow::Result<()> {
@@ -81,6 +84,14 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         access: access.clone(),
         value: config,
     };
+    let launch_codes = crate::review_launch::LaunchCodes::new(
+        token.clone(),
+        options.repository_id.clone(),
+        options.scope.clone(),
+        identity.instance_nonce.clone(),
+    );
+    let startup_code = launch_codes.mint();
+    let startup_url = format!("{endpoint}/?code={startup_code}");
     let router = host
         .router()
         .route(
@@ -91,6 +102,14 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
             "/review-config",
             get(configuration).with_state(review_configuration),
         )
+        .route(
+            "/review-launch",
+            post(crate::review_launch::mint).with_state(launch_codes.clone()),
+        )
+        .route(
+            "/review-launch/exchange",
+            post(crate::review_launch::exchange).with_state(launch_codes),
+        )
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(access, protect_origin));
     let signals = ShutdownSignals::new()?;
@@ -99,7 +118,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         json!({
             "endpoint": endpoint, "bearer": token, "repositoryId": options.repository_id,
             "scope": options.scope, "instanceNonce": identity.instance_nonce,
-            "url": format!("{endpoint}/"),
+            "url": startup_url,
         })
     );
     std::io::stdout().flush()?;
