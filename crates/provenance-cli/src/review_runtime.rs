@@ -123,8 +123,12 @@ fn lock_path(repo: &Path, scope: &str) -> PathBuf {
 }
 
 fn secure_directory(path: &Path) -> anyhow::Result<()> {
-    std::fs::create_dir_all(path)
-        .with_context(|| format!("cannot create review host runtime directory {}", path.display()))?;
+    std::fs::create_dir_all(path).with_context(|| {
+        format!(
+            "cannot create review host runtime directory {}",
+            path.display()
+        )
+    })?;
     #[cfg(unix)]
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))?;
     Ok(())

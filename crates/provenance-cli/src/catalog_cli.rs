@@ -43,16 +43,19 @@ impl Invocation {
                     .unwrap_or_else(|error| usage_error(error));
             }
         }
-        let affected_review_record = resolved.address.definition.registration.review_link.and_then(
-            |kind| {
+        let affected_review_record = resolved
+            .address
+            .definition
+            .registration
+            .review_link
+            .and_then(|kind| {
                 resolved
                     .values
                     .get("id")
                     .cloned()
                     .or_else(|| data.get("id").and_then(Value::as_str).map(str::to_owned))
                     .map(|id| crate::review_link::AffectedReviewRecord { kind, id })
-            },
-        );
+            });
         Self {
             context: args.common.context(),
             path: resolved.path,
@@ -215,11 +218,12 @@ pub async fn dispatch_target(
         .invoke_target(&route, data, headers)
         .await
         .map_err(|failure| anyhow::anyhow!(serde_json::to_string(&failure).unwrap()))?;
-    let affected = route
-        .definition
-        .registration
-        .review_link
-        .map(|kind| crate::review_link::AffectedReviewRecord { kind, id: target.clone() });
+    let affected = route.definition.registration.review_link.map(|kind| {
+        crate::review_link::AffectedReviewRecord {
+            kind,
+            id: target.clone(),
+        }
+    });
     crate::review_link::annotate_write(&repo, affected, &mut value).await;
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&value)?;

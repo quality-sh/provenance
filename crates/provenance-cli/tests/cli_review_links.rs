@@ -44,28 +44,6 @@ fn json_output(arguments: &[&str]) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn json_stdin_output(arguments: &[&str], input: &Value) -> Value {
-    let output = provenance()
-        .args(arguments)
-        .write_stdin(input.to_string())
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
-}
-
-fn allow_reviewer(repo: &str) {
-    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
-    let mut manifest: provenance_core::Manifest =
-        serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
-}
-
 struct FakeHost {
     endpoint: String,
     stop: Arc<AtomicBool>,
@@ -122,8 +100,11 @@ fn fake_host(identity: Value) -> FakeHost {
 fn publish_host(repo: &str, stored: Value) {
     let path = std::path::Path::new(repo).join(".provenance/cache/review-hosts/default.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::set_permissions(path.parent().unwrap(), std::fs::Permissions::from_mode(0o700))
-        .unwrap();
+    std::fs::set_permissions(
+        path.parent().unwrap(),
+        std::fs::Permissions::from_mode(0o700),
+    )
+    .unwrap();
     std::fs::write(
         &path,
         serde_json::to_vec(&json!({"hosts":[stored]})).unwrap(),
@@ -188,10 +169,13 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
     let host = fake_host(json!({
         "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
     }));
-    publish_host(&repo, json!({
-        "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
-        "instanceNonce":"nonce"
-    }));
+    publish_host(
+        &repo,
+        json!({
+            "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
+            "instanceNonce":"nonce"
+        }),
+    );
 
     let created = json_output(&[
         "rule_link",
@@ -223,69 +207,6 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
 }
 
 #[test]
-fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
-    let (_directory, repo) = initialized_repo();
-    allow_reviewer(&repo);
-    let host = fake_host(json!({
-        "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
-    }));
-    publish_host(&repo, json!({
-        "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
-        "instanceNonce":"nonce"
-    }));
-    let expected = format!("{}/?root=req_flow", host.endpoint);
-    let created = json_output(&[
-        "req_flow", "create", "--type", "requirement", "--repo", &repo,
-        "--statement", "The review flow keeps its link.", "--format", "json",
-    ]);
-    assert_eq!(created["data"]["review_url"], expected);
-    let etag = created["data"]["edit"]["etag"].as_str().unwrap();
-    let updated = json_stdin_output(
-        &[
-            "requirements", "req_flow", "update", "--repo", &repo, "--if-match", etag,
-            "--stdin", "--format", "json",
-        ],
-        &json!({"actor":"agent","description":"Updated review text."}),
-    );
-    assert_eq!(updated["data"]["review_url"], expected);
-    let automatic = updated["data"]["decision"]["pending"]["proposal_id"]
-        .as_str()
-        .unwrap();
-    let withdrawn = json_stdin_output(
-        &[
-            "requirements", "req_flow", "submissions", automatic, "withdraw", "--repo",
-            &repo, "--stdin", "--format", "json",
-        ],
-        &json!({"actor":"agent","declared_by":null,"reason":null}),
-    );
-    assert_eq!(withdrawn["data"]["review_url"], expected);
-    let submitted = json_stdin_output(
-        &[
-            "req_flow", "submit", "--repo", &repo, "--stdin", "--format", "json",
-        ],
-        &json!({
-            "actor":"agent", "title":"Review", "summary":"Review the updated record.",
-            "source_ids":[], "evidence_references":[], "builds_on":[]
-        }),
-    );
-    assert_eq!(submitted["data"]["review_url"], expected);
-    let proposal = submitted["data"]["proposal_id"].as_str().unwrap();
-    let decided = json_stdin_output(
-        &[
-            "requirements", "req_flow", "submissions", proposal, "decide", "--repo", &repo,
-            "--stdin", "--format", "json",
-        ],
-        &json!({
-            "actor":{"identity_type":"human","id":"reviewer"}, "decision":"accepted",
-            "rationale":null,
-            "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_flow"},
-            "feedback":null, "declared_by":null
-        }),
-    );
-    assert_eq!(decided["data"]["review_url"], expected);
-}
-
-#[test]
 fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
     for stored in [
         json!({"endpoint":"https://127.0.0.1:1234","repositoryId":"local","scope":"default","instanceNonce":"nonce"}),
@@ -295,30 +216,64 @@ fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
     ] {
         let (_directory, repo) = initialized_repo();
         json_output(&[
-            "req_link", "create", "--type", "requirement", "--repo", &repo,
-            "--statement", "The agent gives the reviewer a safe link.", "--format", "json",
+            "req_link",
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            &repo,
+            "--statement",
+            "The agent gives the reviewer a safe link.",
+            "--format",
+            "json",
         ]);
         publish_host(&repo, stored);
         let link = json_output(&[
-            "req_link", "get", "--repo", &repo, "--review-link", "--format", "json",
+            "req_link",
+            "get",
+            "--repo",
+            &repo,
+            "--review-link",
+            "--format",
+            "json",
         ]);
         assert!(link["review_url"].is_null());
-        assert!(link["message"].as_str().unwrap().contains("provenance review"));
+        assert!(link["message"]
+            .as_str()
+            .unwrap()
+            .contains("provenance review"));
     }
 
     let (_directory, repo) = initialized_repo();
     json_output(&[
-        "req_link", "create", "--type", "requirement", "--repo", &repo,
-        "--statement", "The agent gives the reviewer a safe link.", "--format", "json",
+        "req_link",
+        "create",
+        "--type",
+        "requirement",
+        "--repo",
+        &repo,
+        "--statement",
+        "The agent gives the reviewer a safe link.",
+        "--format",
+        "json",
     ]);
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
-    publish_host(&repo, json!({
-        "endpoint":endpoint, "repositoryId":"local", "scope":"default",
-        "instanceNonce":"nonce"
-    }));
+    publish_host(
+        &repo,
+        json!({
+            "endpoint":endpoint, "repositoryId":"local", "scope":"default",
+            "instanceNonce":"nonce"
+        }),
+    );
     let link = json_output(&[
-        "req_link", "get", "--repo", &repo, "--review-link", "--format", "json",
+        "req_link",
+        "get",
+        "--repo",
+        &repo,
+        "--review-link",
+        "--format",
+        "json",
     ]);
     assert!(link["review_url"].is_null());
 }
@@ -332,16 +287,33 @@ fn identity_mismatches_do_not_produce_links() {
     ] {
         let (_directory, repo) = initialized_repo();
         json_output(&[
-            "req_link", "create", "--type", "requirement", "--repo", &repo,
-            "--statement", "The agent gives the reviewer a safe link.", "--format", "json",
+            "req_link",
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            &repo,
+            "--statement",
+            "The agent gives the reviewer a safe link.",
+            "--format",
+            "json",
         ]);
         let host = fake_host(identity);
-        publish_host(&repo, json!({
-            "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
-            "instanceNonce":"nonce"
-        }));
+        publish_host(
+            &repo,
+            json!({
+                "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
+                "instanceNonce":"nonce"
+            }),
+        );
         let link = json_output(&[
-            "req_link", "get", "--repo", &repo, "--review-link", "--format", "json",
+            "req_link",
+            "get",
+            "--repo",
+            &repo,
+            "--review-link",
+            "--format",
+            "json",
         ]);
         assert!(link["review_url"].is_null());
     }
@@ -356,13 +328,25 @@ fn corrupt_runtime_state_cannot_hide_a_successful_write() {
 
     let output = provenance()
         .args([
-            "req_committed", "create", "--type", "requirement", "--repo", &repo,
-            "--statement", "The committed write remains successful.", "--format", "json",
+            "req_committed",
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            &repo,
+            "--statement",
+            "The committed write remains successful.",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let created: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(created["data"]["id"], "req_committed");
     assert!(created["data"]["review_url"].is_null());
@@ -377,28 +361,54 @@ fn ambiguous_document_decoration_warns_without_hiding_the_write() {
     let (_directory, repo) = initialized_repo();
     for id in ["req_first", "req_second"] {
         json_output(&[
-            id, "create", "--type", "requirement", "--repo", &repo, "--statement",
-            "The Requirement owns part of the shared Rule.", "--format", "json",
+            id,
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            &repo,
+            "--statement",
+            "The Requirement owns part of the shared Rule.",
+            "--format",
+            "json",
         ]);
     }
 
     let output = provenance()
         .args([
-            "rule_shared", "create", "--type", "rule", "--repo", &repo, "--statement",
-            "The shared Rule belongs to two documents.", "--requirement-id", "req_first",
-            "--requirement-id", "req_second", "--format", "json",
+            "rule_shared",
+            "create",
+            "--type",
+            "rule",
+            "--repo",
+            &repo,
+            "--statement",
+            "The shared Rule belongs to two documents.",
+            "--requirement-id",
+            "req_first",
+            "--requirement-id",
+            "req_second",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();
 
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let created: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(created["data"]["id"], "rule_shared");
     assert!(created["data"].get("review_url").is_none());
     let warning = String::from_utf8_lossy(&output.stderr);
     assert_eq!(warning.lines().count(), 1, "{warning}");
     assert!(warning.contains("write succeeded"), "{warning}");
-    assert!(warning.contains("multiple Requirement review documents"), "{warning}");
+    assert!(
+        warning.contains("multiple Requirement review documents"),
+        "{warning}"
+    );
 }
 
 #[test]

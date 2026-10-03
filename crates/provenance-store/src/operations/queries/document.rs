@@ -52,11 +52,7 @@ pub async fn containing_review_documents(
 ) -> anyhow::Result<Stamped<Vec<StableId>>> {
     let id = id.clone();
     served(repo, scope, policy, move |ctx| {
-        Box::pin(async move {
-            ctx.snapshot()
-                .containing_document_roots(kind, &id)
-                .await
-        })
+        Box::pin(async move { ctx.snapshot().containing_document_roots(kind, &id).await })
     })
     .await
 }

@@ -77,9 +77,15 @@ fn runtime_file_contains_the_host_location_and_is_removed_on_shutdown() {
     assert_eq!(published["hosts"][0]["endpoint"], config["endpoint"]);
     assert_eq!(published["hosts"][0]["repositoryId"], "A");
     assert_eq!(published["hosts"][0]["scope"], "default");
-    assert_eq!(published["hosts"][0]["instanceNonce"], config["instanceNonce"]);
+    assert_eq!(
+        published["hosts"][0]["instanceNonce"],
+        config["instanceNonce"]
+    );
     assert!(published["hosts"][0].get("bearer").is_none());
-    assert_eq!(std::fs::metadata(runtime.parent().unwrap()).unwrap().mode() & 0o077, 0);
+    assert_eq!(
+        std::fs::metadata(runtime.parent().unwrap()).unwrap().mode() & 0o077,
+        0
+    );
     assert_eq!(std::fs::metadata(&runtime).unwrap().mode() & 0o077, 0);
 
     stop(&mut child);
@@ -92,13 +98,13 @@ fn public_identity_matches_the_runtime_without_disclosing_the_credential() {
     let (mut child, config) = start(repo.path(), "A", "default");
     let identity: Value = serde_json::from_str(
         &ureq::get(&format!(
-        "{}/review-host-identity",
-        config["endpoint"].as_str().unwrap()
-    ))
-    .call()
-    .unwrap()
-    .into_string()
-    .unwrap(),
+            "{}/review-host-identity",
+            config["endpoint"].as_str().unwrap()
+        ))
+        .call()
+        .unwrap()
+        .into_string()
+        .unwrap(),
     )
     .unwrap();
 
@@ -140,14 +146,27 @@ fn separate_scopes_publish_separate_runtime_files() {
         id: provenance_core::ScopeId::new("secondary").unwrap(),
         path_prefix: provenance_core::RepoPathPrefix::new("."),
     });
-    std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
     let (mut primary, _) = start(repo.path(), "A", "default");
     let (mut secondary, _) = start(repo.path(), "A", "secondary");
 
-    assert!(repo.path().join(".provenance/cache/review-hosts/default.json").exists());
-    assert!(repo.path().join(".provenance/cache/review-hosts/secondary.json").exists());
+    assert!(repo
+        .path()
+        .join(".provenance/cache/review-hosts/default.json")
+        .exists());
+    assert!(repo
+        .path()
+        .join(".provenance/cache/review-hosts/secondary.json")
+        .exists());
     stop(&mut primary);
-    assert!(repo.path().join(".provenance/cache/review-hosts/secondary.json").exists());
+    assert!(repo
+        .path()
+        .join(".provenance/cache/review-hosts/secondary.json")
+        .exists());
     stop(&mut secondary);
 }
 

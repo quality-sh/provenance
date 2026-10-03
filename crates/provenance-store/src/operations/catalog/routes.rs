@@ -283,7 +283,7 @@ impl Definition {
         self
     }
 
-    fn review_link(mut self, kind: Option<NodeType>) -> Self {
+    const fn review_link(mut self, kind: Option<NodeType>) -> Self {
         self.registration.review_link = kind;
         self
     }
