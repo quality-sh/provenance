@@ -33,6 +33,9 @@ impl DocumentReviewState {
 }
 
 impl StateStore {
+    /// Builds the current review outcome for each entry and the totals for the document.
+    #[rule("rule_document_entry_has_review_outcome")]
+    #[rule("rule_document_has_review_totals")]
     pub(crate) fn document_review_state(
         &self,
         scope: &ScopeId,

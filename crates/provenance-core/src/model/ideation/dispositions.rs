@@ -85,6 +85,8 @@ pub fn disposition_requires_prior_assertion(disposition: &DispositionRecord) -> 
             && disposition.canonical_artifact.is_some())
 }
 
+/// Enforces the intrinsic fields that make a Disposition valid.
+#[provenance_macros::rule("rule_review_rejection_requires_comment")]
 pub fn validate_disposition_intrinsic(disposition: &DispositionRecord) -> anyhow::Result<()> {
     if disposition.decision == DispositionDecision::Rejected {
         anyhow::ensure!(
