@@ -2,15 +2,16 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:6114cb605bb5db95 -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:45fcca67b110da56 -->
 
 ## Human review links
 
 Before you ask a person to review a record, start the review host if it is not
 running: `provenance review --repo . --repository-id local --scope default`.
-Get the review URL with
-`provenance <record-id> get --review-link --format json`. Give the person the
-review URL. Never give the person a record ID.
+When you ask a person to review, open the review link yourself. First use your
+app's browser or preview, if it has one (for example, Claude Desktop or the Codex app).
+Otherwise, run `provenance <record-id> get --review-link --format json`; the command opens
+the person's default browser. Never ask the person to copy a link, an ID, or a token.
 
 # Shaping
 

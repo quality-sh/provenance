@@ -2,15 +2,16 @@
 name: provenance-swarm-backtrace
 description: Reverse-engineer candidate requirements from an existing codebase with a multi-agent swarm. Use when the user wants to extract, mine, backtrace, or reverse-engineer requirements or rules from existing code, bootstrap a Provenance graph from a legacy system, or asks "what must be true for this code to be correct". Lands everything as proposals (promotion_state=proposed) against a commit-pinned source — never as active requirements.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:23dbb82ff65bf928 -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:a483ab19cb500af5 -->
 
 ## Human review links
 
 Before you ask a person to review a record, start the review host if it is not
 running: `provenance review --repo . --repository-id local --scope default`.
-Get the review URL with
-`provenance <record-id> get --review-link --format json`. Give the person the
-review URL. Never give the person a record ID.
+When you ask a person to review, open the review link yourself. First use your
+app's browser or preview, if it has one (for example, Claude Desktop or the Codex app).
+Otherwise, run `provenance <record-id> get --review-link --format json`; the command opens
+the person's default browser. Never ask the person to copy a link, an ID, or a token.
 
 # Swarm backtrace
 
