@@ -172,15 +172,15 @@ macro_rules! review_resource {
             .target(TargetAction::Create, $target_kind),
         );
         let update = backed::<$update>(
-                concat!("update-", $singular),
-                concat!("update", $singular_id),
-                HttpMethod::Patch,
-                concat!("/", $plural, "/{id}"),
-                concat!("Apply a partial change to one ", $singular, "."),
-                ResponseKind::Resource,
-                vec![schema::path("id")],
-            )
-            .scope("scope_id");
+            concat!("update-", $singular),
+            concat!("update", $singular_id),
+            HttpMethod::Patch,
+            concat!("/", $plural, "/{id}"),
+            concat!("Apply a partial change to one ", $singular, "."),
+            ResponseKind::Resource,
+            vec![schema::path("id")],
+        )
+        .scope("scope_id");
         let update = if matches!(
             $target_kind,
             Some(NodeType::Topic) | Some(NodeType::Question)
@@ -191,10 +191,10 @@ macro_rules! review_resource {
         };
         $out.push(
             update
-            .cli_defaults($update_defaults)
-            .argument_aliases($update_aliases)
-            .public_patch($nullable)
-            .target(TargetAction::Update, $target_kind),
+                .cli_defaults($update_defaults)
+                .argument_aliases($update_aliases)
+                .public_patch($nullable)
+                .target(TargetAction::Update, $target_kind),
         );
     }};
 }

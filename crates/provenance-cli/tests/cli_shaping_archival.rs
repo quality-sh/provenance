@@ -20,8 +20,18 @@ fn archive(repo: &str, family: &str, id: &str) -> Value {
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            family, id, "update", "--repo", repo, "--scope", "default", "--if-match", etag,
-            "--stdin", "--format", "json",
+            family,
+            id,
+            "update",
+            "--repo",
+            repo,
+            "--scope",
+            "default",
+            "--if-match",
+            etag,
+            "--stdin",
+            "--format",
+            "json",
         ])
         .write_stdin(format!(
             r#"{{"status":"archived","archived_in_commit":{{"commit":"{}"}}}}"#,
@@ -142,8 +152,8 @@ fn topic_and_question_updates_require_the_current_etag() {
         Command::cargo_bin("provenance")
             .unwrap()
             .args([
-                family, id, "update", "--repo", repo, "--scope", "default", "--stdin",
-                "--format", "json",
+                family, id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format",
+                "json",
             ])
             .write_stdin(r#"{"title":"No unguarded update"}"#)
             .assert()

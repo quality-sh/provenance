@@ -85,23 +85,26 @@ impl NativeRecordBatch<'_> {
         T: GraphRecord,
     {
         guard::with_writer(path, "*", || {
-            let (result, mut changes) = self.store.mutate_jsonl_records(path, |records: &mut Vec<T>| {
-                let before = records.clone();
-                let (result, guarded_id) = mutate(records)?;
-                self.store.stamp_records(&before, records)?;
-                ensure_slice_within_read_budget(records)?;
-                if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
-                    check_etag(self.store, &before, id, expected)?;
-                }
-                let changes = records
-                    .iter()
-                    .filter_map(|after| {
-                        let previous = before.iter().find(|record| record.id() == after.id())?;
-                        (previous != after).then(|| (previous.clone(), after.clone()))
-                    })
-                    .collect::<Vec<_>>();
-                Ok((result, changes))
-            })?;
+            let (result, mut changes) =
+                self.store
+                    .mutate_jsonl_records(path, |records: &mut Vec<T>| {
+                        let before = records.clone();
+                        let (result, guarded_id) = mutate(records)?;
+                        self.store.stamp_records(&before, records)?;
+                        ensure_slice_within_read_budget(records)?;
+                        if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
+                            check_etag(self.store, &before, id, expected)?;
+                        }
+                        let changes = records
+                            .iter()
+                            .filter_map(|after| {
+                                let previous =
+                                    before.iter().find(|record| record.id() == after.id())?;
+                                (previous != after).then(|| (previous.clone(), after.clone()))
+                            })
+                            .collect::<Vec<_>>();
+                        Ok((result, changes))
+                    })?;
             for (_, after) in &mut changes {
                 if native_record_is_closed(path, T::KIND, after.id())? {
                     *after = self.store.enroll_graph_record::<T>(path, after.id())?;

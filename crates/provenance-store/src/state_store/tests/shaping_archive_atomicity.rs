@@ -1,5 +1,9 @@
 use super::seeded_requirement_store;
-use crate::{state_store::StateStore, test_probes, write_error::{WriteError, WriteFailure}};
+use crate::{
+    state_store::StateStore,
+    test_probes,
+    write_error::{WriteError, WriteFailure},
+};
 use camino::Utf8Path;
 use provenance_core::{NodeType, QuestionStatus, ScopeId, StableId, TopicStatus};
 use serde_json::json;
@@ -10,25 +14,40 @@ fn id(value: &str) -> StableId {
 
 fn seed() -> (tempfile::TempDir, StateStore, ScopeId) {
     let (directory, store, scope) = seeded_requirement_store();
-    store.create_topic(serde_json::from_value(json!({
-        "scope_id":"default", "id":"topic_archive", "requirement_id":"req_overtime",
-        "title":"Archive topic", "status":"open", "links":[]
-    })).unwrap()).unwrap();
+    store
+        .create_topic(
+            serde_json::from_value(json!({
+                "scope_id":"default", "id":"topic_archive", "requirement_id":"req_overtime",
+                "title":"Archive topic", "status":"open", "links":[]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     for question in ["question_one", "question_two"] {
-        store.create_question(serde_json::from_value(json!({
-            "scope_id":"default", "id":question, "topic_id":"topic_archive",
-            "question":"Keep this history?", "resolution_method":"research",
-            "status":"open", "answer":null, "links":[], "resolution_id":null,
-            "contradicts":null
-        })).unwrap()).unwrap();
+        store
+            .create_question(
+                serde_json::from_value(json!({
+                    "scope_id":"default", "id":question, "topic_id":"topic_archive",
+                    "question":"Keep this history?", "resolution_method":"research",
+                    "status":"open", "answer":null, "links":[], "resolution_id":null,
+                    "contradicts":null
+                }))
+                .unwrap(),
+            )
+            .unwrap();
     }
     (directory, store, scope)
 }
 
 fn etag(store: &StateStore, scope: &ScopeId, kind: NodeType, record_id: &str) -> String {
-    store.review_entries(scope).unwrap().into_iter()
+    store
+        .review_entries(scope)
+        .unwrap()
+        .into_iter()
         .filter(|entry| entry.record_kind == kind && entry.record_id.as_str() == record_id)
-        .max_by_key(|entry| entry.sequence).unwrap().etag
+        .max_by_key(|entry| entry.sequence)
+        .unwrap()
+        .etag
 }
 
 fn archive_input(store: &StateStore, scope: &ScopeId) -> crate::state_store::UpdateTopicInput {
@@ -40,11 +59,18 @@ fn archive_input(store: &StateStore, scope: &ScopeId) -> crate::state_store::Upd
 }
 
 fn assert_open(store: &StateStore, scope: &ScopeId) {
-    let topic = store.list_topics(scope).unwrap().into_iter()
-        .find(|topic| topic.id == id("topic_archive")).unwrap();
+    let topic = store
+        .list_topics(scope)
+        .unwrap()
+        .into_iter()
+        .find(|topic| topic.id == id("topic_archive"))
+        .unwrap();
     assert_eq!(topic.status, TopicStatus::Open);
     assert!(topic.archived_in_commit.is_none());
-    for question in store.list_questions(scope).unwrap().into_iter()
+    for question in store
+        .list_questions(scope)
+        .unwrap()
+        .into_iter()
         .filter(|question| question.topic_id == id("topic_archive"))
     {
         assert_eq!(question.status, QuestionStatus::Open);
@@ -53,11 +79,18 @@ fn assert_open(store: &StateStore, scope: &ScopeId) {
 }
 
 fn assert_archived(store: &StateStore, scope: &ScopeId) {
-    let topic = store.list_topics(scope).unwrap().into_iter()
-        .find(|topic| topic.id == id("topic_archive")).unwrap();
+    let topic = store
+        .list_topics(scope)
+        .unwrap()
+        .into_iter()
+        .find(|topic| topic.id == id("topic_archive"))
+        .unwrap();
     assert_eq!(topic.status, TopicStatus::Archived);
     assert!(topic.archived_in_commit.is_some());
-    for question in store.list_questions(scope).unwrap().into_iter()
+    for question in store
+        .list_questions(scope)
+        .unwrap()
+        .into_iter()
         .filter(|question| question.topic_id == id("topic_archive"))
     {
         assert_eq!(question.status, QuestionStatus::Archived);
@@ -69,19 +102,32 @@ fn assert_archived(store: &StateStore, scope: &ScopeId) {
 fn stale_topic_archive_returns_a_typed_conflict_and_changes_nothing() {
     let (_directory, store, scope) = seed();
     let stale = etag(&store, &scope, NodeType::Topic, "topic_archive");
-    store.edit_topic(serde_json::from_value(json!({
-        "scope_id":"default", "id":"topic_archive", "expected_etag":stale,
-        "title":"Changed title"
-    })).unwrap()).unwrap();
+    store
+        .edit_topic(
+            serde_json::from_value(json!({
+                "scope_id":"default", "id":"topic_archive", "expected_etag":stale,
+                "title":"Changed title"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     let error = store.edit_topic(serde_json::from_value(json!({
         "scope_id":"default", "id":"topic_archive", "expected_etag":stale,
         "status":"archived", "archived_in_commit":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
     })).unwrap()).unwrap_err();
-    assert!(matches!(WriteError(error).safe(), WriteFailure::RecordEditConflict {
-        record_kind: NodeType::Topic, ..
-    }));
-    let topic = store.list_topics(&scope).unwrap().into_iter()
-        .find(|topic| topic.id == id("topic_archive")).unwrap();
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::RecordEditConflict {
+            record_kind: NodeType::Topic,
+            ..
+        }
+    ));
+    let topic = store
+        .list_topics(&scope)
+        .unwrap()
+        .into_iter()
+        .find(|topic| topic.id == id("topic_archive"))
+        .unwrap();
     assert_eq!(topic.title, "Changed title");
     assert_eq!(topic.status, TopicStatus::Open);
     for question in store.list_questions(&scope).unwrap() {
@@ -109,7 +155,9 @@ fn failure_during_question_work_publishes_no_archive_changes() {
 
 #[test]
 fn crash_child() {
-    let Ok(root) = std::env::var("PROVENANCE_TOPIC_ARCHIVE_CRASH_ROOT") else { return; };
+    let Ok(root) = std::env::var("PROVENANCE_TOPIC_ARCHIVE_CRASH_ROOT") else {
+        return;
+    };
     let phase = std::env::var("PROVENANCE_TOPIC_ARCHIVE_CRASH_PHASE").unwrap();
     let phase = match phase.as_str() {
         "state_marker_prepared" => "state_marker_prepared",
@@ -129,13 +177,23 @@ fn archive_recovery_restores_complete_old_or_new_state() {
         let (directory, _store, scope) = seed();
         let root = Utf8Path::from_path(directory.path()).unwrap();
         let status = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "state_store::tests::shaping_archive_atomicity::crash_child", "--nocapture"])
+            .args([
+                "--exact",
+                "state_store::tests::shaping_archive_atomicity::crash_child",
+                "--nocapture",
+            ])
             .env("PROVENANCE_TOPIC_ARCHIVE_CRASH_ROOT", root.as_str())
             .env("PROVENANCE_TOPIC_ARCHIVE_CRASH_PHASE", phase)
-            .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null())
-            .status().unwrap();
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
         assert_eq!(status.code(), Some(86), "{phase}");
         let reopened = StateStore::new(crate::layout::ProvenanceLayout::new(root));
-        if committed { assert_archived(&reopened, &scope); } else { assert_open(&reopened, &scope); }
+        if committed {
+            assert_archived(&reopened, &scope);
+        } else {
+            assert_open(&reopened, &scope);
+        }
     }
 }

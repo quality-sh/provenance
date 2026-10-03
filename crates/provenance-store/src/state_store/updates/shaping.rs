@@ -12,9 +12,8 @@ use provenance_core::{NodeType, Question, QuestionStatus, Topic, TopicStatus};
 impl StateStore {
     pub fn edit_topic(&self, input: UpdateTopicInput) -> anyhow::Result<Topic> {
         if input.status == Some(TopicStatus::Archived) {
-            return self.with_native_record_batch(|batch| {
-                batch.store().write_topic_archive(batch, input)
-            });
+            return self
+                .with_native_record_batch(|batch| batch.store().write_topic_archive(batch, input));
         }
         self.with_repository_publication(|| self.write_topic_update(input))
     }
@@ -34,16 +33,16 @@ impl StateStore {
             &topic_path,
             input.expected_etag.as_deref(),
             |topics: &mut Vec<Topic>| {
-            let topic = topics
-                .iter_mut()
-                .find(|topic| topic.id == input.id)
-                .ok_or_else(|| invalid("topic does not exist"))?;
-            set(&mut topic.title, input.title);
-            set(&mut topic.status, input.status);
-            set(&mut topic.links, links);
-            topic.archived_in_commit.clone_from(&archived_in_commit);
-            clear_topic_claim_on_exit(topic);
-            Ok(topic.clone())
+                let topic = topics
+                    .iter_mut()
+                    .find(|topic| topic.id == input.id)
+                    .ok_or_else(|| invalid("topic does not exist"))?;
+                set(&mut topic.title, input.title);
+                set(&mut topic.status, input.status);
+                set(&mut topic.links, links);
+                topic.archived_in_commit.clone_from(&archived_in_commit);
+                clear_topic_claim_on_exit(topic);
+                Ok(topic.clone())
             },
         )?;
         crate::test_probes::at("topic_archive_after_topic")?;
