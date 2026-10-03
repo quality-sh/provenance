@@ -59,11 +59,11 @@ impl NativeRecordBatch<'_> {
             let result = mutate(records)?;
             Ok((result.clone(), Some(result.id().clone())))
         })?;
-        changes
+        Ok(changes
             .into_iter()
             .map(|(_, after)| after)
             .find(|record| record.id() == result.id())
-            .ok_or_else(|| anyhow::anyhow!("updated graph record is missing"))
+            .unwrap_or(result))
     }
 
     pub(crate) fn mutate_all<T: GraphRecord>(
