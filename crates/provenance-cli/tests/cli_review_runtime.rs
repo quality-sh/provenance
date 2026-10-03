@@ -1,7 +1,7 @@
 #![cfg(unix)]
 
-use serde_json::Value;
 use provenance_macros::verifies;
+use serde_json::Value;
 use std::{
     fs::Permissions,
     io::{BufRead, BufReader},
