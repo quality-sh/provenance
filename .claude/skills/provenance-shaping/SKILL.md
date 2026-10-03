@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:9100f3f99c7a676a -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:be1d8bf24bb62a06 -->
 
 # Shaping
 
@@ -405,6 +405,18 @@ Before final response:
    provenance topics <topic_id> close --scope <scope> --format json
    provenance topics <topic_id> release --scope <scope> --format json
    provenance questions <question_id> release --scope <scope> --format json
+   ```
+
+   To archive a Question or Topic, use the commit that contains the
+   change. Archiving a Topic also archives all Questions in that Topic.
+   Discussions stay readable as history. Read the record first and pass its
+   current ETag to the update.
+
+   ```sh
+   printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | \
+     provenance questions <question_id> update --scope <scope> --if-match <current_etag> --stdin --format json
+   printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | \
+     provenance topics <topic_id> update --scope <scope> --if-match <current_etag> --stdin --format json
    ```
 
 2. Post a handoff on the requirement thread:

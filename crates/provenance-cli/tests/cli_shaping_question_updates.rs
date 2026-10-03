@@ -6,6 +6,27 @@ mod provenance;
 use fixtures::{create_source_and_requirement, create_topic, init};
 use predicates::str::contains;
 use provenance::{provenance, provenance_stdin};
+use serde_json::Value;
+
+fn question_etag(repo: &str, id: &str) -> String {
+    let output = assert_cmd::Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "questions",
+            id,
+            "get",
+            "--repo",
+            repo,
+            "--scope",
+            "default",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    let output: Value = serde_json::from_slice(&output.stdout).unwrap();
+    output["data"]["edit"]["etag"].as_str().unwrap().to_owned()
+}
 
 #[test]
 fn cli_questions_update_changes_method_status_links_and_resolution_id() {
@@ -85,6 +106,7 @@ fn create_resolution(repo: &str) {
 }
 
 fn update_question_to_blocked_prototype(repo: &str) {
+    let etag = question_etag(repo, "question_fork");
     let updated = provenance_stdin(&[
         "questions",
         "question_fork",
@@ -93,6 +115,8 @@ fn update_question_to_blocked_prototype(repo: &str) {
         repo,
         "--scope",
         "default",
+        "--if-match",
+        &etag,
         "--stdin",
         "--format",
         "json",
@@ -122,6 +146,7 @@ fn update_question_to_blocked_prototype(repo: &str) {
 }
 
 fn question_update_rejects_invalid_links(repo: &str) {
+    let etag = question_etag(repo, "question_fork");
     provenance_stdin(
         &[
             "questions",
@@ -131,6 +156,8 @@ fn question_update_rejects_invalid_links(repo: &str) {
             repo,
             "--scope",
             "default",
+            "--if-match",
+            &etag,
             "--stdin",
         ],
         r#"{"links":[{"target_type":"source","target_id":"missing_source"}]}"#,
@@ -159,6 +186,7 @@ fn question_update_rejects_answered_without_answer(repo: &str) {
         "json",
     ])
     .success();
+    let etag = question_etag(repo, "question_unanswered");
     provenance_stdin(
         &[
             "questions",
@@ -168,6 +196,8 @@ fn question_update_rejects_answered_without_answer(repo: &str) {
             repo,
             "--scope",
             "default",
+            "--if-match",
+            &etag,
             "--stdin",
         ],
         r#"{"status":"answered"}"#,

@@ -97,6 +97,7 @@ fn push_open_questions(html: &mut String, page: &UnfinishedPage, links: &PageLin
             QuestionStatus::Open => "Open",
             QuestionStatus::BlockedOnHuman => "Waiting for a person",
             QuestionStatus::Answered => "Answered",
+            QuestionStatus::Archived => "Archived",
         };
         write!(
             html,

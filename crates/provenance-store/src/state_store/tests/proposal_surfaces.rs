@@ -237,6 +237,7 @@ fn topic_claim_atomically_surfaces_matching_asserted_proposal_with_derived_state
             requirement_id: StableId::new("req_overtime").unwrap(),
             title: "Overtime".into(),
             status: TopicStatus::Open,
+            archived_in_commit: None,
             claimed_by: None,
             claimed_at: None,
             links: Vec::new(),
@@ -271,6 +272,7 @@ fn a_topic_claim_surfaces_proposals_in_its_explicit_territory() {
         requirement_id: StableId::new("req_overtime").unwrap(),
         title: "Overtime".into(),
         status: TopicStatus::Open,
+        archived_in_commit: None,
         claimed_by: Some("agent-one".into()),
         claimed_at: Some(1),
         links: vec![ArtifactLink {

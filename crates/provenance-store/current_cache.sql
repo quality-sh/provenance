@@ -55,7 +55,7 @@ CREATE INDEX idx_boundaries_requirement ON boundaries(scope_id, requirement_id);
 CREATE TABLE topics (
     schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
     requirement_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL,
-    claimed_by TEXT, claimed_at INTEGER, links TEXT NOT NULL,
+    archived_in_commit TEXT, claimed_by TEXT, claimed_at INTEGER, links TEXT NOT NULL,
     search_text TEXT NOT NULL, PRIMARY KEY (scope_id, id)
 );
 CREATE INDEX idx_topics_requirement ON topics(scope_id, requirement_id);
@@ -66,7 +66,7 @@ CREATE TABLE questions (
     schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
     topic_id TEXT NOT NULL, requirement_id TEXT NOT NULL, question TEXT NOT NULL,
     resolution_method TEXT NOT NULL, status TEXT NOT NULL, claimed_by TEXT,
-    claimed_at INTEGER, answer TEXT, links TEXT NOT NULL, resolution_id TEXT,
+    archived_in_commit TEXT, claimed_at INTEGER, answer TEXT, links TEXT NOT NULL, resolution_id TEXT,
     contradicts TEXT, search_text TEXT NOT NULL, PRIMARY KEY (scope_id, id)
 );
 CREATE INDEX idx_questions_topic ON questions(scope_id, topic_id);

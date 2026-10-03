@@ -2,7 +2,6 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use provenance_macros::verifies;
 use std::path::Path;
-
 #[path = "cli_dictionary/support.rs"]
 #[allow(dead_code)]
 mod dictionary_support;
@@ -29,6 +28,10 @@ it in the same change.
   the exact value for `--if-match` on the next update.
 - A guarded update after a rejection opens the new submission. Do not submit
   or withdraw manually.
+- To drop a Question or Topic, archive it with its commit evidence. Archiving a
+  Topic also archives its Questions. Discussion history stays readable:
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | provenance questions <question_id> update --scope default --stdin --format json`
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | provenance topics <topic_id> update --scope default --stdin --format json`
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` directly.
 - Pre-commit: `provenance check --quiet` and
@@ -70,6 +73,24 @@ fn init_installs_bundled_skills_and_ratified_instructions() {
         std::fs::read_to_string(repo.join(".gitignore")).unwrap(),
         ".provenance/cache/\n"
     );
+}
+
+#[test]
+fn init_guidance_explains_how_to_drop_questions_and_topics() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+
+    init(&repo).success();
+
+    let agents = read_agents(&repo);
+    let shaping =
+        std::fs::read_to_string(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
+    for text in [&agents, &shaping] {
+        assert!(text.contains("questions <question_id> update"), "{text}");
+        assert!(text.contains("topics <topic_id> update"), "{text}");
+        assert!(text.contains("\"status\":\"archived\""), "{text}");
+        assert!(text.contains("archived_in_commit"), "{text}");
+    }
 }
 
 #[test]
