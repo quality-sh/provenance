@@ -20,8 +20,7 @@ it in the same change.
 - New obligation: `provenance rules create --scope default --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
-- To change a Requirement, Rule, or past decision, create a Proposal. A human decides each
-  Proposal.
+- To change a Requirement, Rule, or past decision, create a Proposal. A human decides each Proposal.
 - Read a record's decision and all bounded feedback with
   `provenance <record-id> get --view review`. The `review.edit.etag` value is
   the exact value for `--if-match` on the next update.
