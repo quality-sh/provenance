@@ -90,7 +90,7 @@ impl From<&crate::review::RequirementDecisionState> for DocumentReviewSummary {
     }
 }
 
-/// Review outcome totals for all filtered records in a document.
+/// Review outcome totals for all filtered member records in a document.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct DocumentReviewTotals {
