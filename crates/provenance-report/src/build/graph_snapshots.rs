@@ -88,8 +88,9 @@ fn read_shard<T: serde::de::DeserializeOwned>(
                 .and_then(serde_json::Value::as_str)
                 .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
             anyhow::bail!(
-                "{path} line {line_number} at commit {commit}: {name} contains legacy field `retired`; \
-                 canonical JSONL requires record-deletion migration 026 before this build can read it"
+                "{path} line {line_number} at commit {commit}: {name} contains \
+                 legacy field `retired`; canonical JSONL requires record-deletion \
+                 migration 026 before this build can read it"
             );
         }
         records.push(serde_json::from_value::<T>(value).with_context(context)?);
@@ -97,12 +98,13 @@ fn read_shard<T: serde::de::DeserializeOwned>(
     Ok(Some(records))
 }
 
-/// Read the typed evidence bindings at the head commit. A missing shard file is
-/// the normal state for a store that never recorded bindings.
+/// Read the typed evidence bindings at one commit. A missing shard file is the
+/// normal state for a store that never recorded bindings.
 pub(super) fn read_bindings(
     repo: &Utf8Path,
     commit: &str,
     scope: &ScopeId,
+    role: CommitRole,
 ) -> anyhow::Result<(
     Vec<provenance_core::VerificationBinding>,
     Vec<provenance_core::ImplementationBinding>,
@@ -112,7 +114,7 @@ pub(super) fn read_bindings(
         commit,
         scope,
         "verifications/binding.jsonl",
-        CommitRole::Head,
+        role,
     )?
     .unwrap_or_default();
     let implementations = read_shard::<provenance_core::ImplementationBinding>(
@@ -120,7 +122,7 @@ pub(super) fn read_bindings(
         commit,
         scope,
         "implementations/binding.jsonl",
-        CommitRole::Head,
+        role,
     )?
     .unwrap_or_default();
     Ok((verifications, implementations))
