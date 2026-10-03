@@ -73,7 +73,9 @@ function reviewConfig(value: unknown, origin: string): ReviewConfig {
   };
 }
 
+// @provenance rule: rule_review_link_opens_signed_in
 export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
+  const { fetch } = dependencies;
   const root = element(dependencies.document, 'root');
   const selection = element(dependencies.document, 'selection');
   const requirement = element(dependencies.document, 'requirement');
@@ -98,24 +100,24 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   });
 
   if (code === null) {
-    status.textContent = 'Connection refused. Run `provenance <record-id> get --review-link` to get a fresh link.';
+    status.textContent = 'Connection refused. Run `provenance <record-id> --review-link` to get a fresh link.';
   } else {
     void (async () => {
-      const exchange = await dependencies.fetch('/review-launch/exchange', {
+      const exchange = await fetch('/review-launch/exchange', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ code }), redirect: 'error', cache: 'no-store',
       });
       if (!exchange.ok) throw new Error(await exchange.text());
       const bearer = launchCredential(await exchange.json());
     void session.connect(bearer, async () => {
-      const response = await dependencies.fetch('/review-config', {
+      const response = await fetch('/review-config', {
         headers: { authorization: `Bearer ${bearer}` }, redirect: 'error', cache: 'no-store',
       });
       if (!response.ok) throw new Error('Access refused');
       return reviewConfig(await response.json(), dependencies.location.origin);
     });
     })().catch(() => {
-      status.textContent = 'Connection refused. Run `provenance <record-id> get --review-link` to get a fresh link.';
+      status.textContent = 'Connection refused. Run `provenance <record-id> --review-link` to get a fresh link.';
     });
   }
   selection.addEventListener('submit', event => {

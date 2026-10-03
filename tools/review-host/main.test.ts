@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { verifies } from '../../packages/provenance/src/rules.ts';
 import { bootstrapReviewPage, type BrowserElement } from './bootstrap.ts';
 
 class ElementFixture implements BrowserElement {
@@ -28,11 +29,13 @@ function fixture(search: string) {
   const mounted: unknown[] = [];
   const fetched: Array<{ path: string; authorization?: string }> = [];
   const replaced: string[] = [];
+  const fetchReceivers: unknown[] = [];
   bootstrapReviewPage({
     document: { getElementById: id => elements[id] },
     location: { origin: 'http://127.0.0.1:1234', search },
     history: { replaceState: (_state, _unused, url) => { replaced.push(url); } },
-    fetch: async (path, init) => {
+    fetch: async function (this: unknown, path, init) {
+      fetchReceivers.push(this);
       fetched.push({ path, authorization: init.headers?.authorization });
       return {
         ok: true,
@@ -48,10 +51,12 @@ function fixture(search: string) {
     },
     mount: (_root, options) => { mounted.push(options); return () => {}; },
   });
-  return { elements, fetched, mounted, replaced };
+  return { elements, fetched, mounted, replaced, fetchReceivers };
 }
 
 test('a launch code is removed before exchange and opens the linked record', async () => {
+  verifies('rule_review_link_needs_no_record_id', 'examples');
+  verifies('rule_review_link_opens_signed_in', 'examples');
   const { fetched, mounted, replaced } = fixture('?code=launch-secret&root=req_root&focus=rule_focus');
   await new Promise(resolve => setImmediate(resolve));
 
@@ -79,9 +84,18 @@ test('manual Requirement selection remains available without a linked root', asy
 });
 
 test('a page without a launch code asks for a fresh link without a token input', async () => {
+  verifies('rule_review_link_opens_signed_in', 'examples');
   const { elements, fetched } = fixture('?root=req_root');
   await new Promise(resolve => setImmediate(resolve));
 
   assert.deepEqual(fetched, []);
-  assert.match(elements.status.textContent!, /get --review-link/);
+  assert.match(elements.status.textContent!, /<record-id> --review-link/);
+});
+
+test('launch and configuration requests do not bind a receiver to fetch', async () => {
+  verifies('rule_review_link_opens_signed_in', 'examples');
+  const { fetchReceivers } = fixture('?code=launch-secret&root=req_root');
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(fetchReceivers, [undefined, undefined]);
 });

@@ -5,11 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { verifies } from '../../packages/provenance/src/rules.ts';
 
 const pinPath = fileURLToPath(new URL('../review-assets.json', import.meta.url));
 const pin = JSON.parse(await readFile(pinPath, 'utf8'));
 
 test('the host page has no manual credential entry', async () => {
+  verifies('rule_review_link_opens_signed_in', 'examples');
   const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
   assert.doesNotMatch(html, /credential|access token|type="password"/i);
 });

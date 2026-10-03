@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::{
     io::{Read, Write},
@@ -102,7 +103,7 @@ fn fake_host(identity: &Value) -> FakeHost {
             let mut request = [0_u8; 2048];
             let count = stream.read(&mut request).unwrap_or(0);
             let request = String::from_utf8_lossy(&request[..count]);
-            let identity_matches = request.starts_with("GET /review-host-identity HTTP/1.1");
+            let identity_matches = request.starts_with("GET /local-host-identity HTTP/1.1");
             let launch_matches = request.starts_with("POST /review-launch HTTP/1.1");
             let (status, response) = if identity_matches {
                 ("200 OK", body.as_str())
@@ -127,36 +128,38 @@ fn fake_host(identity: &Value) -> FakeHost {
 }
 
 fn publish_host(repo: &str, stored: &Value) {
-    let path = std::path::Path::new(repo).join(".provenance/cache/review-hosts/default.json");
+    let path = std::path::Path::new(repo).join(".provenance/cache/local-hosts/default.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::set_permissions(
         path.parent().unwrap(),
         std::fs::Permissions::from_mode(0o700),
     )
     .unwrap();
-    std::fs::write(
-        &path,
-        serde_json::to_vec(&json!({"hosts":[stored]})).unwrap(),
-    )
-    .unwrap();
+    std::fs::write(&path, serde_json::to_vec(stored).unwrap()).unwrap();
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
 }
 
+fn assert_review_url(value: &Value, endpoint: &str, root: &str) {
+    let url = url::Url::parse(value.as_str().unwrap()).unwrap();
+    assert_eq!(url.origin().ascii_serialization(), endpoint);
+    assert_eq!(url.query_pairs().find(|(name, _)| name == "root").unwrap().1, root);
+}
+
 #[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
     let (_directory, repo) = initialized_repo();
     allow_reviewer(&repo);
     let host = fake_host(&json!({
-        "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
+        "schemaVersion":1, "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
     }));
     publish_host(
         &repo,
         &json!({
-            "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
+            "schemaVersion":1, "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
             "instanceNonce":"nonce"
         }),
     );
-    let expected = format!("{}/?root=req_flow&code=launch-code", host.endpoint);
     let created = json_output(&[
         "req_flow",
         "create",
@@ -169,7 +172,7 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
         "--format",
         "json",
     ]);
-    assert_eq!(created["data"]["review_url"], expected);
+    assert_review_url(&created["data"]["review_url"], &host.endpoint, "req_flow");
     let etag = created["data"]["edit"]["etag"].as_str().unwrap();
     let updated = json_stdin_output(
         &[
@@ -186,7 +189,7 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
         ],
         &json!({"actor":"agent","description":"Updated review text."}),
     );
-    assert_eq!(updated["data"]["review_url"], expected);
+    assert_review_url(&updated["data"]["review_url"], &host.endpoint, "req_flow");
     let automatic = updated["data"]["decision"]["pending"]["proposal_id"]
         .as_str()
         .unwrap();
@@ -205,7 +208,7 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
         ],
         &json!({"actor":"agent","declared_by":null,"reason":null}),
     );
-    assert_eq!(withdrawn["data"]["review_url"], expected);
+    assert_review_url(&withdrawn["data"]["review_url"], &host.endpoint, "req_flow");
     let submitted = json_stdin_output(
         &[
             "req_flow", "submit", "--repo", &repo, "--stdin", "--format", "json",
@@ -215,7 +218,7 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
             "source_ids":[], "evidence_references":[], "builds_on":[]
         }),
     );
-    assert_eq!(submitted["data"]["review_url"], expected);
+    assert_review_url(&submitted["data"]["review_url"], &host.endpoint, "req_flow");
     let proposal = submitted["data"]["proposal_id"].as_str().unwrap();
     let decided = json_stdin_output(
         &[
@@ -237,5 +240,5 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
             "feedback":null, "declared_by":null
         }),
     );
-    assert_eq!(decided["data"]["review_url"], expected);
+    assert_review_url(&decided["data"]["review_url"], &host.endpoint, "req_flow");
 }

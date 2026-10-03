@@ -1,6 +1,9 @@
+use provenance_macros::rule;
 use std::process::Command;
 use std::time::Duration;
 
+/// Opens a review link or leaves the printed link available to the person.
+#[rule("rule_review_command_opens_or_prints_link")]
 pub fn open(url: &str, no_open: bool) {
     if no_open {
         return;

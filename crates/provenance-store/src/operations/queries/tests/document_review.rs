@@ -239,6 +239,7 @@ fn with(mut value: Value, field: &str, content: &str) -> Value {
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_document_entry_has_review_outcome", examples)]
 async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle() {
     let (dir, store, scope) = seeded_store();
     allow_reviewer(&store);
@@ -311,6 +312,7 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_document_has_review_totals", examples)]
 async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     let (dir, store, scope) = seeded_store();
     allow_reviewer(&store);

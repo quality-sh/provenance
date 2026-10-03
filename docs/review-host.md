@@ -41,15 +41,11 @@ operations for the configured repository and scope. Native validation, file
 access checks, publication locks, and disposition actor grants still apply.
 Record actor and role fields do not authenticate a caller.
 
-While the host runs, it writes its credential-free location to
-`.provenance/cache/review-hosts/SCOPE.json`. The file is an owner-aware registry.
-Each entry contains `endpoint`, `repositoryId`, `scope`, and `instanceNonce`.
-The host writes the file with an atomic replacement. The directory and files
-permit access only to the OS owner. During shutdown, a host removes only its
-entry. The bearer token is never in this file. CLI commands verify an entry
-against the public `/review-host-identity` response before they add a review
-link. They accept only an exact HTTP base URL with a loopback IP address. If no
-verified host is running, these writes explain how to start one.
+While the host runs, it publishes its credential-free location through the
+[local host discovery protocol](local-host.md). The bearer token is never in
+the registry. CLI commands ask the host layer for the verified endpoint before
+they add a review link. If no verified host is running, these writes explain
+how to start one.
 
 The host mints a random launch code for each review link. A launch code expires
 after two minutes and one successful exchange consumes it. The code is bound to
@@ -87,8 +83,8 @@ hostile repositories or isolate other processes running as the same OS user.
 
 Every operation and configuration request requires `Authorization: Bearer TOKEN`.
 The host checks this credential before it decodes an operation body. The public
-`/review-host-identity` route contains only the repository target, scope, and
-non-secret instance nonce. It does not accept a credential. All routes require
+`/local-host-identity` route contains only the schema version, repository target,
+scope, and non-secret instance nonce. It does not accept a credential. All routes require
 the bound Host value. Requests with an Origin must name the exact local
 origin. `Origin: null`, unrelated origins, and cross-site browser requests are
 refused. Requests without Origin remain available to authorized non-browser
@@ -119,8 +115,8 @@ the asset tree at build time. This directory is trusted build input: replacement
 JavaScript would run with the browser caller's access. Use the pinned archive
 procedure below for the supplied renderer.
 Path segments use ASCII letters, digits, dots, underscores, and hyphens. A
-segment must not start with a dot. Root names `metadata`, `review-config`,
-`review-host-identity`, and `review-launch`, and `v` followed by digits are
+segment must not start with a dot. Root names `metadata`, `review-config`, and
+`local-host-identity`, and `review-launch`, and `v` followed by digits are
 reserved for host routes.
 An asset file with exactly three path segments and `operations` as its second
 segment is also refused. The operation router matches this path shape for any

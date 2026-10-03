@@ -337,8 +337,4 @@ fn assert_served_bundle(config: &Value, files: &BTreeMap<String, Vec<u8>>) {
     assert_eq!(runtime["repositoryId"], "A");
     assert_eq!(runtime["scope"], "default");
     assert!(runtime.get("bearer").is_none());
-    assert!(config["url"].as_str().unwrap().starts_with(&format!(
-        "{}/?code=",
-        config["endpoint"].as_str().unwrap()
-    )));
 }

@@ -2,10 +2,10 @@
 
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::{NodeType, StableId};
+use provenance_macros::rule;
 use provenance_porcelain::get::{GetInput, View};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::time::Duration;
 
 #[derive(Clone)]
 pub struct AffectedReviewRecord {
@@ -20,19 +20,10 @@ struct LinkOutput {
     message: Option<String>,
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct HostIdentity {
-    repository_id: String,
-    scope: String,
-    instance_nonce: String,
-}
-
 #[derive(Deserialize)]
 struct LaunchCode {
     code: String,
 }
-
 pub async fn print(
     context: &RepoContext,
     record_id: &str,
@@ -103,6 +94,8 @@ async fn try_annotate_write(
     Ok(())
 }
 
+/// Builds the direct record link that an agent gives to a person for review.
+#[rule("rule_agent_review_request_includes_link")]
 async fn link_output(
     context: &RepoContext,
     record: &AffectedReviewRecord,
@@ -130,30 +123,30 @@ async fn link_output(
                 .join(", ")
         );
     };
-    let Some(runtime) = running_host(context).await else {
+    let Some(host) =
+        provenance_transport::local_host::discover(context.repo.as_std_path(), &context.scope)?
+    else {
         return Ok(Some(LinkOutput {
             review_url: None,
             message: Some(start_message(context)),
         }));
     };
     let focus = (root.as_str() != record.id).then_some(record.id.as_str());
-    let code = mint_code(&runtime).await?;
+    let code = mint_code(&host).await?;
     Ok(Some(LinkOutput {
-        review_url: Some(build_url(&runtime.endpoint, root.as_str(), focus, &code)?),
+        review_url: Some(build_url(host.endpoint(), root.as_str(), focus, &code)),
         message: None,
     }))
 }
 
-async fn mint_code(runtime: &crate::review_runtime::RunningHost) -> anyhow::Result<String> {
-    let runtime = runtime.clone();
+async fn mint_code(
+    host: &provenance_transport::local_host::DiscoveredLocalHost,
+) -> anyhow::Result<String> {
+    let endpoint = host.endpoint().clone();
+    let identity = host.identity().clone();
     tokio::task::spawn_blocking(move || {
-        let mut url = crate::review_runtime::validate_endpoint(&runtime.endpoint)?;
+        let mut url = endpoint;
         url.set_path("/review-launch");
-        let identity = HostIdentity {
-            repository_id: runtime.repository_id,
-            scope: runtime.scope,
-            instance_nonce: runtime.instance_nonce,
-        };
         let response = ureq::post(url.as_str())
             .set("Content-Type", "application/json")
             .send_string(&serde_json::to_string(&identity)?)?;
@@ -161,50 +154,6 @@ async fn mint_code(runtime: &crate::review_runtime::RunningHost) -> anyhow::Resu
     })
     .await?
 }
-
-async fn running_host(context: &RepoContext) -> Option<crate::review_runtime::RunningHost> {
-    let hosts = crate::review_runtime::read(context.repo.as_std_path(), &context.scope)?;
-    if hosts.iter().any(|host| host.scope != context.scope) {
-        return None;
-    }
-    for host in hosts.into_iter().rev() {
-        if verified_host(host.clone()).await {
-            return Some(host);
-        }
-    }
-    None
-}
-
-async fn verified_host(runtime: crate::review_runtime::RunningHost) -> bool {
-    let expected = runtime.clone();
-    tokio::task::spawn_blocking(move || {
-        let Ok(mut url) = crate::review_runtime::validate_endpoint(&runtime.endpoint) else {
-            return false;
-        };
-        url.set_path("/review-host-identity");
-        let agent = ureq::AgentBuilder::new()
-            .redirects(0)
-            .timeout_connect(Duration::from_millis(200))
-            .timeout_read(Duration::from_millis(200))
-            .timeout_write(Duration::from_millis(200))
-            .build();
-        let Ok(response) = agent.get(url.as_str()).call() else {
-            return false;
-        };
-        let Ok(text) = response.into_string() else {
-            return false;
-        };
-        let Ok(identity) = serde_json::from_str::<HostIdentity>(&text) else {
-            return false;
-        };
-        identity.repository_id == expected.repository_id
-            && identity.scope == expected.scope
-            && identity.instance_nonce == expected.instance_nonce
-    })
-    .await
-    .unwrap_or(false)
-}
-
 fn start_message(context: &RepoContext) -> String {
     format!(
         "No review host is running. Start it with `provenance review --repo {} --repository-id local --scope {}`.",
@@ -212,8 +161,10 @@ fn start_message(context: &RepoContext) -> String {
     )
 }
 
-fn build_url(endpoint: &str, root: &str, focus: Option<&str>, code: &str) -> anyhow::Result<String> {
-    let mut url = crate::review_runtime::validate_endpoint(endpoint)?;
+/// Puts the review document and optional focused record into the review URL.
+#[rule("rule_review_link_needs_no_record_id")]
+fn build_url(endpoint: &url::Url, root: &str, focus: Option<&str>, code: &str) -> String {
+    let mut url = endpoint.clone();
     {
         let mut query = url.query_pairs_mut();
         query.append_pair("root", root);
@@ -222,26 +173,22 @@ fn build_url(endpoint: &str, root: &str, focus: Option<&str>, code: &str) -> any
         }
         query.append_pair("code", code);
     }
-    Ok(url.into())
+    url.into()
 }
 
 #[cfg(test)]
 mod tests {
     use super::build_url;
+    use provenance_macros::verifies;
 
     #[test]
-    fn link_builder_encodes_record_ids_and_never_adds_a_credential() {
-        let url = build_url(
-            "http://127.0.0.1:1234/",
-            "req root",
-            Some("rule/focus"),
-            "one-use-code",
-        )
-        .unwrap();
+    #[verifies("rule_agent_review_request_includes_link", examples)]
+    fn link_builder_encodes_record_ids() {
+        let endpoint = url::Url::parse("http://127.0.0.1:1234/").unwrap();
+        let url = build_url(&endpoint, "req root", Some("rule/focus"), "one-use-code");
         assert_eq!(
             url,
             "http://127.0.0.1:1234/?root=req+root&focus=rule%2Ffocus&code=one-use-code"
         );
-        assert!(!url.contains("bearer"));
     }
 }

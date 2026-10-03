@@ -1,12 +1,9 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
-use provenance_macros::verifies;
-use std::path::Path;
-
+use {provenance_macros::verifies, std::path::Path};
 #[path = "cli_dictionary/support.rs"]
 #[allow(dead_code)]
 mod dictionary_support;
-
 const INSTRUCTIONS: &str = r#"## Provenance
 
 Requirements live in a Provenance graph. Plan changes with the graph and update
@@ -51,6 +48,7 @@ it in the same change.
 #[verifies("rule_init_statement_preflight_guidance", examples)]
 #[verifies("rule_init_statement_claim_limit", examples)]
 #[verifies("rule_init_canonical_write_path", examples)]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn init_installs_bundled_skills_and_ratified_instructions() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -472,7 +470,6 @@ fn init_with(repo: &Path, extra: &[&str]) -> assert_cmd::assert::Assert {
 fn read_agents(repo: &Path) -> String {
     std::fs::read_to_string(repo.join("AGENTS.md")).unwrap()
 }
-
 fn write_as_prior_version(path: &Path, current: &str) {
     let current_stamp = format!("Installed by provenance {}", env!("CARGO_PKG_VERSION"));
     let prior = current.replacen(&current_stamp, "Installed by provenance 0.2.1", 1);

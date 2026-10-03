@@ -7,10 +7,12 @@ use super::support::{
 fn shipped_legacy_export_imports_when_legacy_statements_are_already_canonical() {
     let dir = tempfile::tempdir().unwrap();
     let fresh = dir.path().join("fresh");
+    let shipped = dir.path().join("shipped");
     let export = dir.path().join("shipped.json");
-    export_scope(&shipped_repo(), &export).success();
+    crate::export_fixture_support::copy_portable_state(shipped_repo(), &shipped);
+    export_scope(&shipped, &export).success();
     init_repo_with_actors(&fresh, &["codex-review-panel-gpt55-medium", "ben_nasraoui"]);
-    seed_statement_shards(&shipped_repo(), &fresh);
+    seed_statement_shards(&shipped, &fresh);
     import_scope(&fresh, &export).success();
     for command in ["check", "materialize"] {
         run_repo_command(command, &fresh);
@@ -47,6 +49,7 @@ fn historical_shipped_manifest_without_actor_allowlist_remains_readable() {
     if modern_dispositions.exists() {
         std::fs::remove_file(&modern_dispositions).unwrap();
     }
+    crate::export_fixture_support::make_default_scope_portable(&repo);
 
     for command in ["check", "materialize"] {
         run_repo_command(command, &repo);
@@ -69,8 +72,10 @@ fn historical_shipped_manifest_without_actor_allowlist_remains_readable() {
 fn one_byte_change_to_shipped_legacy_terminal_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let fresh = dir.path().join("fresh");
+    let shipped = dir.path().join("shipped");
     let export = dir.path().join("forged-shipped.json");
-    export_scope(&shipped_repo(), &export).success();
+    crate::export_fixture_support::copy_portable_state(shipped_repo(), &shipped);
+    export_scope(&shipped, &export).success();
     let mut value: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&export).unwrap()).unwrap();
     let terminal = value["proposal_cards"]

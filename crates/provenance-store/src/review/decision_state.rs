@@ -281,6 +281,9 @@ impl CycleFacts {
             .next_back()
     }
 
+    /// Returns the current review state in the typed conflict without merging values.
+    #[provenance_macros::rule("rule_review_conflict_returns_current_value")]
+    #[provenance_macros::rule("rule_review_conflict_not_merged")]
     pub(super) fn conflict_failure(
         &self,
         store: &StateStore,

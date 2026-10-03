@@ -3,9 +3,11 @@
 use super::{decision_state::request_digest, guard, journal, SubmitRecordReview};
 use crate::{shards, state_store::StateStore};
 use provenance_core::review::{ReviewEntry, ReviewRecord};
+use provenance_macros::rule;
 
 impl StateStore {
-    /// Binds a server-created review submission to a new content revision.
+    /// Binds a server-created review submission to a new content revision in the same write.
+    #[rule("rule_content_change_opens_review_submission")]
     pub(super) fn commit_automatic_submission<T>(
         &self,
         record: &T,

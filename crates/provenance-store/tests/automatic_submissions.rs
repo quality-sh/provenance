@@ -52,6 +52,7 @@ fn assert_new_pending(
 }
 
 #[test]
+#[provenance_macros::verifies("rule_content_change_opens_review_submission", examples)]
 fn direct_create_and_all_named_content_writers_open_submissions() {
     let (_temp, store, scope) = fixture();
     let id = StableId::new("req_a").unwrap();

@@ -1,5 +1,6 @@
 #![cfg(target_os = "linux")]
 
+use provenance_macros::verifies;
 use serde_json::Value;
 use std::{
     io::{BufRead, BufReader, Read},
@@ -107,6 +108,7 @@ fn create_requirement(repository: &std::path::Path) {
 }
 
 #[test]
+#[verifies("rule_review_command_opens_or_prints_link", examples)]
 fn review_start_opens_its_launch_link() {
     let repository = repository();
     let (opener, record) = opener();
@@ -119,6 +121,7 @@ fn review_start_opens_its_launch_link() {
 }
 
 #[test]
+#[verifies("rule_review_command_opens_or_prints_link", examples)]
 fn no_open_skips_the_platform_opener() {
     let repository = repository();
     let (opener, record) = opener();
@@ -131,6 +134,7 @@ fn no_open_skips_the_platform_opener() {
 }
 
 #[test]
+#[verifies("rule_review_command_opens_or_prints_link", examples)]
 fn a_headless_session_prints_the_link_without_opening_it() {
     let repository = repository();
     let (opener, record) = opener();
@@ -147,6 +151,7 @@ fn a_headless_session_prints_the_link_without_opening_it() {
 }
 
 #[test]
+#[verifies("rule_review_command_opens_or_prints_link", examples)]
 fn review_link_command_opens_unless_no_open_is_set() {
     let repository = repository();
     create_requirement(repository.path());
@@ -190,6 +195,7 @@ fn review_link_command_opens_unless_no_open_is_set() {
 }
 
 #[test]
+#[verifies("rule_review_command_opens_or_prints_link", examples)]
 fn opener_failure_warns_without_failing_the_review_link_command() {
     let repository = repository();
     create_requirement(repository.path());

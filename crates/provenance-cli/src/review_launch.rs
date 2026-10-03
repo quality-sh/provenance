@@ -17,7 +17,7 @@ const ATTEMPT_WINDOW: Duration = Duration::from_secs(60);
 const MAX_CODES: usize = 128;
 const MAX_ATTEMPTS: usize = 64;
 const FRESH_LINK: &str =
-    "Connection refused. Run `provenance <record-id> get --review-link` to get a fresh link.";
+    "Connection refused. Run `provenance <record-id> --review-link` to get a fresh link.";
 
 #[derive(Clone)]
 pub struct LaunchCodes {
