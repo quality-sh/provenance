@@ -225,6 +225,7 @@ async fn lifecycle_filter_hides_only_terminal_records_from_lists_and_search() {
 }
 
 #[tokio::test]
+#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
 async fn omitted_native_filters_include_terminal_records() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
