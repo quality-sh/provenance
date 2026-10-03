@@ -131,6 +131,7 @@ fn each_review_route_binds_its_record_kind() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_domain_boundary_accept_no_discussions", exhaustion)]
 fn only_discussion_parent_kinds_have_discussion_routes() {
     let routes = definitions();
     for (plural, _) in REVIEW_KINDS {
