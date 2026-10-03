@@ -15,11 +15,13 @@ fn run(repo: &str, args: &[&str]) -> Value {
 }
 
 fn archive(repo: &str, family: &str, id: &str) -> Value {
+    let current = run(repo, &[family, id, "get"]);
+    let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            family, id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format",
-            "json",
+            family, id, "update", "--repo", repo, "--scope", "default", "--if-match", etag,
+            "--stdin", "--format", "json",
         ])
         .write_stdin(format!(
             r#"{{"status":"archived","archived_in_commit":{{"commit":"{}"}}}}"#,
