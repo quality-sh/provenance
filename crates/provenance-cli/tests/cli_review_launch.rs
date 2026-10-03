@@ -68,7 +68,8 @@ fn exchange(host: &Host, code: &str) -> ureq::Response {
         host.startup["endpoint"].as_str().unwrap()
     ))
     .set("Origin", host.startup["endpoint"].as_str().unwrap())
-    .send_json(ureq::json!({ "code": code }));
+    .set("Content-Type", "application/json")
+    .send_string(&serde_json::json!({ "code": code }).to_string());
     match result {
         Ok(response) | Err(ureq::Error::Status(_, response)) => response,
         Err(error) => panic!("{error}"),
@@ -92,7 +93,8 @@ fn startup_link_exchanges_once_without_disclosing_the_bearer() {
     assert!(!url.contains(bearer));
     assert!(!url.contains("bearer"));
     let code = launch_code(&host);
-    let first: Value = exchange(&host, &code).into_json().unwrap();
+    let first: Value =
+        serde_json::from_str(&exchange(&host, &code).into_string().unwrap()).unwrap();
     assert_eq!(first["bearer"], bearer);
 
     let replay = exchange(&host, &code);
