@@ -191,7 +191,8 @@ impl GetPort for HostGetPort {
                     .map_err(|error| operation_error(&error))?;
                 if let Some(cursor) = &listed.result.next_cursor {
                     follow_up_commands.push(format!(
-                        "provenance {id} discussions --limit {limit} --cursor {cursor}"
+                        "provenance {} discussions --limit {limit} --cursor {cursor}",
+                        id.as_str()
                     ));
                 }
                 let mut conversations = Vec::with_capacity(listed.result.entries.len());
@@ -211,7 +212,7 @@ impl GetPort for HostGetPort {
                     if let Some(cursor) = &conversation.result.messages.next_cursor {
                         follow_up_commands.push(format!(
                             "provenance discussions {} get --limit {limit} --cursor {cursor}",
-                            summary.discussion_id
+                            summary.discussion_id.as_str()
                         ));
                     }
                     conversations.push(conversation.result);
