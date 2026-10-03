@@ -81,6 +81,23 @@ fn wait_for(path: &std::path::Path) {
     }
 }
 
+fn create_requirement(repository: &std::path::Path) {
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+        .args([
+            "req_open",
+            "create",
+            "--type",
+            "requirement",
+            "--repo",
+            repository.to_str().unwrap(),
+            "--statement",
+            "The command opens the review link.",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}
+
 #[test]
 fn review_start_opens_its_launch_link() {
     let repository = repository();
@@ -119,4 +136,47 @@ fn a_headless_session_prints_the_link_without_opening_it() {
     child.stderr.take().unwrap().read_to_string(&mut stderr).unwrap();
     assert!(stderr.contains(startup["url"].as_str().unwrap()), "{stderr}");
     assert!(stderr.contains("display"), "{stderr}");
+}
+
+#[test]
+fn review_link_command_opens_unless_no_open_is_set() {
+    let repository = repository();
+    create_requirement(repository.path());
+    let (opener, record) = opener();
+    let (mut host, _) = start(repository.path(), opener.path(), &record, true, true);
+    let command = || {
+        let mut command = Command::new(assert_cmd::cargo::cargo_bin!("provenance"));
+        command
+            .args([
+                "req_open",
+                "get",
+                "--repo",
+                repository.path().to_str().unwrap(),
+                "--review-link",
+            ])
+            .env("PATH", opener.path())
+            .env("OPEN_RECORD", &record)
+            .env("DISPLAY", ":1")
+            .env_remove("SSH_CONNECTION")
+            .env_remove("SSH_CLIENT")
+            .env_remove("SSH_TTY")
+            .env_remove("WAYLAND_DISPLAY");
+        command
+    };
+
+    let output = command().output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    wait_for(&record);
+    assert_eq!(
+        std::fs::read_to_string(&record).unwrap(),
+        String::from_utf8(output.stdout).unwrap().trim()
+    );
+    std::fs::remove_file(&record).unwrap();
+
+    let output = command().arg("--no-open").output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(!record.exists());
+    let _ = host.kill();
+    let _ = host.wait();
 }

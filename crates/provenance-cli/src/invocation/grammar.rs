@@ -179,6 +179,9 @@ pub struct TargetArgs {
     /// Print a link to this record in the running review host.
     #[arg(long, conflicts_with_all = ["view", "depth", "kind", "limit"])]
     pub review_link: bool,
+    /// Print the review link without opening a browser.
+    #[arg(long, requires = "review_link")]
+    pub no_open: bool,
     #[arg(long)]
     pub stdin: bool,
 }

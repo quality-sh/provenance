@@ -37,6 +37,7 @@ pub async fn print(
     context: &RepoContext,
     record_id: &str,
     format: Option<provenance_cli::porcelain::OutputFormat>,
+    no_open: bool,
 ) -> anyhow::Result<()> {
     let host = context.local_host()?;
     let record = host
@@ -53,6 +54,7 @@ pub async fn print(
     )
     .await?
     .ok_or_else(|| anyhow::anyhow!("record {record_id} is not in a Requirement review document"))?;
+    let url = output.review_url.clone();
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&output)
     } else {
@@ -65,7 +67,9 @@ pub async fn print(
                 .unwrap()
         );
         Ok(())
-    }
+    }?;
+    let _ = (url, no_open);
+    Ok(())
 }
 
 pub async fn annotate_write(

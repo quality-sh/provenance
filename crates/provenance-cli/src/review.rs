@@ -122,6 +122,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         })
     );
     std::io::stdout().flush()?;
+    crate::browser_open::open(&startup_url, options.no_open);
     serve(listener, router, host, signals).await
 }
 
