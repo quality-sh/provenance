@@ -1,7 +1,6 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
-use provenance_macros::verifies;
-use std::path::Path;
+use {provenance_macros::verifies, std::path::Path};
 
 #[path = "cli_dictionary/support.rs"]
 #[allow(dead_code)]

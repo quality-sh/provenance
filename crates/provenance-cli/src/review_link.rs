@@ -113,10 +113,9 @@ async fn link_output(
                 .join(", ")
         );
     };
-    let Some(host) = provenance_transport::local_host::discover(
-        context.repo.as_std_path(),
-        &context.scope,
-    )? else {
+    let Some(host) =
+        provenance_transport::local_host::discover(context.repo.as_std_path(), &context.scope)?
+    else {
         return Ok(Some(LinkOutput {
             review_url: None,
             message: Some(start_message(context)),

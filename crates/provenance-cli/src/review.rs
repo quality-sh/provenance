@@ -146,9 +146,7 @@ async fn serve(
     result.context("review listener failed")
 }
 
-async fn local_host_identity(
-    State(identity): State<LocalHostIdentity>,
-) -> Json<LocalHostIdentity> {
+async fn local_host_identity(State(identity): State<LocalHostIdentity>) -> Json<LocalHostIdentity> {
     Json(identity)
 }
 

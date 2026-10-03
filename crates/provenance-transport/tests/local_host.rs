@@ -100,13 +100,23 @@ fn registration_publishes_one_owner_only_record_and_removes_it_on_drop() {
     assert_eq!(published["endpoint"], "http://127.0.0.1:1234");
     assert_eq!(published["repositoryId"], "local");
     assert_eq!(published["scope"], "default");
-    assert_eq!(published["instanceNonce"], registration.identity().instance_nonce);
+    assert_eq!(
+        published["instanceNonce"],
+        registration.identity().instance_nonce
+    );
     assert!(published.get("bearer").is_none());
     assert_eq!(
-        std::fs::metadata(path.parent().unwrap()).unwrap().permissions().mode() & 0o077,
+        std::fs::metadata(path.parent().unwrap())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o077,
         0
     );
-    assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o077, 0);
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o077,
+        0
+    );
 
     drop(registration);
     assert!(!path.exists());
@@ -131,10 +141,17 @@ fn publication_replaces_permissive_modes() {
     .unwrap();
 
     assert_eq!(
-        std::fs::metadata(path.parent().unwrap()).unwrap().permissions().mode() & 0o077,
+        std::fs::metadata(path.parent().unwrap())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o077,
         0
     );
-    assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o077, 0);
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o077,
+        0
+    );
     drop(registration);
 }
 
@@ -143,13 +160,9 @@ fn publication_replaces_permissive_modes() {
 fn publication_refuses_a_live_slot_owner() {
     let repository = tempfile::tempdir().unwrap();
     let first_host = ProbeHost::start();
-    let first = LocalHostRegistration::publish(
-        repository.path(),
-        "default",
-        &first_host.endpoint,
-        "local",
-    )
-    .unwrap();
+    let first =
+        LocalHostRegistration::publish(repository.path(), "default", &first_host.endpoint, "local")
+            .unwrap();
     first_host.answer_with(first.identity());
 
     let error = LocalHostRegistration::publish(
@@ -160,7 +173,9 @@ fn publication_refuses_a_live_slot_owner() {
     )
     .unwrap_err();
 
-    assert!(error.to_string().contains("already has a running local host"));
+    assert!(error
+        .to_string()
+        .contains("already has a running local host"));
     assert_eq!(
         serde_json::from_slice::<Value>(&std::fs::read(registry(repository.path())).unwrap())
             .unwrap()["instanceNonce"],
@@ -172,13 +187,9 @@ fn publication_refuses_a_live_slot_owner() {
 #[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn publication_reclaims_a_stale_slot() {
     let repository = tempfile::tempdir().unwrap();
-    let stale = LocalHostRegistration::publish(
-        repository.path(),
-        "default",
-        "http://127.0.0.1:1",
-        "old",
-    )
-    .unwrap();
+    let stale =
+        LocalHostRegistration::publish(repository.path(), "default", "http://127.0.0.1:1", "old")
+            .unwrap();
     std::mem::forget(stale);
 
     let replacement = LocalHostRegistration::publish(
@@ -192,7 +203,10 @@ fn publication_reclaims_a_stale_slot() {
         serde_json::from_slice(&std::fs::read(registry(repository.path())).unwrap()).unwrap();
 
     assert_eq!(published["repositoryId"], "new");
-    assert_eq!(published["instanceNonce"], replacement.identity().instance_nonce);
+    assert_eq!(
+        published["instanceNonce"],
+        replacement.identity().instance_nonce
+    );
 }
 
 #[test]
@@ -200,17 +214,16 @@ fn publication_reclaims_a_stale_slot() {
 fn discovery_returns_only_a_matching_live_host() {
     let repository = tempfile::tempdir().unwrap();
     let host = ProbeHost::start();
-    let registration = LocalHostRegistration::publish(
-        repository.path(),
-        "default",
-        &host.endpoint,
-        "local",
-    )
-    .unwrap();
+    let registration =
+        LocalHostRegistration::publish(repository.path(), "default", &host.endpoint, "local")
+            .unwrap();
 
     host.answer_with(registration.identity());
     let discovered = discover(repository.path(), "default").unwrap().unwrap();
-    assert_eq!(discovered.endpoint().as_str(), format!("{}/", host.endpoint));
+    assert_eq!(
+        discovered.endpoint().as_str(),
+        format!("{}/", host.endpoint)
+    );
 
     host.answer_with(json!({
         "schemaVersion": 1,
@@ -225,13 +238,9 @@ fn discovery_returns_only_a_matching_live_host() {
 #[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn discovery_removes_stale_state() {
     let repository = tempfile::tempdir().unwrap();
-    let registration = LocalHostRegistration::publish(
-        repository.path(),
-        "default",
-        "http://127.0.0.1:1",
-        "local",
-    )
-    .unwrap();
+    let registration =
+        LocalHostRegistration::publish(repository.path(), "default", "http://127.0.0.1:1", "local")
+            .unwrap();
     std::mem::forget(registration);
 
     assert!(discover(repository.path(), "default").unwrap().is_none());
@@ -249,13 +258,10 @@ fn publication_rejects_non_loopback_or_non_base_endpoints() {
         "http://user@127.0.0.1:1234",
         "http://127.0.0.1",
     ] {
-        assert!(LocalHostRegistration::publish(
-            repository.path(),
-            "default",
-            endpoint,
-            "local"
-        )
-        .is_err());
+        assert!(
+            LocalHostRegistration::publish(repository.path(), "default", endpoint, "local")
+                .is_err()
+        );
     }
 }
 
@@ -278,10 +284,8 @@ fn published_shapes_match_the_version_one_fixtures() {
         expected_registry["repositoryId"].as_str().unwrap(),
     )
     .unwrap();
-    let mut published: Value = serde_json::from_slice(
-        &std::fs::read(registry(repository.path())).unwrap(),
-    )
-    .unwrap();
+    let mut published: Value =
+        serde_json::from_slice(&std::fs::read(registry(repository.path())).unwrap()).unwrap();
     let mut identity = serde_json::to_value(registration.identity()).unwrap();
     published["instanceNonce"] = expected_registry["instanceNonce"].clone();
     identity["instanceNonce"] = expected_identity["instanceNonce"].clone();

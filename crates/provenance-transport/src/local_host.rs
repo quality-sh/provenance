@@ -101,9 +101,9 @@ impl Drop for LocalHostRegistration {
         let Ok(lock) = lock(&self.lock_path) else {
             return;
         };
-        if read_record(&self.path).is_some_and(|record| {
-            record.instance_nonce == self.identity.instance_nonce
-        }) {
+        if read_record(&self.path)
+            .is_some_and(|record| record.instance_nonce == self.identity.instance_nonce)
+        {
             let _ = std::fs::remove_file(&self.path);
         }
         let _ = fs2::FileExt::unlock(&lock);
@@ -156,7 +156,10 @@ fn validate_endpoint(endpoint: &str) -> anyhow::Result<url::Url> {
     anyhow::ensure!(matches!(url.path(), "" | "/"), "path is not allowed");
     anyhow::ensure!(url.query().is_none(), "query is not allowed");
     anyhow::ensure!(url.fragment().is_none(), "fragment is not allowed");
-    anyhow::ensure!(url.port().is_some_and(|port| port != 0), "a nonzero port is required");
+    anyhow::ensure!(
+        url.port().is_some_and(|port| port != 0),
+        "a nonzero port is required"
+    );
     let loopback = match url.host() {
         Some(url::Host::Ipv4(address)) => address.is_loopback(),
         Some(url::Host::Ipv6(address)) => address.is_loopback(),

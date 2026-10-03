@@ -132,11 +132,7 @@ fn publish_host(repo: &str, stored: &Value) {
         std::fs::Permissions::from_mode(0o700),
     )
     .unwrap();
-    std::fs::write(
-        &path,
-        serde_json::to_vec(stored).unwrap(),
-    )
-    .unwrap();
+    std::fs::write(&path, serde_json::to_vec(stored).unwrap()).unwrap();
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
 }
 
