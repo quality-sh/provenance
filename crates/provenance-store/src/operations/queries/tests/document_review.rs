@@ -14,7 +14,7 @@ use provenance_core::{
 };
 use serde_json::{json, Value};
 
-fn input<T: serde::de::DeserializeOwned>(value: Value) -> T {
+pub(super) fn input<T: serde::de::DeserializeOwned>(value: Value) -> T {
     serde_json::from_value(value).unwrap()
 }
 

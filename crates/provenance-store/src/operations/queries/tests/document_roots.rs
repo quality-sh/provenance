@@ -1,4 +1,4 @@
-use super::{root_of, seeded_store, sid};
+use super::{document_review::input, root_of, seeded_store, sid};
 use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::state_store::{
     AddSourceReferenceInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
@@ -7,10 +7,6 @@ use crate::state_store::{
 use provenance_core::{NodeType, RequirementStatus};
 use provenance_macros::verifies;
 use serde_json::json;
-
-fn input<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
-    serde_json::from_value(value).unwrap()
-}
 
 #[tokio::test]
 #[verifies("rule_requirement_document_canonical_membership", conformance)]
