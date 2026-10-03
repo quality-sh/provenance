@@ -48,6 +48,7 @@ it in the same change.
 #[verifies("rule_init_statement_preflight_guidance", examples)]
 #[verifies("rule_init_statement_claim_limit", examples)]
 #[verifies("rule_init_canonical_write_path", examples)]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn init_installs_bundled_skills_and_ratified_instructions() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");

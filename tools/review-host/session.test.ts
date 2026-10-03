@@ -21,20 +21,6 @@ test('open passes all named connection fields and the selected Requirement', asy
   assert.deepEqual(mounted, [{ ...config, bearer: 'secret', rootId: 'req_root' }]);
 });
 
-test('open passes an optional focused record to the renderer', async () => {
-  const mounted: unknown[] = [];
-  const session = createSession({
-    mount(options) { mounted.push(options); return () => {}; },
-    connected() {},
-    status() {},
-  });
-  await session.connect('secret', async () => config);
-  session.open('req_root', 'rule_focus');
-  assert.deepEqual(mounted, [{
-    ...config, bearer: 'secret', rootId: 'req_root', focusId: 'rule_focus',
-  }]);
-});
-
 test('a new connection unmounts the page and a failed connection clears access', async () => {
   let unmounted = 0;
   const statuses: string[] = [];

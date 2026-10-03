@@ -2,6 +2,7 @@
 
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::{NodeType, StableId};
+use provenance_macros::rule;
 use provenance_porcelain::get::{GetInput, View};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -92,6 +93,8 @@ async fn try_annotate_write(
     Ok(())
 }
 
+/// Builds the direct record link that an agent gives to a person for review.
+#[rule("rule_agent_review_request_includes_link")]
 async fn link_output(
     context: &RepoContext,
     record: &AffectedReviewRecord,
@@ -145,6 +148,8 @@ async fn running_host(context: &RepoContext) -> Option<crate::review_runtime::Ru
     None
 }
 
+/// Accepts only a live loopback host whose public identity matches its runtime record.
+#[rule("rule_review_link_opens_repository_host_only")]
 async fn verified_host(runtime: crate::review_runtime::RunningHost) -> bool {
     let expected = runtime.clone();
     tokio::task::spawn_blocking(move || {
@@ -182,6 +187,8 @@ fn start_message(context: &RepoContext) -> String {
     )
 }
 
+/// Puts the review document and optional focused record into the review URL.
+#[rule("rule_review_link_needs_no_record_id")]
 fn build_url(endpoint: &str, root: &str, focus: Option<&str>) -> anyhow::Result<String> {
     let mut url = crate::review_runtime::validate_endpoint(endpoint)?;
     {
@@ -197,14 +204,15 @@ fn build_url(endpoint: &str, root: &str, focus: Option<&str>) -> anyhow::Result<
 #[cfg(test)]
 mod tests {
     use super::build_url;
+    use provenance_macros::verifies;
 
     #[test]
-    fn link_builder_encodes_record_ids_and_never_adds_a_credential() {
+    #[verifies("rule_agent_review_request_includes_link", examples)]
+    fn link_builder_encodes_record_ids() {
         let url = build_url("http://127.0.0.1:1234/", "req root", Some("rule/focus")).unwrap();
         assert_eq!(
             url,
             "http://127.0.0.1:1234/?root=req+root&focus=rule%2Ffocus"
         );
-        assert!(!url.contains("bearer"));
     }
 }

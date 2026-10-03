@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::{
     io::{Read, Write},
@@ -140,6 +141,7 @@ fn publish_host(repo: &str, stored: &Value) {
 }
 
 #[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
     let (_directory, repo) = initialized_repo();
     allow_reviewer(&repo);

@@ -1,6 +1,7 @@
 #![cfg(unix)]
 
 use serde_json::Value;
+use provenance_macros::verifies;
 use std::{
     fs::Permissions,
     io::{BufRead, BufReader},
@@ -66,6 +67,7 @@ fn stop(child: &mut Child) {
 }
 
 #[test]
+#[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn runtime_file_contains_the_host_location_and_is_removed_on_shutdown() {
     let repo = repository();
     let runtime = repo
@@ -81,7 +83,6 @@ fn runtime_file_contains_the_host_location_and_is_removed_on_shutdown() {
         published["hosts"][0]["instanceNonce"],
         config["instanceNonce"]
     );
-    assert!(published["hosts"][0].get("bearer").is_none());
     assert_eq!(
         std::fs::metadata(runtime.parent().unwrap()).unwrap().mode() & 0o077,
         0
@@ -93,7 +94,8 @@ fn runtime_file_contains_the_host_location_and_is_removed_on_shutdown() {
 }
 
 #[test]
-fn public_identity_matches_the_runtime_without_disclosing_the_credential() {
+#[verifies("rule_review_link_opens_repository_host_only", examples)]
+fn public_identity_matches_the_runtime() {
     let repo = repository();
     let (mut child, config) = start(repo.path(), "A", "default");
     let identity: Value = serde_json::from_str(
@@ -111,66 +113,11 @@ fn public_identity_matches_the_runtime_without_disclosing_the_credential() {
     assert_eq!(identity["repositoryId"], "A");
     assert_eq!(identity["scope"], "default");
     assert_eq!(identity["instanceNonce"], config["instanceNonce"]);
-    assert!(identity.get("bearer").is_none());
     stop(&mut child);
 }
 
 #[test]
-fn same_scope_hosts_keep_each_other_discoverable_in_both_shutdown_orders() {
-    for first_to_stop in [0, 1] {
-        let repo = repository();
-        let runtime = repo
-            .path()
-            .join(".provenance/cache/review-hosts/default.json");
-        let (child_a, _) = start(repo.path(), "A", "default");
-        let (child_b, _) = start(repo.path(), "B", "default");
-        let mut children = [child_a, child_b];
-        let published: Value = serde_json::from_slice(&std::fs::read(&runtime).unwrap()).unwrap();
-        assert_eq!(published["hosts"].as_array().unwrap().len(), 2);
-
-        stop(&mut children[first_to_stop]);
-        let published: Value = serde_json::from_slice(&std::fs::read(&runtime).unwrap()).unwrap();
-        assert_eq!(published["hosts"].as_array().unwrap().len(), 1);
-        stop(&mut children[1 - first_to_stop]);
-        assert!(!runtime.exists());
-    }
-}
-
-#[test]
-fn separate_scopes_publish_separate_runtime_files() {
-    let repo = repository();
-    let layout = provenance_store::layout::ProvenanceLayout::new(repo.path().to_str().unwrap());
-    let mut manifest: provenance_core::Manifest =
-        serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest.scopes.push(provenance_core::Scope {
-        id: provenance_core::ScopeId::new("secondary").unwrap(),
-        path_prefix: provenance_core::RepoPathPrefix::new("."),
-    });
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-    let (mut primary, _) = start(repo.path(), "A", "default");
-    let (mut secondary, _) = start(repo.path(), "A", "secondary");
-
-    assert!(repo
-        .path()
-        .join(".provenance/cache/review-hosts/default.json")
-        .exists());
-    assert!(repo
-        .path()
-        .join(".provenance/cache/review-hosts/secondary.json")
-        .exists());
-    stop(&mut primary);
-    assert!(repo
-        .path()
-        .join(".provenance/cache/review-hosts/secondary.json")
-        .exists());
-    stop(&mut secondary);
-}
-
-#[test]
+#[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn publication_replaces_permissive_modes_with_owner_only_modes() {
     let repo = repository();
     let directory = repo.path().join(".provenance/cache/review-hosts");

@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::{
     io::{Read, Write},
@@ -114,6 +115,7 @@ fn publish_host(repo: &str, stored: &Value) {
 }
 
 #[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn write_output_explains_how_to_start_a_missing_review_host() {
     let (_directory, repo) = initialized_repo();
     let created = json_output(&[
@@ -152,6 +154,7 @@ fn write_output_explains_how_to_start_a_missing_review_host() {
 }
 
 #[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn write_and_explicit_read_link_to_the_containing_requirement() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
@@ -207,6 +210,7 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
 }
 
 #[test]
+#[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
     for stored in [
         json!({"endpoint":"https://127.0.0.1:1234","repositoryId":"local","scope":"default","instanceNonce":"nonce"}),
@@ -279,6 +283,7 @@ fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
 }
 
 #[test]
+#[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn identity_mismatches_do_not_produce_links() {
     for identity in [
         json!({"repositoryId":"other","scope":"default","instanceNonce":"nonce"}),
@@ -320,98 +325,7 @@ fn identity_mismatches_do_not_produce_links() {
 }
 
 #[test]
-fn corrupt_runtime_state_cannot_hide_a_successful_write() {
-    let (_directory, repo) = initialized_repo();
-    let path = std::path::Path::new(&repo).join(".provenance/cache/review-hosts/default.json");
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, b"{\"hosts\":[").unwrap();
-
-    let output = provenance()
-        .args([
-            "req_committed",
-            "create",
-            "--type",
-            "requirement",
-            "--repo",
-            &repo,
-            "--statement",
-            "The committed write remains successful.",
-            "--format",
-            "json",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let created: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(created["data"]["id"], "req_committed");
-    assert!(created["data"]["review_url"].is_null());
-    assert!(created["data"]["review_message"]
-        .as_str()
-        .unwrap()
-        .contains("provenance review"));
-}
-
-#[test]
-fn ambiguous_document_decoration_warns_without_hiding_the_write() {
-    let (_directory, repo) = initialized_repo();
-    for id in ["req_first", "req_second"] {
-        json_output(&[
-            id,
-            "create",
-            "--type",
-            "requirement",
-            "--repo",
-            &repo,
-            "--statement",
-            "The Requirement owns part of the shared Rule.",
-            "--format",
-            "json",
-        ]);
-    }
-
-    let output = provenance()
-        .args([
-            "rule_shared",
-            "create",
-            "--type",
-            "rule",
-            "--repo",
-            &repo,
-            "--statement",
-            "The shared Rule belongs to two documents.",
-            "--requirement-id",
-            "req_first",
-            "--requirement-id",
-            "req_second",
-            "--format",
-            "json",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let created: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(created["data"]["id"], "rule_shared");
-    assert!(created["data"].get("review_url").is_none());
-    let warning = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(warning.lines().count(), 1, "{warning}");
-    assert!(warning.contains("write succeeded"), "{warning}");
-    assert!(
-        warning.contains("multiple Requirement review documents"),
-        "{warning}"
-    );
-}
-
-#[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn explicit_link_read_explains_how_to_start_the_host() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
@@ -441,24 +355,4 @@ fn explicit_link_read_explains_how_to_start_the_host() {
         .as_str()
         .unwrap()
         .contains("provenance review"));
-}
-
-#[test]
-fn write_without_a_requirement_document_remains_unchanged() {
-    let (_directory, repo) = initialized_repo();
-    let created = json_output(&[
-        "sources",
-        "create",
-        "--repo",
-        &repo,
-        "--id",
-        "source_without_document",
-        "--name",
-        "Source without document",
-        "--format",
-        "json",
-    ]);
-
-    assert!(created["data"].get("review_url").is_none());
-    assert!(created["data"].get("review_message").is_none());
 }

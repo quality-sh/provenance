@@ -1,6 +1,8 @@
 use assert_cmd::Command;
+use provenance_macros::verifies;
 
 #[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn installed_guidance_gives_people_review_links_instead_of_record_ids() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");

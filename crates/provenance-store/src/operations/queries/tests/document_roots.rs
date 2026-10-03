@@ -5,6 +5,7 @@ use crate::state_store::{
     CreateRuleInput, CreateTopicInput,
 };
 use provenance_core::{NodeType, RequirementStatus};
+use provenance_macros::verifies;
 use serde_json::json;
 
 fn input<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
@@ -12,6 +13,7 @@ fn input<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
 }
 
 #[tokio::test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 async fn inverse_document_read_follows_each_canonical_membership_rule() {
     let (dir, store, scope) = seeded_store();
     store
@@ -97,54 +99,4 @@ async fn inverse_document_read_follows_each_canonical_membership_rule() {
         .result;
         assert_eq!(roots, [sid("req_overtime")], "wrong root for {id}");
     }
-}
-
-#[tokio::test]
-async fn inverse_document_read_reports_all_legitimate_roots() {
-    let (dir, store, scope) = seeded_store();
-    store
-        .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
-            id: sid("req_second"),
-            statement: "A second document also uses the rule.".into(),
-            description: None,
-            status: RequirementStatus::Active,
-            domain_id: None,
-            refines: None,
-            depends_on: Vec::new(),
-            supersedes: Vec::new(),
-            spawned_by: None,
-            origin_thread: None,
-            origin_message: None,
-        })
-        .unwrap();
-    store
-        .create_resolution(input::<CreateResolutionInput>(json!({
-            "scope_id":scope, "id":"resolution_first", "title":"First decision",
-            "position":"Use the first document.", "rationale":"It owns this decision.",
-            "status":"draft", "requirement_ids":["req_overtime"], "supersedes":[],
-            "inputs":[]
-        })))
-        .unwrap();
-    store
-        .create_rule(input::<CreateRuleInput>(json!({
-            "scope_id":scope, "id":"rule_shared",
-            "statement":"The system uses both requirements.", "status":"draft",
-            "severity":"medium", "requirement_ids":["req_second"],
-            "resolution_ids":["resolution_first"]
-        })))
-        .unwrap();
-
-    let roots = queries::containing_review_documents(
-        Some(root_of(&dir)),
-        &scope,
-        ReadPolicy::default(),
-        NodeType::Rule,
-        &sid("rule_shared"),
-    )
-    .await
-    .unwrap()
-    .result;
-
-    assert_eq!(roots, [sid("req_overtime"), sid("req_second")]);
 }

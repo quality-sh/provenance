@@ -44,6 +44,8 @@ function fixture(search: string) {
   return { elements, mounted };
 }
 
+// @provenance verification: examples
+// @provenance rule: rule_review_link_needs_no_record_id
 test('the linked root and focus reach the renderer after connection', async () => {
   const { elements, mounted } = fixture('?root=req_root&focus=rule_focus');
   elements.access.submit();
