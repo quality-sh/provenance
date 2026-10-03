@@ -19,6 +19,7 @@ mod dangling_targets;
 mod document;
 mod document_lifecycle;
 mod document_membership;
+mod document_roots;
 mod document_review;
 mod evidence;
 mod front_equivalence;

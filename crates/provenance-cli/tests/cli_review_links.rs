@@ -1,6 +1,15 @@
 use assert_cmd::Command;
 use serde_json::{json, Value};
-use std::net::TcpListener;
+use std::{
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread::JoinHandle,
+    time::Duration,
+};
 
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
@@ -34,22 +43,67 @@ fn json_output(arguments: &[&str]) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn publish_fake_host(repo: &str) -> (TcpListener, String) {
+struct FakeHost {
+    endpoint: String,
+    stop: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Drop for FakeHost {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        let _ = TcpStream::connect(self.endpoint.trim_start_matches("http://"));
+        if let Some(thread) = self.thread.take() {
+            thread.join().unwrap();
+        }
+    }
+}
+
+fn fake_host(identity: Value) -> FakeHost {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    listener.set_nonblocking(true).unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let thread_stop = stop.clone();
+    let body = identity.to_string();
+    let thread = std::thread::spawn(move || {
+        while !thread_stop.load(Ordering::Relaxed) {
+            let Ok((mut stream, _)) = listener.accept() else {
+                std::thread::sleep(Duration::from_millis(5));
+                continue;
+            };
+            let mut request = [0_u8; 2048];
+            let count = stream.read(&mut request).unwrap_or(0);
+            let path_matches = String::from_utf8_lossy(&request[..count])
+                .starts_with("GET /review-host-identity HTTP/1.1");
+            let (status, response) = if path_matches {
+                ("200 OK", body.as_str())
+            } else {
+                ("404 Not Found", "{}")
+            };
+            write!(
+                stream,
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
+                response.len()
+            )
+            .unwrap();
+        }
+    });
+    FakeHost {
+        endpoint,
+        stop,
+        thread: Some(thread),
+    }
+}
+
+fn publish_host(repo: &str, host: &FakeHost, stored: Value) {
     let path = std::path::Path::new(repo).join(".provenance/cache/review-hosts/default.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         path,
-        serde_json::to_vec(&json!({
-            "endpoint": endpoint,
-            "repositoryId": "local",
-            "scope": "default"
-        }))
-        .unwrap(),
+        serde_json::to_vec(&json!({"hosts":[stored]})).unwrap(),
     )
     .unwrap();
-    (listener, endpoint)
 }
 
 #[test]
@@ -105,7 +159,13 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
         "--format",
         "json",
     ]);
-    let (_listener, endpoint) = publish_fake_host(&repo);
+    let host = fake_host(json!({
+        "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
+    }));
+    publish_host(&repo, &host, json!({
+        "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
+        "instanceNonce":"nonce"
+    }));
 
     let created = json_output(&[
         "rule_link",
@@ -121,7 +181,7 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
         "--format",
         "json",
     ]);
-    let expected = format!("{endpoint}/?root=req_link&focus=rule_link");
+    let expected = format!("{}/?root=req_link&focus=rule_link", host.endpoint);
     assert_eq!(created["data"]["review_url"], expected);
 
     let link = json_output(&[
@@ -134,6 +194,95 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
         "json",
     ]);
     assert_eq!(link["review_url"], expected);
+}
+
+#[test]
+fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
+    for stored in [
+        json!({"endpoint":"https://127.0.0.1:1234","repositoryId":"local","scope":"default","instanceNonce":"nonce"}),
+        json!({"endpoint":"http://127.0.0.1:1234/path","repositoryId":"local","scope":"default","instanceNonce":"nonce"}),
+        json!({"endpoint":"http://user@127.0.0.1:1234","repositoryId":"local","scope":"default","instanceNonce":"nonce"}),
+        json!({"endpoint":"not a URL","repositoryId":"local","scope":"default","instanceNonce":"nonce"}),
+    ] {
+        let (_directory, repo) = initialized_repo();
+        json_output(&[
+            "req_link", "create", "--type", "requirement", "--repo", &repo,
+            "--statement", "The agent gives the reviewer a safe link.", "--format", "json",
+        ]);
+        let placeholder = fake_host(json!({}));
+        publish_host(&repo, &placeholder, stored);
+        let link = json_output(&[
+            "req_link", "get", "--repo", &repo, "--review-link", "--format", "json",
+        ]);
+        assert!(link["review_url"].is_null());
+        assert!(link["message"].as_str().unwrap().contains("provenance review"));
+    }
+
+    let (_directory, repo) = initialized_repo();
+    json_output(&[
+        "req_link", "create", "--type", "requirement", "--repo", &repo,
+        "--statement", "The agent gives the reviewer a safe link.", "--format", "json",
+    ]);
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    let placeholder = fake_host(json!({}));
+    publish_host(&repo, &placeholder, json!({
+        "endpoint":endpoint, "repositoryId":"local", "scope":"default",
+        "instanceNonce":"nonce"
+    }));
+    let link = json_output(&[
+        "req_link", "get", "--repo", &repo, "--review-link", "--format", "json",
+    ]);
+    assert!(link["review_url"].is_null());
+}
+
+#[test]
+fn identity_mismatches_do_not_produce_links() {
+    for identity in [
+        json!({"repositoryId":"other","scope":"default","instanceNonce":"nonce"}),
+        json!({"repositoryId":"local","scope":"other","instanceNonce":"nonce"}),
+        json!({"repositoryId":"local","scope":"default","instanceNonce":"other"}),
+    ] {
+        let (_directory, repo) = initialized_repo();
+        json_output(&[
+            "req_link", "create", "--type", "requirement", "--repo", &repo,
+            "--statement", "The agent gives the reviewer a safe link.", "--format", "json",
+        ]);
+        let host = fake_host(identity);
+        publish_host(&repo, &host, json!({
+            "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
+            "instanceNonce":"nonce"
+        }));
+        let link = json_output(&[
+            "req_link", "get", "--repo", &repo, "--review-link", "--format", "json",
+        ]);
+        assert!(link["review_url"].is_null());
+    }
+}
+
+#[test]
+fn corrupt_runtime_state_cannot_hide_a_successful_write() {
+    let (_directory, repo) = initialized_repo();
+    let path = std::path::Path::new(&repo).join(".provenance/cache/review-hosts/default.json");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, b"{\"hosts\":[").unwrap();
+
+    let output = provenance()
+        .args([
+            "req_committed", "create", "--type", "requirement", "--repo", &repo,
+            "--statement", "The committed write remains successful.", "--format", "json",
+        ])
+        .output()
+        .unwrap();
+
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let created: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(created["data"]["id"], "req_committed");
+    assert!(created["data"]["review_url"].is_null());
+    assert!(created["data"]["review_message"]
+        .as_str()
+        .unwrap()
+        .contains("provenance review"));
 }
 
 #[test]
