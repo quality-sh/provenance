@@ -32,6 +32,8 @@ impl StateStore {
         self.decide_record_review_addressed(Some((kind, record_id.clone())), input)
     }
 
+    /// Rejects feedback for record kinds that cannot carry a Discussion.
+    #[rule("rule_domain_boundary_decisions_accept_no_feedback")]
     fn decide_record_review_addressed(
         &self,
         addressed: Option<(NodeType, StableId)>,
@@ -75,6 +77,8 @@ impl StateStore {
         })
     }
 
+    /// Creates the server-owned Disposition identity for a review decision.
+    #[rule("rule_review_disposition_identity_server_created")]
     fn commit_decision(
         &self,
         input: DecideRecordReview,
@@ -154,7 +158,6 @@ impl StateStore {
         Ok(entry)
     }
 
-    #[rule("rule_rejection_comment_is_optional")]
     #[allow(clippy::too_many_arguments)]
     fn publish_feedback(
         &self,
@@ -195,6 +198,8 @@ impl StateStore {
     }
 }
 
+/// Rejects rationale text on an approval before any decision is written.
+#[rule("rule_review_approval_has_no_rationale")]
 fn validate_decision_input(
     kind: NodeType,
     record_id: &StableId,

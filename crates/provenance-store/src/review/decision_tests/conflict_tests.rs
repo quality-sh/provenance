@@ -34,6 +34,8 @@ fn repeated_decision_reports_the_current_review_identity() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
+#[provenance_macros::verifies("rule_review_conflict_not_merged", examples)]
 fn stale_decision_reports_the_pending_submission_and_current_revision() {
     let (_temp, store, _, proposal) = enrolled();
     let current_revision = edit(&store, "edit-2", "Revised statement");
@@ -176,6 +178,9 @@ fn stale_and_repeated_submissions_are_typed_conflicts() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_request_identity_server_created", examples)]
+#[provenance_macros::verifies("rule_review_proposal_identity_server_created", examples)]
+#[provenance_macros::verifies("rule_review_disposition_identity_server_created", examples)]
 fn server_creates_unique_identities_across_review_cycles() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());

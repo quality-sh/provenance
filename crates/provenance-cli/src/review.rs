@@ -10,7 +10,10 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
-use provenance_transport::{HostAccess, LocalAccess, StatementHost};
+use provenance_transport::{
+    local_host::{LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE},
+    HostAccess, LocalAccess, StatementHost,
+};
 use serde_json::{json, Value};
 use std::{future::IntoFuture, io::Write, path::PathBuf, sync::Arc, time::Duration};
 
@@ -61,6 +64,13 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         ),
     ));
     let endpoint = format!("http://{address}");
+    let runtime = LocalHostRegistration::publish(
+        &options.repo,
+        &options.scope,
+        &endpoint,
+        &options.repository_id,
+    )?;
+    let identity = runtime.identity();
     let config = json!({
         "endpoint": endpoint, "repositoryId": options.repository_id, "scope": options.scope,
         "compatibility": provenance_core::protocol::host::COMPATIBILITY,
@@ -73,20 +83,34 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     let router = host
         .router()
         .route(
+            IDENTITY_ROUTE,
+            get(local_host_identity).with_state(identity.clone()),
+        )
+        .route(
             "/review-config",
             get(configuration).with_state(review_configuration),
         )
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(access, protect_origin));
-    let mut signals = ShutdownSignals::new()?;
+    let signals = ShutdownSignals::new()?;
     println!(
         "{}",
         json!({
             "endpoint": endpoint, "bearer": token, "repositoryId": options.repository_id,
-            "scope": options.scope, "url": format!("{endpoint}/"),
+            "scope": options.scope, "instanceNonce": identity.instance_nonce,
+            "url": format!("{endpoint}/"),
         })
     );
     std::io::stdout().flush()?;
+    serve(listener, router, host, signals).await
+}
+
+async fn serve(
+    listener: tokio::net::TcpListener,
+    router: axum::Router,
+    host: StatementHost,
+    mut signals: ShutdownSignals,
+) -> anyhow::Result<()> {
     let (stop, stopped) = tokio::sync::oneshot::channel();
     let server = axum::serve(listener, router)
         .with_graceful_shutdown(async {
@@ -120,6 +144,10 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         }
     };
     result.context("review listener failed")
+}
+
+async fn local_host_identity(State(identity): State<LocalHostIdentity>) -> Json<LocalHostIdentity> {
+    Json(identity)
 }
 
 struct ShutdownSignals {

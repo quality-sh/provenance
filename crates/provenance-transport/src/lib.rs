@@ -13,6 +13,7 @@ mod failure;
 pub mod fixture;
 mod http;
 mod local;
+pub mod local_host;
 mod mcp;
 mod mcp_io;
 mod mcp_surface;

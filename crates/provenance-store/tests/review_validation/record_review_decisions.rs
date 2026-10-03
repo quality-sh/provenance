@@ -362,6 +362,7 @@ fn every_added_kind_persists_the_exact_review_versions_without_lifecycle_change(
 }
 
 #[test]
+#[provenance_macros::verifies("rule_domain_boundary_decisions_accept_no_feedback", examples)]
 fn domain_and_boundary_decisions_keep_rationale_and_refuse_feedback() {
     for kind in [NodeType::Domain, NodeType::Boundary] {
         let (_temp, store, scope) = fixture();

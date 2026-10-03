@@ -282,6 +282,11 @@ impl Definition {
         self.registration.target = kind.map(|kind| TargetBinding { action, kind });
         self
     }
+
+    const fn review_link(mut self, kind: Option<NodeType>) -> Self {
+        self.registration.review_link = kind;
+        self
+    }
 }
 
 fn response_binding(raw_schema: Value, kind: ResponseKind) -> ResponseBinding {

@@ -8,6 +8,7 @@ export interface ReviewConfig {
 export interface ReviewMountOptions extends ReviewConfig {
   readonly bearer: string;
   readonly rootId: string;
+  readonly focusId?: string;
 }
 
 /** Keeps the credential in memory and lets only the latest connection take effect. */
@@ -38,10 +39,10 @@ export function createSession(view: {
         view.status('Connection refused. Enter the access token from this host session.');
       }
     },
-    open(rootId: string) {
+    open(rootId: string, focusId?: string) {
       if (!connection) return false;
       unmount?.();
-      unmount = view.mount({ ...connection, rootId });
+      unmount = view.mount({ ...connection, rootId, ...(focusId === undefined ? {} : { focusId }) });
       view.status(`Reviewing ${rootId} · ${connection.repositoryId} / ${connection.scope}`);
       return true;
     },

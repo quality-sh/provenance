@@ -1,13 +1,13 @@
 {
-  "schema_version": 2,
-  "disposition_actor_ids": [
-    "codex-review-panel-gpt55-medium",
-    "ben_nasraoui"
-  ],
+  "schema_version": 3,
   "scopes": [
     {
       "id": "default",
       "path_prefix": "."
     }
+  ],
+  "disposition_actor_ids": [
+    "codex-review-panel-gpt55-medium",
+    "ben_nasraoui"
   ]
 }

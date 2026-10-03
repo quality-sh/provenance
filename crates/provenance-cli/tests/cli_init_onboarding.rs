@@ -1,12 +1,10 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
-use provenance_macros::verifies;
-use std::path::Path;
+use {provenance_macros::verifies, std::path::Path};
 
 #[path = "cli_dictionary/support.rs"]
 #[allow(dead_code)]
 mod dictionary_support;
-
 const INSTRUCTIONS: &str = r#"## Provenance
 
 Requirements live in a Provenance graph. Plan changes with the graph and update
@@ -24,8 +22,12 @@ it in the same change.
   with code.
 - To change a Requirement, Rule, or past decision, create a Proposal. A human decides each
   Proposal.
-- To drop a Question or Topic, archive it with its commit evidence. Archiving a
-  Topic also archives its Questions. Discussion history stays readable:
+- Before you ask a person to review a record, start the review host if it is not running:
+  `provenance review --repo . --repository-id local --scope default`.
+- Get the review URL with `provenance <record-id> get --review-link --format json`. Give the person the
+  review URL. Never give the person a record ID.
+- To drop a Question or Topic, archive it with its commit evidence. Archiving a Topic
+  also archives its Questions. Discussion history stays readable:
   `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | provenance questions <question_id> update --scope default --stdin --format json`
   `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | provenance topics <topic_id> update --scope default --stdin --format json`
 - Write graph state only through the Provenance CLI or SDK. Do not edit
@@ -45,6 +47,7 @@ it in the same change.
 #[verifies("rule_init_statement_preflight_guidance", examples)]
 #[verifies("rule_init_statement_claim_limit", examples)]
 #[verifies("rule_init_canonical_write_path", examples)]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn init_installs_bundled_skills_and_ratified_instructions() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
