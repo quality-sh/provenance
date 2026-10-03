@@ -94,9 +94,8 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         .live(crate::operations::reader::Live::Canonical)
         .store()
         .document_review_state(ctx.snapshot().scope(), &review_records)?;
-    let review_totals = document_review_totals(&review_keys, |kind, id| {
-        review_state.summary(kind, id)
-    });
+    let review_totals =
+        document_review_totals(&review_keys, |kind, id| review_state.summary(kind, id));
     let (cursor, mut position) = Cursor::open_live(
         ctx,
         "read-document",
