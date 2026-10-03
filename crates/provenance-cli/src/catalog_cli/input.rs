@@ -116,7 +116,10 @@ pub(super) fn parse(
             .iter()
             .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
     if hide_terminal && !query.contains_key("exclude_terminal") {
-        query.insert("exclude_terminal".into(), "true".into());
+        query.insert(
+            "exclude_terminal".into(),
+            crate::read_policy::exclude_terminal(false).to_string(),
+        );
     }
     apply_defaults(definition, &mut data);
     if definition.parameters().iter().any(|parameter| {
