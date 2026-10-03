@@ -171,8 +171,7 @@ macro_rules! review_resource {
             .argument_aliases($create_aliases)
             .target(TargetAction::Create, $target_kind),
         );
-        $out.push(
-            backed::<$update>(
+        let update = backed::<$update>(
                 concat!("update-", $singular),
                 concat!("update", $singular_id),
                 HttpMethod::Patch,
@@ -181,7 +180,17 @@ macro_rules! review_resource {
                 ResponseKind::Resource,
                 vec![schema::path("id")],
             )
-            .scope("scope_id")
+            .scope("scope_id");
+        let update = if matches!(
+            $target_kind,
+            Some(NodeType::Topic) | Some(NodeType::Question)
+        ) {
+            update.header("If-Match", "expected_etag", true)
+        } else {
+            update
+        };
+        $out.push(
+            update
             .cli_defaults($update_defaults)
             .argument_aliases($update_aliases)
             .public_patch($nullable)

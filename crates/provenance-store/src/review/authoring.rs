@@ -68,54 +68,6 @@ impl StateStore {
         })
     }
 
-    pub(crate) fn save_native_record<T: GraphRecord>(
-        &self,
-        path: &Utf8Path,
-        expected_etag: Option<&str>,
-        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
-    ) -> anyhow::Result<T> {
-        let relative = path.strip_prefix(self.layout.root())?.to_owned();
-        let stamp = self.current_record_stamp()?;
-        self.with_repository_publication(|| {
-            with_staged_state(&self.layout, false, |layout| {
-                let staged = Self::staged(layout.clone(), stamp.clone());
-                let staged_path = layout.root().join(&relative);
-                guard::with_writer(&staged_path, "*", || {
-                    let (before, after) =
-                        staged.mutate_graph_record_guarded(&staged_path, mutate)?;
-                    let before = before.ok_or_else(|| {
-                        anyhow::anyhow!("native update cannot create a graph record")
-                    })?;
-                    let before: ReviewRecord = before.into();
-                    if let Some(expected_etag) = expected_etag {
-                        let head = staged.head(&before)?;
-                        let current_etag = head
-                            .as_ref()
-                            .map(|entry| entry.etag.clone())
-                            .unwrap_or(journal::etag(&before, None)?);
-                        if expected_etag != current_etag {
-                            return Err(SourceFailure::wrap(
-                                WriteFailure::RequirementEditConflict { current_etag },
-                                anyhow::anyhow!("stale native record edit etag"),
-                            ));
-                        }
-                    }
-                    let after = if native_record_is_closed(&staged_path, T::KIND, after.id())? {
-                        staged.enroll_graph_record::<T>(&staged_path, after.id())?
-                    } else {
-                        after
-                    };
-                    let after: ReviewRecord = after.into();
-                    staged.commit_native_occurrence(Some(&before), &after)?;
-                    staged.validate_graph_scope(after.scope_id())?;
-                    staged.enroll_review_manifest()?;
-                    Ok(after)
-                })
-            })
-        })
-        .and_then(review_record_into)
-    }
-
     pub(super) fn commit_native_occurrence(
         &self,
         before: Option<&ReviewRecord>,
@@ -400,31 +352,6 @@ impl StateStore {
         })?;
         self.requirement(&scope, &id)
     }
-}
-
-fn review_record_into<T>(record: ReviewRecord) -> anyhow::Result<T>
-where
-    T: serde::de::DeserializeOwned,
-{
-    Ok(serde_json::from_value(serde_json::to_value(record)?)?)
-}
-
-fn native_record_is_closed(
-    path: &Utf8Path,
-    kind: provenance_core::NodeType,
-    id: &StableId,
-) -> anyhow::Result<bool> {
-    let contents = std::fs::read_to_string(path)?;
-    let mut matched = None;
-    for line in contents.lines() {
-        let value: serde_json::Value = serde_json::from_str(line)?;
-        if value["id"].as_str() == Some(id.as_str()) {
-            matched = Some(value);
-            break;
-        }
-    }
-    let value = matched.ok_or_else(|| anyhow::anyhow!("updated graph record is missing"))?;
-    Ok(provenance_core::review::ReviewRecord::deserialize_closed(kind, &value).is_ok())
 }
 
 fn retype_create_error(error: anyhow::Error, duplicate: bool) -> anyhow::Error {

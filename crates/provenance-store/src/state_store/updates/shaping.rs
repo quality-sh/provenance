@@ -2,6 +2,7 @@ use super::{
     inputs::{EditQuestionInput, QuestionClearField, UpdateTopicInput},
     invalid, optional, required_text, set,
 };
+use crate::review::NativeRecordBatch;
 use crate::state_store::shaping_writers::{
     clear_question_claim_on_exit, clear_topic_claim_on_exit,
 };
@@ -11,12 +12,54 @@ use provenance_core::{NodeType, Question, QuestionStatus, Topic, TopicStatus};
 impl StateStore {
     pub fn edit_topic(&self, input: UpdateTopicInput) -> anyhow::Result<Topic> {
         if input.status == Some(TopicStatus::Archived) {
-            let stamp = self.current_record_stamp()?;
-            return crate::publication::with_staged_state(&self.layout, false, |layout| {
-                Self::staged(layout.clone(), stamp).write_topic_update(input)
+            return self.with_native_record_batch(|batch| {
+                batch.store().write_topic_archive(batch, input)
             });
         }
         self.with_repository_publication(|| self.write_topic_update(input))
+    }
+
+    fn write_topic_archive(
+        &self,
+        batch: &NativeRecordBatch<'_>,
+        input: UpdateTopicInput,
+    ) -> anyhow::Result<Topic> {
+        if let Some(title) = &input.title {
+            required_text(title)?;
+        }
+        let links = self.checked_update_links(&input.scope_id, input.links)?;
+        let archived_in_commit = input.archived_in_commit.clone();
+        let topic_path = crate::shards::topics_path(&self.layout, &input.scope_id);
+        let topic = batch.mutate_one(&topic_path, input.expected_etag.as_deref(), |topics| {
+            let topic = topics
+                .iter_mut()
+                .find(|topic| topic.id == input.id)
+                .ok_or_else(|| invalid("topic does not exist"))?;
+            set(&mut topic.title, input.title);
+            set(&mut topic.status, input.status);
+            set(&mut topic.links, links);
+            topic.archived_in_commit.clone_from(&archived_in_commit);
+            clear_topic_claim_on_exit(topic);
+            Ok(topic.clone())
+        })?;
+        crate::test_probes::at("topic_archive_after_topic")?;
+        let stamp = topic
+            .archived_in_commit
+            .as_ref()
+            .ok_or_else(|| invalid("archived_in_commit is required for an archived Topic"))?;
+        let questions_path = crate::shards::questions_path(&self.layout, &input.scope_id);
+        batch.mutate(&questions_path, None, |questions: &mut Vec<Question>| {
+            for question in questions.iter_mut().filter(|question| {
+                question.topic_id == input.id && question.status != QuestionStatus::Archived
+            }) {
+                question.status = QuestionStatus::Archived;
+                question.archived_in_commit = Some(stamp.clone());
+                clear_question_claim_on_exit(question);
+                crate::test_probes::at("topic_archive_question_changed")?;
+            }
+            Ok(((), None))
+        })?;
+        Ok(topic)
     }
 
     fn write_topic_update(&self, input: UpdateTopicInput) -> anyhow::Result<Topic> {
@@ -40,33 +83,7 @@ impl StateStore {
                 Ok(())
             },
         )?;
-        if topic.status == TopicStatus::Archived {
-            self.archive_topic_questions(
-                &input.scope_id,
-                &input.id,
-                topic.archived_in_commit.as_ref().unwrap(),
-            )?;
-        }
         Ok(topic)
-    }
-
-    fn archive_topic_questions(
-        &self,
-        scope: &provenance_core::ScopeId,
-        topic_id: &provenance_core::StableId,
-        stamp: &provenance_core::ArchivedStamp,
-    ) -> anyhow::Result<()> {
-        let path = crate::shards::questions_path(&self.layout, scope);
-        self.mutate_native_records(&path, |questions: &mut Vec<Question>| {
-            for question in questions.iter_mut().filter(|question| {
-                &question.topic_id == topic_id && question.status != QuestionStatus::Archived
-            }) {
-                question.status = QuestionStatus::Archived;
-                question.archived_in_commit = Some(stamp.clone());
-                clear_question_claim_on_exit(question);
-            }
-            Ok(())
-        })
     }
 
     pub fn edit_question(&self, input: EditQuestionInput) -> anyhow::Result<Question> {

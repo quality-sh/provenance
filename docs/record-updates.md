@@ -125,7 +125,7 @@ Archived Topics and Questions have the same commit evidence requirement. An
 archived status is terminal. Archiving a Topic archives all Questions in that
 Topic in the same publication. Archiving one Question does not change its
 Topic. Discussions on archived records stay readable as history. Updates do
-not hard-delete records or their relationships. A Topic that closes clears its
+not delete records or their relationships. A Topic that closes clears its
 claim. A Question status change keeps the native answer requirement and clears
 claims when the question leaves its claimable state.
 

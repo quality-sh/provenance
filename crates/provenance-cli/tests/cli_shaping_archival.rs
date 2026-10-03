@@ -133,3 +133,29 @@ fn archiving_a_topic_archives_all_of_its_questions_in_one_update() {
         );
     }
 }
+
+#[test]
+fn topic_and_question_updates_require_the_current_etag() {
+    let directory = initialized_records();
+    let repo = directory.path().to_str().unwrap();
+    for (family, id) in [("topics", "topic_archive"), ("questions", "question_one")] {
+        Command::cargo_bin("provenance")
+            .unwrap()
+            .args([
+                family, id, "update", "--repo", repo, "--scope", "default", "--stdin",
+                "--format", "json",
+            ])
+            .write_stdin(r#"{"title":"No unguarded update"}"#)
+            .assert()
+            .failure()
+            .stderr(predicates::str::contains("If-Match"));
+    }
+    assert_eq!(
+        run(repo, &["topics", "topic_archive", "get"])["data"]["status"],
+        "open"
+    );
+    assert_eq!(
+        run(repo, &["questions", "question_one", "get"])["data"]["status"],
+        "open"
+    );
+}
