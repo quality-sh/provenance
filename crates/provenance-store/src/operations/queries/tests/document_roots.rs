@@ -40,7 +40,7 @@ async fn inverse_document_read_follows_each_canonical_membership_rule() {
         .create_rule(input::<CreateRuleInput>(json!({
             "scope_id":scope, "id":"rule_via_resolution",
             "statement":"The system uses the decision.", "status":"draft",
-            "severity":"medium", "requirement_ids":[],
+            "severity":"medium", "requirement_ids":["req_overtime"],
             "resolution_ids":["resolution_policy"]
         })))
         .unwrap();
@@ -119,11 +119,19 @@ async fn inverse_document_read_reports_all_legitimate_roots() {
         })
         .unwrap();
     store
+        .create_resolution(input::<CreateResolutionInput>(json!({
+            "scope_id":scope, "id":"resolution_first", "title":"First decision",
+            "position":"Use the first document.", "rationale":"It owns this decision.",
+            "status":"draft", "requirement_ids":["req_overtime"], "supersedes":[],
+            "inputs":[]
+        })))
+        .unwrap();
+    store
         .create_rule(input::<CreateRuleInput>(json!({
             "scope_id":scope, "id":"rule_shared",
             "statement":"The system uses both requirements.", "status":"draft",
-            "severity":"medium", "requirement_ids":["req_overtime", "req_second"],
-            "resolution_ids":[]
+            "severity":"medium", "requirement_ids":["req_second"],
+            "resolution_ids":["resolution_first"]
         })))
         .unwrap();
 
