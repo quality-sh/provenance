@@ -272,6 +272,7 @@ fn stale_submission_and_stale_selection_are_refused() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_approval_has_no_rationale", examples)]
 fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
     let (_temp, store, _, proposal) = enrolled();
     refused(

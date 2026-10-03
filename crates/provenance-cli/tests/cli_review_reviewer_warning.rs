@@ -8,6 +8,7 @@ use std::{
 };
 
 #[test]
+#[provenance_macros::verifies("rule_review_page_declares_read_only", examples)]
 fn review_startup_warns_when_no_reviewer_is_configured() {
     let repo = tempfile::tempdir().unwrap();
     let layout = provenance_store::layout::ProvenanceLayout::new(repo.path().to_str().unwrap());

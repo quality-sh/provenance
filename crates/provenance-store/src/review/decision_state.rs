@@ -281,6 +281,28 @@ impl CycleFacts {
             .next_back()
     }
 
+    /// Refuses a conflicting review write before it can publish values.
+    #[provenance_macros::rule("rule_review_conflict_not_merged")]
+    pub(super) fn refuse_review_conflict(
+        &self,
+        store: &StateStore,
+        scope: &ScopeId,
+        kind: NodeType,
+        record_id: &StableId,
+        conflicted: bool,
+        message: &str,
+    ) -> anyhow::Result<()> {
+        if conflicted {
+            return Err(crate::write_error::SourceFailure::wrap(
+                self.conflict_failure(store, scope, kind, record_id)?,
+                anyhow::anyhow!(message.to_owned()),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Returns the current review state in the typed conflict.
+    #[provenance_macros::rule("rule_review_conflict_returns_current_value")]
     pub(super) fn conflict_failure(
         &self,
         store: &StateStore,

@@ -23,6 +23,7 @@ fn without_git_identity(command: &mut Command, temporary: &Path) {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_init_configures_human_reviewer", examples)]
 fn init_uses_the_normalized_git_email_as_the_reviewer() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");

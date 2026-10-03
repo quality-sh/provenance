@@ -3,6 +3,8 @@
 use super::*;
 use crate::operations::catalog as operation;
 
+/// Omits Discussion routes for Domain and Boundary records.
+#[provenance_macros::rule("rule_domain_boundary_accept_no_discussions")]
 fn routes_for_kind(
     out: &mut Vec<Definition>,
     plural: &'static str,

@@ -34,6 +34,8 @@ fn repeated_decision_reports_the_current_review_identity() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
+#[provenance_macros::verifies("rule_review_conflict_not_merged", examples)]
 fn stale_decision_reports_the_pending_submission_and_current_revision() {
     let (_temp, store, _, proposal) = enrolled();
     let current_revision = edit(&store, "edit-2", "Revised statement");
@@ -176,14 +178,19 @@ fn stale_and_repeated_submissions_are_typed_conflicts() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_request_identity_server_created", examples)]
+#[provenance_macros::verifies("rule_review_proposal_identity_server_created", examples)]
+#[provenance_macros::verifies("rule_review_disposition_identity_server_created", examples)]
 fn server_creates_unique_identities_across_review_cycles() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     edit(&store, "edit-1", "Statement v1");
     let submission_1 = automatic_submission(&store);
-    let decision_1 = decide(
+    let withdrawal = withdraw(&store, &submission_1.proposal_id).unwrap();
+    let explicit_submission = submit(&store, None, None).unwrap();
+    let rejection = decide(
         &store,
-        &submission_1.proposal_id,
+        &explicit_submission.proposal_id,
         "rejected",
         &reviewer("reviewer"),
         &json!({}),
@@ -191,7 +198,7 @@ fn server_creates_unique_identities_across_review_cycles() {
     .unwrap();
     edit(&store, "edit-2", "Revised statement");
     let submission_2 = automatic_submission(&store);
-    let decision_2 = decide(
+    let acceptance = decide(
         &store,
         &submission_2.proposal_id,
         "accepted",
@@ -200,12 +207,15 @@ fn server_creates_unique_identities_across_review_cycles() {
     )
     .unwrap();
 
-    assert_ne!(submission_1.proposal_id, submission_2.proposal_id);
+    assert_ne!(submission_1.proposal_id, explicit_submission.proposal_id);
+    assert_ne!(explicit_submission.proposal_id, submission_2.proposal_id);
     let request_ids = [
         &submission_1.request_id,
-        &decision_1.request_id,
+        &withdrawal.request_id,
+        &explicit_submission.request_id,
+        &rejection.request_id,
         &submission_2.request_id,
-        &decision_2.request_id,
+        &acceptance.request_id,
     ];
     assert_eq!(
         request_ids
@@ -215,5 +225,27 @@ fn server_creates_unique_identities_across_review_cycles() {
             .len(),
         request_ids.len()
     );
-    assert_ne!(decision_1.disposition_id, decision_2.disposition_id);
+    assert_ne!(rejection.disposition_id, acceptance.disposition_id);
+
+    let submit_with_id = json!({
+        "scope_id":"default","actor":"agent","record_kind":"requirement",
+        "record_id":"req_a","title":"Title","summary":"Summary","source_ids":[],
+        "evidence_references":[],"builds_on":[],"request_id":"caller-request",
+        "proposal_id":"caller-proposal"
+    });
+    assert!(serde_json::from_value::<crate::review::SubmitRecordReview>(submit_with_id).is_err());
+    let decision_with_id = json!({
+        "scope_id":"default","actor":reviewer("reviewer"),
+        "proposal_id":submission_2.proposal_id,"decision":"accepted",
+        "canonical_artifact":artifact()["canonical_artifact"],
+        "request_id":"caller-request","disposition_id":"caller-disposition"
+    });
+    assert!(serde_json::from_value::<crate::review::DecideRecordReview>(decision_with_id).is_err());
+    let withdrawal_with_id = json!({
+        "scope_id":"default","actor":"agent","proposal_id":submission_2.proposal_id,
+        "request_id":"caller-request"
+    });
+    assert!(
+        serde_json::from_value::<crate::review::WithdrawRecordReview>(withdrawal_with_id).is_err()
+    );
 }

@@ -81,11 +81,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
 
     let reviewer_notice =
         if !manifest_exists && disposition_actor_ids.is_empty() && !clear_disposition_actors {
-            let reviewer = crate::reviewer::select(path)?;
-            if let Some(actor_id) = reviewer.actor_id {
-                manifest.disposition_actor_ids.push(actor_id);
-            }
-            Some(reviewer.notice)
+            Some(configure_initial_reviewer(&mut manifest, path)?)
         } else {
             None
         };
@@ -118,6 +114,16 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         scope_ids,
         reviewer_notice,
     })
+}
+
+/// Writes the selected initial reviewer into the planned manifest.
+#[rule("rule_init_configures_human_reviewer")]
+fn configure_initial_reviewer(manifest: &mut Manifest, path: &Utf8Path) -> anyhow::Result<String> {
+    let reviewer = crate::reviewer::select(path)?;
+    if let Some(actor_id) = reviewer.actor_id {
+        manifest.disposition_actor_ids.push(actor_id);
+    }
+    Ok(reviewer.notice)
 }
 
 /// The managed file states a planned init would write, kept together so the
