@@ -154,6 +154,17 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
                 .unwrap()
                 .etag;
             command.args(["--if-match", &etag]);
+        } else if matches!(group, "topics" | "questions") {
+            let current = Command::cargo_bin("provenance")
+                .unwrap()
+                .args([
+                    group, id, "get", "--repo", repo, "--scope", "default", "--format", "json",
+                ])
+                .output()
+                .unwrap();
+            let current: Value = serde_json::from_slice(&current.stdout).unwrap();
+            let etag = current["data"]["edit"]["etag"].as_str().unwrap();
+            command.args(["--if-match", etag]);
         }
         let output = command
             .write_stdin(std::fs::read_to_string(fields.trim_start_matches('@')).unwrap())
