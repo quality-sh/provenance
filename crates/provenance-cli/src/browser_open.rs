@@ -1,4 +1,5 @@
 use std::process::Command;
+use std::time::Duration;
 
 pub fn open(url: &str, no_open: bool) {
     if no_open {
@@ -15,9 +16,21 @@ pub fn open(url: &str, no_open: bool) {
     }
     match opener(url).spawn() {
         Ok(mut child) => {
+            let (send, receive) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
-                let _ = child.wait();
+                let _ = send.send(child.wait());
             });
+            if let Ok(result) = receive.recv_timeout(Duration::from_millis(250)) {
+                match result {
+                    Ok(status) if status.success() => {}
+                    Ok(status) => eprintln!(
+                        "warning: cannot open the review link (opener exited with {status}): {url}"
+                    ),
+                    Err(error) => {
+                        eprintln!("warning: cannot open the review link ({error}): {url}")
+                    }
+                }
+            }
         }
         Err(error) => {
             eprintln!("warning: cannot open the review link ({error}): {url}");
