@@ -17,6 +17,27 @@ pub fn make_default_scope_portable(repo: impl AsRef<Path>) {
     rewrite_records(&state.join("scopes/default"));
 }
 
+/// Copies a repository's canonical state and converts the copy for legacy export tests.
+pub fn copy_portable_state(source: impl AsRef<Path>, destination: impl AsRef<Path>) {
+    let source = source.as_ref().join(".provenance/state");
+    let destination = destination.as_ref().join(".provenance/state");
+    copy_tree(&source, &destination);
+    make_default_scope_portable(destination.parent().unwrap().parent().unwrap());
+}
+
+fn copy_tree(source: &Path, destination: &Path) {
+    std::fs::create_dir_all(destination).unwrap();
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        let target = destination.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
 fn remove_review_proposals(ideation: &Path) {
     let proposals = ideation.join("proposal_cards.jsonl");
     let removed = filter_jsonl(&proposals, |record| {
