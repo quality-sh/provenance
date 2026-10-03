@@ -240,9 +240,7 @@ fn server_creates_unique_identities_across_review_cycles() {
         "canonical_artifact":artifact()["canonical_artifact"],
         "request_id":"caller-request","disposition_id":"caller-disposition"
     });
-    assert!(
-        serde_json::from_value::<crate::review::DecideRecordReview>(decision_with_id).is_err()
-    );
+    assert!(serde_json::from_value::<crate::review::DecideRecordReview>(decision_with_id).is_err());
     let withdrawal_with_id = json!({
         "scope_id":"default","actor":"agent","proposal_id":submission_2.proposal_id,
         "request_id":"caller-request"
