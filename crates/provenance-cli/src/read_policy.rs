@@ -1,5 +1,4 @@
 /// Omits terminal records unless a person explicitly includes them.
-#[provenance_macros::rule("rule_review_defaults_exclude_terminal_records")]
 pub const fn exclude_terminal(include_terminal: bool) -> bool {
     !include_terminal
 }

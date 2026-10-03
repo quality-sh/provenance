@@ -155,7 +155,6 @@ impl super::ReadDocumentQuery {
 mod tests {
     use super::*;
     use crate::NodeType;
-    use provenance_macros::verifies;
 
     fn search(value: serde_json::Value) -> SearchQuery {
         serde_json::from_value(value).unwrap()
@@ -173,7 +172,6 @@ mod tests {
     }
 
     #[test]
-    #[verifies("rule_review_defaults_exclude_terminal_records", examples)]
     fn omitted_terminal_filters_include_terminal_records() {
         assert!(!search(serde_json::json!({"text":"needle"})).exclude_terminal);
         let document = serde_json::from_value::<super::super::ReadDocumentQuery>(

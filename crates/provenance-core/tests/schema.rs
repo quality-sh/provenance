@@ -1,6 +1,5 @@
 #![cfg(feature = "schema")]
 use provenance_core::protocol::{EvidenceResult, SearchQuery, TraceQuery, TypedSpecInput};
-use provenance_macros::verifies;
 use schemars::{
     generate::{Contract, SchemaSettings},
     JsonSchema,
@@ -24,7 +23,6 @@ fn valid(schema: &Value, value: &Value) -> bool {
         .is_valid(value)
 }
 #[test]
-#[verifies("rule_review_defaults_exclude_terminal_records", conformance)]
 fn query_defaults_and_domain_bounds_are_explicit() {
     let search = schema::<SearchQuery>(Contract::Deserialize);
     assert!(valid(&search, &json!({"text":"x"})));

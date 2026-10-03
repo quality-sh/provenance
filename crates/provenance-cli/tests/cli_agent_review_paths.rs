@@ -314,7 +314,6 @@ fn review_view_gives_commands_for_each_truncated_feedback_page() {
 }
 
 #[test]
-#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
 #[verifies("rule_cli_terminal_records_opt_in", examples)]
 fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
     let (_directory, repo) = init();
