@@ -159,7 +159,7 @@ fn publication_refuses_a_live_slot_owner() {
     assert!(error.to_string().contains("already has a running local host"));
     assert_eq!(
         serde_json::from_slice::<Value>(&std::fs::read(registry(repository.path())).unwrap())
-            ["instanceNonce"],
+            .unwrap()["instanceNonce"],
         first.identity().instance_nonce
     );
 }
