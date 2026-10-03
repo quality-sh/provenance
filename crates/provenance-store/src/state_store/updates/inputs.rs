@@ -65,9 +65,11 @@ update_input!(UpdateBoundaryInput, BoundaryClearField { SourceRef }, {
     statement: String, source_ref: SourceReference
 });
 update_input!(UpdateTopicInput, TopicClearField {}, {
-    title: String, status: TopicStatus, links: Vec<ArtifactLink>
+    title: String, status: TopicStatus, links: Vec<ArtifactLink>,
+    archived_in_commit: provenance_core::ArchivedStamp
 });
 update_input!(EditQuestionInput, QuestionClearField { ResolutionId, Contradicts }, {
     question: String, resolution_method: ResolutionMethod, status: QuestionStatus,
-    links: Vec<ArtifactLink>, resolution_id: StableId, contradicts: StableId
+    links: Vec<ArtifactLink>, resolution_id: StableId, contradicts: StableId,
+    archived_in_commit: provenance_core::ArchivedStamp
 });

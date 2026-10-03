@@ -105,6 +105,7 @@ pub(super) fn topic(id: &str, requirement_id: &str, links: &[(&str, ArtifactLink
         requirement_id: sid(requirement_id),
         title: id.to_string(),
         status: TopicStatus::Open,
+        archived_in_commit: None,
         claimed_by: None,
         claimed_at: None,
         links: links
@@ -193,6 +194,7 @@ pub(super) fn question(
         question: format!("{id}?"),
         resolution_method: ResolutionMethod::Grill,
         status: QuestionStatus::Open,
+        archived_in_commit: None,
         claimed_by: None,
         claimed_at: None,
         answer: None,

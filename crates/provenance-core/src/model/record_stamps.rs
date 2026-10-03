@@ -108,3 +108,48 @@ impl super::Rule {
         self.validate_archive()
     }
 }
+
+macro_rules! archive_lifecycle {
+    ($record:ty, $status:ty, $archived:path, $name:literal) => {
+        impl $record {
+            pub fn validate_archive(&self) -> anyhow::Result<()> {
+                anyhow::ensure!(
+                    (self.status == $archived) == self.archived_in_commit.is_some(),
+                    concat!(
+                        "archived_in_commit is required exactly when ",
+                        $name,
+                        " status is archived"
+                    )
+                );
+                if let Some(stamp) = &self.archived_in_commit {
+                    validate_commit(&stamp.commit)?;
+                    if let Some(at) = &stamp.at {
+                        validate_at(at)?;
+                    }
+                }
+                Ok(())
+            }
+
+            pub fn validate_transition(&self, previous: &Self) -> anyhow::Result<()> {
+                anyhow::ensure!(
+                    previous.status != $archived || self.status == $archived,
+                    concat!("archived ", $name, " status is terminal")
+                );
+                self.validate_archive()
+            }
+        }
+    };
+}
+
+archive_lifecycle!(
+    super::Topic,
+    super::TopicStatus,
+    super::TopicStatus::Archived,
+    "Topic"
+);
+archive_lifecycle!(
+    super::Question,
+    super::QuestionStatus,
+    super::QuestionStatus::Archived,
+    "Question"
+);

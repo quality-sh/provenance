@@ -14,7 +14,8 @@ fn all_topic_statuses() -> Vec<TopicStatus> {
     while let Some(next) = match all.last().unwrap() {
         TopicStatus::Open => Some(TopicStatus::Explored),
         TopicStatus::Explored => Some(TopicStatus::Closed),
-        TopicStatus::Closed => None,
+        TopicStatus::Closed => Some(TopicStatus::Archived),
+        TopicStatus::Archived => None,
     } {
         all.push(next);
     }
@@ -26,7 +27,8 @@ fn all_question_statuses() -> Vec<QuestionStatus> {
     while let Some(next) = match all.last().unwrap() {
         QuestionStatus::Open => Some(QuestionStatus::BlockedOnHuman),
         QuestionStatus::BlockedOnHuman => Some(QuestionStatus::Answered),
-        QuestionStatus::Answered => None,
+        QuestionStatus::Answered => Some(QuestionStatus::Archived),
+        QuestionStatus::Archived => None,
     } {
         all.push(next);
     }
@@ -56,11 +58,12 @@ fn stored_status_word(status: ShapingStatus) -> String {
 }
 
 // Independent restatement of the decision: a shaping record stops wanting a
-// worker once it reaches a state that expects none - it is finished (closed,
-// answered) or it is waiting on a human. The refusal names that state with the
+// worker once it reaches a state that expects none: it is finished, archived,
+// or waiting on a human. The refusal names that state with the
 // same word the record stores. Must not be implemented by calling
 // claim_blocking_status.
-const STATES_THAT_WANT_NO_WORKER: [&str; 3] = ["closed", "answered", "blocked_on_human"];
+const STATES_THAT_WANT_NO_WORKER: [&str; 4] =
+    ["closed", "answered", "blocked_on_human", "archived"];
 
 fn claim_refusal_oracle(status: ShapingStatus) -> Option<String> {
     let word = stored_status_word(status);
