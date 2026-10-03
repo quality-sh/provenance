@@ -110,10 +110,11 @@ pub(super) fn parse(
     if stdin {
         merge_stdin(&mut data, &assignments)?;
     }
-    if definition.parameters().iter().any(|parameter| {
-        parameter.location == "query" && parameter.name == "exclude_terminal"
-    }) && !query.contains_key("exclude_terminal")
-    {
+    let hide_terminal = query_action.is_none()
+        && definition.parameters().iter().any(|parameter| {
+            parameter.location == "query" && parameter.name == "exclude_terminal"
+        });
+    if hide_terminal && !query.contains_key("exclude_terminal") {
         query.insert("exclude_terminal".into(), "true".into());
     }
     apply_defaults(definition, &mut data);
