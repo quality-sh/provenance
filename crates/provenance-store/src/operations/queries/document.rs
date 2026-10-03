@@ -42,6 +42,25 @@ pub async fn read_document_answer(
     })
 }
 
+/// Finds each Requirement whose canonical review document contains one record.
+pub async fn containing_review_documents(
+    repo: Option<Utf8PathBuf>,
+    scope: &ScopeId,
+    policy: ReadPolicy,
+    kind: NodeType,
+    id: &StableId,
+) -> anyhow::Result<Stamped<Vec<StableId>>> {
+    let id = id.clone();
+    served(repo, scope, policy, move |ctx| {
+        Box::pin(async move {
+            ctx.snapshot()
+                .containing_document_roots(kind, &id)
+                .await
+        })
+    })
+    .await
+}
+
 pub(super) async fn read(
     ctx: &ReadContext,
     request: ReadDocumentQuery,

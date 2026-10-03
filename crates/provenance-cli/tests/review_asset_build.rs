@@ -26,7 +26,14 @@ fn rejects_missing_entry_and_reserved_paths() {
     let output = dir.path().join("bundle.rs");
     assert!(review_assets::generate(&assets, &output).is_err());
     std::fs::write(assets.join("index.html"), "<!doctype html>").unwrap();
-    for name in ["metadata", "review-config", "v7", ".secret", "bad path"] {
+    for name in [
+        "metadata",
+        "review-config",
+        "review-host-identity",
+        "v7",
+        ".secret",
+        "bad path",
+    ] {
         let path = assets.join(name);
         std::fs::write(&path, "not an asset").unwrap();
         assert!(review_assets::generate(&assets, &output).is_err(), "{name}");

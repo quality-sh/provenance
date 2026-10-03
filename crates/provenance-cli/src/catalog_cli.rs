@@ -19,6 +19,7 @@ pub struct Invocation {
     data: Value,
     query: BTreeMap<String, String>,
     headers: HeaderMap,
+    affected_review_record: Option<crate::review_link::AffectedReviewRecord>,
 }
 
 impl Invocation {
@@ -42,6 +43,16 @@ impl Invocation {
                     .unwrap_or_else(|error| usage_error(error));
             }
         }
+        let affected_review_record = resolved.address.definition.registration.review_link.and_then(
+            |kind| {
+                resolved
+                    .values
+                    .get("id")
+                    .cloned()
+                    .or_else(|| data.get("id").and_then(Value::as_str).map(str::to_owned))
+                    .map(|id| crate::review_link::AffectedReviewRecord { kind, id })
+            },
+        );
         Self {
             context: args.common.context(),
             path: resolved.path,
@@ -49,6 +60,7 @@ impl Invocation {
             data,
             query,
             headers,
+            affected_review_record,
         }
     }
 }
@@ -119,6 +131,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         data,
         query,
         headers,
+        affected_review_record,
     } = invocation;
     let method = match definition.method {
         catalog::HttpMethod::Get => Method::GET,
@@ -155,13 +168,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         .await
     {
         Ok(mut value) => {
-            let record_write = definition.registration.target.is_some_and(|binding| {
-                matches!(
-                    binding.action,
-                    TargetAction::Create | TargetAction::Update | TargetAction::Submit
-                ) && provenance_core::review::REVIEW_RECORD_KINDS.contains(&binding.kind)
-            });
-            crate::review_link::annotate_write(&repo, &host, &mut value, record_write).await?;
+            crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
             crate::output::print_json(&value)?;
         }
         Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
@@ -208,9 +215,12 @@ pub async fn dispatch_target(
         .invoke_target(&route, data, headers)
         .await
         .map_err(|failure| anyhow::anyhow!(serde_json::to_string(&failure).unwrap()))?;
-    let record_write = matches!(action, Action::Create | Action::Update | Action::Submit)
-        && provenance_core::review::REVIEW_RECORD_KINDS.contains(&route.kind);
-    crate::review_link::annotate_write(&repo, &host, &mut value, record_write).await?;
+    let affected = route
+        .definition
+        .registration
+        .review_link
+        .map(|kind| crate::review_link::AffectedReviewRecord { kind, id: target.clone() });
+    crate::review_link::annotate_write(&repo, affected, &mut value).await;
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&value)?;
     } else {

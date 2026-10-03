@@ -1,68 +1,9 @@
 import { mountReview } from 'review-renderer';
-import type { ReviewConfig } from './session.ts';
-import { createSession } from './session.ts';
+import { bootstrapReviewPage, type BrowserElement } from './bootstrap.ts';
 
-const root = document.getElementById('root')!;
-const access = document.getElementById('access') as HTMLFormElement;
-const selection = document.getElementById('selection') as HTMLFormElement;
-const credential = document.getElementById('credential') as HTMLInputElement;
-const requirement = document.getElementById('requirement') as HTMLInputElement;
-const status = document.getElementById('status')!;
-const searchParams = new URLSearchParams(location.search);
-const linkedRoot = searchParams.get('root');
-const linkedFocus = searchParams.get('focus') ?? undefined;
-
-function reviewConfig(value: unknown): ReviewConfig {
-  if (typeof value !== 'object' || value === null ||
-    !('endpoint' in value) || typeof value.endpoint !== 'string' || value.endpoint !== location.origin ||
-    !('repositoryId' in value) || typeof value.repositoryId !== 'string' ||
-    !('scope' in value) || typeof value.scope !== 'string' ||
-    !('dispositionActorIds' in value) || !Array.isArray(value.dispositionActorIds) ||
-    !value.dispositionActorIds.every(id => typeof id === 'string')) {
-    throw new Error('Invalid configuration');
-  }
-  return {
-    endpoint: value.endpoint,
-    repositoryId: value.repositoryId,
-    scope: value.scope,
-    dispositionActorIds: value.dispositionActorIds,
-  };
-}
-
-const session = createSession({
-  mount: options => mountReview(root, options),
-  connected: () => {
-    access.hidden = true;
-    selection.hidden = linkedRoot !== null;
-    if (linkedRoot !== null) {
-      session.open(linkedRoot, linkedFocus);
-    } else {
-      requirement.focus();
-    }
-  },
-  status: message => { status.textContent = message; },
-});
-
-access.addEventListener('submit', event => {
-  event.preventDefault();
-  const bearer = credential.value;
-  credential.value = '';
-  void session.connect(bearer, async () => {
-    const response = await fetch('/review-config', {
-      headers: { authorization: `Bearer ${bearer}` }, redirect: 'error', cache: 'no-store',
-    });
-    if (!response.ok) throw new Error('Access refused');
-    const config = reviewConfig(await response.json());
-    return {
-      endpoint: config.endpoint,
-      repositoryId: config.repositoryId,
-      scope: config.scope,
-      dispositionActorIds: config.dispositionActorIds,
-    };
-  });
-});
-
-selection.addEventListener('submit', event => {
-  event.preventDefault();
-  session.open(requirement.value.trim());
+bootstrapReviewPage({
+  document: document as unknown as { getElementById(id: string): BrowserElement | null },
+  location,
+  fetch,
+  mount: (root, options) => mountReview(root as unknown as Element, options),
 });

@@ -25,7 +25,7 @@ function fixture(search: string) {
     ['root', 'access', 'selection', 'credential', 'requirement', 'status']
       .map(id => [id, new ElementFixture()]),
   );
-  const mounted: Record<string, unknown>[] = [];
+  const mounted: unknown[] = [];
   bootstrapReviewPage({
     document: { getElementById: id => elements[id] },
     location: { origin: 'http://127.0.0.1:1234', search },
@@ -67,5 +67,5 @@ test('manual Requirement selection remains available without a linked root', asy
   assert.equal(elements.requirement.focused, true);
   elements.requirement.value = 'req_manual';
   elements.selection.submit();
-  assert.equal(mounted.at(-1)?.rootId, 'req_manual');
+  assert.equal((mounted.at(-1) as { rootId: string }).rootId, 'req_manual');
 });

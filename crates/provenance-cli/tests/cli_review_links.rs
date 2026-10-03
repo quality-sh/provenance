@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 use std::{
     io::{Read, Write},
     net::{TcpListener, TcpStream},
+    os::unix::fs::PermissionsExt,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -99,11 +100,14 @@ fn fake_host(identity: Value) -> FakeHost {
 fn publish_host(repo: &str, host: &FakeHost, stored: Value) {
     let path = std::path::Path::new(repo).join(".provenance/cache/review-hosts/default.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::set_permissions(path.parent().unwrap(), std::fs::Permissions::from_mode(0o700))
+        .unwrap();
     std::fs::write(
         path,
         serde_json::to_vec(&json!({"hosts":[stored]})).unwrap(),
     )
     .unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
 }
 
 #[test]

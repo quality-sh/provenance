@@ -17,7 +17,7 @@ use super::read_policy::ReadPolicy;
 use super::reader::{self, ReadContext, ReadFuture};
 
 mod document;
-pub use document::read_document;
+pub use document::{containing_review_documents, read_document};
 pub(crate) use document::read_document_answer;
 mod evidence;
 mod impact;

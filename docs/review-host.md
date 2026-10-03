@@ -23,11 +23,12 @@ operation paths.
 
 ## Local caller and repository access
 
-Startup writes one JSON line to stdout with `endpoint`, `bearer`,
-`repositoryId`, `scope`, and `url`. The URL is `http://127.0.0.1:PORT/`; it contains
-no credential. Treat the JSON output as a credential. Each process generates a
-new token. The token is not saved in the repository, a cookie, browser storage,
-a URL query, or a URL fragment.
+Startup writes one JSON line to stdout with `endpoint`, `bearer`, `repositoryId`,
+`scope`, `instanceNonce`, and `url`. The URL is `http://127.0.0.1:PORT/`; it
+contains no credential. Treat the JSON output as a credential. Each process
+generates a new token and a non-secret host-instance nonce. The token is not
+saved in the repository, a cookie, browser storage, a URL query, or a URL
+fragment.
 
 The local caller is the person who starts the process and the clients to which
 that person gives its token. This is one local principal, not a user account
@@ -37,11 +38,14 @@ access checks, publication locks, and disposition actor grants still apply.
 Record actor and role fields do not authenticate a caller.
 
 While the host runs, it writes its credential-free location to
-`.provenance/cache/review-hosts/SCOPE.json`. The file contains `endpoint`,
-`repositoryId`, and `scope`. The host removes the file during shutdown if it
-still owns the file. The bearer token is never in this file. CLI commands use
-this file to add review links to writes that open or change a review submission.
-If the host is not running, these writes explain how to start it.
+`.provenance/cache/review-hosts/SCOPE.json`. The file is an owner-aware registry.
+Each entry contains `endpoint`, `repositoryId`, `scope`, and `instanceNonce`.
+The host writes the file with an atomic replacement. The directory and files
+permit access only to the OS owner. During shutdown, a host removes only its
+entry. The bearer token is never in this file. CLI commands verify an entry
+against the public `/review-host-identity` response before they add a review
+link. They accept only an exact HTTP base URL with a loopback IP address. If no
+verified host is running, these writes explain how to start one.
 
 An agent can get a link for any record with:
 
@@ -59,8 +63,10 @@ directories must be under the local caller's control. The host uses the existing
 hostile repositories or isolate other processes running as the same OS user.
 
 Every operation and configuration request requires `Authorization: Bearer TOKEN`.
-The host checks this credential before it decodes an operation body. All routes
-require the bound Host value. Requests with an Origin must name the exact local
+The host checks this credential before it decodes an operation body. The public
+`/review-host-identity` route contains only the repository target, scope, and
+non-secret instance nonce. It does not accept a credential. All routes require
+the bound Host value. Requests with an Origin must name the exact local
 origin. `Origin: null`, unrelated origins, and cross-site browser requests are
 refused. Requests without Origin remain available to authorized non-browser
 clients. The host does not enable CORS. Cookies and URL parameters do not grant
@@ -91,7 +97,7 @@ JavaScript would run with the browser caller's access. Use the pinned archive
 procedure below for the supplied renderer.
 Path segments use ASCII letters, digits, dots, underscores, and hyphens. A
 segment must not start with a dot. Root names `metadata`, `review-config`, and
-`v` followed by digits are reserved for host routes.
+`review-host-identity`, and `v` followed by digits are reserved for host routes.
 An asset file with exactly three path segments and `operations` as its second
 segment is also refused. The operation router matches this path shape for any
 first segment. For example, `assets/operations/app.js` is refused at build time.

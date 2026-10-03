@@ -61,12 +61,17 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         ),
     ));
     let endpoint = format!("http://{address}");
-    let _runtime = crate::review_runtime::HostRuntime::publish(
+    let runtime = crate::review_runtime::HostRuntime::publish(
         &options.repo,
         &options.scope,
         &endpoint,
         &options.repository_id,
     )?;
+    let identity = ReviewHostIdentity {
+        repository_id: options.repository_id.clone(),
+        scope: options.scope.clone(),
+        instance_nonce: runtime.instance_nonce().to_owned(),
+    };
     let config = json!({
         "endpoint": endpoint, "repositoryId": options.repository_id, "scope": options.scope,
         "compatibility": provenance_core::protocol::host::COMPATIBILITY,
@@ -79,6 +84,10 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     let router = host
         .router()
         .route(
+            "/review-host-identity",
+            get(review_host_identity).with_state(identity.clone()),
+        )
+        .route(
             "/review-config",
             get(configuration).with_state(review_configuration),
         )
@@ -89,7 +98,8 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         "{}",
         json!({
             "endpoint": endpoint, "bearer": token, "repositoryId": options.repository_id,
-            "scope": options.scope, "url": format!("{endpoint}/"),
+            "scope": options.scope, "instanceNonce": identity.instance_nonce,
+            "url": format!("{endpoint}/"),
         })
     );
     std::io::stdout().flush()?;
@@ -126,6 +136,20 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         }
     };
     result.context("review listener failed")
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReviewHostIdentity {
+    repository_id: String,
+    scope: String,
+    instance_nonce: String,
+}
+
+async fn review_host_identity(
+    State(identity): State<ReviewHostIdentity>,
+) -> Json<ReviewHostIdentity> {
+    Json(identity)
 }
 
 struct ShutdownSignals {
