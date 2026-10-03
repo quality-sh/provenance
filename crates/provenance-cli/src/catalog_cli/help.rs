@@ -210,7 +210,8 @@ fn print_options(help: &mut String, address: &address::Address) {
                 .map(|binding| binding.field);
             match guard {
                 Some("expected_etag") => {
-                    details.push("pass data.edit.etag from the latest record read unchanged".into());
+                    details
+                        .push("pass data.edit.etag from the latest record read unchanged".into());
                 }
                 Some("expected_version") => {
                     details.push("pass the latest Discussion version unchanged".into());

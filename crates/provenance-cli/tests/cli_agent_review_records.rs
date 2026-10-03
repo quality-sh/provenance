@@ -24,12 +24,10 @@ fn reviewed_records() -> (tempfile::TempDir, String) {
     let store = StateStore::new(ProvenanceLayout::new(&repo));
     store
         .create_source(
-            serde_json::from_value(
-                json!({
-                    "scope_id":"default", "id":"source_review", "name":"Source",
-                    "source_type":"policy", "supersedes":[]
-                }),
-            )
+            serde_json::from_value(json!({
+                "scope_id":"default", "id":"source_review", "name":"Source",
+                "source_type":"policy", "supersedes":[]
+            }))
             .unwrap(),
         )
         .unwrap();

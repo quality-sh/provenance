@@ -111,9 +111,10 @@ pub(super) fn parse(
         merge_stdin(&mut data, &assignments)?;
     }
     let hide_terminal = query_action.is_none()
-        && definition.parameters().iter().any(|parameter| {
-            parameter.location == "query" && parameter.name == "exclude_terminal"
-        });
+        && definition
+            .parameters()
+            .iter()
+            .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
     if hide_terminal && !query.contains_key("exclude_terminal") {
         query.insert("exclude_terminal".into(), "true".into());
     }
@@ -186,9 +187,7 @@ fn bind_parameter(
                 .controls
                 .headers
                 .iter()
-                .any(|binding| {
-                    binding.name == parameter.name && binding.field == "expected_etag"
-                });
+                .any(|binding| binding.name == parameter.name && binding.field == "expected_etag");
             if expects_review_etag && !valid_review_etag(value) {
                 anyhow::bail!(
                     "--if-match must equal data.edit.etag from the latest record read; \

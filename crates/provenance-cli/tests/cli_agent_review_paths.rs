@@ -218,7 +218,14 @@ fn update_help_and_invalid_if_match_name_the_exact_input() {
 #[test]
 fn discussion_guards_name_numeric_versions_in_help() {
     for address in [
-        ["sources", "source_id", "discussions", "discussion_id", "update"].as_slice(),
+        [
+            "sources",
+            "source_id",
+            "discussions",
+            "discussion_id",
+            "update",
+        ]
+        .as_slice(),
         [
             "sources",
             "source_id",
@@ -287,13 +294,11 @@ fn review_view_gives_commands_for_each_truncated_feedback_page() {
         .iter()
         .map(|command| command.as_str().unwrap())
         .collect::<Vec<_>>();
-    let shown_id = review["review"]["discussions"]["entries"][0]["head"]
-        ["discussion_id"]
+    let shown_id = review["review"]["discussions"]["entries"][0]["head"]["discussion_id"]
         .as_str()
         .unwrap();
-    assert!(commands.iter().any(|command| command.starts_with(
-        "provenance req_bounded_feedback discussions --limit 1 --cursor "
-    )));
+    assert!(commands.iter().any(|command| command
+        .starts_with("provenance req_bounded_feedback discussions --limit 1 --cursor ")));
     assert!(commands.iter().any(|command| command.starts_with(&format!(
         "provenance discussions {shown_id} get --limit 1 --cursor "
     ))));
