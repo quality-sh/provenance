@@ -215,7 +215,7 @@ fn opener_failure_warns_without_failing_the_review_link_command() {
         .unwrap();
 
     assert!(output.status.success());
-    assert!(!output.stdout.is_empty());
+    assert_ne!(output.stdout, Vec::<u8>::new());
     let warning = String::from_utf8(output.stderr).unwrap();
     assert_eq!(warning.lines().count(), 1, "{warning}");
     assert!(warning.contains("warning:"), "{warning}");
