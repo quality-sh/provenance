@@ -9,10 +9,7 @@ use crate::{
     write_error::{SourceFailure, WriteFailure},
 };
 use camino::Utf8Path;
-use provenance_core::{
-    review::{ReviewRecord, REVIEW_SCHEMA_VERSION},
-    StableId,
-};
+use provenance_core::{review::ReviewRecord, StableId};
 
 pub(crate) struct NativeRecordBatch<'a> {
     store: &'a StateStore,
@@ -88,10 +85,9 @@ impl NativeRecordBatch<'_> {
         T: GraphRecord,
     {
         guard::with_writer(path, "*", || {
-            let (result, changes) = self.store.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+            let (result, mut changes) = self.store.mutate_jsonl_records(path, |records: &mut Vec<T>| {
                 let before = records.clone();
                 let (result, guarded_id) = mutate(records)?;
-                enroll_closed_changes(&before, records)?;
                 self.store.stamp_records(&before, records)?;
                 ensure_slice_within_read_budget(records)?;
                 if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
@@ -106,6 +102,11 @@ impl NativeRecordBatch<'_> {
                     .collect::<Vec<_>>();
                 Ok((result, changes))
             })?;
+            for (_, after) in &mut changes {
+                if native_record_is_closed(path, T::KIND, after.id())? {
+                    *after = self.store.enroll_graph_record::<T>(path, after.id())?;
+                }
+            }
             for (before, after) in &changes {
                 let before: ReviewRecord = before.clone().into();
                 let after: ReviewRecord = after.clone().into();
@@ -121,16 +122,22 @@ impl NativeRecordBatch<'_> {
     }
 }
 
-fn enroll_closed_changes<T: GraphRecord>(before: &[T], after: &mut [T]) -> anyhow::Result<()> {
-    for record in after {
-        let changed = before.iter().find(|previous| previous.id() == record.id()) != Some(&*record);
-        if changed
-            && ReviewRecord::deserialize_closed(T::KIND, &serde_json::to_value(&*record)?).is_ok()
-        {
-            record.set_review_schema_version(REVIEW_SCHEMA_VERSION);
+fn native_record_is_closed(
+    path: &Utf8Path,
+    kind: provenance_core::NodeType,
+    id: &StableId,
+) -> anyhow::Result<bool> {
+    let contents = std::fs::read_to_string(path)?;
+    let mut matched = None;
+    for line in contents.lines() {
+        let value: serde_json::Value = serde_json::from_str(line)?;
+        if value["id"].as_str() == Some(id.as_str()) {
+            matched = Some(value);
+            break;
         }
     }
-    Ok(())
+    let value = matched.ok_or_else(|| anyhow::anyhow!("updated graph record is missing"))?;
+    Ok(ReviewRecord::deserialize_closed(kind, &value).is_ok())
 }
 
 fn check_etag<T: GraphRecord>(
