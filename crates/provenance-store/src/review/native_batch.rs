@@ -11,7 +11,7 @@ use crate::{
 use camino::Utf8Path;
 use provenance_core::{review::ReviewRecord, StableId};
 
-pub(crate) struct NativeRecordBatch<'a> {
+pub struct NativeRecordBatch<'a> {
     store: &'a StateStore,
 }
 
@@ -42,7 +42,7 @@ impl StateStore {
 }
 
 impl NativeRecordBatch<'_> {
-    pub(crate) fn store(&self) -> &StateStore {
+    pub(crate) const fn store(&self) -> &StateStore {
         self.store
     }
 
