@@ -97,13 +97,13 @@ fn fake_host(identity: Value) -> FakeHost {
     }
 }
 
-fn publish_host(repo: &str, host: &FakeHost, stored: Value) {
+fn publish_host(repo: &str, stored: Value) {
     let path = std::path::Path::new(repo).join(".provenance/cache/review-hosts/default.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::set_permissions(path.parent().unwrap(), std::fs::Permissions::from_mode(0o700))
         .unwrap();
     std::fs::write(
-        path,
+        &path,
         serde_json::to_vec(&json!({"hosts":[stored]})).unwrap(),
     )
     .unwrap();
@@ -166,7 +166,7 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
     let host = fake_host(json!({
         "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
     }));
-    publish_host(&repo, &host, json!({
+    publish_host(&repo, json!({
         "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
         "instanceNonce":"nonce"
     }));
@@ -213,8 +213,7 @@ fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
             "req_link", "create", "--type", "requirement", "--repo", &repo,
             "--statement", "The agent gives the reviewer a safe link.", "--format", "json",
         ]);
-        let placeholder = fake_host(json!({}));
-        publish_host(&repo, &placeholder, stored);
+        publish_host(&repo, stored);
         let link = json_output(&[
             "req_link", "get", "--repo", &repo, "--review-link", "--format", "json",
         ]);
@@ -229,8 +228,7 @@ fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
     ]);
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
-    let placeholder = fake_host(json!({}));
-    publish_host(&repo, &placeholder, json!({
+    publish_host(&repo, json!({
         "endpoint":endpoint, "repositoryId":"local", "scope":"default",
         "instanceNonce":"nonce"
     }));
@@ -253,7 +251,7 @@ fn identity_mismatches_do_not_produce_links() {
             "--statement", "The agent gives the reviewer a safe link.", "--format", "json",
         ]);
         let host = fake_host(identity);
-        publish_host(&repo, &host, json!({
+        publish_host(&repo, json!({
             "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
             "instanceNonce":"nonce"
         }));
