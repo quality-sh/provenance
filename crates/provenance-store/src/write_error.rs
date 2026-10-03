@@ -22,6 +22,10 @@ pub enum WriteFailure {
     RequirementEditConflict {
         current_etag: String,
     },
+    RecordEditConflict {
+        record_kind: provenance_core::NodeType,
+        current_etag: String,
+    },
     ReviewSubmissionConflict {
         current_submission: Option<provenance_core::StableId>,
         current_revision: provenance_core::StableId,
@@ -150,6 +154,7 @@ impl WriteError {
             | WriteFailure::OwnershipConflict { .. }
             | WriteFailure::EnrolledRecordDeletionConflict { .. }
             | WriteFailure::RequirementEditConflict { .. }
+            | WriteFailure::RecordEditConflict { .. }
             | WriteFailure::ReviewSubmissionConflict { .. }
             | WriteFailure::DiscussionVersionConflict
             | WriteFailure::DiscussionClosed

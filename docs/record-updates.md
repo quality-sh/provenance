@@ -27,8 +27,8 @@ the same writers. The Requirement PATCH uses the guarded review writer.
 | `update-rule` | `name`, `description`, `statement`, `status`, `severity`, `source_document`, `source_section`, `archived_in_commit` | `name`, `description`, `source_document`, `source_section` |
 | `update-domain` | `name`, `description`, `color` | `description`, `color` |
 | `update-boundary` | `statement`, `source_ref` | `source_ref` |
-| `update-topic` | `title`, `status`, `links` | None |
-| `update-question` | `question`, `resolution_method`, `status`, `links`, `resolution_id`, `contradicts` | `resolution_id`, `contradicts` |
+| `update-topic` | `title`, `status`, `links`, `archived_in_commit` | None |
+| `update-question` | `question`, `resolution_method`, `status`, `links`, `resolution_id`, `contradicts`, `archived_in_commit` | `resolution_id`, `contradicts` |
 
 The rows name the native operations. The PATCH route of the matching
 collection carries the same editable set. The relationship fields of Source,
@@ -121,9 +121,13 @@ it cannot return the saved result.
 
 Rule deprecation and archival use the existing `status` values. An archived
 Rule must have `archived_in_commit`; the other Rule statuses must not have it.
-Updates do not delete records or their relationships. A Topic that closes
-clears its claim. A Question status change keeps the native answer requirement
-and clears claims when the question leaves its claimable state.
+Archived Topics and Questions have the same commit evidence requirement. An
+archived status is terminal. Archiving a Topic archives all Questions in that
+Topic in the same publication. Archiving one Question does not change its
+Topic. Discussions on archived records stay readable as history. Updates do
+not delete records or their relationships. A Topic that closes clears its
+claim. A Question status change keeps the native answer requirement and clears
+claims when the question leaves its claimable state.
 
 ## Native CLI
 

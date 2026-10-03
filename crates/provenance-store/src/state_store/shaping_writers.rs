@@ -212,6 +212,7 @@ impl StateStore {
             status,
             links,
             resolution_id,
+            archived_in_commit: None,
             contradicts: None,
             clear_fields: Vec::new(),
         })

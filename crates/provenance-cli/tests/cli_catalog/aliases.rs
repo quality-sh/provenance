@@ -44,6 +44,20 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
         ])
         .assert()
         .success();
+    let current = provenance()
+        .args([
+            "questions",
+            "question_alias",
+            "get",
+            "--repo",
+            &repo,
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    let current: Value = serde_json::from_slice(&current.stdout).unwrap();
+    let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     let output = provenance()
         .args([
             "questions",
@@ -53,6 +67,8 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
             &repo,
             "--method",
             "grill",
+            "--if-match",
+            etag,
             "--format",
             "json",
         ])

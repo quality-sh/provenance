@@ -2,8 +2,8 @@ use super::{nodes, served, ReadContext, ReadPolicy};
 use crate::operations::reader::Cursor;
 use camino::Utf8PathBuf;
 use provenance_core::protocol::{
-    read_failure::ReadFailure, DocumentEntry, ReadDocumentQuery, ReadDocumentResult, StampPolicy,
-    Stamped,
+    read_failure::ReadFailure, DocumentEntry, DocumentReviewTotals, ReadDocumentQuery,
+    ReadDocumentResult, StampPolicy, Stamped,
 };
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_macros::rule;
@@ -67,6 +67,31 @@ pub(super) async fn read(
         .map_err(crate::operations::reader::page_error)
 }
 
+async fn review_keys(
+    ctx: &ReadContext,
+    root: &str,
+    exclude_terminal: bool,
+) -> anyhow::Result<Vec<(NodeType, StableId, bool)>> {
+    ctx.snapshot()
+        .document_keys(
+            root,
+            &crate::operations::reader::Position::default(),
+            8193,
+            exclude_terminal,
+        )
+        .await?
+        .into_iter()
+        .filter(|(_, key)| key.stage < 2)
+        .map(|(kind, key)| {
+            Ok((
+                NodeType::parse(&kind)?,
+                StableId::new(key.id)?,
+                key.stage == 0,
+            ))
+        })
+        .collect()
+}
+
 async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<ReadDocumentResult> {
     use crate::operations::reader::PAGE_BYTES;
     request
@@ -75,23 +100,21 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
     nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
         .await?
         .ok_or(ReadFailure::DocumentRootMissing)?;
-    let review_keys = ctx
-        .snapshot()
-        .document_keys(
-            &request.id,
-            &crate::operations::reader::Position::default(),
-            8193,
-            request.exclude_terminal,
-        )
-        .await?
-        .into_iter()
-        .filter(|(_, key)| key.stage < 2)
-        .map(|(kind, key)| Ok((NodeType::parse(&kind)?, StableId::new(key.id)?)))
-        .collect::<anyhow::Result<Vec<_>>>()?;
+    let review_keys = review_keys(ctx, &request.id, request.exclude_terminal).await?;
+    let review_records = review_keys
+        .iter()
+        .map(|(kind, id, _)| (*kind, id.clone()))
+        .collect::<Vec<_>>();
     let review_state = ctx
         .live(crate::operations::reader::Live::Canonical)
         .store()
-        .document_review_state(ctx.snapshot().scope(), &review_keys)?;
+        .document_review_state(ctx.snapshot().scope(), &review_records)?;
+    let mut review_totals = DocumentReviewTotals::default();
+    for (kind, id, is_member) in &review_keys {
+        if *is_member {
+            review_totals.include(&review_state.summary(*kind, id));
+        }
+    }
     let (cursor, mut position) = Cursor::open_live(
         ctx,
         "read-document",
@@ -158,7 +181,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             None
         },
         has_more,
-        review_totals: review_state.totals,
+        review_totals,
         entries,
     })
 }

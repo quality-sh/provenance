@@ -30,6 +30,16 @@ pub trait GraphRecord:
                 rule.validate_transition(&previous).map_err(invalid_update)
             }
             (ReviewRecord::Rule(rule), None) => rule.validate_archive().map_err(invalid_update),
+            (ReviewRecord::Topic(topic), Some(ReviewRecord::Topic(previous))) => {
+                topic.validate_transition(&previous).map_err(invalid_update)
+            }
+            (ReviewRecord::Topic(topic), None) => topic.validate_archive().map_err(invalid_update),
+            (ReviewRecord::Question(question), Some(ReviewRecord::Question(previous))) => question
+                .validate_transition(&previous)
+                .map_err(invalid_update),
+            (ReviewRecord::Question(question), None) => {
+                question.validate_archive().map_err(invalid_update)
+            }
             _ => Ok(()),
         }
     }
@@ -133,7 +143,7 @@ impl StateStore {
         }))
     }
 
-    pub(super) fn stamp_records<T: GraphRecord>(
+    pub(crate) fn stamp_records<T: GraphRecord>(
         &self,
         before: &[T],
         after: &mut [T],

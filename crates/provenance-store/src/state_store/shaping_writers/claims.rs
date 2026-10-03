@@ -24,6 +24,8 @@ pub(super) const fn claim_blocking_status(status: ShapingStatus) -> Option<&'sta
         ShapingStatus::Topic(TopicStatus::Open | TopicStatus::Explored)
         | ShapingStatus::Question(QuestionStatus::Open) => None,
         ShapingStatus::Topic(TopicStatus::Closed) => Some("closed"),
+        ShapingStatus::Topic(TopicStatus::Archived)
+        | ShapingStatus::Question(QuestionStatus::Archived) => Some("archived"),
         ShapingStatus::Question(QuestionStatus::BlockedOnHuman) => Some("blocked_on_human"),
         ShapingStatus::Question(QuestionStatus::Answered) => Some("answered"),
     }
@@ -34,7 +36,7 @@ pub(super) const fn claim_blocking_status(status: ShapingStatus) -> Option<&'sta
 /// The dual of [`claim_blocking_status`]: that one guards the entry, this one
 /// guards the exit, so the write that closes a topic or answers a question
 /// takes the claim with it and nobody is left holding work that is over. The
-/// two read the same six statuses and agree on every one of them, which is
+/// two read the same statuses and agree on every one of them, which is
 /// what makes a held claim mean the same thing as a grantable one.
 #[rule("rule_claim_cleared_on_exit")]
 pub(super) const fn claim_survives(status: ShapingStatus) -> bool {

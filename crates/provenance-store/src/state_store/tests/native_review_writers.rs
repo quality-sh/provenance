@@ -455,7 +455,10 @@ fn native_save_refuses_a_stale_etag_without_publishing_the_mutation() {
         .unwrap_err();
     assert!(matches!(
         crate::write_error::WriteError(error).safe(),
-        crate::write_error::WriteFailure::RequirementEditConflict { .. }
+        crate::write_error::WriteFailure::RecordEditConflict {
+            record_kind: NodeType::Source,
+            ..
+        }
     ));
     assert_eq!(
         store

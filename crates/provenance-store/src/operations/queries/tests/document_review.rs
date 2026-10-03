@@ -2,10 +2,10 @@ use super::{root_of, seeded_store, sid};
 use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview};
 use crate::state_store::{
-    AddSourceReferenceInput, CreateQuestionInput, CreateResolutionInput, CreateRuleInput,
-    CreateTopicInput, EditQuestionInput, StateStore, UpdateBoundaryInput, UpdateDomainInput,
-    UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput,
-    UpdateTopicInput,
+    AddSourceReferenceInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
+    CreateRuleInput, CreateTopicInput, EditQuestionInput, StateStore, UpdateBoundaryInput,
+    UpdateDomainInput, UpdateRequirementInput, UpdateResolutionInput, UpdateRuleInput,
+    UpdateSourceInput, UpdateTopicInput,
 };
 use provenance_core::protocol::ReadDocumentQuery;
 use provenance_core::{
@@ -383,5 +383,73 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     assert_eq!(
         serde_json::to_value(next.result).unwrap()["review_totals"],
         filtered["review_totals"]
+    );
+}
+
+#[tokio::test]
+async fn document_review_totals_exclude_a_pending_parent_reference() {
+    let (dir, store, scope) = seeded_store();
+    allow_reviewer(&store);
+    store
+        .create_requirement(CreateRequirementInput {
+            scope_id: scope.clone(),
+            id: sid("req_first_release"),
+            statement: "The first release includes overtime.".into(),
+            description: None,
+            status: provenance_core::RequirementStatus::Active,
+            domain_id: None,
+            refines: Some(sid("req_overtime")),
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
+    let root = root_of(&dir);
+    let read = |cursor| {
+        queries::read_document(
+            Some(root.clone()),
+            &scope,
+            ReadPolicy::default(),
+            ReadDocumentQuery {
+                id: "req_first_release".into(),
+                exclude_terminal: true,
+                cursor,
+                limit: 50,
+            },
+        )
+    };
+
+    let pending = serde_json::to_value(read(None).await.unwrap().result).unwrap();
+    assert_eq!(pending["entries"][0]["kind"], "member");
+    assert_eq!(pending["entries"][0]["node"]["id"], "req_first_release");
+    assert_eq!(pending["entries"][0]["review"]["outcome"], "pending");
+    assert_eq!(pending["entries"][1]["kind"], "reference");
+    assert_eq!(pending["entries"][1]["node"]["id"], "req_overtime");
+    assert_eq!(pending["entries"][1]["review"]["outcome"], "pending");
+    assert_eq!(
+        pending["review_totals"],
+        json!({"pending":1, "accepted":0, "rejected":0})
+    );
+
+    let proposal = store
+        .record_decision_state(&scope, NodeType::Requirement, &sid("req_first_release"))
+        .unwrap()
+        .pending
+        .unwrap()
+        .proposal_id;
+    decide(
+        &store,
+        &scope,
+        NodeType::Requirement,
+        &sid("req_first_release"),
+        proposal,
+        DispositionDecision::Rejected,
+    );
+    let rejected = serde_json::to_value(read(None).await.unwrap().result).unwrap();
+    assert_eq!(
+        rejected["review_totals"],
+        json!({"pending":0, "accepted":0, "rejected":1})
     );
 }
