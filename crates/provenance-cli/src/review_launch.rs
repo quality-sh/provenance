@@ -108,6 +108,7 @@ impl LaunchCodes {
             return Err(ExchangeError::Refused);
         };
         state.codes.remove(index);
+        drop(state);
         Ok(self.bearer.to_string())
     }
 

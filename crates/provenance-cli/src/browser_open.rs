@@ -27,7 +27,7 @@ pub fn open(url: &str, no_open: bool) {
                         "warning: cannot open the review link (opener exited with {status}): {url}"
                     ),
                     Err(error) => {
-                        eprintln!("warning: cannot open the review link ({error}): {url}")
+                        eprintln!("warning: cannot open the review link ({error}): {url}");
                     }
                 }
             }
