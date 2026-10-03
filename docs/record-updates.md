@@ -149,7 +149,7 @@ A Requirement update sends the ETag of the last read. The CLI supplies the
 provenance req_policy get --view review
 printf '%s' '{"description":"Reviewed wording."}' |
   provenance --repo . --scope default requirements req_policy update \
-    --if-match "sha256:<the review.edit.etag value>"
+    --if-match "<review.edit.etag>"
 ```
 
 Copy `review.edit.etag` unchanged. A value has the form `sha256:` followed by

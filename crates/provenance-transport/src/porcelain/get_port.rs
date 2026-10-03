@@ -168,63 +168,115 @@ impl GetPort for HostGetPort {
                 )
                 .await
                 .map_err(|error| operation_error(&error))?;
-            let listed = self
-                .host
-                .invoke_scoped_typed::<catalog::ListDiscussions>(DiscussionListQuery {
-                    parent: Some(provenance_core::ThreadParent {
-                        node_type: kind,
-                        node_id: id,
-                    }),
-                    allowed_parent_kinds: vec![kind],
-                    status: DiscussionStatusFilter::All,
-                    limit,
-                    cursor: None,
-                })
-                .await
-                .map_err(|error| operation_error(&error))?;
-            let mut conversations = Vec::with_capacity(listed.result.entries.len());
-            for summary in &listed.result.entries {
-                let conversation = self
+            let edit = resource.result.edit;
+            let decision = resource.result.decision;
+            let mut follow_up_commands = Vec::new();
+            let (discussions, stamp, freshness_error) = if discussion_parent_is_supported(
+                &self.host,
+                kind,
+            ) {
+                let listed = self
                     .host
-                    .invoke_scoped_typed::<catalog::GetDiscussionConversation>(
-                        DiscussionConversationQuery {
-                            discussion_id: summary.discussion_id.clone(),
-                            allowed_parent_kinds: vec![kind],
-                            limit,
-                            cursor: None,
-                        },
-                    )
+                    .invoke_scoped_typed::<catalog::ListDiscussions>(DiscussionListQuery {
+                        parent: Some(provenance_core::ThreadParent {
+                            node_type: kind,
+                            node_id: id.clone(),
+                        }),
+                        allowed_parent_kinds: vec![kind],
+                        status: DiscussionStatusFilter::All,
+                        limit,
+                        cursor: None,
+                    })
                     .await
                     .map_err(|error| operation_error(&error))?;
-                conversations.push(conversation.result);
-            }
-            let edit = resource.result.edit;
-            let discussions = DiscussionResultPage {
-                entries: conversations,
-                limit,
-                has_more: listed.result.has_more,
-                next_cursor: listed.result.next_cursor,
+                if let Some(cursor) = &listed.result.next_cursor {
+                    follow_up_commands.push(format!(
+                        "provenance {id} discussions --limit {limit} --cursor {cursor}"
+                    ));
+                }
+                let mut conversations = Vec::with_capacity(listed.result.entries.len());
+                for summary in &listed.result.entries {
+                    let conversation = self
+                        .host
+                        .invoke_scoped_typed::<catalog::GetDiscussionConversation>(
+                            DiscussionConversationQuery {
+                                discussion_id: summary.discussion_id.clone(),
+                                allowed_parent_kinds: vec![kind],
+                                limit,
+                                cursor: None,
+                            },
+                        )
+                        .await
+                        .map_err(|error| operation_error(&error))?;
+                    if let Some(cursor) = &conversation.result.messages.next_cursor {
+                        follow_up_commands.push(format!(
+                            "provenance discussions {} get --limit {limit} --cursor {cursor}",
+                            summary.discussion_id
+                        ));
+                    }
+                    conversations.push(conversation.result);
+                }
+                (
+                    DiscussionResultPage {
+                        entries: conversations,
+                        limit,
+                        has_more: listed.result.has_more,
+                        next_cursor: listed.result.next_cursor,
+                    },
+                    listed.stamp,
+                    listed.freshness_error,
+                )
+            } else {
+                (
+                    DiscussionResultPage {
+                        entries: Vec::new(),
+                        limit,
+                        has_more: false,
+                        next_cursor: None,
+                    },
+                    resource.stamp,
+                    resource.freshness_error,
+                )
             };
+            let inner_has_more = discussions
+                .entries
+                .iter()
+                .any(|conversation| conversation.messages.has_more);
+            let truncated = discussions.has_more || inner_has_more;
             Ok(Review {
                 update_precondition: format!("--if-match {}", edit.etag),
                 edit,
-                decision: resource.result.decision,
+                decision,
                 bounds: Bounds {
                     limit: discussions.limit,
                     max_depth: None,
-                    has_more: discussions.has_more,
+                    has_more: truncated,
                     continuation: discussions.next_cursor.clone(),
-                    truncated: discussions.has_more,
+                    truncated,
                 },
                 discussions,
+                follow_up_commands,
                 response_metadata: Some(provenance_core::protocol::ResponseMeta {
-                    stamp: Some(listed.stamp),
-                    freshness_error: listed.freshness_error,
+                    stamp: Some(stamp),
+                    freshness_error,
                     ..provenance_core::protocol::ResponseMeta::default()
                 }),
             })
         })
     }
+}
+
+fn discussion_parent_is_supported(host: &crate::StatementHost, kind: NodeType) -> bool {
+    catalog::definitions().iter().any(|definition| {
+        host.advertises(definition.name)
+            && definition.registration.handler.operation == catalog::ListDiscussions::NAME
+            && definition
+                .registration
+                .request
+                .parent
+                .as_ref()
+                .is_some_and(|parent| parent.kind == kind.as_str())
+    })
 }
 
 fn response_parts<R>(response: QueryResponse<R>) -> (R, ResponseMeta) {

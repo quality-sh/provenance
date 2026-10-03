@@ -17,7 +17,7 @@ pub struct ResourcePageRequest {
     #[serde(default = "default_limit")]
     pub limit: usize,
     pub cursor: Option<String>,
-    #[serde(default = "default_exclude_terminal")]
+    #[serde(default)]
     pub exclude_terminal: bool,
 }
 
@@ -43,10 +43,6 @@ pub struct ProposalFactPageRequest {
 
 const fn default_limit() -> usize {
     50
-}
-
-const fn default_exclude_terminal() -> bool {
-    true
 }
 
 #[derive(Serialize)]

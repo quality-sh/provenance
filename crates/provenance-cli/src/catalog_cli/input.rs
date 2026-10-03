@@ -61,7 +61,14 @@ pub(super) fn parse(
         }
         match field.source {
             Source::Parameter(parameter) => {
-                bind_parameter(&parameter, &field.name, &values, &mut query, &mut headers)?;
+                bind_parameter(
+                    definition,
+                    &parameter,
+                    &field.name,
+                    &values,
+                    &mut query,
+                    &mut headers,
+                )?;
             }
             Source::Body {
                 wire_field,
@@ -102,6 +109,12 @@ pub(super) fn parse(
     }
     if stdin {
         merge_stdin(&mut data, &assignments)?;
+    }
+    if definition.parameters().iter().any(|parameter| {
+        parameter.location == "query" && parameter.name == "exclude_terminal"
+    }) && !query.contains_key("exclude_terminal")
+    {
+        query.insert("exclude_terminal".into(), "true".into());
     }
     apply_defaults(definition, &mut data);
     if definition.parameters().iter().any(|parameter| {
@@ -148,6 +161,7 @@ fn unique_wire_fields(declared: &[Field]) -> Vec<String> {
 }
 
 fn bind_parameter(
+    definition: &Definition,
     parameter: &catalog::Parameter,
     flag: &str,
     values: &[String],
@@ -166,10 +180,15 @@ fn bind_parameter(
             query.insert(parameter.name.to_owned(), encoded);
         }
         "header" => {
-            if parameter.name == "If-Match"
-                && parameter.schema.get("type") == Some(&json!("string"))
-                && !valid_review_etag(value)
-            {
+            let expects_review_etag = definition
+                .registration
+                .controls
+                .headers
+                .iter()
+                .any(|binding| {
+                    binding.name == parameter.name && binding.field == "expected_etag"
+                });
+            if expects_review_etag && !valid_review_etag(value) {
                 anyhow::bail!(
                     "--if-match must equal data.edit.etag from the latest record read; \
                      expected sha256:<64 lowercase hexadecimal characters>"

@@ -139,6 +139,7 @@ pub struct Review {
     pub decision: RequirementDecisionState,
     pub update_precondition: String,
     pub discussions: DiscussionResultPage<DiscussionConversationResult>,
+    pub follow_up_commands: Vec<String>,
     pub bounds: Bounds,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_metadata: Option<ResponseMeta>,

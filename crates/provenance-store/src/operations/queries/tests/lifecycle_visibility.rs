@@ -145,6 +145,26 @@ async fn lifecycle_filter_hides_only_terminal_records_from_lists_and_search() {
 }
 
 #[tokio::test]
+async fn omitted_native_filters_include_terminal_records() {
+    let (dir, store, scope) = seeded_store();
+    seed_lifecycle_records(&store, &scope);
+    let root = root_of(&dir);
+
+    let rules = list_rules(&root, json!({"limit":50})).await.unwrap();
+    let listed = serde_json::to_string(&rules["result"]["items"]).unwrap();
+    assert!(listed.contains("rule_a_archived"));
+
+    let found = search(
+        &root,
+        json!({"text":"lifecycle search", "node_types":[NodeType::Rule], "limit":50}),
+    )
+    .await
+    .unwrap();
+    let found = serde_json::to_string(&found["nodes"]).unwrap();
+    assert!(found.contains("rule_a_archived"));
+}
+
+#[tokio::test]
 async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);

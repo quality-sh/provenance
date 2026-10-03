@@ -71,7 +71,7 @@ pub struct SearchQuery {
     pub protocol_version: Option<u32>,
     #[serde(default)]
     pub cursor: Option<String>,
-    #[serde(default = "default_exclude_terminal")]
+    #[serde(default)]
     pub exclude_terminal: bool,
     #[serde(default)]
     pub text: Option<String>,
@@ -80,10 +80,6 @@ pub struct SearchQuery {
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
-}
-
-const fn default_exclude_terminal() -> bool {
-    true
 }
 
 /// Read the records one hop from a record.

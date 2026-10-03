@@ -17,28 +17,36 @@ pub async fn dispatch_api(
     let service = host.porcelain().api();
     match service.execute_api(request).await {
         Ok(ApiOutcome::Catalog(catalog)) => {
-            if format == Some(OutputFormat::Json) {
-                println!("{}", serde_json::to_string_pretty(&catalog)?);
-            } else {
-                let total = catalog.routes.len();
-                let needle = filter.map(str::to_ascii_lowercase);
-                let mut routes = catalog
-                    .routes
-                    .into_iter()
-                    .filter(|route| {
-                        needle.as_ref().is_none_or(|needle| {
-                            format!(
-                                "{} {} {}",
-                                route.method.as_str(),
-                                route.path,
-                                route.description
-                            )
-                            .to_ascii_lowercase()
-                            .contains(needle)
-                        })
+            let total = catalog.routes.len();
+            let needle = filter.map(str::to_ascii_lowercase);
+            let mut routes = catalog
+                .routes
+                .into_iter()
+                .filter(|route| {
+                    needle.as_ref().is_none_or(|needle| {
+                        format!(
+                            "{} {} {}",
+                            route.method.as_str(),
+                            route.path,
+                            route.description
+                        )
+                        .to_ascii_lowercase()
+                        .contains(needle)
                     })
-                    .collect::<Vec<_>>();
-                let matching = routes.len();
+                })
+                .collect::<Vec<_>>();
+            let matching = routes.len();
+            if let Some(limit) = limit {
+                routes.truncate(limit);
+            }
+            if format == Some(OutputFormat::Json) {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&provenance_porcelain::api::ApiCatalog {
+                        routes
+                    })?
+                );
+            } else {
                 routes.truncate(limit.unwrap_or(50));
                 println!(
                     "{}",
