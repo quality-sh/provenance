@@ -12,6 +12,7 @@ use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::{
     ArchivedStamp, NodeType, ResolutionMethod, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
 };
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -224,6 +225,27 @@ async fn lifecycle_filter_hides_only_terminal_records_from_lists_and_search() {
 }
 
 #[tokio::test]
+async fn omitted_native_filters_include_terminal_records() {
+    let (dir, store, scope) = seeded_store();
+    seed_lifecycle_records(&store, &scope);
+    let root = root_of(&dir);
+
+    let rules = list_rules(&root, json!({"limit":50})).await.unwrap();
+    let listed = serde_json::to_string(&rules["result"]["items"]).unwrap();
+    assert!(listed.contains("rule_a_archived"));
+
+    let found = search(
+        &root,
+        json!({"text":"lifecycle search", "node_types":[NodeType::Rule], "limit":50}),
+    )
+    .await
+    .unwrap();
+    let found = serde_json::to_string(&found["nodes"]).unwrap();
+    assert!(found.contains("rule_a_archived"));
+}
+
+#[tokio::test]
+#[verifies("rule_cursor_binds_query_identity", examples)]
 async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
@@ -243,11 +265,14 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
     .unwrap();
     assert_eq!(second["result"]["items"][0]["id"], "rule_c_active");
     assert_eq!(second["result"]["has_more"], false);
-    assert!(list_rules(&root, json!({"limit":1,"cursor":cursor}))
-        .await
-        .unwrap_err()
-        .to_string()
-        .contains("cursor"));
+    assert!(list_rules(
+        &root,
+        json!({"exclude_terminal":false,"limit":1,"cursor":cursor}),
+    )
+    .await
+    .unwrap_err()
+    .to_string()
+    .contains("cursor"));
 
     let first = search(
         &root,
@@ -276,7 +301,7 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
         &root,
         json!({
             "text":"lifecycle search", "node_types":[NodeType::Rule],
-            "limit":1, "cursor":cursor
+            "exclude_terminal":false, "limit":1, "cursor":cursor
         }),
     )
     .await

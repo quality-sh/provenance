@@ -196,6 +196,9 @@ current ETag. A decide or withdraw request returns 409 with
 withdrawn, or already decided. This failure carries the current Proposal ID,
 when one is pending, and the current revision ID. The client applies its update
 only after a person resolves the conflict. The server does not merge changes.
+The CLI reports when the current Proposal is already pending and names
+`provenance <record-id> get --view review` as the read command. A guarded update
+after a rejection creates the replacement submission.
 
 ## 6. Compatibility tuple and gate
 

@@ -76,7 +76,7 @@ fn review_actions_for_kind(
             leaked(format!("submit{title}Review")),
             HttpMethod::Post,
             leaked(format!("{base}/submit")),
-            "Submit the current record revision for review.",
+            "Submit the current record revision when none is pending. Guarded changes submit automatically.",
             ResponseKind::Resource,
             vec![schema::path("id")],
         )

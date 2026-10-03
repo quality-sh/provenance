@@ -19,8 +19,12 @@ it in the same change.
 - New obligation: `{command} rules create --scope default --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
-- To change a Requirement, Rule, or past decision, create a Proposal. A human decides each
-  Proposal.
+- To change a Requirement, Rule, or past decision, create a Proposal. A human decides each Proposal.
+- Read a record's decision and all bounded feedback with
+  `{command} <record-id> get --view review`. The `review.edit.etag` value is
+  the exact value for `--if-match` on the next update.
+- A guarded update after a rejection opens the new submission. Do not submit
+  or withdraw manually.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a
   Topic also archives its Questions. Discussion history stays readable:
   `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope default --stdin --format json`
@@ -86,6 +90,7 @@ pub fn project(existing: &[u8], invocation: &Invocation) -> anyhow::Result<Vec<u
 #[rule("rule_init_statement_preflight_guidance")]
 #[rule("rule_init_statement_claim_limit")]
 #[rule("rule_init_canonical_write_path")]
+#[rule("rule_init_review_resubmission_guidance")]
 fn instructions(invocation: &Invocation) -> String {
     INSTRUCTIONS.replace("{command}", invocation.0)
 }

@@ -148,6 +148,7 @@ impl HostAccess for LocalAccess {
             <catalog::Search as catalog::Operation>::NAME,
             <catalog::Trace as catalog::Operation>::NAME,
             <catalog::Impact as catalog::Operation>::NAME,
+            <catalog::GetReviewedResource as catalog::Operation>::NAME,
             <catalog::ListDiscussions as catalog::Operation>::NAME,
             <catalog::GetDiscussionConversation as catalog::Operation>::NAME,
             <catalog::WriteDiscussion as catalog::Operation>::NAME,

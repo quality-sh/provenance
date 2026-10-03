@@ -22,6 +22,8 @@ pub struct Invocation {
 }
 
 impl Invocation {
+    /// Builds mutation guidance from the guard contract of the selected operation.
+    #[provenance_macros::rule("rule_cli_guard_guidance")]
     pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
         if matches.get_flag("help") {
             help::print_selection(&args.collection, &args.address);
@@ -144,7 +146,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         .await
     {
         Ok(value) => crate::output::print_json(&value)?,
-        Err(failure) => anyhow::bail!("{}", serde_json::to_string(&failure)?),
+        Err(failure) => return Err(actionable_failure(&failure, record_id(&path))),
     }
     Ok(())
 }
@@ -186,7 +188,7 @@ pub async fn dispatch_target(
     let value = host
         .invoke_target(&route, data, headers)
         .await
-        .map_err(|failure| anyhow::anyhow!(serde_json::to_string(&failure).unwrap()))?;
+        .map_err(|failure| actionable_failure(&failure, Some(&target)))?;
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&value)?;
     } else {
@@ -196,6 +198,34 @@ pub async fn dispatch_target(
         );
     }
     Ok(())
+}
+
+fn record_id(path: &str) -> Option<&str> {
+    path.trim_matches('/').split('/').nth(1)
+}
+
+/// Names the command that reads the review after a review-workflow refusal.
+#[provenance_macros::rule("rule_review_refusal_names_read_command")]
+fn review_read_command(id: &str) -> String {
+    format!("provenance {id} get --view review")
+}
+
+fn actionable_failure(
+    failure: &provenance_core::protocol::failure::ErasedFailure,
+    record_id: Option<&str>,
+) -> anyhow::Error {
+    let value = serde_json::to_value(failure).unwrap_or_default();
+    let error = &value["error"];
+    if error["kind"] == "review_submission_conflict" {
+        if let (Some(id), Some(submission)) = (record_id, error["current_submission"].as_str()) {
+            return anyhow::anyhow!(
+                "record {id} already has pending submission {submission}; \
+                 run `{}` to see it",
+                review_read_command(id)
+            );
+        }
+    }
+    anyhow::anyhow!(serde_json::to_string(failure).unwrap_or_else(|_| "operation failed".into()))
 }
 
 pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {

@@ -54,6 +54,9 @@ pub struct SearchArgs {
     pub kind: Vec<NodeType>,
     #[arg(long)]
     pub limit: Option<usize>,
+    /// Include archived and other terminal records.
+    #[arg(long)]
+    pub include_terminal: bool,
 }
 
 #[derive(Parser)]
@@ -89,6 +92,23 @@ pub struct ApiArgs {
     pub headers: Vec<String>,
     #[arg(long = "query")]
     pub queries: Vec<String>,
+    /// Show only catalog routes whose method, path, or description contains this text.
+    #[arg(long, requires = "command")]
+    pub filter: Option<String>,
+    /// Show at most this many catalog routes. The default is 50.
+    #[arg(long, value_parser = parse_catalog_limit)]
+    pub limit: Option<usize>,
+}
+
+fn parse_catalog_limit(value: &str) -> Result<usize, String> {
+    let limit = value
+        .parse::<usize>()
+        .map_err(|_| "catalog limit must be a number from 1 through 200".to_owned())?;
+    if (1..=200).contains(&limit) {
+        Ok(limit)
+    } else {
+        Err("catalog limit must be a number from 1 through 200".to_owned())
+    }
 }
 
 fn parse_api_method(value: &str) -> Result<provenance_porcelain::api::ApiMethod, String> {

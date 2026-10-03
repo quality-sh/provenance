@@ -177,9 +177,7 @@ async fn page(
         "cursor": cursor,
         "limit": limit,
     });
-    if exclude_terminal {
-        query["exclude_terminal"] = json!(true);
-    }
+    query["exclude_terminal"] = json!(exclude_terminal);
     let result = queries::read_document(
         Some(root.to_owned()),
         &ScopeId::new("default")?,
