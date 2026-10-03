@@ -54,7 +54,7 @@ impl HostRuntime {
             instance_nonce: instance_nonce.clone(),
         });
         replace(&path, &registry, &instance_nonce)?;
-        FileExt::unlock(&lock)?;
+        fs2::FileExt::unlock(&lock)?;
         Ok(Self {
             path,
             lock_path,
@@ -83,7 +83,7 @@ impl Drop for HostRuntime {
         } else {
             let _ = replace(&self.path, &registry, &self.instance_nonce);
         }
-        let _ = FileExt::unlock(&lock);
+        let _ = fs2::FileExt::unlock(&lock);
     }
 }
 

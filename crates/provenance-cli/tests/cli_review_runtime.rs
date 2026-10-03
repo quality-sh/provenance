@@ -90,13 +90,16 @@ fn runtime_file_contains_the_host_location_and_is_removed_on_shutdown() {
 fn public_identity_matches_the_runtime_without_disclosing_the_credential() {
     let repo = repository();
     let (mut child, config) = start(repo.path(), "A", "default");
-    let identity: Value = ureq::get(&format!(
+    let identity: Value = serde_json::from_str(
+        &ureq::get(&format!(
         "{}/review-host-identity",
         config["endpoint"].as_str().unwrap()
     ))
     .call()
     .unwrap()
-    .into_json()
+    .into_string()
+    .unwrap(),
+    )
     .unwrap();
 
     assert_eq!(identity["repositoryId"], "A");
