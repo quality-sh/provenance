@@ -62,6 +62,7 @@ pub fn json_stdin_output(arguments: &[&str], input: &Value) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+#[allow(dead_code)]
 pub struct LocalHost {
     pub endpoint: String,
     stop: Arc<AtomicBool>,
@@ -79,10 +80,12 @@ impl Drop for LocalHost {
     }
 }
 
+#[allow(dead_code)]
 pub fn local_host(repo: &str) -> LocalHost {
     local_host_with_identity(repo, |identity| serde_json::to_value(identity).unwrap())
 }
 
+#[allow(dead_code)]
 pub fn local_host_with_identity(
     repo: &str,
     response: impl FnOnce(LocalHostIdentity) -> Value,
@@ -127,6 +130,7 @@ pub fn local_host_with_identity(
     }
 }
 
+#[allow(dead_code)]
 pub fn write_local_host_fixture(repo: &str, endpoint: &str) {
     let mut fixture: Value = serde_json::from_str(include_str!(
         "../../../../docs/fixtures/local-host/registry-v1.json"
