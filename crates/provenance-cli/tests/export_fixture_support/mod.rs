@@ -18,6 +18,7 @@ pub fn make_default_scope_portable(repo: impl AsRef<Path>) {
 }
 
 /// Copies a repository's canonical state and converts the copy for legacy export tests.
+#[allow(dead_code)]
 pub fn copy_portable_state(source: impl AsRef<Path>, destination: impl AsRef<Path>) {
     let source = source.as_ref().join(".provenance/state");
     let destination = destination.as_ref().join(".provenance/state");
@@ -25,6 +26,7 @@ pub fn copy_portable_state(source: impl AsRef<Path>, destination: impl AsRef<Pat
     make_default_scope_portable(destination.parent().unwrap().parent().unwrap());
 }
 
+#[allow(dead_code)]
 fn copy_tree(source: &Path, destination: &Path) {
     std::fs::create_dir_all(destination).unwrap();
     for entry in std::fs::read_dir(source).unwrap() {
