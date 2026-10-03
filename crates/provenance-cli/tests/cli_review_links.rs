@@ -60,7 +60,7 @@ impl Drop for FakeHost {
     }
 }
 
-fn fake_host(identity: Value) -> FakeHost {
+fn fake_host(identity: &Value) -> FakeHost {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     listener.set_nonblocking(true).unwrap();
@@ -97,7 +97,7 @@ fn fake_host(identity: Value) -> FakeHost {
     }
 }
 
-fn publish_host(repo: &str, stored: Value) {
+fn publish_host(repo: &str, stored: &Value) {
     let path = std::path::Path::new(repo).join(".provenance/cache/review-hosts/default.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::set_permissions(
@@ -166,12 +166,12 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
         "--format",
         "json",
     ]);
-    let host = fake_host(json!({
+    let host = fake_host(&json!({
         "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
     }));
     publish_host(
         &repo,
-        json!({
+        &json!({
             "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
             "instanceNonce":"nonce"
         }),
@@ -227,7 +227,7 @@ fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
             "--format",
             "json",
         ]);
-        publish_host(&repo, stored);
+        publish_host(&repo, &stored);
         let link = json_output(&[
             "req_link",
             "get",
@@ -261,7 +261,7 @@ fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     publish_host(
         &repo,
-        json!({
+        &json!({
             "endpoint":endpoint, "repositoryId":"local", "scope":"default",
             "instanceNonce":"nonce"
         }),
@@ -298,10 +298,10 @@ fn identity_mismatches_do_not_produce_links() {
             "--format",
             "json",
         ]);
-        let host = fake_host(identity);
+        let host = fake_host(&identity);
         publish_host(
             &repo,
-            json!({
+            &json!({
                 "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
                 "instanceNonce":"nonce"
             }),

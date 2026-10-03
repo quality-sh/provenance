@@ -86,7 +86,7 @@ impl Drop for FakeHost {
     }
 }
 
-fn fake_host(identity: Value) -> FakeHost {
+fn fake_host(identity: &Value) -> FakeHost {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     listener.set_nonblocking(true).unwrap();
@@ -123,7 +123,7 @@ fn fake_host(identity: Value) -> FakeHost {
     }
 }
 
-fn publish_host(repo: &str, stored: Value) {
+fn publish_host(repo: &str, stored: &Value) {
     let path = std::path::Path::new(repo).join(".provenance/cache/review-hosts/default.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::set_permissions(
@@ -143,12 +143,12 @@ fn publish_host(repo: &str, stored: Value) {
 fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
     let (_directory, repo) = initialized_repo();
     allow_reviewer(&repo);
-    let host = fake_host(json!({
+    let host = fake_host(&json!({
         "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
     }));
     publish_host(
         &repo,
-        json!({
+        &json!({
             "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
             "instanceNonce":"nonce"
         }),
