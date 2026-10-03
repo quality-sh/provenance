@@ -11,22 +11,29 @@ use std::{
 
 fn repository() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
-    let layout = provenance_store::layout::ProvenanceLayout::new(
-        directory.path().to_str().unwrap(),
-    );
+    let layout =
+        provenance_store::layout::ProvenanceLayout::new(directory.path().to_str().unwrap());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     let manifest = provenance_core::Manifest::default_with_scope(
         provenance_core::ScopeId::new("default").unwrap(),
         provenance_core::RepoPathPrefix::new("."),
     );
-    std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
     directory
 }
 
 fn opener() -> (tempfile::TempDir, std::path::PathBuf) {
     let directory = tempfile::tempdir().unwrap();
     let executable = directory.path().join("xdg-open");
-    std::fs::write(&executable, "#!/bin/sh\nprintf '%s' \"$1\" > \"$OPEN_RECORD\"\n").unwrap();
+    std::fs::write(
+        &executable,
+        "#!/bin/sh\nprintf '%s' \"$1\" > \"$OPEN_RECORD\"\n",
+    )
+    .unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     let record = directory.path().join("opened-url");
     (directory, record)
@@ -104,7 +111,11 @@ fn create_requirement(repository: &std::path::Path) {
         ])
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]
@@ -145,8 +156,16 @@ fn a_headless_session_prints_the_link_without_opening_it() {
     let _ = child.kill();
     let _ = child.wait();
     let mut stderr = String::new();
-    child.stderr.take().unwrap().read_to_string(&mut stderr).unwrap();
-    assert!(stderr.contains(startup["url"].as_str().unwrap()), "{stderr}");
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut stderr)
+        .unwrap();
+    assert!(
+        stderr.contains(startup["url"].as_str().unwrap()),
+        "{stderr}"
+    );
     assert!(stderr.contains("display"), "{stderr}");
 }
 
@@ -178,7 +197,11 @@ fn review_link_command_opens_unless_no_open_is_set() {
     };
 
     let output = command().output().unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     wait_for(&record);
     assert_eq!(
         std::fs::read_to_string(&record).unwrap(),
@@ -187,7 +210,11 @@ fn review_link_command_opens_unless_no_open_is_set() {
     std::fs::remove_file(&record).unwrap();
 
     let output = command().arg("--no-open").output().unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     std::thread::sleep(Duration::from_millis(100));
     assert!(!record.exists());
     let _ = host.kill();

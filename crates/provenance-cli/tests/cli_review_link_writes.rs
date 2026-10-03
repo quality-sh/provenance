@@ -142,7 +142,13 @@ fn publish_host(repo: &str, stored: &Value) {
 fn assert_review_url(value: &Value, endpoint: &str, root: &str) {
     let url = url::Url::parse(value.as_str().unwrap()).unwrap();
     assert_eq!(url.origin().ascii_serialization(), endpoint);
-    assert_eq!(url.query_pairs().find(|(name, _)| name == "root").unwrap().1, root);
+    assert_eq!(
+        url.query_pairs()
+            .find(|(name, _)| name == "root")
+            .unwrap()
+            .1,
+        root
+    );
 }
 
 #[test]

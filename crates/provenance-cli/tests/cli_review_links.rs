@@ -116,7 +116,9 @@ fn publish_host(repo: &str, stored: &Value) {
 fn assert_review_url(value: &Value, endpoint: &str, root: &str, focus: Option<&str>) {
     let url = url::Url::parse(value.as_str().unwrap()).unwrap();
     assert_eq!(url.origin().ascii_serialization(), endpoint);
-    let pairs = url.query_pairs().collect::<std::collections::HashMap<_, _>>();
+    let pairs = url
+        .query_pairs()
+        .collect::<std::collections::HashMap<_, _>>();
     assert_eq!(pairs.get("root").map(|value| value.as_ref()), Some(root));
     assert_eq!(pairs.get("focus").map(|value| value.as_ref()), focus);
 }

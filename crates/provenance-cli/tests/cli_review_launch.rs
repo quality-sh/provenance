@@ -21,15 +21,18 @@ impl Drop for Host {
 
 fn repository() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
-    let layout = provenance_store::layout::ProvenanceLayout::new(
-        directory.path().to_str().unwrap(),
-    );
+    let layout =
+        provenance_store::layout::ProvenanceLayout::new(directory.path().to_str().unwrap());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
     let manifest = provenance_core::Manifest::default_with_scope(
         provenance_core::ScopeId::new("default").unwrap(),
         provenance_core::RepoPathPrefix::new("."),
     );
-    std::fs::write(layout.manifest_path(), serde_json::to_vec(&manifest).unwrap()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
     directory
 }
 
@@ -133,12 +136,10 @@ fn a_code_from_another_host_is_refused() {
 
     let refusal = exchange(&second, &launch_code(&first));
     assert_eq!(refusal.status(), 401);
-    assert!(
-        refusal
-            .into_string()
-            .unwrap()
-            .contains("<record-id> --review-link")
-    );
+    assert!(refusal
+        .into_string()
+        .unwrap()
+        .contains("<record-id> --review-link"));
 }
 
 #[test]

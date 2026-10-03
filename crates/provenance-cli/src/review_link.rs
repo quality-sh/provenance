@@ -150,7 +150,9 @@ async fn mint_code(
         let response = ureq::post(url.as_str())
             .set("Content-Type", "application/json")
             .send_string(&serde_json::to_string(&identity)?)?;
-        Ok::<_, anyhow::Error>(serde_json::from_reader::<_, LaunchCode>(response.into_reader())?.code)
+        Ok::<_, anyhow::Error>(
+            serde_json::from_reader::<_, LaunchCode>(response.into_reader())?.code,
+        )
     })
     .await?
 }

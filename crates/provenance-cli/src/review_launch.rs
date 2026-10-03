@@ -58,7 +58,12 @@ enum ExchangeError {
 }
 
 impl LaunchCodes {
-    pub fn new(bearer: String, repository_id: String, scope: String, instance_nonce: String) -> Self {
+    pub fn new(
+        bearer: String,
+        repository_id: String,
+        scope: String,
+        instance_nonce: String,
+    ) -> Self {
         Self {
             bearer: bearer.into(),
             repository_id: repository_id.into(),
@@ -137,7 +142,9 @@ pub async fn exchange(
     match codes.exchange(&request.code) {
         Ok(bearer) => Json(json!({ "bearer": bearer })).into_response(),
         Err(ExchangeError::Refused) => (StatusCode::UNAUTHORIZED, FRESH_LINK).into_response(),
-        Err(ExchangeError::RateLimited) => (StatusCode::TOO_MANY_REQUESTS, FRESH_LINK).into_response(),
+        Err(ExchangeError::RateLimited) => {
+            (StatusCode::TOO_MANY_REQUESTS, FRESH_LINK).into_response()
+        }
     }
 }
 
