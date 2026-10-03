@@ -25,7 +25,10 @@ fn reviewed_records() -> (tempfile::TempDir, String) {
     store
         .create_source(
             serde_json::from_value(
-                json!({"scope_id":"default","id":"source_review","name":"Source"}),
+                json!({
+                    "scope_id":"default", "id":"source_review", "name":"Source",
+                    "source_type":"policy", "supersedes":[]
+                }),
             )
             .unwrap(),
         )
