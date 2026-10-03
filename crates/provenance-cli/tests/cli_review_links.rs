@@ -45,7 +45,6 @@ fn json_output(arguments: &[&str]) -> Value {
 }
 
 fn json_stdin_output(arguments: &[&str], input: &Value) -> Value {
-    use assert_cmd::prelude::CommandWriteStdinExt as _;
     let output = provenance()
         .args(arguments)
         .write_stdin(input.to_string())
