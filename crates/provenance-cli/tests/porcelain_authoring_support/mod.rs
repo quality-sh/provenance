@@ -89,13 +89,9 @@ pub fn local_host_with_identity(
 ) -> LocalHost {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
-    let registration = LocalHostRegistration::publish(
-        std::path::Path::new(repo),
-        "default",
-        &endpoint,
-        "local",
-    )
-    .unwrap();
+    let registration =
+        LocalHostRegistration::publish(std::path::Path::new(repo), "default", &endpoint, "local")
+            .unwrap();
     let body = response(registration.identity()).to_string();
     listener.set_nonblocking(true).unwrap();
     let stop = Arc::new(AtomicBool::new(false));

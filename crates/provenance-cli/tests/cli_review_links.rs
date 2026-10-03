@@ -149,13 +149,9 @@ fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
     ]);
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
-    let _registration = LocalHostRegistration::publish(
-        std::path::Path::new(&repo),
-        "default",
-        &endpoint,
-        "local",
-    )
-    .unwrap();
+    let _registration =
+        LocalHostRegistration::publish(std::path::Path::new(&repo), "default", &endpoint, "local")
+            .unwrap();
     let link = json_output(&[
         "req_link",
         "get",
