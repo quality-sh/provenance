@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::{prelude::PredicateBooleanExt as _, str::contains};
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 fn provenance() -> Command {
@@ -82,6 +83,7 @@ fn reject_pending(repo: &str, id: &str, created: &Value) {
 }
 
 #[test]
+#[verifies("rule_porcelain_review_returns_current_state", examples)]
 fn review_view_returns_decision_comment_discussions_and_update_precondition() {
     let (_directory, repo) = init();
     let created = create_requirement(&repo, "req_feedback");
@@ -121,6 +123,7 @@ fn review_view_returns_decision_comment_discussions_and_update_precondition() {
 }
 
 #[test]
+#[verifies("rule_review_refusal_names_read_command", examples)]
 fn wrong_feedback_form_names_the_review_command() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_wrong_form");
@@ -139,6 +142,7 @@ fn wrong_feedback_form_names_the_review_command() {
 }
 
 #[test]
+#[verifies("rule_review_refusal_names_read_command", examples)]
 fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
     let (_directory, repo) = init();
     let created = create_requirement(&repo, "req_pending");
@@ -167,6 +171,7 @@ fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
 }
 
 #[test]
+#[verifies("rule_cli_api_discovery_filter_limit", examples)]
 fn api_catalog_is_bounded_by_default_and_explains_filtering() {
     let (_directory, repo) = init();
     let output = provenance()
@@ -175,6 +180,7 @@ fn api_catalog_is_bounded_by_default_and_explains_filtering() {
         .unwrap();
     assert!(output.status.success());
     let text = String::from_utf8(output.stdout).unwrap();
+    // The 500-line budget keeps default discovery within one agent context read.
     assert!(text.lines().count() < 500, "{} lines", text.lines().count());
     assert!(text.contains("Use --filter <text> or --limit <number> to see more."));
 
@@ -186,6 +192,7 @@ fn api_catalog_is_bounded_by_default_and_explains_filtering() {
 }
 
 #[test]
+#[verifies("rule_cli_guard_guidance", examples)]
 fn update_help_and_invalid_if_match_name_the_exact_input() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_etag");
@@ -216,6 +223,7 @@ fn update_help_and_invalid_if_match_name_the_exact_input() {
 }
 
 #[test]
+#[verifies("rule_cli_guard_guidance", examples)]
 fn discussion_guards_name_numeric_versions_in_help() {
     for address in [
         [
@@ -247,6 +255,7 @@ fn discussion_guards_name_numeric_versions_in_help() {
 }
 
 #[test]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
 fn review_view_gives_commands_for_each_truncated_feedback_page() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_bounded_feedback");
@@ -305,6 +314,8 @@ fn review_view_gives_commands_for_each_truncated_feedback_page() {
 }
 
 #[test]
+#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
+#[verifies("rule_cli_terminal_records_opt_in", examples)]
 fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_terminal");
@@ -368,6 +379,7 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
 }
 
 #[test]
+#[verifies("rule_init_review_resubmission_guidance", examples)]
 fn installed_guidance_documents_feedback_and_rejected_revision_paths() {
     let (directory, _repo) = init();
     let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();

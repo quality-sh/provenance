@@ -91,6 +91,7 @@ pub fn project(existing: &[u8], invocation: &Invocation) -> anyhow::Result<Vec<u
 #[rule("rule_init_statement_preflight_guidance")]
 #[rule("rule_init_statement_claim_limit")]
 #[rule("rule_init_canonical_write_path")]
+#[rule("rule_init_review_resubmission_guidance")]
 fn instructions(invocation: &Invocation) -> String {
     INSTRUCTIONS.replace("{command}", invocation.0)
 }

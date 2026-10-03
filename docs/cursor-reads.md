@@ -41,7 +41,7 @@ The current review can omit archived Rules and abandoned Resolutions:
 GET /requirements/req_review/document?exclude_terminal=true&limit=50
 ```
 
-The default is `exclude_terminal=true`. Set it to `false` to include archived
+The API default is `exclude_terminal=false`. Set it to `true` to omit archived
 Rules and abandoned Resolutions. A superseded
 Resolution stays visible. The document filter evaluates each record's lifecycle
 independently. Thus, an active Rule stays visible when its only document link is

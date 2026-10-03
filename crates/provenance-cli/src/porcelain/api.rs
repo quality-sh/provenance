@@ -2,9 +2,10 @@ use super::OutputFormat;
 use crate::repo_context::RepoContext;
 use provenance_porcelain::api::{render_discovery_readable, ApiOutcome, ApiRequest};
 
-/// Run one api action through the shared porcelain port, in process, with
-/// the configured repository, scope, and local credential context.
+/// Runs one API action with the selected context and applies discovery filters
+/// and limits before rendering.
 #[provenance_macros::rule("rule_porcelain_api_uses_context")]
+#[provenance_macros::rule("rule_cli_api_discovery_filter_limit")]
 pub async fn dispatch_api(
     repo: &str,
     scope: &str,

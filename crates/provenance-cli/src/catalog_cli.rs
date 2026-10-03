@@ -22,6 +22,8 @@ pub struct Invocation {
 }
 
 impl Invocation {
+    /// Builds mutation guidance from the guard contract of the selected operation.
+    #[provenance_macros::rule("rule_cli_guard_guidance")]
     pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
         if matches.get_flag("help") {
             help::print_selection(&args.collection, &args.address);
@@ -202,6 +204,12 @@ fn record_id(path: &str) -> Option<&str> {
     path.trim_matches('/').split('/').nth(1)
 }
 
+/// Names the command that reads the review after a review-workflow refusal.
+#[provenance_macros::rule("rule_review_refusal_names_read_command")]
+fn review_read_command(id: &str) -> String {
+    format!("provenance {id} get --view review")
+}
+
 fn actionable_failure(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     record_id: Option<&str>,
@@ -212,7 +220,8 @@ fn actionable_failure(
         if let (Some(id), Some(submission)) = (record_id, error["current_submission"].as_str()) {
             return anyhow::anyhow!(
                 "record {id} already has pending submission {submission}; \
-                 run `provenance {id} get --view review` to see it"
+                 run `{}` to see it",
+                review_read_command(id)
             );
         }
     }

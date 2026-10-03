@@ -44,7 +44,8 @@ fn unknown(collection: &str, supplied: &[String]) -> anyhow::Error {
         if matches!(form.as_str(), "feedback" | "review") {
             write!(
                 message,
-                "; to read review feedback, run `provenance {id} get --view review`"
+                "; to read review feedback, run `{}`",
+                super::review_read_command(id)
             )
             .expect("writing to a String cannot fail");
         }

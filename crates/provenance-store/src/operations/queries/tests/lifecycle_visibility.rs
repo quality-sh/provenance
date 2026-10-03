@@ -12,6 +12,7 @@ use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::{
     ArchivedStamp, NodeType, ResolutionMethod, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
 };
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -244,6 +245,7 @@ async fn omitted_native_filters_include_terminal_records() {
 }
 
 #[tokio::test]
+#[verifies("rule_cursor_binds_query_identity", examples)]
 async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);

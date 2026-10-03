@@ -126,6 +126,7 @@ fn api_get_defaults_to_get_and_prints_the_envelope() {
 }
 
 #[test]
+#[verifies("rule_cli_api_discovery_filter_limit", examples)]
 fn json_catalog_applies_filter_and_limit() {
     let (_directory, repo) = init();
     let catalog = json(&[

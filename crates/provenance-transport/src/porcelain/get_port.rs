@@ -157,6 +157,8 @@ impl GetPort for HostGetPort {
         })
     }
 
+    /// Returns the current decision, edit guard, and feedback for each record kind.
+    #[provenance_macros::rule("rule_porcelain_review_returns_current_state")]
     fn review<'a>(
         &'a self,
         record: &'a provenance_core::protocol::GraphNode,

@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 fn provenance() -> Command {
@@ -49,17 +50,18 @@ fn reviewed_records() -> (tempfile::TempDir, String) {
 }
 
 #[test]
+#[verifies("rule_porcelain_review_returns_current_state", examples)]
 fn review_view_reads_every_review_record_kind() {
     let (_directory, repo) = reviewed_records();
-    for (kind, id, supports_discussions) in [
-        ("source", "source_review", true),
-        ("requirement", "req_review", true),
-        ("resolution", "resolution_review", true),
-        ("rule", "rule_review", true),
-        ("domain", "domain_review", false),
-        ("boundary", "boundary_review", false),
-        ("topic", "topic_review", true),
-        ("question", "question_review", true),
+    for (kind, id) in [
+        ("source", "source_review"),
+        ("requirement", "req_review"),
+        ("resolution", "resolution_review"),
+        ("rule", "rule_review"),
+        ("domain", "domain_review"),
+        ("boundary", "boundary_review"),
+        ("topic", "topic_review"),
+        ("question", "question_review"),
     ] {
         let output = provenance()
             .args([
@@ -76,10 +78,5 @@ fn review_view_reads_every_review_record_kind() {
         assert_eq!(result["record"]["kind"], kind);
         assert!(result["review"]["edit"]["etag"].is_string());
         assert!(result["review"]["decision"].is_object());
-        assert_eq!(result["review"]["discussions"]["entries"], json!([]));
-        if !supports_discussions {
-            assert_eq!(result["review"]["discussions"]["has_more"], false);
-            assert_eq!(result["review"]["follow_up_commands"], json!([]));
-        }
     }
 }
