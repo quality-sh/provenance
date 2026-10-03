@@ -22,7 +22,7 @@ fn history_and_evidence(out: &mut Vec<Definition>) {
             schema::path("id"),
             schema::query(
                 "exclude_terminal",
-                serde_json::json!({"type":"boolean","default":true}),
+                serde_json::json!({"type":"boolean","default":false}),
             ),
             limit(),
             cursor(),
