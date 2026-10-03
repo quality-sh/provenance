@@ -94,7 +94,9 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         .live(crate::operations::reader::Live::Canonical)
         .store()
         .document_review_state(ctx.snapshot().scope(), &review_records)?;
-    let review_totals = document_review_totals(&review_keys, &review_state);
+    let review_totals = document_review_totals(&review_keys, |kind, id| {
+        review_state.summary(kind, id)
+    });
     let (cursor, mut position) = Cursor::open_live(
         ctx,
         "read-document",
@@ -170,12 +172,12 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
 #[rule("rule_document_has_review_totals")]
 fn document_review_totals(
     review_keys: &[(NodeType, StableId, bool)],
-    review_state: &crate::review::DocumentReviewState,
+    summary: impl Fn(NodeType, &StableId) -> provenance_core::protocol::DocumentReviewSummary,
 ) -> DocumentReviewTotals {
     let mut totals = DocumentReviewTotals::default();
     for (kind, id, is_member) in review_keys {
         if *is_member {
-            totals.include(&review_state.summary(*kind, id));
+            totals.include(&summary(*kind, id));
         }
     }
     totals
