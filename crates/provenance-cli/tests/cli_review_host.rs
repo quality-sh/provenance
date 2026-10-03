@@ -429,10 +429,9 @@ fn launch_url_and_responses_do_not_disclose_the_credential() {
     let repo = repository();
     let host = start(repo.path());
     let token = host.config["bearer"].as_str().unwrap();
-    assert_eq!(
-        host.config["url"],
-        format!("{}/", host.config["endpoint"].as_str().unwrap())
-    );
+    let url = host.config["url"].as_str().unwrap();
+    assert!(url.starts_with(&format!("{}/?code=", host.config["endpoint"].as_str().unwrap())));
+    assert!(!url.contains(token));
     for path in [
         "/",
         "/index.html",

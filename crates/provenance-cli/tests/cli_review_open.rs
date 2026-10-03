@@ -31,6 +31,14 @@ fn opener() -> (tempfile::TempDir, std::path::PathBuf) {
     (directory, record)
 }
 
+fn failing_opener() -> tempfile::TempDir {
+    let directory = tempfile::tempdir().unwrap();
+    let executable = directory.path().join("xdg-open");
+    std::fs::write(&executable, "#!/bin/sh\nexit 7\n").unwrap();
+    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    directory
+}
+
 fn start(
     repository: &std::path::Path,
     opener_directory: &std::path::Path,
@@ -177,6 +185,40 @@ fn review_link_command_opens_unless_no_open_is_set() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     std::thread::sleep(Duration::from_millis(100));
     assert!(!record.exists());
+    let _ = host.kill();
+    let _ = host.wait();
+}
+
+#[test]
+fn opener_failure_warns_without_failing_the_review_link_command() {
+    let repository = repository();
+    create_requirement(repository.path());
+    let (host_opener, record) = opener();
+    let (mut host, _) = start(repository.path(), host_opener.path(), &record, true, true);
+    let opener = failing_opener();
+
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+        .args([
+            "req_open",
+            "get",
+            "--repo",
+            repository.path().to_str().unwrap(),
+            "--review-link",
+        ])
+        .env("PATH", opener.path())
+        .env("DISPLAY", ":1")
+        .env_remove("SSH_CONNECTION")
+        .env_remove("SSH_CLIENT")
+        .env_remove("SSH_TTY")
+        .env_remove("WAYLAND_DISPLAY")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    assert!(!output.stdout.is_empty());
+    let warning = String::from_utf8(output.stderr).unwrap();
+    assert_eq!(warning.lines().count(), 1, "{warning}");
+    assert!(warning.contains("warning:"), "{warning}");
     let _ = host.kill();
     let _ = host.wait();
 }

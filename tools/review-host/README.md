@@ -2,14 +2,15 @@
 
 This directory supplies the application that the Provenance CLI embeds. The web
 repository supplies `mountReview`, its emitted declarations, and renderer
-assets. This application owns the credential form, explicit Requirement
+assets. This application owns launch-code exchange, explicit Requirement
 selection, configuration read, and connection error display.
 
-The access token stays in page memory. It is sent only in an Authorization
-header to the current origin. The token input is cleared on every connection
-attempt. The application does not store the token or put it in a URL. The host's
-existing origin, repository, scope, and file-access checks remain in effect.
-The renderer owns the generated Effect client and its reads and writes.
+The page removes the launch code from the address bar before exchange. The
+access token stays in page memory. It is sent only in an Authorization header
+to the current origin. The application does not store the token or put it in a
+URL. The host's existing origin, repository, scope, and file-access checks
+remain in effect. The renderer owns the generated Effect client and its reads
+and writes.
 
 The renderer pin uses the successful main build from web PR 23 and SDK 0.2.3.
 The composer checks the archive SHA-256, source commit, and clean build state
@@ -41,7 +42,7 @@ the renderer module unchanged and adds `host.js`, `host.css`, and the host HTML.
 The generated Effect client is part of `review.js`. No Node runtime enters the page.
 
 Run the host with explicit repository and scope options from `docs/review-host.md`.
-Open the printed credential-free URL. Enter the session token, then enter a
+The CLI opens the launch URL. If the URL does not select a Requirement, enter a
 Requirement ID. `Open / Refresh` mounts the selected Requirement. A new
 connection removes the old page. A later connection attempt supersedes an
 earlier attempt, even when the earlier response arrives last.

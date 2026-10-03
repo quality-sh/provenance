@@ -68,7 +68,9 @@ pub async fn print(
         );
         Ok(())
     }?;
-    let _ = (url, no_open);
+    if let Some(url) = url {
+        crate::browser_open::open(&url, no_open);
+    }
     Ok(())
 }
 

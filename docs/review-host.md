@@ -4,6 +4,10 @@ Run `provenance review --repo /absolute/repository --repository-id A --scope def
 The repository must contain an initialized Provenance manifest and the selected
 scope. All three options are required. `--port 0` selects an available port;
 a specified port binds only to `127.0.0.1`.
+The command prints a review link and opens it in the default browser. Use
+`--no-open` to print the link without opening it. In an SSH session or a session
+without a graphical display, the command prints the link and explains why it
+did not open it. An opener failure does not stop the host.
 
 The host prints a warning at startup when the repository has no reviewer. The
 review page is read-only in this state. Add or replace reviewers with
@@ -24,8 +28,8 @@ operation paths.
 ## Local caller and repository access
 
 Startup writes one JSON line to stdout with `endpoint`, `bearer`, `repositoryId`,
-`scope`, `instanceNonce`, and `url`. The URL is `http://127.0.0.1:PORT/`; it
-contains no credential. Treat the JSON output as a credential. Each process
+`scope`, `instanceNonce`, and `url`. The URL contains a launch code, but it does
+not contain the bearer credential. Treat the JSON output as a credential. Each process
 generates a new token and a non-secret host-instance nonce. The token is not
 saved in the repository, a cookie, browser storage, a URL query, or a URL
 fragment.
@@ -47,11 +51,30 @@ against the public `/review-host-identity` response before they add a review
 link. They accept only an exact HTTP base URL with a loopback IP address. If no
 verified host is running, these writes explain how to start one.
 
+The host mints a random launch code for each review link. A launch code expires
+after two minutes and one successful exchange consumes it. The code is bound to
+the host process, repository target, and scope. Another host process cannot
+exchange it. The host limits active codes and exchange attempts. The page
+removes the code from the address bar before it sends the exchange request. The
+exchange returns the bearer credential to page memory. The page does not put
+the bearer in a URL, file, log, cookie, or browser storage.
+
+The launch code is safe for this use because the listener accepts only loopback
+traffic and keeps the existing Host and Origin checks. It is not a remote login
+mechanism. It does not protect against another process for the same OS user, a
+compromised browser or browser extension, compromised embedded assets, or a
+person who can control the local session. These parties can use the person's
+existing local authority. Restart the host to invalidate all codes and its
+bearer credential.
+
 An agent can get a link for any record with:
 
 ```sh
 provenance RECORD_ID get --review-link --format json
 ```
+
+This command opens the link in the default browser. Use `--no-open` to print it
+only. Opener failures do not fail the command.
 
 For a non-Requirement record, the command uses graph reads to find the
 Requirement document that contains the record. If no host is running, the
@@ -96,8 +119,9 @@ the asset tree at build time. This directory is trusted build input: replacement
 JavaScript would run with the browser caller's access. Use the pinned archive
 procedure below for the supplied renderer.
 Path segments use ASCII letters, digits, dots, underscores, and hyphens. A
-segment must not start with a dot. Root names `metadata`, `review-config`, and
-`review-host-identity`, and `v` followed by digits are reserved for host routes.
+segment must not start with a dot. Root names `metadata`, `review-config`,
+`review-host-identity`, and `review-launch`, and `v` followed by digits are
+reserved for host routes.
 An asset file with exactly three path segments and `operations` as its second
 segment is also refused. The operation router matches this path shape for any
 first segment. For example, `assets/operations/app.js` is refused at build time.
@@ -131,13 +155,14 @@ not contain the bearer credential.
 
 The generic renderer does not read credentials, fetch host configuration, or
 mount itself. Its index is an empty shell. The concrete application in
-[tools/review-host](../tools/review-host/README.md) supplies credential entry and
-Requirement selection. The page accepts `root=REQUIREMENT_ID` and an optional
-`focus=RECORD_ID` query parameter. The URL never contains the credential. After
-the person enters the token, the application opens `root` directly and hides
-the manual Requirement ID field. The field remains available when `root` is
-absent. The application reads `/review-config` with the credential. It then
-calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
+[tools/review-host](../tools/review-host/README.md) supplies launch-code exchange
+and Requirement selection. The page accepts `code=LAUNCH_CODE`,
+`root=REQUIREMENT_ID`, and an optional `focus=RECORD_ID` query parameter. It
+removes `code` with `history.replaceState` before it exchanges the code. The URL
+never contains the bearer credential. After the exchange, the application opens
+`root` directly and hides the manual Requirement ID field. The field remains
+available when `root` is absent. The application reads `/review-config` with the
+credential. It then calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
 `dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. The
 renderer creates and owns the generated Effect client.
 
@@ -150,9 +175,8 @@ renderer identifies the review as read-only.
 Build that application with the matching renderer to replace the shell with the
 local host entry. The credential stays in page memory and is
 sent only in the Authorization header to the current origin. It does not enter
-URLs, logs, assets, or browser storage. The password input is cleared after each
-connection attempt. A new connection removes the previous page. A superseded
-connection result cannot replace a later result.
+URLs, logs, assets, or browser storage. A new connection removes the previous
+page. A superseded connection result cannot replace a later result.
 
 The renderer's generated Effect client calls an existing host; it does not
 start one. Asset code must use the same origin and local dependencies. Response

@@ -83,6 +83,24 @@ fn launch_code(host: &Host) -> String {
         .unwrap()
 }
 
+fn mint_for_scope(host: &Host, scope: &str) -> ureq::Response {
+    let body = serde_json::json!({
+        "repositoryId": "local",
+        "scope": scope,
+        "instanceNonce": host.startup["instanceNonce"],
+    });
+    let result = ureq::post(&format!(
+        "{}/review-launch",
+        host.startup["endpoint"].as_str().unwrap()
+    ))
+    .set("Content-Type", "application/json")
+    .send_string(&body.to_string());
+    match result {
+        Ok(response) | Err(ureq::Error::Status(_, response)) => response,
+        Err(error) => panic!("{error}"),
+    }
+}
+
 #[test]
 fn startup_link_exchanges_once_without_disclosing_the_bearer() {
     let repository = repository();
@@ -114,4 +132,16 @@ fn a_code_from_another_host_is_refused() {
     let refusal = exchange(&second, &launch_code(&first));
     assert_eq!(refusal.status(), 401);
     assert!(refusal.into_string().unwrap().contains("get --review-link"));
+}
+
+#[test]
+fn a_launch_request_for_another_scope_is_refused() {
+    let repository = repository();
+    let host = start(repository.path());
+
+    let refusal = mint_for_scope(&host, "other");
+    assert_eq!(refusal.status(), 403);
+    let message = refusal.into_string().unwrap();
+    assert!(message.contains("get --review-link"), "{message}");
+    assert!(!message.contains(host.startup["bearer"].as_str().unwrap()));
 }

@@ -30,6 +30,7 @@ fn rejects_missing_entry_and_reserved_paths() {
         "metadata",
         "review-config",
         "review-host-identity",
+        "review-launch",
         "v7",
         ".secret",
         "bad path",
