@@ -141,7 +141,11 @@ pub(super) struct DiscussionsCommand {
 }
 
 #[derive(Parser)]
-#[command(name = "provenance", about = "Work with records in one scope")]
+#[command(
+    name = "provenance",
+    about = "Work with records in one scope",
+    after_help = "For a bounded view across related record kinds, run:\n  provenance <id> get --view children --depth <N>"
+)]
 pub struct CatalogArgs {
     #[command(flatten)]
     pub common: Common,
