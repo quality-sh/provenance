@@ -93,7 +93,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         )
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(access, protect_origin));
-    let mut signals = ShutdownSignals::new()?;
+    let signals = ShutdownSignals::new()?;
     println!(
         "{}",
         json!({
@@ -103,6 +103,15 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         })
     );
     std::io::stdout().flush()?;
+    serve(listener, router, host, signals).await
+}
+
+async fn serve(
+    listener: tokio::net::TcpListener,
+    router: axum::Router,
+    host: StatementHost,
+    mut signals: ShutdownSignals,
+) -> anyhow::Result<()> {
     let (stop, stopped) = tokio::sync::oneshot::channel();
     let server = axum::serve(listener, router)
         .with_graceful_shutdown(async {
