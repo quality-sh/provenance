@@ -1,6 +1,6 @@
 use assert_cmd::Command;
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 use provenance_macros::verifies;
+use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 use serde_json::{json, Value};
 
 fn provenance() -> Command {
