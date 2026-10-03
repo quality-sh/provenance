@@ -54,3 +54,26 @@ fn centralized_repository_context_keeps_command_help() {
         "command help changed from origin/main"
     );
 }
+
+#[test]
+fn root_help_leads_to_dynamic_command_surfaces() {
+    let text = help(&["--help"]);
+
+    for command in [
+        "provenance api [PATH]",
+        "provenance <collection> --help",
+        "provenance <id> get --view children --depth <N>",
+    ] {
+        assert!(text.contains(command), "root help omits {command}: {text}");
+    }
+}
+
+#[test]
+fn collection_help_leads_to_bounded_record_views() {
+    let text = help(&["requirements", "--help"]);
+
+    assert!(
+        text.contains("provenance <id> get --view children --depth <N>"),
+        "collection help omits the bounded record view: {text}"
+    );
+}
