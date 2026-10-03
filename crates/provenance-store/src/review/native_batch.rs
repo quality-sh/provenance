@@ -4,14 +4,13 @@ use super::{guard, journal};
 use crate::{
     publication::with_staged_state,
     state_store::{
-        read_budget::ensure_slice_within_read_budget, readers, record_stamps::GraphRecord,
-        StateStore,
+        read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, StateStore,
     },
     write_error::{SourceFailure, WriteFailure},
 };
 use camino::Utf8Path;
 use provenance_core::{
-    review::{ReviewRecord, ReviewRecordKind, REVIEW_SCHEMA_VERSION},
+    review::{ReviewRecord, REVIEW_SCHEMA_VERSION},
     StableId,
 };
 
@@ -56,22 +55,35 @@ impl NativeRecordBatch<'_> {
         expected_etag: Option<&str>,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
-        let result = self.mutate(path, expected_etag, |records| {
+        let (result, changes) = self.write(path, expected_etag, |records| {
             let result = mutate(records)?;
             Ok((result.clone(), Some(result.id().clone())))
         })?;
-        readers::read_jsonl(self.store, path)?
+        changes
             .into_iter()
-            .find(|record: &T| record.id() == result.id())
+            .map(|(_, after)| after)
+            .find(|record| record.id() == result.id())
             .ok_or_else(|| anyhow::anyhow!("updated graph record is missing"))
     }
 
-    pub(crate) fn mutate<T, R>(
+    pub(crate) fn mutate_all<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        self.write(path, None, |records| {
+            mutate(records)?;
+            Ok(((), None))
+        })
+        .map(|_| ())
+    }
+
+    fn write<T, R>(
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<(R, Option<StableId>)>,
-    ) -> anyhow::Result<R>
+    ) -> anyhow::Result<(R, Vec<(T, T)>)>
     where
         T: GraphRecord,
     {
@@ -104,7 +116,7 @@ impl NativeRecordBatch<'_> {
                 self.store.validate_graph_scope(review.scope_id())?;
                 self.store.enroll_review_manifest()?;
             }
-            Ok(result)
+            Ok((result, changes))
         })
     }
 }

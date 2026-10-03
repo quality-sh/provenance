@@ -30,7 +30,10 @@ impl StateStore {
         let links = self.checked_update_links(&input.scope_id, input.links)?;
         let archived_in_commit = input.archived_in_commit.clone();
         let topic_path = crate::shards::topics_path(&self.layout, &input.scope_id);
-        let topic = batch.mutate_one(&topic_path, input.expected_etag.as_deref(), |topics| {
+        let topic = batch.mutate_one(
+            &topic_path,
+            input.expected_etag.as_deref(),
+            |topics: &mut Vec<Topic>| {
             let topic = topics
                 .iter_mut()
                 .find(|topic| topic.id == input.id)
@@ -41,14 +44,15 @@ impl StateStore {
             topic.archived_in_commit.clone_from(&archived_in_commit);
             clear_topic_claim_on_exit(topic);
             Ok(topic.clone())
-        })?;
+            },
+        )?;
         crate::test_probes::at("topic_archive_after_topic")?;
         let stamp = topic
             .archived_in_commit
             .as_ref()
             .ok_or_else(|| invalid("archived_in_commit is required for an archived Topic"))?;
         let questions_path = crate::shards::questions_path(&self.layout, &input.scope_id);
-        batch.mutate(&questions_path, None, |questions: &mut Vec<Question>| {
+        batch.mutate_all(&questions_path, |questions: &mut Vec<Question>| {
             for question in questions.iter_mut().filter(|question| {
                 question.topic_id == input.id && question.status != QuestionStatus::Archived
             }) {
@@ -57,7 +61,7 @@ impl StateStore {
                 clear_question_claim_on_exit(question);
                 crate::test_probes::at("topic_archive_question_changed")?;
             }
-            Ok(((), None))
+            Ok(())
         })?;
         Ok(topic)
     }
