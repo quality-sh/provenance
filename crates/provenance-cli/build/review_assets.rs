@@ -36,7 +36,7 @@ fn collect(root: &Path, dir: &Path, entries: &mut Vec<(String, String)>) -> io::
                 || !segment
                     .bytes()
                     .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
-        }) || matches!(first, "metadata" | "review-config" | "review-host-identity")
+        }) || matches!(first, "metadata" | "review-config" | "local-host-identity")
             || first.strip_prefix('v').is_some_and(|tail| {
                 !tail.is_empty() && tail.bytes().all(|byte| byte.is_ascii_digit())
             })

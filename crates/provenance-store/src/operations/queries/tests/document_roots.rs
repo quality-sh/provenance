@@ -13,7 +13,7 @@ fn input<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
 }
 
 #[tokio::test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
+#[verifies("rule_requirement_document_canonical_membership", conformance)]
 async fn inverse_document_read_follows_each_canonical_membership_rule() {
     let (dir, store, scope) = seeded_store();
     store

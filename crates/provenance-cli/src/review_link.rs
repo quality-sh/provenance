@@ -4,9 +4,8 @@ use provenance_cli::repo_context::RepoContext;
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use provenance_porcelain::get::{GetInput, View};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
-use std::time::Duration;
 
 #[derive(Clone)]
 pub struct AffectedReviewRecord {
@@ -19,14 +18,6 @@ struct LinkOutput {
     review_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct HostIdentity {
-    repository_id: String,
-    scope: String,
-    instance_nonce: String,
 }
 
 pub async fn print(
@@ -122,7 +113,10 @@ async fn link_output(
                 .join(", ")
         );
     };
-    let Some(runtime) = running_host(context).await else {
+    let Some(host) = provenance_transport::local_host::discover(
+        context.repo.as_std_path(),
+        &context.scope,
+    )? else {
         return Ok(Some(LinkOutput {
             review_url: None,
             message: Some(start_message(context)),
@@ -130,54 +124,9 @@ async fn link_output(
     };
     let focus = (root.as_str() != record.id).then_some(record.id.as_str());
     Ok(Some(LinkOutput {
-        review_url: Some(build_url(&runtime.endpoint, root.as_str(), focus)?),
+        review_url: Some(build_url(host.endpoint(), root.as_str(), focus)),
         message: None,
     }))
-}
-
-async fn running_host(context: &RepoContext) -> Option<crate::review_runtime::RunningHost> {
-    let hosts = crate::review_runtime::read(context.repo.as_std_path(), &context.scope)?;
-    if hosts.iter().any(|host| host.scope != context.scope) {
-        return None;
-    }
-    for host in hosts.into_iter().rev() {
-        if verified_host(host.clone()).await {
-            return Some(host);
-        }
-    }
-    None
-}
-
-/// Accepts only a live loopback host whose public identity matches its runtime record.
-#[rule("rule_review_link_opens_repository_host_only")]
-async fn verified_host(runtime: crate::review_runtime::RunningHost) -> bool {
-    let expected = runtime.clone();
-    tokio::task::spawn_blocking(move || {
-        let Ok(mut url) = crate::review_runtime::validate_endpoint(&runtime.endpoint) else {
-            return false;
-        };
-        url.set_path("/review-host-identity");
-        let agent = ureq::AgentBuilder::new()
-            .redirects(0)
-            .timeout_connect(Duration::from_millis(200))
-            .timeout_read(Duration::from_millis(200))
-            .timeout_write(Duration::from_millis(200))
-            .build();
-        let Ok(response) = agent.get(url.as_str()).call() else {
-            return false;
-        };
-        let Ok(text) = response.into_string() else {
-            return false;
-        };
-        let Ok(identity) = serde_json::from_str::<HostIdentity>(&text) else {
-            return false;
-        };
-        identity.repository_id == expected.repository_id
-            && identity.scope == expected.scope
-            && identity.instance_nonce == expected.instance_nonce
-    })
-    .await
-    .unwrap_or(false)
 }
 
 fn start_message(context: &RepoContext) -> String {
@@ -189,8 +138,8 @@ fn start_message(context: &RepoContext) -> String {
 
 /// Puts the review document and optional focused record into the review URL.
 #[rule("rule_review_link_needs_no_record_id")]
-fn build_url(endpoint: &str, root: &str, focus: Option<&str>) -> anyhow::Result<String> {
-    let mut url = crate::review_runtime::validate_endpoint(endpoint)?;
+fn build_url(endpoint: &url::Url, root: &str, focus: Option<&str>) -> String {
+    let mut url = endpoint.clone();
     {
         let mut query = url.query_pairs_mut();
         query.append_pair("root", root);
@@ -198,7 +147,7 @@ fn build_url(endpoint: &str, root: &str, focus: Option<&str>) -> anyhow::Result<
             query.append_pair("focus", focus);
         }
     }
-    Ok(url.into())
+    url.into()
 }
 
 #[cfg(test)]
@@ -209,7 +158,8 @@ mod tests {
     #[test]
     #[verifies("rule_agent_review_request_includes_link", examples)]
     fn link_builder_encodes_record_ids() {
-        let url = build_url("http://127.0.0.1:1234/", "req root", Some("rule/focus")).unwrap();
+        let endpoint = url::Url::parse("http://127.0.0.1:1234/").unwrap();
+        let url = build_url(&endpoint, "req root", Some("rule/focus"));
         assert_eq!(
             url,
             "http://127.0.0.1:1234/?root=req+root&focus=rule%2Ffocus"

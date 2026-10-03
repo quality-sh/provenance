@@ -29,7 +29,7 @@ fn rejects_missing_entry_and_reserved_paths() {
     for name in [
         "metadata",
         "review-config",
-        "review-host-identity",
+        "local-host-identity",
         "v7",
         ".secret",
         "bad path",

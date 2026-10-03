@@ -103,7 +103,7 @@ fn fake_host(identity: &Value) -> FakeHost {
             let mut request = [0_u8; 2048];
             let count = stream.read(&mut request).unwrap_or(0);
             let path_matches = String::from_utf8_lossy(&request[..count])
-                .starts_with("GET /review-host-identity HTTP/1.1");
+                .starts_with("GET /local-host-identity HTTP/1.1");
             let (status, response) = if path_matches {
                 ("200 OK", body.as_str())
             } else {
@@ -125,7 +125,7 @@ fn fake_host(identity: &Value) -> FakeHost {
 }
 
 fn publish_host(repo: &str, stored: &Value) {
-    let path = std::path::Path::new(repo).join(".provenance/cache/review-hosts/default.json");
+    let path = std::path::Path::new(repo).join(".provenance/cache/local-hosts/default.json");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::set_permissions(
         path.parent().unwrap(),
@@ -134,7 +134,7 @@ fn publish_host(repo: &str, stored: &Value) {
     .unwrap();
     std::fs::write(
         &path,
-        serde_json::to_vec(&json!({"hosts":[stored]})).unwrap(),
+        serde_json::to_vec(stored).unwrap(),
     )
     .unwrap();
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
@@ -146,12 +146,12 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
     let (_directory, repo) = initialized_repo();
     allow_reviewer(&repo);
     let host = fake_host(&json!({
-        "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
+        "schemaVersion":1, "repositoryId":"local", "scope":"default", "instanceNonce":"nonce"
     }));
     publish_host(
         &repo,
         &json!({
-            "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
+            "schemaVersion":1, "endpoint":host.endpoint, "repositoryId":"local", "scope":"default",
             "instanceNonce":"nonce"
         }),
     );
