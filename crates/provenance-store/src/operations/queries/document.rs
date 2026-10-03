@@ -94,12 +94,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         .live(crate::operations::reader::Live::Canonical)
         .store()
         .document_review_state(ctx.snapshot().scope(), &review_records)?;
-    let mut review_totals = DocumentReviewTotals::default();
-    for (kind, id, is_member) in &review_keys {
-        if *is_member {
-            review_totals.include(&review_state.summary(*kind, id));
-        }
-    }
+    let review_totals = document_review_totals(&review_keys, &review_state);
     let (cursor, mut position) = Cursor::open_live(
         ctx,
         "read-document",
@@ -169,4 +164,19 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         review_totals,
         entries,
     })
+}
+
+/// Aggregates review totals from the filtered document members.
+#[rule("rule_document_has_review_totals")]
+fn document_review_totals(
+    review_keys: &[(NodeType, StableId, bool)],
+    review_state: &crate::review::DocumentReviewState,
+) -> DocumentReviewTotals {
+    let mut totals = DocumentReviewTotals::default();
+    for (kind, id, is_member) in review_keys {
+        if *is_member {
+            totals.include(&review_state.summary(*kind, id));
+        }
+    }
+    totals
 }

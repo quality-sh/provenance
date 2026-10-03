@@ -32,9 +32,8 @@ impl DocumentReviewState {
 }
 
 impl StateStore {
-    /// Builds the current review outcome for each entry and the totals for the document.
+    /// Builds the current review outcome for each document entry.
     #[rule("rule_document_entry_has_review_outcome")]
-    #[rule("rule_document_has_review_totals")]
     pub(crate) fn document_review_state(
         &self,
         scope: &ScopeId,
@@ -73,10 +72,7 @@ impl StateStore {
         })
     }
 
-    /// Reads the decision state of one Requirement: the submission still
-    /// waiting, the acceptance that matches current content, every terminal
-    /// decision, and every withdrawal.
-    #[rule("rule_content_change_requires_new_review")]
+    /// Reads the current and historical decision state of one Requirement.
     pub fn requirement_decision_state(
         &self,
         scope: &ScopeId,

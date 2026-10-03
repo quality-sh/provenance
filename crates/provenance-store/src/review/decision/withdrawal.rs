@@ -8,7 +8,6 @@ use crate::{
         journal, owner_matches,
     },
     state_store::StateStore,
-    write_error::SourceFailure,
 };
 use provenance_core::{
     review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
@@ -76,16 +75,18 @@ impl StateStore {
             let head = self
                 .head(&record)?
                 .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
-            if head.revision != binding.revision
+            let conflicted = head.revision != binding.revision
                 || classifier::content_digest(kind, &record)? != binding.content_digest
                 || facts.is_withdrawn(&input.proposal_id)
-                || facts.is_decided(&input.proposal_id)
-            {
-                return Err(SourceFailure::wrap(
-                    facts.conflict_failure(self, &scope, kind, record_id)?,
-                    anyhow::anyhow!("this review submission is no longer current and pending"),
-                ));
-            }
+                || facts.is_decided(&input.proposal_id);
+            facts.refuse_review_conflict(
+                self,
+                &scope,
+                kind,
+                record_id,
+                conflicted,
+                "this review submission is no longer current and pending",
+            )?;
             with_staged_state(&self.layout, false, |layout| {
                 Self::new(layout.clone()).commit_withdrawal(input, request_id, digest)
             })

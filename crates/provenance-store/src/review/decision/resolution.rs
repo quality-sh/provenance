@@ -65,12 +65,14 @@ impl StateStore {
                     anyhow::anyhow!("this record kind does not support review feedback"),
                 ));
             }
-            if facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id) {
-                return Err(SourceFailure::wrap(
-                    facts.conflict_failure(self, &scope, kind, record_id)?,
-                    anyhow::anyhow!("this review submission is no longer pending"),
-                ));
-            }
+            facts.refuse_review_conflict(
+                self,
+                &scope,
+                kind,
+                record_id,
+                facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id),
+                "this review submission is no longer pending",
+            )?;
             with_staged_state(&self.layout, false, |layout| {
                 Self::new(layout.clone()).commit_decision(input, request_id, digest)
             })
@@ -97,15 +99,17 @@ impl StateStore {
         let head = self
             .head(&record)?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
-        if head.revision != binding.revision
-            || classifier::content_digest(kind, &record)? != binding.content_digest
-        {
-            let facts = CycleFacts::validated(self, &input.scope_id)?;
-            return Err(SourceFailure::wrap(
-                facts.conflict_failure(self, &input.scope_id, kind, &record_id)?,
-                anyhow::anyhow!("stale review selection"),
-            ));
-        }
+        let content_changed = head.revision != binding.revision
+            || classifier::content_digest(kind, &record)? != binding.content_digest;
+        let facts = CycleFacts::validated(self, &input.scope_id)?;
+        facts.refuse_review_conflict(
+            self,
+            &input.scope_id,
+            kind,
+            &record_id,
+            content_changed,
+            "stale review selection",
+        )?;
         let disposition_id = journal::new_id();
         guard::with_writer(
             &shards::dispositions_path(&self.layout, &input.scope_id),

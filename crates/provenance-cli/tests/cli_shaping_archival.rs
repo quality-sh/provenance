@@ -106,6 +106,7 @@ fn initialized_records() -> tempfile::TempDir {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_question_delete_archives", examples)]
 fn archiving_a_question_keeps_its_topic_and_discussion_history() {
     let directory = initialized_records();
     let repo = directory.path().to_str().unwrap();
@@ -129,6 +130,7 @@ fn archiving_a_question_keeps_its_topic_and_discussion_history() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_topic_delete_archives_questions", examples)]
 fn archiving_a_topic_archives_all_of_its_questions_in_one_update() {
     let directory = initialized_records();
     let repo = directory.path().to_str().unwrap();

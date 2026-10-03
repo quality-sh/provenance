@@ -9,8 +9,6 @@ pub struct InitialReviewer {
     pub notice: String,
 }
 
-/// Selects the human reviewer during repository initialization.
-#[provenance_macros::rule("rule_init_configures_human_reviewer")]
 pub fn select(path: &Utf8Path) -> anyhow::Result<InitialReviewer> {
     let git_identity = git_actor_id(path);
     let actor_id = if std::io::stdin().is_terminal() {
@@ -32,8 +30,6 @@ fn read_only_warning(path: &std::path::Path) -> String {
     )
 }
 
-/// States that a review page without a configured reviewer is read-only.
-#[provenance_macros::rule("rule_review_page_declares_read_only")]
 pub fn review_page_warning(path: &std::path::Path) -> String {
     format!(
         "Warning: No reviewer is configured. The review page will be read-only. Add a reviewer with `provenance init --path {} --disposition-actor-id <reviewer-id>`.",
