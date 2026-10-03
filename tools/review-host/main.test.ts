@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { verifies } from '../../packages/provenance/src/rules.ts';
 import { bootstrapReviewPage, type BrowserElement } from './bootstrap.ts';
 
 class ElementFixture implements BrowserElement {
@@ -44,9 +45,8 @@ function fixture(search: string) {
   return { elements, mounted };
 }
 
-// @provenance verification: examples
-// @provenance rule: rule_review_link_needs_no_record_id
 test('the linked root and focus reach the renderer after connection', async () => {
+  verifies('rule_review_link_needs_no_record_id', 'examples');
   const { elements, mounted } = fixture('?root=req_root&focus=rule_focus');
   elements.access.submit();
   await new Promise(resolve => setImmediate(resolve));
