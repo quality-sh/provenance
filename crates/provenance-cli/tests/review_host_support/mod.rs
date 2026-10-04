@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use serde_json::Value;
 use std::{
     io::{BufRead, BufReader},
@@ -54,7 +56,7 @@ impl Host {
         }
     }
 
-    pub fn take_stderr(&mut self) -> std::process::ChildStderr {
+    pub const fn take_stderr(&mut self) -> std::process::ChildStderr {
         self.child.stderr.take().expect("piped host stderr")
     }
 

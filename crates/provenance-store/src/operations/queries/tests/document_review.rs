@@ -282,7 +282,6 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
         assert_eq!(review(&accepted, id.as_str())["outcome"], "accepted");
 
         revise(&store, kind, &id);
-        let revised = page(&root, 50, false).await;
         let second = if kind == NodeType::Requirement {
             store
                 .record_decision_state(&scope, kind, &id)
