@@ -127,6 +127,17 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+## Tests are part of the spec
+
+A test that is bound to a Rule approves that behaviour for release. Use the
+bindings and evidence methods that the Rules section defines. An implementation-aid
+test is allowed, but it has no Rule binding and states its reason. Each code review
+lists the behaviours that the change asks the reviewer to approve. It also flags a
+test that has no Rule or has the wrong Rule, uses a private surface, reaches an
+otherwise unreachable state, checks non-source content, checks a type guarantee, or
+duplicates a mock, fake, or fixture. The `code-review` skill performs this work in
+its Tests axis.
+
 ## Rules
 
 A Rule is an identified atomic behavioural obligation that refines a Requirement and may

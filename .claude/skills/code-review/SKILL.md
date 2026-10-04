@@ -1,14 +1,15 @@
 ---
 name: code-review
-description: Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/PRD asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to "review since X".
+description: Review the changes since a fixed point (commit, branch, tag, or merge-base) along three axes — Standards, Spec, and Tests. Runs all three reviews in parallel sub-agents and reports them separately. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to "review since X".
 ---
 
-Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
+Three-axis review of the diff between `HEAD` and a fixed point the user supplies:
 
 - **Standards** — does the code conform to this repo's documented coding standards?
 - **Spec** — does the code faithfully implement the originating issue / PRD / spec?
+- **Tests** — which product behaviours do the tests ask the reviewer to approve, and which tests are implementation aids?
 
-Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
+All three axes run as **parallel sub-agents** so they do not pollute each other's context. This skill then aggregates their findings.
 
 The issue tracker should have been provided to you — run `/setup-matt-pocock-skills` if `docs/agents/issue-tracker.md` is missing.
 
@@ -55,9 +56,9 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 
-### 4. Spawn both sub-agents in parallel
+### 4. Spawn all three sub-agents in parallel
 
-Send a single message with two `Agent` tool calls. Use the `general-purpose` subagent for both.
+Send a single message with three `Agent` tool calls. Use the `general-purpose` subagent for all three.
 
 **Standards sub-agent prompt** — include:
 
@@ -81,17 +82,34 @@ Send a single message with two `Agent` tool calls. Use the `general-purpose` sub
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report.
 
+**Tests sub-agent prompt** — include:
+
+- The full diff command and commit list.
+- This brief in full:
+
+  "Scope: every test the diff adds or changes, Rust and TypeScript, and every other test in a test file the diff touches. A test that already exists on main is not exempt.
+
+  For each test, or group of tests that check one obligation:
+
+  1. Class: **Spec** (bound with `#[verifies(rule, method)]` to a Rule whose statement it truly checks through a public surface: CLI command, HTTP route, public crate API) or **Implementation aid** (no Rule; it must state its reason: pins behaviour before a refactor, security hardening detail, budget, codegen check). An aid is acceptable, but it is not evidence and does not approve a behaviour.
+  2. Flags, each with the test name and file:line: (1) verifies no Rule, or the bound Rule's statement is not what the test checks; (2) tests a private function or method; (3) tests a state that the code otherwise cannot reach; (4) tests non-source content (docs, guidance or instruction text, config text); (5) tests what the type system already guarantees; (6) uses a mock, fake or fixture that duplicates one elsewhere in the repo.
+  3. One test, one obligation. A unit test that checks several obligations is a finding; say how to split it. Only a deliberate integration or end-to-end flow may check several steps, and its name or a one-line doc comment must say it covers a flow.
+  4. For each Rule the change binds or adds: read it with `provenance <id>` and walk `provenance <id> --view grounding --depth 6`. Learn the CLI from `provenance --help`; never use `get`. Say whether it reaches the Requirement of the feature. A Rule whose natural parent sits outside the feature's subtree is a possible seam problem (code in the wrong layer, or one obligation implemented twice); name the code.
+
+  Output, under 500 words: first **Behaviours to approve**: each Rule the change newly verifies, adds, or rewords, with its statement and the tests that verify it, so the reviewer approves behaviour knowingly. Then a table (test or group → class → Rule id or aid reason → flags). Then grounding and seam findings, or \"none\"."
+
 ### 5. Aggregate
 
-Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings — the two axes are deliberately separate (see _Why two axes_).
+Present the three reports under `## Standards`, `## Spec`, and `## Tests` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings. The three axes are deliberately separate (see _Why three axes_).
 
-End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
+End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Do not pick a single winner across axes. The separation prevents that reranking.
 
-## Why two axes
+## Why three axes
 
-A change can pass one axis and fail the other:
+A change can pass one axis and fail another:
 
 - Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
 - Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
+- Code that implements the requested feature but uses tests as evidence for a different behaviour → **Spec pass, Tests fail.**
 
 Reporting them separately stops one axis from masking the other.
