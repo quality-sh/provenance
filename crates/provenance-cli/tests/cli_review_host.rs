@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use std::{net::TcpListener, time::Duration};
 
 #[test]
+/// This flow checks startup assets, configuration, and selected-graph routing.
 #[verifies("rule_cli_serves_review_assets", examples)]
 fn serves_assets_configuration_and_only_the_selected_graph() {
     let repo = repository();
