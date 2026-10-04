@@ -83,8 +83,7 @@ fn registry(root: &std::path::Path) -> std::path::PathBuf {
 }
 
 #[test]
-#[verifies("rule_review_link_opens_repository_host_only", examples)]
-fn registration_publishes_one_owner_only_record_and_removes_it_on_drop() {
+fn registration_publishes_its_identity() {
     let repository = tempfile::tempdir().unwrap();
     let registration = LocalHostRegistration::publish(
         repository.path(),
@@ -104,7 +103,36 @@ fn registration_publishes_one_owner_only_record_and_removes_it_on_drop() {
         published["instanceNonce"],
         registration.identity().instance_nonce
     );
+}
+
+#[test]
+fn registration_does_not_publish_credentials() {
+    let repository = tempfile::tempdir().unwrap();
+    let _registration = LocalHostRegistration::publish(
+        repository.path(),
+        "default",
+        "http://127.0.0.1:1234",
+        "local",
+    )
+    .unwrap();
+    let published: Value =
+        serde_json::from_slice(&std::fs::read(registry(repository.path())).unwrap()).unwrap();
+
     assert!(published.get("bearer").is_none());
+}
+
+#[test]
+fn registration_uses_owner_only_permissions() {
+    let repository = tempfile::tempdir().unwrap();
+    let _registration = LocalHostRegistration::publish(
+        repository.path(),
+        "default",
+        "http://127.0.0.1:1234",
+        "local",
+    )
+    .unwrap();
+    let path = registry(repository.path());
+
     assert_eq!(
         std::fs::metadata(path.parent().unwrap())
             .unwrap()
@@ -117,13 +145,26 @@ fn registration_publishes_one_owner_only_record_and_removes_it_on_drop() {
         std::fs::metadata(&path).unwrap().permissions().mode() & 0o077,
         0
     );
+}
+
+#[test]
+fn registration_removes_its_record_on_drop() {
+    let repository = tempfile::tempdir().unwrap();
+    let registration = LocalHostRegistration::publish(
+        repository.path(),
+        "default",
+        "http://127.0.0.1:1234",
+        "local",
+    )
+    .unwrap();
+    let path = registry(repository.path());
 
     drop(registration);
+
     assert!(!path.exists());
 }
 
 #[test]
-#[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn publication_replaces_permissive_modes() {
     let repository = tempfile::tempdir().unwrap();
     let path = registry(repository.path());
@@ -156,7 +197,6 @@ fn publication_replaces_permissive_modes() {
 }
 
 #[test]
-#[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn publication_refuses_a_live_slot_owner() {
     let repository = tempfile::tempdir().unwrap();
     let first_host = ProbeHost::start();
@@ -184,7 +224,6 @@ fn publication_refuses_a_live_slot_owner() {
 }
 
 #[test]
-#[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn publication_reclaims_a_stale_slot() {
     let repository = tempfile::tempdir().unwrap();
     let stale =
@@ -211,7 +250,7 @@ fn publication_reclaims_a_stale_slot() {
 
 #[test]
 #[verifies("rule_review_link_opens_repository_host_only", examples)]
-fn discovery_returns_only_a_matching_live_host() {
+fn discovery_returns_a_matching_live_host() {
     let repository = tempfile::tempdir().unwrap();
     let host = ProbeHost::start();
     let registration =
@@ -224,6 +263,16 @@ fn discovery_returns_only_a_matching_live_host() {
         discovered.endpoint().as_str(),
         format!("{}/", host.endpoint)
     );
+}
+
+#[test]
+#[verifies("rule_review_link_opens_repository_host_only", examples)]
+fn discovery_rejects_an_identity_mismatch() {
+    let repository = tempfile::tempdir().unwrap();
+    let host = ProbeHost::start();
+    let registration =
+        LocalHostRegistration::publish(repository.path(), "default", &host.endpoint, "local")
+            .unwrap();
 
     host.answer_with(json!({
         "schemaVersion": 1,
@@ -266,14 +315,9 @@ fn publication_rejects_non_loopback_or_non_base_endpoints() {
 }
 
 #[test]
-#[verifies("rule_review_link_opens_repository_host_only", conformance)]
-fn published_shapes_match_the_version_one_fixtures() {
+fn published_registry_matches_the_version_one_fixture() {
     let expected_registry: Value = serde_json::from_str(include_str!(
         "../../../docs/fixtures/local-host/registry-v1.json"
-    ))
-    .unwrap();
-    let expected_identity: Value = serde_json::from_str(include_str!(
-        "../../../docs/fixtures/local-host/identity-v1.json"
     ))
     .unwrap();
     let repository = tempfile::tempdir().unwrap();
@@ -286,10 +330,27 @@ fn published_shapes_match_the_version_one_fixtures() {
     .unwrap();
     let mut published: Value =
         serde_json::from_slice(&std::fs::read(registry(repository.path())).unwrap()).unwrap();
-    let mut identity = serde_json::to_value(registration.identity()).unwrap();
     published["instanceNonce"] = expected_registry["instanceNonce"].clone();
-    identity["instanceNonce"] = expected_identity["instanceNonce"].clone();
 
     assert_eq!(published, expected_registry);
+}
+
+#[test]
+fn published_identity_matches_the_version_one_fixture() {
+    let expected_identity: Value = serde_json::from_str(include_str!(
+        "../../../docs/fixtures/local-host/identity-v1.json"
+    ))
+    .unwrap();
+    let repository = tempfile::tempdir().unwrap();
+    let registration = LocalHostRegistration::publish(
+        repository.path(),
+        expected_identity["scope"].as_str().unwrap(),
+        "http://127.0.0.1:41731",
+        expected_identity["repositoryId"].as_str().unwrap(),
+    )
+    .unwrap();
+    let mut identity = serde_json::to_value(registration.identity()).unwrap();
+    identity["instanceNonce"] = expected_identity["instanceNonce"].clone();
+
     assert_eq!(identity, expected_identity);
 }

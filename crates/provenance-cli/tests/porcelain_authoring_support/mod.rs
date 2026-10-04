@@ -62,6 +62,18 @@ pub fn json_stdin_output(arguments: &[&str], input: &Value) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+pub fn allow_reviewer(repo: &str) {
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
+    let mut manifest: provenance_core::Manifest =
+        serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
+    manifest.disposition_actor_ids.push("reviewer".into());
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+}
+
 #[allow(dead_code)]
 pub struct LocalHost {
     pub endpoint: String,

@@ -1,8 +1,8 @@
 mod porcelain_authoring_support;
 
 use porcelain_authoring_support::{
-    initialized_repo, json_output, json_stdin_output, local_host, local_host_with_identity,
-    provenance, write_local_host_fixture,
+    allow_reviewer, initialized_repo, json_output, json_stdin_output, local_host,
+    local_host_with_identity, provenance, write_local_host_fixture,
 };
 use provenance_macros::verifies;
 use provenance_transport::local_host::LocalHostRegistration;
@@ -31,6 +31,12 @@ fn write_output_explains_how_to_start_a_missing_review_host() {
         .as_str()
         .unwrap()
         .contains("provenance review"));
+}
+
+#[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
+fn readable_write_output_explains_how_to_start_a_missing_review_host() {
+    let (_directory, repo) = initialized_repo();
 
     provenance()
         .args([
@@ -50,7 +56,7 @@ fn write_output_explains_how_to_start_a_missing_review_host() {
 
 #[test]
 #[verifies("rule_agent_review_request_includes_link", examples)]
-fn write_and_explicit_read_link_to_the_containing_requirement() {
+fn write_output_links_to_the_containing_requirement() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
         "req_link",
@@ -82,6 +88,40 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
     ]);
     let expected = format!("{}/?root=req_link&focus=rule_link", host.endpoint);
     assert_eq!(created["data"]["review_url"], expected);
+}
+
+#[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
+fn explicit_read_links_to_the_containing_requirement() {
+    let (_directory, repo) = initialized_repo();
+    json_output(&[
+        "req_link",
+        "create",
+        "--type",
+        "requirement",
+        "--repo",
+        &repo,
+        "--statement",
+        "The agent gives the reviewer a link.",
+        "--format",
+        "json",
+    ]);
+    json_output(&[
+        "rule_link",
+        "create",
+        "--type",
+        "rule",
+        "--repo",
+        &repo,
+        "--statement",
+        "The review output includes a link.",
+        "--requirement-id",
+        "req_link",
+        "--format",
+        "json",
+    ]);
+    let host = local_host(&repo);
+    let expected = format!("{}/?root=req_link&focus=rule_link", host.endpoint);
 
     let link = json_output(&[
         "rule_link",
@@ -97,7 +137,7 @@ fn write_and_explicit_read_link_to_the_containing_requirement() {
 
 #[test]
 #[verifies("rule_review_link_opens_repository_host_only", examples)]
-fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
+fn invalid_runtime_records_do_not_produce_links() {
     for endpoint in [
         "https://127.0.0.1:1234",
         "http://127.0.0.1:1234/path",
@@ -133,7 +173,11 @@ fn stale_listener_and_invalid_runtime_records_do_not_produce_links() {
             .unwrap()
             .contains("provenance review"));
     }
+}
 
+#[test]
+#[verifies("rule_review_link_opens_repository_host_only", examples)]
+fn a_stale_listener_does_not_produce_a_link() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
         "req_link",
@@ -236,39 +280,95 @@ fn explicit_link_read_explains_how_to_start_the_host() {
         .contains("provenance review"));
 }
 
-fn allow_reviewer(repo: &str) {
-    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
-    let mut manifest: provenance_core::Manifest =
-        serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-}
-
-#[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
-fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
-    let (_directory, repo) = initialized_repo();
-    allow_reviewer(&repo);
-    let host = local_host(&repo);
-    let expected = format!("{}/?root=req_flow", host.endpoint);
-    let created = json_output(&[
-        "req_flow",
+fn create_requirement(repo: &str, id: &str) -> serde_json::Value {
+    json_output(&[
+        id,
         "create",
         "--type",
         "requirement",
         "--repo",
-        &repo,
+        repo,
         "--statement",
-        "The review flow keeps its link.",
+        "The review action keeps its link.",
         "--format",
         "json",
-    ]);
-    assert_eq!(created["data"]["review_url"], expected);
+    ])
+}
+
+fn update_payload() -> serde_json::Value {
+    json!({"actor":"agent","description":"Updated review text."})
+}
+
+fn withdraw_payload() -> serde_json::Value {
+    json!({"actor":"agent","declared_by":null,"reason":null})
+}
+
+fn submission_payload() -> serde_json::Value {
+    json!({
+        "actor":"agent", "title":"Review", "summary":"Review the updated record.",
+        "source_ids":[], "evidence_references":[], "builds_on":[]
+    })
+}
+
+fn decision_payload() -> serde_json::Value {
+    json!({
+        "actor":{"identity_type":"human","id":"reviewer"}, "decision":"accepted",
+        "rationale":null,
+        "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_flow"},
+        "feedback":null, "declared_by":null
+    })
+}
+
+fn pending_submission(repo: &str) -> (serde_json::Value, String) {
+    let created = create_requirement(repo, "req_flow");
+    let proposal = created["data"]["decision"]["pending"]["proposal_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    (created, proposal)
+}
+
+fn ready_to_submit(repo: &str) {
+    let (_, proposal) = pending_submission(repo);
+    json_stdin_output(
+        &[
+            "requirements",
+            "req_flow",
+            "submissions",
+            &proposal,
+            "withdraw",
+            "--repo",
+            repo,
+            "--stdin",
+            "--format",
+            "json",
+        ],
+        &withdraw_payload(),
+    );
+}
+
+fn assert_review_link(output: &serde_json::Value, root: &str) {
+    assert_eq!(output["data"]["review_url"], root);
+}
+
+#[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
+fn create_returns_the_review_link() {
+    let (_directory, repo) = initialized_repo();
+    let host = local_host(&repo);
+
+    let created = create_requirement(&repo, "req_flow");
+
+    assert_review_link(&created, &format!("{}/?root=req_flow", host.endpoint));
+}
+
+#[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
+fn update_returns_the_review_link() {
+    let (_directory, repo) = initialized_repo();
+    let created = create_requirement(&repo, "req_flow");
     let etag = created["data"]["edit"]["etag"].as_str().unwrap();
+    let host = local_host(&repo);
     let updated = json_stdin_output(
         &[
             "requirements",
@@ -282,18 +382,24 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
             "--format",
             "json",
         ],
-        &json!({"actor":"agent","description":"Updated review text."}),
+        &update_payload(),
     );
-    assert_eq!(updated["data"]["review_url"], expected);
-    let automatic = updated["data"]["decision"]["pending"]["proposal_id"]
-        .as_str()
-        .unwrap();
+
+    assert_review_link(&updated, &format!("{}/?root=req_flow", host.endpoint));
+}
+
+#[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
+fn withdraw_returns_the_review_link() {
+    let (_directory, repo) = initialized_repo();
+    let (_, proposal) = pending_submission(&repo);
+    let host = local_host(&repo);
     let withdrawn = json_stdin_output(
         &[
             "requirements",
             "req_flow",
             "submissions",
-            automatic,
+            &proposal,
             "withdraw",
             "--repo",
             &repo,
@@ -301,26 +407,41 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
             "--format",
             "json",
         ],
-        &json!({"actor":"agent","declared_by":null,"reason":null}),
+        &withdraw_payload(),
     );
-    assert_eq!(withdrawn["data"]["review_url"], expected);
+
+    assert_review_link(&withdrawn, &format!("{}/?root=req_flow", host.endpoint));
+}
+
+#[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
+fn submit_returns_the_review_link() {
+    let (_directory, repo) = initialized_repo();
+    ready_to_submit(&repo);
+    let host = local_host(&repo);
     let submitted = json_stdin_output(
         &[
             "req_flow", "submit", "--repo", &repo, "--stdin", "--format", "json",
         ],
-        &json!({
-            "actor":"agent", "title":"Review", "summary":"Review the updated record.",
-            "source_ids":[], "evidence_references":[], "builds_on":[]
-        }),
+        &submission_payload(),
     );
-    assert_eq!(submitted["data"]["review_url"], expected);
-    let proposal = submitted["data"]["proposal_id"].as_str().unwrap();
+
+    assert_review_link(&submitted, &format!("{}/?root=req_flow", host.endpoint));
+}
+
+#[test]
+#[verifies("rule_agent_review_request_includes_link", examples)]
+fn decide_returns_the_review_link() {
+    let (_directory, repo) = initialized_repo();
+    allow_reviewer(&repo);
+    let (_, proposal) = pending_submission(&repo);
+    let host = local_host(&repo);
     let decided = json_stdin_output(
         &[
             "requirements",
             "req_flow",
             "submissions",
-            proposal,
+            &proposal,
             "decide",
             "--repo",
             &repo,
@@ -328,12 +449,8 @@ fn update_submit_withdraw_and_decide_outputs_keep_the_review_link() {
             "--format",
             "json",
         ],
-        &json!({
-            "actor":{"identity_type":"human","id":"reviewer"}, "decision":"accepted",
-            "rationale":null,
-            "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_flow"},
-            "feedback":null, "declared_by":null
-        }),
+        &decision_payload(),
     );
-    assert_eq!(decided["data"]["review_url"], expected);
+
+    assert_review_link(&decided, &format!("{}/?root=req_flow", host.endpoint));
 }

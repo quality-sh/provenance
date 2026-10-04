@@ -1,6 +1,5 @@
 #![cfg(unix)]
 
-use provenance_macros::verifies;
 use serde_json::Value;
 use std::{
     io::{BufRead, BufReader},
@@ -66,7 +65,6 @@ fn stop(child: &mut Child) {
 }
 
 #[test]
-#[verifies("rule_review_link_opens_repository_host_only", examples)]
 fn review_host_serves_its_local_host_identity() {
     let repository = repository();
     let (mut child, startup) = start(repository.path());
