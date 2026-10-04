@@ -232,15 +232,16 @@ fn discussion_writes_use_the_bound_scope() {
     let messages = request(
         &host,
         "GET",
-        &format!(
-            "/requirements/req_example/discussions/{discussion_id}/messages"
-        ),
+        &format!("/requirements/req_example/discussions/{discussion_id}/messages"),
         true,
     )
     .call()
     .unwrap();
     let messages: Value = serde_json::from_str(&messages.into_string().unwrap()).unwrap();
-    assert_eq!(messages["data"]["items"][0]["body"], "Check this requirement.");
+    assert_eq!(
+        messages["data"]["items"][0]["body"],
+        "Check this requirement."
+    );
 }
 
 #[test]
