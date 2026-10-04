@@ -4,7 +4,6 @@ mod review_host_support;
 
 use provenance_macros::verifies;
 use review_host_support::{repository, request, response, start};
-use serde_json::json;
 
 #[test]
 #[verifies("rule_domain_boundary_accept_no_discussions", exhaustion)]
@@ -32,7 +31,7 @@ fn served_discussion_routes_exclude_domain_and_boundary_parents() {
             404
         );
         assert_eq!(
-            response(request(&host, "POST", &path, true).send_json(json!({}))).status(),
+            response(request(&host, "POST", &path, true).send_string("{}")).status(),
             404
         );
     }
