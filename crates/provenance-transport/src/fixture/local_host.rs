@@ -41,19 +41,6 @@ impl LocalHostFixture {
         Self::serve(listener, endpoint, body, Some(registration))
     }
 
-    pub fn probe(body: Value) -> Self {
-        let (listener, endpoint) = listener();
-        Self::serve(listener, endpoint, body.to_string(), None)
-    }
-
-    pub fn answer_with(&mut self, body: Value) {
-        self.stop_listener();
-        let listener = TcpListener::bind(self.endpoint.trim_start_matches("http://")).unwrap();
-        let (stop, thread) = serve(listener, body.to_string());
-        self.stop = stop;
-        self.thread = Some(thread);
-    }
-
     pub fn identity(&self) -> LocalHostIdentity {
         self.registration.as_ref().unwrap().identity()
     }
