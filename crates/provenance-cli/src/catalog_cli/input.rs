@@ -111,9 +111,10 @@ pub(super) fn parse(
         merge_stdin(&mut data, &assignments)?;
     }
     let hide_terminal = matches!(query_action, None | Some("search"))
-        && definition.parameters()
-        .iter()
-        .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
+        && definition
+            .parameters()
+            .iter()
+            .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
     if hide_terminal && !query.contains_key("exclude_terminal") {
         let exclude_terminal = crate::read_policy::exclude_terminal(false).to_string();
         query.insert("exclude_terminal".into(), exclude_terminal);
@@ -190,7 +191,7 @@ fn bind_parameter(
                 .headers
                 .iter()
                 .any(|binding| binding.name == parameter.name && binding.field == "expected_etag");
-            if expects_review_etag && !valid_review_etag(value) {
+            if expects_review_etag && !super::input_guard::valid_review_etag(value) {
                 anyhow::bail!(
                     "--if-match must equal data.edit.etag from the latest record read; \
                      expected sha256:<64 lowercase hexadecimal characters>"
@@ -204,14 +205,6 @@ fn bind_parameter(
         _ => anyhow::bail!("unknown catalog parameter location"),
     }
     Ok(())
-}
-
-fn valid_review_etag(value: &str) -> bool {
-    value.len() == 71
-        && value.starts_with("sha256:")
-        && value[7..]
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 /// Bind plain flag values for one body field: one item per use.

@@ -11,6 +11,7 @@ mod address;
 pub mod fields;
 mod help;
 mod input;
+mod input_guard;
 
 pub struct Invocation {
     context: GlobalContext,
