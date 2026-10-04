@@ -3,7 +3,8 @@ mod review_host_support;
 
 use provenance_macros::verifies;
 use review_host_support::{
-    list_discussions, repository, request, response, set_disposition_actors, start,
+    configure_disposition_actors, list_discussions, repository, repository_with_actors, request,
+    response, start,
 };
 use serde_json::{json, Value};
 use std::{net::TcpListener, time::Duration};
@@ -60,9 +61,9 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
 }
 
 #[test]
+/// Implementation aid: pins per-request reviewer configuration reloads.
 fn review_configuration_reads_disposition_actors_for_each_request() {
-    let repo = repository();
-    set_disposition_actors(repo.path(), &["maintainer"]);
+    let repo = repository_with_actors(&["maintainer"]);
     let host = start(repo.path());
     let read_config = || {
         let response = request(&host, "GET", "/review-config", true)
@@ -72,7 +73,7 @@ fn review_configuration_reads_disposition_actors_for_each_request() {
     };
 
     assert_eq!(read_config()["dispositionActorIds"], json!(["maintainer"]));
-    set_disposition_actors(repo.path(), &["release-manager", "maintainer"]);
+    configure_disposition_actors(repo.path(), &["release-manager", "maintainer"]);
     assert_eq!(
         read_config()["dispositionActorIds"],
         json!(["release-manager", "maintainer"])
@@ -81,13 +82,14 @@ fn review_configuration_reads_disposition_actors_for_each_request() {
 
 #[cfg(unix)]
 #[test]
+/// Implementation aid: hardens the selected repository against path replacement.
 fn review_configuration_stays_with_the_repository_selected_at_start() {
     use std::os::unix::fs::symlink;
 
     let repo_a = repository();
     let repo_b = repository();
-    set_disposition_actors(repo_a.path(), &["maintainer"]);
-    set_disposition_actors(repo_b.path(), &["attacker"]);
+    configure_disposition_actors(repo_a.path(), &["maintainer"]);
+    configure_disposition_actors(repo_b.path(), &["attacker"]);
     let aliases = tempfile::tempdir().unwrap();
     let alias = aliases.path().join("review-repo");
     symlink(repo_a.path(), &alias).unwrap();
@@ -108,6 +110,7 @@ fn review_configuration_stays_with_the_repository_selected_at_start() {
 }
 
 #[test]
+/// Implementation aid: keeps authentication and origin checks before request decoding.
 fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
     let repo = repository();
     let host = start(repo.path());
@@ -184,6 +187,7 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
 }
 
 #[test]
+#[verifies("rule_record_comment_joins_anchored_thread", examples)]
 fn discussion_writes_use_the_bound_scope() {
     let repo = repository();
     let layout = provenance_store::layout::ProvenanceLayout::new(repo.path().to_str().unwrap());
@@ -229,6 +233,7 @@ fn discussion_writes_use_the_bound_scope() {
 }
 
 #[test]
+/// Implementation aid: pins review-host startup validation and port ownership.
 fn refuses_missing_configuration_invalid_repositories_and_busy_ports() {
     assert_cmd::Command::cargo_bin("provenance")
         .unwrap()
@@ -283,6 +288,7 @@ fn refuses_missing_configuration_invalid_repositories_and_busy_ports() {
 
 #[cfg(unix)]
 #[test]
+/// Implementation aid: keeps listener cleanup reliable during host shutdown.
 fn termination_releases_the_listener() {
     use std::{io::Write, net::TcpStream};
     let repo = repository();
@@ -303,6 +309,7 @@ fn termination_releases_the_listener() {
 }
 
 #[test]
+/// Implementation aid: hardens every review response against credential disclosure.
 fn launch_url_and_responses_do_not_disclose_the_credential() {
     let repo = repository();
     let host = start(repo.path());
@@ -353,6 +360,7 @@ fn launch_url_and_responses_do_not_disclose_the_credential() {
 }
 
 #[test]
+/// Implementation aid: keeps route refusals behind the same access checks as successful reads.
 fn document_root_refusal_follows_target_and_scope_access_checks() {
     let repo = repository();
     let host = start(repo.path());

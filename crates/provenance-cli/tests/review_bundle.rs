@@ -8,19 +8,20 @@
 mod archive;
 #[path = "review_bundle/pin.rs"]
 mod pin;
+#[path = "review_host_support/mod.rs"]
+mod review_host_support;
 
 use std::{
     collections::BTreeMap,
-    io::{BufRead, BufReader, Read},
+    io::Read,
     net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
-    sync::mpsc,
+    process::{Command, Stdio},
     time::Duration,
 };
 
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
-use provenance_store::layout::ProvenanceLayout;
+use provenance_macros::verifies;
+use review_host_support::{initialize_repository, start_command, Host};
 use serde_json::Value;
 
 fn workspace_root() -> PathBuf {
@@ -120,8 +121,9 @@ fn call_operation(host: &Value) -> ureq::Response {
     response(request(host, "GET", "/discussion-containers", true).call())
 }
 
-fn start_host(work: &Path, repo: &Path) -> Child {
-    Command::new(work.join("provenance"))
+fn start_host(work: &Path, repo: &Path) -> Host {
+    let mut command = Command::new(work.join("provenance"));
+    command
         .args([
             "review",
             "--repo",
@@ -134,60 +136,13 @@ fn start_host(work: &Path, repo: &Path) -> Child {
         .current_dir(work)
         // The copied executable has no Node executable or asset directory available.
         .env("PATH", work)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("start the copied review host")
-}
-
-fn read_config(child: &mut Child) -> Value {
-    let stdout = child.stdout.take().expect("piped host stdout");
-    let (send, receive) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut line = String::new();
-        BufReader::new(stdout)
-            .read_line(&mut line)
-            .expect("read host line");
-        let _ = send.send(line);
-    });
-    let line = receive
-        .recv_timeout(Duration::from_secs(15))
-        .expect("host startup timed out");
-    serde_json::from_str(&line).expect("host configuration line")
-}
-
-/// Stop like a local caller does, and require a clean exit.
-fn stop_gracefully(child: &mut Child) {
-    #[cfg(unix)]
-    {
-        assert!(Command::new("kill")
-            .args(["-TERM", &child.id().to_string()])
-            .status()
-            .expect("send SIGTERM")
-            .success());
-        let deadline = std::time::Instant::now() + Duration::from_secs(10);
-        loop {
-            if let Some(status) = child.try_wait().expect("wait for the review host") {
-                assert!(status.success(), "review host did not exit cleanly");
-                return;
-            }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "host shutdown timed out"
-            );
-            std::thread::sleep(Duration::from_millis(50));
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        child.kill().expect("terminate the review host");
-        child.wait().expect("wait for the review host");
-        // Windows termination cannot express a clean exit code.
-    }
+        .stderr(Stdio::inherit());
+    start_command(command)
 }
 
 #[test]
 #[ignore = "builds with the pinned renderer archive; set PROVENANCE_REVIEW_ARCHIVE or allow gh run download"]
+#[verifies("rule_cli_serves_review_assets", examples)]
 fn pinned_archive_is_served_by_a_standalone_binary() {
     let pin = pin::pin();
     let work = tempfile::tempdir().expect("bundle workspace");
@@ -201,10 +156,10 @@ fn pinned_archive_is_served_by_a_standalone_binary() {
 
     let repo = repository(work.path());
     let mut host = start_host(work.path(), &repo);
-    let config = read_config(&mut host);
+    let config = host.config.clone();
     assert_served_bundle(&config, &files);
 
-    stop_gracefully(&mut host);
+    host.stop_gracefully(Duration::from_secs(10));
     let address = config["endpoint"]
         .as_str()
         .unwrap()
@@ -290,17 +245,9 @@ fn build_standalone_binary(work: &Path, assets: &Path) -> PathBuf {
 /// An initialized repository with the selected default scope.
 fn repository(work: &Path) -> PathBuf {
     let repo = work.join("repository");
-    let layout = ProvenanceLayout::new(repo.to_str().expect("repository path is UTF-8"));
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&Manifest::default_with_scope(
-            ScopeId::new("default").unwrap(),
-            RepoPathPrefix::new("."),
-        ))
-        .unwrap(),
-    )
-    .unwrap();
+    let mut command = Command::new(work.join("provenance"));
+    command.current_dir(work).env("PATH", work);
+    initialize_repository(&mut command, &repo, &[]);
     repo
 }
 

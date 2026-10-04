@@ -139,6 +139,7 @@ impl ReadSnapshot {
     }
 
     /// Selects members from the root branch and leaves ancestors in references.
+    #[rule("rule_requirement_document_canonical_membership")]
     #[rule("rule_review_ancestors_are_not_descendants")]
     pub(crate) async fn document_keys(
         &self,

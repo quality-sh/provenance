@@ -12,6 +12,7 @@ const REVIEW_KINDS: [(&str, &str); 8] = [
 ];
 
 #[test]
+/// Implementation aid: keeps generated review routes complete when record kinds change.
 fn every_review_kind_has_actions_history_and_evidence() {
     let routes = definitions();
     for (plural, _) in REVIEW_KINDS {
@@ -36,6 +37,7 @@ fn every_review_kind_has_actions_history_and_evidence() {
 
 #[cfg(feature = "schema")]
 #[test]
+/// Implementation aid: keeps generated member schemas aligned with review resources.
 fn every_review_kind_member_read_carries_edit_and_decision_state() {
     let routes = definitions();
     for (plural, _) in REVIEW_KINDS {
@@ -64,6 +66,7 @@ fn every_review_kind_member_read_carries_edit_and_decision_state() {
 }
 
 #[test]
+/// Implementation aid: prevents generated clients from exposing unsupported request identities.
 fn review_actions_do_not_accept_idempotency_headers() {
     for name in [
         "submit-record-review",
@@ -86,6 +89,7 @@ fn review_actions_do_not_accept_idempotency_headers() {
 }
 
 #[test]
+/// Implementation aid: prevents operation ID collisions in generated clients.
 fn generated_review_operation_ids_are_kind_specific() {
     let routes = definitions();
     for (_, singular) in REVIEW_KINDS {
@@ -107,6 +111,7 @@ fn generated_review_operation_ids_are_kind_specific() {
 }
 
 #[test]
+/// Implementation aid: keeps each generated route fixed to its registered record kind.
 fn each_review_route_binds_its_record_kind() {
     let routes = definitions();
     for (plural, singular) in REVIEW_KINDS {

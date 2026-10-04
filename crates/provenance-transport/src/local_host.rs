@@ -98,6 +98,8 @@ impl LocalHostRegistration {
 }
 
 impl Drop for LocalHostRegistration {
+    /// Removes the registration only while it still names this host instance.
+    #[rule("rule_local_host_stop_removes_own_registry")]
     fn drop(&mut self) {
         let Ok(lock) = lock(&self.lock_path) else {
             return;
@@ -201,6 +203,8 @@ fn lock_path(root: &Path, scope: &str) -> PathBuf {
         .join(format!("{scope}.lock"))
 }
 
+/// Restricts local host registry access to its owner.
+#[rule("rule_local_host_registry_owner_only")]
 fn secure_directory(path: &Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(path)
         .with_context(|| format!("cannot create local host directory {}", path.display()))?;
@@ -251,6 +255,8 @@ fn replace(path: &Path, record: &RegistryRecord) -> anyhow::Result<()> {
     result
 }
 
+/// Removes the registry record only if it still names the stale host.
+#[rule("rule_local_host_discovery_removes_stale_registry")]
 fn remove_stale(root: &Path, scope: &str, nonce: &str) -> anyhow::Result<()> {
     let path = registry_path(root, scope);
     let lock = lock(&lock_path(root, scope))?;

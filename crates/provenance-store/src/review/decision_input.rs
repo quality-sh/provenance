@@ -2,11 +2,14 @@ use provenance_core::{
     CanonicalArtifact, DispositionActor, DispositionDecision, IdeationEvidenceReference,
     MessageRole, ScopeId, StableId,
 };
+use provenance_macros::verifies;
 use serde::{Deserialize, Serialize};
 
 /// Submits the record's current review revision as an immutable `proposed`
 /// candidate. The store derives the binding; the caller never states it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[verifies("rule_review_proposal_identity_server_created", construction)]
+#[verifies("rule_review_request_identity_server_created", construction)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SubmitRecordReview {
@@ -34,6 +37,8 @@ pub struct SubmitRecordReview {
 /// Records one guarded Disposition on a review submission, with optional
 /// feedback published in the same commit.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[verifies("rule_review_disposition_identity_server_created", construction)]
+#[verifies("rule_review_request_identity_server_created", construction)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DecideRecordReview {
@@ -54,6 +59,7 @@ pub struct DecideRecordReview {
 
 /// A reviewer comment published atomically with its decision.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[verifies("rule_review_request_identity_server_created", construction)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewFeedback {

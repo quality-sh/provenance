@@ -2,6 +2,7 @@
 mod review_assets;
 
 #[test]
+/// Implementation aid: checks that asset code generation is complete and deterministic.
 fn embeds_index_and_local_dependencies_in_a_stable_inventory() {
     let dir = tempfile::tempdir().unwrap();
     let assets = dir.path().join("assets");
@@ -20,6 +21,7 @@ fn embeds_index_and_local_dependencies_in_a_stable_inventory() {
 
 #[cfg(unix)]
 #[test]
+/// Implementation aid: hardens asset code generation against link traversal.
 fn rejects_file_and_directory_links() {
     use std::os::unix::fs::symlink;
     let dir = tempfile::tempdir().unwrap();
@@ -37,6 +39,7 @@ fn rejects_file_and_directory_links() {
 }
 
 #[test]
+/// Implementation aid: prevents review assets from shadowing generated operation routes.
 fn rejects_operation_routes_with_any_version_segment() {
     for version in ["assets", "vNext", "v7beta", "operations"] {
         let dir = tempfile::tempdir().unwrap();
@@ -54,6 +57,7 @@ fn rejects_operation_routes_with_any_version_segment() {
 }
 
 #[test]
+/// Implementation aid: keeps the operation-route guard limited to its generated namespace.
 fn accepts_paths_that_do_not_match_the_operation_route() {
     for path in [
         "index.html",

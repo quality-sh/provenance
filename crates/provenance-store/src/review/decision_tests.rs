@@ -1,8 +1,4 @@
-//! Tests for the Requirement candidate and decision cycle: the full
-//! edit→submit→reject→revise→submit→approve round trip with exact versions
-//! preserved, the inherited disposition gates, bypass refusals, feedback
-//! atomicity, withdrawal, and frozen legacy history.
-
+//! Tests for the Requirement candidate and decision cycle.
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use camino::Utf8Path;
 use provenance_core::{
@@ -133,6 +129,8 @@ fn refused<T: std::fmt::Debug>(attempt: anyhow::Result<T>, needle: &str) {
 }
 
 #[test]
+/// This flow follows one record through rejection, revision, and approval.
+#[provenance_macros::verifies("rule_approval_accepts_reviewed_version", examples)]
 fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
@@ -219,6 +217,7 @@ fn assert_lifecycle_and_proposals_unchanged(store: &StateStore, statement: &str)
 }
 
 #[test]
+/// Implementation aid: pins submission guards before the review-cycle state is refactored.
 fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     let (_temp, store, _, _) = enrolled();
     refused(
@@ -244,6 +243,7 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_not_merged", examples)]
 fn stale_submission_and_stale_selection_are_refused() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
@@ -347,6 +347,7 @@ fn an_approval_takes_no_rationale() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_disposition_write_gate", examples)]
 fn one_terminal_disposition_per_proposal() {
     let (_temp, store, _, proposal) = enrolled();
     // Rejection keeps a nonempty rationale and permits absent feedback.
@@ -372,6 +373,7 @@ fn one_terminal_disposition_per_proposal() {
 }
 
 #[test]
+/// Implementation aid: pins atomic feedback publication before journal consolidation.
 fn feedback_publishes_with_the_decision_or_neither() {
     let (_temp, store, _, proposal) = enrolled();
     let falsified = json!({"feedback":{"role":"user","body":"Comments"},"declared_by":"mallory"});
@@ -413,6 +415,7 @@ fn feedback_publishes_with_the_decision_or_neither() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_withdrawal_preserves_review_history", examples)]
 fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
     let (_temp, store, _, proposal_1) = enrolled();
     withdraw(&store, &proposal_1).unwrap();
@@ -445,6 +448,7 @@ fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
 }
 
 #[test]
+/// Implementation aid: keeps JavaScript-safe receipt ordering within its numeric budget.
 fn review_finding_withdrawn_and_resubmitted_receipts_have_safe_sequences() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
@@ -459,6 +463,7 @@ fn review_finding_withdrawn_and_resubmitted_receipts_have_safe_sequences() {
 }
 
 #[test]
+/// Implementation aid: rejects forged journal addresses before decision-state reads.
 fn cycle_receipt_refuses_a_different_record_kind_than_its_proposal() {
     let (_temp, store, _, proposal) = enrolled();
     let submitted = automatic_submission(&store);

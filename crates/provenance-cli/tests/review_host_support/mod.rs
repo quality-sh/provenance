@@ -18,14 +18,29 @@ impl Drop for Host {
     }
 }
 
-#[cfg(unix)]
 impl Host {
-    pub fn terminate_and_wait(&mut self, timeout: Duration) -> std::process::ExitStatus {
+    pub fn address(&self) -> &str {
+        self.config["endpoint"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("http://")
+            .unwrap()
+    }
+
+    pub fn bearer(&self) -> &str {
+        self.config["bearer"].as_str().unwrap()
+    }
+
+    #[cfg(unix)]
+    pub fn signal(&self, signal: &str) {
         assert!(Command::new("kill")
-            .args(["-TERM", &self.child.id().to_string()])
+            .args([signal, &self.child.id().to_string()])
             .status()
             .unwrap()
             .success());
+    }
+
+    pub fn wait(&mut self, timeout: Duration) -> std::process::ExitStatus {
         let deadline = std::time::Instant::now() + timeout;
         loop {
             if let Some(status) = self.child.try_wait().unwrap() {
@@ -38,51 +53,118 @@ impl Host {
             std::thread::sleep(Duration::from_millis(25));
         }
     }
+
+    pub fn take_stderr(&mut self) -> std::process::ChildStderr {
+        self.child.stderr.take().expect("piped host stderr")
+    }
+
+    pub fn is_running(&mut self) -> bool {
+        self.child.try_wait().unwrap().is_none()
+    }
+
+    pub fn terminate_and_wait(&mut self, timeout: Duration) -> std::process::ExitStatus {
+        #[cfg(unix)]
+        self.signal("-TERM");
+        #[cfg(not(unix))]
+        self.child.kill().unwrap();
+        self.wait(timeout)
+    }
+
+    pub fn stop_gracefully(&mut self, timeout: Duration) {
+        let status = self.terminate_and_wait(timeout);
+        #[cfg(unix)]
+        assert!(status.success(), "review host did not exit cleanly");
+        #[cfg(not(unix))]
+        {
+            let _ = status;
+        }
+    }
 }
 
 pub fn repository() -> tempfile::TempDir {
+    repository_with_actors(&[])
+}
+
+pub fn repository_with_actors(actor_ids: &[&str]) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
-    let layout = provenance_store::layout::ProvenanceLayout::new(dir.path().to_str().unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    let manifest = provenance_core::Manifest::default_with_scope(
-        provenance_core::ScopeId::new("default").unwrap(),
-        provenance_core::RepoPathPrefix::new("."),
-    );
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
+    initialize_repository(&mut command, dir.path(), actor_ids);
     dir
 }
 
-pub fn set_disposition_actors(root: &std::path::Path, actor_ids: &[&str]) {
-    let layout = provenance_store::layout::ProvenanceLayout::new(root.to_str().unwrap());
-    let mut manifest: provenance_core::Manifest =
-        serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids = actor_ids.iter().map(|id| (*id).to_owned()).collect();
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
+pub fn initialize_repository(
+    command: &mut Command,
+    root: &std::path::Path,
+    actor_ids: &[&str],
+) {
+    command.args([
+        "init",
+        "--path",
+        root.to_str().unwrap(),
+        "--scope",
+        "default",
+        "--path-prefix",
+        ".",
+    ]);
+    set_actor_arguments(command, actor_ids);
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+pub fn configure_disposition_actors(root: &std::path::Path, actor_ids: &[&str]) {
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
+    command.args(["init", "--path", root.to_str().unwrap()]);
+    set_actor_arguments(&mut command, actor_ids);
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn set_actor_arguments(command: &mut Command, actor_ids: &[&str]) {
+    if actor_ids.is_empty() {
+        command.arg("--clear-disposition-actors");
+    } else {
+        for actor_id in actor_ids {
+            command.args(["--disposition-actor-id", actor_id]);
+        }
+    }
 }
 
 pub fn start(root: &std::path::Path) -> Host {
-    let mut child = Command::new(assert_cmd::cargo::cargo_bin("provenance"))
-        .args([
-            "review",
-            "--repo",
-            root.to_str().unwrap(),
-            "--repository-id",
-            "A",
-            "--scope",
-            "default",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .unwrap();
+    let mut command = review_command(root);
+    command.stderr(Stdio::inherit());
+    start_command(command)
+}
+
+pub fn start_capturing_stderr(root: &std::path::Path) -> Host {
+    let mut command = review_command(root);
+    command.stderr(Stdio::piped());
+    start_command(command)
+}
+
+pub fn review_command(root: &std::path::Path) -> Command {
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
+    command.args([
+        "review",
+        "--repo",
+        root.to_str().unwrap(),
+        "--repository-id",
+        "A",
+        "--scope",
+        "default",
+    ]);
+    command
+}
+
+pub fn start_command(mut command: Command) -> Host {
+    let mut child = command.stdout(Stdio::piped()).spawn().unwrap();
     let stdout = child.stdout.take().unwrap();
     let (send, receive) = mpsc::channel();
     std::thread::spawn(move || {

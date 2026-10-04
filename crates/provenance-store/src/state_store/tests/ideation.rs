@@ -101,6 +101,7 @@ fn landed_contribution_and_synthesis_replacements_obey_read_budget() {
 }
 
 #[test]
+/// Implementation aid: keeps ideation shard output stable across storage refactors.
 fn ideation_output_records_are_written_deterministically() {
     let (_dir, store, scope) = seeded_requirement_store();
 
@@ -162,6 +163,7 @@ fn ideation_output_records_are_written_deterministically() {
 }
 
 #[test]
+/// Implementation aid: pins all-or-nothing validation for mixed ideation batches.
 fn invalid_lifecycle_batch_is_rejected_without_partial_writes() {
     let (_dir, store, scope) = initialized_store();
     let batch: crate::state_store::IdeationLandingBatch =
@@ -197,6 +199,7 @@ fn invalid_lifecycle_batch_is_rejected_without_partial_writes() {
 }
 
 #[test]
+/// Implementation aid: keeps direct and landed contribution writers on one identity seam.
 fn direct_contribution_create_and_replace_respect_landed_records() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
@@ -227,6 +230,7 @@ fn direct_contribution_create_and_replace_respect_landed_records() {
 }
 
 #[test]
+/// Implementation aid: keeps direct and landed synthesis writers on one identity seam.
 fn direct_synthesis_create_and_replace_respect_landed_records() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
@@ -259,6 +263,7 @@ fn direct_synthesis_create_and_replace_respect_landed_records() {
 }
 
 #[test]
+/// Implementation aid: pins one publication snapshot across the composite ideation read.
 fn composite_ideation_list_holds_publication_lock_between_reads() {
     let (_dir, store, scope) = initialized_store();
     crate::jsonl::write_jsonl_atomic(
