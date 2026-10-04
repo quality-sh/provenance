@@ -226,13 +226,21 @@ fn discussion_writes_use_the_bound_scope() {
     let saved: Value = serde_json::from_str(&saved.into_string().unwrap()).unwrap();
     assert!(uuid::Uuid::parse_str(saved["data"]["request_id"].as_str().unwrap()).is_ok());
     assert_eq!(saved["data"]["actor"], "ben");
-    let discussions: Value =
-        serde_json::from_str(&list_discussions(&host).into_string().unwrap()).unwrap();
-    let items = discussions["data"]["items"].as_array().unwrap();
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0]["parent"]["node_type"], "requirement");
-    assert_eq!(items[0]["parent"]["node_id"], "req_example");
-    assert_eq!(items[0]["opening_excerpt"], "Check this requirement.");
+    assert_eq!(saved["data"]["parent"]["node_type"], "requirement");
+    assert_eq!(saved["data"]["parent"]["node_id"], "req_example");
+    let discussion_id = saved["data"]["discussion_id"].as_str().unwrap();
+    let messages = request(
+        &host,
+        "GET",
+        &format!(
+            "/requirements/req_example/discussions/{discussion_id}/messages"
+        ),
+        true,
+    )
+    .call()
+    .unwrap();
+    let messages: Value = serde_json::from_str(&messages.into_string().unwrap()).unwrap();
+    assert_eq!(messages["data"]["items"][0]["body"], "Check this requirement.");
 }
 
 #[test]
