@@ -272,7 +272,8 @@ fn stale_submission_and_stale_selection_are_refused() {
 }
 
 #[test]
-fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
+#[provenance_macros::verifies("rule_disposition_actor_allowlist", examples)]
+fn an_unauthorized_actor_cannot_accept_a_review() {
     let (_temp, store, _, proposal) = enrolled();
     refused(
         decide(
@@ -288,7 +289,12 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
         store.list_dispositions(&scope()).unwrap(),
         [] as [provenance_core::DispositionRecord; 0]
     );
+}
 
+#[test]
+#[provenance_macros::verifies("rule_disposition_write_gate", examples)]
+fn an_unqualified_agent_cannot_accept_a_review() {
+    let (_temp, store, _, proposal) = enrolled();
     refused(
         decide(
             &store,
@@ -303,7 +309,12 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
         store.list_dispositions(&scope()).unwrap(),
         [] as [provenance_core::DispositionRecord; 0]
     );
+}
 
+#[test]
+#[provenance_macros::verifies("rule_review_approval_has_no_rationale", examples)]
+fn an_approval_takes_no_rationale() {
+    let (_temp, store, _, proposal) = enrolled();
     refused(
         decide(
             &store,
@@ -324,7 +335,6 @@ fn unauthorized_actor_and_unqualified_acceptance_are_refused() {
         [] as [provenance_core::DispositionRecord; 0]
     );
 
-    // The human existing-artifact path is the qualified exception.
     decide(
         &store,
         &proposal,

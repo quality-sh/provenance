@@ -16,15 +16,19 @@ workspace = true
 test-fixture = ["dep:tempfile", "provenance-store/test-fixture"]
 
 [dependencies]
+anyhow.workspace = true
 tempfile = { workspace = true, optional = true }
 axum.workspace = true
+fs2.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
 provenance-store = { workspace = true, features = ["schema"] }
 serde_json.workspace = true
 serde.workspace = true
+ureq.workspace = true
 url.workspace = true
+uuid.workspace = true
 tokio-util = { version = "0.7", features = ["rt"] }
 tokio = { workspace = true, features = ["sync", "io-util", "io-std", "time"] }
 rmcp = { version = "=1.4.0", default-features = false, features = ["server", "client"] }
@@ -51,4 +55,9 @@ required-features = ["test-fixture"]
 [[bin]]
 name = "existing-root-host-fixture"
 path = "src/bin/existing-root-host-fixture.rs"
+required-features = ["test-fixture"]
+
+[[test]]
+name = "local_host"
+path = "tests/local_host.rs"
 required-features = ["test-fixture"]

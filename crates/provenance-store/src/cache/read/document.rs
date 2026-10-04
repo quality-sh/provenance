@@ -1,6 +1,7 @@
 //! Root-related key selection. Payload reads use the same bounded snapshot.
 use crate::operations::reader::{Position, ReadSnapshot};
 use provenance_core::protocol::read_failure::ReadFailure;
+use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use sqlx::Row;
 
@@ -103,6 +104,40 @@ fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
 }
 
 impl ReadSnapshot {
+    /// Returns each Requirement whose canonical document contains the record.
+    pub(crate) async fn containing_document_roots(
+        &self,
+        kind: NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<Vec<StableId>> {
+        self.attest("requirements");
+        let mut tx = self.connection().await;
+        let root_ids: Vec<String> = sqlx::query_scalar(
+            "SELECT id FROM requirements WHERE scope_id = ? ORDER BY id LIMIT 4097",
+        )
+        .bind(self.scope().as_str())
+        .fetch_all(&mut **tx)
+        .await?;
+        drop(tx);
+        if root_ids.len() > 4096 {
+            return Err(ReadFailure::PageBudgetExceeded.into());
+        }
+        let mut roots = Vec::new();
+        for root in root_ids {
+            let contains = self
+                .document_keys(&root, &Position::default(), 8193, false)
+                .await?
+                .iter()
+                .any(|(entry_kind, key)| {
+                    key.stage < 2 && entry_kind == kind.as_str() && key.id == id.as_str()
+                });
+            if contains {
+                roots.push(StableId::new(root)?);
+            }
+        }
+        Ok(roots)
+    }
+
     /// Selects members from the root branch and leaves ancestors in references.
     #[rule("rule_review_ancestors_are_not_descendants")]
     pub(crate) async fn document_keys(
