@@ -6,7 +6,7 @@ id = "generic-api-key"
 
 [[rules.allowlists]]
 description = "Review proposal keys are public record identifiers"
-regexTarget = "line"
+regexTarget = "match"
 regexes = [
-  '''"proposal_key":"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"''',
+  '''^proposal_key":"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"$''',
 ]
