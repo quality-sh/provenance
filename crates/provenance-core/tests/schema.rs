@@ -53,7 +53,7 @@ fn query_defaults_and_domain_bounds_are_explicit() {
 
 #[test]
 fn search_schema_includes_terminal_records_by_default() {
-    let schema = serde_json::to_value(schema_for!(provenance_core::protocol::SearchQuery)).unwrap();
+    let schema = schema::<SearchQuery>(Contract::Deserialize);
     assert_eq!(schema["properties"]["exclude_terminal"]["default"], false);
 }
 #[test]
