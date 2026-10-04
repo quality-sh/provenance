@@ -212,8 +212,8 @@ async fn all_ids(root: &camino::Utf8Path, exclude_terminal: bool) -> Vec<String>
 }
 
 #[tokio::test]
-#[provenance_macros::verifies("rule_review_keeps_superseded_records_visible", examples)]
-async fn lifecycle_filter_hides_dead_records_at_root_and_nested_levels() {
+#[provenance_macros::verifies("rule_review_defaults_exclude_terminal_records", examples)]
+async fn lifecycle_filter_hides_terminal_records_at_root_and_nested_levels() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
     let root = root_of(&dir);
@@ -224,7 +224,6 @@ async fn lifecycle_filter_hides_dead_records_at_root_and_nested_levels() {
         "res_abandoned_nested",
         "rule_b_archived_root",
         "rule_c_archived_nested",
-        "res_superseded",
     ] {
         assert!(unfiltered.iter().any(|found| found == id), "missing {id}");
     }
@@ -238,7 +237,23 @@ async fn lifecycle_filter_hides_dead_records_at_root_and_nested_levels() {
     ] {
         assert!(!filtered.iter().any(|found| found == id), "found {id}");
     }
-    assert!(filtered.iter().any(|id| id == "res_superseded"));
+}
+
+#[tokio::test]
+#[provenance_macros::verifies("rule_review_keeps_superseded_records_visible", examples)]
+async fn lifecycle_filter_keeps_superseded_records_visible() {
+    let (dir, store, scope) = seeded_store();
+    seed_lifecycle_records(&store, &scope);
+    let root = root_of(&dir);
+
+    assert!(all_ids(&root, false)
+        .await
+        .iter()
+        .any(|id| id == "res_superseded"));
+    assert!(all_ids(&root, true)
+        .await
+        .iter()
+        .any(|id| id == "res_superseded"));
 }
 
 #[tokio::test]

@@ -69,6 +69,8 @@ fn historical_shipped_manifest_without_actor_allowlist_remains_readable() {
 }
 
 #[test]
+#[verifies("rule_legacy_shard_frozen", examples)]
+/// This test covers the export, modification, and rejected import flow.
 fn one_byte_change_to_shipped_legacy_terminal_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let fresh = dir.path().join("fresh");

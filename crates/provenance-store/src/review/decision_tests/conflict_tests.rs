@@ -35,7 +35,6 @@ fn repeated_decision_reports_the_current_review_identity() {
 
 #[test]
 #[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
-#[provenance_macros::verifies("rule_review_conflict_not_merged", examples)]
 fn stale_decision_reports_the_pending_submission_and_current_revision() {
     let (_temp, store, _, proposal) = enrolled();
     let current_revision = edit(&store, "edit-2", "Revised statement");
@@ -57,6 +56,25 @@ fn stale_decision_reports_the_pending_submission_and_current_revision() {
             current_revision: revision,
         } if submission == current_proposal && revision == current_revision
     ));
+}
+
+#[test]
+#[provenance_macros::verifies("rule_review_conflict_not_merged", examples)]
+fn stale_decision_does_not_replace_the_pending_submission() {
+    let (_temp, store, _, proposal) = enrolled();
+    edit(&store, "edit-2", "Revised statement");
+    let current_proposal = state(&store).pending.unwrap().proposal_id;
+
+    decide(
+        &store,
+        &proposal,
+        "accepted",
+        &reviewer("reviewer"),
+        &artifact(),
+    )
+    .unwrap_err();
+
+    assert_eq!(state(&store).pending.unwrap().proposal_id, current_proposal);
 }
 
 #[test]

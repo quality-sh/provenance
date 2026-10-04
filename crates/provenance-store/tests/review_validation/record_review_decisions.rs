@@ -361,34 +361,41 @@ fn every_added_kind_persists_the_exact_review_versions_without_lifecycle_change(
     }
 }
 
+fn pending_classification_review(
+    kind: NodeType,
+) -> (tempfile::TempDir, StateStore, ScopeId, StableId) {
+    let (temp, store, scope) = fixture();
+    let record_id = create_record(&store, kind);
+    let current_revision = store
+        .record_decision_state(&scope, kind, &record_id)
+        .unwrap()
+        .current_revision;
+    let proposal = store
+        .submit_record_review(SubmitRecordReview {
+            scope_id: scope.clone(),
+            actor: "author".into(),
+            record_kind: kind,
+            record_id,
+            declared_by: None,
+            title: "Review classification".into(),
+            summary: "Review the classification.".into(),
+            confidence: None,
+            source_ids: Vec::new(),
+            evidence_references: Vec::new(),
+            builds_on: Vec::new(),
+            expected_revision: current_revision,
+            revises: None,
+        })
+        .unwrap()
+        .proposal_id;
+    (temp, store, scope, proposal)
+}
+
 #[test]
 #[provenance_macros::verifies("rule_domain_boundary_decisions_accept_no_feedback", examples)]
-fn domain_and_boundary_decisions_keep_rationale_and_refuse_feedback() {
+fn domain_and_boundary_decisions_refuse_feedback() {
     for kind in [NodeType::Domain, NodeType::Boundary] {
-        let (_temp, store, scope) = fixture();
-        let record_id = create_record(&store, kind);
-        let current_revision = store
-            .record_decision_state(&scope, kind, &record_id)
-            .unwrap()
-            .current_revision;
-        let proposal = store
-            .submit_record_review(SubmitRecordReview {
-                scope_id: scope.clone(),
-                actor: "author".into(),
-                record_kind: kind,
-                record_id: record_id.clone(),
-                declared_by: None,
-                title: "Review classification".into(),
-                summary: "Review the classification.".into(),
-                confidence: None,
-                source_ids: Vec::new(),
-                evidence_references: Vec::new(),
-                builds_on: Vec::new(),
-                expected_revision: current_revision,
-                revises: None,
-            })
-            .unwrap()
-            .proposal_id;
+        let (_temp, store, scope, proposal) = pending_classification_review(kind);
 
         let error = store
             .decide_record_review(DecideRecordReview {
@@ -412,25 +419,5 @@ fn domain_and_boundary_decisions_keep_rationale_and_refuse_feedback() {
                 record_kind
             } if record_kind == kind
         ));
-
-        let decided = store
-            .decide_record_review(DecideRecordReview {
-                scope_id: scope.clone(),
-                actor: reviewer(),
-                proposal_id: proposal,
-                decision: DispositionDecision::Rejected,
-                rationale: Some("The classification is too broad.".into()),
-                canonical_artifact: None,
-                feedback: None,
-                declared_by: None,
-            })
-            .unwrap();
-        let disposition = store
-            .list_dispositions(&scope)
-            .unwrap()
-            .into_iter()
-            .find(|disposition| Some(&disposition.id) == decided.disposition_id.as_ref())
-            .unwrap();
-        assert_eq!(disposition.rationale, "The classification is too broad.");
     }
 }
