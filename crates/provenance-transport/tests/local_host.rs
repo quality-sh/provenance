@@ -153,16 +153,12 @@ fn discovery_removes_stale_state() {
 #[verifies("rule_local_host_discovery_removes_stale_registry", examples)]
 fn discovery_removes_an_identity_mismatch() {
     let repository = tempfile::tempdir().unwrap();
-    let _host = LocalHostFixture::start_with_identity(
-        repository.path(),
-        "default",
-        "local",
-        |identity| {
+    let _host =
+        LocalHostFixture::start_with_identity(repository.path(), "default", "local", |identity| {
             let mut response = serde_json::to_value(identity).unwrap();
             response["repositoryId"] = "other".into();
             response
-        },
-    );
+        });
 
     assert!(discover(repository.path(), "default").unwrap().is_none());
     assert!(!registry(repository.path()).exists());

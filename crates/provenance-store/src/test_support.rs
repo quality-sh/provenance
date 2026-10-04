@@ -7,10 +7,7 @@ pub(crate) fn allow_reviewer(layout: &ProvenanceLayout) {
     let mut manifest = if layout.manifest_path().exists() {
         StateStore::new(layout.clone()).manifest().unwrap()
     } else {
-        Manifest::default_with_scope(
-            ScopeId::new("default").unwrap(),
-            RepoPathPrefix::new("."),
-        )
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."))
     };
     if !manifest
         .disposition_actor_ids
