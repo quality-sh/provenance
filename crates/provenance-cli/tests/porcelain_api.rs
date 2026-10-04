@@ -134,6 +134,14 @@ fn json_catalog_applies_limit() {
     let catalog = json(&["api", "--repo", &repo, "--limit", "2", "--format", "json"]);
     let routes = catalog["routes"].as_array().unwrap();
     assert_eq!(routes.len(), 2);
+}
+
+#[test]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
+fn limited_json_catalog_reports_truncation() {
+    let (_directory, repo) = init();
+    let catalog = json(&["api", "--repo", &repo, "--limit", "2", "--format", "json"]);
+
     assert_eq!(catalog["bounds"]["truncated"], true);
 }
 
