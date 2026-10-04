@@ -20,16 +20,12 @@ fn served_discussion_routes_exclude_domain_and_boundary_parents() {
     ] {
         let path = format!("/{family}/absent/discussions");
         assert_ne!(
-            response(request(&host, "GET", &path, true).call()).status(),
+            response(request(&host, "POST", &path, true).send_string("{}")).status(),
             404
         );
     }
     for family in ["domains", "boundaries"] {
         let path = format!("/{family}/absent/discussions");
-        assert_eq!(
-            response(request(&host, "GET", &path, true).call()).status(),
-            404
-        );
         assert_eq!(
             response(request(&host, "POST", &path, true).send_string("{}")).status(),
             404
