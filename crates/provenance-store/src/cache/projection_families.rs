@@ -212,7 +212,8 @@ pub(super) fn exclude_terminal_predicate(table: &str, exclude_terminal: bool) ->
     if !exclude_terminal {
         return String::new();
     }
-    let statuses = terminal_families()
+    let statuses = FAMILIES
+        .iter()
         .find(|family| family.table_name == table)
         .map_or(&[][..], |family| family.terminal_statuses);
     if statuses.is_empty() {
@@ -226,18 +227,13 @@ pub(super) fn exclude_terminal_predicate(table: &str, exclude_terminal: bool) ->
     format!(" AND status NOT IN ({statuses})")
 }
 
-/// Classifies record families that have terminal lifecycle states.
+/// Returns the SQL predicate for terminal-and-dead record identities.
+/// Selects only native terminal states, so superseded records stay visible.
 #[provenance_macros::rule("rule_review_keeps_superseded_records_visible")]
-fn terminal_families() -> impl Iterator<Item = &'static FamilyMeta> {
+pub(super) fn terminal_and_dead_predicate(kind: &str, id: &str, scope: &str) -> String {
     FAMILIES
         .iter()
         .filter(|family| !family.terminal_statuses.is_empty())
-}
-
-/// Returns the SQL predicate for terminal-and-dead record identities.
-/// Selects only native terminal states, so superseded records stay visible.
-pub(super) fn terminal_and_dead_predicate(kind: &str, id: &str, scope: &str) -> String {
-    terminal_families()
         .filter_map(|family| {
             let node_type = family.node_type?;
             let statuses = family

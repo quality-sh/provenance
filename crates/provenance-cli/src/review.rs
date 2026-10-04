@@ -10,7 +10,6 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
-use provenance_macros::rule;
 use provenance_transport::{
     local_host::{LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE},
     HostAccess, LocalAccess, StatementHost,
@@ -53,7 +52,9 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         )
         .context("cannot configure review repository access")?,
     );
-    declare_read_only_review(&access, &options.repo)?;
+    if access.disposition_actor_ids()?.is_empty() {
+        eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
+    }
     let host = StatementHost::with_access(access.clone()).with_check_port(Arc::new(
         crate::handlers::check::RepositoryCheckPort::new(
             camino::Utf8PathBuf::from_path_buf(options.repo.clone())
@@ -147,15 +148,6 @@ async fn serve(
 
 async fn local_host_identity(State(identity): State<LocalHostIdentity>) -> Json<LocalHostIdentity> {
     Json(identity)
-}
-
-/// Emits the read-only notice when the review host has no reviewer.
-#[rule("rule_review_page_declares_read_only")]
-fn declare_read_only_review(access: &LocalAccess, repo: &std::path::Path) -> anyhow::Result<()> {
-    if access.disposition_actor_ids()?.is_empty() {
-        eprintln!("{}", crate::reviewer::review_page_warning(repo));
-    }
-    Ok(())
 }
 
 struct ShutdownSignals {

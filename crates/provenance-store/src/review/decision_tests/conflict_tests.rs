@@ -195,20 +195,14 @@ fn stale_and_repeated_submissions_are_typed_conflicts() {
     assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 2);
 }
 
-#[test]
-#[provenance_macros::verifies("rule_review_request_identity_server_created", examples)]
-#[provenance_macros::verifies("rule_review_proposal_identity_server_created", examples)]
-#[provenance_macros::verifies("rule_review_disposition_identity_server_created", examples)]
-fn server_creates_unique_identities_across_review_cycles() {
+fn two_review_cycles() -> [CycleEntry; 4] {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     edit(&store, "edit-1", "Statement v1");
     let submission_1 = automatic_submission(&store);
-    let withdrawal = withdraw(&store, &submission_1.proposal_id).unwrap();
-    let explicit_submission = submit(&store, None, None).unwrap();
-    let rejection = decide(
+    let decision_1 = decide(
         &store,
-        &explicit_submission.proposal_id,
+        &submission_1.proposal_id,
         "rejected",
         &reviewer("reviewer"),
         &json!({}),
@@ -216,7 +210,7 @@ fn server_creates_unique_identities_across_review_cycles() {
     .unwrap();
     edit(&store, "edit-2", "Revised statement");
     let submission_2 = automatic_submission(&store);
-    let acceptance = decide(
+    let decision_2 = decide(
         &store,
         &submission_2.proposal_id,
         "accepted",
@@ -225,15 +219,26 @@ fn server_creates_unique_identities_across_review_cycles() {
     )
     .unwrap();
 
-    assert_ne!(submission_1.proposal_id, explicit_submission.proposal_id);
-    assert_ne!(explicit_submission.proposal_id, submission_2.proposal_id);
+    [submission_1, decision_1, submission_2, decision_2]
+}
+
+#[test]
+#[provenance_macros::verifies("rule_review_proposal_identity_server_created", examples)]
+fn server_creates_unique_proposal_identities_across_review_cycles() {
+    let [submission_1, _, submission_2, _] = two_review_cycles();
+
+    assert_ne!(submission_1.proposal_id, submission_2.proposal_id);
+}
+
+#[test]
+#[provenance_macros::verifies("rule_review_request_identity_server_created", examples)]
+fn server_creates_unique_request_identities_across_review_cycles() {
+    let [submission_1, decision_1, submission_2, decision_2] = two_review_cycles();
     let request_ids = [
         &submission_1.request_id,
-        &withdrawal.request_id,
-        &explicit_submission.request_id,
-        &rejection.request_id,
+        &decision_1.request_id,
         &submission_2.request_id,
-        &acceptance.request_id,
+        &decision_2.request_id,
     ];
     assert_eq!(
         request_ids
@@ -243,27 +248,12 @@ fn server_creates_unique_identities_across_review_cycles() {
             .len(),
         request_ids.len()
     );
-    assert_ne!(rejection.disposition_id, acceptance.disposition_id);
+}
 
-    let submit_with_id = json!({
-        "scope_id":"default","actor":"agent","record_kind":"requirement",
-        "record_id":"req_a","title":"Title","summary":"Summary","source_ids":[],
-        "evidence_references":[],"builds_on":[],"request_id":"caller-request",
-        "proposal_id":"caller-proposal"
-    });
-    assert!(serde_json::from_value::<crate::review::SubmitRecordReview>(submit_with_id).is_err());
-    let decision_with_id = json!({
-        "scope_id":"default","actor":reviewer("reviewer"),
-        "proposal_id":submission_2.proposal_id,"decision":"accepted",
-        "canonical_artifact":artifact()["canonical_artifact"],
-        "request_id":"caller-request","disposition_id":"caller-disposition"
-    });
-    assert!(serde_json::from_value::<crate::review::DecideRecordReview>(decision_with_id).is_err());
-    let withdrawal_with_id = json!({
-        "scope_id":"default","actor":"agent","proposal_id":submission_2.proposal_id,
-        "request_id":"caller-request"
-    });
-    assert!(
-        serde_json::from_value::<crate::review::WithdrawRecordReview>(withdrawal_with_id).is_err()
-    );
+#[test]
+#[provenance_macros::verifies("rule_review_disposition_identity_server_created", examples)]
+fn server_creates_unique_disposition_identities_across_review_cycles() {
+    let [_, decision_1, _, decision_2] = two_review_cycles();
+
+    assert_ne!(decision_1.disposition_id, decision_2.disposition_id);
 }

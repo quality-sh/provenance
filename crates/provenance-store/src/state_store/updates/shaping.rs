@@ -18,8 +18,6 @@ impl StateStore {
         self.with_repository_publication(|| self.write_topic_update(input))
     }
 
-    /// Archives a Topic and each Question in that Topic in one batch.
-    #[provenance_macros::rule("rule_topic_delete_archives_questions")]
     fn write_topic_archive(
         &self,
         batch: &NativeRecordBatch<'_>,
@@ -91,8 +89,6 @@ impl StateStore {
         Ok(topic)
     }
 
-    /// Archives a Question without changing its Topic or Discussions.
-    #[provenance_macros::rule("rule_question_delete_archives")]
     pub fn edit_question(&self, input: EditQuestionInput) -> anyhow::Result<Question> {
         self.with_repository_publication(|| {
             if let Some(question) = &input.question {

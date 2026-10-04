@@ -9,6 +9,7 @@ use crate::{
     },
     shards,
     state_store::{CreateProposalCardInput, StateStore},
+    write_error::SourceFailure,
 };
 use provenance_core::{
     review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
@@ -18,8 +19,9 @@ use provenance_core::{
 use provenance_macros::rule;
 
 impl StateStore {
-    /// Submits the current record revision for review.
+    /// Creates the server-owned request and Proposal identities for a review submission.
     #[rule("rule_revised_item_requires_new_review")]
+    #[rule("rule_review_proposal_identity_server_created")]
     pub fn submit_record_review(&self, input: SubmitRecordReview) -> anyhow::Result<CycleEntry> {
         anyhow::ensure!(
             !input.actor.trim().is_empty(),
@@ -78,28 +80,25 @@ impl StateStore {
             )
         })?;
         let facts = CycleFacts::validated(self, &scope)?;
-        facts.refuse_review_conflict(
-            self,
-            &scope,
-            input.record_kind,
-            &input.record_id,
-            input
-                .expected_revision
-                .as_ref()
-                .is_some_and(|expected| head.revision != *expected),
-            "stale submission revision",
-        )?;
-        let already_pending = facts
+        if input
+            .expected_revision
+            .as_ref()
+            .is_some_and(|expected| head.revision != *expected)
+        {
+            return Err(SourceFailure::wrap(
+                facts.conflict_failure(self, &scope, input.record_kind, &input.record_id)?,
+                anyhow::anyhow!("stale submission revision"),
+            ));
+        }
+        if facts
             .pending_submission(self, &scope, input.record_kind, &input.record_id)?
-            .is_some();
-        facts.refuse_review_conflict(
-            self,
-            &scope,
-            input.record_kind,
-            &input.record_id,
-            already_pending,
-            "this record already has a pending review submission",
-        )?;
+            .is_some()
+        {
+            return Err(SourceFailure::wrap(
+                facts.conflict_failure(self, &scope, input.record_kind, &input.record_id)?,
+                anyhow::anyhow!("this record already has a pending review submission"),
+            ));
+        }
         let (revises, revises_rejection) = match &input.revises {
             Some(predecessor) => (
                 Some(predecessor.clone()),

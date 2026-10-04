@@ -36,8 +36,6 @@ pub(super) fn changed_fields<T: Serialize>(
     Ok(names)
 }
 
-/// Classifies whether changed fields create a new review revision.
-#[provenance_macros::rule("rule_content_change_requires_new_review")]
 pub(super) fn changes_revision(kind: NodeType, fields: &[String]) -> bool {
     let content = review_families::by_kind(kind).content_fields;
     fields.iter().any(|field| content.contains(&field.as_str()))
