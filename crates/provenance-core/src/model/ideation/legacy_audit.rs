@@ -26,6 +26,7 @@ const SHIPPED_DISPOSITION_AUDIT_DIGEST_V1: &str =
 /// Only the ideation aggregate asks, so this one is not re-exported from
 /// `model`; the disposition half below is, because `provenance-store`'s shard
 /// gate asks it too.
+#[provenance_macros::rule("rule_legacy_terminal_proposals_frozen")]
 pub fn is_shipped_terminal_proposal_set<'a>(
     proposals: impl IntoIterator<Item = &'a ProposalCard>,
 ) -> bool {
