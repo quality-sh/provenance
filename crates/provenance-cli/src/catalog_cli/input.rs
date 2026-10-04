@@ -110,8 +110,8 @@ pub(super) fn parse(
     if stdin {
         merge_stdin(&mut data, &assignments)?;
     }
-    let hide_terminal = definition
-        .parameters()
+    let hide_terminal = matches!(query_action, None | Some("search"))
+        && definition.parameters()
         .iter()
         .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
     if hide_terminal && !query.contains_key("exclude_terminal") {
