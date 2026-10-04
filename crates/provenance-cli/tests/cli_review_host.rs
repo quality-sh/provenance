@@ -209,8 +209,8 @@ fn discussion_writes_use_the_bound_scope() {
         })
         .unwrap();
     let host = start(repo.path());
-    let mut body = json!({"data":{
-        "actor":"ben", "scope_id":"other", "role":"user",
+    let body = json!({"data":{
+        "actor":"ben", "role":"user",
         "body":"Check this requirement."
     }});
     let post = |body: &Value| {
@@ -221,8 +221,6 @@ fn discussion_writes_use_the_bound_scope() {
                 .send_string(&body.to_string()),
         )
     };
-    assert_eq!(post(&body).status(), 400);
-    body["data"].as_object_mut().unwrap().remove("scope_id");
     let saved = post(&body);
     assert_eq!(saved.status(), 200);
     let saved: Value = serde_json::from_str(&saved.into_string().unwrap()).unwrap();
@@ -230,7 +228,33 @@ fn discussion_writes_use_the_bound_scope() {
     assert_eq!(saved["data"]["actor"], "ben");
     let discussions: Value =
         serde_json::from_str(&list_discussions(&host).into_string().unwrap()).unwrap();
-    assert_eq!(discussions["data"]["items"].as_array().unwrap().len(), 1);
+    let items = discussions["data"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["parent"]["node_type"], "requirement");
+    assert_eq!(items[0]["parent"]["node_id"], "req_example");
+    assert_eq!(items[0]["opening_excerpt"], "Check this requirement.");
+}
+
+#[test]
+/// Implementation aid: the addressed route owns scope selection and rejects a caller override.
+fn discussion_writes_refuse_a_caller_scope() {
+    let repo = repository();
+    let host = start(repo.path());
+    let body = json!({"data":{
+        "actor":"ben", "scope_id":"other", "role":"user",
+        "body":"Check this requirement."
+    }});
+
+    assert_eq!(
+        response(
+            request(&host, "POST", "/requirements/req_example/discussions", true)
+                .set("Origin", host.config["endpoint"].as_str().unwrap())
+                .set("Content-Type", "application/json")
+                .send_string(&body.to_string()),
+        )
+        .status(),
+        400
+    );
 }
 
 #[test]

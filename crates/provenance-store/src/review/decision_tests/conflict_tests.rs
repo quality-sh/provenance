@@ -141,7 +141,7 @@ fn stale_and_terminal_withdrawals_are_review_conflicts() {
 }
 
 #[test]
-#[provenance_macros::verifies("rule_revised_item_requires_new_review", examples)]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 fn superseded_submission_allows_a_new_review_cycle() {
     let (_temp, store, _, proposal_1) = enrolled();
     let revision_2 = edit(&store, "edit-2", "Revised statement");

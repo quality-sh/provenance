@@ -15,16 +15,11 @@ fn req() -> StableId {
 fn open(root: &Utf8Path) -> StateStore {
     StateStore::new(ProvenanceLayout::new(root))
 }
-/// A manifest that allowlists "reviewer" plus one enrolled record.
+/// A repository that allowlists "reviewer" plus one enrolled record.
 fn fixture() -> tempfile::TempDir {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
-    )
-    .unwrap();
+    crate::test_support::allow_reviewer(&layout);
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     store
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
@@ -130,6 +125,7 @@ fn refused<T: std::fmt::Debug>(attempt: anyhow::Result<T>, needle: &str) {
 #[test]
 /// This flow follows one record through rejection, revision, and approval.
 #[provenance_macros::verifies("rule_approval_accepts_reviewed_version", examples)]
+#[provenance_macros::verifies("rule_revised_item_requires_new_review", examples)]
 fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
@@ -228,12 +224,7 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     // Seed an unenrolled Requirement.
     let fresh = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(fresh.path()).unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
-    )
-    .unwrap();
+    crate::test_support::allow_reviewer(&layout);
     let store = open(Utf8Path::from_path(fresh.path()).unwrap());
     store
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
@@ -414,7 +405,7 @@ fn feedback_publishes_with_the_decision_or_neither() {
 }
 
 #[test]
-#[provenance_macros::verifies("rule_withdrawal_preserves_review_history", examples)]
+#[provenance_macros::verifies("rule_rejection_keeps_graph_record", examples)]
 fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
     let (_temp, store, _, proposal_1) = enrolled();
     withdraw(&store, &proposal_1).unwrap();

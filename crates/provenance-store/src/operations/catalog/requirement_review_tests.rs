@@ -389,6 +389,7 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_request_identity_server_created", examples)]
 fn review_action_requests_exclude_server_created_identities() {
     let submit = serde_json::from_value::<review::SubmitRecordReview>(json!({
         "scope_id":"default", "actor":"agent", "record_kind":"requirement", "record_id":"req_a",
@@ -436,9 +437,18 @@ fn review_action_requests_exclude_server_created_identities() {
         }))
         .is_err()
     );
+    assert!(
+        serde_json::from_value::<WithdrawRecordReviewRequest>(json!({
+            "scope_id":"default", "record_kind":"requirement", "record_id":"req_a",
+            "request_id":"client-request", "actor":"agent", "proposal_id":"prop-1",
+            "declared_by":null, "reason":null
+        }))
+        .is_err()
+    );
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_request_identity_server_created", examples)]
 fn remaining_review_write_requests_exclude_client_request_identities() {
     let create = json!({
         "actor":"agent", "id":"req_a", "statement":"One statement.",

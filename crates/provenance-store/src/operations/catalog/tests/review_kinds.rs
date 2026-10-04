@@ -66,7 +66,7 @@ fn every_review_kind_member_read_carries_edit_and_decision_state() {
 }
 
 #[test]
-/// Implementation aid: prevents generated clients from exposing unsupported request identities.
+#[provenance_macros::verifies("rule_review_request_identity_server_created", examples)]
 fn review_actions_do_not_accept_idempotency_headers() {
     for name in [
         "submit-record-review",

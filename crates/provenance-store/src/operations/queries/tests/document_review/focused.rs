@@ -59,5 +59,15 @@ async fn document_comment_count_summarizes_feedback_without_loading_comments() {
     let document = page(&root_of(&dir), 50, false).await;
     let summary = review(&document, id.as_str());
     assert_eq!(summary["comment_count"], 1);
-    assert!(summary.get("comments").is_none());
+    assert_eq!(
+        summary
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect::<std::collections::BTreeSet<_>>(),
+        ["comment_count", "outcome", "pending_proposal_id"]
+            .into_iter()
+            .collect()
+    );
 }

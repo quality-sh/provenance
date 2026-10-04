@@ -20,7 +20,6 @@ use std::{
     time::Duration,
 };
 
-use provenance_macros::verifies;
 use review_host_support::{initialize_repository, start_command, Host};
 use serde_json::Value;
 
@@ -142,7 +141,7 @@ fn start_host(work: &Path, repo: &Path) -> Host {
 
 #[test]
 #[ignore = "builds with the pinned renderer archive; set PROVENANCE_REVIEW_ARCHIVE or allow gh run download"]
-#[verifies("rule_cli_serves_review_assets", examples)]
+/// Release-check aid: validates the pinned archive in a standalone binary.
 fn pinned_archive_is_served_by_a_standalone_binary() {
     let pin = pin::pin();
     let work = tempfile::tempdir().expect("bundle workspace");

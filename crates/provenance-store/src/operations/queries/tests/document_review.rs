@@ -19,11 +19,7 @@ pub(super) fn input<T: serde::de::DeserializeOwned>(value: Value) -> T {
 }
 
 fn allow_reviewer(store: &StateStore) {
-    std::fs::write(
-        store.layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
-    )
-    .unwrap();
+    crate::test_support::allow_reviewer(&store.layout);
 }
 
 async fn page(root: &camino::Utf8Path, limit: usize, exclude_terminal: bool) -> Value {

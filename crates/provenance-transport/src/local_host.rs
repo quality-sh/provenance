@@ -56,6 +56,7 @@ pub struct LocalHostRegistration {
 
 impl LocalHostRegistration {
     #[rule("rule_single_local_host_per_repository_scope")]
+    #[rule("rule_local_host_registry_owner_only")]
     pub fn publish(
         root: &Path,
         scope: &str,
@@ -203,8 +204,6 @@ fn lock_path(root: &Path, scope: &str) -> PathBuf {
         .join(format!("{scope}.lock"))
 }
 
-/// Restricts local host registry access to its owner.
-#[rule("rule_local_host_registry_owner_only")]
 fn secure_directory(path: &Path) -> anyhow::Result<()> {
     std::fs::create_dir_all(path)
         .with_context(|| format!("cannot create local host directory {}", path.display()))?;
