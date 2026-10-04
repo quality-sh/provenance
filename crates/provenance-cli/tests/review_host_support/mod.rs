@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::duplicated_attributes)]
 
 use serde_json::Value;
 use std::{
