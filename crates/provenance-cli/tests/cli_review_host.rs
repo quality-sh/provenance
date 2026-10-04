@@ -6,7 +6,7 @@ use review_host_support::{
     list_discussions, repository, request, response, set_disposition_actors, start,
 };
 use serde_json::{json, Value};
-use std::{net::TcpListener, process::Command, time::Duration};
+use std::{net::TcpListener, time::Duration};
 
 #[test]
 #[verifies("rule_cli_serves_review_assets", examples)]
@@ -297,23 +297,7 @@ fn termination_releases_the_listener() {
     write!(stalled, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {}\r\nContent-Length: 1000\r\n\r\n{{", host.config["bearer"].as_str().unwrap()).unwrap();
     let mut partial_headers = TcpStream::connect(&address).unwrap();
     partial_headers.write_all(b"GET / HTTP/1.1\r\nHo").unwrap();
-    assert!(Command::new("kill")
-        .args(["-TERM", &host.child.id().to_string()])
-        .status()
-        .unwrap()
-        .success());
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    loop {
-        if let Some(status) = host.child.try_wait().unwrap() {
-            assert!(status.success());
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "host shutdown timed out"
-        );
-        std::thread::sleep(Duration::from_millis(25));
-    }
+    assert!(host.terminate_and_wait(Duration::from_secs(10)).success());
     assert!(TcpStream::connect(&address).is_err());
     assert!(TcpListener::bind(&address).is_ok());
 }

@@ -18,6 +18,28 @@ impl Drop for Host {
     }
 }
 
+#[cfg(unix)]
+impl Host {
+    pub fn terminate_and_wait(&mut self, timeout: Duration) -> std::process::ExitStatus {
+        assert!(Command::new("kill")
+            .args(["-TERM", &self.child.id().to_string()])
+            .status()
+            .unwrap()
+            .success());
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if let Some(status) = self.child.try_wait().unwrap() {
+                return status;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "host shutdown timed out"
+            );
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
+}
+
 pub fn repository() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let layout = provenance_store::layout::ProvenanceLayout::new(dir.path().to_str().unwrap());
