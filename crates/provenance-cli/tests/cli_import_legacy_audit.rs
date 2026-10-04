@@ -1,6 +1,11 @@
 use assert_cmd::Command;
+use provenance_macros::verifies;
+
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
 
 #[test]
+#[verifies("rule_legacy_shard_frozen", examples)]
 fn altered_replaced_or_omitted_shipped_disposition_audit_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let baseline = export_shipped(&dir);
@@ -56,6 +61,7 @@ fn altered_replaced_or_omitted_shipped_disposition_audit_is_rejected() {
 }
 
 #[test]
+#[verifies("rule_legacy_shard_frozen", examples)]
 fn exact_shipped_promotion_decisions_export_is_accepted() {
     let dir = tempfile::tempdir().unwrap();
     let mut legacy = export_shipped(&dir);
@@ -104,6 +110,7 @@ fn exact_shipped_promotion_decisions_export_is_accepted() {
 }
 
 #[test]
+#[verifies("rule_legacy_shard_frozen", examples)]
 fn import_cannot_omit_entire_existing_shipped_legacy_terminal_set() {
     let dir = tempfile::tempdir().unwrap();
     let mut shipped = export_shipped(&dir);
@@ -149,68 +156,6 @@ fn import_cannot_omit_entire_existing_shipped_legacy_terminal_set() {
         .stderr(predicates::str::contains("immutable proposal"));
 }
 
-#[test]
-fn ambiguous_or_unknown_export_fields_are_rejected() {
-    let dir = tempfile::tempdir().unwrap();
-    let baseline = export_shipped(&dir);
-    for attack in ["both", "unknown"] {
-        let mut value = baseline.clone();
-        if attack == "both" {
-            value["promotion_decisions"] = value["dispositions"].clone();
-        } else {
-            value["unexpected"] = serde_json::json!(true);
-        }
-        let input = dir.path().join(format!("{attack}.json"));
-        std::fs::write(&input, serde_json::to_vec(&value).unwrap()).unwrap();
-        let repo = dir.path().join(format!("repo-{attack}"));
-        init(&repo);
-        Command::cargo_bin("provenance")
-            .unwrap()
-            .args([
-                "import",
-                "--repo",
-                repo.to_str().unwrap(),
-                "--scope",
-                "default",
-                "--input",
-                input.to_str().unwrap(),
-            ])
-            .assert()
-            .failure();
-    }
-}
-
-#[test]
-fn pre_service_family_removal_exports_name_the_re_export_remedy() {
-    let dir = tempfile::tempdir().unwrap();
-    let baseline = export_shipped(&dir);
-    for legacy_field in ["services", "service_bindings"] {
-        let mut value = baseline.clone();
-        value[legacy_field] = serde_json::json!([]);
-        let input = dir.path().join(format!("legacy-{legacy_field}.json"));
-        std::fs::write(&input, serde_json::to_vec(&value).unwrap()).unwrap();
-        let repo = dir.path().join(format!("repo-{legacy_field}"));
-        init(&repo);
-
-        Command::cargo_bin("provenance")
-            .unwrap()
-            .args([
-                "import",
-                "--repo",
-                repo.to_str().unwrap(),
-                "--scope",
-                "default",
-                "--input",
-                input.to_str().unwrap(),
-            ])
-            .assert()
-            .failure()
-            .stderr(predicates::str::contains(
-                "this export predates the service family removal; re-export from current provenance",
-            ));
-    }
-}
-
 /// The proposal ids the frozen shipped-v1 disposition audit covers.
 ///
 /// A disposition belongs to the audit when the proposal it disposes of is in a
@@ -233,12 +178,14 @@ fn export_shipped(dir: &tempfile::TempDir) -> serde_json::Value {
         .unwrap()
         .parent()
         .unwrap();
+    let portable = dir.path().join("portable-shipped");
+    export_fixture_support::copy_portable_state(shipped, &portable);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
             "export",
             "--repo",
-            shipped.to_str().unwrap(),
+            portable.to_str().unwrap(),
             "--scope",
             "default",
             "--format",

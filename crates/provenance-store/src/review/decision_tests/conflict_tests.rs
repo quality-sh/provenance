@@ -34,6 +34,7 @@ fn repeated_decision_reports_the_current_review_identity() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 fn stale_decision_reports_the_pending_submission_and_current_revision() {
     let (_temp, store, _, proposal) = enrolled();
     let current_revision = edit(&store, "edit-2", "Revised statement");
@@ -55,6 +56,25 @@ fn stale_decision_reports_the_pending_submission_and_current_revision() {
             current_revision: revision,
         } if submission == current_proposal && revision == current_revision
     ));
+}
+
+#[test]
+#[provenance_macros::verifies("rule_review_conflict_not_merged", examples)]
+fn stale_decision_does_not_replace_the_pending_submission() {
+    let (_temp, store, _, proposal) = enrolled();
+    edit(&store, "edit-2", "Revised statement");
+    let current_proposal = state(&store).pending.unwrap().proposal_id;
+
+    decide(
+        &store,
+        &proposal,
+        "accepted",
+        &reviewer("reviewer"),
+        &artifact(),
+    )
+    .unwrap_err();
+
+    assert_eq!(state(&store).pending.unwrap().proposal_id, current_proposal);
 }
 
 #[test]
@@ -175,8 +195,7 @@ fn stale_and_repeated_submissions_are_typed_conflicts() {
     assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 2);
 }
 
-#[test]
-fn server_creates_unique_identities_across_review_cycles() {
+fn two_review_cycles() -> [CycleEntry; 4] {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     edit(&store, "edit-1", "Statement v1");
@@ -200,7 +219,21 @@ fn server_creates_unique_identities_across_review_cycles() {
     )
     .unwrap();
 
+    [submission_1, decision_1, submission_2, decision_2]
+}
+
+#[test]
+#[provenance_macros::verifies("rule_review_proposal_identity_server_created", examples)]
+fn server_creates_unique_proposal_identities_across_review_cycles() {
+    let [submission_1, _, submission_2, _] = two_review_cycles();
+
     assert_ne!(submission_1.proposal_id, submission_2.proposal_id);
+}
+
+#[test]
+#[provenance_macros::verifies("rule_review_request_identity_server_created", examples)]
+fn server_creates_unique_request_identities_across_review_cycles() {
+    let [submission_1, decision_1, submission_2, decision_2] = two_review_cycles();
     let request_ids = [
         &submission_1.request_id,
         &decision_1.request_id,
@@ -215,5 +248,12 @@ fn server_creates_unique_identities_across_review_cycles() {
             .len(),
         request_ids.len()
     );
+}
+
+#[test]
+#[provenance_macros::verifies("rule_review_disposition_identity_server_created", examples)]
+fn server_creates_unique_disposition_identities_across_review_cycles() {
+    let [_, decision_1, _, decision_2] = two_review_cycles();
+
     assert_ne!(decision_1.disposition_id, decision_2.disposition_id);
 }

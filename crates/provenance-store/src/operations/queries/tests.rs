@@ -20,6 +20,7 @@ mod document;
 mod document_lifecycle;
 mod document_membership;
 mod document_review;
+mod document_roots;
 mod evidence;
 mod front_equivalence;
 mod hydration;
