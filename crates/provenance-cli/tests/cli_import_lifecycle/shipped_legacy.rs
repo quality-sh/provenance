@@ -4,6 +4,7 @@ use super::support::{
 };
 
 #[test]
+/// This test covers the export, import, validation, and materialization flow.
 fn shipped_legacy_export_imports_when_legacy_statements_are_already_canonical() {
     let dir = tempfile::tempdir().unwrap();
     let fresh = dir.path().join("fresh");
@@ -29,6 +30,7 @@ fn seed_statement_shards(source: &std::path::Path, destination: &std::path::Path
 }
 
 #[test]
+/// This test covers the validation and export flow for a historical repository.
 fn historical_shipped_manifest_without_actor_allowlist_remains_readable() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("historical");
@@ -69,6 +71,7 @@ fn historical_shipped_manifest_without_actor_allowlist_remains_readable() {
 }
 
 #[test]
+/// This test covers the export, modification, and rejected import flow.
 fn one_byte_change_to_shipped_legacy_terminal_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let fresh = dir.path().join("fresh");

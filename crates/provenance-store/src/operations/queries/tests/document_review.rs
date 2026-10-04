@@ -313,6 +313,7 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
 
 #[tokio::test]
 #[provenance_macros::verifies("rule_document_has_review_totals", examples)]
+/// This test covers review totals through filtered document pagination.
 async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     let (dir, store, scope) = seeded_store();
     allow_reviewer(&store);
