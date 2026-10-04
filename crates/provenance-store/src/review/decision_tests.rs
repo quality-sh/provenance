@@ -1,4 +1,3 @@
-//! Tests for the Requirement candidate and decision cycle.
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use camino::Utf8Path;
 use provenance_core::{
