@@ -19,10 +19,9 @@ fn init_installs_complete_bundled_skills() {
         "provenance-shaping",
         "provenance-swarm-backtrace",
     ] {
-        let installed = std::fs::read_to_string(
-            repo.join(".agents/skills").join(skill).join("SKILL.md"),
-        )
-        .unwrap();
+        let installed =
+            std::fs::read_to_string(repo.join(".agents/skills").join(skill).join("SKILL.md"))
+                .unwrap();
         assert!(installed.starts_with("---\nname: provenance-"));
         assert!(installed.contains("\n---\n"));
         assert!(repo.join(".claude/skills").join(skill).exists());
