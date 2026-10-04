@@ -321,7 +321,7 @@ fn published_registry_matches_the_version_one_fixture() {
     ))
     .unwrap();
     let repository = tempfile::tempdir().unwrap();
-    let registration = LocalHostRegistration::publish(
+    let _registration = LocalHostRegistration::publish(
         repository.path(),
         expected_registry["scope"].as_str().unwrap(),
         expected_registry["endpoint"].as_str().unwrap(),
