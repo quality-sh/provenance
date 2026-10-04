@@ -1,5 +1,5 @@
 use assert_cmd::Command;
-use predicates::{prelude::PredicateBooleanExt as _, str::contains};
+use predicates::str::contains;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -162,6 +162,44 @@ fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
         .assert()
         .failure()
         .stderr(contains("provenance req_pending get --view review"));
+}
+
+#[test]
+#[verifies("rule_review_refusal_names_read_command", examples)]
+fn stale_edit_names_the_review_command() {
+    let (_directory, repo) = init();
+    let created = create_requirement(&repo, "req_stale");
+    let stale_etag = created["data"]["edit"]["etag"].as_str().unwrap();
+
+    provenance()
+        .args([
+            "req_stale",
+            "update",
+            "--repo",
+            &repo,
+            "--if-match",
+            stale_etag,
+            "--description",
+            "Current description.",
+        ])
+        .assert()
+        .success();
+
+    provenance()
+        .args([
+            "req_stale",
+            "update",
+            "--repo",
+            &repo,
+            "--if-match",
+            stale_etag,
+            "--description",
+            "Stale description.",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("requirement_edit_conflict"))
+        .stderr(contains("provenance req_stale get --view review"));
 }
 
 #[test]
