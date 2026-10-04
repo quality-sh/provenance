@@ -62,6 +62,7 @@ pub fn json_stdin_output(arguments: &[&str], input: &Value) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+#[allow(dead_code)]
 pub fn allow_reviewer(repo: &str) {
     let layout = provenance_store::layout::ProvenanceLayout::new(repo);
     let mut manifest: provenance_core::Manifest =
