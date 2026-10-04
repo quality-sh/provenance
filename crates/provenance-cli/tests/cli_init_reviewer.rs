@@ -14,14 +14,6 @@ fn init(repo: &Path) -> Command {
     command
 }
 
-fn without_git_identity(command: &mut Command, temporary: &Path) {
-    let config = temporary.join("empty-gitconfig");
-    std::fs::write(&config, "").unwrap();
-    command
-        .env("GIT_CONFIG_GLOBAL", config)
-        .env("GIT_CONFIG_NOSYSTEM", "1");
-}
-
 #[test]
 #[provenance_macros::verifies("rule_init_configures_human_reviewer", examples)]
 fn init_uses_the_normalized_git_email_as_the_reviewer() {
