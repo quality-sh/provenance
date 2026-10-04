@@ -139,7 +139,13 @@ fn json_catalog_applies_limit() {
 fn json_catalog_applies_filter() {
     let (_directory, repo) = init();
     let catalog = json(&[
-        "api", "--repo", &repo, "--filter", "requirements/{id}", "--format", "json",
+        "api",
+        "--repo",
+        &repo,
+        "--filter",
+        "requirements/{id}",
+        "--format",
+        "json",
     ]);
     let routes = catalog["routes"].as_array().unwrap();
     assert!(routes.iter().all(|route| {
