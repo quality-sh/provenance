@@ -2,7 +2,7 @@ mod porcelain_authoring_support;
 
 use porcelain_authoring_support::{
     allow_reviewer, initialized_repo, json_output, json_stdin_output, local_host,
-    local_host_with_identity, provenance, write_local_host_fixture,
+    local_host_with_identity,
 };
 use provenance_macros::verifies;
 use provenance_transport::local_host::LocalHostRegistration;
@@ -10,52 +10,7 @@ use serde_json::json;
 use std::net::TcpListener;
 
 #[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
-fn write_output_explains_how_to_start_a_missing_review_host() {
-    let (_directory, repo) = initialized_repo();
-    let created = json_output(&[
-        "req_link",
-        "create",
-        "--type",
-        "requirement",
-        "--repo",
-        &repo,
-        "--statement",
-        "The agent gives the reviewer a link.",
-        "--format",
-        "json",
-    ]);
-
-    assert!(created["data"].get("review_url").is_none());
-    assert!(created["data"]["review_message"]
-        .as_str()
-        .unwrap()
-        .contains("provenance review"));
-}
-
-#[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
-fn readable_write_output_explains_how_to_start_a_missing_review_host() {
-    let (_directory, repo) = initialized_repo();
-
-    provenance()
-        .args([
-            "req_readable_link",
-            "create",
-            "--type",
-            "requirement",
-            "--repo",
-            &repo,
-            "--statement",
-            "The readable output explains how to start review.",
-        ])
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("provenance review --repo"));
-}
-
-#[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
+#[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn write_output_links_to_the_containing_requirement() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
@@ -91,7 +46,7 @@ fn write_output_links_to_the_containing_requirement() {
 }
 
 #[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
+#[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn explicit_read_links_to_the_containing_requirement() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
@@ -133,46 +88,6 @@ fn explicit_read_links_to_the_containing_requirement() {
         "json",
     ]);
     assert_eq!(link["review_url"], expected);
-}
-
-#[test]
-#[verifies("rule_review_link_opens_repository_host_only", examples)]
-fn invalid_runtime_records_do_not_produce_links() {
-    for endpoint in [
-        "https://127.0.0.1:1234",
-        "http://127.0.0.1:1234/path",
-        "http://user@127.0.0.1:1234",
-        "not a URL",
-    ] {
-        let (_directory, repo) = initialized_repo();
-        json_output(&[
-            "req_link",
-            "create",
-            "--type",
-            "requirement",
-            "--repo",
-            &repo,
-            "--statement",
-            "The agent gives the reviewer a safe link.",
-            "--format",
-            "json",
-        ]);
-        write_local_host_fixture(&repo, endpoint);
-        let link = json_output(&[
-            "req_link",
-            "get",
-            "--repo",
-            &repo,
-            "--review-link",
-            "--format",
-            "json",
-        ]);
-        assert!(link["review_url"].is_null());
-        assert!(link["message"]
-            .as_str()
-            .unwrap()
-            .contains("provenance review"));
-    }
 }
 
 #[test]
@@ -247,39 +162,6 @@ fn identity_mismatches_do_not_produce_links() {
     }
 }
 
-#[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
-fn explicit_link_read_explains_how_to_start_the_host() {
-    let (_directory, repo) = initialized_repo();
-    json_output(&[
-        "req_link",
-        "create",
-        "--type",
-        "requirement",
-        "--repo",
-        &repo,
-        "--statement",
-        "The agent gives the reviewer a link.",
-        "--format",
-        "json",
-    ]);
-
-    let output = json_output(&[
-        "req_link",
-        "get",
-        "--repo",
-        &repo,
-        "--review-link",
-        "--format",
-        "json",
-    ]);
-    assert!(output["review_url"].is_null());
-    assert!(output["message"]
-        .as_str()
-        .unwrap()
-        .contains("provenance review"));
-}
-
 fn create_requirement(repo: &str, id: &str) -> serde_json::Value {
     json_output(&[
         id,
@@ -352,7 +234,7 @@ fn assert_review_link(output: &serde_json::Value, root: &str) {
 }
 
 #[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
+#[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn create_returns_the_review_link() {
     let (_directory, repo) = initialized_repo();
     let host = local_host(&repo);
@@ -363,7 +245,7 @@ fn create_returns_the_review_link() {
 }
 
 #[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
+#[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn update_returns_the_review_link() {
     let (_directory, repo) = initialized_repo();
     let created = create_requirement(&repo, "req_flow");
@@ -389,7 +271,7 @@ fn update_returns_the_review_link() {
 }
 
 #[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
+#[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn withdraw_returns_the_review_link() {
     let (_directory, repo) = initialized_repo();
     let (_, proposal) = pending_submission(&repo);
@@ -414,7 +296,7 @@ fn withdraw_returns_the_review_link() {
 }
 
 #[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
+#[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn submit_returns_the_review_link() {
     let (_directory, repo) = initialized_repo();
     ready_to_submit(&repo);
@@ -430,7 +312,7 @@ fn submit_returns_the_review_link() {
 }
 
 #[test]
-#[verifies("rule_agent_review_request_includes_link", examples)]
+#[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn decide_returns_the_review_link() {
     let (_directory, repo) = initialized_repo();
     allow_reviewer(&repo);

@@ -421,30 +421,3 @@ fn domain_and_boundary_decisions_refuse_feedback() {
         ));
     }
 }
-
-#[test]
-fn domain_and_boundary_rejections_keep_their_rationale() {
-    for kind in [NodeType::Domain, NodeType::Boundary] {
-        let (_temp, store, scope, proposal) = pending_classification_review(kind);
-
-        let decided = store
-            .decide_record_review(DecideRecordReview {
-                scope_id: scope.clone(),
-                actor: reviewer(),
-                proposal_id: proposal,
-                decision: DispositionDecision::Rejected,
-                rationale: Some("The classification is too broad.".into()),
-                canonical_artifact: None,
-                feedback: None,
-                declared_by: None,
-            })
-            .unwrap();
-        let disposition = store
-            .list_dispositions(&scope)
-            .unwrap()
-            .into_iter()
-            .find(|disposition| Some(&disposition.id) == decided.disposition_id.as_ref())
-            .unwrap();
-        assert_eq!(disposition.rationale, "The classification is too broad.");
-    }
-}

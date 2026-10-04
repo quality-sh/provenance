@@ -73,3 +73,4 @@ predicates.workspace = true
 rmcp = { version = "=1.4.0", default-features = false, features = ["client"] }
 sha2.workspace = true
 tar.workspace = true
+provenance-transport = { path = "../provenance-transport", version = "0.2.3", features = ["test-fixture"] }

@@ -56,3 +56,8 @@ required-features = ["test-fixture"]
 name = "existing-root-host-fixture"
 path = "src/bin/existing-root-host-fixture.rs"
 required-features = ["test-fixture"]
+
+[[test]]
+name = "local_host"
+path = "tests/local_host.rs"
+required-features = ["test-fixture"]

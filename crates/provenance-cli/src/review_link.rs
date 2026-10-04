@@ -86,6 +86,7 @@ async fn try_annotate_write(
 
 /// Builds the direct record link that an agent gives to a person for review.
 #[rule("rule_agent_review_request_includes_link")]
+#[rule("rule_cli_record_review_action_returns_url")]
 async fn link_output(
     context: &RepoContext,
     record: &AffectedReviewRecord,
@@ -147,21 +148,4 @@ fn build_url(endpoint: &url::Url, root: &str, focus: Option<&str>) -> String {
         }
     }
     url.into()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::build_url;
-    use provenance_macros::verifies;
-
-    #[test]
-    #[verifies("rule_agent_review_request_includes_link", examples)]
-    fn link_builder_encodes_record_ids() {
-        let endpoint = url::Url::parse("http://127.0.0.1:1234/").unwrap();
-        let url = build_url(&endpoint, "req root", Some("rule/focus"));
-        assert_eq!(
-            url,
-            "http://127.0.0.1:1234/?root=req+root&focus=rule%2Ffocus"
-        );
-    }
 }

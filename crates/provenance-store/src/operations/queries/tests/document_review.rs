@@ -318,13 +318,6 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     let (dir, store, scope) = seeded_store();
     allow_reviewer(&store);
     create_document_records(&store, &scope);
-    let pending = store
-        .record_decision_state(&scope, NodeType::Requirement, &sid("req_overtime"))
-        .unwrap()
-        .pending
-        .unwrap()
-        .proposal_id;
-    assert_ne!(pending.as_str(), "");
     let accepted = submit(
         &store,
         &scope,

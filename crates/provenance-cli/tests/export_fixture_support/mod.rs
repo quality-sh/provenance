@@ -27,7 +27,7 @@ pub fn copy_portable_state(source: impl AsRef<Path>, destination: impl AsRef<Pat
 }
 
 #[allow(dead_code)]
-fn copy_tree(source: &Path, destination: &Path) {
+pub fn copy_tree(source: &Path, destination: &Path) {
     std::fs::create_dir_all(destination).unwrap();
     for entry in std::fs::read_dir(source).unwrap() {
         let entry = entry.unwrap();

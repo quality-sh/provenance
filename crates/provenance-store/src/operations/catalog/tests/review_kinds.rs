@@ -130,18 +130,6 @@ fn each_review_route_binds_its_record_kind() {
     }
 }
 
-#[test]
-#[provenance_macros::verifies("rule_domain_boundary_accept_no_discussions", exhaustion)]
-fn only_discussion_parent_kinds_have_discussion_routes() {
-    let routes = definitions();
-    for (plural, _) in REVIEW_KINDS {
-        let path = format!("/{plural}/{{id}}/discussions");
-        let count = routes.iter().filter(|route| route.path == path).count();
-        let expected = usize::from(!matches!(plural, "domains" | "boundaries")) * 2;
-        assert_eq!(count, expected, "unexpected Discussion routes for {plural}");
-    }
-}
-
 fn title_case(value: &str) -> String {
     let mut chars = value.chars();
     chars

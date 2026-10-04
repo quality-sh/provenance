@@ -55,6 +55,7 @@ pub struct LocalHostRegistration {
 }
 
 impl LocalHostRegistration {
+    #[rule("rule_single_local_host_per_repository_scope")]
     pub fn publish(
         root: &Path,
         scope: &str,

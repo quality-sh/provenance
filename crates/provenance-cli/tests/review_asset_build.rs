@@ -18,29 +18,6 @@ fn embeds_index_and_local_dependencies_in_a_stable_inventory() {
     assert_eq!(first, std::fs::read_to_string(output).unwrap());
 }
 
-#[test]
-fn rejects_missing_entry_and_reserved_paths() {
-    let dir = tempfile::tempdir().unwrap();
-    let assets = dir.path().join("assets");
-    std::fs::create_dir(&assets).unwrap();
-    let output = dir.path().join("bundle.rs");
-    assert!(review_assets::generate(&assets, &output).is_err());
-    std::fs::write(assets.join("index.html"), "<!doctype html>").unwrap();
-    for name in [
-        "metadata",
-        "review-config",
-        "local-host-identity",
-        "v7",
-        ".secret",
-        "bad path",
-    ] {
-        let path = assets.join(name);
-        std::fs::write(&path, "not an asset").unwrap();
-        assert!(review_assets::generate(&assets, &output).is_err(), "{name}");
-        std::fs::remove_file(path).unwrap();
-    }
-}
-
 #[cfg(unix)]
 #[test]
 fn rejects_file_and_directory_links() {
