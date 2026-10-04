@@ -66,7 +66,10 @@ fn init_installs_bundled_skills_and_ratified_instructions() {
             .exists());
         assert!(repo.join(".claude/skills").join(skill).exists());
     }
-    assert_eq!(onboarding_support::without_review_guidance(read_agents(&repo)), format!("{INSTRUCTIONS}\n"));
+    assert_eq!(
+        onboarding_support::without_review_guidance(read_agents(&repo)),
+        format!("{INSTRUCTIONS}\n")
+    );
     assert_eq!(
         std::fs::read_to_string(repo.join(".gitignore")).unwrap(),
         ".provenance/cache/\n"
