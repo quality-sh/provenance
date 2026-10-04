@@ -4,9 +4,6 @@ use provenance_macros::verifies;
 #[path = "export_fixture_support/mod.rs"]
 mod export_fixture_support;
 
-#[path = "export_fixture_support/mod.rs"]
-mod export_fixture_support;
-
 #[test]
 #[verifies("rule_legacy_shard_frozen", examples)]
 fn altered_replaced_or_omitted_shipped_disposition_audit_is_rejected() {

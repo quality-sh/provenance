@@ -53,9 +53,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         )
         .context("cannot configure review repository access")?,
     );
-    if access.disposition_actor_ids()?.is_empty() {
-        eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
-    }
+    declare_read_only_review(&access, &options.repo)?;
     let host = StatementHost::with_access(access.clone()).with_check_port(Arc::new(
         crate::handlers::check::RepositoryCheckPort::new(
             camino::Utf8PathBuf::from_path_buf(options.repo.clone())
