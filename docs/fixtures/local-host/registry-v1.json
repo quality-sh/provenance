@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "endpoint": "http://127.0.0.1:43123",
+  "repositoryId": "local",
+  "scope": "default",
+  "instanceNonce": "0123456789abcdef0123456789abcdef"
+}

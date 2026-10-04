@@ -238,6 +238,8 @@ pub struct Registration {
     pub queries: Vec<QueryRoute>,
     pub cli: CliBinding,
     pub target: Option<TargetBinding>,
+    /// The record changed by a write that needs review-link decoration.
+    pub review_link: Option<NodeType>,
 }
 
 impl Registration {
@@ -257,6 +259,7 @@ impl Registration {
             queries: Vec::new(),
             cli: CliBinding::default(),
             target: None,
+            review_link: None,
         }
     }
 }

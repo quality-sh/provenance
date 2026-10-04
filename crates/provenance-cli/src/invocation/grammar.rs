@@ -176,6 +176,9 @@ pub struct TargetArgs {
     pub kind: Vec<NodeType>,
     #[arg(long)]
     pub limit: Option<usize>,
+    /// Print a link to this record in the running review host.
+    #[arg(long, conflicts_with_all = ["view", "depth", "kind", "limit"])]
+    pub review_link: bool,
     #[arg(long)]
     pub stdin: bool,
 }

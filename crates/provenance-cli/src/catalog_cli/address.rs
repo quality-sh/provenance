@@ -5,6 +5,7 @@ pub(super) struct Resolved {
     pub address: &'static Address,
     pub path: String,
     pub query: Option<&'static str>,
+    pub values: BTreeMap<&'static str, String>,
 }
 
 #[derive(Clone)]
@@ -36,6 +37,7 @@ pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<R
         address,
         path: render_path(address.definition.path, &values)?,
         query: address.query,
+        values,
     })
 }
 

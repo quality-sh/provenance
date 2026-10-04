@@ -39,6 +39,7 @@ pub struct GetInvocation {
     context: GlobalContext,
     format: Option<porcelain::OutputFormat>,
     input: provenance_porcelain::get::GetInput,
+    review_link: bool,
 }
 
 pub struct TargetInvocation {
@@ -116,7 +117,10 @@ impl Invocation {
         let format = args.common.format();
         let context = args.common.context();
         if matches!(args.action, None | Some(TargetVerb::Get)) {
-            catalog_cli::ensure_only_fields(&matches, &["kind", "view", "depth", "limit"]);
+            catalog_cli::ensure_only_fields(
+                &matches,
+                &["kind", "view", "depth", "limit", "review-link"],
+            );
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
                 args.view
@@ -131,6 +135,7 @@ impl Invocation {
                 context,
                 format,
                 input,
+                review_link: args.review_link,
             }));
         }
         let Some(TargetVerb::Action(action)) = args.action else {
@@ -155,6 +160,14 @@ impl Invocation {
             Self::Api(args) => api::dispatch(args).await,
             Self::Catalog(invocation) => catalog_cli::dispatch(invocation).await,
             Self::Get(invocation) => {
+                if invocation.review_link {
+                    return crate::review_link::print(
+                        &invocation.context.repo,
+                        &invocation.input.target,
+                        invocation.format,
+                    )
+                    .await;
+                }
                 porcelain::dispatch_get(
                     invocation.context.repo.repo.as_str(),
                     &invocation.context.repo.scope,

@@ -2371,7 +2371,9 @@ dependencies = [
 name = "provenance-transport"
 version = "0.2.3"
 dependencies = [
+ "anyhow",
  "axum",
+ "fs2",
  "futures",
  "jsonschema",
  "provenance-core",
@@ -2387,7 +2389,9 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tower",
+ "ureq",
  "url",
+ "uuid",
 ]
 
 [[package]]
