@@ -1,6 +1,5 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
 use serde_json::{json, Value};
 
 fn provenance() -> Command {
@@ -22,30 +21,47 @@ fn reviewed_records() -> (tempfile::TempDir, String) {
         ])
         .assert()
         .success();
-    let store = StateStore::new(ProvenanceLayout::new(&repo));
-    store
-        .create_source(
-            serde_json::from_value(json!({
-                "scope_id":"default", "id":"source_review", "name":"Source",
-                "source_type":"policy", "supersedes":[]
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-    store.create_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_review","statement":"The system shows the review state.","status":"active","depends_on":[],"supersedes":[]})).unwrap()).unwrap();
-    store.create_resolution(serde_json::from_value(json!({"scope_id":"default","id":"resolution_review","title":"Decision","position":"Show the state.","rationale":"Agents need the state.","status":"draft","requirement_ids":["req_review"],"supersedes":[],"inputs":[]})).unwrap()).unwrap();
-    store.create_rule(serde_json::from_value(json!({"scope_id":"default","id":"rule_review","statement":"The system shows the review state.","status":"draft","severity":"medium","requirement_ids":["req_review"],"resolution_ids":[]})).unwrap()).unwrap();
-    store
-        .create_domain(
-            serde_json::from_value(
-                json!({"scope_id":"default","id":"domain_review","name":"Review"}),
-            )
-            .unwrap(),
-        )
-        .unwrap();
-    store.create_boundary(serde_json::from_value(json!({"scope_id":"default","id":"boundary_review","requirement_id":"req_review","statement":"Keep the review bounded."})).unwrap()).unwrap();
-    store.create_topic(serde_json::from_value(json!({"scope_id":"default","id":"topic_review","requirement_id":"req_review","title":"Review","status":"open","links":[]})).unwrap()).unwrap();
-    store.create_question(serde_json::from_value(json!({"scope_id":"default","id":"question_review","topic_id":"topic_review","question":"Is the review complete?","resolution_method":"research","status":"open","links":[]})).unwrap()).unwrap();
+    for (collection, body) in [
+        (
+            "sources",
+            json!({"id":"source_review", "name":"Source", "source_type":"policy"}),
+        ),
+        (
+            "requirements",
+            json!({"id":"req_review", "statement":"The system stores records."}),
+        ),
+        (
+            "resolutions",
+            json!({"id":"resolution_review", "title":"Decision", "position":"Store records.",
+                "rationale":"Records are necessary.", "requirement_ids":["req_review"]}),
+        ),
+        (
+            "rules",
+            json!({"id":"rule_review", "statement":"The system stores records.",
+                "requirement_ids":["req_review"]}),
+        ),
+        ("domains", json!({"id":"domain_review", "name":"Review"})),
+        (
+            "boundaries",
+            json!({"id":"boundary_review", "requirement_id":"req_review",
+                "statement":"Keep the work in the repository."}),
+        ),
+        (
+            "topics",
+            json!({"id":"topic_review", "requirement_id":"req_review", "title":"Review"}),
+        ),
+        (
+            "questions",
+            json!({"id":"question_review", "topic_id":"topic_review",
+                "question":"Is the work complete?", "resolution_method":"research"}),
+        ),
+    ] {
+        provenance()
+            .args([collection, "create", "--repo", &repo, "--stdin"])
+            .write_stdin(body.to_string())
+            .assert()
+            .success();
+    }
     (directory, repo)
 }
 
@@ -76,7 +92,14 @@ fn review_view_reads_every_review_record_kind() {
         );
         let result: Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(result["record"]["kind"], kind);
-        assert!(result["review"]["edit"]["etag"].is_string());
-        assert!(result["review"]["decision"].is_object());
+        let review = &result["review"];
+        assert_eq!(review["decision"]["requirement_id"], id);
+        assert_eq!(
+            review["decision"]["current_revision"],
+            review["edit"]["revision"]
+        );
+        assert_eq!(review["discussions"]["entries"], json!([]));
+        assert_eq!(review["discussions"]["has_more"], false);
+        assert!(review["discussions"]["next_cursor"].is_null());
     }
 }

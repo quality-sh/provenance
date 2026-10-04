@@ -74,6 +74,7 @@ fn envelope(stderr: &str) -> Value {
 #[test]
 #[verifies("rule_porcelain_api_public_path", examples)]
 #[verifies("rule_porcelain_api_uses_context", examples)]
+/// This flow compares the shared public path with the configured target-first read.
 fn api_get_reads_one_public_path_with_the_configured_context() {
     let (_directory, repo) = init();
     seed_source(&repo);
@@ -133,6 +134,7 @@ fn json_catalog_applies_limit() {
     let catalog = json(&["api", "--repo", &repo, "--limit", "2", "--format", "json"]);
     let routes = catalog["routes"].as_array().unwrap();
     assert_eq!(routes.len(), 2);
+    assert_eq!(catalog["bounds"]["truncated"], true);
 }
 
 #[test]
@@ -149,6 +151,7 @@ fn json_catalog_applies_filter() {
         "json",
     ]);
     let routes = catalog["routes"].as_array().unwrap();
+    assert!(!routes.is_empty());
     assert!(routes.iter().all(|route| {
         format!(
             "{} {} {}",

@@ -210,7 +210,7 @@ async fn all_ids(root: &camino::Utf8Path, exclude_terminal: bool) -> Vec<String>
 }
 
 #[tokio::test]
-#[provenance_macros::verifies("rule_review_defaults_exclude_terminal_records", examples)]
+/// Implementation aid: this checks the store's explicit terminal-record filter at both depths.
 async fn lifecycle_filter_hides_terminal_records_at_root_and_nested_levels() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);

@@ -9,6 +9,7 @@ use provenance_macros::verifies;
 #[test]
 #[verifies("rule_porcelain_cli_target_action_order", examples)]
 #[verifies("rule_porcelain_create_names_new_record", examples)]
+/// This flow checks target-first creation grammar and its required record type.
 fn target_first_create_uses_the_target_id_and_requires_an_explicit_type() {
     let (_directory, repo) = initialized_repo();
 
@@ -192,6 +193,7 @@ fn relationship_updates_preserve_unmodified_members_until_explicit_replacement()
 #[test]
 #[verifies("rule_porcelain_cli_readable_json", examples)]
 #[verifies("rule_porcelain_update_preserves_omissions", examples)]
+/// This flow checks omission and null semantics in both readable and JSON updates.
 fn target_first_update_preserves_omissions_and_honors_null_clear() {
     let (_directory, repo) = initialized_repo();
     json_output(&[

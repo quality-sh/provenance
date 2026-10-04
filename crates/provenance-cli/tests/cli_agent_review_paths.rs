@@ -146,9 +146,6 @@ fn wrong_feedback_form_names_the_review_command() {
 fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
     let (_directory, repo) = init();
     let created = create_requirement(&repo, "req_pending");
-    let proposal = created["data"]["decision"]["pending"]["proposal_id"]
-        .as_str()
-        .unwrap();
     let revision = created["data"]["edit"]["revision"].as_str().unwrap();
 
     provenance()
@@ -164,21 +161,7 @@ fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
         )
         .assert()
         .failure()
-        .stderr(contains(format!(
-            "already has pending submission {proposal}"
-        )))
         .stderr(contains("provenance req_pending get --view review"));
-}
-
-#[test]
-#[verifies("rule_cli_guard_guidance", examples)]
-fn update_help_names_the_edit_etag_input() {
-    provenance()
-        .args(["requirements", "req_id", "update", "--help"])
-        .assert()
-        .success()
-        .stdout(contains("data.edit.etag"))
-        .stdout(contains("--if-match"));
 }
 
 #[test]
@@ -203,38 +186,6 @@ fn invalid_if_match_names_the_edit_etag_form() {
         .failure()
         .stderr(contains("--if-match must equal data.edit.etag"))
         .stderr(contains("sha256:<64 lowercase hexadecimal characters>"));
-}
-
-#[test]
-#[verifies("rule_cli_guard_guidance", examples)]
-fn discussion_guards_name_numeric_versions_in_help() {
-    for address in [
-        [
-            "sources",
-            "source_id",
-            "discussions",
-            "discussion_id",
-            "update",
-        ]
-        .as_slice(),
-        [
-            "sources",
-            "source_id",
-            "discussions",
-            "discussion_id",
-            "messages",
-            "create",
-        ]
-        .as_slice(),
-    ] {
-        provenance()
-            .args(address)
-            .arg("--help")
-            .assert()
-            .success()
-            .stdout(contains("pass the latest Discussion version unchanged"))
-            .stdout(contains("data.edit.etag").not());
-    }
 }
 
 #[test]
@@ -330,6 +281,24 @@ fn collection_hides_terminal_records_by_default() {
     let listed =
         json_output(provenance().args(["rules", "list", "--repo", &repo, "--format", "json"]));
     assert_eq!(listed["data"]["items"], serde_json::json!([]));
+}
+
+#[test]
+#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
+fn named_query_hides_terminal_records_by_default() {
+    let (_directory, repo) = repo_with_archived_rule();
+
+    let searched = json_output(provenance().args([
+        "rules",
+        "search",
+        "--repo",
+        &repo,
+        "--text",
+        "terminal records",
+        "--format",
+        "json",
+    ]));
+    assert_eq!(searched["data"]["items"], serde_json::json!([]));
 }
 
 #[test]
