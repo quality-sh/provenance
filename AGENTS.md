@@ -135,8 +135,10 @@ test is allowed, but it has no Rule binding and states its reason. Each code rev
 lists the behaviours that the change asks the reviewer to approve. It also flags a
 test that has no Rule or has the wrong Rule, uses a private surface, reaches an
 otherwise unreachable state, checks non-source content, checks a type guarantee, or
-duplicates a mock, fake, or fixture. The `code-review` skill performs this work in
-its Tests axis.
+duplicates a mock, fake, or fixture. It flags a weak or overly broad assertion, a
+test-only production hook, setup that bypasses the public surface, a redundant test,
+the wrong verification method, or a platform gap. The `code-review` skill performs
+this work in its Tests axis.
 
 ## Rules
 
