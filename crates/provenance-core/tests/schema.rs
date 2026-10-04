@@ -23,6 +23,7 @@ fn valid(schema: &Value, value: &Value) -> bool {
         .is_valid(value)
 }
 #[test]
+/// Implementation aid: this checks generated query defaults and bounds.
 fn query_defaults_and_domain_bounds_are_explicit() {
     let search = schema::<SearchQuery>(Contract::Deserialize);
     assert!(valid(&search, &json!({"text":"x"})));
@@ -52,11 +53,13 @@ fn query_defaults_and_domain_bounds_are_explicit() {
 }
 
 #[test]
+/// Implementation aid: this keeps the generated schema aligned with the native query default.
 fn search_schema_includes_terminal_records_by_default() {
     let schema = schema::<SearchQuery>(Contract::Deserialize);
     assert_eq!(schema["properties"]["exclude_terminal"]["default"], false);
 }
 #[test]
+/// Implementation aid: this checks optional evidence fields in the generated schema.
 fn evidence_output_requires_nullable_stale_and_emitted_cut_flags() {
     let input = json!({"rule_id":"r", "limit":50,"has_more":false,"implementation_bindings":[],
         "verification_bindings":[],"verification_runs":[],"review_required":false,"reviews":[]});
@@ -82,6 +85,7 @@ fn evidence_output_requires_nullable_stale_and_emitted_cut_flags() {
     }
 }
 #[test]
+/// Implementation aid: this checks omission semantics in the generated typed specification.
 fn typed_spec_uses_real_input_and_output_omissions() {
     let input = json!({"schema_version":1,"spec":"x","declared_by":"test","rules":[
         {"key":"a","statement":"The system works.","implementation":{"file":"src/a.rs","symbol":"a"}}
@@ -103,6 +107,7 @@ fn typed_spec_uses_real_input_and_output_omissions() {
     ));
 }
 #[test]
+/// Implementation aid: this checks generated constraints for smart identifiers.
 fn smart_identifiers_describe_their_runtime_constraints() {
     use provenance_core::{DeclarationAddress, ScopeId, StableId};
     for contract in [Contract::Serialize, Contract::Deserialize] {
@@ -122,6 +127,7 @@ fn smart_identifiers_describe_their_runtime_constraints() {
     }
 }
 #[test]
+/// Implementation aid: this checks the generated response envelope against serialization.
 fn flattened_response_schema_matches_serialized_envelope() {
     use provenance_core::protocol::{GetResult, QueryResponse, Stamp, StampPolicy, Stamped};
     let response = QueryResponse::new(
@@ -152,6 +158,7 @@ fn flattened_response_schema_matches_serialized_envelope() {
     ));
 }
 #[test]
+/// Implementation aid: this checks the generated tagged union against serialization.
 fn tagged_graph_node_schema_matches_real_serde_variant() {
     use provenance_core::protocol::GraphNode;
     let value = json!({"node_type":"domain","schema_version":1,"scope_id":"default",

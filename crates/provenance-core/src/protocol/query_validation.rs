@@ -161,6 +161,7 @@ mod tests {
     }
 
     #[test]
+    /// Implementation aid: this exercises each accepted search predicate combination.
     fn search_accepts_each_supported_predicate_combination() {
         for value in [
             serde_json::json!({"text":"needle"}),
@@ -172,11 +173,13 @@ mod tests {
     }
 
     #[test]
+    /// Implementation aid: this pins the native search default below the CLI policy seam.
     fn omitted_search_filter_includes_terminal_records() {
         assert!(!search(serde_json::json!({"text":"needle"})).exclude_terminal);
     }
 
     #[test]
+    /// Implementation aid: this pins the native document default below the CLI policy seam.
     fn omitted_document_filter_includes_terminal_records() {
         let document = serde_json::from_value::<super::super::ReadDocumentQuery>(
             serde_json::json!({"id":"req_review"}),
@@ -186,6 +189,7 @@ mod tests {
     }
 
     #[test]
+    /// Implementation aid: this exercises invalid search predicate combinations.
     fn search_refuses_no_predicates_and_supplied_blank_text() {
         assert!(search(serde_json::json!({})).validate().is_err());
         assert!(search(serde_json::json!({

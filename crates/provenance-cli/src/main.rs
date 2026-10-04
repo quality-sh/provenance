@@ -13,6 +13,7 @@ mod output;
 mod read_policy;
 use provenance_cli::{repo_context, store};
 mod review;
+mod review_link;
 mod reviewer;
 mod skills;
 mod ste_onboarding;

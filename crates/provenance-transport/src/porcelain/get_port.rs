@@ -337,6 +337,7 @@ mod tests {
     };
 
     #[test]
+    /// Implementation aid: this checks typed conversion at the transport adapter seam.
     fn a_core_resolution_stays_typed_at_the_adapter_boundary() {
         let result = ResolveRecordResult {
             resolution: CoreRecordResolution::Missing,

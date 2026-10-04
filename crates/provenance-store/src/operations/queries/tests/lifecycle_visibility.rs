@@ -198,6 +198,7 @@ async fn search(root: &camino::Utf8Path, request: Value) -> anyhow::Result<Value
 }
 
 #[tokio::test]
+/// Implementation aid: this checks the shared explicit terminal filter across native reads.
 async fn lifecycle_filter_hides_only_terminal_records_from_lists_and_search() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
@@ -225,6 +226,7 @@ async fn lifecycle_filter_hides_only_terminal_records_from_lists_and_search() {
 }
 
 #[tokio::test]
+/// Implementation aid: this pins the native list default below the CLI policy seam.
 async fn omitted_native_list_filter_includes_terminal_records() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
@@ -236,6 +238,7 @@ async fn omitted_native_list_filter_includes_terminal_records() {
 }
 
 #[tokio::test]
+/// Implementation aid: this pins the native search default below the CLI policy seam.
 async fn omitted_native_search_filter_includes_terminal_records() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
@@ -324,6 +327,7 @@ async fn search_cursor_binds_the_terminal_filter() {
 }
 
 #[tokio::test]
+/// Implementation aid: this checks filtered aggregate totals for archived shaping records.
 async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals() {
     let (dir, store, scope) = seeded_store();
     seed_archived_shaping_records(&store, &scope);
@@ -406,6 +410,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
 }
 
 #[test]
+#[provenance_macros::verifies("rule_archive_is_terminal_for_each_record", examples)]
 fn archived_question_cannot_return_to_an_active_status() {
     let (_dir, store, scope) = seeded_store();
     seed_archived_shaping_records(&store, &scope);

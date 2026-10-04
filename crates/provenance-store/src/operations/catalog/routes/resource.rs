@@ -113,7 +113,8 @@ macro_rules! resource {
             .scope("scope_id")
             .cli_defaults($create_defaults)
             .argument_aliases($create_aliases)
-            .target(TargetAction::Create, $target_kind),
+            .target(TargetAction::Create, $target_kind)
+            .review_link($target_kind),
         );
         $out.push(
             backed::<$update>(
@@ -129,7 +130,8 @@ macro_rules! resource {
             .cli_defaults($update_defaults)
             .argument_aliases($update_aliases)
             .public_patch($nullable)
-            .target(TargetAction::Update, $target_kind),
+            .target(TargetAction::Update, $target_kind)
+            .review_link($target_kind),
         );
     }};
 }
@@ -169,7 +171,8 @@ macro_rules! review_resource {
             .scope("scope_id")
             .cli_defaults($create_defaults)
             .argument_aliases($create_aliases)
-            .target(TargetAction::Create, $target_kind),
+            .target(TargetAction::Create, $target_kind)
+            .review_link($target_kind),
         );
         let update = backed::<$update>(
             concat!("update-", $singular),
@@ -195,7 +198,8 @@ macro_rules! review_resource {
                 .cli_defaults($update_defaults)
                 .argument_aliases($update_aliases)
                 .public_patch($nullable)
-                .target(TargetAction::Update, $target_kind),
+                .target(TargetAction::Update, $target_kind)
+                .review_link($target_kind),
         );
     }};
 }

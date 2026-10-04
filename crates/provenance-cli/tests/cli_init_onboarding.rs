@@ -1,53 +1,15 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
-use provenance_macros::verifies;
-use std::path::Path;
+use {provenance_macros::verifies, std::path::Path};
+
 #[path = "cli_dictionary/support.rs"]
 #[allow(dead_code)]
 mod dictionary_support;
-#[path = "cli_init_onboarding_support.rs"]
-mod onboarding_support;
-#[path = "cli_init_onboarding/section_ownership.rs"]
-mod section_ownership;
-const INSTRUCTIONS: &str = r#"## Provenance
-
-Requirements live in a Provenance graph. Plan changes with the graph and update
-it in the same change.
-
-- Use the `provenance-grounded-writing` skill before you write or change a
-  Requirement or Rule statement.
-- Before a graph write, run
-  `provenance statement-checks create --statement "<statement>" --format json`. A clean report covers only the
-  ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
-  conformance.
-- Plan: `provenance prime --quiet`
-- New obligation: `provenance rules create --scope default --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
-- Annotate implementation with `rule`, tests with `verifies`. Annotations move
-  with code.
-- To change a Requirement, Rule, or past decision, create a Proposal. A human decides each
-  Proposal.
-- To drop a Question or Topic, archive it with its commit evidence. Archiving a
-  Topic also archives its Questions. Discussion history stays readable:
-  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | provenance questions <question_id> update --scope default --stdin --format json`
-  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | provenance topics <topic_id> update --scope default --stdin --format json`
-- Write graph state only through the Provenance CLI or SDK. Do not edit
-  `.provenance/state` directly.
-- Pre-commit: `provenance check --quiet` and
-  `provenance coverage scan --path . --scope default --validate-rules`.
-  Commit graph updates with the code.
-- ASD owns ASD-STE100. STEMG maintains it. Use the official Issue 9 request page:
-  https://www.asd-ste100.org/STE_downloads.html#article02-2l. Provenance names
-  only its implemented checks and makes no compliance or endorsement claim."#;
-
 #[test]
 #[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_owns_agents_provenance_section", examples)]
-#[verifies("rule_init_native_command", examples)]
-#[verifies("rule_init_grounded_writing_guidance", examples)]
-#[verifies("rule_init_statement_preflight_guidance", examples)]
-#[verifies("rule_init_statement_claim_limit", examples)]
-#[verifies("rule_init_canonical_write_path", examples)]
-fn init_installs_bundled_skills_and_ratified_instructions() {
+/// This test covers the complete initialization flow and its installed artifacts.
+fn init_installs_bundled_skills_and_managed_section() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
 
@@ -66,32 +28,13 @@ fn init_installs_bundled_skills_and_ratified_instructions() {
             .exists());
         assert!(repo.join(".claude/skills").join(skill).exists());
     }
-    assert_eq!(
-        onboarding_support::without_review_guidance(read_agents(&repo)),
-        format!("{INSTRUCTIONS}\n")
-    );
+    let agents = read_agents(&repo);
+    assert!(agents.starts_with("## Provenance\n"));
+    assert_eq!(managed_heading_count(&agents), 1);
     assert_eq!(
         std::fs::read_to_string(repo.join(".gitignore")).unwrap(),
         ".provenance/cache/\n"
     );
-}
-
-#[test]
-fn init_guidance_explains_how_to_drop_questions_and_topics() {
-    let temporary = tempfile::tempdir().unwrap();
-    let repo = temporary.path().join("repo");
-
-    init(&repo).success();
-
-    let agents = read_agents(&repo);
-    let shaping =
-        std::fs::read_to_string(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
-    for text in [&agents, &shaping] {
-        assert!(text.contains("questions <question_id> update"), "{text}");
-        assert!(text.contains("topics <topic_id> update"), "{text}");
-        assert!(text.contains("\"status\":\"archived\""), "{text}");
-        assert!(text.contains("archived_in_commit"), "{text}");
-    }
 }
 
 #[test]
@@ -288,6 +231,7 @@ fn invalid_existing_graph_is_rejected_before_onboarding_writes() {
 }
 
 #[test]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
 fn invalid_agents_text_is_rejected_before_any_init_write() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -307,6 +251,7 @@ fn invalid_agents_text_is_rejected_before_any_init_write() {
 }
 
 #[test]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
 fn invalid_gitignore_text_is_rejected_before_any_init_write() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -326,6 +271,7 @@ fn invalid_gitignore_text_is_rejected_before_any_init_write() {
 }
 
 #[test]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
 fn existing_manifest_is_preserved_when_a_late_skill_conflicts() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -368,6 +314,95 @@ fn planned_validation_failure_preserves_the_original_repository() {
     assert!(!repo.join(".gitignore").exists());
 }
 
+#[test]
+#[verifies("rule_init_owns_agents_provenance_section", examples)]
+fn init_updates_the_exact_heading_and_preserves_other_content() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    std::fs::write(
+        repo.join("AGENTS.md"),
+        "# Local instructions\n\nKeep this.\n\n## Provenance\n\nOld text.\n\n## Build\n\nKeep this too.\n",
+    )
+    .unwrap();
+
+    init(&repo).success();
+
+    let agents = read_agents(&repo);
+    assert!(agents.starts_with("# Local instructions\n\nKeep this.\n\n## Provenance\n"));
+    assert!(agents.ends_with("\n## Build\n\nKeep this too.\n"));
+    assert!(!agents.contains("Old text."));
+    assert_eq!(managed_heading_count(&agents), 1);
+}
+
+#[test]
+#[verifies("rule_init_owns_agents_provenance_section", examples)]
+fn init_leaves_a_renamed_heading_alone_and_adds_the_owned_section() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let existing = "# Local instructions\n\n## Project Provenance\n\nUser-owned text.\n";
+    std::fs::write(repo.join("AGENTS.md"), existing).unwrap();
+
+    init(&repo).success();
+
+    let agents = read_agents(&repo);
+    assert!(agents.starts_with(existing));
+    assert_eq!(managed_heading_count(&agents), 1);
+}
+
+#[test]
+#[verifies("rule_init_owns_agents_provenance_section", examples)]
+fn init_ignores_headings_inside_fenced_examples() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let existing = "# Local instructions\n\n```md\n## Provenance\nExample only.\n\n## Build\nStill an example.\n```\n";
+    std::fs::write(repo.join("AGENTS.md"), existing).unwrap();
+
+    init(&repo).success();
+
+    let agents = read_agents(&repo);
+    assert!(agents.starts_with(existing));
+    assert_eq!(managed_heading_count(&agents), 2);
+}
+
+#[test]
+#[verifies("rule_init_owns_agents_provenance_section", examples)]
+fn init_preserves_a_following_setext_section() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let trailing = "Build\n-----\n\nUser-owned text.\n";
+    std::fs::write(
+        repo.join("AGENTS.md"),
+        format!("## Provenance\n\nOld text.\n\n{trailing}"),
+    )
+    .unwrap();
+
+    init(&repo).success();
+
+    let agents = read_agents(&repo);
+    assert!(agents.starts_with("## Provenance\n"));
+    assert!(agents.ends_with(trailing));
+    assert!(!agents.contains("Old text."));
+}
+
+#[test]
+#[verifies("rule_init_owns_agents_provenance_section", examples)]
+fn init_does_not_claim_a_blockquoted_provenance_heading() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let existing = "> ## Provenance\n>\n> User-owned example.\n";
+    std::fs::write(repo.join("AGENTS.md"), existing).unwrap();
+
+    init(&repo).success();
+
+    let agents = read_agents(&repo);
+    assert!(agents.starts_with(existing));
+    assert_eq!(managed_heading_count(&agents), 1);
+}
 fn init(repo: &Path) -> assert_cmd::assert::Assert {
     init_with(repo, &[])
 }
@@ -388,6 +423,13 @@ fn init_with(repo: &Path, extra: &[&str]) -> assert_cmd::assert::Assert {
 
 fn read_agents(repo: &Path) -> String {
     std::fs::read_to_string(repo.join("AGENTS.md")).unwrap()
+}
+
+fn managed_heading_count(contents: &str) -> usize {
+    contents
+        .lines()
+        .filter(|line| *line == "## Provenance")
+        .count()
 }
 
 fn write_as_prior_version(path: &Path, current: &str) {

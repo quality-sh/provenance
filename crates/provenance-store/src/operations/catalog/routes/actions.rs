@@ -83,7 +83,8 @@ fn review_actions_for_kind(
         .path_field("id", "record_id")
         .fixed("record_kind", kind.as_str())
         .scope("scope_id")
-        .target(TargetAction::Submit, Some(kind)),
+        .target(TargetAction::Submit, Some(kind))
+        .review_link(Some(kind)),
     );
     out.push(
         backed::<operation::DecideRecordReview>(
@@ -97,7 +98,8 @@ fn review_actions_for_kind(
         )
         .path_field("id", "record_id")
         .fixed("record_kind", kind.as_str())
-        .scope("scope_id"),
+        .scope("scope_id")
+        .review_link(Some(kind)),
     );
     out.push(
         backed::<operation::WithdrawRecordReview>(
@@ -111,7 +113,8 @@ fn review_actions_for_kind(
         )
         .path_field("id", "record_id")
         .fixed("record_kind", kind.as_str())
-        .scope("scope_id"),
+        .scope("scope_id")
+        .review_link(Some(kind)),
     );
 }
 

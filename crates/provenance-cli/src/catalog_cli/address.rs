@@ -5,6 +5,7 @@ pub(super) struct Resolved {
     pub address: &'static Address,
     pub path: String,
     pub query: Option<&'static str>,
+    pub values: BTreeMap<&'static str, String>,
 }
 
 #[derive(Clone)]
@@ -32,6 +33,7 @@ pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<R
         address,
         path: render_path(address.definition.path, &values)?,
         query: address.query,
+        values,
     })
 }
 
@@ -229,6 +231,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "ambiguous CLI registrations")]
+    /// Implementation aid: this proves that route grammar categories do not overlap.
     fn construction_rejects_intersecting_address_grammars() {
         let definition = &catalog::definitions()[0];
         reject_ambiguous(&[

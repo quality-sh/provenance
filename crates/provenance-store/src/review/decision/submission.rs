@@ -19,7 +19,9 @@ use provenance_core::{
 use provenance_macros::rule;
 
 impl StateStore {
+    /// Creates the server-owned request and Proposal identities for a review submission.
     #[rule("rule_revised_item_requires_new_review")]
+    #[rule("rule_review_proposal_identity_server_created")]
     pub fn submit_record_review(&self, input: SubmitRecordReview) -> anyhow::Result<CycleEntry> {
         anyhow::ensure!(
             !input.actor.trim().is_empty(),

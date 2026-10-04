@@ -1,4 +1,5 @@
 //! Explicit test policy. This module is absent without the test-fixture feature.
+pub mod local_host;
 pub mod records;
 use provenance_core::{
     protocol::failure::{InvalidInputReason, OperationFailure},

@@ -20,6 +20,10 @@ it in the same change.
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
 - To change a Requirement, Rule, or past decision, create a Proposal. A human decides each Proposal.
+- Before you ask a person to review a record, start the review host if it is not running:
+  `{command} review --repo . --repository-id local --scope default`.
+- Get the review URL with `{command} <record-id> get --review-link --format json`. Give the person the
+  review URL. Never give the person a record ID.
 - Read a record's decision and all bounded feedback with
   `{command} <record-id> get --view review`. The `review.edit.etag` value is
   the exact value for `--if-match` on the next update.

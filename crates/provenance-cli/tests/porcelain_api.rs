@@ -106,6 +106,7 @@ fn api_get_reads_one_public_path_with_the_configured_context() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
 fn api_get_defaults_to_get_and_prints_the_envelope() {
     let (_directory, repo) = init();
     seed_source(&repo);
@@ -186,6 +187,7 @@ fn api_post_creates_from_a_file_body_with_selected_method_and_headers() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_body_inputs", examples)]
 fn api_stdin_body_creates_from_standard_input() {
     let (_directory, repo) = init();
 
@@ -210,6 +212,7 @@ fn api_stdin_body_creates_from_standard_input() {
 }
 
 #[test]
+#[verifies("rule_review_conflict_returns_current_value", examples)]
 fn api_reports_the_typed_requirement_edit_conflict() {
     let (_directory, repo) = init();
     let created = json(&[
@@ -322,6 +325,7 @@ fn readable_api_catalog_explains_how_to_continue() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
 fn api_unknown_paths_refuse_with_the_canonical_failure() {
     let (_directory, repo) = init();
 
@@ -330,6 +334,7 @@ fn api_unknown_paths_refuse_with_the_canonical_failure() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
 fn api_unsupported_methods_refuse_with_the_canonical_failure() {
     let (_directory, repo) = init();
 

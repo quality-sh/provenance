@@ -333,6 +333,7 @@ fn target_first_mutations_keep_parent_version_and_existence_preconditions() {
 }
 
 #[test]
+/// Implementation aid: this checks parser context and flag-shaped values for target actions.
 fn target_actions_keep_help_global_context_and_flag_like_values() {
     provenance()
         .args(["new_source", "create", "--help"])

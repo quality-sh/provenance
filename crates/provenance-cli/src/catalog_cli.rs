@@ -19,6 +19,7 @@ pub struct Invocation {
     data: Value,
     query: BTreeMap<String, String>,
     headers: HeaderMap,
+    affected_review_record: Option<crate::review_link::AffectedReviewRecord>,
 }
 
 impl Invocation {
@@ -44,6 +45,19 @@ impl Invocation {
                     .unwrap_or_else(|error| usage_error(error));
             }
         }
+        let affected_review_record = resolved
+            .address
+            .definition
+            .registration
+            .review_link
+            .and_then(|kind| {
+                resolved
+                    .values
+                    .get("id")
+                    .cloned()
+                    .or_else(|| data.get("id").and_then(Value::as_str).map(str::to_owned))
+                    .map(|id| crate::review_link::AffectedReviewRecord { kind, id })
+            });
         Self {
             context: args.common.context(),
             path: resolved.path,
@@ -51,6 +65,7 @@ impl Invocation {
             data,
             query,
             headers,
+            affected_review_record,
         }
     }
 }
@@ -90,7 +105,17 @@ pub fn target_command() -> anyhow::Result<Command> {
         grammar::target_command(),
         definitions,
         &[
-            "repo", "scope", "format", "quiet", "type", "view", "depth", "kind", "limit", "stdin",
+            "repo",
+            "scope",
+            "format",
+            "quiet",
+            "type",
+            "view",
+            "depth",
+            "kind",
+            "limit",
+            "review_link",
+            "stdin",
         ],
         &[],
     )?;
@@ -111,6 +136,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         data,
         query,
         headers,
+        affected_review_record,
     } = invocation;
     let method = match definition.method {
         catalog::HttpMethod::Get => Method::GET,
@@ -123,7 +149,8 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
     ) {
         warn_if_skills_missing(context.repo.repo.as_str(), context.quiet)?;
     }
-    let host = context.repo.local_host()?;
+    let repo = context.repo.clone();
+    let host = repo.local_host()?;
     if matches!(
         definition.registration.cli.execution,
         catalog::CliExecution::ProjectStatementCheck
@@ -145,7 +172,10 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         .invoke_resource(method, &path, data, query, headers)
         .await
     {
-        Ok(value) => crate::output::print_json(&value)?,
+        Ok(mut value) => {
+            crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
+            crate::output::print_json(&value)?;
+        }
         Err(failure) => return Err(actionable_failure(&failure, record_id(&path))),
     }
     Ok(())
@@ -163,7 +193,8 @@ pub async fn dispatch_target(
         provenance_core::ensure_record_id_assignable(&target)
             .unwrap_or_else(|error| usage_error(error));
     }
-    let host = context.repo.local_host()?;
+    let repo = context.repo.clone();
+    let host = repo.local_host()?;
     let route = host
         .target_route(action, &target, kind)
         .await
@@ -185,10 +216,17 @@ pub async fn dispatch_target(
             "target actions do not accept query options"
         ));
     }
-    let value = host
+    let mut value = host
         .invoke_target(&route, data, headers)
         .await
         .map_err(|failure| actionable_failure(&failure, Some(&target)))?;
+    let affected = route.definition.registration.review_link.map(|kind| {
+        crate::review_link::AffectedReviewRecord {
+            kind,
+            id: target.clone(),
+        }
+    });
+    crate::review_link::annotate_write(&repo, affected, &mut value).await;
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&value)?;
     } else {

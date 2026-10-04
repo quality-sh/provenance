@@ -472,6 +472,7 @@ fn requirements(out: &mut Vec<Definition>) {
         )
         .cli_defaults(CREATE_REQUIREMENT_DEFAULTS)
         .target(TargetAction::Create, Some(NodeType::Requirement))
+        .review_link(Some(NodeType::Requirement))
         .with_etag("/edit/etag", false),
     );
     out.push(
@@ -492,6 +493,7 @@ fn requirements(out: &mut Vec<Definition>) {
             ("domain_id", "domain_id"),
         ])
         .target(TargetAction::Update, Some(NodeType::Requirement))
+        .review_link(Some(NodeType::Requirement))
         .with_etag("/edit/etag", false),
     );
 }

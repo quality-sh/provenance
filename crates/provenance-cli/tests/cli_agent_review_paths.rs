@@ -323,6 +323,7 @@ fn repo_with_archived_rule() -> (tempfile::TempDir, String) {
 }
 
 #[test]
+#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
 fn collection_hides_terminal_records_by_default() {
     let (_directory, repo) = repo_with_archived_rule();
 
@@ -349,6 +350,7 @@ fn collection_includes_terminal_records_on_request() {
 }
 
 #[test]
+#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
 fn search_hides_terminal_records_by_default() {
     let (_directory, repo) = repo_with_archived_rule();
     let searched = json_output(provenance().args([
