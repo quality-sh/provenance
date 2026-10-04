@@ -23,8 +23,6 @@ pub struct Invocation {
 }
 
 impl Invocation {
-    /// Builds mutation guidance from the guard contract of the selected operation.
-    #[provenance_macros::rule("rule_cli_guard_guidance")]
     pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
         if matches.get_flag("help") {
             help::print_selection(&args.collection, &args.address);
@@ -254,7 +252,8 @@ fn actionable_failure(
 ) -> anyhow::Error {
     let value = serde_json::to_value(failure).unwrap_or_default();
     let error = &value["error"];
-    if error["kind"] == "review_submission_conflict" {
+    let kind = error["kind"].as_str();
+    if kind == Some("review_submission_conflict") {
         if let (Some(id), Some(submission)) = (record_id, error["current_submission"].as_str()) {
             return anyhow::anyhow!(
                 "record {id} already has pending submission {submission}; \
@@ -263,7 +262,19 @@ fn actionable_failure(
             );
         }
     }
-    anyhow::anyhow!(serde_json::to_string(failure).unwrap_or_else(|_| "operation failed".into()))
+    let message = serde_json::to_string(failure).unwrap_or_else(|_| "operation failed".into());
+    if let (Some(id), Some(kind)) = (record_id, kind) {
+        if matches!(
+            kind,
+            "review_submission_conflict"
+                | "requirement_edit_conflict"
+                | "record_edit_conflict"
+                | "unsupported_review_feedback"
+        ) {
+            return anyhow::anyhow!("{message}; run `{}`", review_read_command(id));
+        }
+    }
+    anyhow::anyhow!(message)
 }
 
 pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {

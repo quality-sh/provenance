@@ -110,11 +110,10 @@ pub(super) fn parse(
     if stdin {
         merge_stdin(&mut data, &assignments)?;
     }
-    let hide_terminal = query_action.is_none()
-        && definition
-            .parameters()
-            .iter()
-            .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
+    let hide_terminal = definition
+        .parameters()
+        .iter()
+        .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
     if hide_terminal && !query.contains_key("exclude_terminal") {
         let exclude_terminal = crate::read_policy::exclude_terminal(false).to_string();
         query.insert("exclude_terminal".into(), exclude_terminal);
@@ -163,6 +162,8 @@ fn unique_wire_fields(declared: &[Field]) -> Vec<String> {
     wire_fields
 }
 
+/// Refuses a malformed review guard and names its required form.
+#[provenance_macros::rule("rule_cli_guard_guidance")]
 fn bind_parameter(
     definition: &Definition,
     parameter: &catalog::Parameter,

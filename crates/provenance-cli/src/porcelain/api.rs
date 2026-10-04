@@ -6,6 +6,7 @@ use provenance_porcelain::api::{render_discovery_readable, ApiOutcome, ApiReques
 /// and limits before rendering.
 #[provenance_macros::rule("rule_porcelain_api_uses_context")]
 #[provenance_macros::rule("rule_cli_api_discovery_filter_limit")]
+#[provenance_macros::rule("rule_porcelain_output_reports_bounds")]
 pub async fn dispatch_api(
     repo: &str,
     scope: &str,
@@ -41,11 +42,18 @@ pub async fn dispatch_api(
                 routes.truncate(limit);
             }
             if format == Some(OutputFormat::Json) {
+                let returned = routes.len();
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&provenance_porcelain::api::ApiCatalog {
-                        routes
-                    })?
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "routes": routes,
+                        "bounds": {
+                            "total": total,
+                            "matching": matching,
+                            "returned": returned,
+                            "truncated": returned < matching
+                        }
+                    }))?
                 );
             } else {
                 routes.truncate(limit.unwrap_or(50));
