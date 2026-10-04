@@ -2,6 +2,7 @@ use super::support::{
     export_scope, import_scope, init_repo, init_repo_with_actors, provenance, shipped_repo,
     write_json,
 };
+use provenance_macros::verifies;
 
 #[test]
 fn shipped_legacy_export_imports_when_legacy_statements_are_already_canonical() {
