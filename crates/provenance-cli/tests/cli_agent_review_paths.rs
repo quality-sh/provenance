@@ -298,7 +298,7 @@ fn review_view_gives_commands_for_each_truncated_feedback_page() {
 }
 
 fn repo_with_archived_rule() -> (tempfile::TempDir, String) {
-    let (_directory, repo) = init();
+    let (directory, repo) = init();
     create_requirement(&repo, "req_terminal");
     provenance()
         .args([
@@ -319,7 +319,7 @@ fn repo_with_archived_rule() -> (tempfile::TempDir, String) {
         ])
         .assert()
         .success();
-    (_directory, repo)
+    (directory, repo)
 }
 
 #[test]
