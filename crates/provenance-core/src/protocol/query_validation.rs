@@ -172,8 +172,12 @@ mod tests {
     }
 
     #[test]
-    fn omitted_terminal_filters_include_terminal_records() {
+    fn omitted_search_filter_includes_terminal_records() {
         assert!(!search(serde_json::json!({"text":"needle"})).exclude_terminal);
+    }
+
+    #[test]
+    fn omitted_document_filter_includes_terminal_records() {
         let document = serde_json::from_value::<super::super::ReadDocumentQuery>(
             serde_json::json!({"id":"req_review"}),
         )

@@ -33,7 +33,6 @@ fn query_defaults_and_domain_bounds_are_explicit() {
     assert!(!search["required"]
         .as_array()
         .is_some_and(|required| required.contains(&json!("text"))));
-    assert_eq!(search["properties"]["exclude_terminal"]["default"], false);
     assert_eq!(search["properties"]["limit"]["default"], 50);
     for limit in [0, 201] {
         assert!(
@@ -50,6 +49,12 @@ fn query_defaults_and_domain_bounds_are_explicit() {
     for depth in [0, 11] {
         assert!(!valid(&trace, &json!({"id":"r","max_depth":depth})));
     }
+}
+
+#[test]
+fn search_schema_includes_terminal_records_by_default() {
+    let schema = serde_json::to_value(schema_for!(provenance_core::protocol::SearchQuery)).unwrap();
+    assert_eq!(schema["properties"]["exclude_terminal"]["default"], false);
 }
 #[test]
 fn evidence_output_requires_nullable_stale_and_emitted_cut_flags() {

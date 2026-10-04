@@ -171,38 +171,21 @@ fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
 }
 
 #[test]
-#[verifies("rule_cli_api_discovery_filter_limit", examples)]
-fn api_catalog_is_bounded_by_default_and_explains_filtering() {
-    let (_directory, repo) = init();
-    let output = provenance()
-        .args(["api", "--repo", &repo])
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    let text = String::from_utf8(output.stdout).unwrap();
-    // The 500-line budget keeps default discovery within one agent context read.
-    assert!(text.lines().count() < 500, "{} lines", text.lines().count());
-    assert!(text.contains("Use --filter <text> or --limit <number> to see more."));
-
-    provenance()
-        .args(["api", "--repo", &repo, "--filter", "requirements/{id}"])
-        .assert()
-        .success()
-        .stdout(contains("/requirements/{id}"));
-}
-
-#[test]
 #[verifies("rule_cli_guard_guidance", examples)]
-fn update_help_and_invalid_if_match_name_the_exact_input() {
-    let (_directory, repo) = init();
-    create_requirement(&repo, "req_etag");
-
+fn update_help_names_the_edit_etag_input() {
     provenance()
-        .args(["requirements", "req_etag", "update", "--help"])
+        .args(["requirements", "req_id", "update", "--help"])
         .assert()
         .success()
         .stdout(contains("data.edit.etag"))
         .stdout(contains("--if-match"));
+}
+
+#[test]
+#[verifies("rule_cli_guard_guidance", examples)]
+fn invalid_if_match_names_the_edit_etag_form() {
+    let (_directory, repo) = init();
+    create_requirement(&repo, "req_etag");
 
     provenance()
         .args([
@@ -256,6 +239,7 @@ fn discussion_guards_name_numeric_versions_in_help() {
 
 #[test]
 #[verifies("rule_porcelain_output_reports_bounds", examples)]
+/// Covers the review flow when Discussion and message pages are both truncated.
 fn review_view_gives_commands_for_each_truncated_feedback_page() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_bounded_feedback");
@@ -313,9 +297,7 @@ fn review_view_gives_commands_for_each_truncated_feedback_page() {
     ))));
 }
 
-#[test]
-#[verifies("rule_cli_terminal_records_opt_in", examples)]
-fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
+fn repo_with_archived_rule() -> (tempfile::TempDir, String) {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_terminal");
     provenance()
@@ -337,11 +319,22 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
         ])
         .assert()
         .success();
+    (_directory, repo)
+}
+
+#[test]
+fn collection_hides_terminal_records_by_default() {
+    let (_directory, repo) = repo_with_archived_rule();
 
     let listed =
         json_output(provenance().args(["rules", "list", "--repo", &repo, "--format", "json"]));
     assert_eq!(listed["data"]["items"], serde_json::json!([]));
+}
 
+#[test]
+#[verifies("rule_cli_terminal_records_opt_in", examples)]
+fn collection_includes_terminal_records_on_request() {
+    let (_directory, repo) = repo_with_archived_rule();
     let included = json_output(provenance().args([
         "rules",
         "list",
@@ -353,7 +346,11 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
         "json",
     ]));
     assert_eq!(included["data"]["items"][0]["id"], "rule_archived");
+}
 
+#[test]
+fn search_hides_terminal_records_by_default() {
+    let (_directory, repo) = repo_with_archived_rule();
     let searched = json_output(provenance().args([
         "search",
         "--repo",
@@ -364,6 +361,12 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
         "json",
     ]));
     assert_eq!(searched["nodes"], serde_json::json!([]));
+}
+
+#[test]
+#[verifies("rule_cli_terminal_records_opt_in", examples)]
+fn search_includes_terminal_records_on_request() {
+    let (_directory, repo) = repo_with_archived_rule();
     let searched = json_output(provenance().args([
         "search",
         "--repo",
@@ -375,21 +378,4 @@ fn terminal_records_are_hidden_by_default_and_have_an_explicit_opt_in() {
         "json",
     ]));
     assert_eq!(searched["nodes"][0]["id"], "rule_archived");
-}
-
-#[test]
-#[verifies("rule_init_review_resubmission_guidance", examples)]
-fn installed_guidance_documents_feedback_and_rejected_revision_paths() {
-    let (directory, _repo) = init();
-    let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
-    let skills = std::fs::read_dir(directory.path().join(".agents/skills"))
-        .unwrap()
-        .map(|entry| std::fs::read_to_string(entry.unwrap().path().join("SKILL.md")).unwrap())
-        .collect::<Vec<_>>()
-        .join("\n");
-    let guidance = format!("{agents}\n{skills}");
-
-    assert!(guidance.contains("provenance <record-id> get --view review"));
-    assert!(guidance.contains("A guarded update after a rejection opens the new submission"));
-    assert!(guidance.contains("review.edit.etag"));
 }

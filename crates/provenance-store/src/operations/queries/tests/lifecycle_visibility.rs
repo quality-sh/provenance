@@ -225,7 +225,7 @@ async fn lifecycle_filter_hides_only_terminal_records_from_lists_and_search() {
 }
 
 #[tokio::test]
-async fn omitted_native_filters_include_terminal_records() {
+async fn omitted_native_list_filter_includes_terminal_records() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
     let root = root_of(&dir);
@@ -233,7 +233,13 @@ async fn omitted_native_filters_include_terminal_records() {
     let rules = list_rules(&root, json!({"limit":50})).await.unwrap();
     let listed = serde_json::to_string(&rules["result"]["items"]).unwrap();
     assert!(listed.contains("rule_a_archived"));
+}
 
+#[tokio::test]
+async fn omitted_native_search_filter_includes_terminal_records() {
+    let (dir, store, scope) = seeded_store();
+    seed_lifecycle_records(&store, &scope);
+    let root = root_of(&dir);
     let found = search(
         &root,
         json!({"text":"lifecycle search", "node_types":[NodeType::Rule], "limit":50}),
@@ -246,7 +252,7 @@ async fn omitted_native_filters_include_terminal_records() {
 
 #[tokio::test]
 #[verifies("rule_cursor_binds_query_identity", examples)]
-async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
+async fn list_cursor_binds_the_terminal_filter() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
     let root = root_of(&dir);
@@ -273,7 +279,14 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
     .unwrap_err()
     .to_string()
     .contains("cursor"));
+}
 
+#[tokio::test]
+#[verifies("rule_cursor_binds_query_identity", examples)]
+async fn search_cursor_binds_the_terminal_filter() {
+    let (dir, store, scope) = seeded_store();
+    seed_lifecycle_records(&store, &scope);
+    let root = root_of(&dir);
     let first = search(
         &root,
         json!({

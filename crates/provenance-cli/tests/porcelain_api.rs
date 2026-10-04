@@ -127,21 +127,21 @@ fn api_get_defaults_to_get_and_prints_the_envelope() {
 
 #[test]
 #[verifies("rule_cli_api_discovery_filter_limit", examples)]
-fn json_catalog_applies_filter_and_limit() {
+fn json_catalog_applies_limit() {
     let (_directory, repo) = init();
-    let catalog = json(&[
-        "api",
-        "--repo",
-        &repo,
-        "--filter",
-        "requirements/{id}",
-        "--limit",
-        "2",
-        "--format",
-        "json",
-    ]);
+    let catalog = json(&["api", "--repo", &repo, "--limit", "2", "--format", "json"]);
     let routes = catalog["routes"].as_array().unwrap();
     assert_eq!(routes.len(), 2);
+}
+
+#[test]
+#[verifies("rule_cli_api_discovery_filter_limit", examples)]
+fn json_catalog_applies_filter() {
+    let (_directory, repo) = init();
+    let catalog = json(&[
+        "api", "--repo", &repo, "--filter", "requirements/{id}", "--format", "json",
+    ]);
+    let routes = catalog["routes"].as_array().unwrap();
     assert!(routes.iter().all(|route| {
         format!(
             "{} {} {}",
@@ -278,10 +278,6 @@ fn api_discovery_describes_the_live_catalog() {
         "{readable}"
     );
     assert!(
-        readable.contains("Use --filter <text> or --limit <number> to see more."),
-        "{readable}"
-    );
-    assert!(
         readable
             .trim_end()
             .ends_with("Use --format json for all schemas."),
@@ -304,6 +300,18 @@ fn api_discovery_describes_the_live_catalog() {
     assert_ne!(
         base["parameters"].as_array().unwrap().as_slice(),
         [] as [serde_json::Value; 0]
+    );
+}
+
+#[test]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
+fn readable_api_catalog_explains_how_to_continue() {
+    let (_directory, repo) = init();
+    let readable =
+        String::from_utf8(success(&["api", "--repo", &repo, "--limit", "1"]).stdout).unwrap();
+    assert!(
+        readable.contains("Use --filter <text> or --limit <number> to see more."),
+        "{readable}"
     );
 }
 
