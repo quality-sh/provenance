@@ -92,11 +92,7 @@ pub fn repository_with_actors(actor_ids: &[&str]) -> tempfile::TempDir {
     dir
 }
 
-pub fn initialize_repository(
-    command: &mut Command,
-    root: &std::path::Path,
-    actor_ids: &[&str],
-) {
+pub fn initialize_repository(command: &mut Command, root: &std::path::Path, actor_ids: &[&str]) {
     command.args([
         "init",
         "--path",

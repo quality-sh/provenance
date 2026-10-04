@@ -86,10 +86,7 @@ fn first_signal_waits_for_an_active_write_to_finish() {
     let (mut blocked, mut request) = block_write(&host, &layout);
     host.signal("-TERM");
     std::thread::sleep(Duration::from_millis(1200));
-    assert!(
-        host.is_running(),
-        "active writes have no drain deadline"
-    );
+    assert!(host.is_running(), "active writes have no drain deadline");
     // Restore the normal file before releasing the read, for later store access.
     let path =
         provenance_store::shards::requirements_path(&layout, &ScopeId::new("default").unwrap());
