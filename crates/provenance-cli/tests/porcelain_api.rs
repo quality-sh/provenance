@@ -151,7 +151,7 @@ fn json_catalog_applies_filter() {
         "json",
     ]);
     let routes = catalog["routes"].as_array().unwrap();
-    assert!(!routes.is_empty());
+    assert_ne!(routes.as_slice(), []);
     assert!(routes.iter().all(|route| {
         format!(
             "{} {} {}",
