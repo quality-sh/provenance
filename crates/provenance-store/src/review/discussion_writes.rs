@@ -174,28 +174,25 @@ impl StateStore {
             message.as_ref(),
             status_only,
         )?;
-        let discussion = match head {
-            Some(mut discussion) => {
-                discussion.version += 1;
-                discussion.status = status;
-                discussion.message_ids.extend(message.map(|m| m.id));
-                discussion
-            }
-            None => {
-                let root = message.expect("a started Discussion has a root Message").id;
-                Discussion {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
-                    scope_id: scope.clone(),
-                    discussion_id: journal::new_id(),
-                    parent: input.parent,
-                    thread_id: thread.id,
-                    root_message_id: root.clone(),
-                    message_ids: vec![root],
-                    status,
-                    version: 1,
-                    actor: input.actor,
-                    outcomes: Vec::new(),
-                }
+        let discussion = if let Some(mut discussion) = head {
+            discussion.version += 1;
+            discussion.status = status;
+            discussion.message_ids.extend(message.map(|m| m.id));
+            discussion
+        } else {
+            let root = message.expect("a started Discussion has a root Message").id;
+            Discussion {
+                schema_version: SUPPORTED_SCHEMA_VERSION,
+                scope_id: scope.clone(),
+                discussion_id: journal::new_id(),
+                parent: input.parent,
+                thread_id: thread.id,
+                root_message_id: root.clone(),
+                message_ids: vec![root],
+                status,
+                version: 1,
+                actor: input.actor,
+                outcomes: Vec::new(),
             }
         };
         let path = shards::discussions_path(&self.layout, scope);

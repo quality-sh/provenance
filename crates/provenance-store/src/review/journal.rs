@@ -179,7 +179,7 @@ impl StateStore {
             .into_iter()
             .filter_map(|e| match e {
                 JournalEntry::Record(e) => Some(*e),
-                _ => None,
+                JournalEntry::Cycle(_) => None,
             })
             .collect())
     }
@@ -190,7 +190,7 @@ impl StateStore {
             .into_iter()
             .filter_map(|e| match e {
                 JournalEntry::Cycle(e) => Some(*e),
-                _ => None,
+                JournalEntry::Record(_) => None,
             })
             .collect())
     }
