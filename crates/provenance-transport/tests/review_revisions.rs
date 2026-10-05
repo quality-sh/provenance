@@ -112,7 +112,7 @@ async fn accepted_text_returns_as_accepted() {
     let disposition = decided["data"]["disposition_id"].clone();
     let (status, accepted, _) = call(&host, "GET", "/requirements/req_flow", None, None).await;
     assert_eq!(status, 200, "{accepted}");
-    assert_eq!(accepted["data"]["record"]["value"]["status"], "active");
+    assert_eq!(accepted["data"]["status"], "active");
 
     let changed = set_statement(&host, "The flow text is B.").await;
     assert_ne!(changed["edit"]["revision"], revision_a);
@@ -120,7 +120,7 @@ async fn accepted_text_returns_as_accepted() {
     assert!(changed["decision"]["pending"]["proposal_id"].is_string());
 
     let returned = set_statement(&host, "The flow text is A.").await;
-    assert_eq!(returned["record"]["value"]["status"], "active");
+    assert_eq!(returned["status"], "active");
     assert_eq!(returned["edit"]["revision"], revision_a);
     assert!(returned["decision"]["pending"].is_null(), "{returned}");
     let acceptance = &returned["decision"]["current_acceptance"];
