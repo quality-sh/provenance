@@ -76,7 +76,7 @@ fn crash_child() {
         }
         "edit" => {
             store
-                .save_requirement_from_discussion(edit(&store), origin(&root))
+                .save_requirement_from_discussion(edit(&store), &origin(&root))
                 .unwrap();
         }
         _ => {

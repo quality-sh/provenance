@@ -190,7 +190,7 @@ async fn complete_cache_rebuild_retains_resolved_groups_and_outcomes() {
     store
         .save_requirement_from_discussion(
             save(&store, "edit", json!({"description":"After"})),
-            provenance_core::threads::DiscussionOrigin {
+            &provenance_core::threads::DiscussionOrigin {
                 thread_id: a.thread_id,
                 discussion_id: a.discussion_id,
                 message_id: a.root_message_id,

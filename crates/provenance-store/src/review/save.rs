@@ -75,9 +75,9 @@ impl StateStore {
     pub fn save_requirement_from_discussion(
         &self,
         input: SaveRequirement,
-        origin: DiscussionOrigin,
+        origin: &DiscussionOrigin,
     ) -> anyhow::Result<RequirementEditState> {
-        self.save_requirement_with_origin(input, Some(&origin), |_, after| {
+        self.save_requirement_with_origin(input, Some(origin), |_, after| {
             Self::record_edit_state_for_record(&after.into())
         })
     }

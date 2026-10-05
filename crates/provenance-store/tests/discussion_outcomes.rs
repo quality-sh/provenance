@@ -66,7 +66,7 @@ async fn discussion_edit_version_shows_its_change() {
         "relationships":null}))
     .unwrap();
     store
-        .save_requirement_from_discussion(edit, origin.clone())
+        .save_requirement_from_discussion(edit, &origin)
         .unwrap();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let history = read_history(
@@ -124,7 +124,10 @@ fn mismatched_discussion_message_origin_refuses_without_editing() {
     };
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store
-        .save_requirement_from_discussion(save(&store, "bad", json!({"description":"bad"})), origin)
+        .save_requirement_from_discussion(
+            save(&store, "bad", json!({"description":"bad"})),
+            &origin
+        )
         .is_err());
     assert_eq!(before, store.list_requirements(&scope()).unwrap());
 }
