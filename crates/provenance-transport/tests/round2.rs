@@ -80,7 +80,6 @@ async fn discussion_members_are_direct_and_addressed_messages_paginate() {
         .write_discussion(WriteDiscussion {
             scope_id: scope.clone(),
             parent: parent(),
-            request_id: sid("round2_root"),
             actor: "reviewer".into(),
             declared_by: None,
             action: DiscussionAction::Start {
@@ -89,13 +88,12 @@ async fn discussion_members_are_direct_and_addressed_messages_paginate() {
             },
         })
         .unwrap();
-    let mut last = root.message_id.clone().unwrap();
+    let mut last = root.root_message_id.clone();
     for version in 1..=50 {
         let reply = store
             .write_discussion(WriteDiscussion {
                 scope_id: scope.clone(),
                 parent: parent(),
-                request_id: sid(format!("round2_reply_{version}")),
                 actor: "reviewer".into(),
                 declared_by: None,
                 action: DiscussionAction::Reply {
@@ -106,7 +104,7 @@ async fn discussion_members_are_direct_and_addressed_messages_paginate() {
                 },
             })
             .unwrap();
-        last = reply.message_id.unwrap();
+        last = reply.message_ids.last().unwrap().clone();
     }
 
     let host = host(&repo);

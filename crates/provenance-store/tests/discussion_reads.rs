@@ -11,7 +11,7 @@ use provenance_store::{
 use serde_json::json;
 
 #[tokio::test]
-async fn legacy_membership_is_explicit_and_pages_rebuild_from_journal() {
+async fn legacy_membership_is_explicit_and_pages_rebuild_from_records() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let old=store.post_thread_message(serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"role":"user","body":"Unknown root"})).unwrap()).unwrap();
@@ -151,12 +151,11 @@ async fn missing_membership_is_a_conflict_instead_of_a_legacy_group() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let a = start(&store, "a");
-    let dir = provenance_store::layout::ProvenanceLayout::new(root)
-        .scopes_dir()
-        .join("default/review/journal");
-    for file in std::fs::read_dir(&dir).unwrap() {
-        std::fs::remove_file(file.unwrap().path()).unwrap();
-    }
+    let discussions = provenance_store::shards::discussions_path(
+        &provenance_store::layout::ProvenanceLayout::new(root),
+        &scope(),
+    );
+    std::fs::remove_file(&discussions).unwrap();
     assert!(read_discussions(
         root,
         &scope(),
@@ -173,14 +172,13 @@ async fn missing_membership_is_a_conflict_instead_of_a_legacy_group() {
     let messages_before = store.list_messages(&scope()).unwrap();
     let error = store
         .write_discussion(write(
-            "new",
             json!({"kind":"start","role":"user","body":"Should refuse"}),
         ))
         .unwrap_err();
     assert!(format!("{error:#}").contains("no Discussion membership"));
     assert_eq!(store.list_threads(&scope()).unwrap(), threads_before);
     assert_eq!(store.list_messages(&scope()).unwrap(), messages_before);
-    assert_eq!(std::fs::read_dir(dir).unwrap().count(), 0);
+    assert!(!discussions.exists());
 }
 
 #[tokio::test]
@@ -188,16 +186,14 @@ async fn complete_cache_rebuild_retains_resolved_groups_and_outcomes() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let a = start(&store, "a");
-    let resolved = store
-        .write_discussion(status(&a, "resolve", "resolved"))
-        .unwrap();
+    let resolved = store.write_discussion(status(&a, "resolved")).unwrap();
     store
         .save_requirement_from_discussion(
             save(&store, "edit", json!({"description":"After"})),
             provenance_core::threads::DiscussionOrigin {
                 thread_id: a.thread_id,
                 discussion_id: a.discussion_id,
-                message_id: a.message_id.unwrap(),
+                message_id: a.root_message_id,
             },
         )
         .unwrap();
@@ -215,9 +211,13 @@ async fn complete_cache_rebuild_retains_resolved_groups_and_outcomes() {
         .await
         .unwrap();
     assert_eq!(first.result.entries, rebuilt.result.entries);
-    assert!(
-        matches!(&rebuilt.result.entries[0],DiscussionGroup::Addressed {discussion,..} if **discussion==resolved)
-    );
+    let DiscussionGroup::Addressed { discussion, .. } = &rebuilt.result.entries[0] else {
+        panic!("the Discussion reads as an addressed group");
+    };
+    assert_eq!(discussion.status, resolved.status);
+    assert_eq!(discussion.version, resolved.version);
+    assert_eq!(discussion.outcomes.len(), 1);
+    assert_eq!(discussion.outcomes[0].record_id, id());
 }
 
 #[tokio::test]
@@ -228,7 +228,6 @@ async fn oversized_discussion_messages_are_refused_before_publication() {
     // the bounded page reader refuses would otherwise be unwritable-by-read:
     // persisted once and unreadable forever.
     let refused = store.write_discussion(write(
-        "oversized",
         json!({"kind":"start","role":"user","body":"a".repeat(70_000)}),
     ));
     assert!(refused.is_err());
@@ -250,7 +249,6 @@ async fn large_but_legal_discussion_messages_stay_readable() {
     // 65,536-byte record budget, so the bounded page reader must return them.
     let a = store
         .write_discussion(write(
-            "large",
             json!({"kind":"start","role":"user","body":"a".repeat(60_000)}),
         ))
         .unwrap();

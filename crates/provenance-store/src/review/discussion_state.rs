@@ -1,8 +1,7 @@
-use super::journal;
-use crate::state_store::StateStore;
+use crate::{shards, state_store::StateStore};
 use provenance_core::{
-    review::JournalEntry,
-    threads::{DiscussionEntry, DiscussionOrigin},
+    review::ReviewEntry,
+    threads::{Discussion, DiscussionOrigin, DiscussionOutcome},
     Message, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId, Thread,
     ThreadParent, Topic,
 };
@@ -64,27 +63,22 @@ impl StateStore {
 }
 
 impl StateStore {
-    pub(super) fn discussion_entries(
-        &self,
-        scope: &ScopeId,
-    ) -> anyhow::Result<Vec<DiscussionEntry>> {
-        Ok(self
-            .journal_entries(scope)?
-            .into_iter()
-            .filter_map(|e| match e {
-                JournalEntry::Discussion(e) => Some(*e),
-                JournalEntry::Record(_) | JournalEntry::Cycle(_) => None,
-            })
-            .collect())
+    /// Reads the scope's Discussion records.
+    pub fn list_discussions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Discussion>> {
+        crate::state_store::readers::read_jsonl(
+            self,
+            &shards::discussions_path(&self.layout, scope),
+        )
     }
 
-    pub(super) fn discussion_heads(&self, scope: &ScopeId) -> anyhow::Result<Vec<DiscussionEntry>> {
-        let entries = self.discussion_entries(scope)?;
+    /// Reads the scope's Discussions and refuses one whose Thread, parent, or
+    /// Message membership disagrees with the Thread and Message records.
+    pub(super) fn validated_discussions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Discussion>> {
+        let discussions = self.list_discussions(scope)?;
         let threads = self.list_threads(scope)?;
         let messages = self.list_messages(scope)?;
-        // Index each shard once. Entry validation below runs one pass over
-        // these maps instead of one shard scan per entry, which kept
-        // validation quadratic as Discussions and Messages accumulated.
+        // Index each shard once, so validation runs one pass over these maps
+        // instead of one shard scan per Discussion.
         let mut threads_by_key = BTreeMap::<(&str, &str), &Thread>::new();
         for thread in &threads {
             threads_by_key
@@ -99,50 +93,49 @@ impl StateStore {
                 .push(message);
         }
         let parents_by_key = self.index_discussion_parents(scope)?;
-        let mut chains = BTreeMap::<&str, Vec<&DiscussionEntry>>::new();
         let mut ids = BTreeSet::new();
         let mut membership = BTreeSet::new();
-        for entry in &entries {
+        for discussion in &discussions {
+            discussion.validate()?;
+            anyhow::ensure!(discussion.scope_id == *scope, "Discussion scope mismatch");
             anyhow::ensure!(
-                ids.insert(entry.id.as_str()),
-                "duplicate Discussion entry identity"
+                ids.insert(discussion.discussion_id.as_str()),
+                "duplicate Discussion identity"
             );
-            anyhow::ensure!(!entry.actor.trim().is_empty(), "invalid Discussion actor");
             let thread = threads_by_key
-                .get(&(entry.thread_id.as_str(), scope.as_str()))
+                .get(&(discussion.thread_id.as_str(), scope.as_str()))
                 .copied()
                 .ok_or_else(|| anyhow::anyhow!("Discussion Thread is missing"))?;
-            let Some(parent_kind) = discussion_kind_word(entry.parent.node_type) else {
+            let Some(parent_kind) = discussion_kind_word(discussion.parent.node_type) else {
                 anyhow::bail!("Discussion parent mismatch");
             };
-            anyhow::ensure!(thread.parent == entry.parent, "Discussion parent mismatch");
+            anyhow::ensure!(
+                thread.parent == discussion.parent,
+                "Discussion parent mismatch"
+            );
             let in_scope = parents_by_key
-                .get(&(parent_kind, entry.parent.node_id.as_str().to_owned()))
+                .get(&(parent_kind, discussion.parent.node_id.as_str().to_owned()))
                 .is_some_and(|scopes| scopes.len() == 1 && scopes[0].as_str() == scope.as_str());
             anyhow::ensure!(
                 in_scope,
                 "Discussion parent does not exist uniquely in this scope"
             );
-            if let Some(id) = &entry.message_id {
+            for id in &discussion.message_ids {
                 anyhow::ensure!(
                     membership.insert(id.as_str()),
-                    "Message belongs to multiple Discussion entries"
+                    "Message belongs to multiple Discussions"
                 );
                 let matches = messages_by_id.get(id.as_str()).is_some_and(|candidates| {
                     candidates.len() == 1
                         && candidates
                             .iter()
-                            .any(|m| m.scope_id == *scope && m.thread_id == entry.thread_id)
+                            .any(|m| m.scope_id == *scope && m.thread_id == discussion.thread_id)
                 });
                 anyhow::ensure!(matches, "Discussion Message membership mismatch");
             }
-            chains
-                .entry(entry.discussion_id.as_str())
-                .or_default()
-                .push(entry);
         }
-        let entry_thread_ids: BTreeSet<&str> =
-            entries.iter().map(|e| e.thread_id.as_str()).collect();
+        let discussion_threads: BTreeSet<&str> =
+            discussions.iter().map(|d| d.thread_id.as_str()).collect();
         for message in messages
             .iter()
             .filter(|m| m.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION)
@@ -157,21 +150,11 @@ impl StateStore {
             .filter(|t| t.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION)
         {
             anyhow::ensure!(
-                entry_thread_ids.contains(thread.id.as_str()),
-                "enrolled Thread has no Discussion history"
+                discussion_threads.contains(thread.id.as_str()),
+                "enrolled Thread has no Discussion"
             );
         }
-        let mut heads = Vec::new();
-        for mut chain in chains.into_values() {
-            chain.sort_by_key(|e| e.version);
-            let mut previous: Option<&DiscussionEntry> = None;
-            for entry in chain {
-                entry.validate_after(previous)?;
-                previous = Some(entry);
-            }
-            heads.push(previous.unwrap().clone());
-        }
-        Ok(heads)
+        Ok(discussions)
     }
 
     pub(super) fn validate_discussion_origin(
@@ -179,57 +162,53 @@ impl StateStore {
         scope: &ScopeId,
         origin: &DiscussionOrigin,
     ) -> anyhow::Result<()> {
-        self.discussion_heads(scope)?;
-        let entries = self.discussion_entries(scope)?;
-        self.validate_discussion_origin_among(scope, origin, &entries)
+        let discussions = self.validated_discussions(scope)?;
+        self.validate_discussion_origin_among(scope, origin, &discussions)
     }
 
-    /// Checks one origin against already-read Discussion entries, so callers
-    /// that validated the Discussion state once need not revalidate per origin.
+    /// Checks one origin against already-read Discussions, so callers that
+    /// validated the Discussion state once need not revalidate per origin.
     pub(super) fn validate_discussion_origin_among(
         &self,
         scope: &ScopeId,
         origin: &DiscussionOrigin,
-        entries: &[DiscussionEntry],
+        discussions: &[Discussion],
     ) -> anyhow::Result<()> {
         anyhow::ensure!(
-            entries
+            discussions
                 .iter()
-                .any(|e| e.discussion_id == origin.discussion_id
-                    && e.thread_id == origin.thread_id
-                    && e.message_id.as_ref() == Some(&origin.message_id)),
+                .any(|d| d.discussion_id == origin.discussion_id
+                    && d.thread_id == origin.thread_id
+                    && d.message_ids.contains(&origin.message_id)),
             "outcome origin is not a Message in this Discussion and scope"
         );
         self.validate_requirement_origin(scope, Some(&origin.thread_id), Some(&origin.message_id))
     }
 
-    pub(crate) fn discussion_receipt(
-        &self,
-        input: &super::WriteDiscussion,
-    ) -> anyhow::Result<Option<DiscussionEntry>> {
-        self.with_repository_publication(|| {
-            self.authorize_discussion(input)?;
-            let path = journal::entry_path(&self.layout, &input.scope_id, &input.request_id);
-            if !path.try_exists()? {
-                return Ok(None);
-            }
-            let JournalEntry::Discussion(entry) = journal::read_journal_entry(&self.layout, &path)?
-            else {
-                return Err(crate::write_error::SourceFailure::wrap(
-                    crate::write_error::WriteFailure::DiscussionIntentChanged,
-                    anyhow::anyhow!("request ID belongs to a Requirement save"),
-                ));
-            };
-            crate::write_error::ensure!(
-                DiscussionIntentChanged,
-                entry.scope_id == input.scope_id
-                    && entry.request_id == input.request_id
-                    && entry.actor == input.actor
-                    && entry.parent == input.parent
-                    && entry.intent_digest == super::discussion_writes::intent(input)?,
-                "Discussion request ID was reused with different intent"
-            );
-            Ok(Some(*entry))
+    /// Adds the record write of one review entry to the Discussion of its
+    /// origin, with the revision that the write gave the record.
+    pub(super) fn add_discussion_outcome(&self, entry: &ReviewEntry) -> anyhow::Result<()> {
+        let Some(origin) = &entry.origin else {
+            return Ok(());
+        };
+        let outcome = DiscussionOutcome {
+            message_id: origin.message_id.clone(),
+            record_kind: entry.record_kind,
+            record_id: entry.record_id.clone(),
+            revision: entry.revision.clone(),
+        };
+        let path = shards::discussions_path(&self.layout, &entry.scope_id);
+        super::guard::with_writer(&path, "*", || {
+            self.mutate_jsonl_records(&path, |discussions: &mut Vec<Discussion>| {
+                let discussion = discussions
+                    .iter_mut()
+                    .find(|d| d.discussion_id == origin.discussion_id)
+                    .ok_or_else(|| anyhow::anyhow!("outcome origin Discussion is missing"))?;
+                if !discussion.outcomes.contains(&outcome) {
+                    discussion.outcomes.push(outcome);
+                }
+                Ok(())
+            })
         })
     }
 

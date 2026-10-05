@@ -35,9 +35,7 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
     let a = start(&store, "a");
     let b = start(&store, "b");
     let c = start(&store, "c");
-    store
-        .write_discussion(status(&b, "resolve_b", "resolved"))
-        .unwrap();
+    store.write_discussion(status(&b, "resolved")).unwrap();
     let mut query = list(None, 1);
     let mut found = Vec::new();
     loop {
@@ -242,12 +240,9 @@ async fn default_list_has_truthful_parent_status_and_bounded_opening() {
     assert!(legacy_only.next_cursor.is_none());
     let body = "α".repeat(300);
     let entry = store
-        .write_discussion(write(
-            "long",
-            json!({
-                "kind":"start", "role":"user", "body":body
-            }),
-        ))
+        .write_discussion(write(json!({
+            "kind":"start", "role":"user", "body":body
+        })))
         .unwrap();
     let query: DiscussionListQuery = serde_json::from_value(json!({
         "parent": entry.parent, "allowed_parent_kinds":["requirement"],
@@ -273,12 +268,9 @@ async fn page_limits_and_large_messages_are_bounded() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let entry = store
-        .write_discussion(write(
-            "large",
-            json!({
-                "kind":"start", "role":"user", "body":"x".repeat(60_000)
-            }),
-        ))
+        .write_discussion(write(json!({
+            "kind":"start", "role":"user", "body":"x".repeat(60_000)
+        })))
         .unwrap();
     let page = read_discussion_list(root, &scope(), ReadPolicy::default(), list(None, 10))
         .await
@@ -356,10 +348,7 @@ async fn scope_list_includes_other_parents_and_parent_list_does_not() {
             "status":"discovery", "depends_on":[], "supersedes":[]
         }
     })).unwrap()).unwrap();
-    let mut input = write(
-        "second",
-        json!({"kind":"start","role":"user","body":"second"}),
-    );
+    let mut input = write(json!({"kind":"start","role":"user","body":"second"}));
     input.parent.node_id = StableId::new("req_b").unwrap();
     let b = store.write_discussion(input).unwrap();
     let scope_page = read_discussion_list(root, &scope(), ReadPolicy::default(), list(None, 10))

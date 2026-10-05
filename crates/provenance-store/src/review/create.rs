@@ -184,6 +184,7 @@ impl StateStore {
             &journal::entry_path(&self.layout, &scope, &entry.request_id),
             &entry,
         )?;
+        self.add_discussion_outcome(&entry)?;
         self.commit_automatic_submission(&after, &entry)?;
         Ok(entry)
     }

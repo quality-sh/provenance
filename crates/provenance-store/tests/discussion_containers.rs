@@ -25,14 +25,10 @@ fn closed_containers_refuse_reply_and_reopening_without_reactivation() {
     for closed in [ThreadStatus::Resolved, ThreadStatus::Archived] {
         let (temp, store) = fixture();
         let a = start(&store, "a");
-        let resolved = store
-            .write_discussion(status(&a, "resolve", "resolved"))
-            .unwrap();
+        let resolved = store.write_discussion(status(&a, "resolved")).unwrap();
         replace_threads(&store, &temp, |threads| threads[0].status = closed.clone());
         assert!(store.write_discussion(reply(&a, "reply")).is_err());
-        assert!(store
-            .write_discussion(status(&resolved, "reopen", "active"))
-            .is_err());
+        assert!(store.write_discussion(status(&resolved, "active")).is_err());
         let b = start(&store, "b");
         assert_ne!(a.thread_id, b.thread_id);
         let history = store.list_threads(&scope()).unwrap();
@@ -131,7 +127,7 @@ fn direct_message_append_cannot_bypass_enrolled_membership() {
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 1);
     assert_eq!(
         store.list_messages(&scope()).unwrap()[0].id,
-        a.message_id.unwrap()
+        a.root_message_id
     );
 }
 
@@ -147,9 +143,7 @@ fn resolving_a_discussion_leaves_all_container_statuses_unchanged() {
         threads.push(later);
     });
     let before = store.list_threads(&scope()).unwrap();
-    store
-        .write_discussion(status(&a, "resolve", "resolved"))
-        .unwrap();
+    store.write_discussion(status(&a, "resolved")).unwrap();
     assert_eq!(before, store.list_threads(&scope()).unwrap());
 }
 
@@ -181,7 +175,6 @@ fn posting_refuses_a_container_stored_under_the_wrong_scope() {
     });
     assert!(store
         .write_discussion(write(
-            "bad",
             json!({"kind":"start","role":"user","body":"Bad scope"})
         ))
         .is_err());
@@ -196,5 +189,5 @@ fn new_messages_do_not_reuse_identities_from_legacy_shards() {
     let path = shards::messages_path(&layout, &scope());
     std::fs::rename(&path, path.parent().unwrap().join("2020-01.jsonl")).unwrap();
     let a = start(&store, "new");
-    assert_ne!(a.message_id.unwrap(), old.message.id);
+    assert_ne!(a.root_message_id, old.message.id);
 }

@@ -200,6 +200,7 @@ impl StateStore {
                 origin,
             },
         )?;
+        self.add_discussion_outcome(&entry)?;
         if classifier::changes_revision(entry.record_kind, &entry.changed_fields) {
             self.commit_automatic_submission(&after, &entry)?;
         }

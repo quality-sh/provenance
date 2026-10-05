@@ -46,7 +46,7 @@ async fn message(
 ) -> anyhow::Result<Message> {
     ctx.snapshot().bound_page_work().await?;
     super::discussion_reads::check_parent(ctx, &parent).await?;
-    for family in ["review_journal", "messages", "threads"] {
+    for family in ["discussions", "messages", "threads"] {
         ctx.snapshot().attest(family);
     }
     let (join, selector_id, condition) = selector_sql(&selector);
@@ -93,7 +93,7 @@ pub(super) async fn messages(
     let (cursor, mut position) = message_cursor(ctx, &query, allowed_parent_kinds)?;
     ctx.snapshot().bound_page_work().await?;
     super::discussion_reads::check_parent(ctx, &query.parent).await?;
-    for family in ["review_journal", "messages", "threads"] {
+    for family in ["discussions", "messages", "threads"] {
         ctx.snapshot().attest(family);
     }
     if query.cursor.is_none() {
@@ -116,14 +116,16 @@ pub(super) async fn messages(
 fn selector_sql(selector: &DiscussionSelector) -> (&'static str, &str, &'static str) {
     match selector {
         DiscussionSelector::Discussion { discussion_id } => (
-            "JOIN review_journal j ON j.scope_id=m.scope_id AND j.message_id=m.id",
+            "JOIN discussions d ON d.scope_id=m.scope_id \
+             JOIN json_each(d.message_ids) e ON e.value=m.id",
             discussion_id.as_str(),
-            "j.discussion_id=?",
+            "d.discussion_id=?",
         ),
         DiscussionSelector::Legacy { thread_id } => (
             "",
             thread_id.as_str(),
-            "m.thread_id=? AND NOT EXISTS(SELECT 1 FROM review_journal j WHERE j.scope_id=m.scope_id AND j.message_id=m.id)",
+            "m.thread_id=? AND NOT EXISTS(SELECT 1 FROM discussions d, json_each(d.message_ids) e \
+             WHERE d.scope_id=m.scope_id AND e.value=m.id)",
         ),
     }
 }
@@ -138,7 +140,7 @@ const fn message_schema_version(selector: &DiscussionSelector) -> SchemaVersion 
 /// Refuses a discussion or a legacy thread that the parent does not hold.
 async fn check_address(ctx: &ReadContext, query: &DiscussionMessagesQuery) -> anyhow::Result<()> {
     let (address_sql, address_id) = match &query.selector {
-        DiscussionSelector::Discussion { discussion_id } => ("SELECT EXISTS(SELECT 1 FROM review_journal WHERE scope_id=? AND parent_type=? AND parent_id=? AND discussion_id=?)", discussion_id.as_str()),
+        DiscussionSelector::Discussion { discussion_id } => ("SELECT EXISTS(SELECT 1 FROM discussions d WHERE d.scope_id=? AND json_extract(d.parent,'$.node_type')=? AND json_extract(d.parent,'$.node_id')=? AND d.discussion_id=?)", discussion_id.as_str()),
         DiscussionSelector::Legacy { thread_id } => ("SELECT EXISTS(SELECT 1 FROM threads WHERE scope_id=? AND parent_type=? AND parent_id=? AND id=?)", thread_id.as_str()),
     };
     let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);

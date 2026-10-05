@@ -3,13 +3,13 @@ mod discussion_support;
 use discussion_support::*;
 use provenance_core::{
     protocol::read_failure::ReadFailure,
-    threads::{DiscussionEntry, DiscussionMessagesQuery, DiscussionSelector},
+    threads::{Discussion, DiscussionMessagesQuery, DiscussionSelector},
 };
 use provenance_macros::verifies;
 use provenance_store::{operations::read_policy::ReadPolicy, review::read_discussion_messages};
 use serde_json::json;
 
-fn messages_query(latest: &DiscussionEntry, limit: usize) -> DiscussionMessagesQuery {
+fn messages_query(latest: &Discussion, limit: usize) -> DiscussionMessagesQuery {
     DiscussionMessagesQuery {
         parent: latest.parent.clone(),
         selector: DiscussionSelector::Discussion {

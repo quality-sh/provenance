@@ -234,7 +234,6 @@ fn resolve_second_discussion(directory: &tempfile::TempDir, second_id: &str) {
                 node_type: provenance_core::NodeType::Requirement,
                 node_id: provenance_core::StableId::new("req_a").unwrap(),
             },
-            request_id: provenance_core::StableId::new("resolve_second").unwrap(),
             actor: "cli".into(),
             declared_by: None,
             action: provenance_store::review::DiscussionAction::SetStatus {
@@ -324,7 +323,7 @@ fn cli_discussion_actions_use_one_scope_and_preserve_receipt_identity() {
         "--format",
         "json",
     ]);
-    assert!(reply["receipt"]["request_id"].is_string());
+    assert_eq!(reply["receipt"]["message_ids"].as_array().unwrap().len(), 2);
     assert_eq!(reply["receipt"]["version"], 2);
     let get = json(&["req_a", "get", "--repo", repo, "--format", "json"]);
     assert_eq!(get["record"]["id"], "req_a");

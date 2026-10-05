@@ -454,6 +454,21 @@ macro_rules! expand_record_family_rows {
                     catalog: [none],
                     route: [none]
                 };
+                Discussions {
+                    record: provenance_core::threads::Discussion,
+                    field: discussions,
+                    path: discussions_path,
+                    meta: { shard: "threads/discussions.jsonl", order: none,
+                        budget: NotImported },
+                    node: [],
+                    reader: { open: list_discussions, closed: [], strategy: existing },
+                    id: method,
+                    loader: [kind],
+                    graph: [],
+                    import: [skip],
+                    catalog: [none],
+                    route: [none]
+                };
                 ReviewJournal {
                     record: provenance_core::review::JournalEntry,
                     field: review_journal,

@@ -11,11 +11,10 @@ impl StateStore {
         scope: &ScopeId,
     ) -> anyhow::Result<Vec<JournalEntry>> {
         let entries = self.validated_review_entries(scope)?;
-        let discussion = self.discussion_entries(scope)?;
-        self.discussion_heads(scope)?;
+        let discussions = self.validated_discussions(scope)?;
         for entry in &entries {
             if let Some(origin) = &entry.origin {
-                self.validate_discussion_origin_among(scope, origin, &discussion)?;
+                self.validate_discussion_origin_among(scope, origin, &discussions)?;
             }
         }
         self.validated_cycle_entries(scope)?;
@@ -113,13 +112,6 @@ pub async fn load_rows(tx: &mut Transaction<'_, Sqlite>, bytes: &[u8]) -> anyhow
                 sqlx::query("INSERT INTO review_journal(scope_id, kind, record_kind, record_id, id, sequence, request_id, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
                     .bind(entry.scope_id.as_str()).bind(row_kind).bind(entry.record_kind.as_str()).bind(entry.record_id.as_str()).bind(entry.id.as_str())
                     .bind(i64::try_from(entry.sequence)?).bind(entry.request_id.as_str()).bind(serde_json::to_string(entry)?)
-                    .execute(&mut **tx).await?;
-            }
-            JournalEntry::Discussion(entry) => {
-                sqlx::query("INSERT INTO review_journal(scope_id, kind, id, request_id, payload, discussion_id, thread_id, message_id, parent_type, parent_id, version) VALUES (?, 'discussion', ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-                    .bind(entry.scope_id.as_str()).bind(entry.id.as_str()).bind(entry.request_id.as_str()).bind(serde_json::to_string(entry)?)
-                    .bind(entry.discussion_id.as_str()).bind(entry.thread_id.as_str()).bind(entry.message_id.as_ref().map(provenance_core::StableId::as_str))
-                    .bind(crate::state_store::serde_name(&entry.parent.node_type)?).bind(entry.parent.node_id.as_str()).bind(i64::try_from(entry.version)?)
                     .execute(&mut **tx).await?;
             }
             JournalEntry::Cycle(entry) => {

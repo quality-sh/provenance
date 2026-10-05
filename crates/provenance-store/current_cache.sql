@@ -185,6 +185,14 @@ CREATE TABLE projection_validation (
     only_row INTEGER PRIMARY KEY CHECK (only_row = 1), version INTEGER NOT NULL
 );
 
+CREATE TABLE discussions (
+    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, discussion_id TEXT NOT NULL,
+    parent TEXT NOT NULL, thread_id TEXT NOT NULL, root_message_id TEXT NOT NULL,
+    message_ids TEXT NOT NULL, status TEXT NOT NULL, version INTEGER NOT NULL,
+    actor TEXT NOT NULL, outcomes TEXT NOT NULL, PRIMARY KEY (scope_id, discussion_id)
+);
+CREATE INDEX idx_discussions_parent ON discussions(scope_id, json_extract(parent, '$.node_type'), json_extract(parent, '$.node_id'), discussion_id);
+
 CREATE TABLE review_journal (
     scope_id TEXT NOT NULL, kind TEXT NOT NULL, record_kind TEXT, record_id TEXT, id TEXT NOT NULL,
     sequence INTEGER, request_id TEXT NOT NULL, payload TEXT NOT NULL,

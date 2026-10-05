@@ -42,11 +42,11 @@ fn projection_family_table_names_every_stored_family_once() {
         .iter()
         .map(|family| family.family_name())
         .collect();
-    assert_eq!(names.len(), 19);
+    assert_eq!(names.len(), 20);
     let mut unique = names.clone();
     unique.sort_unstable();
     unique.dedup();
-    assert_eq!(unique.len(), 19, "family names must be unique");
+    assert_eq!(unique.len(), 20, "family names must be unique");
     for expected in [
         "sources",
         "domains",
@@ -66,6 +66,7 @@ fn projection_family_table_names_every_stored_family_once() {
         "implementation_bindings",
         "verification_bindings",
         "requirement_reviews",
+        "discussions",
         "review_journal",
     ] {
         assert!(names.contains(&expected), "missing family {expected}");
@@ -211,7 +212,7 @@ fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
     let mut walked = Vec::new();
     for family in ProjectionFamily::ALL {
         let (bytes, record_count) = family.canonical_records(&store, &scope).unwrap();
-        if family.family_name() == "review_journal" && record_count == 0 {
+        if matches!(family.family_name(), "review_journal" | "discussions") && record_count == 0 {
             continue;
         }
         walked.push(serde_json::json!({

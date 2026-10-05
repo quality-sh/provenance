@@ -1,4 +1,4 @@
-use super::{feedback_request_id, validate_submission_address};
+use super::validate_submission_address;
 use crate::{
     publication::with_staged_state,
     review::{
@@ -132,7 +132,6 @@ impl StateStore {
                     &record_id,
                     &input.actor,
                     input.declared_by.as_deref(),
-                    &request_id,
                     feedback,
                 )
             })
@@ -166,7 +165,6 @@ impl StateStore {
         record_id: &StableId,
         actor: &provenance_core::DispositionActor,
         declared_by: Option<&str>,
-        request_id: &StableId,
         feedback: ReviewFeedback,
     ) -> anyhow::Result<StableId> {
         use crate::review::discussion_input::{DiscussionAction, WriteDiscussion};
@@ -177,7 +175,6 @@ impl StateStore {
                 node_type: kind,
                 node_id: record_id.clone(),
             },
-            request_id: feedback_request_id(request_id)?,
             actor: actor.id.clone(),
             declared_by: declared_by.map(str::to_string),
             action: DiscussionAction::Start {
@@ -185,16 +182,14 @@ impl StateStore {
                 body: feedback.body,
             },
         };
-        let digest = crate::review::discussion_writes::intent(&discussion)?;
+        crate::review::discussion_writes::check_size(&discussion)?;
         self.authorize_discussion(&discussion)?;
-        let entry = guard::with_writer(&shards::threads_path(&self.layout, scope), "*", || {
+        let started = guard::with_writer(&shards::threads_path(&self.layout, scope), "*", || {
             guard::with_writer(&shards::messages_path(&self.layout, scope), "*", || {
-                self.commit_discussion(discussion, None, digest)
+                self.commit_discussion(discussion, None)
             })
         })?;
-        entry
-            .message_id
-            .ok_or_else(|| anyhow::anyhow!("feedback published no Message"))
+        Ok(started.root_message_id)
     }
 }
 

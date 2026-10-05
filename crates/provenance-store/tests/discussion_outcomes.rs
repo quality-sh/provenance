@@ -14,7 +14,7 @@ fn creation_and_edits_retain_origin_and_immutable_evidence() {
     let origin = DiscussionOrigin {
         discussion_id: a.discussion_id.clone(),
         thread_id: a.thread_id.clone(),
-        message_id: a.message_id.clone().unwrap(),
+        message_id: a.root_message_id.clone(),
     };
     let input: CreateReviewRequirement = serde_json::from_value(json!({"request_id":"create", "actor":"ben", "origin":origin,
         "create":{"scope_id":"default", "id":"req_new", "statement":"The system retains evidence.", "status":"discovery", "depends_on":[], "supersedes":[], "origin_thread":origin.thread_id,"origin_message":origin.message_id}})).unwrap();
@@ -74,7 +74,7 @@ fn creation_and_edits_retain_origin_and_immutable_evidence() {
         .find(|r| r.id.as_str() == "req_new")
         .unwrap();
     assert_eq!(saved.origin_thread, Some(a.thread_id));
-    assert_eq!(saved.origin_message, a.message_id);
+    assert_eq!(saved.origin_message, Some(a.root_message_id));
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn mismatched_discussion_message_origin_refuses_without_editing() {
     let origin = DiscussionOrigin {
         discussion_id: a.discussion_id,
         thread_id: a.thread_id,
-        message_id: b.message_id.unwrap(),
+        message_id: b.root_message_id,
     };
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store

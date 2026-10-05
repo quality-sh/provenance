@@ -257,28 +257,24 @@ pub struct EvidenceQuery {
 #[serde(untagged)]
 pub enum JournalEntry {
     Record(Box<ReviewEntry>),
-    Discussion(Box<crate::threads::DiscussionEntry>),
     Cycle(Box<CycleEntry>),
 }
 impl JournalEntry {
     pub const fn id(&self) -> &StableId {
         match self {
             Self::Record(e) => &e.id,
-            Self::Discussion(e) => &e.id,
             Self::Cycle(e) => &e.id,
         }
     }
     pub const fn scope_id(&self) -> &ScopeId {
         match self {
             Self::Record(e) => &e.scope_id,
-            Self::Discussion(e) => &e.scope_id,
             Self::Cycle(e) => &e.scope_id,
         }
     }
     pub const fn request_id(&self) -> &StableId {
         match self {
             Self::Record(e) => &e.request_id,
-            Self::Discussion(e) => &e.request_id,
             Self::Cycle(e) => &e.request_id,
         }
     }

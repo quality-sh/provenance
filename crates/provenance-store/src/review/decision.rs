@@ -43,7 +43,3 @@ const fn target_type(kind: NodeType) -> IdeationTargetType {
         NodeType::Question => IdeationTargetType::Question,
     }
 }
-
-fn feedback_request_id(request: &StableId) -> anyhow::Result<StableId> {
-    StableId::new(format!("{}_feedback", request.as_str()))
-}

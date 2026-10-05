@@ -53,10 +53,16 @@ pub fn family_content_digests(
 
 /// The revision digest: canonical bytes of the family digest list, hashed.
 pub fn revision_digest(families: &[FamilyContentDigest]) -> anyhow::Result<String> {
-    // Empty review history does not change a legacy projection identity.
+    // Empty review history and an empty Discussion family do not change a
+    // legacy projection identity.
     let included = families
         .iter()
-        .filter(|family| family.kind != ProjectionFamily::ReviewJournal || family.record_count != 0)
+        .filter(|family| {
+            !matches!(
+                family.kind,
+                ProjectionFamily::ReviewJournal | ProjectionFamily::Discussions
+            ) || family.record_count != 0
+        })
         .collect::<Vec<_>>();
     Ok(canonical_digest::digest(
         &canonical_digest::canonical_bytes(&included)?,

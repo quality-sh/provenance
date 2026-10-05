@@ -5,10 +5,55 @@ use crate::operations::{
 };
 use camino::Utf8Path;
 use provenance_core::{
+    model::{ColumnValue, ProjectionRow},
     protocol::{read_failure::ReadFailure, Stamped},
-    threads::{DiscussionEntry, DiscussionGroup, DiscussionPage, DiscussionQuery},
+    threads::{Discussion, DiscussionGroup, DiscussionPage, DiscussionQuery},
     ScopeId, StableId, ThreadParent,
 };
+
+/// The columns of one Discussion row, in `Discussion::COLUMNS` order.
+const DISCUSSION_COLUMNS: &str = "d.schema_version,d.scope_id,d.discussion_id,d.parent,\
+    d.thread_id,d.root_message_id,d.message_ids,d.status,d.version,d.actor,d.outcomes";
+
+/// The stored bytes of one Discussion row that a page accounts for.
+pub(super) const DISCUSSION_SIZE: &str = "length(CAST(d.parent AS BLOB))+\
+    length(CAST(d.message_ids AS BLOB))+length(CAST(d.outcomes AS BLOB))+\
+    length(CAST(d.actor AS BLOB))+256";
+
+/// Selects the Discussions of one parent.
+pub(super) const DISCUSSION_PARENT: &str =
+    "json_extract(d.parent,'$.node_type')=? AND json_extract(d.parent,'$.node_id')=?";
+
+type DiscussionRow = (
+    i64,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    i64,
+    String,
+    String,
+);
+
+fn discussion_from_row(row: DiscussionRow) -> anyhow::Result<Discussion> {
+    let text = ColumnValue::Text;
+    Discussion::from_row(&[
+        ColumnValue::Integer(row.0),
+        text(row.1),
+        text(row.2),
+        text(row.3),
+        text(row.4),
+        text(row.5),
+        text(row.6),
+        text(row.7),
+        ColumnValue::Integer(row.8),
+        text(row.9),
+        text(row.10),
+    ])
+}
 
 pub async fn read_discussions(
     repo: &Utf8Path,
@@ -71,7 +116,7 @@ async fn groups(ctx: &ReadContext, query: DiscussionQuery) -> anyhow::Result<Dis
     )?;
     ctx.snapshot().bound_page_work().await?;
     check_parent(ctx, &query.parent).await?;
-    for family in ["review_journal", "threads", "messages"] {
+    for family in ["discussions", "threads", "messages"] {
         ctx.snapshot().attest(family);
     }
     let mut page = DiscussionPageFill::new(query.limit);
@@ -98,8 +143,8 @@ async fn groups(ctx: &ReadContext, query: DiscussionQuery) -> anyhow::Result<Dis
     })
 }
 
-/// Stage 0: adds the latest version of each addressed discussion after
-/// `position`, in discussion id order.
+/// Stage 0: adds each addressed discussion after `position`, in discussion
+/// id order.
 async fn fill_addressed(
     ctx: &ReadContext,
     query: &DiscussionQuery,
@@ -107,19 +152,30 @@ async fn fill_addressed(
     page: &mut DiscussionPageFill<DiscussionGroup>,
 ) -> anyhow::Result<Fill> {
     let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String, String, i64, String)> = sqlx::query_as(
-        "SELECT j.discussion_id, j.id, length(CAST(j.payload AS BLOB)), t.status FROM review_journal j JOIN threads t ON t.scope_id=j.scope_id AND t.id=j.thread_id WHERE j.scope_id=? AND j.parent_type=? AND j.parent_id=? AND j.discussion_id>? AND NOT EXISTS(SELECT 1 FROM review_journal n WHERE n.scope_id=j.scope_id AND n.discussion_id=j.discussion_id AND n.version>j.version) ORDER BY j.discussion_id LIMIT ?"
-    ).bind(ctx.snapshot().scope().as_str())
-    .bind(super::discussion_state::discussion_kind_word(query.parent.node_type))
-    .bind(query.parent.node_id.as_str()).bind(&position.id)
-        .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
+    let keys: Vec<(String, i64, String)> = sqlx::query_as(&format!(
+        "SELECT d.discussion_id, {DISCUSSION_SIZE}, t.status FROM discussions d \
+         JOIN threads t ON t.scope_id=d.scope_id AND t.id=d.thread_id \
+         WHERE d.scope_id=? AND {DISCUSSION_PARENT} AND d.discussion_id>? \
+         ORDER BY d.discussion_id LIMIT ?"
+    ))
+    .bind(ctx.snapshot().scope().as_str())
+    .bind(super::discussion_state::discussion_kind_word(
+        query.parent.node_type,
+    ))
+    .bind(query.parent.node_id.as_str())
+    .bind(&position.id)
+    .bind(i64::try_from(query.limit + 1)?)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(anyhow::Error::from)
+    .map_err(reader::page_error)?;
     drop(tx);
-    for (discussion, id, size, status) in keys {
+    for (discussion, size, status) in keys {
         if page.at_limit() || page.over_budget(usize::try_from(size)?) {
             return Ok(Fill::Full);
         }
         check_stored_size(size)?;
-        let group = journal_group(ctx, &id, status).await?;
+        let group = discussion_group(ctx, &discussion, status).await?;
         let size = DiscussionPageFill::record_size(&group)?;
         page.push(group, size);
         position.id = discussion;
@@ -127,32 +183,33 @@ async fn fill_addressed(
     Ok(Fill::Complete)
 }
 
-/// Loads one journal entry by id as an addressed discussion.
-async fn journal_group(
+/// Loads one Discussion by id as an addressed discussion.
+async fn discussion_group(
     ctx: &ReadContext,
     id: &str,
     status: String,
 ) -> anyhow::Result<DiscussionGroup> {
     let mut tx = ctx.snapshot().connection().await;
-    let payload: String =
-        sqlx::query_scalar("SELECT payload FROM review_journal WHERE scope_id=? AND id=?")
-            .bind(ctx.snapshot().scope().as_str())
-            .bind(id)
-            .fetch_one(&mut **tx)
-            .await?;
+    let row: DiscussionRow = sqlx::query_as(&format!(
+        "SELECT {DISCUSSION_COLUMNS} FROM discussions d WHERE d.scope_id=? AND d.discussion_id=?"
+    ))
+    .bind(ctx.snapshot().scope().as_str())
+    .bind(id)
+    .fetch_one(&mut **tx)
+    .await?;
     drop(tx);
-    addressed(&payload, status)
+    addressed(discussion_from_row(row)?, status)
 }
 
-fn addressed(payload: &str, status: String) -> anyhow::Result<DiscussionGroup> {
+fn addressed(discussion: Discussion, status: String) -> anyhow::Result<DiscussionGroup> {
     Ok(DiscussionGroup::Addressed {
-        discussion: Box::new(serde_json::from_str::<DiscussionEntry>(payload)?),
+        discussion: Box::new(discussion),
         container_status: serde_json::from_value(serde_json::Value::String(status))?,
     })
 }
 
 /// Stage 1: adds each legacy thread after `position` that holds a message
-/// outside the review journal, in thread id order.
+/// outside every Discussion, in thread id order.
 async fn fill_legacy(
     ctx: &ReadContext,
     query: &DiscussionQuery,
@@ -160,7 +217,7 @@ async fn fill_legacy(
     page: &mut DiscussionPageFill<DiscussionGroup>,
 ) -> anyhow::Result<Fill> {
     let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String,String)> = sqlx::query_as("SELECT t.id,t.status FROM threads t WHERE t.scope_id=? AND t.parent_type=? AND t.parent_id=? AND t.id>? AND EXISTS(SELECT 1 FROM messages m WHERE m.scope_id=t.scope_id AND m.thread_id=t.id AND NOT EXISTS(SELECT 1 FROM review_journal j WHERE j.scope_id=m.scope_id AND j.message_id=m.id)) ORDER BY t.id LIMIT ?")
+    let keys: Vec<(String,String)> = sqlx::query_as("SELECT t.id,t.status FROM threads t WHERE t.scope_id=? AND t.parent_type=? AND t.parent_id=? AND t.id>? AND EXISTS(SELECT 1 FROM messages m WHERE m.scope_id=t.scope_id AND m.thread_id=t.id AND NOT EXISTS(SELECT 1 FROM discussions d, json_each(d.message_ids) e WHERE d.scope_id=m.scope_id AND e.value=m.id)) ORDER BY t.id LIMIT ?")
         .bind(ctx.snapshot().scope().as_str())
         .bind(super::discussion_state::discussion_kind_word(query.parent.node_type))
         .bind(query.parent.node_id.as_str()).bind(&position.id)
@@ -189,17 +246,15 @@ pub(super) async fn group(
 ) -> anyhow::Result<DiscussionGroup> {
     ctx.snapshot().bound_page_work().await?;
     check_parent(ctx, &parent).await?;
-    for family in ["review_journal", "threads"] {
+    for family in ["discussions", "threads"] {
         ctx.snapshot().attest(family);
     }
     let mut tx = ctx.snapshot().connection().await;
-    let row: Option<(String, String, i64)> = sqlx::query_as(
-        "SELECT j.payload,t.status,length(CAST(j.payload AS BLOB)) \
-         FROM review_journal j \
-         JOIN threads t ON t.scope_id=j.scope_id AND t.id=j.thread_id \
-         WHERE j.scope_id=? AND j.parent_type=? AND j.parent_id=? AND j.discussion_id=? \
-         ORDER BY j.version DESC LIMIT 1",
-    )
+    let row: Option<(String, i64)> = sqlx::query_as(&format!(
+        "SELECT t.status,{DISCUSSION_SIZE} FROM discussions d \
+         JOIN threads t ON t.scope_id=d.scope_id AND t.id=d.thread_id \
+         WHERE d.scope_id=? AND {DISCUSSION_PARENT} AND d.discussion_id=?"
+    ))
     .bind(ctx.snapshot().scope().as_str())
     .bind(super::discussion_state::discussion_kind_word(
         parent.node_type,
@@ -209,7 +264,7 @@ pub(super) async fn group(
     .fetch_optional(&mut **tx)
     .await?;
     drop(tx);
-    let (payload, status, size) = row.ok_or(ReadFailure::ResourceNotFound)?;
+    let (status, size) = row.ok_or(ReadFailure::ResourceNotFound)?;
     check_stored_size(size)?;
-    addressed(&payload, status)
+    discussion_group(ctx, discussion_id.as_str(), status).await
 }

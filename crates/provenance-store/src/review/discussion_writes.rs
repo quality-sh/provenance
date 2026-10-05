@@ -7,40 +7,36 @@ use crate::{
 };
 use provenance_core::{
     review::REVIEW_SCHEMA_VERSION,
-    threads::{DiscussionEntry, DiscussionFact, DiscussionStatus},
-    Message, Thread, ThreadStatus,
+    threads::{Discussion, DiscussionStatus},
+    Message, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
 
-pub(super) fn intent(input: &WriteDiscussion) -> anyhow::Result<String> {
-    let bytes = canonical_digest::canonical_bytes(input)?;
+pub(super) fn check_size(input: &WriteDiscussion) -> anyhow::Result<()> {
     anyhow::ensure!(
-        bytes.len() <= 1_048_576,
+        canonical_digest::canonical_bytes(input)?.len() <= 1_048_576,
         "Discussion request exceeds the operation byte budget"
     );
-    Ok(canonical_digest::digest(&bytes))
+    Ok(())
 }
 
 impl StateStore {
     /// Creates a distinct Discussion root or changes one addressed Discussion.
     #[rule("rule_record_comments_have_separate_reply_threads")]
-    pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<DiscussionEntry> {
+    pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<Discussion> {
         self.with_repository_publication(|| self.write_discussion_in_publication(input, None))
     }
 
     pub(super) fn write_discussion_in_publication(
         &self,
         input: WriteDiscussion,
-        resolved_head: Option<DiscussionEntry>,
-    ) -> anyhow::Result<DiscussionEntry> {
-        let digest = intent(&input)?;
+        resolved_head: Option<Discussion>,
+    ) -> anyhow::Result<Discussion> {
+        check_size(&input)?;
         self.authorize_discussion(&input)?;
-        if let Some(receipt) = self.discussion_receipt(&input)? {
-            return Ok(receipt);
-        }
         let head = match &input.action {
             DiscussionAction::Start { .. } => {
-                self.discussion_heads(&input.scope_id)?;
+                self.validated_discussions(&input.scope_id)?;
                 None
             }
             DiscussionAction::Reply {
@@ -56,9 +52,9 @@ impl StateStore {
                 let head = if let Some(head) = resolved_head {
                     head
                 } else {
-                    self.discussion_heads(&input.scope_id)?
+                    self.validated_discussions(&input.scope_id)?
                         .into_iter()
-                        .find(|e| e.discussion_id == *discussion_id)
+                        .find(|d| d.discussion_id == *discussion_id)
                         .ok_or_else(|| {
                             crate::write_error::SourceFailure::wrap(
                                 crate::write_error::WriteFailure::ResourceNotFound,
@@ -121,7 +117,7 @@ impl StateStore {
             let staged = Self::new(layout.clone());
             guard::with_writer(&shards::threads_path(layout, &input.scope_id), "*", || {
                 guard::with_writer(&shards::messages_path(layout, &input.scope_id), "*", || {
-                    staged.commit_discussion(input, head, digest)
+                    staged.commit_discussion(input, head)
                 })
             })
         })
@@ -135,11 +131,10 @@ impl StateStore {
     pub(super) fn commit_discussion(
         &self,
         input: WriteDiscussion,
-        head: Option<DiscussionEntry>,
-        digest: String,
-    ) -> anyhow::Result<DiscussionEntry> {
+        head: Option<Discussion>,
+    ) -> anyhow::Result<Discussion> {
         let scope = &input.scope_id;
-        let (thread, message, status, fact) = match input.action {
+        let (thread, message, status) = match input.action {
             DiscussionAction::Start { role, body } => {
                 let result = self.write_thread_message(PostMessageInput {
                     scope_id: scope.clone(),
@@ -151,7 +146,6 @@ impl StateStore {
                     result.thread,
                     Some(result.message),
                     DiscussionStatus::Active,
-                    DiscussionFact::Started,
                 )
             }
             action => {
@@ -165,52 +159,59 @@ impl StateStore {
                     DiscussionAction::Reply { role, body, .. } => {
                         let message =
                             self.append_discussion_message(scope, &thread.id, role, body)?;
-                        (
-                            thread,
-                            Some(message),
-                            DiscussionStatus::Active,
-                            DiscussionFact::Replied,
-                        )
+                        (thread, Some(message), DiscussionStatus::Active)
                     }
-                    DiscussionAction::SetStatus { status, .. } => {
-                        (thread, None, status, DiscussionFact::StatusChanged)
-                    }
+                    DiscussionAction::SetStatus { status, .. } => (thread, None, status),
                     DiscussionAction::Start { .. } => unreachable!(),
                 }
             }
         };
-        self.enroll_discussion_records(scope, &input.parent, &thread, message.as_ref(), fact)?;
-        let entry = DiscussionEntry {
-            schema_version: REVIEW_SCHEMA_VERSION,
-            scope_id: scope.clone(),
-            id: journal::new_id(),
-            parent: input.parent,
-            thread_id: thread.id,
-            discussion_id: head
-                .as_ref()
-                .map_or_else(journal::new_id, |e| e.discussion_id.clone()),
-            root_message_id: head.as_ref().map_or_else(
-                || message.as_ref().unwrap().id.clone(),
-                |e| e.root_message_id.clone(),
-            ),
-            version: head.as_ref().map_or(1, |e| e.version + 1),
-            predecessor: head.map(|e| e.id),
-            status,
-            fact,
-            message_id: message.map(|m| m.id),
-            actor: input.actor,
-            request_id: input.request_id,
-            intent_digest: digest,
-        };
-        anyhow::ensure!(
-            serde_json::to_vec(&entry)?.len() as u64 <= journal::ENTRY_BYTES,
-            "Discussion receipt exceeds the entry byte budget"
-        );
-        journal::write_new(
-            &journal::entry_path(&self.layout, scope, &entry.request_id),
-            &entry,
+        let status_only = message.is_none();
+        self.enroll_discussion_records(
+            scope,
+            &input.parent,
+            &thread,
+            message.as_ref(),
+            status_only,
         )?;
-        Ok(entry)
+        let discussion = match head {
+            Some(mut discussion) => {
+                discussion.version += 1;
+                discussion.status = status;
+                discussion.message_ids.extend(message.map(|m| m.id));
+                discussion
+            }
+            None => {
+                let root = message.expect("a started Discussion has a root Message").id;
+                Discussion {
+                    schema_version: SUPPORTED_SCHEMA_VERSION,
+                    scope_id: scope.clone(),
+                    discussion_id: journal::new_id(),
+                    parent: input.parent,
+                    thread_id: thread.id,
+                    root_message_id: root.clone(),
+                    message_ids: vec![root],
+                    status,
+                    version: 1,
+                    actor: input.actor,
+                    outcomes: Vec::new(),
+                }
+            }
+        };
+        let path = shards::discussions_path(&self.layout, scope);
+        guard::with_writer(&path, "*", || {
+            self.mutate_jsonl_records(&path, |discussions: &mut Vec<Discussion>| {
+                match discussions
+                    .iter_mut()
+                    .find(|d| d.discussion_id == discussion.discussion_id)
+                {
+                    Some(current) => *current = discussion.clone(),
+                    None => discussions.push(discussion.clone()),
+                }
+                Ok(())
+            })
+        })?;
+        Ok(discussion)
     }
 
     fn enroll_discussion_records(
@@ -219,12 +220,12 @@ impl StateStore {
         parent: &provenance_core::ThreadParent,
         thread: &Thread,
         message: Option<&Message>,
-        fact: DiscussionFact,
+        status_only: bool,
     ) -> anyhow::Result<()> {
         self.mutate_jsonl_records(
             &shards::threads_path(&self.layout, scope),
             |threads: &mut Vec<Thread>| {
-                if fact != DiscussionFact::StatusChanged {
+                if !status_only {
                     provenance_core::threads::archive_non_canonical_siblings(
                         threads, parent, &thread.id,
                     );

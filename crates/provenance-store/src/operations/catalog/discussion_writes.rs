@@ -2,7 +2,7 @@
 
 use super::{shapes::scoped_write_operation, ExecutionNeed};
 use crate::review;
-use provenance_core::{threads::DiscussionEntry, ScopeId, ThreadParent};
+use provenance_core::{threads::Discussion, ScopeId, ThreadParent};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -20,14 +20,13 @@ scoped_write_operation!(
     pub WriteDiscussion,
     "write-discussion",
     WriteDiscussionRequest,
-    DiscussionEntry,
+    Discussion,
     &[409],
     &[ExecutionNeed::GraphStorage],
     scope = scope_id,
     |store, _scope, request| store.write_discussion(review::WriteDiscussion {
         scope_id: request.scope_id,
         parent: request.parent,
-        request_id: review::new_request_id(),
         actor: request.actor,
         declared_by: request.declared_by,
         action: request.action,

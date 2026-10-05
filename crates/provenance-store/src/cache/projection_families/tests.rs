@@ -263,6 +263,18 @@ fn every_family_keeps_its_independent_descriptor() {
             ),
         ),
         (
+            ProjectionFamily::Discussions,
+            expected(
+                (Internal, "discussions"),
+                "threads/discussions.jsonl",
+                None,
+                None,
+                None,
+                NotImported,
+                &[],
+            ),
+        ),
+        (
             ProjectionFamily::ReviewJournal,
             expected(
                 (Internal, "review_journal"),

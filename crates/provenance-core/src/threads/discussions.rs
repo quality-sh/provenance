@@ -1,4 +1,5 @@
-use crate::{SchemaVersion, ScopeId, StableId, ThreadParent};
+use crate::{NodeType, SchemaVersion, ScopeId, StableId, ThreadParent};
+use provenance_macros::ProjectionRow;
 use serde::{Deserialize, Serialize};
 
 /// A Discussion's status is independent of its Thread container.
@@ -10,35 +11,71 @@ pub enum DiscussionStatus {
     Resolved,
 }
 
+/// One Discussion: its root Message, the Messages that belong to it, its
+/// status, and the records created or changed from it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DiscussionFact {
-    Started,
-    Replied,
-    StatusChanged,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ProjectionRow)]
+#[serde(deny_unknown_fields)]
+#[table("discussions")]
+pub struct Discussion {
+    pub schema_version: SchemaVersion,
+    pub scope_id: ScopeId,
+    pub discussion_id: StableId,
+    #[column(json)]
+    pub parent: ThreadParent,
+    pub thread_id: StableId,
+    pub root_message_id: StableId,
+    /// The Messages of the Discussion in write order. The first is the root.
+    pub message_ids: Vec<StableId>,
+    pub status: DiscussionStatus,
+    /// Increases by one at each reply or status change.
+    pub version: u64,
+    /// The actor who started the Discussion.
+    pub actor: String,
+    pub outcomes: Vec<DiscussionOutcome>,
 }
 
-/// One immutable membership or status fact is also the request receipt.
+impl Discussion {
+    pub const fn id(&self) -> &StableId {
+        &self.discussion_id
+    }
+
+    /// Refuses a Discussion whose root, versions, or membership disagree.
+    pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(!self.actor.trim().is_empty(), "invalid Discussion actor");
+        anyhow::ensure!(
+            self.message_ids.first() == Some(&self.root_message_id),
+            "Discussion has no root Message"
+        );
+        let mut ids = std::collections::BTreeSet::new();
+        anyhow::ensure!(
+            self.message_ids.iter().all(|id| ids.insert(id.as_str())),
+            "Discussion lists a Message twice"
+        );
+        anyhow::ensure!(
+            self.version >= 1 && self.version >= self.message_ids.len() as u64,
+            "Discussion version is lower than its writes"
+        );
+        anyhow::ensure!(
+            self.outcomes
+                .iter()
+                .all(|outcome| ids.contains(outcome.message_id.as_str())),
+            "Discussion outcome cites a Message outside the Discussion"
+        );
+        Ok(())
+    }
+}
+
+/// A record created or changed from one Message of a Discussion, with the
+/// review revision that the write gave the record.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct DiscussionEntry {
-    pub schema_version: SchemaVersion,
-    pub scope_id: ScopeId,
-    pub id: StableId,
-    pub parent: ThreadParent,
-    pub thread_id: StableId,
-    pub discussion_id: StableId,
-    pub root_message_id: StableId,
-    pub version: u64,
-    pub predecessor: Option<StableId>,
-    pub status: DiscussionStatus,
-    pub fact: DiscussionFact,
-    pub message_id: Option<StableId>,
-    pub actor: String,
-    pub request_id: StableId,
-    pub intent_digest: String,
+pub struct DiscussionOutcome {
+    pub message_id: StableId,
+    pub record_kind: NodeType,
+    pub record_id: StableId,
+    pub revision: StableId,
 }
 
 /// An outcome cites one known Message in one Discussion. It does not infer membership.
@@ -56,7 +93,7 @@ pub struct DiscussionOrigin {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DiscussionGroup {
     Addressed {
-        discussion: Box<DiscussionEntry>,
+        discussion: Box<Discussion>,
         container_status: crate::ThreadStatus,
     },
     Legacy {

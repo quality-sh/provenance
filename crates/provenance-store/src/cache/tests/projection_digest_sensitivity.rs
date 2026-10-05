@@ -211,6 +211,18 @@ pub(super) fn change_one_record(
                 )
                 .unwrap();
         }
+        ProjectionFamily::Discussions => {
+            StateStore::new(layout.clone())
+                .write_discussion(
+                    serde_json::from_value(json!({
+                        "scope_id":scope, "actor":"reviewer", "declared_by":null,
+                        "parent":{"node_type":"requirement","node_id":"req_schads_overtime"},
+                        "action":{"kind":"start","role":"user","body":"A concern"}
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+        }
         ProjectionFamily::AssertionRecords => {
             let content = std::fs::read_to_string(&path).unwrap();
             std::fs::write(path, content.replace("assertion_base", "assertion_moved")).unwrap();
