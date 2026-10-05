@@ -20,6 +20,7 @@ struct LinkOutput {
     message: Option<String>,
 }
 
+#[rule("rule_agent_review_request_includes_link")]
 pub async fn print(
     context: &RepoContext,
     record_id: &str,
@@ -55,6 +56,7 @@ pub async fn print(
     }
 }
 
+#[rule("rule_cli_record_review_action_returns_url")]
 pub async fn annotate_write(
     context: &RepoContext,
     affected: Option<AffectedReviewRecord>,
@@ -85,8 +87,6 @@ async fn try_annotate_write(
 }
 
 /// Builds the direct record link that an agent gives to a person for review.
-#[rule("rule_agent_review_request_includes_link")]
-#[rule("rule_cli_record_review_action_returns_url")]
 async fn link_output(
     context: &RepoContext,
     record: &AffectedReviewRecord,

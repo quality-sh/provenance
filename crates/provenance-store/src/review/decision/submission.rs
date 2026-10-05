@@ -28,7 +28,7 @@ impl StateStore {
             "invalid review request identity"
         );
         let digest = request_digest(&input)?;
-        let request_id = journal::new_id();
+        let request_id = crate::review::new_request_id();
         let proposal_id = journal::new_id();
         let proposal_key = proposal_id.as_str().to_owned();
         let scope = input.scope_id.clone();
