@@ -356,8 +356,8 @@ fn named_query_hides_terminal_records_by_default() {
     assert_eq!(ids, ["rule_active"]);
 }
 
+// Implementation aid: a query without an exclude_terminal parameter still runs.
 #[test]
-#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
 fn named_query_without_terminal_parameter_runs_without_the_default() {
     let (_directory, repo) = repo_with_archived_rule();
 
