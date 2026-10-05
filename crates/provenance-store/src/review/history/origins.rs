@@ -1,4 +1,4 @@
-//! Assigns an outcome to its first matching record version.
+//! Assigns an outcome to the first record version that contains it.
 
 use super::{git, VersionedRecord};
 use camino::Utf8Path;
@@ -22,7 +22,6 @@ pub(super) fn assign(
         .collect::<Vec<_>>();
     let mut committed = git::file_at_commits(root, path, &commits)?.into_iter();
     let mut seen = BTreeSet::new();
-    let mut pending = Vec::new();
     for version in versions {
         let discussions = if version.version.commit.is_some() {
             committed
@@ -47,22 +46,14 @@ pub(super) fn assign(
                     outcome.revision.as_str().to_owned(),
                 );
                 if seen.insert(key) {
-                    pending.push((
-                        outcome.revision,
-                        DiscussionOrigin {
-                            discussion_id: discussion.discussion_id.clone(),
-                            thread_id: discussion.thread_id.clone(),
-                            message_id: outcome.message_id,
-                        },
-                    ));
+                    version.version.origin = Some(DiscussionOrigin {
+                        discussion_id: discussion.discussion_id.clone(),
+                        thread_id: discussion.thread_id.clone(),
+                        message_id: outcome.message_id,
+                    });
                 }
             }
         }
-        version.version.origin = pending
-            .iter()
-            .find(|(revision, _)| *revision == version.version.revision)
-            .map(|(_, origin)| origin.clone());
-        pending.retain(|(revision, _)| *revision != version.version.revision);
     }
     Ok(())
 }

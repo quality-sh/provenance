@@ -111,6 +111,8 @@ fn create_and_update_every_kind(store: &StateStore, scope: &ScopeId) {
         .unwrap();
 }
 
+/// Covers create and update saves. The CLI flow `review_state_files` covers
+/// submit, decide, withdraw, and Discussion writes.
 #[test]
 #[verifies("rule_review_writes_change_only_record_files", examples)]
 fn record_saves_change_only_record_files() {
