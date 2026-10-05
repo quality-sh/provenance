@@ -110,9 +110,13 @@ At startup the host writes a launch key to
 `<user cache>/provenance/review-launch/<instance nonce>.key`. The user cache is
 `$XDG_CACHE_HOME` or `~/.cache` on Linux, `~/Library/Caches` on macOS, and
 `%LOCALAPPDATA%` on Windows. On Unix the directory has mode `0700` and the file
-has mode `0600`. The host removes the file when it stops. A forced exit can
-leave the file; a key file for a stopped host opens nothing. The key is not in
-the repository, the registry, the startup line, or any response.
+has mode `0600`. On Windows the key file and the redirect page have a protected
+access list that grants rights only to the current user. The CLI checks the
+owner and access list through the file handle before it writes either secret.
+It also checks the key file before it reads the key. The host removes the file
+when it stops. A forced exit can leave the file; a key file for a stopped host
+opens nothing. The key is not in the repository, the registry, the startup line,
+or any response.
 
 `POST /review-launch/code` with `{"launchKey": "..."}` returns `{"code": "..."}`.
 The host compares the key in constant time. `POST /review-launch/session` with
