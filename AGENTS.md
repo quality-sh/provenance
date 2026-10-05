@@ -30,6 +30,15 @@ Do not add a browser suite here or move a broad suite into `provenance-web`.
 
 Before designing or restructuring modules, use the codebase-design and domain-modeling skills.
 
+## No versioning before 1.0
+
+Before Provenance 1.0, nothing is versioned. Do not add a schema version, a version
+field or marker, a version number in a name (`v1`, `v2`, `V1`), a compatibility shim,
+a reader for an older format, or a migration on write. Do not bump an existing version
+field. Change a format in place; existing repositories are initialised again, not
+migrated. A review rejects a change that adds any of these. Bead provenance-u9mg
+removes the versioning that is already in the code.
+
 ## Technical writing
 
 Use ASD-STE100 Simplified Technical English, Issue 9, for technical prose in
