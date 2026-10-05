@@ -64,11 +64,12 @@ fn review_writes_change_only_record_shard_files() {
         Some("\"1\""),
     );
 
-    git(&repo, &["add", "--all", ".provenance/state"]);
-    let staged = git(&repo, &["diff", "--cached", "--name-only"]);
-    let changed = staged.lines().collect::<Vec<_>>();
+    let status = git(&repo, &["status", "--porcelain", "--untracked-files=all"]);
+    let changed = status.lines().collect::<Vec<_>>();
     assert_ne!(changed, [] as [&str; 0]);
     for path in &changed {
+        // The shared Git helper removes leading spaces from the first line.
+        let path = path.trim_start().split_once(' ').unwrap().1.trim_start();
         let path = camino::Utf8Path::new(path);
         assert!(
             path.starts_with(".provenance/state/scopes/default")

@@ -3,6 +3,15 @@ use discussion_support::*;
 use provenance_core::{threads::DiscussionStatus, ThreadStatus};
 use serde_json::json;
 
+/// Implementation aid: the owner forbids format markers on new record families.
+#[test]
+fn discussion_has_no_schema_marker() {
+    let (_temp, store) = fixture();
+    let discussion = start(&store, "Name the stored records.");
+    let stored = serde_json::to_value(discussion).unwrap();
+    assert!(stored.get("schema_version").is_none());
+}
+
 #[test]
 #[provenance_macros::verifies("rule_record_comments_have_separate_reply_threads", examples)]
 #[provenance_macros::verifies("rule_reply_threads_resolve_independently", examples)]

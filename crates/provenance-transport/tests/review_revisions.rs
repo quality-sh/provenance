@@ -84,7 +84,7 @@ async fn accepted_text_returns_as_accepted() {
         "/requirements",
         Some(json!({"data":{
             "actor":"agent","id":"req_flow","statement":"The flow text is A.",
-            "status":"active","depends_on":[],"supersedes":[]
+            "status":"discovery","depends_on":[],"supersedes":[]
         }})),
         None,
     )
@@ -112,7 +112,7 @@ async fn accepted_text_returns_as_accepted() {
     let disposition = decided["data"]["disposition_id"].clone();
     let (status, accepted, _) = call(&host, "GET", "/requirements/req_flow", None, None).await;
     assert_eq!(status, 200, "{accepted}");
-    assert_eq!(accepted["data"]["status"], "active");
+    assert_eq!(accepted["data"]["status"], "discovery");
 
     let changed = set_statement(&host, "The flow text is B.").await;
     assert_ne!(changed["edit"]["revision"], revision_a);
@@ -120,7 +120,7 @@ async fn accepted_text_returns_as_accepted() {
     assert!(changed["decision"]["pending"]["proposal_id"].is_string());
 
     let returned = set_statement(&host, "The flow text is A.").await;
-    assert_eq!(returned["status"], "active");
+    assert_eq!(returned["status"], "discovery");
     assert_eq!(returned["edit"]["revision"], revision_a);
     assert!(returned["decision"]["pending"].is_null(), "{returned}");
     let acceptance = &returned["decision"]["current_acceptance"];

@@ -181,3 +181,42 @@ async fn plain_save_to_previous_content_has_no_discussion_origin() {
     assert_eq!(history[3].origin, None);
     assert_eq!(history[4].origin, None);
 }
+
+#[tokio::test]
+#[verifies("rule_discussion_outcome_shows_record_change", examples)]
+async fn discussion_and_plain_save_in_one_commit_keep_the_commit_origin() {
+    let (temp, store) = fixture();
+    let discussion = start(&store, "Use text A.");
+    let origin = origin_of(&discussion);
+    commit_state(&temp, "Create the discussion");
+    let text_a = json!({"description":"Text A."});
+    store
+        .save_requirement_from_discussion(save(&store, text_a.clone()), &origin)
+        .unwrap();
+    store
+        .save_requirement(save(&store, json!({"description":"Text B."})))
+        .unwrap();
+    let combined = commit_state(&temp, "Save the discussion outcome and the next edit");
+    store.save_requirement(save(&store, text_a)).unwrap();
+    commit_state(&temp, "Return to text A");
+
+    let history = read_history(
+        camino::Utf8Path::from_path(temp.path()).unwrap(),
+        &scope(),
+        ReadPolicy::default(),
+        ReviewHistoryQuery {
+            record_kind: NodeType::Requirement,
+            record_id: id(),
+            limit: 10,
+            cursor: None,
+        },
+    )
+    .await
+    .unwrap()
+    .result
+    .entries;
+    assert_eq!(history.len(), 3);
+    assert_eq!(history[1].commit.as_deref(), Some(combined.as_str()));
+    assert_eq!(history[1].origin, Some(origin));
+    assert_eq!(history[2].origin, None);
+}
