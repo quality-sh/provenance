@@ -4,12 +4,12 @@ use provenance_store::operations::catalog;
 /// `resolve-symbol` queries keep terminal Rules because their code bindings
 /// remain necessary binding and symbol-resolution information.
 #[provenance_macros::rule("rule_review_defaults_exclude_terminal_records")]
-pub fn default_exclude_terminal<'a>(
+pub fn default_exclude_terminal(
     query_action: Option<&str>,
-    route_parameters: impl IntoIterator<Item = &'a catalog::Parameter>,
+    route_parameters: &[catalog::Parameter],
 ) -> Option<bool> {
     let supports_filter = route_parameters
-        .into_iter()
+        .iter()
         .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
     if !supports_filter || matches!(query_action, Some("stale" | "resolve-symbol")) {
         return None;
