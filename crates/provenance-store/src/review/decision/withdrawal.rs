@@ -50,7 +50,7 @@ impl StateStore {
             );
         }
         let digest = request_digest(&input)?;
-        let request_id = journal::new_id();
+        let request_id = crate::review::new_request_id();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(

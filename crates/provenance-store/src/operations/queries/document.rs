@@ -43,7 +43,6 @@ pub async fn read_document_answer(
 }
 
 /// Finds each Requirement whose canonical review document contains one record.
-#[rule("rule_requirement_document_canonical_membership")]
 pub async fn containing_review_documents(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,

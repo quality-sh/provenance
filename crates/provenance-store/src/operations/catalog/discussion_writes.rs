@@ -7,6 +7,7 @@ use serde::Deserialize;
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[provenance_macros::verifies("rule_review_request_identity_server_created", construction)]
 #[serde(deny_unknown_fields)]
 pub struct WriteDiscussionRequest {
     pub scope_id: ScopeId,
