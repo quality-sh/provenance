@@ -198,10 +198,11 @@ impl SearchArgs {
                     .find(|query| query.name == "search")
                     .map(|query| query.parameters.as_slice())
             })
-            .expect("the operation catalog declares root search parameters");
+            .ok_or_else(|| anyhow::anyhow!("the operation catalog does not declare root search"))?;
         let default_exclude_terminal =
-            crate::read_policy::default_exclude_terminal(Some("search"), parameters)
-                .expect("root search declares the terminal filter");
+            crate::read_policy::default_exclude_terminal(parameters).ok_or_else(|| {
+                anyhow::anyhow!("the root search query does not declare exclude_terminal")
+            })?;
         let query = SearchQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             cursor: self.cursor,

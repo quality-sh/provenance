@@ -111,10 +111,18 @@ pub(super) fn parse(
         merge_stdin(&mut data, &assignments)?;
     }
     let route_parameters = definition.parameters();
+    let policy_parameters = query_action
+        .and_then(|action| {
+            definition
+                .registration
+                .queries
+                .iter()
+                .find(|query| query.name == action)
+                .map(|query| query.parameters.as_slice())
+        })
+        .unwrap_or(&route_parameters);
     if !query.contains_key("exclude_terminal") {
-        if let Some(default) =
-            crate::read_policy::default_exclude_terminal(query_action, &route_parameters)
-        {
+        if let Some(default) = crate::read_policy::default_exclude_terminal(policy_parameters) {
             query.insert("exclude_terminal".into(), default.to_string());
         }
     }
