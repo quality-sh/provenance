@@ -123,7 +123,7 @@ fn enroll(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
         scope_id: scope.clone(),
         record_kind: kind,
         record_id: id.clone(),
-        id: entry_id.clone(),
+        id: entry_id,
         sequence,
         predecessor,
         revision,
