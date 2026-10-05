@@ -54,13 +54,10 @@ async fn call(
     if let Some(etag) = etag {
         request = request.header("if-match", etag);
     }
-    let body = match body {
-        Some(value) => {
-            request = request.header("content-type", "application/json");
-            Body::from(value.to_string())
-        }
-        None => Body::empty(),
-    };
+    if body.is_some() {
+        request = request.header("content-type", "application/json");
+    }
+    let body = body.map_or_else(Body::empty, |value| Body::from(value.to_string()));
     let response = host
         .router()
         .oneshot(request.body(body).unwrap())
