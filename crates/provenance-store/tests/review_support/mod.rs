@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use camino::Utf8Path;
 use provenance_core::{ScopeId, StableId};
 use provenance_store::{
