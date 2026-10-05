@@ -159,7 +159,7 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
             SUPPORTED_SCHEMA_VERSION.0
         )));
 
-    // The export refuses earlier, on the review-bearing portability gate.
+    // The export refuses on the same unsupported row.
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -175,9 +175,12 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
         ])
         .assert()
         .failure()
-        .stderr(contains(
-            "review-bearing scopes require lossless import/export support",
-        ));
+        .stderr(contains("record req_overtime"))
+        .stderr(contains(format!(
+            "has schema_version {}, but this build reads schema_version {} only",
+            REVIEW_SCHEMA_VERSION.0 + 1,
+            SUPPORTED_SCHEMA_VERSION.0
+        )));
 }
 
 /// Writing to a shard that holds a hand-edited record changes nothing.

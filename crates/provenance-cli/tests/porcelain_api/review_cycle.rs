@@ -22,13 +22,7 @@ pub fn init_with_reviewer() -> (tempfile::TempDir, String) {
 }
 
 /// Sends one write through the public API and returns its envelope.
-pub fn write(
-    repo: &str,
-    method: &str,
-    path: &str,
-    body: &Value,
-    etag: Option<&str>,
-) -> Value {
+pub fn write(repo: &str, method: &str, path: &str, body: &Value, etag: Option<&str>) -> Value {
     let mut command = provenance();
     command.args([
         "api", path, "--repo", repo, "--method", method, "--input", "-",
