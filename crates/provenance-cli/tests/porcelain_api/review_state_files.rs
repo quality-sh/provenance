@@ -8,7 +8,10 @@ use super::*;
 #[verifies("rule_review_writes_change_only_record_files", examples)]
 fn review_writes_change_only_record_shard_files() {
     let (_directory, repo) = init_with_reviewer();
+    // Init also creates skills, instructions, and ignore settings.
+    git(&repo, &["add", "."]);
     commit(&repo);
+    assert!(git(&repo, &["status", "--porcelain", "--untracked-files=all"]).is_empty());
     write(
         &repo,
         "post",
