@@ -1,16 +1,19 @@
 #![cfg(feature = "test-fixture")]
 
 mod support {
-    pub mod records;
     #[allow(dead_code)]
     pub mod api_fixture;
+    pub mod records;
 }
 
 use axum::{body::Body, http::Request};
 use provenance_macros::verifies;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
-use support::{api_fixture::write_host as host, records::{allow_reviewer, Repository}};
+use support::{
+    api_fixture::write_host as host,
+    records::{allow_reviewer, Repository},
+};
 use tower::ServiceExt as _;
 
 async fn call(

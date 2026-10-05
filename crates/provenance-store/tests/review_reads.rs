@@ -22,10 +22,7 @@ async fn history_pages_follow_versions_one_at_a_time() {
     let (temp, store) = fixture();
     let created = commit_state(&temp, "Create");
     store
-        .save_requirement(save(
-            &store,
-            json!({"description":"Changed"}),
-        ))
+        .save_requirement(save(&store, json!({"description":"Changed"})))
         .unwrap();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let complete = read_history(root, &scope(), ReadPolicy::default(), query(200, None))
@@ -140,9 +137,7 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
 #[test]
 fn saves_stay_authoritative_after_reopen() {
     let (temp, store) = fixture();
-    let first = store
-        .save_requirement(save(&store, json!({})))
-        .unwrap();
+    let first = store.save_requirement(save(&store, json!({}))).unwrap();
     drop(store);
     let store = provenance_store::state_store::StateStore::new(
         provenance_store::layout::ProvenanceLayout::new(
@@ -150,8 +145,7 @@ fn saves_stay_authoritative_after_reopen() {
         ),
     );
     let repeat: SaveRequirement =
-        serde_json::from_value(serde_json::to_value(save(&store, json!({}))).unwrap())
-            .unwrap();
+        serde_json::from_value(serde_json::to_value(save(&store, json!({}))).unwrap()).unwrap();
     assert_eq!(store.save_requirement(repeat).unwrap(), first);
     assert!(store
         .save_requirement(save(&store, json!({"description":"new"})))

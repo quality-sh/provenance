@@ -76,11 +76,7 @@ impl StateStore {
 
     /// Creates the server-owned Disposition identity for a review decision.
     #[rule("rule_review_disposition_identity_server_created")]
-    fn commit_decision(
-        &self,
-        input: DecideRecordReview,
-
-    ) -> anyhow::Result<CycleEntry> {
+    fn commit_decision(&self, input: DecideRecordReview) -> anyhow::Result<CycleEntry> {
         let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
         let record_id = proposal.traceability.target.artifact_id.clone();
@@ -141,8 +137,6 @@ impl StateStore {
             disposition_id: Some(disposition_id),
             feedback_message_id,
             actor: input.actor.id,
-
-
         }
         .entry())
     }

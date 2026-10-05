@@ -1,8 +1,8 @@
 //! Guarded graph record edits and their review state.
 mod classifier;
-mod publication;
 pub(crate) mod guard;
 mod input;
+mod publication;
 pub(crate) mod relationships;
 mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;

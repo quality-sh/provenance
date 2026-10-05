@@ -76,10 +76,7 @@ fn withdrawal_keeps_feedback_and_decisions() {
         )
         .unwrap();
     store
-        .save_requirement(save(
-            &store,
-            json!({"description":"Stored records."}),
-        ))
+        .save_requirement(save(&store, json!({"description":"Stored records."})))
         .unwrap();
     let revised = pending(&store);
 

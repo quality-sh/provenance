@@ -75,7 +75,7 @@ impl StateStore {
                 .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
             if revision != binding.revision
                 || classifier::content_digest(kind, &record)? != binding.content_digest
-                    || facts.is_withdrawn(&input.proposal_id)
+                || facts.is_withdrawn(&input.proposal_id)
                 || facts.is_decided(&input.proposal_id)
             {
                 return Err(SourceFailure::wrap(
@@ -90,11 +90,7 @@ impl StateStore {
     }
 
     /// Writes the Withdrawal record of one review submission.
-    fn commit_withdrawal(
-        &self,
-        input: WithdrawRecordReview,
-
-    ) -> anyhow::Result<CycleEntry> {
+    fn commit_withdrawal(&self, input: WithdrawRecordReview) -> anyhow::Result<CycleEntry> {
         let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
         let record_id = proposal.traceability.target.artifact_id.clone();
@@ -121,8 +117,6 @@ impl StateStore {
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-
-
         }
         .entry())
     }

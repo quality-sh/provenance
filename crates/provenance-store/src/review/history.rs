@@ -88,8 +88,14 @@ impl StateStore {
                 push_version(&mut versions, kind, source, record)?;
             }
         }
-        origins::assign(self.layout.root(), &shards::discussions_path(&self.layout, scope),
-            &discussions, kind, id, &mut versions)?;
+        origins::assign(
+            self.layout.root(),
+            &shards::discussions_path(&self.layout, scope),
+            &discussions,
+            kind,
+            id,
+            &mut versions,
+        )?;
         Ok(versions)
     }
 }

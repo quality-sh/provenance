@@ -17,9 +17,9 @@ pub(super) fn with_record_state<R>(
             .scopes
             .iter()
             .flat_map(|scope| {
-                ProjectionFamily::ALL.into_iter().map(move |family| {
-                    family.shard_path(live, &scope.id)
-                })
+                ProjectionFamily::ALL
+                    .into_iter()
+                    .map(move |family| family.shard_path(live, &scope.id))
             })
             .map(|path| path.strip_prefix(live.state_dir()).map(Utf8Path::to_owned))
             .collect::<Result<BTreeSet<_>, _>>()?;

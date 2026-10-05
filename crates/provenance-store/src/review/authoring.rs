@@ -5,8 +5,8 @@ use super::{
     CreateReviewRequirement,
 };
 use crate::{
-    review::publication::with_record_state,
     review::guard,
+    review::publication::with_record_state,
     state_store::{
         record_stamps::GraphRecord, AddSourceReferenceInput, CreateRequirementInput, StateStore,
         UpdateRequirementInput,

@@ -144,7 +144,8 @@ pub(super) fn file_at_commits(
     let prefix = repository_prefix(root)
         .ok_or_else(|| anyhow::anyhow!("record history repository is unavailable"))?;
     let relative = path.strip_prefix(root)?.as_str().replace('\\', "/");
-    let names = commits.iter()
+    let names = commits
+        .iter()
         .map(|commit| format!("{commit}:{prefix}{relative}\n"))
         .collect::<String>();
     read_blobs(root, &names, commits.len())

@@ -53,7 +53,6 @@ impl StateStore {
     pub(in crate::review) fn commit_submission(
         &self,
         input: SubmitRecordReview,
-
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
         let record = crate::cache::review_families::record(
@@ -139,8 +138,6 @@ impl StateStore {
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-
-
         }
         .entry())
     }

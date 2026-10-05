@@ -124,10 +124,7 @@ fn mismatched_discussion_message_origin_refuses_without_editing() {
     };
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store
-        .save_requirement_from_discussion(
-            save(&store, json!({"description":"bad"})),
-            &origin
-        )
+        .save_requirement_from_discussion(save(&store, json!({"description":"bad"})), &origin)
         .is_err());
     assert_eq!(before, store.list_requirements(&scope()).unwrap());
 }
@@ -140,22 +137,14 @@ async fn plain_save_to_previous_content_has_no_discussion_origin() {
     let origin = origin_of(&discussion);
     let text_a = json!({"description":"Text A."});
     store
-        .save_requirement_from_discussion(
-            save(&store, text_a.clone()),
-            &origin,
-        )
+        .save_requirement_from_discussion(save(&store, text_a.clone()), &origin)
         .unwrap();
     commit_state(&temp, "Save text A from the discussion");
     store
-        .save_requirement(save(
-            &store,
-            json!({"description":"Text B."}),
-        ))
+        .save_requirement(save(&store, json!({"description":"Text B."})))
         .unwrap();
     commit_state(&temp, "Save text B");
-    store
-        .save_requirement(save(&store, text_a))
-        .unwrap();
+    store.save_requirement(save(&store, text_a)).unwrap();
 
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let history = read_history(

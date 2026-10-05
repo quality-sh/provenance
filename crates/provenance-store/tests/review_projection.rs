@@ -16,17 +16,13 @@ async fn revision_digest(pool: &sqlx::SqlitePool) -> String {
 async fn equal_save_leaves_the_projection_unchanged() {
     let (temp, store) = fixture();
     let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
-    store
-        .save_requirement(save(&store, json!({})))
-        .unwrap();
+    store.save_requirement(save(&store, json!({}))).unwrap();
     cache::materialize_state(&layout).await.unwrap();
     let pool = sqlx::SqlitePool::connect(&format!("sqlite:{}", layout.cache_db_path()))
         .await
         .unwrap();
     let before = revision_digest(&pool).await;
-    store
-        .save_requirement(save(&store, json!({})))
-        .unwrap();
+    store.save_requirement(save(&store, json!({}))).unwrap();
     cache::materialize_state(&layout).await.unwrap();
     assert_eq!(revision_digest(&pool).await, before);
     pool.close().await;
