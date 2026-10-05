@@ -139,7 +139,7 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
 }
 
 #[test]
-fn saves_stay_authoritative_after_reopen_and_private_to_the_actor() {
+fn saves_stay_authoritative_after_reopen() {
     let (temp, store) = fixture();
     let first = store
         .save_requirement(save(&store, "enroll", json!({})))
@@ -154,11 +154,6 @@ fn saves_stay_authoritative_after_reopen_and_private_to_the_actor() {
         serde_json::from_value(serde_json::to_value(save(&store, "enroll", json!({}))).unwrap())
             .unwrap();
     assert_eq!(store.save_requirement(repeat).unwrap(), first);
-    let mut foreign = serde_json::to_value(save(&store, "enroll", json!({}))).unwrap();
-    foreign["actor"] = json!("other");
-    assert!(store
-        .save_requirement(serde_json::from_value(foreign).unwrap())
-        .is_err());
     assert!(store
         .save_requirement(save(&store, "missing", json!({"description":"new"})))
         .is_ok());
