@@ -56,7 +56,6 @@ pub(super) fn read_journal_entry(
     let entry: JournalEntry = read_bounded(layout, path, ENTRY_BYTES)?;
     let version = match &entry {
         JournalEntry::Record(e) => e.schema_version,
-        JournalEntry::Discussion(e) => e.schema_version,
         JournalEntry::Cycle(e) => e.schema_version,
     };
     anyhow::ensure!(
