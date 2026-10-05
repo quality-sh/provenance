@@ -112,8 +112,6 @@ macro_rules! define_review_record {
                 fn review_id(&self) -> &StableId {
                     &self.id
                 }
-
-
             }
         )*
     };

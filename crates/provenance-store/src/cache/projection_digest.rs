@@ -54,7 +54,7 @@ pub fn family_content_digests(
 /// The revision digest: canonical bytes of the family digest list, hashed.
 pub fn revision_digest(families: &[FamilyContentDigest]) -> anyhow::Result<String> {
     Ok(canonical_digest::digest(
-        &canonical_digest::canonical_bytes(families)?,
+        &canonical_digest::canonical_bytes(&families)?,
     ))
 }
 
