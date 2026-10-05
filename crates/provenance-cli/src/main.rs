@@ -11,7 +11,6 @@ mod invocation;
 mod legacy_cleanup;
 mod onboarding;
 mod output;
-#[cfg(windows)]
 mod owner_file;
 mod read_policy;
 use provenance_cli::{repo_context, store};

@@ -1,17 +1,18 @@
-//! Windows files whose protected access list grants rights only to the current user.
+//! Creates secret files with owner-only access on each platform.
 
+use std::{fs::File, io, path::Path};
+
+#[cfg(windows)]
 use std::{
     ffi::c_void,
-    fs::File,
-    io,
     mem::size_of,
     os::windows::{
         ffi::OsStrExt as _,
         io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle},
     },
-    path::Path,
     ptr::{addr_of_mut, null_mut},
 };
+#[cfg(windows)]
 use windows_sys::Win32::{
     Foundation::{LocalFree, GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE},
     Security::{
@@ -34,15 +35,38 @@ use windows_sys::Win32::{
     },
 };
 
+/// Creates a secret file with Unix mode bits or a protected Windows access list.
+pub fn create(path: &Path) -> io::Result<File> {
+    #[cfg(not(windows))]
+    {
+        let mut options = std::fs::OpenOptions::new();
+        options.create_new(true).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options.mode(0o600);
+        }
+        options.open(path)
+    }
+    #[cfg(windows)]
+    {
+        create_windows(path)
+    }
+}
+
+#[cfg(windows)]
 struct LocalMemory(*mut c_void);
 
+#[cfg(windows)]
 impl Drop for LocalMemory {
+    #[cfg(windows)]
     fn drop(&mut self) {
         // The Windows security functions allocate these buffers with LocalAlloc.
         unsafe { LocalFree(self.0) };
     }
 }
 
+#[cfg(windows)]
 fn checked(result: i32) -> io::Result<()> {
     if result == 0 {
         Err(io::Error::last_os_error())
@@ -51,6 +75,7 @@ fn checked(result: i32) -> io::Result<()> {
     }
 }
 
+#[cfg(windows)]
 fn current_user_sid() -> io::Result<String> {
     // The token and aligned buffer remain live until the SID has been copied.
     unsafe {
@@ -93,6 +118,7 @@ fn current_user_sid() -> io::Result<String> {
     }
 }
 
+#[cfg(windows)]
 fn owner_descriptor() -> io::Result<LocalMemory> {
     let sid = current_user_sid()?;
     let descriptor: Vec<u16> = format!("O:{sid}D:P(A;;FA;;;{sid})\0")
@@ -112,7 +138,8 @@ fn owner_descriptor() -> io::Result<LocalMemory> {
 }
 
 /// Creates and checks an owner-only file before the caller can write a secret.
-pub fn create(path: &Path) -> io::Result<File> {
+#[cfg(windows)]
+fn create_windows(path: &Path) -> io::Result<File> {
     let security = owner_descriptor()?;
     let mut name: Vec<u16> = path.as_os_str().encode_wide().collect();
     if name.contains(&0) {
@@ -149,10 +176,12 @@ pub fn create(path: &Path) -> io::Result<File> {
 }
 
 /// Checks an open file before the caller reads a saved secret.
+#[cfg(windows)]
 pub fn verify(file: &File) -> io::Result<()> {
     verify_with(file, &owner_descriptor()?)
 }
 
+#[cfg(windows)]
 fn verify_with(file: &File, expected: &LocalMemory) -> io::Result<()> {
     // All SID and ACL pointers refer to the two live security descriptors.
     unsafe {
@@ -210,6 +239,7 @@ fn verify_with(file: &File, expected: &LocalMemory) -> io::Result<()> {
     }
 }
 
+#[cfg(windows)]
 fn access_error() -> io::Error {
     io::Error::new(
         io::ErrorKind::PermissionDenied,

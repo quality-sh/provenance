@@ -18,7 +18,7 @@ use std::{
 };
 
 #[cfg(unix)]
-use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+use std::os::unix::fs::PermissionsExt as _;
 
 const CODE_LIFETIME: Duration = Duration::from_secs(120);
 const MAX_LIVE_CODES: usize = 64;
@@ -39,15 +39,6 @@ impl LaunchKey {
         #[cfg(unix)]
         std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700))?;
         let value = secret();
-        #[cfg(not(windows))]
-        let file = {
-            let mut options = std::fs::OpenOptions::new();
-            options.create_new(true).write(true);
-            #[cfg(unix)]
-            options.mode(0o600);
-            options.open(&path)
-        };
-        #[cfg(windows)]
         let file = crate::owner_file::create(&path);
         let mut file = file
             .with_context(|| format!("cannot create the review launch key {}", path.display()))?;
