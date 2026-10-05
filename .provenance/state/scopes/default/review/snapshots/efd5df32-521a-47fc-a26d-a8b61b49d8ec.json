@@ -1,0 +1,1 @@
+{"record":{"id":"topic_unversioned_state_before_release","links":[{"target_id":"provenance-u9mg-rpi-plan","target_type":"source"}],"requirement_id":"req_records_are_read_only_at_supported_version","schema_version":3,"scope_id":"default","status":"open","title":"Remove versions from stored state, wire and names before 1.0"},"record_kind":"topic","schema_version":3}
