@@ -66,11 +66,12 @@ fn redirect_page(link: &url::Url) -> std::io::Result<PathBuf> {
         .replace('&', "&amp;")
         .replace('"', "&quot;")
         .replace('<', "&lt;");
-    // A new temporary file is readable and writable only by its owner.
-    let mut page = tempfile::Builder::new()
-        .prefix("provenance-review-")
-        .suffix(".html")
-        .tempfile()?;
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("provenance-review-").suffix(".html");
+    #[cfg(not(windows))]
+    let mut page = builder.tempfile()?;
+    #[cfg(windows)]
+    let mut page = builder.make(crate::owner_file::create)?;
     writeln!(
         page,
         "<!doctype html>\n<meta charset=\"utf-8\">\n<meta name=\"referrer\" content=\"no-referrer\">\n\

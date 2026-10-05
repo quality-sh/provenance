@@ -39,12 +39,17 @@ impl LaunchKey {
         #[cfg(unix)]
         std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700))?;
         let value = secret();
-        let mut options = std::fs::OpenOptions::new();
-        options.create_new(true).write(true);
-        #[cfg(unix)]
-        options.mode(0o600);
-        let mut file = options
-            .open(&path)
+        #[cfg(not(windows))]
+        let file = {
+            let mut options = std::fs::OpenOptions::new();
+            options.create_new(true).write(true);
+            #[cfg(unix)]
+            options.mode(0o600);
+            options.open(&path)
+        };
+        #[cfg(windows)]
+        let file = crate::owner_file::create(&path);
+        let mut file = file
             .with_context(|| format!("cannot create the review launch key {}", path.display()))?;
         std::io::Write::write_all(&mut file, value.as_bytes())?;
         file.sync_all()?;
@@ -64,7 +69,18 @@ impl LaunchKey {
         if metadata.permissions().mode() & 0o077 != 0 {
             anyhow::bail!("the review launch key is open to other users");
         }
+        #[cfg(not(windows))]
         let value = std::fs::read_to_string(&path).context("cannot read the review launch key")?;
+        #[cfg(windows)]
+        let value = {
+            let mut file =
+                std::fs::File::open(&path).context("cannot read the review launch key")?;
+            crate::owner_file::verify(&file)?;
+            let mut value = String::new();
+            std::io::Read::read_to_string(&mut file, &mut value)
+                .context("cannot read the review launch key")?;
+            value
+        };
         anyhow::ensure!(is_secret(&value), "the review launch key is not valid");
         Ok(value)
     }
