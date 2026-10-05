@@ -1,10 +1,14 @@
 use provenance_core::protocol::{
     Direction, ImpactQuery, QueryResponse, ResolveRecordQuery, ResponseMeta, TraceQuery,
 };
-use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
+use provenance_core::threads::{
+    DiscussionConversationQuery, DiscussionConversationResult, DiscussionListQuery,
+    DiscussionResultPage, DiscussionStatusFilter,
+};
+use provenance_core::{NodeType, StableId, SDK_PROTOCOL_VERSION};
 use provenance_porcelain::get::{
-    Bounds, GetPort, Impact, PortFuture, ReadError, RecordResolution, Traversal, TraversalRequest,
-    View,
+    Bounds, GetPort, Impact, PortFuture, ReadError, RecordResolution, Review, Traversal,
+    TraversalRequest, View,
 };
 use provenance_store::operations::catalog::{self, Operation as _};
 
@@ -12,6 +16,13 @@ use provenance_store::operations::catalog::{self, Operation as _};
 #[derive(Clone)]
 pub struct HostGetPort {
     host: crate::StatementHost,
+}
+
+struct ReviewDiscussions {
+    page: DiscussionResultPage<DiscussionConversationResult>,
+    follow_up_commands: Vec<String>,
+    stamp: provenance_core::protocol::Stamp,
+    freshness_error: Option<String>,
 }
 
 impl HostGetPort {
@@ -145,6 +156,144 @@ impl GetPort for HostGetPort {
             })
         })
     }
+
+    /// Returns the current decision, edit guard, and feedback for each record kind.
+    #[provenance_macros::rule("rule_porcelain_review_returns_current_state")]
+    fn review<'a>(
+        &'a self,
+        record: &'a provenance_core::protocol::GraphNode,
+        limit: usize,
+    ) -> PortFuture<'a, Review> {
+        Box::pin(async move {
+            let kind = record.node_type();
+            let id = record.id().clone();
+            let resource = self
+                .host
+                .invoke_scoped_typed::<catalog::GetReviewedResource>(
+                    catalog::ReviewedResourceRequest {
+                        record_kind: kind,
+                        id: id.clone(),
+                    },
+                )
+                .await
+                .map_err(|error| operation_error(&error))?;
+            let edit = resource.result.edit;
+            let decision = resource.result.decision;
+            let loaded = if discussion_parent_is_supported(&self.host, kind) {
+                load_review_discussions(&self.host, kind, &id, limit).await?
+            } else {
+                ReviewDiscussions {
+                    page: DiscussionResultPage {
+                        entries: Vec::new(),
+                        limit,
+                        has_more: false,
+                        next_cursor: None,
+                    },
+                    follow_up_commands: Vec::new(),
+                    stamp: resource.stamp,
+                    freshness_error: resource.freshness_error,
+                }
+            };
+            let discussions = loaded.page;
+            let inner_has_more = discussions
+                .entries
+                .iter()
+                .any(|conversation| conversation.messages.has_more);
+            let truncated = discussions.has_more || inner_has_more;
+            Ok(Review {
+                update_precondition: format!("--if-match {}", edit.etag),
+                edit,
+                decision,
+                bounds: Bounds {
+                    limit: discussions.limit,
+                    max_depth: None,
+                    has_more: truncated,
+                    continuation: discussions.next_cursor.clone(),
+                    truncated,
+                },
+                discussions,
+                follow_up_commands: loaded.follow_up_commands,
+                response_metadata: Some(provenance_core::protocol::ResponseMeta {
+                    stamp: Some(loaded.stamp),
+                    freshness_error: loaded.freshness_error,
+                    ..provenance_core::protocol::ResponseMeta::default()
+                }),
+            })
+        })
+    }
+}
+
+async fn load_review_discussions(
+    host: &crate::StatementHost,
+    kind: NodeType,
+    id: &StableId,
+    limit: usize,
+) -> Result<ReviewDiscussions, ReadError> {
+    let listed = host
+        .invoke_scoped_typed::<catalog::ListDiscussions>(DiscussionListQuery {
+            parent: Some(provenance_core::ThreadParent {
+                node_type: kind,
+                node_id: id.clone(),
+            }),
+            allowed_parent_kinds: vec![kind],
+            status: DiscussionStatusFilter::All,
+            limit,
+            cursor: None,
+        })
+        .await
+        .map_err(|error| operation_error(&error))?;
+    let mut follow_up_commands = Vec::new();
+    if let Some(cursor) = &listed.result.next_cursor {
+        follow_up_commands.push(format!(
+            "provenance {} discussions --limit {limit} --cursor {cursor}",
+            id.as_str()
+        ));
+    }
+    let mut conversations = Vec::with_capacity(listed.result.entries.len());
+    for summary in &listed.result.entries {
+        let conversation = host
+            .invoke_scoped_typed::<catalog::GetDiscussionConversation>(
+                DiscussionConversationQuery {
+                    discussion_id: summary.discussion_id.clone(),
+                    allowed_parent_kinds: vec![kind],
+                    limit,
+                    cursor: None,
+                },
+            )
+            .await
+            .map_err(|error| operation_error(&error))?;
+        if let Some(cursor) = &conversation.result.messages.next_cursor {
+            follow_up_commands.push(format!(
+                "provenance discussions {} get --limit {limit} --cursor {cursor}",
+                summary.discussion_id.as_str()
+            ));
+        }
+        conversations.push(conversation.result);
+    }
+    Ok(ReviewDiscussions {
+        page: DiscussionResultPage {
+            entries: conversations,
+            limit,
+            has_more: listed.result.has_more,
+            next_cursor: listed.result.next_cursor,
+        },
+        follow_up_commands,
+        stamp: listed.stamp,
+        freshness_error: listed.freshness_error,
+    })
+}
+
+fn discussion_parent_is_supported(host: &crate::StatementHost, kind: NodeType) -> bool {
+    catalog::definitions().iter().any(|definition| {
+        host.advertises(definition.name)
+            && definition.registration.handler.operation == catalog::ReviewDiscussions::NAME
+            && definition
+                .registration
+                .request
+                .parent
+                .as_ref()
+                .is_some_and(|parent| parent.kind == kind.as_str())
+    })
 }
 
 fn response_parts<R>(response: QueryResponse<R>) -> (R, ResponseMeta) {
@@ -188,6 +337,7 @@ mod tests {
     };
 
     #[test]
+    /// Implementation aid: this checks typed conversion at the transport adapter seam.
     fn a_core_resolution_stays_typed_at_the_adapter_boundary() {
         let result = ResolveRecordResult {
             resolution: CoreRecordResolution::Missing,

@@ -19,14 +19,18 @@ it in the same change.
 - New obligation: `{command} rules create --scope default --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
-- To change a Requirement, Rule, or past decision, create a Proposal. A human decides each
-  Proposal.
+- To change a Requirement, Rule, or past decision, create a Proposal. A human decides each Proposal.
 - Before you ask a person to review a record, start the review host if it is not running:
   `{command} review --repo . --repository-id local --scope default`.
 - Get the review URL with `{command} <record-id> get --review-link --format json`. Give the person the
   review URL. Never give the person a record ID.
-- To drop a Question or Topic, archive it with its commit evidence. Archiving a Topic
-  also archives its Questions. Discussion history stays readable:
+- Read the decision and review feedback with `{command} <record-id> get --view review`.
+  Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
+  If feedback is truncated, use the continuation commands in the review view.
+- A guarded update after a rejection opens the new submission. Do not submit
+  or withdraw manually.
+- To drop a Question or Topic, archive it with its commit evidence. Archiving a
+  Topic also archives its Questions. Discussion history stays readable:
   `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope default --stdin --format json`
   `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} topics <topic_id> update --scope default --stdin --format json`
 - Write graph state only through the Provenance CLI or SDK. Do not edit

@@ -74,6 +74,7 @@ fn envelope(stderr: &str) -> Value {
 #[test]
 #[verifies("rule_porcelain_api_public_path", examples)]
 #[verifies("rule_porcelain_api_uses_context", examples)]
+/// This flow compares the shared public path with the configured target-first read.
 fn api_get_reads_one_public_path_with_the_configured_context() {
     let (_directory, repo) = init();
     seed_source(&repo);
@@ -106,6 +107,7 @@ fn api_get_reads_one_public_path_with_the_configured_context() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
 fn api_get_defaults_to_get_and_prints_the_envelope() {
     let (_directory, repo) = init();
     seed_source(&repo);
@@ -123,6 +125,51 @@ fn api_get_defaults_to_get_and_prints_the_envelope() {
         "GET",
     ]);
     assert_eq!(upper, printed, "the method name takes any letter case");
+}
+
+#[test]
+#[verifies("rule_cli_api_discovery_filter_limit", examples)]
+fn json_catalog_applies_limit() {
+    let (_directory, repo) = init();
+    let catalog = json(&["api", "--repo", &repo, "--limit", "2", "--format", "json"]);
+    let routes = catalog["routes"].as_array().unwrap();
+    assert_eq!(routes.len(), 2);
+}
+
+#[test]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
+fn limited_json_catalog_reports_truncation() {
+    let (_directory, repo) = init();
+    let catalog = json(&["api", "--repo", &repo, "--limit", "2", "--format", "json"]);
+
+    assert_eq!(catalog["bounds"]["truncated"], true);
+}
+
+#[test]
+#[verifies("rule_cli_api_discovery_filter_limit", examples)]
+fn json_catalog_applies_filter() {
+    let (_directory, repo) = init();
+    let catalog = json(&[
+        "api",
+        "--repo",
+        &repo,
+        "--filter",
+        "requirements/{id}",
+        "--format",
+        "json",
+    ]);
+    let routes = catalog["routes"].as_array().unwrap();
+    assert_ne!(routes.as_slice(), [] as [Value; 0]);
+    assert!(routes.iter().all(|route| {
+        format!(
+            "{} {} {}",
+            route["method"].as_str().unwrap(),
+            route["path"].as_str().unwrap(),
+            route["description"].as_str().unwrap()
+        )
+        .to_ascii_lowercase()
+        .contains("requirements/{id}")
+    }));
 }
 
 #[test]
@@ -151,6 +198,7 @@ fn api_post_creates_from_a_file_body_with_selected_method_and_headers() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_body_inputs", examples)]
 fn api_stdin_body_creates_from_standard_input() {
     let (_directory, repo) = init();
 
@@ -175,6 +223,7 @@ fn api_stdin_body_creates_from_standard_input() {
 }
 
 #[test]
+#[verifies("rule_review_conflict_returns_current_value", examples)]
 fn api_reports_the_typed_requirement_edit_conflict() {
     let (_directory, repo) = init();
     let created = json(&[
@@ -251,7 +300,7 @@ fn api_discovery_describes_the_live_catalog() {
     assert!(
         readable
             .trim_end()
-            .ends_with("Use --format json for the full request and response schemas."),
+            .ends_with("Use --format json for all schemas."),
         "{readable}"
     );
 
@@ -275,6 +324,19 @@ fn api_discovery_describes_the_live_catalog() {
 }
 
 #[test]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
+fn readable_api_catalog_explains_how_to_continue() {
+    let (_directory, repo) = init();
+    let readable =
+        String::from_utf8(success(&["api", "--repo", &repo, "--limit", "1"]).stdout).unwrap();
+    assert!(
+        readable.contains("Use --filter <text> or --limit <number> to see more."),
+        "{readable}"
+    );
+}
+
+#[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
 fn api_unknown_paths_refuse_with_the_canonical_failure() {
     let (_directory, repo) = init();
 
@@ -283,6 +345,7 @@ fn api_unknown_paths_refuse_with_the_canonical_failure() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
 fn api_unsupported_methods_refuse_with_the_canonical_failure() {
     let (_directory, repo) = init();
 

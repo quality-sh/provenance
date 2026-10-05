@@ -148,6 +148,7 @@ impl HostAccess for LocalAccess {
             <catalog::Search as catalog::Operation>::NAME,
             <catalog::Trace as catalog::Operation>::NAME,
             <catalog::Impact as catalog::Operation>::NAME,
+            <catalog::GetReviewedResource as catalog::Operation>::NAME,
             <catalog::ListDiscussions as catalog::Operation>::NAME,
             <catalog::GetDiscussionConversation as catalog::Operation>::NAME,
             <catalog::WriteDiscussion as catalog::Operation>::NAME,
@@ -220,6 +221,7 @@ mod tests {
     use super::constant_time_eq;
 
     #[test]
+    /// Implementation aid: this checks the constant-time credential comparison helper.
     fn credential_comparison_rejects_length_and_content_differences() {
         let expected = b"Bearer 0123456789abcdef";
         assert!(constant_time_eq(expected, expected));

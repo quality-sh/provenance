@@ -21,6 +21,8 @@ pub struct ImportReport {
     pub records: usize,
 }
 
+/// Refuses an import that changes or removes shipped-v1 terminal proposals.
+#[rule("rule_legacy_terminal_proposals_frozen")]
 pub(super) fn import_scope(
     context: &RepoContext,
     input: Utf8PathBuf,
