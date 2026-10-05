@@ -77,6 +77,7 @@ pub fn commit_state(temp: &tempfile::TempDir, message: &str) -> String {
 }
 
 /// Configures the reviewer through the repository configuration API.
+#[allow(dead_code)]
 pub fn allow_reviewer(store: &StateStore) {
     store
         .set_disposition_actor_ids(vec!["reviewer".into()])
