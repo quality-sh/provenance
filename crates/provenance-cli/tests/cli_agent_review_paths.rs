@@ -368,7 +368,13 @@ fn collection_includes_terminal_records_on_request() {
         "--format",
         "json",
     ]));
-    assert_eq!(included["data"]["items"][0]["id"], "rule_archived");
+    let ids = included["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["rule_active", "rule_archived"]);
 }
 
 #[test]
@@ -407,5 +413,11 @@ fn search_includes_terminal_records_on_request() {
         "--format",
         "json",
     ]));
-    assert_eq!(searched["nodes"][0]["id"], "rule_archived");
+    let ids = searched["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["rule_active", "rule_archived"]);
 }
