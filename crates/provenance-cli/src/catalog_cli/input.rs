@@ -112,10 +112,8 @@ pub(super) fn parse(
     }
     let route_parameters = definition.parameters();
     if !query.contains_key("exclude_terminal") {
-        if let Some(default) = crate::read_policy::default_exclude_terminal(
-            query_action,
-            &route_parameters,
-        )
+        if let Some(default) =
+            crate::read_policy::default_exclude_terminal(query_action, &route_parameters)
         {
             query.insert("exclude_terminal".into(), default.to_string());
         }
