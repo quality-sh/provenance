@@ -14,7 +14,7 @@ fn assert_owner_only(path: &Path) {
     // Independent ACL inspection: every allowed right must belong to the current user.
     let script = r#"
 $ErrorActionPreference = 'Stop'
-$acl = Get-Acl -LiteralPath $env:REVIEW_SECRET_FILE
+$acl = [System.IO.File]::GetAccessControl($env:REVIEW_SECRET_FILE)
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
 if ($owner -ne $user) { throw 'The file owner is not the current user' }
@@ -42,7 +42,7 @@ foreach ($rule in $allowed) {
 }
 
 #[test]
-/// Security aid: this flow checks the ACLs of both secret files from a real host launch.
+/// Implementation aid: this flow checks that other users cannot read the two launch secrets.
 fn launch_key_and_redirect_page_allow_only_the_owner() {
     let repo = repository();
     let browser = tempfile::tempdir().unwrap();

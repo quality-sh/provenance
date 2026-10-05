@@ -442,8 +442,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
-          prefix-key: v1
-          shared-key: test-all-features
+          shared-key: review-file-security
           add-job-id-key: "false"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Check launch-file access
