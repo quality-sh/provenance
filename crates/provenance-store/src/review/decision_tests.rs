@@ -7,7 +7,7 @@ use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use camino::Utf8Path;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
-    DispositionDecision, NodeType, PromotionState, ScopeId, StableId,
+    DispositionDecision, PromotionState, ScopeId, StableId,
 };
 use serde_json::{json, Value};
 
