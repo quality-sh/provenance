@@ -69,15 +69,15 @@ fn reviewed_records() -> (tempfile::TempDir, String) {
 #[verifies("rule_porcelain_review_returns_current_state", examples)]
 fn review_view_reads_every_review_record_kind() {
     let (_directory, repo) = reviewed_records();
-    for (kind, id) in [
-        ("source", "source_review"),
-        ("requirement", "req_review"),
-        ("resolution", "resolution_review"),
-        ("rule", "rule_review"),
-        ("domain", "domain_review"),
-        ("boundary", "boundary_review"),
-        ("topic", "topic_review"),
-        ("question", "question_review"),
+    for (kind, id, has_pending_submission) in [
+        ("source", "source_review", false),
+        ("requirement", "req_review", true),
+        ("resolution", "resolution_review", false),
+        ("rule", "rule_review", false),
+        ("domain", "domain_review", false),
+        ("boundary", "boundary_review", false),
+        ("topic", "topic_review", false),
+        ("question", "question_review", false),
     ] {
         let output = provenance()
             .args([
@@ -98,7 +98,11 @@ fn review_view_reads_every_review_record_kind() {
             review["decision"]["current_revision"],
             review["edit"]["revision"]
         );
-        assert!(review["decision"]["pending"]["proposal_id"].is_string());
+        if has_pending_submission {
+            assert!(review["decision"]["pending"]["proposal_id"].is_string());
+        } else {
+            assert!(review["decision"]["pending"].is_null(), "{kind}");
+        }
         assert_eq!(review["decision"]["decisions"], json!([]));
         assert_eq!(review["discussions"]["entries"], json!([]));
         assert_eq!(review["discussions"]["has_more"], false);
