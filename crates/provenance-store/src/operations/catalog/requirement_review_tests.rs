@@ -118,7 +118,7 @@ async fn create_response_failure_refuses_before_publication() {
         committed.decision.pending.as_ref().unwrap().revision,
         committed.edit.revision.clone().unwrap()
     );
-    assert_eq!(store.review_entries(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_proposal_definitions(&scope).unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -265,7 +265,7 @@ async fn update_response_failure_refuses_before_publication() {
         )
         .unwrap();
     let request = update_request(&store, "update_a");
-    let receipts_before = store.review_entries(&scope).unwrap();
+    let proposals_before = store.list_proposal_definitions(&scope).unwrap();
     crate::test_probes::arm("requirement_resource_snapshot", || {
         anyhow::bail!("injected response construction failure")
     });
@@ -276,7 +276,10 @@ async fn update_response_failure_refuses_before_publication() {
     assert!(result.is_err());
     let record = store.list_requirements(&scope).unwrap().remove(0);
     assert_eq!(record.description, None);
-    assert_eq!(store.review_entries(&scope).unwrap(), receipts_before);
+    assert_eq!(
+        store.list_proposal_definitions(&scope).unwrap(),
+        proposals_before
+    );
 
     let committed = UpdateRequirementResource::run(
         PreparedContext::for_scope(PreparedScope {
@@ -290,8 +293,8 @@ async fn update_response_failure_refuses_before_publication() {
     .unwrap();
     assert_eq!(committed.record.description.as_deref(), Some("Saved text."));
     assert_eq!(
-        store.review_entries(&scope).unwrap().len(),
-        receipts_before.len() + 1
+        store.list_proposal_definitions(&scope).unwrap().len(),
+        proposals_before.len() + 1
     );
 }
 
@@ -330,7 +333,12 @@ async fn a_repeated_update_with_an_old_etag_returns_a_typed_conflict() {
         error.safe(),
         crate::write_error::WriteFailure::RequirementEditConflict { .. }
     ));
-    assert_eq!(store.review_entries(&scope).unwrap().len(), 3);
+    assert_eq!(
+        store.list_requirements(&scope).unwrap()[0]
+            .description
+            .as_deref(),
+        Some("Second text.")
+    );
 }
 
 #[test]
@@ -383,7 +391,7 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
             .to_string()
             .contains("etag"));
     });
-    assert_eq!(store.review_entries(&scope).unwrap().len(), 2);
+    assert_eq!(store.list_proposal_definitions(&scope).unwrap().len(), 2);
 }
 
 #[test]

@@ -118,7 +118,8 @@ impl StateStore {
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
-                    let after = staged.commit_requirement(input, &record, origin, stale)?;
+                    let after =
+                        staged.commit_requirement(input, &record, origin.as_ref(), stale)?;
                     complete(&staged, after)
                 })
             })
@@ -132,7 +133,7 @@ impl StateStore {
         &self,
         input: SaveRequirement,
         before: &Requirement,
-        origin: Option<DiscussionOrigin>,
+        origin: Option<&DiscussionOrigin>,
         stale: Option<String>,
     ) -> anyhow::Result<Requirement> {
         let scope = before.scope_id.clone();
@@ -166,7 +167,7 @@ impl StateStore {
         let fields =
             classifier::changed_fields(NodeType::Requirement, &before_record, &after_record)?;
         let revision = classifier::review_revision(NodeType::Requirement, &after_record)?;
-        if let Some(origin) = &origin {
+        if let Some(origin) = origin {
             self.add_discussion_outcome(&scope, origin, NodeType::Requirement, &id, &revision)?;
         }
         if classifier::changes_revision(NodeType::Requirement, &fields) {

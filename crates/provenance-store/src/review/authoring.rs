@@ -373,9 +373,11 @@ impl StateStore {
             value.is_null() || value.as_array().is_some_and(Vec::is_empty)
         };
         let equal = wanted.as_object().is_some_and(|fields| {
-            fields.iter().all(|(name, value)| match stored.get(name) {
-                Some(current) => current == value || (absent(current) && absent(value)),
-                None => absent(value),
+            fields.iter().all(|(name, value)| {
+                stored.get(name).map_or_else(
+                    || absent(value),
+                    |current| current == value || (absent(current) && absent(value)),
+                )
             })
         });
         Ok(equal.then_some(existing))

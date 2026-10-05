@@ -7,8 +7,7 @@ use crate::{
 };
 use camino::Utf8Path;
 use provenance_core::{
-    review::SaveOutcome, Manifest, QuestionStatus, RepoPathPrefix, RequirementStatus,
-    ResolutionMethod, TopicStatus,
+    Manifest, QuestionStatus, RepoPathPrefix, RequirementStatus, ResolutionMethod, TopicStatus,
 };
 
 fn id(value: &str) -> StableId {
@@ -84,6 +83,13 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
 
 fn publish_changed_cascade(kind: NodeType) {
     let (_temp, store, scope) = fixture();
+    let record = match kind {
+        NodeType::Topic => id("topic_cascade_writer"),
+        NodeType::Question => id("question_cascade_writer"),
+        NodeType::Boundary => id("boundary_cascade_writer"),
+        _ => unreachable!(),
+    };
+    let created = store.record_edit_state(&scope, kind, &record).unwrap();
     let mut topics = store.list_topics(&scope).unwrap();
     let mut questions = store.list_questions(&scope).unwrap();
     let mut boundaries = store.list_boundaries(&scope).unwrap();
@@ -104,16 +110,9 @@ fn publish_changed_cascade(kind: NodeType) {
     .publish(&store, &scope)
     .unwrap();
 
-    let mut entries = store
-        .review_entries(&scope)
-        .unwrap()
-        .into_iter()
-        .filter(|entry| entry.record_kind == kind)
-        .collect::<Vec<_>>();
-    entries.sort_by_key(|entry| entry.sequence);
-    assert_eq!(entries.len(), 2);
-    assert_eq!(entries[1].outcome, SaveOutcome::Changed);
-    assert_eq!(entries[1].predecessor.as_ref(), Some(&entries[0].id));
+    let changed = store.record_edit_state(&scope, kind, &record).unwrap();
+    assert!(created.revision.is_some());
+    assert_ne!(changed.revision, created.revision);
 }
 
 #[test]
