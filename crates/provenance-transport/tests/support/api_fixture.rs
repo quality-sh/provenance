@@ -29,6 +29,7 @@ pub fn host(repository: &Repository) -> StatementHost {
 }
 
 /// One fixture host that permits record writes.
+#[allow(dead_code)]
 pub fn write_host(repository: &Repository) -> StatementHost {
     StatementHost::with_fixture_access(access(repository).allow_writes())
 }

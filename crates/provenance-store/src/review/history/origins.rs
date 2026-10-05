@@ -6,7 +6,7 @@ use provenance_core::{
     threads::{Discussion, DiscussionOrigin},
     NodeType, StableId,
 };
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 pub(super) fn assign(
     root: &Utf8Path,
@@ -21,7 +21,7 @@ pub(super) fn assign(
         .filter_map(|version| version.version.commit.as_deref())
         .collect::<Vec<_>>();
     let mut committed = git::file_at_commits(root, path, &commits)?.into_iter();
-    let mut seen = BTreeSet::new();
+    let mut seen = HashSet::new();
     let mut pending = Vec::new();
     for version in versions {
         let discussions = if version.version.commit.is_some() {
