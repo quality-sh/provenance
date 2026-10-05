@@ -221,7 +221,7 @@ fn discussion_writes_use_the_bound_scope() {
     let saved = post(&body);
     assert_eq!(saved.status(), 200);
     let saved: Value = serde_json::from_str(&saved.into_string().unwrap()).unwrap();
-    assert!(uuid::Uuid::parse_str(saved["data"]["request_id"].as_str().unwrap()).is_ok());
+    assert!(uuid::Uuid::parse_str(saved["data"]["discussion_id"].as_str().unwrap()).is_ok());
     assert_eq!(saved["data"]["actor"], "ben");
     let discussions: Value =
         serde_json::from_str(&list_discussions(&host).into_string().unwrap()).unwrap();
