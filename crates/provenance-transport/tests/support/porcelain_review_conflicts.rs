@@ -1,4 +1,4 @@
-use super::records::allow_reviewer;
+use super::support::records::allow_reviewer;
 use super::*;
 
 async fn edit(session: &ApiSession, description: &str) -> (String, String) {
