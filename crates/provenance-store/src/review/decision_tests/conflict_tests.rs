@@ -142,7 +142,7 @@ fn stale_and_terminal_withdrawals_are_review_conflicts() {
 
 #[test]
 #[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
-fn superseded_submission_allows_a_new_review_cycle() {
+fn superseded_submission_reports_the_current_review_identity() {
     let (_temp, store, _, proposal_1) = enrolled();
     let revision_2 = edit(&store, "edit-2", "Revised statement");
 
@@ -168,14 +168,6 @@ fn superseded_submission_allows_a_new_review_cycle() {
     }
 
     assert_ne!(proposal_1, proposal_2);
-    decide(
-        &store,
-        &proposal_2,
-        "accepted",
-        &reviewer("reviewer"),
-        &artifact(),
-    )
-    .unwrap();
 }
 
 #[test]

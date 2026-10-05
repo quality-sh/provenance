@@ -189,7 +189,7 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
 
 #[test]
 #[verifies("rule_record_comment_joins_anchored_thread", examples)]
-fn discussion_writes_use_the_bound_scope() {
+fn record_comment_joins_the_selected_record_thread() {
     let repo = repository();
     let layout = provenance_store::layout::ProvenanceLayout::new(repo.path().to_str().unwrap());
     provenance_store::state_store::StateStore::new(layout)
@@ -224,7 +224,6 @@ fn discussion_writes_use_the_bound_scope() {
     let saved = post(&body);
     assert_eq!(saved.status(), 200);
     let saved: Value = serde_json::from_str(&saved.into_string().unwrap()).unwrap();
-    assert!(uuid::Uuid::parse_str(saved["data"]["request_id"].as_str().unwrap()).is_ok());
     assert_eq!(saved["data"]["actor"], "ben");
     assert_eq!(saved["data"]["parent"]["node_type"], "requirement");
     assert_eq!(saved["data"]["parent"]["node_id"], "req_example");

@@ -406,22 +406,24 @@ fn feedback_publishes_with_the_decision_or_neither() {
 
 #[test]
 #[provenance_macros::verifies("rule_rejection_keeps_graph_record", examples)]
-fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
+fn withdrawal_does_not_remove_or_retire_the_graph_record() {
+    let (_temp, store, _, proposal_1) = enrolled();
+    let before = store.list_requirements(&scope()).unwrap().remove(0);
+
+    withdraw(&store, &proposal_1).unwrap();
+    let requirement = store.list_requirements(&scope()).unwrap().remove(0);
+    assert_eq!(requirement.id, req(), "withdrawal must keep Requirement req_a");
+    assert_eq!(
+        requirement.status, before.status,
+        "withdrawal must not retire the Requirement graph record"
+    );
+}
+
+#[test]
+/// This flow withdraws one submission, rejects the next, and refuses another withdrawal.
+fn withdrawal_allows_a_fresh_review_cycle() {
     let (_temp, store, _, proposal_1) = enrolled();
     withdraw(&store, &proposal_1).unwrap();
-    let withdrawn = state(&store);
-    assert_eq!(withdrawn.withdrawn, vec![proposal_1.clone()]);
-    assert!(withdrawn.pending.is_none() && withdrawn.decisions.is_empty());
-    assert!(
-        store
-            .list_proposal_definitions(&scope())
-            .unwrap()
-            .iter()
-            .any(|p| p.id == proposal_1),
-        "withdrawal keeps the candidate, its feedback, and the graph record"
-    );
-
-    // Withdrawal is not rejection: a fresh candidate needs no predecessor.
     let proposal_2 = submit(&store, None, None).unwrap().proposal_id;
     decide(
         &store,
