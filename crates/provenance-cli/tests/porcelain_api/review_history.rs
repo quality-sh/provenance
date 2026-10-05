@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn git(repo: &str, args: &[&str]) -> String {
+pub fn git(repo: &str, args: &[&str]) -> String {
     let result = std::process::Command::new("git")
         .args([
             "-c",
@@ -17,7 +17,7 @@ pub(super) fn git(repo: &str, args: &[&str]) -> String {
     String::from_utf8(result.stdout).unwrap().trim().to_owned()
 }
 
-pub(super) fn commit(repo: &str) -> String {
+pub fn commit(repo: &str) -> String {
     git(repo, &["add", ".provenance/state"]);
     git(repo, &["commit", "-q", "-m", "Save the graph"]);
     git(repo, &["rev-parse", "HEAD"])

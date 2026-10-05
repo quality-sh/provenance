@@ -1,10 +1,10 @@
 use super::*;
 
 /// The reviewer that `provenance init` takes from the fixture's Git identity.
-pub(super) const REVIEWER: &str = "reviewer_example_com";
+pub const REVIEWER: &str = "reviewer_example_com";
 
 /// A repository whose Git identity gives `provenance init` its reviewer.
-pub(super) fn init_with_reviewer() -> (tempfile::TempDir, String) {
+pub fn init_with_reviewer() -> (tempfile::TempDir, String) {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     super::review_history::git(&repo, &["init", "-q"]);
@@ -22,7 +22,7 @@ pub(super) fn init_with_reviewer() -> (tempfile::TempDir, String) {
 }
 
 /// Sends one write through the public API and returns its envelope.
-pub(super) fn write(
+pub fn write(
     repo: &str,
     method: &str,
     path: &str,
@@ -46,7 +46,7 @@ pub(super) fn write(
 }
 
 /// Changes the description of one Requirement with its current etag.
-pub(super) fn describe(repo: &str, id: &str, description: &str) -> Value {
+pub fn describe(repo: &str, id: &str, description: &str) -> Value {
     let path = format!("requirements/{id}");
     let read = json(&["api", &path, "--repo", repo]);
     let etag = read["data"]["edit"]["etag"].as_str().unwrap().to_owned();
@@ -60,7 +60,7 @@ pub(super) fn describe(repo: &str, id: &str, description: &str) -> Value {
 }
 
 /// The decision body of the configured reviewer.
-pub(super) fn decision(decision: &str, id: &str, feedback: Option<&str>) -> Value {
+pub fn decision(decision: &str, id: &str, feedback: Option<&str>) -> Value {
     let accepted = decision == "accepted";
     json!({
         "actor":{"identity_type":"human","id":REVIEWER}, "decision":decision,

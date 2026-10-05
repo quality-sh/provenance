@@ -67,10 +67,12 @@ fn review_writes_change_only_record_shard_files() {
     git(&repo, &["add", "--all", ".provenance/state"]);
     let staged = git(&repo, &["diff", "--cached", "--name-only"]);
     let changed = staged.lines().collect::<Vec<_>>();
-    assert!(!changed.is_empty());
+    assert_ne!(changed, [] as [&str; 0]);
     for path in &changed {
+        let path = camino::Utf8Path::new(path);
         assert!(
-            path.starts_with(".provenance/state/scopes/default/") && path.ends_with(".jsonl"),
+            path.starts_with(".provenance/state/scopes/default")
+                && path.extension() == Some("jsonl"),
             "{path} is not a graph record file"
         );
     }
