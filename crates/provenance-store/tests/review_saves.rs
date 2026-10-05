@@ -1,11 +1,13 @@
 #[allow(dead_code)]
 mod review_support;
 use provenance_core::review::SaveOutcome;
+use provenance_macros::verifies;
 use review_support::*;
 use serde_json::json;
 
 #[test]
-fn repeated_content_has_distinct_occurrences_and_lifecycle_keeps_revision() {
+#[verifies("rule_review_revision_follows_review_content", examples)]
+fn equal_review_content_has_equal_revision() {
     let (_temp, store) = fixture();
     let a = store
         .save_requirement(save(&store, "enroll", json!({})))
@@ -22,15 +24,12 @@ fn repeated_content_has_distinct_occurrences_and_lifecycle_keeps_revision() {
         ))
         .unwrap();
     assert_ne!(a.revision, b.revision);
-    assert_ne!(a.revision, again.revision);
-    assert_eq!(again.prior_revision, Some(b.revision));
-    assert_eq!(a.after.digest, again.after.digest);
+    assert_eq!(a.revision, again.revision);
     let lifecycle = store
         .save_requirement(save(&store, "lifecycle", json!({"status":"active"})))
         .unwrap();
-    assert_eq!(lifecycle.revision, again.revision);
     assert_eq!(lifecycle.outcome, SaveOutcome::LifecycleOnly);
-    assert_ne!(lifecycle.etag, again.etag);
+    assert_eq!(lifecycle.revision, again.revision);
 }
 
 #[test]

@@ -53,7 +53,7 @@ impl StateStore {
             etag: head
                 .as_ref()
                 .map(|e| e.etag.clone())
-                .unwrap_or(journal::etag(record, None)?),
+                .unwrap_or(journal::etag(record)?),
             revision: head.as_ref().map(|e| e.revision.clone()),
             snapshot: head.map(|e| e.after),
         })
@@ -136,7 +136,7 @@ impl StateStore {
             let current_etag = head
                 .as_ref()
                 .map(|e| e.etag.clone())
-                .unwrap_or(journal::etag(&review_record, None)?);
+                .unwrap_or(journal::etag(&review_record)?);
             if input.expected_etag != current_etag {
                 return Err(SourceFailure::wrap(
                     WriteFailure::RequirementEditConflict { current_etag },
@@ -251,10 +251,7 @@ impl StateStore {
         } else {
             SaveOutcome::LifecycleOnly
         };
-        let revision = match &head {
-            Some(head) if !classifier::changes_revision(kind, &fields) => head.revision.clone(),
-            _ => journal::new_id(),
-        };
+        let revision = classifier::review_revision(kind, after)?;
         let before_snapshot = match (before, &head) {
             (None, _) => None,
             (_, Some(entry)) => Some(entry.after.clone()),
@@ -268,11 +265,7 @@ impl StateStore {
             journal::snapshot(&self.layout, after)?
         };
         let entry_id = journal::new_id();
-        let etag = if outcome == SaveOutcome::NoChange {
-            head.as_ref().unwrap().etag.clone()
-        } else {
-            journal::etag(after, Some(&entry_id))?
-        };
+        let etag = journal::etag(after)?;
         let entry = ReviewEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: scope.clone(),

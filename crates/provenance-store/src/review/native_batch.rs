@@ -157,7 +157,7 @@ fn check_etag<T: GraphRecord>(
     let current_etag = store
         .head(&record)?
         .map(|entry| entry.etag)
-        .unwrap_or(journal::etag(&record, None)?);
+        .unwrap_or(journal::etag(&record)?);
     if expected != current_etag {
         return Err(SourceFailure::wrap(
             WriteFailure::RecordEditConflict {

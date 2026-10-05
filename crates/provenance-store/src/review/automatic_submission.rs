@@ -6,7 +6,8 @@ use provenance_core::review::{ReviewEntry, ReviewRecord};
 use provenance_macros::rule;
 
 impl StateStore {
-    /// Binds a server-created review submission to a new content revision in the same write.
+    /// Binds a server-created review submission to a new content revision in the
+    /// same write, unless that revision is already pending or accepted.
     #[rule("rule_content_change_opens_review_submission")]
     pub(super) fn commit_automatic_submission<T>(
         &self,
@@ -17,11 +18,14 @@ impl StateStore {
         T: Clone + Into<ReviewRecord>,
     {
         let record: ReviewRecord = record.clone().into();
-        if self
-            .record_decision_state(record.scope_id(), record.kind(), record.id())?
+        let state = self.record_decision_state(record.scope_id(), record.kind(), record.id())?;
+        let pending = state
             .pending
-            .is_some_and(|pending| pending.revision == edit.revision)
-        {
+            .is_some_and(|pending| pending.revision == edit.revision);
+        let accepted = state
+            .current_acceptance
+            .is_some_and(|decision| decision.revision.as_ref() == Some(&edit.revision));
+        if pending || accepted {
             return Ok(());
         }
         let value = serde_json::to_value(&record)?;

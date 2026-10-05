@@ -142,10 +142,10 @@ pub(super) fn record_digest(record: &ReviewRecord) -> anyhow::Result<String> {
     ))
 }
 
-pub(super) fn etag(record: &ReviewRecord, occurrence: Option<&StableId>) -> anyhow::Result<String> {
+pub(super) fn etag(record: &ReviewRecord) -> anyhow::Result<String> {
     let content = provenance_core::model::record_stamps::content_value(record)?;
     Ok(canonical_digest::digest(
-        &canonical_digest::canonical_bytes(&(content, occurrence))?,
+        &canonical_digest::canonical_bytes(&content)?,
     ))
 }
 
@@ -330,7 +330,7 @@ pub(super) fn validated_head(entries: &[ReviewEntry]) -> anyhow::Result<Option<R
 #[cfg(test)]
 mod tests {
     use super::{etag, record_digest};
-    use provenance_core::{Requirement, StableId};
+    use provenance_core::Requirement;
     use serde_json::json;
 
     #[test]
@@ -358,16 +358,12 @@ mod tests {
             }))
             .unwrap(),
         );
-        let occurrence = StableId::new("entry_one").unwrap();
 
         assert_eq!(
             record_digest(&before.clone().into()).unwrap(),
             record_digest(&after.clone().into()).unwrap()
         );
-        assert_eq!(
-            etag(&before.into(), Some(&occurrence)).unwrap(),
-            etag(&after.into(), Some(&occurrence)).unwrap()
-        );
+        assert_eq!(etag(&before.into()).unwrap(), etag(&after.into()).unwrap());
     }
 }
 

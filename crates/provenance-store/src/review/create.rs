@@ -1,4 +1,4 @@
-use super::{guard, journal};
+use super::{classifier, guard, journal};
 use crate::{
     canonical_digest,
     publication::with_staged_state,
@@ -155,7 +155,10 @@ impl StateStore {
             sequence: 1,
             predecessor: None,
             prior_revision: None,
-            revision: journal::new_id(),
+            revision: classifier::review_revision(
+                provenance_core::NodeType::Requirement,
+                &after.clone().into(),
+            )?,
             before: None,
             after: journal::snapshot(&self.layout, &after.clone().into())?,
             changed_fields: serde_json::to_value(&after)?
@@ -168,7 +171,7 @@ impl StateStore {
             actor: input.actor,
             request_id: input.request_id,
             intent_digest,
-            etag: journal::etag(&after.clone().into(), Some(&id))?,
+            etag: journal::etag(&after.clone().into())?,
             id,
             outcome: SaveOutcome::Created,
             origin: input.origin,

@@ -134,7 +134,7 @@ fn enroll(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
         actor: "reviewer".into(),
         request_id: journal::new_id(),
         intent_digest: "sha256:enrollment".into(),
-        etag: journal::etag(&record, Some(&entry_id)).unwrap(),
+        etag: journal::etag(&record).unwrap(),
         outcome: SaveOutcome::Enrolled,
         origin: None,
     };
