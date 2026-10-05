@@ -33,7 +33,7 @@ fn commit(root: &std::path::Path, message: &str) -> String {
 }
 
 #[test]
-fn typed_change_stamps_the_enrolled_record_and_journals_the_occurrence() {
+fn typed_change_stamps_the_enrolled_record() {
     let (temp, store, scope) = fixture();
     git(temp.path(), &["init", "-q"]);
     let commit_a = commit(temp.path(), "Create state");
@@ -66,9 +66,8 @@ fn typed_change_stamps_the_enrolled_record_and_journals_the_occurrence() {
 
     let changed = store.list_requirements(&scope).unwrap()[0].clone();
     assert_eq!(changed.updated.as_ref().unwrap().commit, commit_b);
-    let head = store.head(&changed.into()).unwrap().unwrap();
-    assert_eq!(head.sequence, 2);
-    assert!(head.changed_fields.iter().any(|field| field == "statement"));
+    assert_eq!(changed.statement, "The system stores durable records.");
+    assert_eq!(changed.schema_version, REVIEW_SCHEMA_VERSION);
 }
 
 #[test]

@@ -1,9 +1,6 @@
 use crate::{canonical_digest, layout::ProvenanceLayout, state_store::StateStore};
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::review::{
-    CycleEntry, JournalEntry, RecordSnapshot, ReviewEntry, ReviewRecord, SnapshotRef,
-    REVIEW_SCHEMA_VERSION,
-};
+use provenance_core::review::{CycleEntry, JournalEntry, ReviewRecord, REVIEW_SCHEMA_VERSION};
 use provenance_core::{Requirement, ScopeId, StableId};
 use serde::{de::DeserializeOwned, Serialize};
 use std::io::{Read, Write};
@@ -25,39 +22,13 @@ pub(super) fn entry_path(
     ))
 }
 
-pub(super) fn snapshot_path(
-    layout: &ProvenanceLayout,
-    scope: &ScopeId,
-    id: &StableId,
-) -> Utf8PathBuf {
-    directory(layout, scope)
-        .join("snapshots")
-        .join(format!("{}.json", id.as_str()))
-}
-
-pub(super) fn read_entry(
-    layout: &ProvenanceLayout,
-    path: &Utf8Path,
-) -> anyhow::Result<ReviewEntry> {
-    let JournalEntry::Record(entry) = read_journal_entry(layout, path)? else {
-        anyhow::bail!("request ID belongs to a Discussion or decision-cycle write");
-    };
-    anyhow::ensure!(
-        entry.schema_version == REVIEW_SCHEMA_VERSION,
-        "unsupported review journal version"
-    );
-    Ok(*entry)
-}
-
 pub(super) fn read_journal_entry(
     layout: &ProvenanceLayout,
     path: &Utf8Path,
 ) -> anyhow::Result<JournalEntry> {
     let entry: JournalEntry = read_bounded(layout, path, ENTRY_BYTES)?;
-    let version = match &entry {
-        JournalEntry::Record(e) => e.schema_version,
-        JournalEntry::Cycle(e) => e.schema_version,
-    };
+    let JournalEntry::Cycle(cycle) = &entry;
+    let version = cycle.schema_version;
     anyhow::ensure!(
         version == REVIEW_SCHEMA_VERSION,
         "unsupported review journal version"
@@ -108,37 +79,8 @@ pub(super) fn write_new<T: Serialize>(path: &Utf8Path, value: &T) -> anyhow::Res
     Ok(())
 }
 
-pub(super) fn snapshot(
-    layout: &ProvenanceLayout,
-    record: &ReviewRecord,
-) -> anyhow::Result<SnapshotRef> {
-    let id = new_id();
-    let value = RecordSnapshot {
-        schema_version: REVIEW_SCHEMA_VERSION,
-        record: record.clone(),
-    };
-    let bytes = canonical_digest::canonical_bytes(&value)?;
-    write_new(&snapshot_path(layout, record.scope_id(), &id), &value)?;
-    Ok(SnapshotRef {
-        id,
-        digest: canonical_digest::digest(&bytes),
-        bytes: bytes.len() as u64,
-        fields: super::snapshot::fields(record)?,
-    })
-}
-
 pub(super) fn new_id() -> StableId {
     StableId::new(uuid::Uuid::new_v4().to_string()).expect("UUID uses valid stable ID characters")
-}
-
-pub(super) fn record_digest(record: &ReviewRecord) -> anyhow::Result<String> {
-    let value = serde_json::json!({
-        "schema_version": REVIEW_SCHEMA_VERSION,
-        "record": provenance_core::model::record_stamps::content_value(record)?,
-    });
-    Ok(canonical_digest::digest(
-        &canonical_digest::canonical_bytes(&value)?,
-    ))
 }
 
 pub(super) fn etag(record: &ReviewRecord) -> anyhow::Result<String> {
@@ -148,50 +90,12 @@ pub(super) fn etag(record: &ReviewRecord) -> anyhow::Result<String> {
     ))
 }
 
-fn snapshot_record(
-    layout: &ProvenanceLayout,
-    scope: &ScopeId,
-    reference: &SnapshotRef,
-) -> anyhow::Result<ReviewRecord> {
-    let path = snapshot_path(layout, scope, &reference.id);
-    let mut file = regular_file(layout, &path)?;
-    anyhow::ensure!(
-        file.metadata()?.len() == reference.bytes,
-        "review snapshot length differs from its immutable reference"
-    );
-    let mut bytes = Vec::new();
-    (&mut file)
-        .take(reference.bytes + 1)
-        .read_to_end(&mut bytes)?;
-    anyhow::ensure!(
-        bytes.len() as u64 == reference.bytes
-            && canonical_digest::digest(&bytes) == reference.digest,
-        "review snapshot digest differs from its immutable reference"
-    );
-    let snapshot: RecordSnapshot = serde_json::from_slice(&bytes)?;
-    Ok(snapshot.record)
-}
-
 impl StateStore {
-    pub(crate) fn review_entries(&self, scope: &ScopeId) -> anyhow::Result<Vec<ReviewEntry>> {
-        Ok(self
-            .journal_entries(scope)?
-            .into_iter()
-            .filter_map(|e| match e {
-                JournalEntry::Record(e) => Some(*e),
-                JournalEntry::Cycle(_) => None,
-            })
-            .collect())
-    }
-
     pub(super) fn cycle_entries(&self, scope: &ScopeId) -> anyhow::Result<Vec<CycleEntry>> {
         Ok(self
             .journal_entries(scope)?
             .into_iter()
-            .filter_map(|e| match e {
-                JournalEntry::Cycle(e) => Some(*e),
-                JournalEntry::Record(_) => None,
-            })
+            .map(|JournalEntry::Cycle(e)| *e)
             .collect())
     }
 
@@ -214,28 +118,6 @@ impl StateStore {
             entries.push(entry);
         }
         Ok(entries)
-    }
-
-    pub(super) fn head(&self, record: &ReviewRecord) -> anyhow::Result<Option<ReviewEntry>> {
-        let entries = self
-            .review_entries(record.scope_id())?
-            .into_iter()
-            .filter(|entry| entry.record_kind == record.kind() && entry.record_id == *record.id())
-            .collect::<Vec<_>>();
-        let head = validated_head(&entries)?;
-        if let Some(head) = &head {
-            let snapshot = snapshot_record(&self.layout, record.scope_id(), &head.after)?;
-            anyhow::ensure!(
-                record_digest(&snapshot)? == record_digest(record)?,
-                "observed review history gap: live Requirement differs from its recorded snapshot"
-            );
-        } else {
-            anyhow::ensure!(
-                record.schema_version() != REVIEW_SCHEMA_VERSION,
-                "enrolled record has no review history"
-            );
-        }
-        Ok(head)
     }
 
     pub(super) fn requirement(
@@ -271,69 +153,16 @@ impl StateStore {
     }
 }
 
-pub(super) fn validated_head(entries: &[ReviewEntry]) -> anyhow::Result<Option<ReviewEntry>> {
-    if entries.is_empty() {
-        return Ok(None);
-    }
-    let mut previous: Option<&ReviewEntry> = None;
-    let mut ids = std::collections::BTreeSet::new();
-    let mut by_predecessor = std::collections::BTreeMap::<Option<&str>, Vec<&ReviewEntry>>::new();
-    for entry in entries {
-        by_predecessor
-            .entry(entry.predecessor.as_ref().map(StableId::as_str))
-            .or_default()
-            .push(entry);
-        anyhow::ensure!(
-            ids.insert(entry.id.as_str()),
-            "review conflict: duplicate entry identity"
-        );
-    }
-    for index in 0..entries.len() {
-        let successors = by_predecessor
-            .get(&previous.map(|p| p.id.as_str()))
-            .map_or(&[][..], Vec::as_slice);
-        anyhow::ensure!(
-            successors.len() == 1,
-            "review conflict: missing or competing revision predecessors"
-        );
-        let next = successors[0];
-        anyhow::ensure!(
-            next.sequence == index as u64 + 1,
-            "review conflict: invalid sequence"
-        );
-        if previous.is_none() {
-            anyhow::ensure!(
-                next.prior_revision.is_none(),
-                "review conflict: initial revision has a predecessor"
-            );
-        }
-        if let Some(prev) = previous {
-            anyhow::ensure!(
-                next.prior_revision.as_ref() == Some(&prev.revision)
-                    && next.before.as_ref() == Some(&prev.after),
-                "review conflict: evidence chain differs from its predecessor"
-            );
-        }
-        previous = Some(next);
-    }
-    let head = previous.unwrap();
-    anyhow::ensure!(
-        !entries
-            .iter()
-            .any(|e| e.predecessor.as_ref() == Some(&head.id)),
-        "review conflict: revision cycle"
-    );
-    Ok(Some(head.clone()))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{etag, record_digest};
+    use super::etag;
     use provenance_core::Requirement;
     use serde_json::json;
 
+    /// Implementation aid: pins that the etag ignores record stamps; no Rule
+    /// names it.
     #[test]
-    fn requirement_hashes_ignore_record_stamps() {
+    fn requirement_etag_ignores_record_stamps() {
         let value = json!({
             "schema_version": 2,
             "scope_id": "default",
@@ -358,13 +187,6 @@ mod tests {
             .unwrap(),
         );
 
-        assert_eq!(
-            record_digest(&before.clone().into()).unwrap(),
-            record_digest(&after.clone().into()).unwrap()
-        );
         assert_eq!(etag(&before.into()).unwrap(), etag(&after.into()).unwrap());
     }
 }
-
-#[cfg(test)]
-mod generic_tests;

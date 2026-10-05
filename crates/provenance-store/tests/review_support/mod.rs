@@ -17,7 +17,7 @@ pub fn fixture() -> (tempfile::TempDir, StateStore) {
     let store = StateStore::new(layout);
     store
         .create_review_requirement(serde_json::from_value(json!({
-            "request_id":"fixture_create","actor":"ben","origin":null,
+            "actor":"ben","origin":null,
             "create":{"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"discovery","depends_on":[],"supersedes":[]}
         }))
         .unwrap())
@@ -32,16 +32,17 @@ pub fn id() -> StableId {
     StableId::new("req_a").unwrap()
 }
 
-pub fn save(store: &StateStore, request: &str, fields: Value) -> SaveRequirement {
+pub fn save(store: &StateStore, _request: &str, fields: Value) -> SaveRequirement {
     let mut update = json!({"scope_id":"default", "id":"req_a"});
     let Value::Object(fields) = fields else {
         panic!("update fields must be an object")
     };
     update.as_object_mut().unwrap().extend(fields);
     serde_json::from_value(json!({
-        "request_id":request,"actor":"ben", "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
+        "actor":"ben", "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update":update,"relationships":null
-    })).unwrap()
+    }))
+    .unwrap()
 }
 
 /// Runs one Git command in the fixture repository with a fixed identity.

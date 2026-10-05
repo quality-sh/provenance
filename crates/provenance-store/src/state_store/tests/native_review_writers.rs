@@ -5,7 +5,6 @@ use crate::state_store::{
     UpdateBoundaryInput, UpdateDomainInput, UpdateResolutionInput, UpdateRuleInput,
     UpdateSourceInput, UpdateTopicInput,
 };
-use provenance_core::review::SaveOutcome;
 use provenance_core::{
     NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ResolutionStatus, RuleSeverity,
     RuleStatus, SourceType, StableId, TopicStatus,
@@ -118,28 +117,39 @@ pub(super) fn seed_native_records(
         .unwrap();
 }
 
+/// The review revision of one native record.
+fn revision(
+    store: &crate::state_store::StateStore,
+    scope: &provenance_core::ScopeId,
+    kind: NodeType,
+    record: &str,
+) -> Option<StableId> {
+    store
+        .record_edit_state(scope, kind, &id(record))
+        .unwrap()
+        .revision
+}
+
+const NATIVE_RECORDS: [(NodeType, &str); 7] = [
+    (NodeType::Source, "source_native"),
+    (NodeType::Domain, "domain_native"),
+    (NodeType::Resolution, "resolution_native"),
+    (NodeType::Rule, "rule_native"),
+    (NodeType::Boundary, "boundary_native"),
+    (NodeType::Topic, "topic_native"),
+    (NodeType::Question, "question_native"),
+];
+
 #[test]
-fn native_creators_capture_created_occurrences_for_every_other_record_kind() {
+fn native_creators_enroll_every_other_record_kind() {
     let (_dir, store, scope) = seeded_requirement_store();
     seed_native_records(&store, &scope);
 
-    let entries = store.review_entries(&scope).unwrap();
-    for (kind, record_id) in [
-        (NodeType::Source, "source_native"),
-        (NodeType::Domain, "domain_native"),
-        (NodeType::Resolution, "resolution_native"),
-        (NodeType::Rule, "rule_native"),
-        (NodeType::Boundary, "boundary_native"),
-        (NodeType::Topic, "topic_native"),
-        (NodeType::Question, "question_native"),
-    ] {
-        let matches = entries
-            .iter()
-            .filter(|entry| entry.record_kind == kind && entry.record_id.as_str() == record_id)
-            .collect::<Vec<_>>();
-        assert_eq!(matches.len(), 1, "missing creation occurrence for {kind:?}");
-        assert_eq!(matches[0].outcome, SaveOutcome::Created);
-        assert!(matches[0].before.is_none());
+    for (kind, record_id) in NATIVE_RECORDS {
+        assert!(
+            revision(&store, &scope, kind, record_id).is_some(),
+            "{kind:?} is not enrolled"
+        );
     }
 }
 
@@ -182,33 +192,21 @@ fn update_native_records(store: &crate::state_store::StateStore, label: &str) {
 }
 
 #[test]
-fn native_updates_capture_each_occurrence_when_content_returns_to_an_earlier_value() {
+#[provenance_macros::verifies("rule_review_revision_follows_review_content", examples)]
+fn native_content_that_returns_to_an_earlier_value_returns_to_its_revision() {
     let (_dir, store, scope) = seeded_requirement_store();
     seed_native_records(&store, &scope);
+    let created = NATIVE_RECORDS.map(|(kind, record_id)| revision(&store, &scope, kind, record_id));
 
     update_native_records(&store, "B");
+    let changed = NATIVE_RECORDS.map(|(kind, record_id)| revision(&store, &scope, kind, record_id));
     update_native_records(&store, "A");
+    let returned =
+        NATIVE_RECORDS.map(|(kind, record_id)| revision(&store, &scope, kind, record_id));
 
-    let entries = store.review_entries(&scope).unwrap();
-    for (kind, record_id) in [
-        (NodeType::Source, "source_native"),
-        (NodeType::Domain, "domain_native"),
-        (NodeType::Resolution, "resolution_native"),
-        (NodeType::Rule, "rule_native"),
-        (NodeType::Boundary, "boundary_native"),
-        (NodeType::Topic, "topic_native"),
-        (NodeType::Question, "question_native"),
-    ] {
-        let mut matches = entries
-            .iter()
-            .filter(|entry| entry.record_kind == kind && entry.record_id.as_str() == record_id)
-            .collect::<Vec<_>>();
-        matches.sort_by_key(|entry| entry.sequence);
-        assert_eq!(matches.len(), 3, "missing update occurrence for {kind:?}");
-        assert_eq!(matches[0].outcome, SaveOutcome::Created);
-        assert_eq!(matches[1].outcome, SaveOutcome::Changed);
-        assert_eq!(matches[2].outcome, SaveOutcome::Changed);
-        assert_eq!(matches[2].predecessor.as_ref(), Some(&matches[1].id));
+    for (index, (kind, _)) in NATIVE_RECORDS.iter().enumerate() {
+        assert_ne!(changed[index], created[index], "{kind:?}");
+        assert_eq!(returned[index], created[index], "{kind:?}");
     }
 }
 
@@ -292,9 +290,17 @@ fn source_rule_and_resolution_creators_refuse_unaddressed_origins() {
 }
 
 #[test]
-fn relation_and_shaping_writer_families_capture_occurrences() {
+#[provenance_macros::verifies("rule_review_revision_follows_review_content", examples)]
+fn relation_and_shaping_writers_keep_the_revision_of_returned_content() {
     let (_dir, store, scope) = seeded_requirement_store();
     seed_native_records(&store, &scope);
+    let kept = [
+        (NodeType::Source, "source_native"),
+        (NodeType::Rule, "rule_native"),
+        (NodeType::Resolution, "resolution_native"),
+        (NodeType::Topic, "topic_native"),
+    ];
+    let created = kept.map(|(kind, record_id)| revision(&store, &scope, kind, record_id));
     store
         .create_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
@@ -367,40 +373,21 @@ fn relation_and_shaping_writer_families_capture_occurrences() {
         .answer_question(&scope, &id("question_native"), "A is correct".into(), None)
         .unwrap();
 
-    let entries = store.review_entries(&scope).unwrap();
-    for (kind, record_id, count) in [
-        (NodeType::Source, "source_native", 3),
-        (NodeType::Rule, "rule_native", 3),
-        (NodeType::Resolution, "resolution_native", 3),
-        (NodeType::Topic, "topic_native", 3),
-        (NodeType::Question, "question_native", 6),
-    ] {
+    for (index, (kind, record_id)) in kept.iter().enumerate() {
         assert_eq!(
-            entries
-                .iter()
-                .filter(|entry| entry.record_kind == kind && entry.record_id.as_str() == record_id)
-                .count(),
-            count,
-            "writer family missed an occurrence for {kind:?}"
+            revision(&store, &scope, *kind, record_id),
+            created[index],
+            "{kind:?}"
         );
     }
-    let mut topic = entries
-        .iter()
-        .filter(|entry| entry.record_kind == NodeType::Topic)
-        .collect::<Vec<_>>();
-    topic.sort_by_key(|entry| entry.sequence);
-    assert!(topic[1..]
-        .iter()
-        .all(|entry| entry.outcome == SaveOutcome::LifecycleOnly));
-    assert!(topic
-        .iter()
-        .all(|entry| entry.revision == topic[0].revision));
+    assert!(revision(&store, &scope, NodeType::Question, "question_native").is_some());
 }
 
 #[test]
-fn graph_record_replacement_captures_an_occurrence() {
+fn graph_record_replacement_changes_the_revision() {
     let (_dir, store, scope) = seeded_requirement_store();
     seed_native_records(&store, &scope);
+    let created = revision(&store, &scope, NodeType::Source, "source_native");
     let mut sources = store.list_sources(&scope).unwrap();
     sources[0].name = "Source B".into();
 
@@ -408,14 +395,10 @@ fn graph_record_replacement_captures_an_occurrence() {
         .replace_graph_records(&crate::shards::sources_path(&store.layout, &scope), sources)
         .unwrap();
 
-    let entries = store.review_entries(&scope).unwrap();
-    let mut source = entries
-        .iter()
-        .filter(|entry| entry.record_kind == NodeType::Source)
-        .collect::<Vec<_>>();
-    source.sort_by_key(|entry| entry.sequence);
-    assert_eq!(source.len(), 2);
-    assert_eq!(source[1].outcome, SaveOutcome::Changed);
+    assert_ne!(
+        revision(&store, &scope, NodeType::Source, "source_native"),
+        created
+    );
 }
 
 #[test]
@@ -423,12 +406,7 @@ fn native_save_refuses_a_stale_etag_without_publishing_the_mutation() {
     let (_dir, store, scope) = seeded_requirement_store();
     seed_native_records(&store, &scope);
     let stale_etag = store
-        .review_entries(&scope)
-        .unwrap()
-        .into_iter()
-        .find(|entry| {
-            entry.record_kind == NodeType::Source && entry.record_id.as_str() == "source_native"
-        })
+        .record_edit_state(&scope, NodeType::Source, &id("source_native"))
         .unwrap()
         .etag;
     store
@@ -469,14 +447,5 @@ fn native_save_refuses_a_stale_etag_without_publishing_the_mutation() {
             .unwrap()
             .name,
         "Source B"
-    );
-    assert_eq!(
-        store
-            .review_entries(&scope)
-            .unwrap()
-            .into_iter()
-            .filter(|entry| entry.record_kind == NodeType::Source)
-            .count(),
-        2
     );
 }

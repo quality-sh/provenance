@@ -160,7 +160,6 @@ pub struct RequirementRelations {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SaveRequirement {
-    pub request_id: StableId,
     pub actor: String,
     pub expected_etag: String,
     pub update: UpdateRequirementInput,

@@ -1,6 +1,5 @@
 #[allow(dead_code)]
 mod review_support;
-use provenance_core::review::SaveOutcome;
 use provenance_macros::verifies;
 use review_support::*;
 use serde_json::json;
@@ -12,7 +11,7 @@ fn equal_review_content_has_equal_revision() {
     let a = store
         .save_requirement(save(&store, "enroll", json!({})))
         .unwrap();
-    assert_eq!(a.outcome, SaveOutcome::NoChange);
+    assert!(a.revision.is_some());
     let b = store
         .save_requirement(save(&store, "edit_b", json!({"description":"B"})))
         .unwrap();
@@ -28,34 +27,8 @@ fn equal_review_content_has_equal_revision() {
     let lifecycle = store
         .save_requirement(save(&store, "lifecycle", json!({"status":"active"})))
         .unwrap();
-    assert_eq!(lifecycle.outcome, SaveOutcome::LifecycleOnly);
+    assert_ne!(lifecycle.etag, again.etag);
     assert_eq!(lifecycle.revision, again.revision);
-}
-
-#[test]
-fn request_replay_precedes_stale_cas_and_different_intent_refuses() {
-    let (_temp, store) = fixture();
-    let input = save(&store, "first", json!({}));
-    let serialized = serde_json::to_value(&input).unwrap();
-    let first = store.save_requirement(input).unwrap();
-    store
-        .save_requirement(save(&store, "next", json!({"description":"B"})))
-        .unwrap();
-    assert_eq!(
-        first,
-        store
-            .save_requirement(serde_json::from_value(serialized.clone()).unwrap())
-            .unwrap()
-    );
-    let mut different = serialized;
-    different["update"]["description"] = json!("different");
-    assert!(store
-        .save_requirement(serde_json::from_value(different).unwrap())
-        .is_err());
-    let no_op = store
-        .save_requirement(save(&store, "noop", json!({})))
-        .unwrap();
-    assert_eq!(no_op.outcome, SaveOutcome::NoChange);
 }
 
 #[test]

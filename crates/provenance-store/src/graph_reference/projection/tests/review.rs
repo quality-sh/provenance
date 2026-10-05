@@ -13,10 +13,10 @@ fn enrolled_requirements_keep_review_history_out_of_the_pinned_graph() {
     let scope = provenance_core::ScopeId::new("default").unwrap();
     let id = provenance_core::StableId::new("req_a").unwrap();
     store.create_requirement(serde_json::from_value(serde_json::json!({"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"active","depends_on":[],"supersedes":[]})).unwrap()).unwrap();
-    let save = |request: &str| {
+    let save = |_request: &str| {
         store
             .save_requirement(
-                serde_json::from_value(serde_json::json!({"request_id":request,"actor":"ben",
+                serde_json::from_value(serde_json::json!({"actor":"ben",
             "expected_etag":store.requirement_edit_state(&scope,&id).unwrap().etag,
             "update":{"scope_id":"default","id":"req_a"},"relationships":null}))
                 .unwrap(),

@@ -99,8 +99,8 @@ async fn create_response_failure_refuses_before_publication() {
         [] as [provenance_core::Requirement; 0]
     );
     assert_eq!(
-        store.review_entries(&scope).unwrap(),
-        [] as [provenance_core::review::ReviewEntry; 0]
+        store.list_proposal_definitions(&scope).unwrap(),
+        [] as [provenance_core::ProposalCard; 0]
     );
 
     let committed = CreateRequirementResource::run(
@@ -339,7 +339,6 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
     store
         .create_review_requirement(
             serde_json::from_value(json!({
-                "request_id": "create_a",
                 "actor": "ben",
                 "origin": null,
                 "create": {
@@ -356,9 +355,8 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
         .unwrap();
     let id = StableId::new("req_a").unwrap();
     let etag = store.requirement_edit_state(&scope, &id).unwrap().etag;
-    let input = |request: &str, description: &str| {
+    let input = |_request: &str, description: &str| {
         serde_json::from_value(json!({
-            "request_id": request,
             "actor": "ben",
             "expected_etag": etag,
             "update": {

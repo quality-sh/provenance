@@ -94,10 +94,9 @@ impl StateStore {
             .expect("review_submission checks the binding");
         let record =
             crate::cache::review_families::record(self, &input.scope_id, kind, &record_id)?;
-        let head = self
-            .head(&record)?
-            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
-        if head.revision != binding.revision
+        let revision = super::super::save::current_revision(&record)?
+            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
+        if revision != binding.revision
             || classifier::content_digest(kind, &record)? != binding.content_digest
         {
             let facts = CycleFacts::validated(self, &input.scope_id)?;

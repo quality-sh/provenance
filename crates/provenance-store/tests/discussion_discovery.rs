@@ -342,7 +342,7 @@ async fn scope_list_includes_other_parents_and_parent_list_does_not() {
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let a = start(&store, "first");
     store.create_review_requirement(serde_json::from_value(json!({
-        "request_id":"create_b", "actor":"ben", "origin":null,
+        "actor":"ben", "origin":null,
         "create": {
             "scope_id":"default", "id":"req_b", "statement":"The system stores another record.",
             "status":"discovery", "depends_on":[], "supersedes":[]

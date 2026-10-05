@@ -2,7 +2,7 @@
 
 use super::{decision_state::request_digest, guard, journal, SubmitRecordReview};
 use crate::{shards, state_store::StateStore};
-use provenance_core::review::{ReviewEntry, ReviewRecord};
+use provenance_core::review::ReviewRecord;
 use provenance_macros::rule;
 
 impl StateStore {
@@ -12,7 +12,8 @@ impl StateStore {
     pub(super) fn commit_automatic_submission<T>(
         &self,
         record: &T,
-        edit: &ReviewEntry,
+        actor: &str,
+        revision: &provenance_core::StableId,
     ) -> anyhow::Result<()>
     where
         T: Clone + Into<ReviewRecord>,
@@ -21,10 +22,10 @@ impl StateStore {
         let state = self.record_decision_state(record.scope_id(), record.kind(), record.id())?;
         let pending = state
             .pending
-            .is_some_and(|pending| pending.revision == edit.revision);
+            .is_some_and(|pending| pending.revision == *revision);
         let accepted = state
             .current_acceptance
-            .is_some_and(|decision| decision.revision.as_ref() == Some(&edit.revision));
+            .is_some_and(|decision| decision.revision.as_ref() == Some(revision));
         if pending || accepted {
             return Ok(());
         }
@@ -36,7 +37,7 @@ impl StateStore {
             .to_owned();
         let input = SubmitRecordReview {
             scope_id: record.scope_id().clone(),
-            actor: edit.actor.clone(),
+            actor: actor.to_owned(),
             record_kind: record.kind(),
             record_id: record.id().clone(),
             declared_by: value
@@ -49,7 +50,7 @@ impl StateStore {
             source_ids: Vec::new(),
             evidence_references: Vec::new(),
             builds_on: Vec::new(),
-            expected_revision: Some(edit.revision.clone()),
+            expected_revision: Some(revision.clone()),
             revises: None,
         };
         let digest = request_digest(&input)?;

@@ -1,7 +1,7 @@
 mod discussion_support;
 use discussion_support::*;
 use provenance_core::{
-    review::{EvidenceQuery, ReviewHistoryQuery, SaveOutcome},
+    review::{EvidenceQuery, ReviewHistoryQuery},
     threads::DiscussionOrigin,
     NodeType,
 };
@@ -21,12 +21,10 @@ fn origin_of(discussion: &provenance_core::threads::Discussion) -> DiscussionOri
 }
 
 fn create_from(origin: &DiscussionOrigin) -> CreateReviewRequirement {
-    serde_json::from_value(
-        json!({"request_id":"create", "actor":"ben", "origin":origin,
+    serde_json::from_value(json!({"actor":"ben", "origin":origin,
         "create":{"scope_id":"default", "id":"req_new", "statement":"The system retains evidence.",
             "status":"discovery", "depends_on":[], "supersedes":[],
-            "origin_thread":origin.thread_id,"origin_message":origin.message_id}}),
-    )
+            "origin_thread":origin.thread_id,"origin_message":origin.message_id}}))
     .unwrap()
 }
 
@@ -40,17 +38,9 @@ fn comment_created_record_retains_its_origin() {
     let (_temp, store) = fixture();
     let a = start(&store, "root");
     let origin = origin_of(&a);
-    let input = create_from(&origin);
-    let serialized = serde_json::to_value(&input).unwrap();
-    let created = store.create_review_requirement(input).unwrap();
-    assert_eq!(created.outcome, SaveOutcome::Created);
-    assert_eq!(created.origin, Some(origin));
-    assert_eq!(
-        store
-            .create_review_requirement(serde_json::from_value(serialized).unwrap())
-            .unwrap(),
-        created
-    );
+    store
+        .create_review_requirement(create_from(&origin))
+        .unwrap();
     let saved = store
         .list_requirements(&scope())
         .unwrap()
@@ -71,7 +61,7 @@ async fn discussion_edit_version_shows_its_change() {
         .create_review_requirement(create_from(&origin))
         .unwrap();
     commit_state(&temp, "Create from the comment");
-    let edit = serde_json::from_value(json!({"request_id":"edit", "actor":"ben", "expected_etag":created.etag,
+    let edit = serde_json::from_value(json!({"actor":"ben", "expected_etag":created.etag,
         "update":{"scope_id":"default","id":"req_new","statement":"The system retains changed evidence."},
         "relationships":null}))
     .unwrap();
@@ -137,20 +127,4 @@ fn mismatched_discussion_message_origin_refuses_without_editing() {
         .save_requirement_from_discussion(save(&store, "bad", json!({"description":"bad"})), origin)
         .is_err());
     assert_eq!(before, store.list_requirements(&scope()).unwrap());
-}
-
-#[test]
-fn repeated_guarded_creation_resolves_to_the_recorded_outcome() {
-    let (_temp, store) = fixture();
-    let value = json!({"request_id":"create","actor":"ben","origin":null,"create":{"scope_id":"default","id":"req_new","statement":"The system retains evidence.","status":"discovery","depends_on":[],"supersedes":[]}});
-    let created = store
-        .create_review_requirement(serde_json::from_value(value.clone()).unwrap())
-        .unwrap();
-    assert_eq!(
-        store
-            .create_review_requirement(serde_json::from_value(value).unwrap())
-            .unwrap(),
-        created
-    );
-    assert_eq!(store.list_requirements(&scope()).unwrap().len(), 2);
 }

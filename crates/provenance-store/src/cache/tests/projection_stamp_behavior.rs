@@ -176,7 +176,6 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
             | "implementation_bindings"
             | "verification_bindings"
             | "requirement_reviews" => 1,
-            "review_journal" => 4,
             _ => 0,
         };
         assert_eq!(*count, expected_count, "count for {family}");
@@ -232,7 +231,7 @@ fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
 }
 
 #[tokio::test]
-async fn distinct_review_occurrences_move_digest_and_instance() {
+async fn separate_databases_have_separate_instances() {
     let (_dir_a, layout_a, scope_a) = seeded_layout();
     let (_dir_b, layout_b, scope_b) = seeded_layout();
     seed_integration_shards(&layout_a, scope_a.as_str());
@@ -242,10 +241,9 @@ async fn distinct_review_occurrences_move_digest_and_instance() {
 
     let pool_a = open_cache(&layout_a).await.unwrap();
     let pool_b = open_cache(&layout_b).await.unwrap();
-    let (_, digest_a, instance_a) = stamp(pool_a.pool()).await;
-    let (_, digest_b, instance_b) = stamp(pool_b.pool()).await;
+    let (_, _, instance_a) = stamp(pool_a.pool()).await;
+    let (_, _, instance_b) = stamp(pool_b.pool()).await;
 
-    assert_ne!(digest_a, digest_b, "review occurrences are canonical state");
     assert_ne!(instance_a, instance_b, "each database is its own instance");
 }
 

@@ -44,7 +44,6 @@ impl StateStore {
                 &input.record_id,
             )?;
             owner_matches(&record, input.declared_by.as_deref())?;
-            self.validated_review_entries(&scope)?;
             with_staged_state(&self.layout, false, |layout| {
                 guard::with_writer(&shards::proposal_cards_path(layout, &scope), "*", || {
                     Self::new(layout.clone()).commit_submission(
@@ -74,7 +73,7 @@ impl StateStore {
             input.record_kind,
             &input.record_id,
         )?;
-        let head = self.head(&record)?.ok_or_else(|| {
+        let revision = super::super::save::current_revision(&record)?.ok_or_else(|| {
             anyhow::anyhow!(
                 "submission requires a review revision: save the record through the review seam first"
             )
@@ -83,7 +82,7 @@ impl StateStore {
         if input
             .expected_revision
             .as_ref()
-            .is_some_and(|expected| head.revision != *expected)
+            .is_some_and(|expected| revision != *expected)
         {
             return Err(SourceFailure::wrap(
                 facts.conflict_failure(self, &scope, input.record_kind, &input.record_id)?,
@@ -134,7 +133,7 @@ impl StateStore {
             duplicate_of: None,
             superseded_by: None,
             record_revision: Some(RecordRevisionBinding {
-                revision: head.revision,
+                revision,
                 content_digest: classifier::content_digest(input.record_kind, &record)?,
             }),
             revises,

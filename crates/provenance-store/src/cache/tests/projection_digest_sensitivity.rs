@@ -204,8 +204,9 @@ pub(super) fn change_one_record(
             store
                 .save_requirement(
                     serde_json::from_value(json!({
-                        "request_id":"fixture_review", "actor":"reviewer", "expected_etag":etag,
-                        "update":{"scope_id":scope,"id":id},"relationships":null
+                        "actor":"reviewer", "expected_etag":etag,
+                        "update":{"scope_id":scope,"id":id,"description":"Reviewed"},
+                        "relationships":null
                     }))
                     .unwrap(),
                 )

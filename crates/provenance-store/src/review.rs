@@ -1,4 +1,4 @@
-//! Recoverable Requirement edits and immutable evidence.
+//! Guarded graph record edits and their review state.
 mod classifier;
 pub(crate) mod guard;
 mod input;
@@ -8,10 +8,6 @@ mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
-
-pub(crate) fn new_request_id() -> provenance_core::StableId {
-    journal::new_id()
-}
 
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
     let value = serde_json::to_value(record)?;
@@ -31,15 +27,10 @@ mod history;
 mod reads;
 pub use reads::{read_evidence, read_history};
 
-mod snapshot;
-
 #[cfg(test)]
 mod concurrency_tests;
 #[cfg(test)]
 mod recovery_tests;
-
-#[cfg(all(test, any(unix, windows)))]
-mod path_tests;
 
 mod discussion_input;
 pub use discussion_input::{DiscussionAction, WriteDiscussion};

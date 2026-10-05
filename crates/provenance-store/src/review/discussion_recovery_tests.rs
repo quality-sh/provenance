@@ -30,7 +30,7 @@ fn mutation(root: &Discussion, operation: &str) -> WriteDiscussion {
     .unwrap()
 }
 fn creation(root: &Discussion) -> CreateReviewRequirement {
-    serde_json::from_value(json!({"request_id":"creation","actor":"ben","origin":{"discussion_id":root.discussion_id,"thread_id":root.thread_id,"message_id":root.root_message_id},
+    serde_json::from_value(json!({"actor":"ben","origin":{"discussion_id":root.discussion_id,"thread_id":root.thread_id,"message_id":root.root_message_id},
         "create":{"scope_id":"default","id":"req_new","statement":"The system stores evidence.","status":"discovery","depends_on":[],"supersedes":[]}})).unwrap()
 }
 fn fixture() -> tempfile::TempDir {
@@ -100,7 +100,7 @@ fn discussions(store: &StateStore) -> Vec<Discussion> {
 }
 fn edit(store: &StateStore) -> super::SaveRequirement {
     let id = provenance_core::StableId::new("req_a").unwrap();
-    serde_json::from_value(json!({"request_id":"edit","actor":"ben","expected_etag":store.requirement_edit_state(&scope(),&id).unwrap().etag,"update":{"scope_id":"default","id":"req_a","description":"After"},"relationships":null})).unwrap()
+    serde_json::from_value(json!({"actor":"ben","expected_etag":store.requirement_edit_state(&scope(),&id).unwrap().etag,"update":{"scope_id":"default","id":"req_a","description":"After"},"relationships":null})).unwrap()
 }
 
 #[test]
@@ -135,29 +135,14 @@ fn process_restart_recovers_membership_status_and_outcome_as_one_state() {
             let messages = store.list_messages(&scope()).unwrap().len();
             let changes = usize::from(committed);
             if operation == "create" {
-                let entries = store.review_entries(&scope()).unwrap();
-                assert_eq!(entries.len(), changes, "creation/{phase}");
                 assert_eq!(
                     store.list_requirements(&scope()).unwrap().len(),
                     1 + changes
                 );
                 assert_eq!(original.outcomes.len(), changes, "creation/{phase}");
-                let result = store
-                    .create_review_requirement(creation(&original))
-                    .unwrap();
-                assert!(result.before.is_none());
-                assert_eq!(result.origin, Some(origin(&original)));
-                if committed {
-                    assert_eq!(result, entries[0]);
-                }
+                let retried = store.create_review_requirement(creation(&original));
+                assert_eq!(retried.is_ok(), !committed, "creation/{phase}");
             } else if operation == "edit" {
-                let request = provenance_core::StableId::new("edit").unwrap();
-                let entry = store
-                    .review_entries(&scope())
-                    .unwrap()
-                    .into_iter()
-                    .find(|e| e.request_id == request);
-                assert_eq!(entry.is_some(), committed);
                 assert_eq!(original.outcomes.len(), changes, "edit/{phase}");
                 assert_eq!(
                     store.list_requirements(&scope()).unwrap()[0]
@@ -165,10 +150,6 @@ fn process_restart_recovers_membership_status_and_outcome_as_one_state() {
                         .as_deref(),
                     committed.then_some("After")
                 );
-                if let Some(entry) = entry {
-                    assert!(entry.before.is_some());
-                    assert_eq!(entry.origin, Some(origin(&original)));
-                }
             } else if operation == "start" {
                 assert_eq!(recovered.len(), 1 + changes, "{operation}/{phase}");
                 assert_eq!(messages, 1 + changes, "{operation}/{phase}");

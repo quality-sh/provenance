@@ -93,7 +93,7 @@ impl NativeRecordBatch<'_> {
                         self.store.stamp_records(&before, records)?;
                         ensure_slice_within_read_budget(records)?;
                         if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
-                            check_etag(self.store, &before, id, expected)?;
+                            check_etag(&before, id, expected)?;
                         }
                         let changes = records
                             .iter()
@@ -109,11 +109,6 @@ impl NativeRecordBatch<'_> {
                 if native_record_is_closed(path, T::KIND, after.id())? {
                     *after = self.store.enroll_graph_record::<T>(path, after.id())?;
                 }
-            }
-            for (before, after) in &changes {
-                let before: ReviewRecord = before.clone().into();
-                let after: ReviewRecord = after.clone().into();
-                self.store.commit_native_occurrence(Some(&before), &after)?;
             }
             if let Some((_, after)) = changes.first() {
                 let review: ReviewRecord = after.clone().into();
@@ -143,21 +138,13 @@ fn native_record_is_closed(
     Ok(ReviewRecord::deserialize_closed(kind, &value).is_ok())
 }
 
-fn check_etag<T: GraphRecord>(
-    store: &StateStore,
-    before: &[T],
-    id: &StableId,
-    expected: &str,
-) -> anyhow::Result<()> {
+fn check_etag<T: GraphRecord>(before: &[T], id: &StableId, expected: &str) -> anyhow::Result<()> {
     let record = before
         .iter()
         .find(|record| record.id() == id)
         .ok_or_else(|| anyhow::anyhow!("native update cannot create a graph record"))?;
     let record: ReviewRecord = record.clone().into();
-    let current_etag = store
-        .head(&record)?
-        .map(|entry| entry.etag)
-        .unwrap_or(journal::etag(&record)?);
+    let current_etag = journal::etag(&record)?;
     if expected != current_etag {
         return Err(SourceFailure::wrap(
             WriteFailure::RecordEditConflict {

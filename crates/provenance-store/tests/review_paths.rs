@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 mod review_support;
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};
 use provenance_store::{
     cache,
@@ -72,24 +72,4 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     .await
     .unwrap();
     assert_eq!(page.result.json_text, "\"saved\"");
-}
-
-fn review_dir(root: &Utf8Path) -> Utf8PathBuf {
-    root.join(".provenance/state/scopes/default/review")
-}
-
-#[test]
-fn journal_entries_refuse_an_internal_directory_escape() {
-    let (temp, store) = fixture();
-    store
-        .save_requirement(save(&store, "enroll", json!({})))
-        .unwrap();
-    let next = save(&store, "next", json!({}));
-    let root = Utf8Path::from_path(temp.path()).unwrap();
-    let journal = review_dir(root).join("journal");
-    let outside = tempfile::tempdir().unwrap();
-    let moved = Utf8Path::from_path(outside.path()).unwrap().join("journal");
-    std::fs::rename(&journal, &moved).unwrap();
-    symlink_dir(&moved, &journal);
-    assert!(store.save_requirement(next).is_err());
 }

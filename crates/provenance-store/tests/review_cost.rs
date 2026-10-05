@@ -67,11 +67,9 @@ fn representative_state_copy_and_save_cost() {
             let start = Instant::now();
             with_staged_state(&layout, true, |_| Ok(())).unwrap();
             copy_ms.push(start.elapsed().as_secs_f64() * 1000.0);
-            let input = serde_json::from_value(
-                json!({"request_id":format!("cost_{index}"), "actor":"benchmark",
+            let input = serde_json::from_value(json!({"actor":"benchmark",
                 "expected_etag":store.requirement_edit_state(&scope, &record.id).unwrap().etag,
-                "update":{"scope_id":scope,"id":record.id},"relationships":null}),
-            )
+                "update":{"scope_id":scope,"id":record.id},"relationships":null}))
             .unwrap();
             let start = Instant::now();
             store.save_requirement(input).unwrap();

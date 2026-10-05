@@ -1,6 +1,5 @@
 use crate::{shards, state_store::StateStore};
 use provenance_core::{
-    review::ReviewEntry,
     threads::{Discussion, DiscussionOrigin, DiscussionOutcome},
     Message, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId, Thread,
     ThreadParent, Topic,
@@ -185,19 +184,23 @@ impl StateStore {
         self.validate_requirement_origin(scope, Some(&origin.thread_id), Some(&origin.message_id))
     }
 
-    /// Adds the record write of one review entry to the Discussion of its
-    /// origin, with the revision that the write gave the record.
-    pub(super) fn add_discussion_outcome(&self, entry: &ReviewEntry) -> anyhow::Result<()> {
-        let Some(origin) = &entry.origin else {
-            return Ok(());
-        };
+    /// Adds one record write to the Discussion of its origin, with the
+    /// revision that the write gave the record.
+    pub(super) fn add_discussion_outcome(
+        &self,
+        scope: &ScopeId,
+        origin: &DiscussionOrigin,
+        record_kind: NodeType,
+        record_id: &StableId,
+        revision: &StableId,
+    ) -> anyhow::Result<()> {
         let outcome = DiscussionOutcome {
             message_id: origin.message_id.clone(),
-            record_kind: entry.record_kind,
-            record_id: entry.record_id.clone(),
-            revision: entry.revision.clone(),
+            record_kind,
+            record_id: record_id.clone(),
+            revision: revision.clone(),
         };
-        let path = shards::discussions_path(&self.layout, &entry.scope_id);
+        let path = shards::discussions_path(&self.layout, scope);
         super::guard::with_writer(&path, "*", || {
             self.mutate_jsonl_records(&path, |discussions: &mut Vec<Discussion>| {
                 let discussion = discussions

@@ -17,6 +17,8 @@ const fn is_requirement_kind(kind: &NodeType) -> bool {
     matches!(kind, NodeType::Requirement)
 }
 
+/// The wire shape of a former snapshot reference. Only the always-null
+/// `RequirementEditState::snapshot` field still names it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -27,7 +29,7 @@ pub struct SnapshotRef {
     pub fields: Vec<SnapshotField>,
 }
 
-/// A field range in an ordinary JSON snapshot. Offsets count UTF-8 bytes.
+/// A field range in a former snapshot reference. Offsets count UTF-8 bytes.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -42,44 +44,11 @@ pub struct SnapshotField {
 #[serde(rename_all = "snake_case")]
 pub enum SaveOutcome {
     Created,
-    Enrolled,
     Changed,
     LifecycleOnly,
-    NoChange,
 }
 
-/// One committed save is also its durable request receipt.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReviewEntry {
-    pub schema_version: SchemaVersion,
-    pub scope_id: ScopeId,
-    pub record_kind: NodeType,
-    pub record_id: StableId,
-    pub id: StableId,
-    pub sequence: u64,
-    pub predecessor: Option<StableId>,
-    pub revision: StableId,
-    pub prior_revision: Option<StableId>,
-    pub before: Option<SnapshotRef>,
-    pub after: SnapshotRef,
-    pub changed_fields: Vec<String>,
-    pub actor: String,
-    pub request_id: StableId,
-    pub intent_digest: String,
-    pub etag: String,
-    pub outcome: SaveOutcome,
-    pub origin: Option<crate::threads::DiscussionOrigin>,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone)]
-pub struct RecordSnapshot {
-    pub schema_version: SchemaVersion,
-    pub record: ReviewRecord,
-}
-
-/// Identifies one record type that the native review journal supports.
+/// Identifies one record type that native review supports.
 pub trait ReviewRecordKind {
     const KIND: NodeType;
 
@@ -275,30 +244,26 @@ pub struct EvidenceQuery {
     pub offset: u64,
 }
 
-/// R1 Requirement entries keep their original representation in the shared journal.
+/// One decision-cycle receipt in the review journal.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum JournalEntry {
-    Record(Box<ReviewEntry>),
     Cycle(Box<CycleEntry>),
 }
 impl JournalEntry {
     pub const fn id(&self) -> &StableId {
         match self {
-            Self::Record(e) => &e.id,
             Self::Cycle(e) => &e.id,
         }
     }
     pub const fn scope_id(&self) -> &ScopeId {
         match self {
-            Self::Record(e) => &e.scope_id,
             Self::Cycle(e) => &e.scope_id,
         }
     }
     pub const fn request_id(&self) -> &StableId {
         match self {
-            Self::Record(e) => &e.request_id,
             Self::Cycle(e) => &e.request_id,
         }
     }

@@ -48,7 +48,7 @@ impl StateStore {
                 .iter()
                 .map(|(kind, id)| {
                     let record = crate::cache::review_families::record(self, scope, *kind, id)?;
-                    self.record_decision_state_from_parts(
+                    Self::record_decision_state_from_parts(
                         &record,
                         &proposals,
                         &dispositions,
@@ -103,11 +103,10 @@ impl StateStore {
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         let facts = CycleFacts::validated(self, scope)?;
-        self.record_decision_state_from_parts(record, &proposals, &dispositions, &facts)
+        Self::record_decision_state_from_parts(record, &proposals, &dispositions, &facts)
     }
 
     fn record_decision_state_from_parts(
-        &self,
         record: &provenance_core::review::ReviewRecord,
         proposals: &[ProposalCard],
         dispositions: &[DispositionRecord],
@@ -115,8 +114,7 @@ impl StateStore {
     ) -> anyhow::Result<RequirementDecisionState> {
         let kind = record.kind();
         let record_id = record.id();
-        let head = self.head(record)?;
-        let current_revision = head.as_ref().map(|entry| entry.revision.clone());
+        let current_revision = super::save::current_revision(record)?;
         let targets_record = |target: &provenance_core::IdeationTarget| {
             NodeType::from(target.artifact_type) == kind && target.artifact_id == *record_id
         };

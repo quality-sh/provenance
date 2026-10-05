@@ -171,7 +171,7 @@ fn owner_and_parent_membership_refuse_without_publication() {
     store
         .create_review_requirement(
             serde_json::from_value(json!({
-                "request_id":"create_b","actor":"ben","origin":null,
+                "actor":"ben","origin":null,
                 "create": {
                     "scope_id": "default", "id": "req_b",
                     "statement": "The system stores notes.", "status": "discovery",
@@ -235,8 +235,8 @@ async fn catalog_operation_uses_the_target_write_path() {
 async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
     let (temp, store) = fixture();
     let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
-    let journal = layout.scopes_dir().join("default/review/journal");
-    let receipt_count = std::fs::read_dir(&journal).unwrap().count();
+    let state_files = || walkdir_count(&layout.scopes_dir());
+    let file_count = state_files();
     let requirement = store.requirement_edit_state(&scope(), &id()).unwrap();
     let context = PreparedContext::for_scope(PreparedScope {
         root: camino::Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap(),
@@ -262,7 +262,7 @@ async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
         json!({"kind":"scope_mismatch"})
     );
     assert_eq!(error.status(), 400);
-    assert_eq!(std::fs::read_dir(journal).unwrap().count(), receipt_count);
+    assert_eq!(state_files(), file_count);
     assert_eq!(
         store.list_threads(&scope()).unwrap(),
         [] as [provenance_core::Thread; 0]
@@ -276,4 +276,19 @@ async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
         requirement.etag
     );
     assert!(!layout.scopes_dir().join("other").exists());
+}
+
+fn walkdir_count(directory: &camino::Utf8Path) -> usize {
+    std::fs::read_dir(directory).map_or(0, |entries| {
+        entries
+            .map(|entry| {
+                let path = camino::Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap();
+                if path.is_dir() {
+                    walkdir_count(&path)
+                } else {
+                    1
+                }
+            })
+            .sum()
+    })
 }

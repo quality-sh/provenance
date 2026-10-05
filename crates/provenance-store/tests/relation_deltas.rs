@@ -1,6 +1,5 @@
 #[allow(dead_code)]
 mod review_support;
-use provenance_core::review::SaveOutcome;
 use provenance_store::review::SaveRequirement;
 use review_support::*;
 use serde_json::json;
@@ -71,7 +70,7 @@ fn save_ok(
     store: &provenance_store::state_store::StateStore,
     request: &str,
     edit: serde_json::Value,
-) -> provenance_core::review::ReviewEntry {
+) -> provenance_core::review::RequirementEditState {
     store
         .save_requirement(relations(store, request, edit))
         .unwrap()
@@ -112,8 +111,9 @@ fn list_deltas_add_and_remove_without_touching_other_fields() {
         json!({"depends_on": {"remove": ["req_b"]}}),
     );
     assert_eq!(depends_on(&store), ["req_c"]);
+    let head = store.requirement_edit_state(&scope(), &id()).unwrap();
     let entry = save_ok(&store, "again", json!({"depends_on": {"add": ["req_c"]}}));
-    assert_eq!(entry.outcome, SaveOutcome::NoChange);
+    assert_eq!(entry, head);
     assert_eq!(depends_on(&store), ["req_c"]);
 }
 
@@ -215,7 +215,6 @@ fn valid_absent_removals_keep_requirement_content_and_edit_preconditions() {
             "cites": {"remove": ["source_one"]}
         }),
     );
-    assert_eq!(repeated.outcome, SaveOutcome::NoChange);
     assert_eq!(record(&store), before);
     assert_eq!(repeated.etag, head.etag);
 
@@ -227,7 +226,6 @@ fn valid_absent_removals_keep_requirement_content_and_edit_preconditions() {
             "cites": {"remove": ["source_two"]}
         }),
     );
-    assert_eq!(never_linked.outcome, SaveOutcome::NoChange);
     assert_eq!(record(&store), before);
     assert_eq!(never_linked.etag, head.etag);
 }
@@ -323,10 +321,7 @@ fn invalid_deltas_refuse_and_publish_nothing() {
         "bad_remove",
         json!({"depends_on": {"remove": ["req_c"]}}),
     );
-    assert_eq!(
-        store.save_requirement(retried).unwrap().outcome,
-        SaveOutcome::Changed
-    );
+    assert_ne!(store.save_requirement(retried).unwrap().etag, etag);
 }
 
 #[test]
@@ -346,10 +341,8 @@ fn validation_runs_on_the_final_resource_exactly_as_one_edit() {
         "swap",
         json!({"depends_on": {"add": ["req_b"], "remove": ["req_b"]}}),
     );
-    assert_eq!(
-        store.save_requirement(swap).unwrap().outcome,
-        SaveOutcome::NoChange
-    );
+    let unchanged = store.requirement_edit_state(&scope(), &id()).unwrap();
+    assert_eq!(store.save_requirement(swap).unwrap(), unchanged);
     assert_eq!(depends_on(&store), [] as [std::string::String; 0]);
 
     let wrong_kind = relations(&store, "wrong_kind", json!({"spawned_by": "req_b"}));
@@ -371,19 +364,4 @@ fn the_same_delta_on_the_same_state_resolves_to_one_outcome() {
     let second = store.save_requirement(replay).unwrap();
     assert_eq!(first, second);
     assert_eq!(depends_on(&store), ["req_b"]);
-}
-
-#[test]
-fn the_journal_holds_the_complete_before_and_after() {
-    let (_temp, store) = fixture();
-    seed_targets(&store);
-    let head = store.requirement_edit_state(&scope(), &id()).unwrap();
-    let entry = save_ok(
-        &store,
-        "delta",
-        json!({"depends_on": {"add": ["req_b", "req_c"]}}),
-    );
-    assert_eq!(entry.prior_revision, head.revision);
-    assert!(entry.before.is_some());
-    assert_eq!(depends_on(&store), ["req_b", "req_c"]);
 }

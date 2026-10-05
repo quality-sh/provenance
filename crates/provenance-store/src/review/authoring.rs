@@ -5,9 +5,8 @@ use super::{
     CreateReviewRequirement,
 };
 use crate::{
-    canonical_digest,
     publication::with_staged_state,
-    review::{guard, journal, save::RecordEvidenceContext},
+    review::guard,
     state_store::{
         record_stamps::GraphRecord, AddSourceReferenceInput, CreateRequirementInput, StateStore,
         UpdateRequirementInput,
@@ -52,12 +51,6 @@ impl StateStore {
                             "an enrolled graph record cannot be removed by replacement"
                         );
                     }
-                    for record in replacement {
-                        let previous = before.iter().find(|before| before.id() == record.id());
-                        let before = previous.cloned().map(Into::into);
-                        let after: ReviewRecord = record.into();
-                        staged.commit_native_occurrence(before.as_ref(), &after)?;
-                    }
                     if let Some(scope) = scope {
                         staged.validate_graph_scope(&scope)?;
                         staged.enroll_review_manifest()?;
@@ -66,31 +59,6 @@ impl StateStore {
                 })
             })
         })
-    }
-
-    pub(super) fn commit_native_occurrence(
-        &self,
-        before: Option<&ReviewRecord>,
-        after: &ReviewRecord,
-    ) -> anyhow::Result<()> {
-        let head = before
-            .map(|record| self.head(record))
-            .transpose()?
-            .flatten();
-        self.validated_review_entries(after.scope_id())?;
-        let request_id = journal::new_id();
-        self.commit_record_evidence(
-            before,
-            after,
-            RecordEvidenceContext {
-                head,
-                actor: AUTHORING_ACTOR.to_owned(),
-                request_id,
-                intent_digest: canonical_digest::digest(&canonical_digest::canonical_bytes(after)?),
-                origin: None,
-            },
-        )?;
-        Ok(())
     }
 
     pub(crate) fn create_native_record<T: GraphRecord>(
@@ -108,21 +76,6 @@ impl StateStore {
                 guard::with_writer(&staged_path, id.as_str(), || {
                     write(&staged)?;
                     let created = staged.enroll_graph_record::<T>(&staged_path, id)?;
-                    let after: ReviewRecord = created.clone().into();
-                    let request_id = journal::new_id();
-                    staged.commit_record_evidence(
-                        None,
-                        &after,
-                        RecordEvidenceContext {
-                            head: None,
-                            actor: AUTHORING_ACTOR.to_owned(),
-                            request_id,
-                            intent_digest: canonical_digest::digest(
-                                &canonical_digest::canonical_bytes(&after)?,
-                            ),
-                            origin: None,
-                        },
-                    )?;
                     staged.enroll_review_manifest()?;
                     Ok(created)
                 })
@@ -130,18 +83,20 @@ impl StateStore {
         })
     }
 
+    /// Creates a Requirement, or returns the stored one when it already holds
+    /// exactly the requested content.
     pub fn create_requirement(&self, input: CreateRequirementInput) -> anyhow::Result<Requirement> {
-        let intent = intent_of(&input)?;
-        let request_id = authoring_request_id("create-requirement", &[&intent])?;
         let scope = input.scope_id.clone();
         let id = input.id.clone();
+        if let Some(existing) = self.equal_creation(&input)? {
+            return Ok(existing);
+        }
         match self.create_review_requirement(CreateReviewRequirement {
-            request_id,
             actor: AUTHORING_ACTOR.to_owned(),
             create: input,
             origin: None,
         }) {
-            Ok(entry) => self.requirement(&entry.scope_id, &entry.record_id),
+            Ok(_) => self.requirement(&scope, &id),
             Err(error) => {
                 let duplicate = self
                     .list_requirements(&scope)
@@ -340,11 +295,7 @@ impl StateStore {
         let scope = update.scope_id.clone();
         let id = update.id.clone();
         let expected_etag = self.requirement_edit_state(&scope, &id)?.etag;
-        let intent = intent_of(&(&update, &relationships))?;
-        let request_id =
-            authoring_request_id("update-requirement", &[&intent, expected_etag.as_str()])?;
         self.save_requirement(SaveRequirement {
-            request_id,
             actor: AUTHORING_ACTOR.to_owned(),
             expected_etag,
             update,
@@ -397,13 +348,36 @@ fn empty_update(scope_id: &ScopeId, id: &StableId) -> UpdateRequirementInput {
     }
 }
 
-fn intent_of(value: &impl serde::Serialize) -> anyhow::Result<String> {
-    Ok(canonical_digest::digest(
-        &canonical_digest::canonical_bytes(value)?,
-    ))
-}
-
-fn authoring_request_id(label: &str, parts: &[&str]) -> anyhow::Result<StableId> {
-    let joined = format!("{label}\u{1f}{}", parts.join("\u{1f}"));
-    StableId::new(canonical_digest::sha256(joined.as_bytes()))
+impl StateStore {
+    /// The stored Requirement when it already holds every requested value.
+    fn equal_creation(
+        &self,
+        input: &CreateRequirementInput,
+    ) -> anyhow::Result<Option<Requirement>> {
+        let Some(existing) = self
+            .list_requirements(&input.scope_id)?
+            .into_iter()
+            .find(|record| record.id == input.id)
+        else {
+            return Ok(None);
+        };
+        let mut wanted = serde_json::to_value(input)?;
+        for field in ["depends_on", "supersedes"] {
+            if let Some(serde_json::Value::Array(ids)) = wanted.get_mut(field) {
+                ids.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+                ids.dedup();
+            }
+        }
+        let stored = serde_json::to_value(&existing)?;
+        let absent = |value: &serde_json::Value| {
+            value.is_null() || value.as_array().is_some_and(Vec::is_empty)
+        };
+        let equal = wanted.as_object().is_some_and(|fields| {
+            fields.iter().all(|(name, value)| match stored.get(name) {
+                Some(current) => current == value || (absent(current) && absent(value)),
+                None => absent(value),
+            })
+        });
+        Ok(equal.then_some(existing))
+    }
 }

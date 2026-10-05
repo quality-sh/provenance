@@ -14,12 +14,12 @@ fn open(root: &Utf8Path) -> StateStore {
     StateStore::new(ProvenanceLayout::new(root))
 }
 fn input(store: &StateStore, request: &str) -> SaveRequirement {
-    serde_json::from_value(json!({"request_id":request,"actor":"ben", "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
+    serde_json::from_value(json!({"actor":"ben", "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update":{"scope_id":"default","id":"req_a","description":request},"relationships":null})).unwrap()
 }
 fn create_input() -> CreateReviewRequirement {
     serde_json::from_value(json!({
-        "request_id":"create_crash", "actor":"ben", "origin":null,
+        "actor":"ben", "origin":null,
         "create":{"scope_id":"default", "id":"req_new",
             "statement":"The system recovers creation.", "status":"discovery",
             "depends_on":[], "supersedes":[]}
@@ -106,7 +106,6 @@ fn crash_between_edit_and_submission_publishes_neither_half() {
             .as_deref(),
         Some("baseline")
     );
-    assert!(!journal_entry_exists(&store, "crash_request"));
     assert_eq!(
         store
             .requirement_decision_state(&scope(), &id())
@@ -148,8 +147,6 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
             .unwrap();
         assert_eq!(status.code(), Some(86), "{phase}");
         let store = open(root);
-        let found = journal_entry_exists(&store, "crash_request");
-        assert_eq!(found, committed, "{phase}");
         let record = store.list_requirements(&scope()).unwrap().remove(0);
         assert_eq!(
             record.description.as_deref(),
@@ -166,7 +163,7 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
             .pending
             .unwrap();
         assert_eq!(pending.proposal_id == previous, !committed, "{phase}");
-        store.validated_review_entries(&scope()).unwrap();
+        store.validated_journal_entries(&scope()).unwrap();
         assert!(!ProvenanceLayout::new(root)
             .publication_marker_path()
             .exists());
@@ -215,21 +212,7 @@ fn creation_crashes_reopen_with_both_or_neither_published_half() {
             committed,
             "{phase}"
         );
-        assert_eq!(
-            journal_entry_exists(&store, "create_crash"),
-            committed,
-            "{phase}"
-        );
     }
-}
-
-fn journal_entry_exists(store: &StateStore, request: &str) -> bool {
-    let request = StableId::new(request).unwrap();
-    store
-        .review_entries(&scope())
-        .unwrap()
-        .iter()
-        .any(|entry| entry.request_id == request)
 }
 
 #[test]
@@ -266,7 +249,6 @@ fn assert_failed_rollback(root: &Utf8Path) {
         .publication_marker_path()
         .exists());
     let store = open(root);
-    assert!(!journal_entry_exists(&store, "failed"));
     assert_eq!(
         store.list_requirements(&scope()).unwrap()[0]
             .description
@@ -291,9 +273,11 @@ fn a_lost_result_resolves_through_resubmission_after_recovery() {
     ));
     let reopened = open(root);
     let retried: SaveRequirement = serde_json::from_slice(&request).unwrap();
-    let entry = reopened.save_requirement(retried).unwrap();
-    assert_eq!(entry.request_id, StableId::new("lost_result").unwrap());
-    assert!(journal_entry_exists(&reopened, "lost_result"));
+    let state = reopened.save_requirement(retried).unwrap();
+    assert_eq!(
+        state,
+        reopened.requirement_edit_state(&scope(), &id()).unwrap()
+    );
     assert_eq!(
         reopened.list_requirements(&scope()).unwrap()[0]
             .description
@@ -363,7 +347,7 @@ fn a_relationship_only_review_save_updates_the_record_stamp() {
     ]);
     let second = git(&["rev-parse", "HEAD"]);
     let save: SaveRequirement = serde_json::from_value(json!({
-        "request_id":"relationships", "actor":"ben",
+        "actor":"ben",
         "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update":{"scope_id":"default","id":"req_a"},
         "relationships":{"refines":null,"depends_on":["req_b"],"supersedes":[],"spawned_by":null,"cites":[]}

@@ -73,10 +73,9 @@ impl StateStore {
                 .record_revision
                 .as_ref()
                 .expect("review_submission checks the binding");
-            let head = self
-                .head(&record)?
-                .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
-            if head.revision != binding.revision
+            let revision = super::super::save::current_revision(&record)?
+                .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
+            if revision != binding.revision
                 || classifier::content_digest(kind, &record)? != binding.content_digest
                 || facts.is_withdrawn(&input.proposal_id)
                 || facts.is_decided(&input.proposal_id)

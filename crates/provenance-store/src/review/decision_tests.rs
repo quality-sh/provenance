@@ -36,16 +36,17 @@ fn fixture() -> tempfile::TempDir {
         .unwrap();
     let etag = store.requirement_edit_state(&scope(), &req()).unwrap().etag;
     store
-        .save_requirement(serde_json::from_value(json!({"request_id":"fixture-enroll","actor":"agent","expected_etag":etag,"update":{"scope_id":"default","id":"req_a"},"relationships":null})).unwrap())
+        .save_requirement(serde_json::from_value(json!({"actor":"agent","expected_etag":etag,"update":{"scope_id":"default","id":"req_a"},"relationships":null})).unwrap())
         .unwrap();
     temp
 }
-fn edit(store: &StateStore, request: &str, statement: &str) -> StableId {
+fn edit(store: &StateStore, _request: &str, statement: &str) -> StableId {
     let etag = store.requirement_edit_state(&scope(), &req()).unwrap().etag;
     store
-        .save_requirement(serde_json::from_value(json!({"request_id":request,"actor":"agent","expected_etag":etag,"update":{"scope_id":"default","id":"req_a","statement":statement},"relationships":null})).unwrap())
+        .save_requirement(serde_json::from_value(json!({"actor":"agent","expected_etag":etag,"update":{"scope_id":"default","id":"req_a","statement":statement},"relationships":null})).unwrap())
         .unwrap()
         .revision
+        .unwrap()
 }
 fn submit(
     store: &StateStore,

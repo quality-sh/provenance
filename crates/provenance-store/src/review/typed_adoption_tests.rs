@@ -1,11 +1,10 @@
-use super::journal;
 use crate::{
     cache::review_families,
     layout::ProvenanceLayout,
     shards,
     state_store::{
-        CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateResolutionInput,
-        CreateTopicInput, StateStore, TypedSpecInput,
+        readers::read_jsonl, record_stamps::GraphRecord, CreateBoundaryInput, CreateDomainInput,
+        CreateQuestionInput, CreateResolutionInput, CreateTopicInput, StateStore, TypedSpecInput,
     },
     write_error::{WriteError, WriteFailure},
 };
@@ -15,9 +14,10 @@ use provenance_core::{
         TypedAdoptionTarget, TypedDeclarationKind, TypedRequirementInput, TypedRuleInput,
         TypedSourceInput,
     },
-    review::{ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION},
-    ArtifactLink, ArtifactLinkTargetType, NodeType, QuestionStatus, ResolutionMethod,
-    ResolutionStatus, ScopeId, SourceReference, StableId, TopicStatus, SUPPORTED_SCHEMA_VERSION,
+    review::REVIEW_SCHEMA_VERSION,
+    ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, NodeType, Question, QuestionStatus,
+    Requirement, Resolution, ResolutionMethod, ResolutionStatus, Rule, ScopeId, Source,
+    SourceReference, StableId, Topic, TopicStatus, SUPPORTED_SCHEMA_VERSION,
 };
 
 const OWNER: &str = "spec://review/typed";
@@ -81,68 +81,44 @@ fn document(source_name: &str, requirement: &str, rule: &str) -> TypedSpecInput 
 
 fn enroll(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
     let path = shards::path_for(&store.layout, scope, kind);
-    let text = std::fs::read_to_string(&path).unwrap();
-    let mut values = text
-        .lines()
-        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
-        .collect::<Vec<_>>();
-    let value = values
-        .iter_mut()
-        .find(|value| value["id"] == id.as_str())
-        .unwrap();
-    let before = review_families::deserialize_record(kind, value).unwrap();
-    let entries = store
-        .review_entries(scope)
+    match kind {
+        NodeType::Source => enroll_as::<Source>(store, &path, id),
+        NodeType::Requirement => enroll_as::<Requirement>(store, &path, id),
+        NodeType::Resolution => enroll_as::<Resolution>(store, &path, id),
+        NodeType::Rule => enroll_as::<Rule>(store, &path, id),
+        NodeType::Domain => enroll_as::<Domain>(store, &path, id),
+        NodeType::Boundary => enroll_as::<Boundary>(store, &path, id),
+        NodeType::Topic => enroll_as::<Topic>(store, &path, id),
+        NodeType::Question => enroll_as::<Question>(store, &path, id),
+    }
+}
+
+/// Enrolls one stored record through the native creation writer.
+fn enroll_as<T: GraphRecord + serde::de::DeserializeOwned>(
+    store: &StateStore,
+    path: &camino::Utf8Path,
+    id: &StableId,
+) {
+    let stored = read_jsonl::<T>(store, path)
         .unwrap()
         .into_iter()
-        .filter(|entry| entry.record_kind == kind && entry.record_id == *id)
-        .collect::<Vec<_>>();
-    let head = journal::validated_head(&entries).unwrap();
-    if before.schema_version() == REVIEW_SCHEMA_VERSION {
-        return;
-    }
-    value["schema_version"] = REVIEW_SCHEMA_VERSION.0.into();
-    let record = review_families::deserialize_record(kind, value).unwrap();
-    let lines = values
-        .iter()
-        .map(|value| serde_json::to_string(value).unwrap())
-        .collect::<Vec<_>>()
-        .join("\n");
-    std::fs::write(path, format!("{lines}\n")).unwrap();
-    let after = journal::snapshot(&store.layout, &record).unwrap();
-    let entry_id = journal::new_id();
-    let sequence = head.as_ref().map_or(1, |entry| entry.sequence + 1);
-    let predecessor = head.as_ref().map(|entry| entry.id.clone());
-    let revision = head
-        .as_ref()
-        .map_or_else(journal::new_id, |entry| entry.revision.clone());
-    let prior_revision = head.as_ref().map(|entry| entry.revision.clone());
-    let before = head.as_ref().map(|entry| entry.after.clone());
-    let entry = ReviewEntry {
-        schema_version: REVIEW_SCHEMA_VERSION,
-        scope_id: scope.clone(),
-        record_kind: kind,
-        record_id: id.clone(),
-        id: entry_id,
-        sequence,
-        predecessor,
-        revision,
-        prior_revision,
-        before,
-        after,
-        changed_fields: Vec::new(),
-        actor: "reviewer".into(),
-        request_id: journal::new_id(),
-        intent_digest: "sha256:enrollment".into(),
-        etag: journal::etag(&record).unwrap(),
-        outcome: SaveOutcome::Enrolled,
-        origin: None,
-    };
-    journal::write_new(
-        &journal::entry_path(&store.layout, scope, &entry.request_id),
-        &entry,
-    )
-    .unwrap();
+        .find(|record| record.id() == id)
+        .unwrap();
+    store
+        .create_native_record::<T>(path, id, move |_| Ok(stored))
+        .unwrap();
+}
+
+/// The stored record of one kind and id, without its record stamps.
+fn content(
+    store: &StateStore,
+    scope: &ScopeId,
+    kind: NodeType,
+    id: &StableId,
+) -> serde_json::Value {
+    let record = review_families::record(store, scope, kind, id).unwrap();
+    assert_eq!(record.schema_version(), REVIEW_SCHEMA_VERSION);
+    provenance_core::model::record_stamps::content_value(&record).unwrap()
 }
 
 fn enrolled_typed_records(store: &StateStore, scope: &ScopeId) -> Vec<(NodeType, StableId)> {
@@ -213,20 +189,20 @@ fn typed_updates_capture_owned_enrolled_records() {
         )
         .unwrap();
 
-    for (kind, id) in records {
-        let record = match kind {
-            NodeType::Source => store.list_sources(&scope).unwrap()[0].clone().into(),
-            NodeType::Requirement => store.list_requirements(&scope).unwrap()[0].clone().into(),
-            NodeType::Rule => store.list_rules(&scope).unwrap()[0].clone().into(),
-            _ => unreachable!(),
-        };
-        let head = store.head(&record).unwrap().unwrap();
-        assert_eq!(head.record_kind, kind);
-        assert_eq!(head.record_id, id);
-        let expected_sequence = if kind == NodeType::Requirement { 2 } else { 3 };
-        assert_eq!(head.sequence, expected_sequence);
-        assert_eq!(head.actor, OWNER);
+    let expected = [
+        ("name", "Policy two"),
+        ("statement", "The system stores durable records."),
+        ("statement", "The system retains durable records."),
+    ];
+    for ((kind, id), (field, value)) in records.iter().zip(expected) {
+        assert_eq!(content(&store, &scope, *kind, id)[field], value);
     }
+    let pending = store
+        .requirement_decision_state(&scope, &records[1].1)
+        .unwrap()
+        .pending
+        .unwrap();
+    assert_eq!(pending.actor, OWNER);
 }
 
 #[test]
@@ -273,17 +249,7 @@ fn typed_adoption_captures_unowned_enrolled_records() {
     store.apply_typed_spec(&scope, input).unwrap();
 
     for (kind, _, id) in records {
-        let record = match kind {
-            NodeType::Source => store.list_sources(&scope).unwrap()[0].clone().into(),
-            NodeType::Requirement => store.list_requirements(&scope).unwrap()[0].clone().into(),
-            NodeType::Rule => store.list_rules(&scope).unwrap()[0].clone().into(),
-            _ => unreachable!(),
-        };
-        let head = store.head(&record).unwrap().unwrap();
-        assert_eq!(head.record_id, id);
-        let expected_sequence = if kind == NodeType::Requirement { 2 } else { 3 };
-        assert_eq!(head.sequence, expected_sequence);
-        assert_eq!(head.actor, OWNER);
+        assert_eq!(content(&store, &scope, kind, &id)["declared_by"], OWNER);
     }
 }
 
@@ -464,26 +430,25 @@ fn typed_cascade_captures_each_changed_enrolled_kind() {
         .id
         .clone();
     let records = seed_cascade_dependants(&store, &scope, source, kept, removed);
+    let domain_id = StableId::new("domain_unchanged").unwrap();
+    let before = records
+        .iter()
+        .map(|(kind, id)| content(&store, &scope, *kind, &StableId::new(*id).unwrap()))
+        .collect::<Vec<_>>();
+    let domain = content(&store, &scope, NodeType::Domain, &domain_id);
 
     store
         .apply_typed_spec(&scope, cascade_document(false))
         .unwrap();
 
-    for (kind, id) in records {
-        let record = match kind {
-            NodeType::Resolution => store.list_resolutions(&scope).unwrap()[0].clone().into(),
-            NodeType::Boundary => store.list_boundaries(&scope).unwrap()[0].clone().into(),
-            NodeType::Topic => store.list_topics(&scope).unwrap()[0].clone().into(),
-            NodeType::Question => store.list_questions(&scope).unwrap()[0].clone().into(),
-            _ => unreachable!(),
-        };
-        let head = store.head(&record).unwrap().unwrap();
-        assert_eq!(head.record_id.as_str(), id);
-        assert_eq!(head.sequence, 2, "{kind:?}");
-        assert_eq!(head.actor, OWNER);
+    for ((kind, id), before) in records.iter().zip(before) {
+        let after = content(&store, &scope, *kind, &StableId::new(*id).unwrap());
+        assert_ne!(after, before, "{kind:?}");
     }
-    let domain = store.list_domains(&scope).unwrap()[0].clone().into();
-    assert_eq!(store.head(&domain).unwrap().unwrap().sequence, 1);
+    assert_eq!(
+        content(&store, &scope, NodeType::Domain, &domain_id),
+        domain
+    );
 }
 
 mod typed_adoption_deletion_tests;

@@ -57,9 +57,9 @@ fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
 }
 
-fn edit(store: &StateStore, request: &str, description: &str) -> SaveRequirement {
+fn edit(store: &StateStore, _request: &str, description: &str) -> SaveRequirement {
     serde_json::from_value(json!({
-        "request_id":request,"actor":"ben",
+        "actor":"ben",
         "expected_etag":store
             .requirement_edit_state(&scope(), &sid("req_hist"))
             .unwrap()
@@ -101,7 +101,7 @@ async fn requirement_history_pages_report_limit_has_more_and_cursor() {
     let repo = Repository::new("The shared graph is readable.");
     let store = StateStore::new(repo.layout.clone());
     let create: CreateReviewRequirement = serde_json::from_value(json!({
-        "request_id":"hist_create","actor":"ben","origin":null,
+        "actor":"ben","origin":null,
         "create":{"scope_id":"default","id":"req_hist",
             "statement":"History pages carry paging metadata.",
             "status":"discovery","depends_on":[],"supersedes":[]}

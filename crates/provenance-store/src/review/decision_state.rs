@@ -221,7 +221,7 @@ impl CycleFacts {
         record_id: &StableId,
     ) -> anyhow::Result<Option<CycleEntry>> {
         let record = crate::cache::review_families::record(store, scope, kind, record_id)?;
-        let current_revision = store.head(&record)?.map(|entry| entry.revision);
+        let current_revision = super::save::current_revision(&record)?;
         self.pending_submission_at_revision(
             store,
             scope,
@@ -292,10 +292,8 @@ impl CycleFacts {
         record_id: &StableId,
     ) -> anyhow::Result<crate::write_error::WriteFailure> {
         let record = crate::cache::review_families::record(store, scope, kind, record_id)?;
-        let current_revision = store
-            .head(&record)?
-            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?
-            .revision;
+        let current_revision = super::save::current_revision(&record)?
+            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
         let current_submission = self
             .pending_submission(store, scope, kind, record_id)?
             .map(|entry| entry.proposal_id);
