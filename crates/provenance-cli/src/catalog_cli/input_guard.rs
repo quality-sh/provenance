@@ -1,4 +1,4 @@
-/// Refuses a malformed review edit guard and names the required ETag form.
+/// Refuses a malformed review edit guard and names the required `ETag` form.
 #[provenance_macros::rule("rule_cli_guard_guidance")]
 pub(super) fn validate_review_etag(value: &str) -> anyhow::Result<()> {
     let valid = value.len() == 71
