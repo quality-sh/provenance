@@ -378,12 +378,12 @@ fn the_journal_holds_the_complete_before_and_after() {
     let (_temp, store) = fixture();
     seed_targets(&store);
     let head = store.requirement_edit_state(&scope(), &id()).unwrap();
-    let before_digest = head.snapshot.as_ref().unwrap().digest.clone();
     let entry = save_ok(
         &store,
         "delta",
         json!({"depends_on": {"add": ["req_b", "req_c"]}}),
     );
-    assert_eq!(entry.before.as_ref().unwrap().digest, before_digest);
+    assert_eq!(entry.prior_revision, head.revision);
+    assert!(entry.before.is_some());
     assert_eq!(depends_on(&store), ["req_b", "req_c"]);
 }

@@ -151,7 +151,7 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
     );
 
     let state = store.requirement_edit_state(&scope(), &id()).unwrap();
-    assert!(state.snapshot.is_some());
+    assert!(state.revision.is_some());
 }
 
 #[test]
