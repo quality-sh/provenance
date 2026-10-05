@@ -16,7 +16,11 @@ fn rejection_does_not_remove_or_retire_the_graph_record() {
     .unwrap();
 
     let requirement = store.list_requirements(&scope()).unwrap().remove(0);
-    assert_eq!(requirement.id, req(), "rejection must keep Requirement req_a");
+    assert_eq!(
+        requirement.id,
+        req(),
+        "rejection must keep Requirement req_a"
+    );
     assert_eq!(
         requirement.status, before.status,
         "rejection must not retire the Requirement graph record"
