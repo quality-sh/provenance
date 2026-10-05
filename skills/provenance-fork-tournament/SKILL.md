@@ -3,14 +3,6 @@ name: provenance-fork-tournament
 description: Run a fork tournament when a shaping session hits a genuine design fork — mutually exclusive directions, expensive to reverse, and the human's preference unknowable without concrete artifacts to react to. Implements the `prototype` resolution method from docs/shaping.md - spawn stance-based agents producing competing artifacts as proposals (phase 1, end session), then present them for human disposal and land the decision as a Resolution (phase 2).
 ---
 
-## Human review links
-
-Before you ask a person to review a record, start the review host if it is not
-running: `provenance review --repo . --repository-id local --scope default`.
-Get the review URL with
-`provenance <record-id> get --review-link --format json`. Give the person the
-review URL. Never give the person a record ID.
-
 # Fork tournament (`prototype`)
 
 Implements the `prototype` resolution method. Canonical design: `docs/shaping.md`,

@@ -24,9 +24,9 @@ it in the same change.
   `{command} review --repo . --repository-id local --scope default`.
 - Get the review URL with `{command} <record-id> get --review-link --format json`. Give the person the
   review URL. Never give the person a record ID.
-- Read a record's decision and all bounded feedback with
-  `{command} <record-id> get --view review`. The `review.edit.etag` value is
-  the exact value for `--if-match` on the next update.
+- Read the decision and review feedback with `{command} <record-id> get --view review`.
+  Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
+  If feedback is truncated, use the continuation commands in the review view.
 - A guarded update after a rejection opens the new submission. Do not submit
   or withdraw manually.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a
