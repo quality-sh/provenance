@@ -146,7 +146,14 @@ fn commit(repo: &Repository) -> String {
         git(&["init", "-q"]);
     }
     git(&["add", ".provenance/state"]);
-    git(&["-c", "commit.gpgsign=false", "commit", "-q", "-m", "Save record"]);
+    git(&[
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-q",
+        "-m",
+        "Save record",
+    ]);
     git(&["rev-parse", "HEAD"])
 }
 
@@ -173,7 +180,9 @@ async fn rejected_text_return_uses_previous_git_version_for_evidence() {
     let original = commit(&repo);
     let changed = set_statement(&host, "The limit is 3000 dollars.").await;
     let previous = commit(&repo);
-    let proposal = changed["decision"]["pending"]["proposal_id"].as_str().unwrap();
+    let proposal = changed["decision"]["pending"]["proposal_id"]
+        .as_str()
+        .unwrap();
     let (status, rejected, _) = call(
         &host,
         "POST",
