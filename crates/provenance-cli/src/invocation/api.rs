@@ -81,6 +81,8 @@ pub async fn dispatch(args: ApiArgs) -> anyhow::Result<()> {
         &args.common.scope,
         args.common.format(),
         request,
+        args.filter.as_deref(),
+        args.limit,
     )
     .await
 }

@@ -188,10 +188,29 @@ impl Invocation {
 
 impl SearchArgs {
     pub(crate) async fn dispatch(self) -> anyhow::Result<()> {
+        let parameters = provenance_store::operations::catalog::definitions()
+            .iter()
+            .find_map(|definition| {
+                definition
+                    .registration
+                    .queries
+                    .iter()
+                    .find(|query| query.name == "search")
+                    .map(|query| query.parameters.as_slice())
+            })
+            .ok_or_else(|| anyhow::anyhow!("the operation catalog does not declare root search"))?;
+        let default_exclude_terminal = crate::read_policy::default_exclude_terminal(parameters)
+            .ok_or_else(|| {
+                anyhow::anyhow!("the root search query does not declare exclude_terminal")
+            })?;
         let query = SearchQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             cursor: self.cursor,
-            exclude_terminal: false,
+            exclude_terminal: if self.include_terminal {
+                crate::read_policy::exclude_terminal(true)
+            } else {
+                default_exclude_terminal
+            },
             text: self.text,
             node_types: self.kind,
             limit: self.limit.unwrap_or(QUERY_DEFAULT_LIMIT),

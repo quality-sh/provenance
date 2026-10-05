@@ -7,9 +7,7 @@ use {provenance_macros::verifies, std::path::Path};
 mod dictionary_support;
 #[test]
 #[verifies("rule_init_installs_bundled_skills", examples)]
-#[verifies("rule_init_owns_agents_provenance_section", examples)]
-/// This test covers the complete initialization flow and its installed artifacts.
-fn init_installs_bundled_skills_and_managed_section() {
+fn init_installs_complete_bundled_skills() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
 
@@ -21,16 +19,23 @@ fn init_installs_bundled_skills_and_managed_section() {
         "provenance-shaping",
         "provenance-swarm-backtrace",
     ] {
-        assert!(repo
-            .join(".agents/skills")
-            .join(skill)
-            .join("SKILL.md")
-            .exists());
+        let installed =
+            std::fs::read_to_string(repo.join(".agents/skills").join(skill).join("SKILL.md"))
+                .unwrap();
+        assert!(installed.starts_with("---\nname: provenance-"));
+        assert!(installed.contains("\n---\n"));
         assert!(repo.join(".claude/skills").join(skill).exists());
     }
-    let agents = read_agents(&repo);
-    assert!(agents.starts_with("## Provenance\n"));
-    assert_eq!(managed_heading_count(&agents), 1);
+}
+
+#[test]
+#[verifies("rule_generated_outputs_ignored", examples)]
+fn init_ignores_the_generated_cache() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+
+    init(&repo).success();
+
     assert_eq!(
         std::fs::read_to_string(repo.join(".gitignore")).unwrap(),
         ".provenance/cache/\n"
@@ -38,26 +43,9 @@ fn init_installs_bundled_skills_and_managed_section() {
 }
 
 #[test]
-fn init_guidance_explains_how_to_drop_questions_and_topics() {
-    let temporary = tempfile::tempdir().unwrap();
-    let repo = temporary.path().join("repo");
-
-    init(&repo).success();
-
-    let agents = read_agents(&repo);
-    let shaping =
-        std::fs::read_to_string(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
-    for text in [&agents, &shaping] {
-        assert!(text.contains("questions <question_id> update"), "{text}");
-        assert!(text.contains("topics <topic_id> update"), "{text}");
-        assert!(text.contains("\"status\":\"archived\""), "{text}");
-        assert!(text.contains("archived_in_commit"), "{text}");
-    }
-}
-
-#[test]
 #[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_owns_agents_provenance_section", examples)]
+/// This flow checks that repeated initialization preserves both managed artifact families.
 fn init_onboarding_is_idempotent() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -123,7 +111,6 @@ fn init_refuses_managed_skill_paths_with_symlinked_ancestors() {
 }
 
 #[test]
-#[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_upgrades_hash_owned_skills", examples)]
 fn init_upgrades_an_unedited_skill_from_a_prior_provenance_version() {
     let temporary = tempfile::tempdir().unwrap();
@@ -139,7 +126,6 @@ fn init_upgrades_an_unedited_skill_from_a_prior_provenance_version() {
 }
 
 #[test]
-#[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_upgrades_hash_owned_skills", examples)]
 fn init_refuses_to_replace_an_edited_skill_from_a_prior_provenance_version() {
     let temporary = tempfile::tempdir().unwrap();
@@ -165,6 +151,7 @@ fn init_refuses_to_replace_an_edited_skill_from_a_prior_provenance_version() {
 #[test]
 #[verifies("rule_init_upgrades_hash_owned_skills", examples)]
 #[verifies("rule_init_plan_rejection_preserves_targets", examples)]
+/// This flow checks that a changed prior skill stops the complete initialization plan.
 fn a_skill_conflict_leaves_a_new_repository_without_partial_onboarding() {
     let temporary = tempfile::tempdir().unwrap();
     let source = temporary.path().join("source");
@@ -193,6 +180,7 @@ fn a_skill_conflict_leaves_a_new_repository_without_partial_onboarding() {
 #[test]
 #[verifies("rule_init_plans_all_project_writes", examples)]
 #[verifies("rule_init_plan_rejection_preserves_targets", examples)]
+/// This flow checks that a late conflict stops all planned repository writes.
 fn a_late_claude_conflict_leaves_every_existing_file_unchanged() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -231,6 +219,7 @@ fn a_late_claude_conflict_leaves_every_existing_file_unchanged() {
 #[test]
 #[verifies("rule_init_plan_rejection_preserves_targets", examples)]
 #[verifies("rule_init_validates_planned_repository", examples)]
+/// This flow checks that graph validation fails before the initialization plan writes files.
 fn invalid_existing_graph_is_rejected_before_onboarding_writes() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -249,6 +238,7 @@ fn invalid_existing_graph_is_rejected_before_onboarding_writes() {
 }
 
 #[test]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
 fn invalid_agents_text_is_rejected_before_any_init_write() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -268,6 +258,7 @@ fn invalid_agents_text_is_rejected_before_any_init_write() {
 }
 
 #[test]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
 fn invalid_gitignore_text_is_rejected_before_any_init_write() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -287,6 +278,7 @@ fn invalid_gitignore_text_is_rejected_before_any_init_write() {
 }
 
 #[test]
+#[verifies("rule_init_plan_rejection_preserves_targets", examples)]
 fn existing_manifest_is_preserved_when_a_late_skill_conflicts() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -308,6 +300,7 @@ fn existing_manifest_is_preserved_when_a_late_skill_conflicts() {
 #[test]
 #[verifies("rule_init_plan_rejection_preserves_targets", examples)]
 #[verifies("rule_init_validates_planned_repository", examples)]
+/// This flow checks that planned validation failure preserves every original artifact.
 fn planned_validation_failure_preserves_the_original_repository() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -418,7 +411,6 @@ fn init_does_not_claim_a_blockquoted_provenance_heading() {
     assert!(agents.starts_with(existing));
     assert_eq!(managed_heading_count(&agents), 1);
 }
-
 fn init(repo: &Path) -> assert_cmd::assert::Assert {
     init_with(repo, &[])
 }

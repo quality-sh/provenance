@@ -1,5 +1,5 @@
 use provenance_store::operations::catalog::{self, Definition, HttpMethod};
-use std::{collections::BTreeMap, sync::OnceLock};
+use std::{collections::BTreeMap, fmt::Write as _, sync::OnceLock};
 
 pub(super) struct Resolved {
     pub address: &'static Address,
@@ -26,12 +26,8 @@ pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<R
         .into_iter()
         .filter(|address| address.words.len() == supplied.len())
         .collect::<Vec<_>>();
-    let address = select_address(candidates, supplied).ok_or_else(|| {
-        anyhow::anyhow!(
-            "the catalog does not declare the {collection} command: {}",
-            supplied.join(" ")
-        )
-    })?;
+    let address =
+        select_address(candidates, supplied).ok_or_else(|| unknown(collection, supplied))?;
     let values = address_values(address, supplied).expect("selected address matches");
     Ok(Resolved {
         address,
@@ -39,6 +35,24 @@ pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<R
         query: address.query,
         values,
     })
+}
+
+fn unknown(collection: &str, supplied: &[String]) -> anyhow::Error {
+    let mut message = format!(
+        "the catalog does not declare the {collection} command: {}",
+        supplied.join(" ")
+    );
+    if let [id, form] = supplied {
+        if matches!(form.as_str(), "feedback" | "review") {
+            write!(
+                message,
+                "; to read review feedback, run `{}`",
+                super::review_read_command(id)
+            )
+            .expect("writing to a String cannot fail");
+        }
+    }
+    anyhow::anyhow!(message)
 }
 
 fn addresses() -> &'static [Address] {
@@ -217,6 +231,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "ambiguous CLI registrations")]
+    /// Implementation aid: this proves that route grammar categories do not overlap.
     fn construction_rejects_intersecting_address_grammars() {
         let definition = &catalog::definitions()[0];
         reject_ambiguous(&[
