@@ -136,6 +136,12 @@ async fn plain_save_to_previous_content_has_no_discussion_origin() {
     let discussion = start(&store, "Use text A.");
     let origin = origin_of(&discussion);
     let text_a = json!({"description":"Text A."});
+    store.save_requirement(save(&store, text_a.clone())).unwrap();
+    commit_state(&temp, "Save text A before the discussion outcome");
+    store
+        .save_requirement(save(&store, json!({"description":"Text B."})))
+        .unwrap();
+    commit_state(&temp, "Save text B before the discussion outcome");
     store
         .save_requirement_from_discussion(save(&store, text_a.clone()), &origin)
         .unwrap();
@@ -162,11 +168,14 @@ async fn plain_save_to_previous_content_has_no_discussion_origin() {
     .unwrap()
     .result
     .entries;
-    assert_eq!(history.len(), 3);
-    assert_eq!(history[0].origin, Some(origin));
-    assert_eq!(history[0].revision, history[2].revision);
-    assert_eq!(history[2].id.as_str(), "working");
-    assert_eq!(history[2].changed_fields, ["description"]);
+    assert_eq!(history.len(), 5);
+    assert_eq!(history[0].origin, None);
     assert_eq!(history[1].origin, None);
-    assert_eq!(history[2].origin, None);
+    assert_eq!(history[2].origin, Some(origin));
+    assert_eq!(history[0].revision, history[2].revision);
+    assert_eq!(history[2].revision, history[4].revision);
+    assert_eq!(history[4].id.as_str(), "working");
+    assert_eq!(history[4].changed_fields, ["description"]);
+    assert_eq!(history[3].origin, None);
+    assert_eq!(history[4].origin, None);
 }
