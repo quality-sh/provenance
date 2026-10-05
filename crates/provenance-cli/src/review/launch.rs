@@ -61,10 +61,9 @@ impl LaunchKey {
             "the review launch key is not a regular file"
         );
         #[cfg(unix)]
-        anyhow::ensure!(
-            metadata.permissions().mode() & 0o077 == 0,
-            "the review launch key is open to other users"
-        );
+        if metadata.permissions().mode() & 0o077 != 0 {
+            anyhow::bail!("the review launch key is open to other users");
+        }
         let value = std::fs::read_to_string(&path).context("cannot read the review launch key")?;
         anyhow::ensure!(is_secret(&value), "the review launch key is not valid");
         Ok(value)
@@ -156,6 +155,7 @@ impl LaunchCodes {
             }
         }
         live.remove(found?);
+        drop(live);
         Some(self.inner.bearer.clone())
     }
 
@@ -188,10 +188,10 @@ pub(super) async fn open_session(State(codes): State<LaunchCodes>, body: Bytes) 
     let bearer = serde_json::from_slice::<SessionRequest>(&body)
         .ok()
         .and_then(|request| codes.redeem(&request.code, Instant::now()));
-    match bearer {
-        Some(bearer) => Json(json!({ "bearer": bearer })).into_response(),
-        None => super::refusal(OperationFailure::Unauthenticated),
-    }
+    bearer.map_or_else(
+        || super::refusal(OperationFailure::Unauthenticated),
+        |bearer| Json(json!({ "bearer": bearer })).into_response(),
+    )
 }
 
 #[cfg(test)]

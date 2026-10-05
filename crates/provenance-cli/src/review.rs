@@ -1,5 +1,5 @@
 mod assets;
-pub(crate) mod launch;
+pub mod launch;
 
 use anyhow::Context;
 use axum::{
