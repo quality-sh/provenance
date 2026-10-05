@@ -1,9 +1,10 @@
 pub use provenance_transport::fixture::records::Repository;
 
-/// Configures the reviewer through the repository configuration API.
+#[path = "../../../provenance-store/tests/support/initialization.rs"]
+mod initialization;
+
+/// Uses the same manifest plan as repository initialization.
 #[allow(dead_code)]
 pub fn allow_reviewer(repo: &Repository) {
-    provenance_store::state_store::StateStore::new(repo.layout.clone())
-        .set_disposition_actor_ids(vec!["reviewer".into()])
-        .unwrap();
+    initialization::allow_reviewer(&repo.layout);
 }

@@ -8,12 +8,7 @@ use serde_json::{json, Value};
 pub fn fixture() -> (tempfile::TempDir, StateStore) {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
-    )
-    .unwrap();
+    initialization::initialize(&layout, &[]);
     let store = StateStore::new(layout);
     store
         .create_review_requirement(serde_json::from_value(json!({
@@ -76,10 +71,12 @@ pub fn commit_state(temp: &tempfile::TempDir, message: &str) -> String {
     git(temp, &["rev-parse", "HEAD"])
 }
 
-/// Configures the reviewer through the repository configuration API.
+#[path = "../support/initialization.rs"]
+mod initialization;
+
+/// Uses the same manifest plan as repository initialization.
 #[allow(dead_code)]
-pub fn allow_reviewer(store: &StateStore) {
-    store
-        .set_disposition_actor_ids(vec!["reviewer".into()])
-        .unwrap();
+pub fn allow_reviewer(temp: &tempfile::TempDir) {
+    let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+    initialization::allow_reviewer(&layout);
 }

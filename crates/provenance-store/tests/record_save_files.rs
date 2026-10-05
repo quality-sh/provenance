@@ -1,3 +1,6 @@
+#[path = "support/initialization.rs"]
+mod initialization;
+
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;
 use provenance_macros::verifies;
@@ -118,12 +121,7 @@ fn create_and_update_every_kind(store: &StateStore, scope: &ScopeId) {
 fn record_saves_change_only_record_files() {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
-    )
-    .unwrap();
+    initialization::initialize(&layout, &[]);
     let store = StateStore::new(layout.clone());
     let scope = ScopeId::new("default").unwrap();
 
