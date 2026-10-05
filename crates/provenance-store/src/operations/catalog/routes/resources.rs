@@ -466,7 +466,7 @@ fn requirements(out: &mut Vec<Definition>) {
             "createRequirement",
             HttpMethod::Post,
             "/requirements",
-            "Create one Requirement through the guarded review journal.",
+            "Create one Requirement and open its review submission.",
             ResponseKind::Resource,
             Vec::new(),
         )

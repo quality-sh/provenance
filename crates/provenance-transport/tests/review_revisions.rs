@@ -127,3 +127,101 @@ async fn accepted_text_returns_as_accepted() {
     assert_eq!(acceptance["revision"], revision_a);
     assert_eq!(acceptance["disposition"]["id"], disposition);
 }
+
+fn commit(repo: &Repository) -> String {
+    let git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "Reviewer")
+            .env("GIT_AUTHOR_EMAIL", "reviewer@example.com")
+            .env("GIT_COMMITTER_NAME", "Reviewer")
+            .env("GIT_COMMITTER_EMAIL", "reviewer@example.com")
+            .current_dir(repo.dir.path())
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "git {args:?}: {output:?}");
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    if !repo.dir.path().join(".git").exists() {
+        git(&["init", "-q"]);
+    }
+    git(&["add", ".provenance/state"]);
+    git(&["-c", "commit.gpgsign=false", "commit", "-q", "-m", "Save record"]);
+    git(&["rev-parse", "HEAD"])
+}
+
+#[tokio::test]
+#[verifies("rule_record_history_reads_git", examples)]
+#[verifies("rule_change_view_has_before_and_after_states", examples)]
+async fn rejected_text_return_uses_previous_git_version_for_evidence() {
+    let repo = Repository::new("The shared graph is readable.");
+    allow_reviewer(&repo);
+    let host = host(&repo);
+    let (status, created, _) = call(
+        &host,
+        "POST",
+        "/requirements",
+        Some(json!({"data":{
+            "actor":"agent","id":"req_flow","statement":"The limit is 2000 dollars.",
+            "status":"discovery","depends_on":[],"supersedes":[]
+        }})),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{created}");
+    let revision_a = created["data"]["edit"]["revision"].clone();
+    let original = commit(&repo);
+    let changed = set_statement(&host, "The limit is 3000 dollars.").await;
+    let previous = commit(&repo);
+    let proposal = changed["decision"]["pending"]["proposal_id"].as_str().unwrap();
+    let (status, rejected, _) = call(
+        &host,
+        "POST",
+        &format!("/requirements/req_flow/submissions/{proposal}/decide"),
+        Some(json!({"data":{
+            "actor":{"identity_type":"human","id":"reviewer"},
+            "decision":"rejected", "rationale":"Keep the limit at 2000 dollars.",
+            "canonical_artifact":null, "feedback":null, "declared_by":null
+        }})),
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{rejected}");
+    let returned = set_statement(&host, "The limit is 2000 dollars.").await;
+    assert_eq!(returned["decision"]["pending"]["revision"], revision_a);
+    assert_ne!(returned["decision"]["pending"]["proposal_id"], proposal);
+
+    for committed in [false, true] {
+        let selected = if committed {
+            commit(&repo)
+        } else {
+            "working".to_owned()
+        };
+        let base = "/requirements/req_flow/history";
+        let (status, history, _) = call(&host, "GET", base, None, None).await;
+        assert_eq!(status, 200, "{history}");
+        let entries = history["data"]["items"].as_array().unwrap();
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0]["id"], original);
+        let latest = entries.last().unwrap();
+        assert_eq!(latest["id"], selected);
+        assert_eq!(latest["revision"], revision_a);
+        assert_eq!(latest["before"], previous);
+        assert_eq!(latest["changed_fields"], json!(["statement"]));
+        let (status, entry, _) =
+            call(&host, "GET", &format!("{base}/{selected}"), None, None).await;
+        assert_eq!(status, 200, "{entry}");
+        assert_eq!(entry["data"], *latest);
+        for (side, expected) in [
+            ("before", "The limit is 3000 dollars."),
+            ("after", "The limit is 2000 dollars."),
+        ] {
+            let path = format!("{base}/{selected}/evidence/{side}?field=statement");
+            let (status, evidence, _) = call(&host, "GET", &path, None, None).await;
+            assert_eq!(status, 200, "{evidence}");
+            let text: String =
+                serde_json::from_str(evidence["data"]["json_text"].as_str().unwrap()).unwrap();
+            assert_eq!(text, expected);
+        }
+    }
+}
