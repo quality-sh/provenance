@@ -18,7 +18,9 @@ fn an_expired_code_is_refused() {
     let expired = codes.issue(issued_at);
 
     assert!(codes
-        .redeem(&inside, issued_at + CODE_LIFETIME - Duration::from_secs(1))
+        .redeem(&inside, issued_at + Duration::from_secs(119))
         .is_some());
-    assert!(codes.redeem(&expired, issued_at + CODE_LIFETIME).is_none());
+    assert!(codes
+        .redeem(&expired, issued_at + Duration::from_secs(120))
+        .is_none());
 }
