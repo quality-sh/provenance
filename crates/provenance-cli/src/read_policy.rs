@@ -34,7 +34,7 @@ mod tests {
             .iter()
             .find(|definition| definition.path == "/rules")
             .unwrap();
-        definition.parameters().clone()
+        definition.parameters()
     }
 
     #[test]
