@@ -142,3 +142,26 @@ fn a_failed_browser_prints_the_link() {
     let link = output["review_url"].as_str().unwrap();
     assert_eq!(redeem(&host, &launch_code(link)).status(), 200);
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+#[verifies("rule_review_link_printed_when_not_opened", examples)]
+fn no_display_prints_a_usable_link_without_a_browser_override() {
+    let (repo, host) = running_review();
+    let output = review_link(&host, repo.path(), |command| {
+        for name in [
+            "BROWSER",
+            "DISPLAY",
+            "WAYLAND_DISPLAY",
+            "SSH_CONNECTION",
+            "SSH_CLIENT",
+            "SSH_TTY",
+        ] {
+            command.env_remove(name);
+        }
+    });
+
+    assert_eq!(output["opened"], false);
+    let link = output["review_url"].as_str().unwrap();
+    assert_eq!(redeem(&host, &launch_code(link)).status(), 200);
+}
