@@ -34,6 +34,9 @@ pub struct Options {
     /// Loopback port. Zero selects an available port.
     #[arg(long, default_value_t = 0)]
     port: u16,
+    /// Do not open the review page in a browser.
+    #[arg(long)]
+    no_open: bool,
 }
 
 pub async fn run(options: Options) -> anyhow::Result<()> {
@@ -119,7 +122,36 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         })
     );
     std::io::stdout().flush()?;
+    open_review_page(&endpoint, &codes, options.no_open)?;
     serve(listener, router, host, signals).await
+}
+
+/// Opens the review page signed in, or tells the person which link to open.
+fn open_review_page(
+    endpoint: &str,
+    codes: &launch::LaunchCodes,
+    no_open: bool,
+) -> anyhow::Result<()> {
+    if no_open {
+        return Ok(());
+    }
+    let mut link = url::Url::parse(&format!("{endpoint}/"))?;
+    link.set_fragment(Some(&format!(
+        "launch={}",
+        codes.issue(std::time::Instant::now())
+    )));
+    // A browser program can stay open, so the host does not wait for it before it serves.
+    tokio::task::spawn_blocking(move || {
+        if let crate::browser::Opening::Printed(reason) =
+            crate::browser::open_or_print(&link, false)
+        {
+            eprintln!(
+                "The review page did not open because {}. Open this link in your browser: {link}",
+                reason.reason()
+            );
+        }
+    });
+    Ok(())
 }
 
 async fn serve(

@@ -49,6 +49,7 @@ fs2 = "0.4"
 fs_at = "0.2"
 insta = "1.39"
 jsonschema = { version = "0.18", features = ["draft202012"] }
+open = "5.4"
 proc-macro2 = "1.0"
 pulldown-cmark = "0.10"
 quote = "1.0"

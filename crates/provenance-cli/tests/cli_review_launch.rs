@@ -36,6 +36,7 @@ fn review_link(host: &Host, root: &Path) -> String {
         .args([
             "req_launch",
             "--review-link",
+            "--no-open",
             "--repo",
             root.to_str().unwrap(),
             "--format",

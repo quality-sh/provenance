@@ -161,13 +161,28 @@ pub fn start(root: &std::path::Path) -> Host {
     start_command(command)
 }
 
+/// Starts a host that may open the browser; the caller sets up the command first.
+pub fn start_with(root: &std::path::Path, configure: impl FnOnce(&mut Command)) -> Host {
+    let mut command = host_command(root);
+    command.stderr(Stdio::inherit());
+    configure(&mut command);
+    start_command(command)
+}
+
 pub fn start_capturing_stderr(root: &std::path::Path) -> Host {
     let mut command = review_command(root);
     command.stderr(Stdio::piped());
     start_command(command)
 }
 
+/// Builds a host command that never opens a browser.
 pub fn review_command(root: &std::path::Path) -> Command {
+    let mut command = host_command(root);
+    command.arg("--no-open");
+    command
+}
+
+fn host_command(root: &std::path::Path) -> Command {
     let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
     command.args([
         "review",
@@ -218,6 +233,76 @@ fn use_user_cache(command: &mut Command, root: &Path) {
 
 fn cache_directory(root: &Path) -> PathBuf {
     root.join("Library").join("Caches")
+}
+
+/// A BROWSER program that records each page it gets: sh on Unix, a command script on Windows.
+pub struct BrowserRecorder {
+    directory: tempfile::TempDir,
+}
+
+impl BrowserRecorder {
+    pub fn install() -> Self {
+        let directory = tempfile::tempdir().unwrap();
+        let record = directory.path().join("opened.html");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let script = format!("#!/bin/sh\ncat \"$1\" >> '{}'\n", record.display());
+            std::fs::write(Self::program_in(directory.path()), script).unwrap();
+            std::fs::set_permissions(
+                Self::program_in(directory.path()),
+                std::fs::Permissions::from_mode(0o700),
+            )
+            .unwrap();
+        }
+        #[cfg(windows)]
+        std::fs::write(
+            Self::program_in(directory.path()),
+            format!("@type \"%~1\" >> \"{}\"\r\n", record.display()),
+        )
+        .unwrap();
+        Self { directory }
+    }
+
+    fn program_in(directory: &Path) -> PathBuf {
+        directory.join(if cfg!(windows) {
+            "browser.cmd"
+        } else {
+            "browser.sh"
+        })
+    }
+
+    /// Makes the command a local desktop session whose browser is this recorder.
+    pub fn configure(&self, command: &mut Command) {
+        command
+            .env("BROWSER", Self::program_in(self.directory.path()))
+            .env("DISPLAY", ":0")
+            .env_remove("SSH_CONNECTION")
+            .env_remove("SSH_CLIENT")
+            .env_remove("SSH_TTY");
+    }
+
+    /// Returns the link of the first page the browser got, if it got one.
+    pub fn opened_link(&self) -> Option<String> {
+        let page = std::fs::read_to_string(self.directory.path().join("opened.html")).ok()?;
+        let start = page.find("href=\"")? + "href=\"".len();
+        let end = start + page[start..].find('"')?;
+        Some(page[start..end].replace("&amp;", "&"))
+    }
+
+    pub fn wait_for_link(&self, timeout: Duration) -> String {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if let Some(link) = self.opened_link() {
+                return link;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the browser did not get a page"
+            );
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
 }
 
 /// Takes the launch code from the fragment of a review link.

@@ -47,7 +47,7 @@ try {
       }),
     });
   }
-  host = spawn(binary, ['review', '--repo', repository, '--repository-id', 'fixture', '--scope', 'default'], {
+  host = spawn(binary, ['review', '--repo', repository, '--repository-id', 'fixture', '--scope', 'default', '--no-open'], {
     cwd: work, env: { ...process.env, PATH: work }, stdio: ['ignore', 'pipe', 'inherit'],
   });
   const exited = once(host, 'exit');

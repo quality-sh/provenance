@@ -1,4 +1,5 @@
 mod atomic_file;
+mod browser;
 mod catalog_cli;
 mod cli;
 mod docs;

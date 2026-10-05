@@ -20,6 +20,8 @@ pub struct AffectedReviewRecord {
 struct LinkOutput {
     review_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    opened: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<String>,
 }
 
@@ -35,6 +37,7 @@ pub async fn print(
     context: &RepoContext,
     record_id: &str,
     format: Option<provenance_cli::porcelain::OutputFormat>,
+    no_open: bool,
 ) -> anyhow::Result<()> {
     let host = context.local_host()?;
     let record = host
@@ -52,12 +55,14 @@ pub async fn print(
     .await?
     .ok_or_else(|| anyhow::anyhow!("record {record_id} is not in a Requirement review document"))?;
     let output = match &target.host {
-        Some(host) => LinkOutput {
-            review_url: Some(launch_link(host, &target)?),
-            message: None,
-        },
+        Some(host) => opened_output(
+            launch_link(host, &target)?,
+            plain_link(host, &target),
+            no_open,
+        ),
         None => LinkOutput {
             review_url: None,
+            opened: None,
             message: Some(start_message(context)),
         },
     };
@@ -99,16 +104,35 @@ async fn try_annotate_write(
         return Ok(());
     };
     match &target.host {
-        Some(host) => {
-            value["data"]["review_url"] = Value::String(build_url(
-                host.endpoint(),
-                target.root.as_str(),
-                target.focus.as_deref(),
-            ));
-        }
+        Some(host) => value["data"]["review_url"] = Value::String(plain_link(host, &target)),
         None => value["data"]["review_message"] = Value::String(start_message(context)),
     }
     Ok(())
+}
+
+/// Opens the launch link, or puts it in the output for the caller when the CLI cannot open it.
+#[rule("rule_review_link_printed_when_not_opened")]
+fn opened_output(launch: url::Url, plain: String, no_open: bool) -> LinkOutput {
+    match crate::browser::open_or_print(&launch, no_open) {
+        crate::browser::Opening::Opened => LinkOutput {
+            review_url: Some(plain),
+            opened: Some(true),
+            message: None,
+        },
+        crate::browser::Opening::Printed(_) => LinkOutput {
+            review_url: Some(launch.into()),
+            opened: Some(false),
+            message: None,
+        },
+    }
+}
+
+fn plain_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> String {
+    build_url(
+        host.endpoint(),
+        target.root.as_str(),
+        target.focus.as_deref(),
+    )
 }
 
 /// Finds the review document that holds the record and the host that can show it.
@@ -157,7 +181,7 @@ fn start_message(context: &RepoContext) -> String {
 
 /// Adds a single-use launch code that signs the review page in when the link opens.
 #[rule("rule_review_link_opens_signed_in")]
-fn launch_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> anyhow::Result<String> {
+fn launch_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> anyhow::Result<url::Url> {
     let key = crate::review::launch::LaunchKey::read(host.instance_nonce())?;
     let mut url = host.endpoint().clone();
     url.set_path(LAUNCH_CODE_ROUTE);
@@ -174,13 +198,9 @@ fn launch_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> anyhow::Res
         .as_str()
         .filter(|code| code.len() == 64 && code.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .context("the review host sent a launch code that is not valid")?;
-    let mut link = url::Url::parse(&build_url(
-        host.endpoint(),
-        target.root.as_str(),
-        target.focus.as_deref(),
-    ))?;
+    let mut link = url::Url::parse(&plain_link(host, target))?;
     link.set_fragment(Some(&format!("launch={code}")));
-    Ok(link.into())
+    Ok(link)
 }
 
 /// Puts the review document and optional focused record into the review URL.

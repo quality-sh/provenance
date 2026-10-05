@@ -89,6 +89,7 @@ fn explicit_read_links_to_the_containing_requirement() {
             "--repo",
             &repo,
             "--review-link",
+            "--no-open",
             "--format",
             "json",
         ])

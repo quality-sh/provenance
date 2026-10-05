@@ -131,6 +131,7 @@ fn start_host(work: &Path, repo: &Path) -> Host {
             "A",
             "--scope",
             "default",
+            "--no-open",
         ])
         .current_dir(work)
         // The copied executable has no Node executable or asset directory available.
