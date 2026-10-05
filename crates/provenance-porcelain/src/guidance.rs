@@ -40,6 +40,11 @@ A source citation does not count as an Implementation binding. Coverage checks e
 Use search to find IDs, then get to read the selected record and its related views. Create names an explicit record type; actions on an existing record infer its type.\n\
 Available actions depend on the selected surface and its access. Use CLI help or the advertised MCP tools for supported inputs and actions.\n\n",
     );
+    text.push_str(
+        "For a focused start, run:\n\n\
+- `provenance search --text <text> --scope <scope> --format json`\n\
+- `provenance <id> get --view children --depth <N> --scope <scope> --format json`\n\n",
+    );
     for (name, description) in [
         ("get", GET_DESCRIPTION),
         ("search", SEARCH_DESCRIPTION),

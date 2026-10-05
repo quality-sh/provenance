@@ -41,7 +41,7 @@ The collection commands are:
 provenance <collection> list
 provenance <collection> create [scalar flags | --stdin]
 provenance <collection> search --text <text> [--limit <count>] [--cursor <cursor>]
-provenance rules stale [--base <commit>] [--head <commit>]
+provenance rules stale --base <commit> [--head <commit>]
 provenance rules resolve-symbol --file <path> [--symbol <name>] [--line <line>]
 ```
 
@@ -59,6 +59,12 @@ provenance <collection> <id> update [scalar flags | --stdin]
 provenance <collection> <id> trace [--direction in|out|both] [--max-depth <count>]
 provenance <collection> <id> neighbors [--direction in|out|both] [--limit <count>]
 provenance <collection> <id> impact
+```
+
+For one bounded view across record kinds, use the target-first read:
+
+```text
+provenance <id> get --view children --depth <count>
 ```
 
 Examples:

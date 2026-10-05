@@ -82,6 +82,9 @@ pub fn command(collection: &str) -> anyhow::Result<Command> {
             .help("Print help for the addressed operation, or the collection overview"),
     );
     let mut help = help::collection(collection);
+    help.push_str(
+        "\n\nFor a bounded view across related record kinds, run:\n  provenance <id> get --view children --depth <N>",
+    );
     if collection == "questions" {
         help.push_str(help::question_guidance());
     }
