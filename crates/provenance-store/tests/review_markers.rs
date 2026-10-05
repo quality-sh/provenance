@@ -53,3 +53,24 @@ fn edit_state_omits_snapshot() {
     let value = serde_json::to_value(state).unwrap();
     assert!(value.get("snapshot").is_none());
 }
+
+/// Implementation aid: retained stored markers cannot change review edit state.
+#[test]
+fn review_edit_state_ignores_retained_format_markers() {
+    let (temp, store) = fixture();
+    let before = store.requirement_edit_state(&scope(), &id()).unwrap();
+    let layout = provenance_store::layout::ProvenanceLayout::new(
+        camino::Utf8Path::from_path(temp.path()).unwrap(),
+    );
+    let path = provenance_store::shards::requirements_path(&layout, &scope());
+    let mut stored: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    for marker in [2, 3] {
+        stored["schema_version"] = json!(marker);
+        std::fs::write(&path, format!("{stored}\n")).unwrap();
+        assert_eq!(
+            store.requirement_edit_state(&scope(), &id()).unwrap(),
+            before
+        );
+    }
+}
