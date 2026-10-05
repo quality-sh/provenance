@@ -57,6 +57,7 @@ function reviewConfig(value: unknown, origin: string): ReviewConfig {
 }
 
 export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
+  const { fetch } = dependencies;
   const root = element(dependencies.document, 'root');
   const access = element(dependencies.document, 'access');
   const selection = element(dependencies.document, 'selection');
@@ -82,7 +83,7 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
     const bearer = credential.value;
     credential.value = '';
     void session.connect(bearer, async () => {
-      const response = await dependencies.fetch('/review-config', {
+      const response = await fetch('/review-config', {
         headers: { authorization: `Bearer ${bearer}` }, redirect: 'error', cache: 'no-store',
       });
       if (!response.ok) throw new Error('Access refused');
