@@ -75,10 +75,7 @@ fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
         store.ensure_review_portable(&scope_id)?;
         store.validate_ideation_scope(&scope_id)?;
         store.validate_graph_scope(&scope_id)?;
-        Ok(ScopeExport::from_snapshot(
-            context.scope.clone(),
-            snapshot,
-        ))
+        Ok(ScopeExport::from_snapshot(context.scope.clone(), snapshot))
     })
 }
 
