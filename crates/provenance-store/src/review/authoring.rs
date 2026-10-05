@@ -7,7 +7,7 @@ use super::{
 use crate::{
     canonical_digest,
     publication::with_staged_state,
-    review::{guard, journal, save::RecordEvidenceContext},
+    review::{guard, save::RecordEvidenceContext},
     state_store::{
         record_stamps::GraphRecord, AddSourceReferenceInput, CreateRequirementInput, StateStore,
         UpdateRequirementInput,
@@ -78,7 +78,7 @@ impl StateStore {
             .transpose()?
             .flatten();
         self.validated_review_entries(after.scope_id())?;
-        let request_id = journal::new_id();
+        let request_id = crate::review::new_request_id();
         self.commit_record_evidence(
             before,
             after,
@@ -109,7 +109,7 @@ impl StateStore {
                     write(&staged)?;
                     let created = staged.enroll_graph_record::<T>(&staged_path, id)?;
                     let after: ReviewRecord = created.clone().into();
-                    let request_id = journal::new_id();
+                    let request_id = crate::review::new_request_id();
                     staged.commit_record_evidence(
                         None,
                         &after,

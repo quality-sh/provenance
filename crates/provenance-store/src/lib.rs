@@ -21,6 +21,8 @@ pub mod stale;
 pub mod state_store;
 pub mod statement_analysis;
 mod test_probes;
+#[cfg(test)]
+mod test_support;
 
 /// The validator version that a completed projection rebuild records.
 ///

@@ -9,6 +9,8 @@ pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
+/// Creates the caller-independent identity for a review write.
+#[provenance_macros::rule("rule_review_request_identity_server_created")]
 pub(crate) fn new_request_id() -> provenance_core::StableId {
     journal::new_id()
 }

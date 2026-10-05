@@ -49,7 +49,7 @@ impl StateStore {
             revises: None,
         };
         let digest = request_digest(&input)?;
-        let request_id = journal::new_id();
+        let request_id = crate::review::new_request_id();
         let proposal_id = journal::new_id();
         let proposal_key = proposal_id.as_str().to_owned();
         crate::test_probes::at("requirement_submission_writing")?;

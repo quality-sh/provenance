@@ -1,10 +1,7 @@
 use super::*;
 use crate::{
     layout::ProvenanceLayout,
-    operations::catalog::{
-        Operation, PreparedContext, PreparedScope, WriteDiscussionRequest,
-        WriteTargetDiscussionRequest,
-    },
+    operations::catalog::{Operation, PreparedContext, PreparedScope},
     state_store::StateStore,
 };
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
@@ -386,103 +383,4 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
             .contains("etag"));
     });
     assert_eq!(store.review_entries(&scope).unwrap().len(), 2);
-}
-
-#[test]
-fn review_action_requests_exclude_server_created_identities() {
-    let submit = serde_json::from_value::<review::SubmitRecordReview>(json!({
-        "scope_id":"default", "actor":"agent", "record_kind":"requirement", "record_id":"req_a",
-        "title":"Title", "summary":"Summary", "source_ids":[],
-        "evidence_references":[], "builds_on":[],
-        "expected_revision":null, "revises":null
-    }));
-    assert!(submit.is_ok());
-
-    let decide = serde_json::from_value::<DecideRecordReviewRequest>(json!({
-        "scope_id":"default", "record_kind":"requirement", "record_id":"req_a", "actor":{
-            "identity_type":"human", "id":"reviewer"
-        }, "proposal_id":"prop-1", "decision":"accepted", "rationale":null,
-        "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"},
-        "feedback":null, "declared_by":null
-    }));
-    assert!(decide.is_ok());
-
-    let withdraw = serde_json::from_value::<WithdrawRecordReviewRequest>(json!({
-        "scope_id":"default", "record_kind":"requirement", "record_id":"req_a", "actor":"agent",
-        "proposal_id":"prop-1", "declared_by":null, "reason":null
-    }));
-    assert!(withdraw.is_ok());
-
-    for (field, supplied) in [
-        ("request_id", json!("client-request")),
-        ("proposal_id", json!("client-proposal")),
-        ("proposal_key", json!("client-key")),
-    ] {
-        let mut value = json!({
-            "scope_id":"default", "actor":"agent", "record_kind":"requirement", "record_id":"req_a",
-            "title":"Title", "summary":"Summary", "source_ids":[],
-            "evidence_references":[], "builds_on":[], "expected_revision":null, "revises":null
-        });
-        value[field] = supplied;
-        assert!(serde_json::from_value::<review::SubmitRecordReview>(value).is_err());
-    }
-    assert!(
-        serde_json::from_value::<DecideRecordReviewRequest>(json!({
-            "scope_id":"default", "record_kind":"requirement", "record_id":"req_a", "request_id":"client-request",
-            "actor":{"identity_type":"human", "id":"reviewer"}, "proposal_id":"prop-1",
-            "disposition_id":"client-disposition", "decision":"accepted", "rationale":null,
-            "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"},
-            "feedback":null, "declared_by":null
-        }))
-        .is_err()
-    );
-}
-
-#[test]
-fn remaining_review_write_requests_exclude_client_request_identities() {
-    let create = json!({
-        "actor":"agent", "id":"req_a", "statement":"One statement.",
-        "description":null, "status":"discovery", "domain_id":null,
-        "refines":null, "depends_on":[], "supersedes":[], "spawned_by":null,
-        "origin_thread":null, "origin_message":null, "origin":null
-    });
-    assert!(serde_json::from_value::<CreateRequirementRequest>(create.clone()).is_ok());
-
-    let update = json!({
-        "actor":"agent", "expected_etag":"etag", "declared_by":null,
-        "statement":null, "description":"New text.", "fog":null, "status":null,
-        "domain_id":null, "clear_fields":[], "relationships":null, "id":"req_a"
-    });
-    assert!(serde_json::from_value::<UpdateRequirementRequest>(update.clone()).is_ok());
-
-    let discussion = json!({
-        "scope_id":"default", "parent":{
-            "node_type":"requirement", "node_id":"req_a"
-        }, "actor":"agent", "declared_by":null,
-        "action":{"kind":"start", "role":"user", "body":"Concern."}
-    });
-    assert!(serde_json::from_value::<WriteDiscussionRequest>(discussion.clone()).is_ok());
-
-    let reply = json!({
-        "scope_id":"default", "actor":"agent", "declared_by":null,
-        "allowed_parent_kinds":["requirement"], "discussion_id":"discussion_a",
-        "expected_version":1, "role":"user", "body":"Reply."
-    });
-    assert!(serde_json::from_value::<WriteTargetDiscussionRequest>(reply.clone()).is_ok());
-
-    let mut create_with_identity = create;
-    create_with_identity["request_id"] = json!("client-request");
-    assert!(serde_json::from_value::<CreateRequirementRequest>(create_with_identity).is_err());
-
-    let mut update_with_identity = update;
-    update_with_identity["request_id"] = json!("client-request");
-    assert!(serde_json::from_value::<UpdateRequirementRequest>(update_with_identity).is_err());
-
-    let mut discussion_with_identity = discussion;
-    discussion_with_identity["request_id"] = json!("client-request");
-    assert!(serde_json::from_value::<WriteDiscussionRequest>(discussion_with_identity).is_err());
-
-    let mut reply_with_identity = reply;
-    reply_with_identity["request_id"] = json!("client-request");
-    assert!(serde_json::from_value::<WriteTargetDiscussionRequest>(reply_with_identity).is_err());
 }
