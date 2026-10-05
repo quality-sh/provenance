@@ -70,6 +70,32 @@ fn edit(store: &StateStore, request: &str, description: &str) -> SaveRequirement
     .unwrap()
 }
 
+/// Commits the saved graph state and returns the commit id.
+fn commit(repo: &Repository) -> String {
+    let git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=Reviewer",
+                "-c",
+                "user.email=reviewer@example.com",
+            ])
+            .args(["-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(repo.dir.path())
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "git {args:?} failed: {output:?}");
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    if !repo.dir.path().join(".git").exists() {
+        git(&["init", "-q"]);
+    }
+    git(&["add", ".provenance/state"]);
+    git(&["commit", "-q", "-m", "Save"]);
+    git(&["rev-parse", "HEAD"])
+}
+
 #[tokio::test]
 async fn requirement_history_pages_report_limit_has_more_and_cursor() {
     let repo = Repository::new("The shared graph is readable.");
@@ -82,6 +108,7 @@ async fn requirement_history_pages_report_limit_has_more_and_cursor() {
     }))
     .unwrap();
     store.create_review_requirement(create).unwrap();
+    let mut expected = vec![commit(&repo)];
     for version in 1..=4 {
         let save = edit(
             &store,
@@ -89,7 +116,11 @@ async fn requirement_history_pages_report_limit_has_more_and_cursor() {
             &format!("Description {version}."),
         );
         store.save_requirement(save).unwrap();
+        if version < 4 {
+            expected.push(commit(&repo));
+        }
     }
+    expected.push("working".into());
 
     let host = host(&repo);
     let base = "/requirements/req_hist/history?limit=2";
@@ -109,7 +140,7 @@ async fn requirement_history_pages_report_limit_has_more_and_cursor() {
         seen.extend(
             items
                 .iter()
-                .map(|item| item["request_id"].as_str().unwrap().to_owned()),
+                .map(|item| item["id"].as_str().unwrap().to_owned()),
         );
         if body["meta"]["has_more"] == json!(true) {
             assert_eq!(items.len(), 2, "only a full page may continue");
@@ -124,8 +155,7 @@ async fn requirement_history_pages_report_limit_has_more_and_cursor() {
     }
     assert!(exhausted, "five entries at limit two need three pages");
     assert_eq!(
-        seen,
-        ["hist_create", "hist_s1", "hist_s2", "hist_s3", "hist_s4"],
+        seen, expected,
         "concatenated pages must keep every entry once, in order"
     );
 

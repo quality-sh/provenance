@@ -54,8 +54,8 @@ impl StateStore {
                 .as_ref()
                 .map(|e| e.etag.clone())
                 .unwrap_or(journal::etag(record)?),
-            revision: head.as_ref().map(|e| e.revision.clone()),
-            snapshot: head.map(|e| e.after),
+            revision: head.map(|e| e.revision),
+            snapshot: None,
         })
     }
 

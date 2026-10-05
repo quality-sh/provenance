@@ -43,3 +43,32 @@ pub fn save(store: &StateStore, request: &str, fields: Value) -> SaveRequirement
         "update":update,"relationships":null
     })).unwrap()
 }
+
+/// Runs one Git command in the fixture repository with a fixed identity.
+pub fn git(temp: &tempfile::TempDir, args: &[&str]) -> String {
+    let output = std::process::Command::new("git")
+        .args([
+            "-c",
+            "user.name=Reviewer",
+            "-c",
+            "user.email=reviewer@example.com",
+            "-c",
+            "commit.gpgsign=false",
+        ])
+        .args(args)
+        .current_dir(temp.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "git {args:?} failed: {output:?}");
+    String::from_utf8(output.stdout).unwrap().trim().to_owned()
+}
+
+/// Commits the saved graph state and returns the commit id.
+pub fn commit_state(temp: &tempfile::TempDir, message: &str) -> String {
+    if !temp.path().join(".git").exists() {
+        git(temp, &["init", "-q"]);
+    }
+    git(temp, &["add", ".provenance/state"]);
+    git(temp, &["commit", "-q", "-m", message]);
+    git(temp, &["rev-parse", "HEAD"])
+}

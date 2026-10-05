@@ -155,10 +155,7 @@ impl StateStore {
             sequence: 1,
             predecessor: None,
             prior_revision: None,
-            revision: classifier::review_revision(
-                provenance_core::NodeType::Requirement,
-                &after.clone().into(),
-            )?,
+            revision: classifier::review_revision(provenance_core::NodeType::Requirement, &after)?,
             before: None,
             after: journal::snapshot(&self.layout, &after.clone().into())?,
             changed_fields: serde_json::to_value(&after)?

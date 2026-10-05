@@ -193,14 +193,38 @@ review_record_kinds!(define_review_record);
 pub struct RequirementEditState {
     pub etag: String,
     pub revision: Option<StableId>,
+    /// Always null. The field stays on the wire until the pinned review page
+    /// stops requiring it.
     pub snapshot: Option<SnapshotRef>,
 }
 
-/// JSON text spans concatenate to the exact immutable snapshot document.
+/// One version of a record: a commit that changed the record in its graph
+/// record file, or the saved working copy when it differs from `HEAD`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordVersion {
+    /// The commit id, or `working` for the saved working copy.
+    pub id: StableId,
+    pub commit: Option<String>,
+    pub author: Option<String>,
+    /// Commit time in seconds since the Unix epoch.
+    pub committed_at: Option<i64>,
+    pub revision: StableId,
+    /// The id of the previous version, if any.
+    pub before: Option<StableId>,
+    pub changed_fields: Vec<String>,
+    pub outcome: SaveOutcome,
+    /// The Discussion outcome that gave the record this revision.
+    pub origin: Option<crate::threads::DiscussionOrigin>,
+}
+
+/// JSON text spans concatenate to the canonical JSON of one record version,
+/// or of one field of it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvidencePage {
-    pub snapshot: SnapshotRef,
+    pub version: StableId,
     pub offset: u64,
     pub field: Option<String>,
     pub json_text: String,
@@ -229,7 +253,7 @@ const fn default_limit() -> usize {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewHistoryPage {
-    pub entries: Vec<ReviewEntry>,
+    pub entries: Vec<RecordVersion>,
     pub next_cursor: Option<String>,
 }
 

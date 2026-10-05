@@ -3,7 +3,7 @@
 mod review_support;
 
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::review::{EvidenceQuery, RecordSnapshot, ReviewHistoryQuery};
+use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};
 use provenance_store::{
     cache,
     layout::ProvenanceLayout,
@@ -36,11 +36,8 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         .is_symlink());
     let layout = ProvenanceLayout::new(&root);
     let store = StateStore::new(layout.clone());
-    let first = store
+    store
         .save_requirement(save(&store, "enroll", json!({"description":"saved"})))
-        .unwrap();
-    let second = store
-        .save_requirement(save(&store, "next", json!({"description":"later"})))
         .unwrap();
     cache::materialize_state(&layout).await.unwrap();
     let history = read_history(
@@ -56,11 +53,9 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     )
     .await
     .unwrap();
-    assert_eq!(
-        history.result.entries[0].request_id.as_str(),
-        "fixture_create"
-    );
-    assert_eq!(&history.result.entries[1..], &[first.clone(), second]);
+    assert_eq!(history.result.entries.len(), 1);
+    let working = history.result.entries[0].id.clone();
+    assert_eq!(working.as_str(), "working");
     let page = read_evidence(
         &root,
         &scope(),
@@ -68,24 +63,15 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         EvidenceQuery {
             record_kind: provenance_core::NodeType::Requirement,
             record_id: id(),
-            entry_id: first.id,
+            entry_id: working,
             before: false,
-            field: None,
+            field: Some("description".into()),
             offset: 0,
         },
     )
     .await
     .unwrap();
-    let snapshot: RecordSnapshot = serde_json::from_str(&page.result.json_text).unwrap();
-    assert_eq!(
-        snapshot
-            .record
-            .as_requirement()
-            .unwrap()
-            .description
-            .as_deref(),
-        Some("saved")
-    );
+    assert_eq!(page.result.json_text, "\"saved\"");
 }
 
 fn review_dir(root: &Utf8Path) -> Utf8PathBuf {

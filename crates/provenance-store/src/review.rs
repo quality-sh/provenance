@@ -27,6 +27,7 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
 
 pub(crate) mod cache;
 
+mod history;
 mod reads;
 pub use reads::{read_evidence, read_history};
 

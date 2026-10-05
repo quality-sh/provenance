@@ -70,7 +70,6 @@ async fn the_legacy_create_enrolls_through_the_journal() {
     .unwrap();
     assert_eq!(history.result.entries.len(), 1);
     assert_eq!(history.result.entries[0].outcome, SaveOutcome::Created);
-    assert_eq!(history.result.entries[0].actor, "authoring");
 }
 
 #[test]

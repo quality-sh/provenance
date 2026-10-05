@@ -3,7 +3,7 @@ use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::review;
 pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
-    review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryQuery},
+    review::{EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryQuery},
     threads::{DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery, DiscussionSelector},
     Message, StableId, ThreadParent,
 };
@@ -102,7 +102,7 @@ review_read!(
     ReviewHistory,
     "review-history",
     HistoryRequest,
-    ReadResult<DiscussionResultPage<ReviewEntry>>,
+    ReadResult<DiscussionResultPage<RecordVersion>>,
     |read, request| async move {
         let limit = request.limit;
         let page = review::read_history(
@@ -138,7 +138,7 @@ review_read!(
     ReviewHistoryEntry,
     "review-history-entry",
     HistoryEntryRequest,
-    ReviewEntry,
+    RecordVersion,
     |read, request| async move {
         let mut cursor = None;
         loop {
