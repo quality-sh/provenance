@@ -100,7 +100,7 @@ fn withdrawal_keeps_feedback_and_decisions() {
 
     let state = store.requirement_decision_state(&scope(), &id()).unwrap();
     assert!(state.pending.is_none());
-    assert_eq!(state.withdrawn, [revised.clone()]);
+    assert_eq!(state.withdrawn, std::slice::from_ref(&revised));
     assert_eq!(state.decisions.len(), 1);
     assert_eq!(
         Some(&state.decisions[0].disposition.id),
