@@ -13,7 +13,7 @@ use crate::{
 };
 use provenance_core::{
     review::{CycleEntry, CycleFact},
-    NodeType, StableId, Withdrawal, SUPPORTED_SCHEMA_VERSION,
+    NodeType, StableId, Withdrawal,
 };
 use provenance_macros::rule;
 
@@ -99,7 +99,6 @@ impl StateStore {
             "*",
             || {
                 self.create_withdrawal(Withdrawal {
-                    schema_version: SUPPORTED_SCHEMA_VERSION,
                     scope_id: input.scope_id.clone(),
                     id: new_id(),
                     proposal_id: input.proposal_id.clone(),

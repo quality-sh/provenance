@@ -195,7 +195,7 @@ CREATE TABLE discussions (
 CREATE INDEX idx_discussions_parent ON discussions(scope_id, json_extract(parent, '$.node_type'), json_extract(parent, '$.node_id'), discussion_id);
 
 CREATE TABLE withdrawals (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
     proposal_id TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT, PRIMARY KEY (scope_id, id)
 );
 
