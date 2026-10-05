@@ -1,6 +1,6 @@
 //! Guarded typed-spec changes to enrolled graph records.
 
-use super::{classifier, guard};
+use super::{classifier, decision_state::CycleFacts, guard};
 use crate::{
     cache::review_families, review::publication::with_record_state, state_store::StateStore,
     write_error::SourceFailure,
@@ -42,13 +42,17 @@ impl StateStore {
         desired: &[ReviewRecord],
     ) -> anyhow::Result<Vec<TypedChange>> {
         let current = review_records(&self.layout, scope)?;
+        let facts = CycleFacts::validated(self, scope)?;
         let mut changes = Vec::new();
         for before in &current {
             let after = desired
                 .iter()
                 .find(|record| record.kind() == before.kind() && record.id() == before.id());
             let Some(after) = after else {
-                return Err(enrolled_deletion_conflict(before));
+                if facts.has_submissions(before.kind(), before.id()) {
+                    return Err(enrolled_deletion_conflict(before));
+                }
+                continue;
             };
             if content(before)? == content(after)? {
                 continue;

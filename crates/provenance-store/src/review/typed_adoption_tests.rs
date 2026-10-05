@@ -3,8 +3,8 @@ use crate::{
     layout::ProvenanceLayout,
     shards,
     state_store::{
-        readers::read_jsonl, record_stamps::GraphRecord, CreateBoundaryInput, CreateDomainInput,
-        CreateQuestionInput, CreateResolutionInput, CreateTopicInput, StateStore, TypedSpecInput,
+        CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateResolutionInput,
+        CreateTopicInput, StateStore, TypedSpecInput,
     },
     write_error::{WriteError, WriteFailure},
 };
@@ -14,9 +14,8 @@ use provenance_core::{
         TypedAdoptionTarget, TypedDeclarationKind, TypedRequirementInput, TypedRuleInput,
         TypedSourceInput,
     },
-    ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, NodeType, Question, QuestionStatus,
-    Requirement, Resolution, ResolutionMethod, ResolutionStatus, Rule, ScopeId, Source,
-    SourceReference, StableId, Topic, TopicStatus, SUPPORTED_SCHEMA_VERSION,
+    ArtifactLink, ArtifactLinkTargetType, NodeType, QuestionStatus, ResolutionMethod,
+    ResolutionStatus, ScopeId, SourceReference, StableId, TopicStatus, SUPPORTED_SCHEMA_VERSION,
 };
 
 const OWNER: &str = "spec://review/typed";
@@ -78,34 +77,19 @@ fn document(source_name: &str, requirement: &str, rule: &str) -> TypedSpecInput 
     }
 }
 
-fn enroll(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
-    let path = shards::path_for(&store.layout, scope, kind);
-    match kind {
-        NodeType::Source => enroll_as::<Source>(store, &path, id),
-        NodeType::Requirement => enroll_as::<Requirement>(store, &path, id),
-        NodeType::Resolution => enroll_as::<Resolution>(store, &path, id),
-        NodeType::Rule => enroll_as::<Rule>(store, &path, id),
-        NodeType::Domain => enroll_as::<Domain>(store, &path, id),
-        NodeType::Boundary => enroll_as::<Boundary>(store, &path, id),
-        NodeType::Topic => enroll_as::<Topic>(store, &path, id),
-        NodeType::Question => enroll_as::<Question>(store, &path, id),
-    }
-}
-
-/// Enrolls one stored record through the native creation writer.
-fn enroll_as<T: GraphRecord + serde::de::DeserializeOwned>(
-    store: &StateStore,
-    path: &camino::Utf8Path,
-    id: &StableId,
-) {
-    let stored = read_jsonl::<T>(store, path)
-        .unwrap()
-        .into_iter()
-        .find(|record| record.id() == id)
-        .unwrap();
-    store
-        .create_native_record::<T>(path, id, move |_| Ok(stored))
-        .unwrap();
+/// Submits the stored record through the public review operation.
+fn submit_for_review(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) {
+    let record = review_families::record(store, scope, kind, id).unwrap();
+    let value = serde_json::to_value(record).unwrap();
+    let declared_by = ["declared_by", "made_by", "claimed_by"]
+        .iter()
+        .find_map(|name| value.get(name).filter(|value| !value.is_null()));
+    store.submit_record_review(serde_json::from_value(serde_json::json!({
+        "scope_id":scope, "actor":"author", "record_kind":kind, "record_id":id,
+        "declared_by":declared_by, "title":"Review the record", "summary":"Review the stored text.",
+        "source_ids":[], "evidence_references":[], "builds_on":[],
+        "expected_revision":null, "revises":null
+    })).unwrap()).unwrap();
 }
 
 /// The stored record of one kind and id, without its record stamps.
@@ -119,7 +103,7 @@ fn content(
     provenance_core::model::record_stamps::content_value(&record).unwrap()
 }
 
-fn enrolled_typed_records(store: &StateStore, scope: &ScopeId) -> Vec<(NodeType, StableId)> {
+fn submitted_typed_records(store: &StateStore, scope: &ScopeId) -> Vec<(NodeType, StableId)> {
     let records = vec![
         (
             NodeType::Source,
@@ -135,7 +119,7 @@ fn enrolled_typed_records(store: &StateStore, scope: &ScopeId) -> Vec<(NodeType,
         ),
     ];
     for (kind, id) in &records {
-        enroll(store, scope, *kind, id);
+        submit_for_review(store, scope, *kind, id);
     }
     records
 }
@@ -174,7 +158,7 @@ fn typed_updates_capture_owned_enrolled_records() {
             ),
         )
         .unwrap();
-    let records = enrolled_typed_records(&store, &scope);
+    let records = submitted_typed_records(&store, &scope);
 
     store
         .apply_typed_spec(
@@ -231,7 +215,7 @@ fn typed_adoption_captures_unowned_enrolled_records() {
     ];
     for (kind, _, id) in &records {
         clear_typed_owner(&store, &scope, *kind, id);
-        enroll(&store, &scope, *kind, id);
+        submit_for_review(&store, &scope, *kind, id);
     }
     input.sources[0].id = Some(records[0].2.as_str().to_owned());
     input.requirements[0].id = Some(records[1].2.as_str().to_owned());
@@ -260,7 +244,7 @@ fn typed_omission_refuses_enrolled_deletion() {
         "The system retains records.",
     );
     store.apply_typed_spec(&scope, input).unwrap();
-    let records = enrolled_typed_records(&store, &scope);
+    let records = submitted_typed_records(&store, &scope);
     let before = std::fs::read(shards::requirements_path(&store.layout, &scope)).unwrap();
     let empty = TypedSpecInput {
         schema_version: SUPPORTED_SCHEMA_VERSION.0,
@@ -400,10 +384,10 @@ fn seed_cascade_dependants(
         (NodeType::Question, "question_cascade"),
     ];
     for (kind, id) in records {
-        enroll(store, scope, kind, &StableId::new(id).unwrap());
+        submit_for_review(store, scope, kind, &StableId::new(id).unwrap());
     }
     let domain_id = StableId::new("domain_unchanged").unwrap();
-    enroll(store, scope, NodeType::Domain, &domain_id);
+    submit_for_review(store, scope, NodeType::Domain, &domain_id);
     records
 }
 

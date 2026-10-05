@@ -156,6 +156,10 @@ impl CycleFacts {
         (cycle, proposal.as_str().to_owned())
     }
 
+    pub(super) fn has_submissions(&self, kind: NodeType, record_id: &StableId) -> bool {
+        self.of_record(kind, record_id).next().is_some()
+    }
+
     fn of_record<'a>(
         &'a self,
         kind: NodeType,

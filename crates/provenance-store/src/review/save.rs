@@ -88,9 +88,8 @@ impl StateStore {
         })
     }
 
-    /// Saves a Requirement edit as a Discussion outcome and records the
-    /// revision it gives the record, so the history version of that revision
-    /// shows the change from the earlier text.
+    /// Saves a Requirement edit as a Discussion outcome. The first history
+    /// version that contains the outcome shows its Discussion origin.
     #[rule("rule_discussion_outcome_shows_record_change")]
     pub fn save_requirement_from_discussion(
         &self,

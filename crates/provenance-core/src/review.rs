@@ -143,7 +143,7 @@ pub struct RecordVersion {
     pub before: Option<StableId>,
     pub changed_fields: Vec<String>,
     pub outcome: SaveOutcome,
-    /// The Discussion outcome that gave the record this revision.
+    /// The Discussion outcome first recorded with this version.
     pub origin: Option<crate::threads::DiscussionOrigin>,
 }
 

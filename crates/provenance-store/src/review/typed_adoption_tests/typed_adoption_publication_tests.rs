@@ -49,7 +49,7 @@ fn typed_change_stamps_the_enrolled_record() {
         .unwrap();
     let requirement = store.list_requirements(&scope).unwrap()[0].clone();
     assert_eq!(requirement.updated.as_ref().unwrap().commit, commit_a);
-    enroll(&store, &scope, NodeType::Requirement, &requirement.id);
+    submit_for_review(&store, &scope, NodeType::Requirement, &requirement.id);
     std::fs::write(temp.path().join("advance.txt"), "advance\n").unwrap();
     let commit_b = commit(temp.path(), "Advance repository");
 
@@ -81,7 +81,7 @@ fn changed_description_of_an_adopted_requirement_gets_a_new_pending_proposal() {
     store.apply_typed_spec(&scope, input.clone()).unwrap();
     let requirement_id = store.list_requirements(&scope).unwrap()[0].id.clone();
     clear_typed_owner(&store, &scope, NodeType::Requirement, &requirement_id);
-    enroll(&store, &scope, NodeType::Requirement, &requirement_id);
+    submit_for_review(&store, &scope, NodeType::Requirement, &requirement_id);
     input.requirements[0].id = Some(requirement_id.as_str().to_owned());
     input.adopt_unowned = vec![TypedAdoptionTarget {
         kind: TypedDeclarationKind::Requirement,
