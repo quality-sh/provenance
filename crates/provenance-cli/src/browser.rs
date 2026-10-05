@@ -85,32 +85,37 @@ fn redirect_page(link: &url::Url) -> std::io::Result<PathBuf> {
 
 fn launch(page: &Path) -> std::io::Result<()> {
     if let Some(browser) = std::env::var_os("BROWSER").filter(|value| !value.is_empty()) {
-        let status = Command::new(browser)
-            .arg(page)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .status()?;
-        return if status.success() {
-            Ok(())
-        } else {
-            Err(std::io::Error::other("the BROWSER program failed"))
-        };
+        return spawn_opener(Command::new(browser).arg(page));
     }
     system_open(page)
 }
 
-#[cfg(windows)]
-fn system_open(page: &Path) -> std::io::Result<()> {
-    // Explorer opens the page with the default browser. Its exit status does not show success.
-    Command::new("explorer.exe")
-        .arg(page)
+fn spawn_opener(command: &mut Command) -> std::io::Result<()> {
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .status()
-        .map(|_| ())
+        .stderr(Stdio::null())
+        .spawn()?;
+    // Reap the child without making CLI exit or runtime shutdown wait for it.
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
+#[cfg(windows)]
+fn system_open(page: &Path) -> std::io::Result<()> {
+    spawn_opener(Command::new("explorer.exe").arg(page))
 }
 
 #[cfg(not(windows))]
 fn system_open(page: &Path) -> std::io::Result<()> {
-    open::that(page)
+    let mut failure = std::io::Error::other("no browser opener is available");
+    for mut command in open::commands(page) {
+        match spawn_opener(&mut command) {
+            Ok(()) => return Ok(()),
+            Err(error) => failure = error,
+        }
+    }
+    Err(failure)
 }

@@ -5,6 +5,10 @@ use provenance_macros::verifies;
 use review_host_support::{
     launch_code, redeem, repository, start, start_with, BrowserRecorder, Host,
 };
+#[cfg(unix)]
+#[path = "review_host_support/persistent_browser.rs"]
+mod persistent_browser;
+
 use serde_json::Value;
 use std::{path::Path, process::Command, time::Duration};
 
@@ -76,7 +80,7 @@ fn review_link_opens_the_record_in_the_browser() {
 
     assert_eq!(output["opened"], true);
     assert_eq!(output["review_url"], record_page(&host));
-    let opened = browser.opened_link().unwrap();
+    let opened = browser.wait_for_link(Duration::from_secs(15));
     assert!(opened.starts_with(&format!("{}#launch=", record_page(&host))));
     assert_eq!(redeem(&host, &launch_code(&opened)).status(), 200);
 }
@@ -97,7 +101,7 @@ fn review_opens_the_page_at_startup() {
 
 #[test]
 #[verifies("rule_review_commands_open_the_browser", examples)]
-/// Flow: suppress browser launch and redeem the printed fallback link.
+/// Flow: suppress browser launch and check the printed fallback link.
 fn no_open_does_not_run_the_browser() {
     let (repo, host) = running_review();
     let browser = BrowserRecorder::install();
@@ -165,4 +169,54 @@ fn no_display_prints_a_usable_link_without_a_browser_override() {
     assert_eq!(output["opened"], false);
     let link = output["review_url"].as_str().unwrap();
     assert_eq!(redeem(&host, &launch_code(link)).status(), 200);
+}
+
+#[cfg(unix)]
+#[test]
+/// Implementation aid: this flow checks command completion while its browser stays open.
+fn review_link_returns_while_the_browser_stays_open() {
+    let (repo, host) = running_review();
+    let browser = persistent_browser::PersistentBrowser::install();
+    let mut command = host.cli();
+    command.args([
+        "req_open",
+        "--review-link",
+        "--repo",
+        repo.path().to_str().unwrap(),
+        "--format",
+        "json",
+    ]);
+    browser.configure(&mut command);
+    let mut child = command.stdout(std::process::Stdio::null()).spawn().unwrap();
+    browser.wait_until_running();
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success());
+            break;
+        }
+        if std::time::Instant::now() >= deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("The review-link command waited for the browser to exit");
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    browser.assert_running();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+/// Flow: the default Linux opener gets a redirect page with a usable launch link.
+#[verifies("rule_review_commands_open_the_browser", examples)]
+fn linux_default_opener_receives_the_record_page() {
+    let (repo, host) = running_review();
+    let browser = BrowserRecorder::install();
+    let output = review_link(&host, repo.path(), |command| {
+        browser.configure_default_opener(command);
+    });
+    assert_eq!(output["opened"], true);
+    let opened = browser.wait_for_link(Duration::from_secs(15));
+    assert!(opened.starts_with(&format!("{}#launch=", record_page(&host))));
+    assert_eq!(redeem(&host, &launch_code(&opened)).status(), 200);
 }

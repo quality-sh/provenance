@@ -282,6 +282,23 @@ impl BrowserRecorder {
             .env_remove("SSH_TTY");
     }
 
+    /// Selects the real Linux default-opener branch with a recorder in place of xdg-open.
+    #[cfg(target_os = "linux")]
+    pub fn configure_default_opener(&self, command: &mut Command) {
+        std::fs::copy(
+            Self::program_in(self.directory.path()),
+            self.directory.path().join("xdg-open"),
+        )
+        .unwrap();
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let paths = std::iter::once(self.directory.path().to_path_buf())
+            .chain(std::env::split_paths(&path));
+        self.configure(command);
+        command
+            .env_remove("BROWSER")
+            .env("PATH", std::env::join_paths(paths).unwrap());
+    }
+
     /// Returns the link of the first page the browser got, if it got one.
     pub fn opened_link(&self) -> Option<String> {
         let page = std::fs::read_to_string(self.directory.path().join("opened.html")).ok()?;
