@@ -211,9 +211,6 @@ fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
     let mut walked = Vec::new();
     for family in ProjectionFamily::ALL {
         let (bytes, record_count) = family.canonical_records(&store, &scope).unwrap();
-        if matches!(family.family_name(), "withdrawals" | "discussions") && record_count == 0 {
-            continue;
-        }
         walked.push(serde_json::json!({
             "family": family.family_name(),
             "scope_id": scope.as_str(),

@@ -79,6 +79,18 @@ fn empty_typed_replacement_refuses_enrolled_source_deletion() {
             .unwrap(),
         )
         .unwrap();
+    // A native edit does not itself submit this record for review.
+    store
+        .submit_record_review(
+            serde_json::from_value(serde_json::json!({
+                "scope_id":scope, "actor":"author", "record_kind":"source",
+                "record_id":"source_typed_history", "declared_by":"spec://review/history",
+                "title":"Review the record", "summary":"Review the stored text.",
+                "source_ids":[], "evidence_references":[], "builds_on":[]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     input.sources.clear();
 
     let error = store.apply_typed_spec(&scope, input).unwrap_err();
@@ -98,6 +110,18 @@ fn empty_typed_rule_replacement_refuses_enrolled_rule_deletion() {
                 "id": "rule_typed_history",
                 "declared_by": "spec://review/history",
                 "name": "Native rule name"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    // A native edit does not itself submit this record for review.
+    store
+        .submit_record_review(
+            serde_json::from_value(serde_json::json!({
+                "scope_id":scope, "actor":"author", "record_kind":"rule",
+                "record_id":"rule_typed_history", "declared_by":"spec://review/history",
+                "title":"Review the record", "summary":"Review the stored text.",
+                "source_ids":[], "evidence_references":[], "builds_on":[]
             }))
             .unwrap(),
         )
