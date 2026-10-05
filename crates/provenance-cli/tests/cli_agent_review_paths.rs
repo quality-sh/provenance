@@ -314,6 +314,18 @@ fn repo_with_archived_rule() -> (tempfile::TempDir, String) {
     (directory, repo)
 }
 
+fn record_ids(output: &Value) -> Vec<&str> {
+    output
+        .pointer("/data/items")
+        .or_else(|| output.get("nodes"))
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|record| record["id"].as_str().unwrap())
+        .collect()
+}
+
 #[test]
 #[verifies("rule_review_defaults_exclude_terminal_records", examples)]
 fn collection_hides_terminal_records_by_default() {
@@ -321,12 +333,7 @@ fn collection_hides_terminal_records_by_default() {
 
     let listed =
         json_output(provenance().args(["rules", "list", "--repo", &repo, "--format", "json"]));
-    let ids = listed["data"]["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item["id"].as_str().unwrap())
-        .collect::<Vec<_>>();
+    let ids = record_ids(&listed);
     assert_eq!(ids, ["rule_active"]);
 }
 
@@ -345,13 +352,54 @@ fn named_query_hides_terminal_records_by_default() {
         "--format",
         "json",
     ]));
-    let ids = searched["data"]["items"]
+    let ids = record_ids(&searched);
+    assert_eq!(ids, ["rule_active"]);
+}
+
+#[test]
+#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
+fn named_query_without_terminal_parameter_runs_without_the_default() {
+    let (_directory, repo) = repo_with_archived_rule();
+
+    provenance()
+        .args([
+            "rules",
+            "stale",
+            "--repo",
+            &repo,
+            "--base",
+            "missing-base",
+            "--head",
+            "missing-head",
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("git_unavailable"));
+}
+
+#[test]
+#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
+fn document_hides_terminal_records_by_default() {
+    let (_directory, repo) = repo_with_archived_rule();
+
+    let document = json_output(provenance().args([
+        "requirements",
+        "req_terminal",
+        "document",
+        "get",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]));
+    let ids = document["data"]["entries"]
         .as_array()
         .unwrap()
         .iter()
-        .map(|item| item["id"].as_str().unwrap())
+        .map(|entry| entry["node"]["id"].as_str().unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(ids, ["rule_active"]);
+    assert!(ids.contains(&"rule_active"));
+    assert!(!ids.contains(&"rule_archived"));
 }
 
 #[test]
@@ -368,12 +416,7 @@ fn collection_includes_terminal_records_on_request() {
         "--format",
         "json",
     ]));
-    let ids = included["data"]["items"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|item| item["id"].as_str().unwrap())
-        .collect::<Vec<_>>();
+    let ids = record_ids(&included);
     assert_eq!(ids, ["rule_active", "rule_archived"]);
 }
 
@@ -390,12 +433,7 @@ fn search_hides_terminal_records_by_default() {
         "--format",
         "json",
     ]));
-    let ids = searched["nodes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|node| node["id"].as_str().unwrap())
-        .collect::<Vec<_>>();
+    let ids = record_ids(&searched);
     assert_eq!(ids, ["rule_active"]);
 }
 
@@ -413,11 +451,6 @@ fn search_includes_terminal_records_on_request() {
         "--format",
         "json",
     ]));
-    let ids = searched["nodes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|node| node["id"].as_str().unwrap())
-        .collect::<Vec<_>>();
+    let ids = record_ids(&searched);
     assert_eq!(ids, ["rule_active", "rule_archived"]);
 }
