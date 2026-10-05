@@ -98,6 +98,8 @@ fn review_view_reads_every_review_record_kind() {
             review["decision"]["current_revision"],
             review["edit"]["revision"]
         );
+        assert!(review["decision"]["pending"]["proposal_id"].is_string());
+        assert_eq!(review["decision"]["decisions"], json!([]));
         assert_eq!(review["discussions"]["entries"], json!([]));
         assert_eq!(review["discussions"]["has_more"], false);
         assert!(review["discussions"]["next_cursor"].is_null());

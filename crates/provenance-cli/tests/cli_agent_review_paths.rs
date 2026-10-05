@@ -289,25 +289,28 @@ fn review_view_gives_commands_for_each_truncated_feedback_page() {
 fn repo_with_archived_rule() -> (tempfile::TempDir, String) {
     let (directory, repo) = init();
     create_requirement(&repo, "req_terminal");
-    provenance()
-        .args([
+    for (id, status) in [("rule_active", "active"), ("rule_archived", "archived")] {
+        let mut args = vec![
             "rules",
             "create",
             "--repo",
             &repo,
             "--id",
-            "rule_archived",
+            id,
             "--statement",
             "The system keeps terminal records available on request.",
             "--requirement-id",
             "req_terminal",
             "--status",
-            "archived",
-            "--archived-in-commit-json",
-            &json!({"commit":"a".repeat(40),"at":null}).to_string(),
-        ])
-        .assert()
-        .success();
+            status,
+        ];
+        let archived_in_commit;
+        if status == "archived" {
+            archived_in_commit = json!({"commit":"a".repeat(40),"at":null}).to_string();
+            args.extend(["--archived-in-commit-json", &archived_in_commit]);
+        }
+        provenance().args(args).assert().success();
+    }
     (directory, repo)
 }
 
@@ -318,7 +321,13 @@ fn collection_hides_terminal_records_by_default() {
 
     let listed =
         json_output(provenance().args(["rules", "list", "--repo", &repo, "--format", "json"]));
-    assert_eq!(listed["data"]["items"], serde_json::json!([]));
+    let ids = listed["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["rule_active"]);
 }
 
 #[test]
@@ -336,7 +345,13 @@ fn named_query_hides_terminal_records_by_default() {
         "--format",
         "json",
     ]));
-    assert_eq!(searched["data"]["items"], serde_json::json!([]));
+    let ids = searched["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["rule_active"]);
 }
 
 #[test]
@@ -369,7 +384,13 @@ fn search_hides_terminal_records_by_default() {
         "--format",
         "json",
     ]));
-    assert_eq!(searched["nodes"], serde_json::json!([]));
+    let ids = searched["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["rule_active"]);
 }
 
 #[test]

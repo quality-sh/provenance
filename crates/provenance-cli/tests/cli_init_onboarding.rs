@@ -111,9 +111,7 @@ fn init_refuses_managed_skill_paths_with_symlinked_ancestors() {
 }
 
 #[test]
-#[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_upgrades_hash_owned_skills", examples)]
-/// This flow checks that initialization recognizes and upgrades a bundled skill it owns.
 fn init_upgrades_an_unedited_skill_from_a_prior_provenance_version() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -128,9 +126,7 @@ fn init_upgrades_an_unedited_skill_from_a_prior_provenance_version() {
 }
 
 #[test]
-#[verifies("rule_init_installs_bundled_skills", examples)]
 #[verifies("rule_init_upgrades_hash_owned_skills", examples)]
-/// This flow checks that initialization recognizes but preserves a changed bundled skill.
 fn init_refuses_to_replace_an_edited_skill_from_a_prior_provenance_version() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
