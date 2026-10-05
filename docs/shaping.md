@@ -174,20 +174,20 @@ land their candidates through the same durable shapes (ported from the Convex
 
 ### Dispose on demand
 
-The proposal shard is evidence-backed context, not a batch-review inbox. Undisposed
-proposals surface when current work enters territory they already name:
+The proposal shard is evidence-backed context, not a batch-review inbox. A Topic claim
+surfaces undisposed proposals when the claim enters territory they already name:
 
 - a diff touches an exact repository-relative `file_path` in the proposal's evidence;
 - a shaping session claims the proposal's target topic, the topic's anchor requirement,
   or one of the topic's explicit artifact links; or
 - an external work item such as a bug explicitly identifies one of those typed targets.
 
-Use `provenance proposals surface --scope <scope> --changed-path <path>` for changed files.
-Topic claims derive matching `proposed` and `asserted` views and persist the claim in the
-same publication operation, so invalid lifecycle state cannot leave a claim behind.
-Integrations that already know a typed territory can use `provenance proposals surface
---scope <scope> --target-type <type> --target-id <id>`; Provenance does not infer territory
-from issue text, titles, graph proximity, or similar filenames.
+Run `provenance topics <topic_id> claim --scope <scope> --actor <actor> --format json`.
+The result includes proposals that match the Topic, its anchor Requirement, or its explicit
+artifact links. The command persists the claim and returns the matching `proposed` and
+`asserted` views in one operation. Provenance does not infer territory from issue text,
+titles, graph proximity, or similar filenames. The CLI does not have a changed-path
+proposal query.
 
 Review all proposals together only when a small set jointly blocks the work: competing
 fork proposals, explicitly contested synthesis claims, or conflicting backtrace findings.

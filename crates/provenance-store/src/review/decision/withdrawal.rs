@@ -5,7 +5,7 @@ use crate::{
         classifier,
         decision_input::WithdrawRecordReview,
         decision_state::{request_digest, review_submission, CycleFacts, Receipt},
-        guard, new_id, owner_matches,
+        guard, new_id, new_request_id, owner_matches,
     },
     shards,
     state_store::StateStore,
@@ -121,7 +121,7 @@ impl StateStore {
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-            request_id: new_id(),
+            request_id: new_request_id(),
             intent_digest: digest,
         }
         .entry())

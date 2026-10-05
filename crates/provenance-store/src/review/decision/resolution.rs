@@ -5,7 +5,7 @@ use crate::{
         classifier,
         decision_input::{DecideRecordReview, ReviewFeedback},
         decision_state::{request_digest, review_submission, CycleFacts, Receipt},
-        guard, new_id,
+        guard, new_id, new_request_id,
     },
     shards,
     state_store::{CreateDispositionInput, StateStore},
@@ -141,7 +141,7 @@ impl StateStore {
             disposition_id: Some(disposition_id),
             feedback_message_id,
             actor: input.actor.id,
-            request_id: new_id(),
+            request_id: new_request_id(),
             intent_digest: digest,
         }
         .entry())

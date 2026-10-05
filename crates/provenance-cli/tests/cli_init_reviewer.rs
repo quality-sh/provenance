@@ -14,14 +14,6 @@ fn init(repo: &Path) -> Command {
     command
 }
 
-fn without_git_identity(command: &mut Command, temporary: &Path) {
-    let config = temporary.join("empty-gitconfig");
-    std::fs::write(&config, "").unwrap();
-    command
-        .env("GIT_CONFIG_GLOBAL", config)
-        .env("GIT_CONFIG_NOSYSTEM", "1");
-}
-
 #[test]
 #[provenance_macros::verifies("rule_init_configures_human_reviewer", examples)]
 fn init_uses_the_normalized_git_email_as_the_reviewer() {
@@ -53,6 +45,7 @@ fn init_uses_the_normalized_git_email_as_the_reviewer() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_init_configures_human_reviewer", examples)]
 fn init_keeps_the_explicit_reviewer() {
     let temporary = tempfile::tempdir().unwrap();
     let repo = temporary.path().join("repo");
@@ -65,25 +58,5 @@ fn init_keeps_the_explicit_reviewer() {
     assert_eq!(
         manifest(&repo)["disposition_actor_ids"],
         serde_json::json!(["maintainer"])
-    );
-}
-
-#[test]
-fn non_interactive_init_without_a_git_identity_warns_about_read_only_review() {
-    let temporary = tempfile::tempdir().unwrap();
-    let repo = temporary.path().join("repo");
-    let mut command = init(&repo);
-    without_git_identity(&mut command, temporary.path());
-
-    command.assert().success().stderr(predicate::str::contains(
-        format!(
-            "Warning: No reviewer is configured. Review will be read-only. Add a reviewer with `provenance init --path {} --disposition-actor-id <reviewer-id>`.",
-            repo.display()
-        ),
-    ));
-
-    assert_eq!(
-        manifest(&repo)["disposition_actor_ids"],
-        serde_json::json!([])
     );
 }

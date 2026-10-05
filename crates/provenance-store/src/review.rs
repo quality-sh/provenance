@@ -14,6 +14,12 @@ fn new_id() -> provenance_core::StableId {
         .expect("UUID uses valid stable ID characters")
 }
 
+/// Creates the caller-independent identity for a review write.
+#[provenance_macros::rule("rule_review_request_identity_server_created")]
+fn new_request_id() -> provenance_core::StableId {
+    new_id()
+}
+
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
     let value = serde_json::to_value(record)?;
     let declared_by = value.get("declared_by").and_then(serde_json::Value::as_str);

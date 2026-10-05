@@ -1,103 +1,23 @@
 #![cfg(unix)]
 
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
+#[path = "review_host_support/mod.rs"]
+mod review_host_support;
+
+use provenance_core::ScopeId;
 use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
-use serde_json::{json, Value};
+use review_host_support::{repository as initialized_repository, start_capturing_stderr, Host};
+use serde_json::json;
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Read, Write},
+    io::{Read, Write},
     net::{TcpListener, TcpStream},
-    process::{Child, Command, ExitStatus, Stdio},
-    sync::mpsc,
+    process::Command,
     time::{Duration, Instant},
 };
 
-struct Host {
-    child: Child,
-    address: String,
-    token: String,
-}
-
-impl Drop for Host {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-impl Host {
-    fn start(repo: &std::path::Path) -> Self {
-        let mut child = Command::new(assert_cmd::cargo::cargo_bin("provenance"))
-            .args([
-                "review",
-                "--repo",
-                repo.to_str().unwrap(),
-                "--repository-id",
-                "A",
-                "--scope",
-                "default",
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        let stdout = child.stdout.take().unwrap();
-        let (send, receive) = mpsc::channel();
-        std::thread::spawn(move || {
-            let mut line = String::new();
-            BufReader::new(stdout).read_line(&mut line).unwrap();
-            let _ = send.send(line);
-        });
-        let mut host = Self {
-            child,
-            address: String::new(),
-            token: String::new(),
-        };
-        let config: Value =
-            serde_json::from_str(&receive.recv_timeout(Duration::from_secs(15)).unwrap()).unwrap();
-        host.address = config["endpoint"]
-            .as_str()
-            .unwrap()
-            .strip_prefix("http://")
-            .unwrap()
-            .into();
-        host.token = config["bearer"].as_str().unwrap().into();
-        host
-    }
-
-    fn signal(&self, signal: &str) {
-        assert!(Command::new("kill")
-            .args([signal, &self.child.id().to_string()])
-            .status()
-            .unwrap()
-            .success());
-    }
-
-    fn wait(&mut self) -> ExitStatus {
-        let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            if let Some(status) = self.child.try_wait().unwrap() {
-                return status;
-            }
-            assert!(
-                Instant::now() < deadline,
-                "host did not exit after the second signal or completed write"
-            );
-            std::thread::sleep(Duration::from_millis(25));
-        }
-    }
-}
-
 fn repository() -> (tempfile::TempDir, ProvenanceLayout, Vec<u8>) {
-    let repo = tempfile::tempdir().unwrap();
+    let repo = initialized_repository();
     let layout = ProvenanceLayout::new(repo.path().to_str().unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    let manifest = serde_json::to_vec(&Manifest::default_with_scope(
-        ScopeId::new("default").unwrap(),
-        RepoPathPrefix::new("."),
-    ))
-    .unwrap();
-    std::fs::write(layout.manifest_path(), &manifest).unwrap();
     let scope = ScopeId::new("default").unwrap();
     StateStore::new(layout.clone())
         .create_requirement(provenance_store::state_store::CreateRequirementInput {
@@ -134,11 +54,11 @@ fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
         "actor":"ben", "role":"user", "body":"The active write finishes before exit."
     }})
     .to_string();
-    let mut stream = TcpStream::connect(&host.address).unwrap();
+    let mut stream = TcpStream::connect(host.address()).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
         .unwrap();
-    write!(stream, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}", host.address, host.token, body.len()).unwrap();
+    write!(stream, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}", host.address(), host.bearer(), body.len()).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match rustix::fs::open(
@@ -159,16 +79,14 @@ fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
 }
 
 #[test]
+/// Implementation aid: pins graceful shutdown ordering around an admitted write.
 fn first_signal_waits_for_an_active_write_to_finish() {
     let (repo, layout, requirements) = repository();
-    let mut host = Host::start(repo.path());
+    let mut host = start_capturing_stderr(repo.path());
     let (mut blocked, mut request) = block_write(&host, &layout);
     host.signal("-TERM");
     std::thread::sleep(Duration::from_millis(1200));
-    assert!(
-        host.child.try_wait().unwrap().is_none(),
-        "active writes have no drain deadline"
-    );
+    assert!(host.is_running(), "active writes have no drain deadline");
     // Restore the normal file before releasing the read, for later store access.
     let path =
         provenance_store::shards::requirements_path(&layout, &ScopeId::new("default").unwrap());
@@ -179,7 +97,7 @@ fn first_signal_waits_for_an_active_write_to_finish() {
     let mut response = String::new();
     request.read_to_string(&mut response).unwrap();
     assert!(response.starts_with("HTTP/1.1 200"), "{response}");
-    assert!(host.wait().success());
+    assert!(host.wait(Duration::from_secs(5)).success());
     let store = StateStore::new(layout);
     let scope = ScopeId::new("default").unwrap();
     let threads = store.list_threads(&scope).unwrap();
@@ -187,31 +105,27 @@ fn first_signal_waits_for_an_active_write_to_finish() {
     let messages = store.list_messages(&scope).unwrap();
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].body, "The active write finishes before exit.");
-    assert!(TcpListener::bind(&host.address).is_ok());
+    assert!(TcpListener::bind(host.address()).is_ok());
 }
 
 #[test]
+/// Implementation aid: pins forced shutdown and its incomplete-write warning.
 fn second_signal_forces_exit_from_a_blocked_operation_with_a_warning() {
     for (first, second) in [("-TERM", "-TERM"), ("-INT", "-INT"), ("-TERM", "-INT")] {
         let (repo, layout, _) = repository();
-        let mut host = Host::start(repo.path());
+        let mut host = start_capturing_stderr(repo.path());
         let (_blocked, _request) = block_write(&host, &layout);
         host.signal(first);
         std::thread::sleep(Duration::from_millis(1200));
-        assert!(host.child.try_wait().unwrap().is_none());
+        assert!(host.is_running());
         host.signal(second);
-        let status = host.wait();
+        let status = host.wait(Duration::from_secs(5));
         assert_eq!(status.code(), Some(1), "forced exit must report failure");
         let mut errors = String::new();
-        host.child
-            .stderr
-            .take()
-            .unwrap()
-            .read_to_string(&mut errors)
-            .unwrap();
+        host.take_stderr().read_to_string(&mut errors).unwrap();
         assert!(errors.contains("send a second signal"), "{errors}");
         assert!(errors.contains("writes may be incomplete"), "{errors}");
-        assert!(TcpStream::connect(&host.address).is_err());
-        assert!(TcpListener::bind(&host.address).is_ok());
+        assert!(TcpStream::connect(host.address()).is_err());
+        assert!(TcpListener::bind(host.address()).is_ok());
     }
 }

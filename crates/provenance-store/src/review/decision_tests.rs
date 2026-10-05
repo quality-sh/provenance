@@ -1,8 +1,3 @@
-//! Tests for the Requirement candidate and decision cycle: the full
-//! edit→submit→reject→revise→submit→approve round trip with exact versions
-//! preserved, the inherited disposition gates, bypass refusals, feedback
-//! atomicity, withdrawal, and frozen legacy history.
-
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use camino::Utf8Path;
 use provenance_core::{
@@ -20,16 +15,11 @@ fn req() -> StableId {
 fn open(root: &Utf8Path) -> StateStore {
     StateStore::new(ProvenanceLayout::new(root))
 }
-/// A manifest that allowlists "reviewer" plus one enrolled record.
+/// A repository that allowlists "reviewer" plus one enrolled record.
 fn fixture() -> tempfile::TempDir {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
-    )
-    .unwrap();
+    crate::test_support::allow_reviewer(&layout);
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     store
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
@@ -129,6 +119,9 @@ fn refused<T: std::fmt::Debug>(attempt: anyhow::Result<T>, needle: &str) {
 }
 
 #[test]
+/// This flow follows one record through rejection, revision, and approval.
+#[provenance_macros::verifies("rule_approval_accepts_reviewed_version", examples)]
+#[provenance_macros::verifies("rule_revised_item_requires_new_review", examples)]
 fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
@@ -215,6 +208,7 @@ fn assert_lifecycle_and_proposals_unchanged(store: &StateStore, statement: &str)
 }
 
 #[test]
+/// Implementation aid: pins submission guards before the review-cycle state is refactored.
 fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     let (_temp, store, _, _) = enrolled();
     refused(
@@ -226,12 +220,7 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     // Seed an unenrolled Requirement.
     let fresh = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(fresh.path()).unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
-    )
-    .unwrap();
+    crate::test_support::allow_reviewer(&layout);
     let store = open(Utf8Path::from_path(fresh.path()).unwrap());
     store
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
@@ -240,6 +229,7 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_not_merged", examples)]
 fn stale_submission_and_stale_selection_are_refused() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
@@ -343,6 +333,7 @@ fn an_approval_takes_no_rationale() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_disposition_write_gate", examples)]
 fn one_terminal_disposition_per_proposal() {
     let (_temp, store, _, proposal) = enrolled();
     // Rejection keeps a nonempty rationale and permits absent feedback.
@@ -368,6 +359,7 @@ fn one_terminal_disposition_per_proposal() {
 }
 
 #[test]
+/// Implementation aid: pins atomic feedback publication before journal consolidation.
 fn feedback_publishes_with_the_decision_or_neither() {
     let (_temp, store, _, proposal) = enrolled();
     let falsified = json!({"feedback":{"role":"user","body":"Comments"},"declared_by":"mallory"});
@@ -409,22 +401,29 @@ fn feedback_publishes_with_the_decision_or_neither() {
 }
 
 #[test]
-fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
+#[provenance_macros::verifies("rule_rejection_keeps_graph_record", examples)]
+fn withdrawal_does_not_remove_or_retire_the_graph_record() {
+    let (_temp, store, _, proposal_1) = enrolled();
+    let before = store.list_requirements(&scope()).unwrap().remove(0);
+
+    withdraw(&store, &proposal_1).unwrap();
+    let requirement = store.list_requirements(&scope()).unwrap().remove(0);
+    assert_eq!(
+        requirement.id,
+        req(),
+        "withdrawal must keep Requirement req_a"
+    );
+    assert_eq!(
+        requirement.status, before.status,
+        "withdrawal must not retire the Requirement graph record"
+    );
+}
+
+#[test]
+/// This flow withdraws one submission, rejects the next, and refuses another withdrawal.
+fn withdrawal_allows_a_fresh_review_cycle() {
     let (_temp, store, _, proposal_1) = enrolled();
     withdraw(&store, &proposal_1).unwrap();
-    let withdrawn = state(&store);
-    assert_eq!(withdrawn.withdrawn, vec![proposal_1.clone()]);
-    assert!(withdrawn.pending.is_none() && withdrawn.decisions.is_empty());
-    assert!(
-        store
-            .list_proposal_definitions(&scope())
-            .unwrap()
-            .iter()
-            .any(|p| p.id == proposal_1),
-        "withdrawal keeps the candidate, its feedback, and the graph record"
-    );
-
-    // Withdrawal is not rejection: a fresh candidate needs no predecessor.
     let proposal_2 = submit(&store, None, None).unwrap().proposal_id;
     decide(
         &store,
@@ -446,3 +445,5 @@ mod canonical_artifacts;
 mod conflict_tests;
 #[path = "decision_tests/legacy.rs"]
 mod legacy;
+#[path = "decision_tests/rejection_tests.rs"]
+mod rejection_tests;
