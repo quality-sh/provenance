@@ -96,6 +96,7 @@ async fn set_statement(host: &StatementHost, statement: &str) -> Value {
 /// Flow: create, accept, change the text to B, then return it to A.
 #[tokio::test]
 #[verifies("rule_approval_accepts_reviewed_version", examples)]
+#[verifies("rule_content_change_opens_review_submission", examples)]
 async fn accepted_text_returns_as_accepted() {
     let repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&repo);
