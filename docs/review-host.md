@@ -134,10 +134,13 @@ The CLI checks these conditions in this order:
    CLI does not open a browser.
 3. Linux without `DISPLAY` or `WAYLAND_DISPLAY`: the CLI does not open a
    browser.
-4. `BROWSER` is set: the CLI runs that program with one argument and waits for
-   it. A failure exit counts as not opened.
+4. `BROWSER` is set: the CLI starts that program with one argument.
 5. Otherwise the `open` crate opens the page with the default program. On
    Windows, Explorer opens it.
+
+The CLI does not wait for the opener to exit. A process that cannot start counts
+as not opened. After the process starts, its later exit status does not change
+the result. The host can stop while the browser stays open.
 
 The browser does not get the launch link as an argument, because other users
 can read process arguments. The CLI writes an owner-only redirect page to the
