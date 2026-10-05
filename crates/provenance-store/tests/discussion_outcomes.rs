@@ -44,7 +44,7 @@ fn comment_created_record_retains_its_origin() {
     let serialized = serde_json::to_value(&input).unwrap();
     let created = store.create_review_requirement(input).unwrap();
     assert_eq!(created.outcome, SaveOutcome::Created);
-    assert_eq!(created.origin, Some(origin.clone()));
+    assert_eq!(created.origin, Some(origin));
     assert_eq!(
         store
             .create_review_requirement(serde_json::from_value(serialized).unwrap())
