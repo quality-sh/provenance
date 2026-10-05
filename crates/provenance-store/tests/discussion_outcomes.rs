@@ -136,7 +136,9 @@ async fn plain_save_to_previous_content_has_no_discussion_origin() {
     let discussion = start(&store, "Use text A.");
     let origin = origin_of(&discussion);
     let text_a = json!({"description":"Text A."});
-    store.save_requirement(save(&store, text_a.clone())).unwrap();
+    store
+        .save_requirement(save(&store, text_a.clone()))
+        .unwrap();
     commit_state(&temp, "Save text A before the discussion outcome");
     store
         .save_requirement(save(&store, json!({"description":"Text B."})))
