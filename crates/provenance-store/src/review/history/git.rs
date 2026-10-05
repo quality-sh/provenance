@@ -44,10 +44,14 @@ pub(super) fn file_versions(root: &Utf8Path, path: &Utf8Path) -> anyhow::Result<
     if commits.is_empty() {
         return Ok(Vec::new());
     }
-    let names = commits
-        .iter()
-        .map(|(commit, _, _)| format!("{commit}:{prefix}{relative}\n"))
-        .collect::<String>();
+    let mut names = String::new();
+    for (commit, _, _) in &commits {
+        names.push_str(commit);
+        names.push(':');
+        names.push_str(&prefix);
+        names.push_str(&relative);
+        names.push('\n');
+    }
     let texts = read_blobs(root, &names, commits.len())?;
     Ok(commits
         .into_iter()
