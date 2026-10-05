@@ -52,8 +52,9 @@ test('the code leaves the address bar before the exchange', async () => {
   ]);
 });
 
-// Implementation aid: regression check; a browser throws "Illegal invocation" for a bound receiver.
-test('fetch is called without a receiver', async () => {
+// Regression aid: no Rule covers fetch receivers. A browser throws "Illegal invocation"
+// when the page calls fetch with another receiver, and the page then fails to connect.
+test('the page loads its configuration with a browser-compatible fetch receiver', async () => {
   const page = launchPage();
   await page.mounting;
   assert.deepEqual(page.receivers, [undefined, undefined]);

@@ -61,7 +61,14 @@ pub(super) fn parse(
         }
         match field.source {
             Source::Parameter(parameter) => {
-                bind_parameter(&parameter, &field.name, &values, &mut query, &mut headers)?;
+                bind_parameter(
+                    definition,
+                    &parameter,
+                    &field.name,
+                    &values,
+                    &mut query,
+                    &mut headers,
+                )?;
             }
             Source::Body {
                 wire_field,
@@ -102,6 +109,22 @@ pub(super) fn parse(
     }
     if stdin {
         merge_stdin(&mut data, &assignments)?;
+    }
+    let route_parameters = definition.parameters();
+    let policy_parameters = query_action
+        .and_then(|action| {
+            definition
+                .registration
+                .queries
+                .iter()
+                .find(|query| query.name == action)
+                .map(|query| query.parameters.as_slice())
+        })
+        .unwrap_or(&route_parameters);
+    if !query.contains_key("exclude_terminal") {
+        if let Some(default) = crate::read_policy::default_exclude_terminal(policy_parameters) {
+            query.insert("exclude_terminal".into(), default.to_string());
+        }
     }
     apply_defaults(definition, &mut data);
     if definition.parameters().iter().any(|parameter| {
@@ -148,6 +171,7 @@ fn unique_wire_fields(declared: &[Field]) -> Vec<String> {
 }
 
 fn bind_parameter(
+    definition: &Definition,
     parameter: &catalog::Parameter,
     flag: &str,
     values: &[String],
@@ -166,6 +190,15 @@ fn bind_parameter(
             query.insert(parameter.name.to_owned(), encoded);
         }
         "header" => {
+            let expects_review_etag = definition
+                .registration
+                .controls
+                .headers
+                .iter()
+                .any(|binding| binding.name == parameter.name && binding.field == "expected_etag");
+            if expects_review_etag {
+                super::input_guard::validate_review_etag(value)?;
+            }
             headers.insert(
                 HeaderName::from_bytes(parameter.name.as_bytes())?,
                 HeaderValue::from_str(value)?,

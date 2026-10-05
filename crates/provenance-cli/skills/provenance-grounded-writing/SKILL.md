@@ -3,14 +3,6 @@ name: provenance-grounded-writing
 description: Write specific, evidence-grounded statements for requirements, rules, sources, resolutions, and boundaries — not generic capability language. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
 
-## Human review links
-
-Before you ask a person to review a record, start the review host if it is not
-running: `provenance review --repo . --repository-id local --scope default`.
-Get the review URL with
-`provenance <record-id> get --review-link --format json`. Give the person the
-review URL. Never give the person a record ID.
-
 # Grounded writing
 
 Atomic Rule statements read sharp. Requirements above them read like a
