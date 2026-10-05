@@ -412,7 +412,11 @@ fn withdrawal_does_not_remove_or_retire_the_graph_record() {
 
     withdraw(&store, &proposal_1).unwrap();
     let requirement = store.list_requirements(&scope()).unwrap().remove(0);
-    assert_eq!(requirement.id, req(), "withdrawal must keep Requirement req_a");
+    assert_eq!(
+        requirement.id,
+        req(),
+        "withdrawal must keep Requirement req_a"
+    );
     assert_eq!(
         requirement.status, before.status,
         "withdrawal must not retire the Requirement graph record"
