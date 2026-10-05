@@ -41,7 +41,7 @@ The collection commands are:
 provenance <collection> list
 provenance <collection> create [scalar flags | --stdin]
 provenance <collection> search --text <text> [--limit <count>] [--cursor <cursor>]
-provenance rules stale [--base <commit>] [--head <commit>]
+provenance rules stale --base <commit> [--head <commit>]
 provenance rules resolve-symbol --file <path> [--symbol <name>] [--line <line>]
 ```
 
@@ -76,6 +76,11 @@ The result shows `review.edit.etag` and the exact `--if-match` value for the nex
 guarded update. A guarded update after a rejection opens the replacement
 submission. Do not submit or withdraw manually.
 
+For one bounded view across record kinds, use the target-first read:
+
+```text
+provenance <id> get --view children --depth <count>
+```
 Examples:
 
 ```sh

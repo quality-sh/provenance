@@ -137,10 +137,10 @@ objects use one JSON object on standard input with `--stdin`:
 
 ```sh
 printf '%s' '{"url":"https://example.test/policy","reference":null}' |
-  provenance --repo . --scope default sources source_policy update
+  provenance --repo . --scope default sources source_policy update --stdin
 
 printf '%s' '{"status":"approved","approved_by":"reviewer","approved_at":1234}' |
-  provenance --repo . --scope default resolutions resolution_policy update
+  provenance --repo . --scope default resolutions resolution_policy update --stdin
 ```
 
 Here `null` clears `reference`, as on the route. A body that carries `id`,
@@ -153,7 +153,7 @@ A Requirement update sends the ETag of the last read. The CLI supplies the
 provenance req_policy get --view review
 printf '%s' '{"description":"Reviewed wording."}' |
   provenance --repo . --scope default requirements req_policy update \
-    --if-match "<review.edit.etag>"
+    --if-match "$etag" --stdin
 ```
 
 Copy `review.edit.etag` unchanged. A value has the form `sha256:` followed by
