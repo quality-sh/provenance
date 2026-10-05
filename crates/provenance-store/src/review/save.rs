@@ -10,10 +10,14 @@ use provenance_core::threads::DiscussionOrigin;
 use provenance_core::{NodeType, Requirement, ScopeId, StableId};
 use provenance_macros::rule;
 
-/// The edit precondition of a record: a digest of the record without its
-/// record stamps.
+/// The edit precondition is a digest of the record without its stored format
+/// marker or record stamps.
 pub(super) fn etag(record: &ReviewRecord) -> anyhow::Result<String> {
-    let content = provenance_core::model::record_stamps::content_value(record)?;
+    let mut content = provenance_core::model::record_stamps::content_value(record)?;
+    content
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?
+        .remove("schema_version");
     Ok(crate::canonical_digest::digest(
         &crate::canonical_digest::canonical_bytes(&content)?,
     ))
