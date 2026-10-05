@@ -2,7 +2,6 @@ use super::validate_submission_address;
 use crate::{
     review::publication::with_record_state,
     review::{
-        classifier,
         decision_input::{DecideRecordReview, ReviewFeedback},
         decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
         guard, new_id,
@@ -88,9 +87,7 @@ impl StateStore {
             crate::cache::review_families::record(self, &input.scope_id, kind, &record_id)?;
         let revision = super::super::save::current_revision(&record)?
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
-        if revision != binding.revision
-            || classifier::content_digest(kind, &record)? != binding.content_digest
-        {
+        if revision != binding.revision {
             let facts = CycleFacts::validated(self, &input.scope_id)?;
             return Err(SourceFailure::wrap(
                 facts.conflict_failure(self, &input.scope_id, kind, &record_id)?,

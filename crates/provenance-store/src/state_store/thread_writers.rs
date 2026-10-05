@@ -16,10 +16,9 @@ impl StateStore {
         self.with_repository_publication(|| {
             anyhow::ensure!(
                 !self
-                    .list_threads(&input.scope_id)?
+                    .list_discussions(&input.scope_id)?
                     .iter()
-                    .any(|t| t.parent == input.parent
-                        && t.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION),
+                    .any(|discussion| discussion.parent == input.parent),
                 "enrolled Thread requires an addressed Discussion write"
             );
             self.write_thread_message(input)

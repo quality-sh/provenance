@@ -133,26 +133,6 @@ impl StateStore {
                 anyhow::ensure!(matches, "Discussion Message membership mismatch");
             }
         }
-        let discussion_threads: BTreeSet<&str> =
-            discussions.iter().map(|d| d.thread_id.as_str()).collect();
-        for message in messages
-            .iter()
-            .filter(|m| m.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION)
-        {
-            anyhow::ensure!(
-                membership.contains(message.id.as_str()),
-                "enrolled Message has no Discussion membership"
-            );
-        }
-        for thread in threads
-            .iter()
-            .filter(|t| t.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION)
-        {
-            anyhow::ensure!(
-                discussion_threads.contains(thread.id.as_str()),
-                "enrolled Thread has no Discussion"
-            );
-        }
         Ok(discussions)
     }
 

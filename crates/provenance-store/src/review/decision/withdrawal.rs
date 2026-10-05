@@ -2,7 +2,6 @@ use super::validate_submission_address;
 use crate::{
     review::publication::with_record_state,
     review::{
-        classifier,
         decision_input::WithdrawRecordReview,
         decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
         guard, new_id, owner_matches,
@@ -74,7 +73,6 @@ impl StateStore {
             let revision = super::super::save::current_revision(&record)?
                 .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
             if revision != binding.revision
-                || classifier::content_digest(kind, &record)? != binding.content_digest
                 || facts.is_withdrawn(&input.proposal_id)
                 || facts.is_decided(&input.proposal_id)
             {

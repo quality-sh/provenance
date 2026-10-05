@@ -4,7 +4,7 @@
 
 use crate::state_store::StateStore;
 use provenance_core::{
-    review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
+    review::{CycleEntry, CycleFact},
     DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
     StableId, Withdrawal,
 };
@@ -42,7 +42,6 @@ impl Receipt {
     /// Builds the response of a decision-cycle write.
     pub(super) fn entry(self) -> CycleEntry {
         CycleEntry {
-            schema_version: REVIEW_SCHEMA_VERSION,
             scope_id: self.proposal.scope_id.clone(),
             id: self.id,
             sequence: cycle_of(&self.proposal).unwrap_or_default(),

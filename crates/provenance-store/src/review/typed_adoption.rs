@@ -5,10 +5,7 @@ use crate::{
     cache::review_families, review::publication::with_record_state, state_store::StateStore,
     write_error::SourceFailure,
 };
-use provenance_core::{
-    review::{ReviewRecord, REVIEW_SCHEMA_VERSION},
-    NodeType, ScopeId,
-};
+use provenance_core::{review::ReviewRecord, ScopeId};
 
 struct TypedChange {
     before: ReviewRecord,
@@ -51,17 +48,9 @@ impl StateStore {
                 .iter()
                 .find(|record| record.kind() == before.kind() && record.id() == before.id());
             let Some(after) = after else {
-                if before.schema_version() == REVIEW_SCHEMA_VERSION {
-                    return Err(enrolled_deletion_conflict(before));
-                }
-                continue;
+                return Err(enrolled_deletion_conflict(before));
             };
             if content(before)? == content(after)? {
-                continue;
-            }
-            if before.schema_version() != REVIEW_SCHEMA_VERSION
-                && !records_typed_occurrences(before.kind())
-            {
                 continue;
             }
             changes.push(TypedChange {
@@ -89,10 +78,6 @@ impl StateStore {
 /// The record without its record stamps.
 fn content(record: &ReviewRecord) -> serde_json::Result<serde_json::Value> {
     provenance_core::model::record_stamps::content_value(record)
-}
-
-const fn records_typed_occurrences(kind: NodeType) -> bool {
-    matches!(kind, NodeType::Source | NodeType::Rule)
 }
 
 fn enrolled_deletion_conflict(before: &ReviewRecord) -> anyhow::Error {

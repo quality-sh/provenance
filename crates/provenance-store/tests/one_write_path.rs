@@ -28,10 +28,6 @@ fn new_requirement(id: &str) -> CreateRequirementInput {
 async fn the_legacy_create_enrolls_the_record() {
     let (temp, store) = fixture();
     let created = store.create_requirement(new_requirement("req_b")).unwrap();
-    assert_eq!(
-        created.schema_version,
-        provenance_core::review::REVIEW_SCHEMA_VERSION
-    );
 
     let again = store.create_requirement(new_requirement("req_b")).unwrap();
     assert_eq!(again.id, created.id);

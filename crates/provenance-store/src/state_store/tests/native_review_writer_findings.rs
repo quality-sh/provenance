@@ -6,7 +6,6 @@ use crate::state_store::{
     EditQuestionInput, UpdateBoundaryInput, UpdateDomainInput, UpdateRequirementInput,
     UpdateResolutionInput, UpdateRuleInput, UpdateSourceInput, UpdateTopicInput,
 };
-use provenance_core::review::REVIEW_SCHEMA_VERSION;
 use provenance_core::{NodeType, SchemaVersion, Source};
 
 fn revision(
@@ -258,10 +257,7 @@ fn bulk_replacement_reviews_existing_unenrolled_and_enrolled_records() {
     store
         .replace_graph_records(&path, vec![source.clone()])
         .unwrap();
-    assert_eq!(
-        revision(&store, &scope, NodeType::Source, "source_bulk"),
-        None
-    );
+    assert!(revision(&store, &scope, NodeType::Source, "source_bulk").is_some());
 
     let mut changed = source;
     changed.name = "Source B".into();
@@ -276,9 +272,5 @@ fn bulk_replacement_reviews_existing_unenrolled_and_enrolled_records() {
     assert_ne!(
         revision(&store, &scope, NodeType::Source, "source_bulk"),
         enrolled
-    );
-    assert_eq!(
-        store.list_sources(&scope).unwrap()[0].schema_version,
-        REVIEW_SCHEMA_VERSION
     );
 }

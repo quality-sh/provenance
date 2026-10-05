@@ -102,7 +102,7 @@ fn state(store: &StateStore) -> provenance_core::review::RequirementDecisionStat
 fn automatic_submission(store: &StateStore) -> provenance_core::review::PendingSubmission {
     state(store).pending.unwrap()
 }
-fn binding_of(store: &StateStore, proposal: &StableId) -> (String, String) {
+fn binding_of(store: &StateStore, proposal: &StableId) -> String {
     let card = store
         .list_proposal_definitions(&scope())
         .unwrap()
@@ -110,7 +110,7 @@ fn binding_of(store: &StateStore, proposal: &StableId) -> (String, String) {
         .find(|p| p.id == *proposal)
         .unwrap();
     let binding = card.record_revision.unwrap();
-    (binding.revision.as_str().to_owned(), binding.content_digest)
+    binding.revision.as_str().to_owned()
 }
 /// Asserts a review operation is refused for the stated reason.
 fn refused<T: std::fmt::Debug>(attempt: anyhow::Result<T>, needle: &str) {
@@ -127,7 +127,7 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let r1 = edit(&store, "edit-1", "Statement v1");
     let proposal_1 = automatic_submission(&store).proposal_id;
-    let (prop1_revision, prop1_digest) = binding_of(&store, &proposal_1);
+    let prop1_revision = binding_of(&store, &proposal_1);
     assert_eq!(prop1_revision, r1.as_str());
     assert_eq!(state(&store).pending.unwrap().revision, r1);
 
@@ -158,10 +158,10 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     // through the human existing-artifact path.
     let r2 = edit(&store, "edit-2", "Revised statement");
     let proposal_2 = automatic_submission(&store).proposal_id;
-    let (prop2_revision, prop2_digest) = binding_of(&store, &proposal_2);
+    let prop2_revision = binding_of(&store, &proposal_2);
     assert_eq!(prop2_revision, r2.as_str());
     assert_ne!(
-        prop1_digest, prop2_digest,
+        prop1_revision, prop2_revision,
         "each submission binds its exact revision"
     );
     let approval = decide(

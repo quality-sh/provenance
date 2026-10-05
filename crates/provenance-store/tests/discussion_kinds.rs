@@ -152,7 +152,7 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
     assert_eq!(threads.len(), 6);
     assert!(threads
         .iter()
-        .all(|thread| thread.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION));
+        .all(|thread| thread.schema_version == provenance_core::SUPPORTED_SCHEMA_VERSION));
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 12);
 }
 
@@ -234,7 +234,7 @@ fn legacy_containers_stay_readable_beside_addressed_discussions() {
     assert_eq!(containers.len(), 1);
     assert_eq!(
         containers[0].schema_version,
-        provenance_core::review::REVIEW_SCHEMA_VERSION
+        provenance_core::SUPPORTED_SCHEMA_VERSION
     );
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 2);
 }

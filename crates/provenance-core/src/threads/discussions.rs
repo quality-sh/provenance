@@ -1,4 +1,4 @@
-use crate::{NodeType, SchemaVersion, ScopeId, StableId, ThreadParent};
+use crate::{NodeType, ScopeId, StableId, ThreadParent};
 use provenance_macros::ProjectionRow;
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,6 @@ pub enum DiscussionStatus {
 #[serde(deny_unknown_fields)]
 #[table("discussions")]
 pub struct Discussion {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub discussion_id: StableId,
     #[column(json)]

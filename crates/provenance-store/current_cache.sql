@@ -186,7 +186,7 @@ CREATE TABLE projection_validation (
 );
 
 CREATE TABLE discussions (
-    schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, discussion_id TEXT NOT NULL,
+    scope_id TEXT NOT NULL, discussion_id TEXT NOT NULL,
     parent TEXT NOT NULL, thread_id TEXT NOT NULL, root_message_id TEXT NOT NULL,
     message_ids TEXT NOT NULL, status TEXT NOT NULL, version INTEGER NOT NULL,
     actor TEXT NOT NULL, outcomes TEXT NOT NULL, disposition_id TEXT,

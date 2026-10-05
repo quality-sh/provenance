@@ -67,7 +67,7 @@ fn typed_change_stamps_the_enrolled_record() {
     let changed = store.list_requirements(&scope).unwrap()[0].clone();
     assert_eq!(changed.updated.as_ref().unwrap().commit, commit_b);
     assert_eq!(changed.statement, "The system stores durable records.");
-    assert_eq!(changed.schema_version, REVIEW_SCHEMA_VERSION);
+    assert_eq!(changed.schema_version, requirement.schema_version);
 }
 
 #[test]

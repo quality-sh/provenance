@@ -5,9 +5,7 @@ use crate::{
     state_store::{CreateRequirementInput, StateStore},
 };
 use provenance_core::{
-    review::{RequirementEditState, REVIEW_SCHEMA_VERSION},
-    threads::DiscussionOrigin,
-    NodeType, Requirement,
+    review::RequirementEditState, threads::DiscussionOrigin, NodeType, Requirement,
 };
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
@@ -96,13 +94,7 @@ impl StateStore {
 
     fn commit_creation(&self, input: CreateReviewRequirement) -> anyhow::Result<Requirement> {
         let scope = input.create.scope_id.clone();
-        let created = self.write_requirement(input.create)?;
-        let path = shards::requirements_path(&self.layout, &scope);
-        let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
-            let record = records.iter_mut().find(|r| r.id == created.id).unwrap();
-            record.schema_version = REVIEW_SCHEMA_VERSION;
-            Ok(record.clone())
-        })?;
+        let after = self.write_requirement(input.create)?;
         self.validate_graph_scope(&scope)?;
         let revision = classifier::review_revision(NodeType::Requirement, &after)?;
         if let Some(origin) = &input.origin {

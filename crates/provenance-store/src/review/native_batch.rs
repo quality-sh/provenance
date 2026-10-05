@@ -85,7 +85,7 @@ impl NativeRecordBatch<'_> {
         T: GraphRecord,
     {
         guard::with_writer(path, "*", || {
-            let (result, mut changes) =
+            let (result, changes) =
                 self.store
                     .mutate_jsonl_records(path, |records: &mut Vec<T>| {
                         let before = records.clone();
@@ -105,11 +105,6 @@ impl NativeRecordBatch<'_> {
                             .collect::<Vec<_>>();
                         Ok((result, changes))
                     })?;
-            for (_, after) in &mut changes {
-                if native_record_is_closed(path, T::KIND, after.id())? {
-                    *after = self.store.enroll_graph_record::<T>(path, after.id())?;
-                }
-            }
             if let Some((_, after)) = changes.first() {
                 let review: ReviewRecord = after.clone().into();
                 self.store.validate_graph_scope(review.scope_id())?;
@@ -117,24 +112,6 @@ impl NativeRecordBatch<'_> {
             Ok((result, changes))
         })
     }
-}
-
-fn native_record_is_closed(
-    path: &Utf8Path,
-    kind: provenance_core::NodeType,
-    id: &StableId,
-) -> anyhow::Result<bool> {
-    let contents = std::fs::read_to_string(path)?;
-    let mut matched = None;
-    for line in contents.lines() {
-        let value: serde_json::Value = serde_json::from_str(line)?;
-        if value["id"].as_str() == Some(id.as_str()) {
-            matched = Some(value);
-            break;
-        }
-    }
-    let value = matched.ok_or_else(|| anyhow::anyhow!("updated graph record is missing"))?;
-    Ok(ReviewRecord::deserialize_closed(kind, &value).is_ok())
 }
 
 fn check_etag<T: GraphRecord>(before: &[T], id: &StableId, expected: &str) -> anyhow::Result<()> {

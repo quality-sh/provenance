@@ -5,7 +5,7 @@ use crate::{
     state_store::StateStore,
     write_error::{SourceFailure, WriteFailure},
 };
-use provenance_core::review::{RequirementEditState, ReviewRecord, REVIEW_SCHEMA_VERSION};
+use provenance_core::review::{RequirementEditState, ReviewRecord};
 use provenance_core::threads::DiscussionOrigin;
 use provenance_core::{NodeType, Requirement, ScopeId, StableId};
 use provenance_macros::rule;
@@ -19,12 +19,9 @@ pub(super) fn etag(record: &ReviewRecord) -> anyhow::Result<String> {
     ))
 }
 
-/// The review revision of an enrolled record. A record outside review has
-/// none.
+/// The review revision depends only on the review content of the record.
 pub(super) fn current_revision(record: &ReviewRecord) -> anyhow::Result<Option<StableId>> {
-    (record.schema_version() == REVIEW_SCHEMA_VERSION)
-        .then(|| classifier::review_revision(record.kind(), record))
-        .transpose()
+    classifier::review_revision(record.kind(), record).map(Some)
 }
 
 impl StateStore {
@@ -72,7 +69,6 @@ impl StateStore {
         Ok(RequirementEditState {
             etag: etag(record)?,
             revision: current_revision(record)?,
-            snapshot: None,
         })
     }
 
@@ -167,12 +163,7 @@ impl StateStore {
             crate::test_probes::at("requirement_relationships_expanding")?;
             self.replace_review_relationships(&scope, &id, &relationships)?;
         }
-        let path = shards::requirements_path(&self.layout, &scope);
-        let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
-            let record = records.iter_mut().find(|r| r.id == id).unwrap();
-            record.schema_version = REVIEW_SCHEMA_VERSION;
-            Ok(record.clone())
-        })?;
+        let after = self.requirement(&scope, &id)?;
         self.validate_graph_scope(&scope)?;
         let before_record = ReviewRecord::from(before.clone());
         let after_record = ReviewRecord::from(after.clone());

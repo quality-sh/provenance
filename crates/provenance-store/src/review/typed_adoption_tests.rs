@@ -14,7 +14,6 @@ use provenance_core::{
         TypedAdoptionTarget, TypedDeclarationKind, TypedRequirementInput, TypedRuleInput,
         TypedSourceInput,
     },
-    review::REVIEW_SCHEMA_VERSION,
     ArtifactLink, ArtifactLinkTargetType, Boundary, Domain, NodeType, Question, QuestionStatus,
     Requirement, Resolution, ResolutionMethod, ResolutionStatus, Rule, ScopeId, Source,
     SourceReference, StableId, Topic, TopicStatus, SUPPORTED_SCHEMA_VERSION,
@@ -117,7 +116,6 @@ fn content(
     id: &StableId,
 ) -> serde_json::Value {
     let record = review_families::record(store, scope, kind, id).unwrap();
-    assert_eq!(record.schema_version(), REVIEW_SCHEMA_VERSION);
     provenance_core::model::record_stamps::content_value(&record).unwrap()
 }
 

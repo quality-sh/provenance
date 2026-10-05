@@ -12,7 +12,7 @@ use provenance_core::{
 };
 
 /// The columns of one Discussion row, in `Discussion::COLUMNS` order.
-const DISCUSSION_COLUMNS: &str = "d.schema_version,d.scope_id,d.discussion_id,d.parent,\
+const DISCUSSION_COLUMNS: &str = "d.scope_id,d.discussion_id,d.parent,\
     d.thread_id,d.root_message_id,d.message_ids,d.status,d.version,d.actor,d.outcomes,\
     d.disposition_id";
 
@@ -26,7 +26,6 @@ pub(super) const DISCUSSION_PARENT: &str =
     "json_extract(d.parent,'$.node_type')=? AND json_extract(d.parent,'$.node_id')=?";
 
 type DiscussionRow = (
-    i64,
     String,
     String,
     String,
@@ -43,18 +42,17 @@ type DiscussionRow = (
 fn discussion_from_row(row: DiscussionRow) -> anyhow::Result<Discussion> {
     let text = ColumnValue::Text;
     Discussion::from_row(&[
-        ColumnValue::Integer(row.0),
+        text(row.0),
         text(row.1),
         text(row.2),
         text(row.3),
         text(row.4),
         text(row.5),
         text(row.6),
-        text(row.7),
-        ColumnValue::Integer(row.8),
+        ColumnValue::Integer(row.7),
+        text(row.8),
         text(row.9),
-        text(row.10),
-        row.11.map_or(ColumnValue::Null, ColumnValue::Text),
+        row.10.map_or(ColumnValue::Null, ColumnValue::Text),
     ])
 }
 

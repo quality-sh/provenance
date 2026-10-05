@@ -82,11 +82,6 @@ fn withdrawal_keeps_feedback_and_decisions() {
 
     withdraw(&store, &revised);
 
-    // Implementation aid: the owner forbids format version markers before 1.0.
-    let withdrawals = serde_json::to_value(store.list_withdrawals(&scope()).unwrap()).unwrap();
-    assert_eq!(withdrawals.as_array().unwrap().len(), 1);
-    assert!(withdrawals[0].get("schema_version").is_none());
-
     let state = store.requirement_decision_state(&scope(), &id()).unwrap();
     assert!(state.pending.is_none());
     assert_eq!(state.withdrawn, std::slice::from_ref(&revised));

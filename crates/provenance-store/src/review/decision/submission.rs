@@ -2,7 +2,6 @@ use super::target_type;
 use crate::{
     review::publication::with_record_state,
     review::{
-        classifier,
         decision_input::SubmitRecordReview,
         decision_state::{
             check_request_size, review_proposal_key, validated_resubmission, CycleFacts, Receipt,
@@ -121,10 +120,7 @@ impl StateStore {
             promotion_state: PromotionState::Proposed,
             duplicate_of: None,
             superseded_by: None,
-            record_revision: Some(RecordRevisionBinding {
-                revision,
-                content_digest: classifier::content_digest(input.record_kind, &record)?,
-            }),
+            record_revision: Some(RecordRevisionBinding { revision }),
             actor: Some(input.actor.clone()),
             revises,
             revises_rejection,

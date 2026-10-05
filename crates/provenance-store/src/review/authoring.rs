@@ -22,7 +22,7 @@ impl StateStore {
     pub(crate) fn replace_native_records<T: GraphRecord>(
         &self,
         path: &Utf8Path,
-        mut replacement: Vec<T>,
+        replacement: Vec<T>,
     ) -> anyhow::Result<()> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
@@ -31,11 +31,6 @@ impl StateStore {
                 let staged = Self::staged(layout.clone(), stamp.clone());
                 let staged_path = layout.root().join(&relative);
                 guard::with_writer(&staged_path, "*", || {
-                    for record in &mut replacement {
-                        record.set_review_schema_version(
-                            provenance_core::review::REVIEW_SCHEMA_VERSION,
-                        );
-                    }
                     let scope = replacement.first().map(|record| {
                         let record: ReviewRecord = record.clone().into();
                         record.scope_id().clone()
@@ -43,11 +38,8 @@ impl StateStore {
                     let before =
                         staged.replace_graph_records_guarded(&staged_path, replacement.clone())?;
                     for record in &before {
-                        let review: ReviewRecord = record.clone().into();
                         anyhow::ensure!(
-                            review.schema_version()
-                                != provenance_core::review::REVIEW_SCHEMA_VERSION
-                                || replacement.iter().any(|after| after.id() == record.id()),
+                            replacement.iter().any(|after| after.id() == record.id()),
                             "an enrolled graph record cannot be removed by replacement"
                         );
                     }
@@ -72,11 +64,7 @@ impl StateStore {
             with_record_state(&self.layout, |layout| {
                 let staged = Self::staged(layout.clone(), stamp.clone());
                 let staged_path = layout.root().join(&relative);
-                guard::with_writer(&staged_path, id.as_str(), || {
-                    write(&staged)?;
-                    let created = staged.enroll_graph_record::<T>(&staged_path, id)?;
-                    Ok(created)
-                })
+                guard::with_writer(&staged_path, id.as_str(), || write(&staged))
             })
         })
     }

@@ -51,15 +51,6 @@ macro_rules! define_review_families {
             },)*
         ];
 
-        pub fn has_enrolled_record(
-            store: &crate::state_store::StateStore,
-            scope: &provenance_core::ScopeId,
-        ) -> anyhow::Result<bool> {
-            Ok(false $(|| store.$reader(scope)?.iter().any(|record| {
-                record.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION
-            }))*)
-        }
-
         pub fn review_records(
             store: &crate::state_store::StateStore,
             scope: &provenance_core::ScopeId,

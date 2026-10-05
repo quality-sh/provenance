@@ -17,28 +17,6 @@ const fn is_requirement_kind(kind: &NodeType) -> bool {
     matches!(kind, NodeType::Requirement)
 }
 
-/// The wire shape of a former snapshot reference. Only the always-null
-/// `RequirementEditState::snapshot` field still names it.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SnapshotRef {
-    pub id: StableId,
-    pub digest: String,
-    pub bytes: u64,
-    pub fields: Vec<SnapshotField>,
-}
-
-/// A field range in a former snapshot reference. Offsets count UTF-8 bytes.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SnapshotField {
-    pub name: String,
-    pub offset: u64,
-    pub bytes: u64,
-}
-
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -53,8 +31,6 @@ pub trait ReviewRecordKind {
     const KIND: NodeType;
 
     fn review_id(&self) -> &StableId;
-    fn review_schema_version(&self) -> SchemaVersion;
-    fn set_review_schema_version(&mut self, version: SchemaVersion);
 }
 
 /// The closed list of record kinds that native review evidence supports.
@@ -115,12 +91,6 @@ macro_rules! define_review_record {
                 }
             }
 
-            pub const fn schema_version(&self) -> SchemaVersion {
-                match self {
-                    $( Self::$variant(record) => record.schema_version, )*
-                }
-            }
-
             pub const fn as_requirement(&self) -> Option<&crate::Requirement> {
                 match self {
                     Self::Requirement(record) => Some(record),
@@ -143,13 +113,7 @@ macro_rules! define_review_record {
                     &self.id
                 }
 
-                fn review_schema_version(&self) -> SchemaVersion {
-                    self.schema_version
-                }
 
-                fn set_review_schema_version(&mut self, version: SchemaVersion) {
-                    self.schema_version = version;
-                }
             }
         )*
     };
@@ -162,9 +126,6 @@ review_record_kinds!(define_review_record);
 pub struct RequirementEditState {
     pub etag: String,
     pub revision: Option<StableId>,
-    /// Always null. The field stays on the wire until the pinned review page
-    /// stops requiring it.
-    pub snapshot: Option<SnapshotRef>,
 }
 
 /// One version of a record: a commit that changed the record in its graph
@@ -264,7 +225,6 @@ pub enum CycleFact {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CycleEntry {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(

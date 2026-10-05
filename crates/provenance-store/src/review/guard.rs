@@ -78,23 +78,27 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
         .iter()
         .map(serde_json::to_value)
         .collect::<Result<Vec<_>, _>>()?;
-    if directory == Some("threads")
-        && path.file_name() != Some("threads.jsonl")
-        && !writer_allows(path, "*")
-    {
-        let thread_path = path.parent().unwrap().join("threads.jsonl");
-        let threads = match std::fs::read_to_string(&thread_path) {
+    let discussions = if directory == Some("threads") {
+        let discussion_path = path.parent().unwrap().join("discussions.jsonl");
+        match std::fs::read_to_string(&discussion_path) {
             Ok(text) => text
                 .lines()
                 .map(serde_json::from_str::<Value>)
                 .collect::<Result<Vec<_>, _>>()?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(error) => return Err(error.into()),
-        };
+        }
+    } else {
+        Vec::new()
+    };
+    if directory == Some("threads") && path.file_name() != Some("threads.jsonl") {
+        if writer_allows(path, "*") {
+            return Ok(());
+        }
         for message in before.iter().chain(&after) {
-            if threads
+            if discussions
                 .iter()
-                .any(|t| t["schema_version"] == 3 && t["id"] == message["thread_id"])
+                .any(|discussion| discussion["thread_id"] == message["thread_id"])
             {
                 anyhow::ensure!(
                     before
@@ -105,16 +109,19 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
                             .iter()
                             .filter(|m| m["id"] == message["id"])
                             .collect::<Vec<_>>(),
-                    "enrolled Thread requires journaled Message membership"
+                    "enrolled Thread requires an addressed Discussion write"
                 );
             }
         }
     }
-    for record in before
-        .iter()
-        .chain(&after)
-        .filter(|r| r["schema_version"] == 3)
-    {
+    for record in &before {
+        if family.is_none()
+            && !discussions
+                .iter()
+                .any(|discussion| discussion["thread_id"] == record["id"])
+        {
+            continue;
+        }
         let owner_field = family.map_or("id", |facts| facts.owner_field);
         let id = record[owner_field].as_str().unwrap_or_default();
         if !writer_allows(path, id) {
@@ -142,10 +149,16 @@ impl crate::state_store::StateStore {
                     .try_exists()?,
                 "review-bearing scopes require lossless import/export support"
             );
-            let has_enrolled_record =
-                crate::cache::review_families::has_enrolled_record(self, scope)?;
+            let has_review_state = !self.list_discussions(scope)?.is_empty()
+                || !self.list_withdrawals(scope)?.is_empty()
+                || self
+                    .list_proposal_definitions(scope)?
+                    .iter()
+                    .any(|proposal| {
+                        proposal.proposal_type == provenance_core::ProposalType::RecordRevision
+                    });
             anyhow::ensure!(
-                !has_enrolled_record,
+                !has_review_state,
                 "review-bearing scopes require lossless import/export support"
             );
             Ok(())

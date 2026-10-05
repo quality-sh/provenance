@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 
 fn discussion() -> Discussion {
-    serde_json::from_value(json!({"schema_version":2,"scope_id":"default","discussion_id":"discussion_a",
+    serde_json::from_value(json!({"scope_id":"default","discussion_id":"discussion_a",
         "parent":{"node_type":"requirement","node_id":"req_a"},"thread_id":"thread_a","root_message_id":"message_a",
         "message_ids":["message_a","reply"],"status":"active","version":2,"actor":"ben",
         "outcomes":[{"message_id":"reply","record_kind":"requirement","record_id":"req_a","revision":"abc"}]})).unwrap()

@@ -6,9 +6,8 @@ use crate::{
     state_store::{PostMessageInput, StateStore},
 };
 use provenance_core::{
-    review::REVIEW_SCHEMA_VERSION,
     threads::{Discussion, DiscussionStatus},
-    Message, Thread, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
+    Thread, ThreadStatus,
 };
 use provenance_macros::rule;
 
@@ -168,13 +167,7 @@ impl StateStore {
             }
         };
         let status_only = message.is_none();
-        self.enroll_discussion_records(
-            scope,
-            &input.parent,
-            &thread,
-            message.as_ref(),
-            status_only,
-        )?;
+        self.validate_discussion_thread(scope, &input.parent, &thread, status_only)?;
         let discussion = if let Some(mut discussion) = head {
             discussion.version += 1;
             discussion.status = status;
@@ -183,7 +176,6 @@ impl StateStore {
         } else {
             let root = message.expect("a started Discussion has a root Message").id;
             Discussion {
-                schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope.clone(),
                 discussion_id: super::new_id(),
                 parent: input.parent,
@@ -213,12 +205,11 @@ impl StateStore {
         Ok(discussion)
     }
 
-    fn enroll_discussion_records(
+    fn validate_discussion_thread(
         &self,
         scope: &provenance_core::ScopeId,
         parent: &provenance_core::ThreadParent,
         thread: &Thread,
-        message: Option<&Message>,
         status_only: bool,
     ) -> anyhow::Result<()> {
         self.mutate_jsonl_records(
@@ -234,23 +225,10 @@ impl StateStore {
                     current.status == ThreadStatus::Active,
                     "Discussion Thread closed during publication"
                 );
-                current.schema_version = REVIEW_SCHEMA_VERSION;
                 Ok(())
             },
         )?;
-        if let Some(message) = message {
-            let path = shards::messages_path(&self.layout, scope);
-            guard::with_writer(&path, "*", || {
-                self.mutate_jsonl_records(&path, |messages: &mut Vec<Message>| {
-                    messages
-                        .iter_mut()
-                        .find(|m| m.id == message.id)
-                        .unwrap()
-                        .schema_version = REVIEW_SCHEMA_VERSION;
-                    Ok(())
-                })
-            })?;
-        }
+
         Ok(())
     }
 }
