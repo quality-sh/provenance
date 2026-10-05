@@ -163,7 +163,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     .fetch_all(pool.pool())
     .await
     .unwrap();
-    assert_eq!(rows.len(), 19, "one row per family for the one scope");
+    assert_eq!(rows.len(), 20, "one row per family for the one scope");
     for (scope_id, family, digest, count) in &rows {
         assert_eq!(scope_id, scope.as_str(), "scope for {family}");
         assert!(digest.starts_with("sha256:"), "digest for {family}");
