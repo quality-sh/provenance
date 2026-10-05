@@ -8,7 +8,7 @@ const PAGE_TEXT_BYTES: u64 = 8192;
 
 /// Pages the canonical JSON of a record version, or of one of its fields,
 /// from `offset`, ending each page at a UTF-8 boundary.
-pub(super) fn page(
+pub(in crate::review) fn page(
     version: StableId,
     record: &serde_json::Value,
     field: Option<String>,
