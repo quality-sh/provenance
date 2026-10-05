@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use camino::Utf8Path;
 use provenance_core::{ScopeId, StableId};
 use provenance_store::{
@@ -46,6 +45,7 @@ pub fn save(store: &StateStore, request: &str, fields: Value) -> SaveRequirement
 }
 
 /// Runs one Git command in the fixture repository with a fixed identity.
+#[allow(dead_code)]
 pub fn git(temp: &tempfile::TempDir, args: &[&str]) -> String {
     let output = std::process::Command::new("git")
         .args([
@@ -65,6 +65,7 @@ pub fn git(temp: &tempfile::TempDir, args: &[&str]) -> String {
 }
 
 /// Commits the saved graph state and returns the commit id.
+#[allow(dead_code)]
 pub fn commit_state(temp: &tempfile::TempDir, message: &str) -> String {
     if !temp.path().join(".git").exists() {
         git(temp, &["init", "-q"]);
