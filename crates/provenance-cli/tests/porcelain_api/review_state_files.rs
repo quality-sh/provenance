@@ -11,7 +11,10 @@ fn review_writes_change_only_record_shard_files() {
     // Init also creates skills, instructions, and ignore settings.
     git(&repo, &["add", "."]);
     commit(&repo);
-    assert!(git(&repo, &["status", "--porcelain", "--untracked-files=all"]).is_empty());
+    assert_eq!(
+        git(&repo, &["status", "--porcelain", "--untracked-files=all"]),
+        ""
+    );
     write(
         &repo,
         "post",

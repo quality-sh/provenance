@@ -71,12 +71,13 @@ fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
     let scope_id = context.scope_id()?;
     let store = context.open_graph()?;
     store.with_repository_publication(|| {
+        let snapshot = store.snapshot(&scope_id)?;
         store.ensure_review_portable(&scope_id)?;
         store.validate_ideation_scope(&scope_id)?;
         store.validate_graph_scope(&scope_id)?;
         Ok(ScopeExport::from_snapshot(
             context.scope.clone(),
-            store.snapshot(&scope_id)?,
+            snapshot,
         ))
     })
 }
