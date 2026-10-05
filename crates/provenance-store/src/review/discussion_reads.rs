@@ -13,7 +13,8 @@ use provenance_core::{
 
 /// The columns of one Discussion row, in `Discussion::COLUMNS` order.
 const DISCUSSION_COLUMNS: &str = "d.schema_version,d.scope_id,d.discussion_id,d.parent,\
-    d.thread_id,d.root_message_id,d.message_ids,d.status,d.version,d.actor,d.outcomes";
+    d.thread_id,d.root_message_id,d.message_ids,d.status,d.version,d.actor,d.outcomes,\
+    d.disposition_id";
 
 /// The stored bytes of one Discussion row that a page accounts for.
 pub(super) const DISCUSSION_SIZE: &str = "length(CAST(d.parent AS BLOB))+\
@@ -36,6 +37,7 @@ type DiscussionRow = (
     i64,
     String,
     String,
+    Option<String>,
 );
 
 fn discussion_from_row(row: DiscussionRow) -> anyhow::Result<Discussion> {
@@ -52,6 +54,7 @@ fn discussion_from_row(row: DiscussionRow) -> anyhow::Result<Discussion> {
         ColumnValue::Integer(row.8),
         text(row.9),
         text(row.10),
+        row.11.map_or(ColumnValue::Null, ColumnValue::Text),
     ])
 }
 
