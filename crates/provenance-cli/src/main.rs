@@ -16,6 +16,7 @@ mod review_link;
 mod reviewer;
 mod skills;
 mod ste_onboarding;
+mod user_cache;
 mod wiki;
 
 #[tokio::main]

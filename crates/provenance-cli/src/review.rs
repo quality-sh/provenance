@@ -1,4 +1,5 @@
 mod assets;
+pub(crate) mod launch;
 
 use anyhow::Context;
 use axum::{
@@ -6,12 +7,15 @@ use axum::{
     http::{header, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json,
 };
 use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
 use provenance_transport::{
-    local_host::{LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE},
+    local_host::{
+        LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE, LAUNCH_CODE_ROUTE,
+        LAUNCH_SESSION_ROUTE,
+    },
     HostAccess, LocalAccess, StatementHost,
 };
 use serde_json::{json, Value};
@@ -71,6 +75,11 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         &options.repository_id,
     )?;
     let identity = runtime.identity();
+    // The codes own the launch key, so the key file is removed when the host stops.
+    let codes = launch::LaunchCodes::new(
+        &token,
+        launch::LaunchKey::publish(&identity.instance_nonce)?,
+    );
     let config = json!({
         "endpoint": endpoint, "repositoryId": options.repository_id, "scope": options.scope,
         "compatibility": provenance_core::protocol::host::COMPATIBILITY,
@@ -89,6 +98,14 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         .route(
             "/review-config",
             get(configuration).with_state(review_configuration),
+        )
+        .route(
+            LAUNCH_CODE_ROUTE,
+            post(launch::issue_code).with_state(codes.clone()),
+        )
+        .route(
+            LAUNCH_SESSION_ROUTE,
+            post(launch::open_session).with_state(codes.clone()),
         )
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(access, protect_origin));

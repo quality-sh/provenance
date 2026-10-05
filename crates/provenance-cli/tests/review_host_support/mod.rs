@@ -1,8 +1,10 @@
 #![allow(dead_code, clippy::duplicated_attributes)]
 
-use serde_json::Value;
+use provenance_transport::local_host::LAUNCH_SESSION_ROUTE;
+use serde_json::{json, Value};
 use std::{
     io::{BufRead, BufReader},
+    path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::mpsc,
     time::Duration,
@@ -11,6 +13,7 @@ use std::{
 pub struct Host {
     child: Child,
     pub config: Value,
+    user_cache: tempfile::TempDir,
 }
 
 impl Drop for Host {
@@ -21,6 +24,23 @@ impl Drop for Host {
 }
 
 impl Host {
+    /// Runs the CLI as the same user as the host, with the same per-user cache.
+    pub fn cli(&self) -> Command {
+        let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
+        use_user_cache(&mut command, self.user_cache.path());
+        command
+    }
+
+    /// Returns the launch key file that the host wrote for its instance.
+    pub fn launch_key_path(&self) -> PathBuf {
+        cache_directory(self.user_cache.path())
+            .join("provenance/review-launch")
+            .join(format!(
+                "{}.key",
+                self.config["instanceNonce"].as_str().unwrap()
+            ))
+    }
+
     pub fn address(&self) -> &str {
         self.config["endpoint"]
             .as_str()
@@ -162,6 +182,8 @@ pub fn review_command(root: &std::path::Path) -> Command {
 }
 
 pub fn start_command(mut command: Command) -> Host {
+    let user_cache = tempfile::tempdir().unwrap();
+    use_user_cache(&mut command, user_cache.path());
     let mut child = command.stdout(Stdio::piped()).spawn().unwrap();
     let stdout = child.stdout.take().unwrap();
     let (send, receive) = mpsc::channel();
@@ -173,6 +195,7 @@ pub fn start_command(mut command: Command) -> Host {
     let mut host = Host {
         child,
         config: Value::Null,
+        user_cache,
     };
     let line = receive
         .recv_timeout(Duration::from_secs(15))
@@ -183,6 +206,37 @@ pub fn start_command(mut command: Command) -> Host {
     );
     host.config = serde_json::from_str(&line).unwrap();
     host
+}
+
+/// Points every platform's per-user cache at one isolated directory.
+fn use_user_cache(command: &mut Command, root: &Path) {
+    command
+        .env("HOME", root)
+        .env("XDG_CACHE_HOME", cache_directory(root))
+        .env("LOCALAPPDATA", cache_directory(root));
+}
+
+fn cache_directory(root: &Path) -> PathBuf {
+    root.join("Library").join("Caches")
+}
+
+/// Takes the launch code from the fragment of a review link.
+pub fn launch_code(link: &str) -> String {
+    let fragment = url::Url::parse(link)
+        .unwrap()
+        .fragment()
+        .unwrap()
+        .to_owned();
+    fragment.strip_prefix("launch=").unwrap().to_owned()
+}
+
+/// Exchanges a launch code for the page session as the review page does.
+pub fn redeem(host: &Host, code: &str) -> ureq::Response {
+    response(
+        request(host, "POST", LAUNCH_SESSION_ROUTE, false)
+            .set("Content-Type", "application/json")
+            .send_string(&json!({ "code": code }).to_string()),
+    )
 }
 
 pub fn request(host: &Host, method: &str, path: &str, auth: bool) -> ureq::Request {

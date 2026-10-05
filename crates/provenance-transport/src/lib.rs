@@ -21,7 +21,7 @@ pub mod porcelain;
 mod routing;
 
 pub use access::HostAccess;
-pub use local::LocalAccess;
+pub use local::{constant_time_eq, LocalAccess};
 
 use execution::Execution;
 use provenance_core::protocol::failure::{ErasedFailure as FailureEnvelope, OperationFailure};
