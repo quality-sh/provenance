@@ -2,12 +2,13 @@ use super::review_cycle::{decision, describe, init_with_reviewer, write};
 use super::review_history::{commit, git};
 use super::*;
 
-/// Flow: from a committed Requirement, edit, withdraw, submit, decide with
+/// Flow: from a committed initial state, create, edit, withdraw, submit, decide with
 /// feedback and reply; Git then reports changes to record shard files only.
 #[test]
 #[verifies("rule_review_writes_change_only_record_files", examples)]
 fn review_writes_change_only_record_shard_files() {
     let (_directory, repo) = init_with_reviewer();
+    commit(&repo);
     write(
         &repo,
         "post",
@@ -16,7 +17,6 @@ fn review_writes_change_only_record_shard_files() {
             "status":"active", "depends_on":[], "supersedes":[]}),
         None,
     );
-    commit(&repo);
 
     let edited = describe(&repo, "req_files", "The files are graph records.");
     let automatic = edited["data"]["decision"]["pending"]["proposal_id"]

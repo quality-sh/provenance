@@ -112,8 +112,8 @@ fn create_and_update_every_kind(store: &StateStore, scope: &ScopeId) {
 }
 
 #[test]
-#[verifies("rule_review_writes_change_only_record_files", exhaustion)]
-fn saves_of_every_kind_add_no_file() {
+#[verifies("rule_review_writes_change_only_record_files", examples)]
+fn record_saves_change_only_record_files() {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
@@ -125,12 +125,15 @@ fn saves_of_every_kind_add_no_file() {
     let store = StateStore::new(layout.clone());
     let scope = ScopeId::new("default").unwrap();
 
+    let manifest = std::fs::read(layout.manifest_path()).unwrap();
     create_and_update_every_kind(&store, &scope);
+    assert_eq!(std::fs::read(layout.manifest_path()).unwrap(), manifest);
 
     let scope_dir = layout.scopes_dir().join("default");
-    let added = files(&scope_dir)
+    let added = files(&layout.state_dir())
         .into_iter()
-        .filter(|path| path.extension() != Some("jsonl"))
+        .filter(|path| path != &layout.manifest_path())
+        .filter(|path| !path.starts_with(&scope_dir) || path.extension() != Some("jsonl"))
         .collect::<Vec<_>>();
     assert_eq!(added, [] as [Utf8PathBuf; 0]);
     assert!(!scope_dir.join("review").exists());

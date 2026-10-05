@@ -96,7 +96,17 @@ fn review_cycle_reads_decisions_feedback_and_withdrawal() {
         None,
     );
     let revised = describe(&repo, "req_cycle", "The scope is the cycle.");
+    assert!(revised["data"]["decision"]["pending"].is_object());
+    assert_ne!(
+        revised["data"]["edit"]["revision"],
+        created["data"]["edit"]["revision"]
+    );
+    assert_eq!(
+        revised["data"]["decision"]["pending"]["revision"],
+        revised["data"]["edit"]["revision"]
+    );
     let second = pending(&revised);
+    assert_ne!(second, first);
     write(
         &repo,
         "post",
