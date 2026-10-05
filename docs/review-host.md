@@ -5,6 +5,13 @@ The repository must contain an initialized Provenance manifest and the selected
 scope. All three options are required. `--port 0` selects an available port;
 a specified port binds only to `127.0.0.1`.
 
+At startup the host opens the review page in the browser of the person, signed
+in. Add `--no-open` to start the host without a browser. An agent starts the
+host with `--no-open` and opens each record with `--review-link`. With
+`--no-open` the host prints no launch link. When the host cannot open the
+browser, it prints the launch link on stderr. See
+[Opening the browser](#opening-the-browser).
+
 The host prints a warning at startup when the repository has no reviewer. The
 review page is read-only in this state. Add or replace reviewers with
 `provenance init --path REPOSITORY --disposition-actor-id REVIEWER-ID`. Repeat
@@ -43,15 +50,25 @@ the registry. CLI commands ask the host layer for the verified endpoint before
 they add a review link. If no verified host is running, these writes explain
 how to start one.
 
-An agent can get a link for any record with:
+An agent opens any record for the person with:
 
 ```sh
-provenance RECORD_ID get --review-link --format json
+provenance RECORD_ID --review-link
 ```
 
 For a non-Requirement record, the command uses graph reads to find the
-Requirement document that contains the record. If no host is running, the
-command explains how to start one instead of returning a URL.
+Requirement document that contains the record. The command gets a launch code
+from the running host and opens the record in the browser of the person. It
+prints the link without the code. With `--format json` the output is
+`{"review_url": "...", "opened": true}`. When the command does not open the
+browser, it prints the launch link and `"opened": false`. If no host is
+running, the command explains how to start one instead of returning a URL.
+
+In an app that shows web pages, the agent runs
+`provenance RECORD_ID --review-link --no-open --format json` and opens
+`review_url` in the app. Write output keeps a `review_url` without a launch
+code. That link opens the page, which then tells the person how to get a new
+link.
 
 The selected repository, its control files, Git configuration, and ancestor
 directories must be under the local caller's control. The host uses the existing
@@ -59,7 +76,8 @@ directories must be under the local caller's control. The host uses the existing
 hostile repositories or isolate other processes running as the same OS user.
 
 Every operation and configuration request requires `Authorization: Bearer TOKEN`.
-The host checks this credential before it decodes an operation body. The public
+The host checks this credential before it decodes an operation body. The two
+review launch routes take a launch key or a launch code instead. The public
 `/local-host-identity` route contains only the schema version, repository target,
 scope, and non-secret instance nonce. It does not accept a credential. All routes require
 the bound Host value. Requests with an Origin must name the exact local
@@ -80,6 +98,53 @@ grant, but no scope grant. It returns version numbers and the configured target
 name. It does not read settings, prepare scope storage, or return graph data.
 Removal of the selected scope therefore does not disable `info`.
 
+## Review launch links
+
+A launch link has the form
+`http://127.0.0.1:PORT/?root=REQUIREMENT_ID&focus=RECORD_ID#launch=CODE`. The
+code is in the URL fragment, so the browser does not send it in a request line
+or a Referer header. A code works one time and expires after 120 seconds. Only
+the host that issued it accepts it.
+
+At startup the host writes a launch key to
+`<user cache>/provenance/review-launch/<instance nonce>.key`. The user cache is
+`$XDG_CACHE_HOME` or `~/.cache` on Linux, `~/Library/Caches` on macOS, and
+`%LOCALAPPDATA%` on Windows. On Unix the directory has mode `0700` and the file
+has mode `0600`. The host removes the file when it stops. A forced exit can
+leave the file; a key file for a stopped host opens nothing. The key is not in
+the repository, the registry, the startup line, or any response.
+
+`POST /review-launch/code` with `{"launchKey": "..."}` returns `{"code": "..."}`.
+The host compares the key in constant time. `POST /review-launch/session` with
+`{"code": "..."}` returns `{"bearer": "..."}` and removes the code. Both routes
+refuse a wrong key or code with 401 and the standard failure envelope. Both
+routes have the same Host and Origin checks as all other routes.
+
+The page removes the fragment from the address bar before it exchanges the
+code. It keeps the bearer only in page memory. A used, expired, or foreign code,
+or a page without a code, shows "Connection refused" and tells the person to
+get a new link with `provenance <record-id> --review-link`.
+
+## Opening the browser
+
+The CLI checks these conditions in this order:
+
+1. `--no-open`: the CLI does not open a browser.
+2. An SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `SSH_TTY` is set): the
+   CLI does not open a browser.
+3. Linux without `DISPLAY` or `WAYLAND_DISPLAY`: the CLI does not open a
+   browser.
+4. `BROWSER` is set: the CLI runs that program with one argument and waits for
+   it. A failure exit counts as not opened.
+5. Otherwise the `open` crate opens the page with the default program. On
+   Windows, Explorer opens it.
+
+The browser does not get the launch link as an argument, because other users
+can read process arguments. The CLI writes an owner-only redirect page to the
+temporary directory and gives the browser the path of that page. The page sends
+the browser to the launch link. The page stays in the temporary directory; its
+code works one time and expires after 120 seconds.
+
 ## Browser integration contract
 
 Build the browser assets before building the Rust binary. Set
@@ -92,8 +157,9 @@ the asset tree at build time. This directory is trusted build input: replacement
 JavaScript would run with the browser caller's access. Use the pinned archive
 procedure below for the supplied renderer.
 Path segments use ASCII letters, digits, dots, underscores, and hyphens. A
-segment must not start with a dot. Root names `metadata`, `review-config`, and
-`local-host-identity`, and `v` followed by digits are reserved for host routes.
+segment must not start with a dot. Root names `metadata`, `review-config`,
+`local-host-identity`, and `review-launch`, and `v` followed by digits are
+reserved for host routes.
 An asset file with exactly three path segments and `operations` as its second
 segment is also refused. The operation router matches this path shape for any
 first segment. For example, `assets/operations/app.js` is refused at build time.
@@ -127,12 +193,13 @@ not contain the bearer credential.
 
 The generic renderer does not read credentials, fetch host configuration, or
 mount itself. Its index is an empty shell. The concrete application in
-[tools/review-host](../tools/review-host/README.md) supplies credential entry and
-Requirement selection. The page accepts `root=REQUIREMENT_ID` and an optional
-`focus=RECORD_ID` query parameter. The URL never contains the credential. After
-the person enters the token, the application opens `root` directly and hides
-the manual Requirement ID field. The field remains available when `root` is
-absent. The application reads `/review-config` with the credential. It then
+[tools/review-host](../tools/review-host/README.md) supplies the launch code
+exchange and Requirement selection. The page accepts `root=REQUIREMENT_ID` and
+an optional `focus=RECORD_ID` query parameter. The URL never contains the
+credential. After the page exchanges the launch code, the application opens
+`root` directly and hides the manual Requirement ID field. The field remains
+available when `root` is absent. The application reads `/review-config` with the
+credential. It then
 calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
 `dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. The
 renderer creates and owns the generated Effect client.
@@ -146,9 +213,9 @@ renderer identifies the review as read-only.
 Build that application with the matching renderer to replace the shell with the
 local host entry. The credential stays in page memory and is
 sent only in the Authorization header to the current origin. It does not enter
-URLs, logs, assets, or browser storage. The password input is cleared after each
-connection attempt. A new connection removes the previous page. A superseded
-connection result cannot replace a later result.
+URLs, logs, assets, or browser storage. The page has no credential field. A new
+connection removes the previous page. A superseded connection result cannot
+replace a later result.
 
 The renderer's generated Effect client calls an existing host; it does not
 start one. Asset code must use the same origin and local dependencies. Response
