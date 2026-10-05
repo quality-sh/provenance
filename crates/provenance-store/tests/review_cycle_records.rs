@@ -61,8 +61,8 @@ fn review_proposal_key_names_record_and_cycle() {
 #[test]
 #[verifies("rule_withdrawal_preserves_review_history", examples)]
 fn withdrawal_keeps_feedback_and_decisions() {
-    let (_temp, store) = fixture();
-    allow_reviewer(&_temp);
+    let (temp, store) = fixture();
+    allow_reviewer(&temp);
     let rejected = pending(&store);
     let decision = store
         .decide_record_review(

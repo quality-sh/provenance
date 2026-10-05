@@ -22,7 +22,7 @@ impl StateStore {
     pub(crate) fn replace_native_records<T: GraphRecord>(
         &self,
         path: &Utf8Path,
-        replacement: Vec<T>,
+        replacement: &[T],
     ) -> anyhow::Result<()> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
@@ -36,7 +36,7 @@ impl StateStore {
                         record.scope_id().clone()
                     });
                     let before =
-                        staged.replace_graph_records_guarded(&staged_path, replacement.clone())?;
+                        staged.replace_graph_records_guarded(&staged_path, replacement.to_vec())?;
                     for record in &before {
                         anyhow::ensure!(
                             replacement.iter().any(|after| after.id() == record.id()),

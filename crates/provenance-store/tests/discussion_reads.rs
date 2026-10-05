@@ -146,6 +146,7 @@ async fn message_selector_refuses_wrong_parent_and_missing_discussion() {
     }
 }
 
+/// Implementation aid: a Discussion cannot refer to an absent Message.
 #[tokio::test]
 async fn missing_discussion_message_is_a_conflict() {
     let (temp, store) = fixture();
@@ -153,7 +154,7 @@ async fn missing_discussion_message_is_a_conflict() {
     let a = start(&store, "a");
     let layout = provenance_store::layout::ProvenanceLayout::new(root);
     let messages = provenance_store::shards::messages_path(&layout, &scope());
-    std::fs::remove_file(messages).unwrap();
+    std::fs::remove_file(&messages).unwrap();
     assert!(read_discussions(
         root,
         &scope(),
@@ -173,10 +174,10 @@ async fn missing_discussion_message_is_a_conflict() {
             json!({"kind":"start","role":"user","body":"Should refuse"}),
         ))
         .unwrap_err();
-    assert!(format!("{error:#}").contains("no Discussion membership"));
+    assert!(format!("{error:#}").contains("Discussion Message membership mismatch"));
     assert_eq!(store.list_threads(&scope()).unwrap(), threads_before);
     assert_eq!(store.list_messages(&scope()).unwrap(), messages_before);
-    assert!(!discussions.exists());
+    assert!(!messages.exists());
 }
 
 #[tokio::test]

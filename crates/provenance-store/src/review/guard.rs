@@ -153,11 +153,13 @@ fn submitted_ids(
     kind: provenance_core::NodeType,
 ) -> anyhow::Result<std::collections::BTreeSet<String>> {
     let Some(scope) = path.parent().and_then(Utf8Path::parent) else {
-        return Ok(Default::default());
+        return Ok(std::collections::BTreeSet::new());
     };
     let text = match std::fs::read_to_string(scope.join("ideation/proposal_cards.jsonl")) {
         Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(std::collections::BTreeSet::new())
+        }
         Err(error) => return Err(error.into()),
     };
     let mut ids = std::collections::BTreeSet::new();

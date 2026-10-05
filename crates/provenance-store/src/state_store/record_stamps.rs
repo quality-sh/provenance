@@ -215,7 +215,7 @@ impl StateStore {
             && has_stored_record
             && !crate::review::guard::writer_allows_path(path)
         {
-            return self.replace_native_records(path, replacement);
+            return self.replace_native_records(path, &replacement);
         }
         self.replace_graph_records_guarded(path, replacement)
             .map(|_| ())
