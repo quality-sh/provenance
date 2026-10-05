@@ -2,12 +2,17 @@
 mod classifier;
 pub(crate) mod guard;
 mod input;
-mod journal;
 pub(crate) mod relationships;
 mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
+
+/// A new server-made identity.
+fn new_id() -> provenance_core::StableId {
+    provenance_core::StableId::new(uuid::Uuid::new_v4().to_string())
+        .expect("UUID uses valid stable ID characters")
+}
 
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
     let value = serde_json::to_value(record)?;
@@ -20,8 +25,6 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
     }
     Ok(())
 }
-
-pub(crate) mod cache;
 
 mod history;
 mod reads;

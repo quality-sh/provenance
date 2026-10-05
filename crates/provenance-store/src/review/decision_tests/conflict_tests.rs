@@ -199,7 +199,8 @@ fn two_review_cycles() -> [CycleEntry; 4] {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     edit(&store, "edit-1", "Statement v1");
-    let submission_1 = automatic_submission(&store);
+    withdraw(&store, &automatic_submission(&store).proposal_id).unwrap();
+    let submission_1 = submit(&store, None, None).unwrap();
     let decision_1 = decide(
         &store,
         &submission_1.proposal_id,
@@ -209,7 +210,8 @@ fn two_review_cycles() -> [CycleEntry; 4] {
     )
     .unwrap();
     edit(&store, "edit-2", "Revised statement");
-    let submission_2 = automatic_submission(&store);
+    withdraw(&store, &automatic_submission(&store).proposal_id).unwrap();
+    let submission_2 = submit(&store, None, None).unwrap();
     let decision_2 = decide(
         &store,
         &submission_2.proposal_id,

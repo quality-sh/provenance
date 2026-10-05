@@ -1,4 +1,4 @@
-use super::{classifier, guard, journal, SaveRequirement};
+use super::{classifier, guard, SaveRequirement};
 use crate::{
     publication::with_staged_state,
     shards,
@@ -10,6 +10,15 @@ use provenance_core::threads::DiscussionOrigin;
 use provenance_core::{NodeType, Requirement, ScopeId, StableId};
 use provenance_macros::rule;
 
+/// The edit precondition of a record: a digest of the record without its
+/// record stamps.
+pub(super) fn etag(record: &ReviewRecord) -> anyhow::Result<String> {
+    let content = provenance_core::model::record_stamps::content_value(record)?;
+    Ok(crate::canonical_digest::digest(
+        &crate::canonical_digest::canonical_bytes(&content)?,
+    ))
+}
+
 /// The review revision of an enrolled record. A record outside review has
 /// none.
 pub(super) fn current_revision(record: &ReviewRecord) -> anyhow::Result<Option<StableId>> {
@@ -19,6 +28,21 @@ pub(super) fn current_revision(record: &ReviewRecord) -> anyhow::Result<Option<S
 }
 
 impl StateStore {
+    pub(super) fn requirement(
+        &self,
+        scope: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<Requirement> {
+        let records = self.list_requirements(scope)?;
+        let matches = records.iter().filter(|r| r.id == *id).collect::<Vec<_>>();
+        anyhow::ensure!(
+            matches.len() == 1 && matches[0].scope_id == *scope,
+            "requirement {} does not exist uniquely in this scope",
+            id.as_str()
+        );
+        Ok(matches[0].clone())
+    }
+
     pub fn requirement_edit_state(
         &self,
         scope: &ScopeId,
@@ -46,7 +70,7 @@ impl StateStore {
         record: &ReviewRecord,
     ) -> anyhow::Result<RequirementEditState> {
         Ok(RequirementEditState {
-            etag: journal::etag(record)?,
+            etag: etag(record)?,
             revision: current_revision(record)?,
             snapshot: None,
         })
@@ -110,7 +134,7 @@ impl StateStore {
             if let Some(origin) = origin {
                 self.validate_discussion_origin(scope, origin)?;
             }
-            let current_etag = journal::etag(&ReviewRecord::from(record.clone()))?;
+            let current_etag = etag(&ReviewRecord::from(record.clone()))?;
             let stale = (input.expected_etag != current_etag).then_some(current_etag);
             let stamp = self.current_record_stamp()?;
             with_staged_state(&self.layout, false, |layout| {
@@ -207,6 +231,30 @@ mod tests {
         }))
         .unwrap();
         assert!(store.save_requirement(input).unwrap().revision.is_some());
+    }
+
+    /// Implementation aid: pins that the etag ignores record stamps; no Rule
+    /// names it.
+    #[test]
+    fn requirement_etag_ignores_record_stamps() {
+        let value = json!({
+            "schema_version": 2,
+            "scope_id": "default",
+            "id": "req_stamp",
+            "statement": "The system stores records.",
+            "status": "active"
+        });
+        let before: Requirement = serde_json::from_value(value.clone()).unwrap();
+        let mut after: Requirement = serde_json::from_value(value).unwrap();
+        after.created = Some(
+            serde_json::from_value(json!({"commit": "a".repeat(40), "at": "2026-09-12T00:00:00Z"}))
+                .unwrap(),
+        );
+        after.updated = Some(
+            serde_json::from_value(json!({"commit": "b".repeat(40), "at": "2026-09-12T01:00:00Z"}))
+                .unwrap(),
+        );
+        assert_eq!(etag(&before.into()).unwrap(), etag(&after.into()).unwrap());
     }
 
     #[test]

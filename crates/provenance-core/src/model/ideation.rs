@@ -6,6 +6,7 @@ pub(super) mod legacy_audit;
 pub(super) mod lifecycle;
 pub(super) mod proposals;
 pub(super) mod synthesis;
+pub(super) mod withdrawals;
 
 use super::graph::NodeType;
 use super::ids::StableId;

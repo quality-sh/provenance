@@ -4,15 +4,15 @@ use crate::{
     review::{
         classifier,
         decision_input::{DecideRecordReview, ReviewFeedback},
-        decision_state::{request_digest, review_submission, write_receipt, CycleFacts},
-        guard, journal,
+        decision_state::{request_digest, review_submission, CycleFacts, Receipt},
+        guard, new_id,
     },
     shards,
     state_store::{CreateDispositionInput, StateStore},
     write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::{
-    review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
+    review::{CycleEntry, CycleFact},
     CanonicalArtifactType, DispositionDecision, NodeType, StableId, ThreadParent,
 };
 use provenance_macros::rule;
@@ -40,7 +40,6 @@ impl StateStore {
         input: DecideRecordReview,
     ) -> anyhow::Result<CycleEntry> {
         let digest = request_digest(&input)?;
-        let request_id = journal::new_id();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -51,8 +50,6 @@ impl StateStore {
             let facts = CycleFacts::validated(self, &scope)?;
             validate_submission_address(
                 &proposal,
-                &facts,
-                &input.proposal_id,
                 addressed.as_ref().map(|(kind, id)| (*kind, id)),
             )?;
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
@@ -72,7 +69,7 @@ impl StateStore {
                 ));
             }
             with_staged_state(&self.layout, false, |layout| {
-                Self::new(layout.clone()).commit_decision(input, request_id, digest)
+                Self::new(layout.clone()).commit_decision(input, digest)
             })
         })
     }
@@ -82,7 +79,6 @@ impl StateStore {
     fn commit_decision(
         &self,
         input: DecideRecordReview,
-        request_id: StableId,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
@@ -105,7 +101,7 @@ impl StateStore {
                 anyhow::anyhow!("stale review selection"),
             ));
         }
-        let disposition_id = journal::new_id();
+        let disposition_id = new_id();
         guard::with_writer(
             &shards::dispositions_path(&self.layout, &input.scope_id),
             "*",
@@ -131,29 +127,24 @@ impl StateStore {
                     &record_id,
                     &input.actor,
                     input.declared_by.as_deref(),
+                    &disposition_id,
                     feedback,
                 )
             })
             .transpose()?;
-        let entry = CycleEntry {
-            schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: CycleFacts::validated(self, &input.scope_id)?
-                .next_sequence(kind, &record_id)?,
-            scope_id: input.scope_id,
-            id: journal::new_id(),
+        Ok(Receipt {
+            id: disposition_id.clone(),
             record_kind: kind,
             record_id,
-            proposal_id: input.proposal_id,
-            proposal_key: None,
+            proposal,
             fact: CycleFact::Decided,
             disposition_id: Some(disposition_id),
             feedback_message_id,
             actor: input.actor.id,
-            request_id,
+            request_id: new_id(),
             intent_digest: digest,
-        };
-        write_receipt(self, &entry)?;
-        Ok(entry)
+        }
+        .entry())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -164,6 +155,7 @@ impl StateStore {
         record_id: &StableId,
         actor: &provenance_core::DispositionActor,
         declared_by: Option<&str>,
+        disposition_id: &StableId,
         feedback: ReviewFeedback,
     ) -> anyhow::Result<StableId> {
         use crate::review::discussion_input::{DiscussionAction, WriteDiscussion};
@@ -185,7 +177,7 @@ impl StateStore {
         self.authorize_discussion(&discussion)?;
         let started = guard::with_writer(&shards::threads_path(&self.layout, scope), "*", || {
             guard::with_writer(&shards::messages_path(&self.layout, scope), "*", || {
-                self.commit_discussion(discussion, None)
+                self.commit_discussion(discussion, None, Some(disposition_id.clone()))
             })
         })?;
         Ok(started.root_message_id)

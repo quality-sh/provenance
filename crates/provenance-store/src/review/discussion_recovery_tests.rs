@@ -170,7 +170,7 @@ fn process_restart_recovers_membership_status_and_outcome_as_one_state() {
                 assert_eq!(original.version, 1 + u64::from(committed));
                 assert_eq!(messages, 1);
             }
-            store.validated_journal_entries(&scope()).unwrap();
+            store.validated_discussions(&scope()).unwrap();
             assert!(!ProvenanceLayout::new(root)
                 .publication_marker_path()
                 .exists());

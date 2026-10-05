@@ -108,14 +108,9 @@ fn enrolled() -> (tempfile::TempDir, StateStore, StableId, StableId) {
 fn state(store: &StateStore) -> provenance_core::review::RequirementDecisionState {
     store.requirement_decision_state(&scope(), &req()).unwrap()
 }
-fn automatic_submission(store: &StateStore) -> CycleEntry {
-    let proposal = state(store).pending.unwrap().proposal_id;
-    store
-        .cycle_entries(&scope())
-        .unwrap()
-        .into_iter()
-        .find(|entry| entry.proposal_id == proposal && entry.fact == CycleFact::Submitted)
-        .unwrap()
+/// The submission that the last content edit opened.
+fn automatic_submission(store: &StateStore) -> provenance_core::review::PendingSubmission {
+    state(store).pending.unwrap()
 }
 fn binding_of(store: &StateStore, proposal: &StableId) -> (String, String) {
     let card = store
@@ -442,49 +437,6 @@ fn withdrawal_preserves_the_candidate_and_allows_a_fresh_submission() {
     refused(
         withdraw(&store, &proposal_2),
         "no longer current and pending",
-    );
-}
-
-#[test]
-fn review_finding_withdrawn_and_resubmitted_receipts_have_safe_sequences() {
-    let temp = fixture();
-    let store = open(Utf8Path::from_path(temp.path()).unwrap());
-    edit(&store, "edit-1", "Statement v1");
-    let proposal = state(&store).pending.unwrap().proposal_id;
-
-    let withdrawn = withdraw(&store, &proposal).unwrap();
-    let resubmitted = submit(&store, None, None).unwrap();
-
-    assert!(withdrawn.sequence < resubmitted.sequence);
-    assert!(resubmitted.sequence < (1_u64 << 53));
-}
-
-#[test]
-fn cycle_receipt_refuses_a_different_record_kind_than_its_proposal() {
-    let (_temp, store, _, proposal) = enrolled();
-    let submitted = automatic_submission(&store);
-    let forged = CycleEntry {
-        id: super::journal::new_id(),
-        record_kind: NodeType::Source,
-        sequence: submitted.sequence + 1,
-        fact: CycleFact::Withdrawn,
-        request_id: super::journal::new_id(),
-        intent_digest: "sha256:forged-kind".into(),
-        ..submitted
-    };
-    super::decision_state::write_receipt(&store, &forged).unwrap();
-
-    refused(
-        store.validated_cycle_entries(&scope()),
-        "cycle entry address does not match its proposal target",
-    );
-    refused(
-        store.requirement_decision_state(&scope(), &req()),
-        "cycle entry address does not match its proposal target",
-    );
-    refused(
-        withdraw(&store, &proposal),
-        "cycle entry address does not match its proposal target",
     );
 }
 

@@ -10,3 +10,9 @@ regexTarget = "match"
 regexes = [
   '''^proposal_key":"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"$''',
 ]
+
+[[rules.allowlists]]
+description = "A review report finding in one historical commit"
+condition = "AND"
+commits = ["2f49f720e64ca516f54495b630e0acd4599b0c33"]
+paths = ['''^docs/reviews/pr192-test-audit-glm\.md$''']

@@ -4,15 +4,16 @@ use crate::{
     review::{
         classifier,
         decision_input::WithdrawRecordReview,
-        decision_state::{request_digest, review_submission, write_receipt, CycleFacts},
-        journal, owner_matches,
+        decision_state::{request_digest, review_submission, CycleFacts, Receipt},
+        guard, new_id, owner_matches,
     },
+    shards,
     state_store::StateStore,
     write_error::SourceFailure,
 };
 use provenance_core::{
-    review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
-    NodeType, StableId,
+    review::{CycleEntry, CycleFact},
+    NodeType, StableId, Withdrawal, SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
 
@@ -50,7 +51,6 @@ impl StateStore {
             );
         }
         let digest = request_digest(&input)?;
-        let request_id = journal::new_id();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -61,8 +61,6 @@ impl StateStore {
             let facts = CycleFacts::validated(self, &scope)?;
             validate_submission_address(
                 &proposal,
-                &facts,
-                &input.proposal_id,
                 addressed.as_ref().map(|(kind, id)| (*kind, id)),
             )?;
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
@@ -86,38 +84,46 @@ impl StateStore {
                 ));
             }
             with_staged_state(&self.layout, false, |layout| {
-                Self::new(layout.clone()).commit_withdrawal(input, request_id, digest)
+                Self::new(layout.clone()).commit_withdrawal(input, digest)
             })
         })
     }
 
+    /// Writes the Withdrawal record of one review submission.
     fn commit_withdrawal(
         &self,
         input: WithdrawRecordReview,
-        request_id: StableId,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
-        let record_id = proposal.traceability.target.artifact_id;
-        let entry = CycleEntry {
-            schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: CycleFacts::validated(self, &input.scope_id)?
-                .next_sequence(kind, &record_id)?,
-            scope_id: input.scope_id,
-            id: journal::new_id(),
+        let record_id = proposal.traceability.target.artifact_id.clone();
+        let withdrawal = guard::with_writer(
+            &shards::withdrawals_path(&self.layout, &input.scope_id),
+            "*",
+            || {
+                self.create_withdrawal(Withdrawal {
+                    schema_version: SUPPORTED_SCHEMA_VERSION,
+                    scope_id: input.scope_id.clone(),
+                    id: new_id(),
+                    proposal_id: input.proposal_id.clone(),
+                    actor: input.actor.clone(),
+                    reason: input.reason.clone(),
+                })
+            },
+        )?;
+        Ok(Receipt {
+            id: withdrawal.id,
             record_kind: kind,
             record_id,
-            proposal_id: input.proposal_id,
-            proposal_key: None,
+            proposal,
             fact: CycleFact::Withdrawn,
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-            request_id,
+            request_id: new_id(),
             intent_digest: digest,
-        };
-        write_receipt(self, &entry)?;
-        Ok(entry)
+        }
+        .entry())
     }
 }

@@ -275,10 +275,10 @@ fn every_family_keeps_its_independent_descriptor() {
             ),
         ),
         (
-            ProjectionFamily::ReviewJournal,
+            ProjectionFamily::Withdrawals,
             expected(
-                (Internal, "review_journal"),
-                "review/journal",
+                (Internal, "withdrawals"),
+                "ideation/withdrawals.jsonl",
                 None,
                 None,
                 None,

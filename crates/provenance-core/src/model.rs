@@ -43,6 +43,7 @@ pub use ideation::synthesis::{
     ConsensusFinding, ContestedClaim, EvidenceGap, MinorityObjection, RequiredHumanDecision,
     SuggestedArtifact, SynthesisPacket, UnsupportedSpeculation,
 };
+pub use ideation::withdrawals::Withdrawal;
 pub use ideation::{
     ArtifactChangeType, CanonicalArtifactType, ContributionStance, DispositionDecision,
     EvidenceQuality, IdeationEvidenceReference, IdeationEvidenceType, IdeationTarget,

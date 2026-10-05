@@ -1,4 +1,4 @@
-use super::{guard, journal, DiscussionAction, WriteDiscussion};
+use super::{guard, DiscussionAction, WriteDiscussion};
 use crate::{
     canonical_digest,
     publication::with_staged_state,
@@ -117,7 +117,7 @@ impl StateStore {
             let staged = Self::new(layout.clone());
             guard::with_writer(&shards::threads_path(layout, &input.scope_id), "*", || {
                 guard::with_writer(&shards::messages_path(layout, &input.scope_id), "*", || {
-                    staged.commit_discussion(input, head)
+                    staged.commit_discussion(input, head, None)
                 })
             })
         })
@@ -132,6 +132,7 @@ impl StateStore {
         &self,
         input: WriteDiscussion,
         head: Option<Discussion>,
+        feedback_for: Option<provenance_core::StableId>,
     ) -> anyhow::Result<Discussion> {
         let scope = &input.scope_id;
         let (thread, message, status) = match input.action {
@@ -184,7 +185,7 @@ impl StateStore {
             Discussion {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
                 scope_id: scope.clone(),
-                discussion_id: journal::new_id(),
+                discussion_id: super::new_id(),
                 parent: input.parent,
                 thread_id: thread.id,
                 root_message_id: root.clone(),
@@ -193,6 +194,7 @@ impl StateStore {
                 version: 1,
                 actor: input.actor,
                 outcomes: Vec::new(),
+                disposition_id: feedback_for,
             }
         };
         let path = shards::discussions_path(&self.layout, scope);

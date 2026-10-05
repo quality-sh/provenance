@@ -189,6 +189,10 @@ impl StateStore {
                 ),
             "review submissions go through the review seam"
         );
+        anyhow::ensure!(
+            candidate.actor.is_none() || candidate.proposal_type == ProposalType::RecordRevision,
+            "only a review submission names its actor"
+        );
         let mut proposals = self.list_proposal_definitions(&candidate.scope_id)?;
         proposals.push(candidate.clone());
         provenance_core::validate_ideation_aggregate(provenance_core::IdeationAggregate {
@@ -432,6 +436,7 @@ fn proposal_from_input(input: CreateProposalCardInput) -> anyhow::Result<Proposa
         duplicate_of: input.duplicate_of,
         superseded_by: input.superseded_by,
         record_revision: input.record_revision,
+        actor: input.actor,
         revises: input.revises,
         revises_rejection: input.revises_rejection,
     };

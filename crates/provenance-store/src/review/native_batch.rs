@@ -1,6 +1,6 @@
 //! Canonical staged writer for one or more native graph record changes.
 
-use super::{guard, journal};
+use super::guard;
 use crate::{
     publication::with_staged_state,
     state_store::{
@@ -144,7 +144,7 @@ fn check_etag<T: GraphRecord>(before: &[T], id: &StableId, expected: &str) -> an
         .find(|record| record.id() == id)
         .ok_or_else(|| anyhow::anyhow!("native update cannot create a graph record"))?;
     let record: ReviewRecord = record.clone().into();
-    let current_etag = journal::etag(&record)?;
+    let current_etag = super::save::etag(&record)?;
     if expected != current_etag {
         return Err(SourceFailure::wrap(
             WriteFailure::RecordEditConflict {

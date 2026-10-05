@@ -49,6 +49,7 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
             duplicate_of: None,
             superseded_by: None,
             record_revision: None,
+            actor: None,
             revises: None,
             revises_rejection: None,
         })

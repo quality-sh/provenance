@@ -244,31 +244,6 @@ pub struct EvidenceQuery {
     pub offset: u64,
 }
 
-/// One decision-cycle receipt in the review journal.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum JournalEntry {
-    Cycle(Box<CycleEntry>),
-}
-impl JournalEntry {
-    pub const fn id(&self) -> &StableId {
-        match self {
-            Self::Cycle(e) => &e.id,
-        }
-    }
-    pub const fn scope_id(&self) -> &ScopeId {
-        match self {
-            Self::Cycle(e) => &e.scope_id,
-        }
-    }
-    pub const fn request_id(&self) -> &StableId {
-        match self {
-            Self::Cycle(e) => &e.request_id,
-        }
-    }
-}
-
 /// One decision-cycle fact: a submission, a decision, or a withdrawal.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -279,12 +254,12 @@ pub enum CycleFact {
     Withdrawn,
 }
 
-/// One committed decision-cycle fact is also its durable request receipt.
+/// The response to one decision-cycle write.
 ///
 /// The cycle never mutates a proposal, a disposition, or the record itself.
-/// Submission writes an immutable bound proposal, decision writes an immutable
-/// disposition, and this entry records which of the three happened, so the
-/// request can be replayed and the history read in order.
+/// Submission writes an immutable bound Proposal, decision writes an immutable
+/// Disposition, and withdrawal writes a Withdrawal. This receipt names the
+/// record that the write added and is not stored.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -303,7 +278,7 @@ pub struct CycleEntry {
     /// The server-created key of a `Submitted` Proposal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proposal_key: Option<String>,
-    /// Submission and decision order for the addressed record.
+    /// The review cycle of the submission for the addressed record.
     pub sequence: u64,
     pub fact: CycleFact,
     /// The disposition a `Decided` fact recorded.
@@ -356,8 +331,9 @@ pub struct RequirementDecisionState {
     pub record_id: StableId,
     pub current_revision: Option<StableId>,
     pub pending: Option<PendingSubmission>,
-    /// The accepted decision whose revision matches current content. Editing
-    /// keeps past acceptances in `decisions` and leaves this empty.
+    /// The accepted decision whose revision matches current content. An edit
+    /// to other content leaves this empty and keeps past acceptances in
+    /// `decisions`.
     pub current_acceptance: Option<RecordedDecision>,
     /// Every terminal decision for the record, oldest first. Legacy unbound
     /// dispositions keep their place here.

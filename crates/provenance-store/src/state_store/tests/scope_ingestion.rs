@@ -50,7 +50,7 @@ fn scope_import_writes_only_the_imported_shards() {
             family,
             ProjectionFamily::RequirementReviews
                 | ProjectionFamily::Discussions
-                | ProjectionFamily::ReviewJournal
+                | ProjectionFamily::Withdrawals
         ) {
             assert!(!path.exists(), "{path} must stay outside scope import");
         } else {

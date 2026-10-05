@@ -384,6 +384,10 @@ pub struct CreateProposalCardInput {
     /// the review seam may state one; ordinary writers refuse the type.
     #[serde(default)]
     pub record_revision: Option<provenance_core::RecordRevisionBinding>,
+    /// The actor who submitted a review submission. Only the review seam
+    /// states one.
+    #[serde(default)]
+    pub actor: Option<String>,
     /// The rejected predecessor this resubmission revises.
     #[serde(default)]
     pub revises: Option<StableId>,

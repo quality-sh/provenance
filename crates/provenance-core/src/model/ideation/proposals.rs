@@ -63,6 +63,9 @@ pub struct ProposalCard {
         skip_serializing_if = "Option::is_none"
     )]
     pub record_revision: Option<RecordRevisionBinding>,
+    /// The actor who submitted a review submission.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
     /// The rejected predecessor this resubmission revises. Assertion lineage
     /// stays in `builds_on`; this link answers a rejection, not evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]

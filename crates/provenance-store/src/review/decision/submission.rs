@@ -4,17 +4,18 @@ use crate::{
     review::{
         classifier,
         decision_input::SubmitRecordReview,
-        decision_state::{request_digest, validated_resubmission, write_receipt, CycleFacts},
-        guard, journal, owner_matches,
+        decision_state::{
+            request_digest, review_proposal_key, validated_resubmission, CycleFacts, Receipt,
+        },
+        guard, new_id, owner_matches,
     },
     shards,
     state_store::{CreateProposalCardInput, StateStore},
     write_error::SourceFailure,
 };
 use provenance_core::{
-    review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
+    review::{CycleEntry, CycleFact},
     IdeationTarget, PromotionState, ProposalTraceability, ProposalType, RecordRevisionBinding,
-    StableId,
 };
 use provenance_macros::rule;
 
@@ -28,9 +29,6 @@ impl StateStore {
             "invalid review request identity"
         );
         let digest = request_digest(&input)?;
-        let request_id = journal::new_id();
-        let proposal_id = journal::new_id();
-        let proposal_key = proposal_id.as_str().to_owned();
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -46,13 +44,7 @@ impl StateStore {
             owner_matches(&record, input.declared_by.as_deref())?;
             with_staged_state(&self.layout, false, |layout| {
                 guard::with_writer(&shards::proposal_cards_path(layout, &scope), "*", || {
-                    Self::new(layout.clone()).commit_submission(
-                        input,
-                        request_id,
-                        proposal_id,
-                        proposal_key,
-                        digest,
-                    )
+                    Self::new(layout.clone()).commit_submission(input, digest)
                 })
             })
         })
@@ -61,9 +53,6 @@ impl StateStore {
     pub(in crate::review) fn commit_submission(
         &self,
         input: SubmitRecordReview,
-        request_id: StableId,
-        proposal_id: StableId,
-        proposal_key: String,
         digest: String,
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
@@ -111,10 +100,11 @@ impl StateStore {
             ),
             None => (None, None),
         };
-        self.create_proposal_card(CreateProposalCardInput {
-            scope_id: scope.clone(),
-            id: proposal_id.clone(),
-            proposal_key: proposal_key.clone(),
+        let cycle = facts.next_cycle(input.record_kind, &input.record_id)?;
+        let proposal = self.create_proposal_card(CreateProposalCardInput {
+            scope_id: scope,
+            id: new_id(),
+            proposal_key: review_proposal_key(input.record_kind, &input.record_id, cycle),
             proposal_type: ProposalType::RecordRevision,
             title: input.title,
             summary: input.summary,
@@ -136,26 +126,22 @@ impl StateStore {
                 revision,
                 content_digest: classifier::content_digest(input.record_kind, &record)?,
             }),
+            actor: Some(input.actor.clone()),
             revises,
             revises_rejection,
         })?;
-        let entry = CycleEntry {
-            schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: facts.next_sequence(input.record_kind, &input.record_id)?,
-            scope_id: scope,
-            id: journal::new_id(),
+        Ok(Receipt {
+            id: proposal.id.clone(),
             record_kind: input.record_kind,
             record_id: input.record_id,
-            proposal_id,
-            proposal_key: Some(proposal_key),
+            proposal,
             fact: CycleFact::Submitted,
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-            request_id,
+            request_id: new_id(),
             intent_digest: digest,
-        };
-        write_receipt(self, &entry)?;
-        Ok(entry)
+        }
+        .entry())
     }
 }

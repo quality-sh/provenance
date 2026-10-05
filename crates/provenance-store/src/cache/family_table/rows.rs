@@ -461,7 +461,7 @@ macro_rules! expand_record_family_rows {
                     meta: { shard: "threads/discussions.jsonl", order: none,
                         budget: NotImported },
                     node: [],
-                    reader: { open: list_discussions, closed: [], strategy: existing },
+                    reader: { open: validated_discussions, closed: [], strategy: existing },
                     id: method,
                     loader: [kind],
                     graph: [],
@@ -469,15 +469,16 @@ macro_rules! expand_record_family_rows {
                     catalog: [none],
                     route: [none]
                 };
-                ReviewJournal {
-                    record: provenance_core::review::JournalEntry,
-                    field: review_journal,
-                    path: review_journal_path,
-                    meta: { shard: "review/journal", order: none, budget: NotImported },
+                Withdrawals {
+                    record: provenance_core::Withdrawal,
+                    field: withdrawals,
+                    path: withdrawals_path,
+                    meta: { shard: "ideation/withdrawals.jsonl", order: none,
+                        budget: NotImported },
                     node: [],
-                    reader: { open: validated_journal_entries, closed: [], strategy: existing },
-                    id: method,
-                    loader: [journal],
+                    reader: { open: list_withdrawals, closed: [], strategy: existing },
+                    id: field,
+                    loader: [kind],
                     graph: [],
                     import: [skip],
                     catalog: [none],

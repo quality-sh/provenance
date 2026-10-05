@@ -33,6 +33,8 @@ pub struct Discussion {
     /// The actor who started the Discussion.
     pub actor: String,
     pub outcomes: Vec<DiscussionOutcome>,
+    /// The review decision that published this Discussion as its feedback.
+    pub disposition_id: Option<StableId>,
 }
 
 impl Discussion {

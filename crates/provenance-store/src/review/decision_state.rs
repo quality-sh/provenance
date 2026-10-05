@@ -1,13 +1,16 @@
-//! Shared decision-cycle helpers: receipt replay, validated cycle facts, and
-//! the checks a submission or a decision must pass against the scope.
+//! Shared decision-cycle helpers: the review state read from Proposal,
+//! Disposition, Withdrawal and Discussion records, and the checks a
+//! submission or a decision must pass against the scope.
 
 use crate::state_store::StateStore;
 use provenance_core::{
-    review::{CycleEntry, CycleFact},
-    DispositionDecision, NodeType, ProposalType, ScopeId, StableId,
+    review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
+    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
+    StableId, Withdrawal,
 };
+use provenance_macros::rule;
 
-const MAX_SAFE_SEQUENCE: u64 = (1 << 53) - 1;
+const MAX_SAFE_CYCLE: u64 = (1 << 53) - 1;
 
 pub(super) fn request_digest(input: &impl serde::Serialize) -> anyhow::Result<String> {
     anyhow::ensure!(
@@ -19,195 +22,184 @@ pub(super) fn request_digest(input: &impl serde::Serialize) -> anyhow::Result<St
     ))
 }
 
-pub(super) fn write_receipt(store: &StateStore, entry: &CycleEntry) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        serde_json::to_vec(entry)?.len() as u64 <= super::journal::ENTRY_BYTES,
-        "review receipt exceeds the entry byte budget"
-    );
-    super::journal::write_new(
-        &super::journal::entry_path(&store.layout, &entry.scope_id, &entry.request_id),
-        entry,
-    )
+/// The key of the review Proposal for one record and one review cycle.
+#[rule("rule_review_proposal_key_names_record_cycle")]
+pub(super) fn review_proposal_key(kind: NodeType, record_id: &StableId, cycle: u64) -> String {
+    format!("review:{}:{}:{cycle}", kind.as_str(), record_id.as_str())
 }
 
-/// The scope's decision-cycle receipts, each checked against the records it
-/// names, so a forged or dangling receipt cannot join the decision history.
-pub(super) fn validated_cycle_entries(
-    store: &StateStore,
-    scope: &ScopeId,
-) -> anyhow::Result<Vec<CycleEntry>> {
-    let entries = store.cycle_entries(scope)?;
-    let proposals = store.list_proposal_definitions(scope)?;
-    let dispositions = store.list_dispositions(scope)?;
-    let mut ids = std::collections::BTreeSet::new();
-    let mut sequences = std::collections::BTreeSet::new();
-    for entry in &entries {
-        anyhow::ensure!(
-            ids.insert(entry.id.as_str()),
-            "duplicate cycle entry identity"
-        );
-        anyhow::ensure!(
-            !entry.actor.trim().is_empty(),
-            "invalid decision-cycle actor"
-        );
-        anyhow::ensure!(
-            sequences.insert((
-                entry.record_kind.as_str(),
-                entry.record_id.as_str(),
-                entry.sequence,
-            )),
-            "duplicate decision-cycle sequence {} for {} {}",
-            entry.sequence,
-            entry.record_kind.as_str(),
-            entry.record_id.as_str()
-        );
-        anyhow::ensure!(
-            entry.sequence <= MAX_SAFE_SEQUENCE,
-            "decision-cycle sequence exceeds the safe integer limit"
-        );
-        let proposal = proposals
-            .iter()
-            .find(|proposal| proposal.id == entry.proposal_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "cycle entry names proposal {} which does not exist",
-                    entry.proposal_id.as_str()
-                )
-            })?;
-        anyhow::ensure!(
-            entry.record_kind == proposal.traceability.target.artifact_type.into()
-                && entry.record_id == proposal.traceability.target.artifact_id,
-            "cycle entry address does not match its proposal target"
-        );
-        match (entry.fact, &entry.disposition_id) {
-            (CycleFact::Decided, Some(disposition_id)) => {
-                let recorded = dispositions
-                    .iter()
-                    .find(|d| d.id == *disposition_id)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "cycle entry names disposition {} which does not exist",
-                            disposition_id.as_str()
-                        )
-                    })?;
-                anyhow::ensure!(
-                    recorded.proposal_id == entry.proposal_id,
-                    "cycle entry disposition does not belong to its proposal"
-                );
-            }
-            (CycleFact::Decided, None) => {
-                anyhow::bail!("a decided cycle entry names no disposition")
-            }
-            (CycleFact::Submitted | CycleFact::Withdrawn, None) => {}
-            (CycleFact::Submitted | CycleFact::Withdrawn, Some(_)) => {
-                anyhow::bail!("a submitted or withdrawn cycle entry names no disposition")
-            }
-        }
-        if entry.fact == CycleFact::Submitted {
-            anyhow::ensure!(
-                proposals.iter().any(|p| p.id == entry.proposal_id
-                    && p.proposal_type == ProposalType::RecordRevision),
-                "a submitted cycle entry names a proposal that is not a review submission"
-            );
+/// The response of one decision-cycle write.
+pub(super) struct Receipt {
+    pub(super) id: StableId,
+    pub(super) record_kind: NodeType,
+    pub(super) record_id: StableId,
+    pub(super) proposal: ProposalCard,
+    pub(super) fact: CycleFact,
+    pub(super) disposition_id: Option<StableId>,
+    pub(super) feedback_message_id: Option<StableId>,
+    pub(super) actor: String,
+    pub(super) request_id: StableId,
+    pub(super) intent_digest: String,
+}
+
+impl Receipt {
+    /// Builds the response of a decision-cycle write. The write changes only
+    /// graph record files, so this receipt is returned and not stored.
+    #[rule("rule_review_writes_change_only_record_files")]
+    pub(super) fn entry(self) -> CycleEntry {
+        CycleEntry {
+            schema_version: REVIEW_SCHEMA_VERSION,
+            scope_id: self.proposal.scope_id.clone(),
+            id: self.id,
+            sequence: cycle_of(&self.proposal).unwrap_or_default(),
+            proposal_key: (self.fact == CycleFact::Submitted)
+                .then(|| self.proposal.proposal_key.clone()),
+            record_kind: self.record_kind,
+            record_id: self.record_id,
+            proposal_id: self.proposal.id,
+            fact: self.fact,
+            disposition_id: self.disposition_id,
+            feedback_message_id: self.feedback_message_id,
+            actor: self.actor,
+            request_id: self.request_id,
+            intent_digest: self.intent_digest,
         }
     }
-    Ok(entries)
 }
 
-/// The validated decision-cycle facts of one scope.
+/// The review cycle a Proposal key names, or `None` for a key in another
+/// form, such as the random key of an older submission.
+pub(super) fn cycle_of(proposal: &ProposalCard) -> Option<u64> {
+    let kind = NodeType::from(proposal.traceability.target.artifact_type);
+    let prefix = format!(
+        "review:{}:{}:",
+        kind.as_str(),
+        proposal.traceability.target.artifact_id.as_str()
+    );
+    proposal
+        .proposal_key
+        .strip_prefix(&prefix)
+        .and_then(|cycle| cycle.parse().ok())
+}
+
+/// The review state of one scope, read from its records.
 pub(super) struct CycleFacts {
-    entries: Vec<CycleEntry>,
+    submissions: Vec<ProposalCard>,
+    dispositions: Vec<DispositionRecord>,
+    withdrawals: Vec<Withdrawal>,
+    feedback: Vec<(StableId, StableId)>,
 }
 
 impl CycleFacts {
+    /// Reads the scope's review submissions, Dispositions, Withdrawals and
+    /// feedback Discussions, and refuses a Withdrawal that names no review
+    /// submission.
     pub(super) fn validated(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Self> {
+        let submissions = store
+            .list_proposal_definitions(scope)?
+            .into_iter()
+            .filter(|proposal| proposal.proposal_type == ProposalType::RecordRevision)
+            .collect::<Vec<_>>();
+        let withdrawals = store.list_withdrawals(scope)?;
+        let mut withdrawn = std::collections::BTreeSet::new();
+        for withdrawal in &withdrawals {
+            anyhow::ensure!(
+                submissions
+                    .iter()
+                    .any(|proposal| proposal.id == withdrawal.proposal_id),
+                "withdrawal {} names no review submission",
+                withdrawal.id.as_str()
+            );
+            anyhow::ensure!(
+                withdrawn.insert(withdrawal.proposal_id.as_str()),
+                "review submission {} is withdrawn twice",
+                withdrawal.proposal_id.as_str()
+            );
+        }
+        let feedback = store
+            .list_discussions(scope)?
+            .into_iter()
+            .filter_map(|discussion| {
+                discussion
+                    .disposition_id
+                    .map(|disposition| (disposition, discussion.root_message_id))
+            })
+            .collect();
         Ok(Self {
-            entries: validated_cycle_entries(store, scope)?,
+            submissions,
+            dispositions: store.list_dispositions(scope)?,
+            withdrawals,
+            feedback,
         })
     }
 
     pub(super) fn is_withdrawn(&self, proposal: &StableId) -> bool {
-        self.entries
+        self.withdrawals
             .iter()
-            .any(|e| e.fact == CycleFact::Withdrawn && e.proposal_id == *proposal)
+            .any(|withdrawal| withdrawal.proposal_id == *proposal)
     }
 
     pub(super) fn is_decided(&self, proposal: &StableId) -> bool {
-        self.entries
+        self.dispositions
             .iter()
-            .any(|e| e.fact == CycleFact::Decided && e.proposal_id == *proposal)
-    }
-
-    pub(super) fn submission_address(
-        &self,
-        proposal: &StableId,
-    ) -> anyhow::Result<(NodeType, &StableId)> {
-        self.entries
-            .iter()
-            .find(|entry| entry.fact == CycleFact::Submitted && entry.proposal_id == *proposal)
-            .map(|entry| (entry.record_kind, &entry.record_id))
-            .ok_or_else(|| anyhow::anyhow!("the proposal has no review submission cycle entry"))
+            .any(|disposition| disposition.proposal_id == *proposal)
     }
 
     /// The feedback Message a decision published, if it did.
     pub(super) fn feedback_for(&self, disposition: &StableId) -> Option<StableId> {
-        self.entries.iter().find_map(|e| {
-            if e.fact == CycleFact::Decided && e.disposition_id.as_ref() == Some(disposition) {
-                e.feedback_message_id.clone()
-            } else {
-                None
-            }
+        self.feedback
+            .iter()
+            .find(|(decided, _)| decided == disposition)
+            .map(|(_, message)| message.clone())
+    }
+
+    /// The order of one review submission: its review cycle, then its id.
+    /// A submission whose key names no cycle keeps the end of the order.
+    pub(super) fn order_of(&self, proposal: &StableId) -> (u64, String) {
+        let cycle = self
+            .submissions
+            .iter()
+            .find(|submission| submission.id == *proposal)
+            .and_then(cycle_of)
+            .unwrap_or(u64::MAX);
+        (cycle, proposal.as_str().to_owned())
+    }
+
+    fn of_record<'a>(
+        &'a self,
+        kind: NodeType,
+        record_id: &'a StableId,
+    ) -> impl Iterator<Item = &'a ProposalCard> + 'a {
+        self.submissions.iter().filter(move |proposal| {
+            NodeType::from(proposal.traceability.target.artifact_type) == kind
+                && proposal.traceability.target.artifact_id == *record_id
         })
     }
 
-    /// The submission sequence of one proposal, ordering its decision in the
-    /// history. Receipts without a submission keep the end of the order.
-    pub(super) fn sequence_of(&self, proposal: &StableId) -> Option<u64> {
-        self.entries
-            .iter()
-            .filter(|e| e.fact == CycleFact::Submitted && e.proposal_id == *proposal)
-            .map(|e| e.sequence)
-            .next()
-    }
-
-    /// The withdrawn submissions of one record, in withdrawal order.
+    /// The withdrawn submissions of one record, in submission order.
     pub(super) fn withdrawn_submissions(
         &self,
         kind: NodeType,
         record_id: &StableId,
     ) -> Vec<StableId> {
-        let mut withdrawn: Vec<(u64, StableId)> = self
-            .entries
-            .iter()
-            .filter(|e| {
-                e.record_kind == kind && e.record_id == *record_id && e.fact == CycleFact::Withdrawn
-            })
-            .map(|e| (e.sequence, e.proposal_id.clone()))
-            .collect();
-        withdrawn.sort_by_key(|(sequence, _)| *sequence);
+        let mut withdrawn = self
+            .of_record(kind, record_id)
+            .filter(|proposal| self.is_withdrawn(&proposal.id))
+            .map(|proposal| proposal.id.clone())
+            .collect::<Vec<_>>();
+        withdrawn.sort_by_key(|proposal| self.order_of(proposal));
         withdrawn
-            .into_iter()
-            .map(|(_, proposal)| proposal)
-            .collect()
     }
 
-    pub(super) fn next_sequence(
-        &self,
-        kind: NodeType,
-        record_id: &StableId,
-    ) -> anyhow::Result<u64> {
-        let next = self
-            .entries
-            .iter()
-            .filter(|e| e.record_kind == kind && e.record_id == *record_id)
-            .map(|e| e.sequence)
-            .max()
-            .unwrap_or(0)
+    /// The review cycle of the next submission of one record: one more than
+    /// the number of review submissions of the record.
+    pub(super) fn next_cycle(&self, kind: NodeType, record_id: &StableId) -> anyhow::Result<u64> {
+        let next = u64::try_from(self.of_record(kind, record_id).count())?
             .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("decision-cycle sequence overflow"))?;
+            .ok_or_else(|| anyhow::anyhow!("review cycle overflow"))?;
         anyhow::ensure!(
-            next <= MAX_SAFE_SEQUENCE,
-            "decision-cycle sequence exceeds the safe integer limit"
+            next <= MAX_SAFE_CYCLE,
+            "review cycle exceeds the safe integer limit"
         );
         Ok(next)
     }
@@ -219,71 +211,34 @@ impl CycleFacts {
         scope: &ScopeId,
         kind: NodeType,
         record_id: &StableId,
-    ) -> anyhow::Result<Option<CycleEntry>> {
+    ) -> anyhow::Result<Option<ProposalCard>> {
         let record = crate::cache::review_families::record(store, scope, kind, record_id)?;
         let current_revision = super::save::current_revision(&record)?;
-        self.pending_submission_at_revision(
-            store,
-            scope,
-            kind,
-            record_id,
-            current_revision.as_ref(),
-        )
+        Ok(self.pending_submission_at_revision(kind, record_id, current_revision.as_ref()))
     }
 
+    /// The undecided, unwithdrawn submission bound to the current revision.
     pub(super) fn pending_submission_at_revision(
         &self,
-        store: &StateStore,
-        scope: &ScopeId,
         kind: NodeType,
         record_id: &StableId,
         current_revision: Option<&StableId>,
-    ) -> anyhow::Result<Option<CycleEntry>> {
-        let proposals = store.list_proposal_definitions(scope)?;
-        let dispositions = store.list_dispositions(scope)?;
-        Ok(self.pending_submission_at_revision_in(
-            &proposals,
-            &dispositions,
-            kind,
-            record_id,
-            current_revision,
-        ))
-    }
-
-    pub(super) fn pending_submission_at_revision_in(
-        &self,
-        proposals: &[provenance_core::ProposalCard],
-        dispositions: &[provenance_core::DispositionRecord],
-        kind: NodeType,
-        record_id: &StableId,
-        current_revision: Option<&StableId>,
-    ) -> Option<CycleEntry> {
-        let decided: std::collections::BTreeSet<&str> = dispositions
-            .iter()
-            .map(|d| d.proposal_id.as_str())
-            .collect();
-        self.entries
-            .iter()
-            .filter(|e| {
-                e.record_kind == kind && e.record_id == *record_id && e.fact == CycleFact::Submitted
-            })
-            .filter(|e| {
-                !decided.contains(e.proposal_id.as_str()) && !self.is_withdrawn(&e.proposal_id)
-            })
-            .filter(|entry| {
-                proposals
-                    .iter()
-                    .find(|proposal| proposal.id == entry.proposal_id)
-                    .and_then(|proposal| proposal.record_revision.as_ref())
+    ) -> Option<ProposalCard> {
+        self.of_record(kind, record_id)
+            .filter(|proposal| !self.is_decided(&proposal.id) && !self.is_withdrawn(&proposal.id))
+            .filter(|proposal| {
+                proposal
+                    .record_revision
+                    .as_ref()
                     .is_some_and(|binding| Some(&binding.revision) == current_revision)
             })
+            .max_by_key(|proposal| self.order_of(&proposal.id))
             .cloned()
-            .next_back()
     }
 
     /// Returns the current review state in the typed conflict without merging values.
-    #[provenance_macros::rule("rule_review_conflict_returns_current_value")]
-    #[provenance_macros::rule("rule_review_conflict_not_merged")]
+    #[rule("rule_review_conflict_returns_current_value")]
+    #[rule("rule_review_conflict_not_merged")]
     pub(super) fn conflict_failure(
         &self,
         store: &StateStore,
@@ -296,7 +251,7 @@ impl CycleFacts {
             .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
         let current_submission = self
             .pending_submission(store, scope, kind, record_id)?
-            .map(|entry| entry.proposal_id);
+            .map(|proposal| proposal.id);
         Ok(crate::write_error::WriteFailure::ReviewSubmissionConflict {
             current_submission,
             current_revision,
@@ -310,7 +265,7 @@ pub(super) fn review_submission(
     store: &StateStore,
     scope: &ScopeId,
     proposal_id: &StableId,
-) -> anyhow::Result<provenance_core::ProposalCard> {
+) -> anyhow::Result<ProposalCard> {
     let proposal = store
         .list_proposal_definitions(scope)?
         .into_iter()

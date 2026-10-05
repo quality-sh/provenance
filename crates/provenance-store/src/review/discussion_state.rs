@@ -72,7 +72,7 @@ impl StateStore {
 
     /// Reads the scope's Discussions and refuses one whose Thread, parent, or
     /// Message membership disagrees with the Thread and Message records.
-    pub(super) fn validated_discussions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Discussion>> {
+    pub(crate) fn validated_discussions(&self, scope: &ScopeId) -> anyhow::Result<Vec<Discussion>> {
         let discussions = self.list_discussions(scope)?;
         let threads = self.list_threads(scope)?;
         let messages = self.list_messages(scope)?;

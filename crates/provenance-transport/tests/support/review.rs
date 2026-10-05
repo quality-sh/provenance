@@ -50,7 +50,10 @@ async fn submit_at(host: &StatementHost, revision: &str) -> String {
         .as_str()
         .expect("submission returns its proposal identity")
         .to_owned();
-    assert_eq!(value["data"]["proposal_key"], proposal);
+    assert!(value["data"]["proposal_key"]
+        .as_str()
+        .unwrap()
+        .starts_with("review:requirement:req_shared:"));
     proposal
 }
 

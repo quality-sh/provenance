@@ -128,3 +128,27 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
     }
     Ok(())
 }
+
+impl crate::state_store::StateStore {
+    /// Full-scope import and export cannot yet carry review state.
+    pub fn ensure_review_portable(&self, scope: &provenance_core::ScopeId) -> anyhow::Result<()> {
+        self.with_repository_publication(|| {
+            anyhow::ensure!(
+                !self
+                    .layout
+                    .scopes_dir()
+                    .join(scope.as_str())
+                    .join("review")
+                    .try_exists()?,
+                "review-bearing scopes require lossless import/export support"
+            );
+            let has_enrolled_record =
+                crate::cache::review_families::has_enrolled_record(self, scope)?;
+            anyhow::ensure!(
+                !has_enrolled_record,
+                "review-bearing scopes require lossless import/export support"
+            );
+            Ok(())
+        })
+    }
+}

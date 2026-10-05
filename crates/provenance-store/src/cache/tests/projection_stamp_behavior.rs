@@ -6,7 +6,7 @@ const PROJECTION_TABLES: [&str; 8] = [
     "implementation_bindings",
     "verification_bindings",
     "requirement_reviews",
-    "review_journal",
+    "withdrawals",
     "projection_instance",
     "projection_revision",
     "projection_family_digests",
@@ -67,7 +67,7 @@ fn projection_family_table_names_every_stored_family_once() {
         "verification_bindings",
         "requirement_reviews",
         "discussions",
-        "review_journal",
+        "withdrawals",
     ] {
         assert!(names.contains(&expected), "missing family {expected}");
     }
@@ -211,7 +211,7 @@ fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
     let mut walked = Vec::new();
     for family in ProjectionFamily::ALL {
         let (bytes, record_count) = family.canonical_records(&store, &scope).unwrap();
-        if matches!(family.family_name(), "review_journal" | "discussions") && record_count == 0 {
+        if matches!(family.family_name(), "withdrawals" | "discussions") && record_count == 0 {
             continue;
         }
         walked.push(serde_json::json!({

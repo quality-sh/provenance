@@ -56,7 +56,6 @@ fn crash_child() {
         "state_backup_created" => "state_backup_created",
         "state_installed" => "state_installed",
         "state_published" => "state_published",
-        "requirement_submission_writing" => "requirement_submission_writing",
         _ => panic!("unknown crash phase"),
     };
     let store = open(Utf8Path::new(&root));
@@ -87,10 +86,7 @@ fn crash_between_edit_and_submission_publishes_neither_half() {
             "--nocapture",
         ])
         .env("PROVENANCE_REVIEW_CRASH_ROOT", root.as_str())
-        .env(
-            "PROVENANCE_REVIEW_CRASH_PHASE",
-            "requirement_submission_writing",
-        )
+        .env("PROVENANCE_REVIEW_CRASH_PHASE", "state_prepared")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
@@ -163,7 +159,7 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
             .pending
             .unwrap();
         assert_eq!(pending.proposal_id == previous, !committed, "{phase}");
-        store.validated_journal_entries(&scope()).unwrap();
+        super::decision_state::CycleFacts::validated(&store, &scope()).unwrap();
         assert!(!ProvenanceLayout::new(root)
             .publication_marker_path()
             .exists());
