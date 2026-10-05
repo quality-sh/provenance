@@ -199,8 +199,8 @@ impl SearchArgs {
                     .map(|query| query.parameters.as_slice())
             })
             .ok_or_else(|| anyhow::anyhow!("the operation catalog does not declare root search"))?;
-        let default_exclude_terminal =
-            crate::read_policy::default_exclude_terminal(parameters).ok_or_else(|| {
+        let default_exclude_terminal = crate::read_policy::default_exclude_terminal(parameters)
+            .ok_or_else(|| {
                 anyhow::anyhow!("the root search query does not declare exclude_terminal")
             })?;
         let query = SearchQuery {
