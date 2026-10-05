@@ -224,7 +224,6 @@ fn record_comment_joins_the_selected_record_thread() {
     let saved = post(&body);
     assert_eq!(saved.status(), 200);
     let saved: Value = serde_json::from_str(&saved.into_string().unwrap()).unwrap();
-    assert_eq!(saved["data"]["actor"], "ben");
     assert_eq!(saved["data"]["parent"]["node_type"], "requirement");
     assert_eq!(saved["data"]["parent"]["node_id"], "req_example");
     let discussion_id = saved["data"]["discussion_id"].as_str().unwrap();

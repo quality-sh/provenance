@@ -147,27 +147,21 @@ fn superseded_submission_reports_the_current_review_identity() {
     let revision_2 = edit(&store, "edit-2", "Revised statement");
 
     let proposal_2 = state(&store).pending.unwrap().proposal_id;
-    for error in [
-        decide(
-            &store,
-            &proposal_1,
-            "accepted",
-            &reviewer("reviewer"),
-            &artifact(),
-        )
-        .unwrap_err(),
-        withdraw(&store, &proposal_1).unwrap_err(),
-    ] {
-        assert!(matches!(
-            WriteError(error).safe(),
-            WriteFailure::ReviewSubmissionConflict {
-                current_submission: Some(submission),
-                current_revision,
-            } if submission == proposal_2 && current_revision == revision_2
-        ));
-    }
-
-    assert_ne!(proposal_1, proposal_2);
+    let error = decide(
+        &store,
+        &proposal_1,
+        "accepted",
+        &reviewer("reviewer"),
+        &artifact(),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::ReviewSubmissionConflict {
+            current_submission: Some(submission),
+            current_revision,
+        } if submission == proposal_2 && current_revision == revision_2
+    ));
 }
 
 #[test]

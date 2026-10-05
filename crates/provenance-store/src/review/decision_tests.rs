@@ -494,3 +494,5 @@ mod canonical_artifacts;
 mod conflict_tests;
 #[path = "decision_tests/legacy.rs"]
 mod legacy;
+#[path = "decision_tests/rejection_tests.rs"]
+mod rejection_tests;
