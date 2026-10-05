@@ -2,7 +2,7 @@
 
 use super::{classifier, guard};
 use crate::{
-    cache::review_families, publication::with_staged_state, state_store::StateStore,
+    cache::review_families, review::publication::with_record_state, state_store::StateStore,
     write_error::SourceFailure,
 };
 use provenance_core::{
@@ -26,7 +26,7 @@ impl StateStore {
             !actor.trim().is_empty(),
             "invalid typed-spec review identity"
         );
-        with_staged_state(&self.layout, false, |layout| {
+        with_record_state(&self.layout, |layout| {
             let staged = Self::new(layout.clone());
             let paths = review_families::review_paths(layout, scope);
             let result = guard::with_writers(&paths, "*", || publish(&staged))?;

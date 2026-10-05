@@ -1,13 +1,13 @@
 use super::target_type;
 use crate::{
-    publication::with_staged_state,
+    review::publication::with_record_state,
     review::{
         classifier,
         decision_input::SubmitRecordReview,
         decision_state::{
-            request_digest, review_proposal_key, validated_resubmission, CycleFacts, Receipt,
+            check_request_size, review_proposal_key, validated_resubmission, CycleFacts, Receipt,
         },
-        guard, new_id, new_request_id, owner_matches,
+        guard, new_id, owner_matches,
     },
     shards,
     state_store::{CreateProposalCardInput, StateStore},
@@ -20,7 +20,7 @@ use provenance_core::{
 use provenance_macros::rule;
 
 impl StateStore {
-    /// Creates the server-owned request and Proposal identities for a review submission.
+    /// Creates the server-owned Proposal identity for a review submission.
     #[rule("rule_revised_item_requires_new_review")]
     #[rule("rule_review_proposal_identity_server_created")]
     pub fn submit_record_review(&self, input: SubmitRecordReview) -> anyhow::Result<CycleEntry> {
@@ -28,7 +28,7 @@ impl StateStore {
             !input.actor.trim().is_empty(),
             "invalid review request identity"
         );
-        let digest = request_digest(&input)?;
+        check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -42,9 +42,9 @@ impl StateStore {
                 &input.record_id,
             )?;
             owner_matches(&record, input.declared_by.as_deref())?;
-            with_staged_state(&self.layout, false, |layout| {
+            with_record_state(&self.layout, |layout| {
                 guard::with_writer(&shards::proposal_cards_path(layout, &scope), "*", || {
-                    Self::new(layout.clone()).commit_submission(input, digest)
+                    Self::new(layout.clone()).commit_submission(input)
                 })
             })
         })
@@ -53,7 +53,7 @@ impl StateStore {
     pub(in crate::review) fn commit_submission(
         &self,
         input: SubmitRecordReview,
-        digest: String,
+
     ) -> anyhow::Result<CycleEntry> {
         let scope = input.scope_id.clone();
         let record = crate::cache::review_families::record(
@@ -139,8 +139,8 @@ impl StateStore {
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-            request_id: new_request_id(),
-            intent_digest: digest,
+
+
         }
         .entry())
     }

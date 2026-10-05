@@ -288,8 +288,6 @@ pub struct CycleEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feedback_message_id: Option<StableId>,
     pub actor: String,
-    pub request_id: StableId,
-    pub intent_digest: String,
 }
 
 /// A submission still waiting for a decision.

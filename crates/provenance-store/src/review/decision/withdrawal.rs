@@ -1,11 +1,11 @@
 use super::validate_submission_address;
 use crate::{
-    publication::with_staged_state,
+    review::publication::with_record_state,
     review::{
         classifier,
         decision_input::WithdrawRecordReview,
-        decision_state::{request_digest, review_submission, CycleFacts, Receipt},
-        guard, new_id, new_request_id, owner_matches,
+        decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
+        guard, new_id, owner_matches,
     },
     shards,
     state_store::StateStore,
@@ -50,7 +50,7 @@ impl StateStore {
                 "withdrawal reason must not be empty"
             );
         }
-        let digest = request_digest(&input)?;
+        check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -75,7 +75,7 @@ impl StateStore {
                 .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
             if revision != binding.revision
                 || classifier::content_digest(kind, &record)? != binding.content_digest
-                || facts.is_withdrawn(&input.proposal_id)
+                    || facts.is_withdrawn(&input.proposal_id)
                 || facts.is_decided(&input.proposal_id)
             {
                 return Err(SourceFailure::wrap(
@@ -83,8 +83,8 @@ impl StateStore {
                     anyhow::anyhow!("this review submission is no longer current and pending"),
                 ));
             }
-            with_staged_state(&self.layout, false, |layout| {
-                Self::new(layout.clone()).commit_withdrawal(input, digest)
+            with_record_state(&self.layout, |layout| {
+                Self::new(layout.clone()).commit_withdrawal(input)
             })
         })
     }
@@ -93,7 +93,7 @@ impl StateStore {
     fn commit_withdrawal(
         &self,
         input: WithdrawRecordReview,
-        digest: String,
+
     ) -> anyhow::Result<CycleEntry> {
         let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
@@ -121,8 +121,8 @@ impl StateStore {
             disposition_id: None,
             feedback_message_id: None,
             actor: input.actor,
-            request_id: new_request_id(),
-            intent_digest: digest,
+
+
         }
         .entry())
     }

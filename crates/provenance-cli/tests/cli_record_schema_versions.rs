@@ -138,7 +138,7 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
         &path,
         stored.replace(
             // The CLI-created Requirement is enrolled, so it stands at the
-            // review journal schema version.
+            // record schema version.
             &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0),
             &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0 + 1),
         ),

@@ -5,7 +5,7 @@ use super::{
     CreateReviewRequirement,
 };
 use crate::{
-    publication::with_staged_state,
+    review::publication::with_record_state,
     review::guard,
     state_store::{
         record_stamps::GraphRecord, AddSourceReferenceInput, CreateRequirementInput, StateStore,
@@ -27,7 +27,7 @@ impl StateStore {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
         self.with_repository_publication(|| {
-            with_staged_state(&self.layout, false, |layout| {
+            with_record_state(&self.layout, |layout| {
                 let staged = Self::staged(layout.clone(), stamp.clone());
                 let staged_path = layout.root().join(&relative);
                 guard::with_writer(&staged_path, "*", || {
@@ -53,7 +53,6 @@ impl StateStore {
                     }
                     if let Some(scope) = scope {
                         staged.validate_graph_scope(&scope)?;
-                        staged.enroll_review_manifest()?;
                     }
                     Ok(())
                 })
@@ -70,13 +69,12 @@ impl StateStore {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
         self.with_repository_publication(|| {
-            with_staged_state(&self.layout, false, |layout| {
+            with_record_state(&self.layout, |layout| {
                 let staged = Self::staged(layout.clone(), stamp.clone());
                 let staged_path = layout.root().join(&relative);
                 guard::with_writer(&staged_path, id.as_str(), || {
                     write(&staged)?;
                     let created = staged.enroll_graph_record::<T>(&staged_path, id)?;
-                    staged.enroll_review_manifest()?;
                     Ok(created)
                 })
             })

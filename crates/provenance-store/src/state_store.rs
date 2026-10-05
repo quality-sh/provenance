@@ -15,6 +15,7 @@ pub(crate) mod read_budget;
 pub(crate) mod readers;
 pub(crate) mod record_stamps;
 mod reference_methods;
+mod reviewer_config;
 mod reference_writers;
 mod requirement_reviews;
 mod rule_writers;

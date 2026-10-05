@@ -37,7 +37,7 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     let layout = ProvenanceLayout::new(&root);
     let store = StateStore::new(layout.clone());
     store
-        .save_requirement(save(&store, "enroll", json!({"description":"saved"})))
+        .save_requirement(save(&store, json!({"description":"saved"})))
         .unwrap();
     cache::materialize_state(&layout).await.unwrap();
     let history = read_history(

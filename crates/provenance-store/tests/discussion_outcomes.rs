@@ -125,7 +125,7 @@ fn mismatched_discussion_message_origin_refuses_without_editing() {
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store
         .save_requirement_from_discussion(
-            save(&store, "bad", json!({"description":"bad"})),
+            save(&store, json!({"description":"bad"})),
             &origin
         )
         .is_err());
@@ -141,7 +141,7 @@ async fn plain_save_to_previous_content_has_no_discussion_origin() {
     let text_a = json!({"description":"Text A."});
     store
         .save_requirement_from_discussion(
-            save(&store, "discussion-a", text_a.clone()),
+            save(&store, text_a.clone()),
             &origin,
         )
         .unwrap();
@@ -149,13 +149,12 @@ async fn plain_save_to_previous_content_has_no_discussion_origin() {
     store
         .save_requirement(save(
             &store,
-            "plain-b",
             json!({"description":"Text B."}),
         ))
         .unwrap();
     commit_state(&temp, "Save text B");
     store
-        .save_requirement(save(&store, "plain-a", text_a))
+        .save_requirement(save(&store, text_a))
         .unwrap();
 
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();

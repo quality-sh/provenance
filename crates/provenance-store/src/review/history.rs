@@ -2,13 +2,13 @@
 
 mod evidence;
 mod git;
+mod origins;
 
 pub(super) use evidence::page as evidence_page;
 
 use super::classifier;
 use crate::{cache::review_families, shards, state_store::StateStore};
 use provenance_core::review::{RecordVersion, SaveOutcome};
-use provenance_core::threads::{Discussion, DiscussionOrigin};
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_macros::rule;
 use serde_json::Value;
@@ -88,9 +88,8 @@ impl StateStore {
                 push_version(&mut versions, kind, source, record)?;
             }
         }
-        for versioned in &mut versions {
-            versioned.version.origin = origin(&discussions, kind, id, &versioned.version.revision);
-        }
+        origins::assign(self.layout.root(), &shards::discussions_path(&self.layout, scope),
+            &discussions, kind, id, &mut versions)?;
         Ok(versions)
     }
 }
@@ -171,28 +170,4 @@ fn push_version(
     };
     versions.push(VersionedRecord { version, record });
     Ok(())
-}
-
-/// The Discussion outcome that gave the record this revision.
-fn origin(
-    discussions: &[Discussion],
-    kind: NodeType,
-    id: &StableId,
-    revision: &StableId,
-) -> Option<DiscussionOrigin> {
-    discussions.iter().find_map(|discussion| {
-        discussion
-            .outcomes
-            .iter()
-            .find(|outcome| {
-                outcome.record_kind == kind
-                    && outcome.record_id == *id
-                    && outcome.revision == *revision
-            })
-            .map(|outcome| DiscussionOrigin {
-                thread_id: discussion.thread_id.clone(),
-                discussion_id: discussion.discussion_id.clone(),
-                message_id: outcome.message_id.clone(),
-            })
-    })
 }

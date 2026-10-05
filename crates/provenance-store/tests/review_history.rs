@@ -12,11 +12,11 @@ async fn history_lists_commits_and_working_version() {
     let (temp, store) = fixture();
     let created = commit_state(&temp, "Create the Requirement");
     store
-        .save_requirement(save(&store, "edit_b", json!({"description":"B"})))
+        .save_requirement(save(&store, json!({"description":"B"})))
         .unwrap();
     let described = commit_state(&temp, "Describe the Requirement");
     store
-        .save_requirement(save(&store, "edit_c", json!({"description":"C"})))
+        .save_requirement(save(&store, json!({"description":"C"})))
         .unwrap();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let query = ReviewHistoryQuery {

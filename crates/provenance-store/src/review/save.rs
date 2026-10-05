@@ -1,6 +1,6 @@
 use super::{classifier, guard, SaveRequirement};
 use crate::{
-    publication::with_staged_state,
+    review::publication::with_record_state,
     shards,
     state_store::StateStore,
     write_error::{SourceFailure, WriteFailure},
@@ -137,7 +137,7 @@ impl StateStore {
             let current_etag = etag(&ReviewRecord::from(record.clone()))?;
             let stale = (input.expected_etag != current_etag).then_some(current_etag);
             let stamp = self.current_record_stamp()?;
-            with_staged_state(&self.layout, false, |layout| {
+            with_record_state(&self.layout, |layout| {
                 let staged = Self::staged(layout.clone(), stamp);
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
@@ -174,7 +174,6 @@ impl StateStore {
             Ok(record.clone())
         })?;
         self.validate_graph_scope(&scope)?;
-        self.enroll_review_manifest()?;
         let before_record = ReviewRecord::from(before.clone());
         let after_record = ReviewRecord::from(after.clone());
         let content = provenance_core::model::record_stamps::content_value;

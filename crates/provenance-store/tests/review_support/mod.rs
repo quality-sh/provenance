@@ -32,7 +32,7 @@ pub fn id() -> StableId {
     StableId::new("req_a").unwrap()
 }
 
-pub fn save(store: &StateStore, _request: &str, fields: Value) -> SaveRequirement {
+pub fn save(store: &StateStore, fields: Value) -> SaveRequirement {
     let mut update = json!({"scope_id":"default", "id":"req_a"});
     let Value::Object(fields) = fields else {
         panic!("update fields must be an object")
@@ -74,4 +74,11 @@ pub fn commit_state(temp: &tempfile::TempDir, message: &str) -> String {
     git(temp, &["add", ".provenance/state"]);
     git(temp, &["commit", "-q", "-m", message]);
     git(temp, &["rev-parse", "HEAD"])
+}
+
+/// Configures the reviewer through the repository configuration API.
+pub fn allow_reviewer(store: &StateStore) {
+    store
+        .set_disposition_actor_ids(vec!["reviewer".into()])
+        .unwrap();
 }

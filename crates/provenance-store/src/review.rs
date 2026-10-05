@@ -1,5 +1,6 @@
 //! Guarded graph record edits and their review state.
 mod classifier;
+mod publication;
 pub(crate) mod guard;
 mod input;
 pub(crate) mod relationships;
@@ -8,16 +9,11 @@ pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
-/// A new server-made identity.
+/// Creates the caller-independent identity for a review write.
+#[provenance_macros::rule("rule_review_request_identity_server_created")]
 fn new_id() -> provenance_core::StableId {
     provenance_core::StableId::new(uuid::Uuid::new_v4().to_string())
         .expect("UUID uses valid stable ID characters")
-}
-
-/// Creates the caller-independent identity for a review write.
-#[provenance_macros::rule("rule_review_request_identity_server_created")]
-fn new_request_id() -> provenance_core::StableId {
-    new_id()
 }
 
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {

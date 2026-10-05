@@ -11,17 +11,17 @@ use serde_json::json;
 fn failed_relationship_replacement_does_not_publish_the_text_edit() {
     let (_temp, store) = fixture();
     store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
     let before = store.requirement_edit_state(&scope(), &id()).unwrap();
-    let mut input = save(&store, "invalid", json!({"description":"must not persist"}));
+    let mut input = save(&store, json!({"description":"must not persist"}));
     input.relationships = Some(serde_json::from_value(json!({"refines":"req_a", "depends_on":[], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
     assert!(store.save_requirement(input).is_err());
     assert_eq!(
         store.requirement_edit_state(&scope(), &id()).unwrap(),
         before
     );
-    let retried = save(&store, "invalid", json!({"description":"valid now"}));
+    let retried = save(&store, json!({"description":"valid now"}));
     assert!(store.save_requirement(retried).is_ok());
 }
 
@@ -39,9 +39,9 @@ fn relationship_sets_are_normalized_and_classified_without_lifecycle_changes() {
         .create_requirement(serde_json::from_value(other).unwrap())
         .unwrap();
     let first = store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
-    let mut input = save(&store, "relations", json!({}));
+    let mut input = save(&store, json!({}));
     input.relationships = Some(serde_json::from_value(json!({"refines":null, "depends_on":["req_b","req_b"], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
     let result = store.save_requirement(input).unwrap();
     assert_ne!(first.revision, result.revision);
@@ -68,7 +68,7 @@ fn enrolled_scope_refuses_lossy_portability() {
     let (_temp, store) = fixture();
     assert!(store.ensure_review_portable(&scope()).is_err());
     store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
     assert!(store.ensure_review_portable(&scope()).is_err());
 }
@@ -79,12 +79,11 @@ fn statement_edits_keep_existing_verification_review_behavior() {
     store.create_rule(serde_json::from_value(json!({"scope_id":"default", "id":"rule_a", "requirement_ids":["req_a"],"resolution_ids":[], "statement":"The system stores records.","status":"active","severity":"high"})).unwrap()).unwrap();
     std::fs::write(temp.path().join("check.rs"), "fn check() {}\n").unwrap();
     store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
     store
         .save_requirement(save(
             &store,
-            "statement",
             json!({"statement":"The system reads records."}),
         ))
         .unwrap();
@@ -165,7 +164,7 @@ fn typed_apply_submits_enrolled_changes_and_publishes_other_shards() {
 fn an_unknown_enrolled_field_is_refused_before_a_writer_can_drop_it() {
     let (temp, store) = fixture();
     store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
     let path = temp
         .path()

@@ -2,21 +2,9 @@
 mod review_support;
 use provenance_core::StableId;
 use provenance_macros::verifies;
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+use provenance_store::state_store::StateStore;
 use review_support::*;
 use serde_json::json;
-
-fn allow_reviewer(temp: &tempfile::TempDir) {
-    let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
-    let mut manifest: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(layout.manifest_path()).unwrap()).unwrap();
-    manifest["disposition_actor_ids"] = json!(["reviewer"]);
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-}
 
 fn pending(store: &StateStore) -> StableId {
     store
@@ -73,8 +61,8 @@ fn review_proposal_key_names_record_and_cycle() {
 #[test]
 #[verifies("rule_withdrawal_preserves_review_history", examples)]
 fn withdrawal_keeps_feedback_and_decisions() {
-    let (temp, store) = fixture();
-    allow_reviewer(&temp);
+    let (_temp, store) = fixture();
+    allow_reviewer(&store);
     let rejected = pending(&store);
     let decision = store
         .decide_record_review(
@@ -90,7 +78,6 @@ fn withdrawal_keeps_feedback_and_decisions() {
     store
         .save_requirement(save(
             &store,
-            "revise",
             json!({"description":"Stored records."}),
         ))
         .unwrap();

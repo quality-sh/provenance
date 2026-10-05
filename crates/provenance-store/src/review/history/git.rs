@@ -131,3 +131,21 @@ fn read_blobs(root: &Utf8Path, names: &str, count: usize) -> anyhow::Result<Vec<
     }
     Ok(texts)
 }
+
+/// Reads one record file at each specified commit through one Git process.
+pub(super) fn file_at_commits(
+    root: &Utf8Path,
+    path: &Utf8Path,
+    commits: &[&str],
+) -> anyhow::Result<Vec<Option<String>>> {
+    if commits.is_empty() {
+        return Ok(Vec::new());
+    }
+    let prefix = repository_prefix(root)
+        .ok_or_else(|| anyhow::anyhow!("record history repository is unavailable"))?;
+    let relative = path.strip_prefix(root)?.as_str().replace('\\', "/");
+    let names = commits.iter()
+        .map(|commit| format!("{commit}:{prefix}{relative}\n"))
+        .collect::<String>();
+    read_blobs(root, &names, commits.len())
+}

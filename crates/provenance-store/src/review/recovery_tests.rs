@@ -71,48 +71,6 @@ fn crash_child() {
 }
 
 #[test]
-fn crash_between_edit_and_submission_publishes_neither_half() {
-    let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
-    let before = open(root)
-        .requirement_decision_state(&scope(), &id())
-        .unwrap()
-        .pending
-        .unwrap();
-    let status = std::process::Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "review::recovery_tests::crash_child",
-            "--nocapture",
-        ])
-        .env("PROVENANCE_REVIEW_CRASH_ROOT", root.as_str())
-        .env("PROVENANCE_REVIEW_CRASH_PHASE", "state_prepared")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
-    assert_eq!(status.code(), Some(86));
-
-    let store = open(root);
-    assert_eq!(
-        store
-            .requirement(&scope(), &id())
-            .unwrap()
-            .description
-            .as_deref(),
-        Some("baseline")
-    );
-    assert_eq!(
-        store
-            .requirement_decision_state(&scope(), &id())
-            .unwrap()
-            .pending
-            .unwrap(),
-        before
-    );
-}
-
-#[test]
 fn process_crashes_reopen_as_complete_old_or_new_state() {
     for (phase, committed) in [
         ("state_prepared", false),

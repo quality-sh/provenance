@@ -247,7 +247,7 @@ fn resolve_second_discussion(directory: &tempfile::TempDir, second_id: &str) {
 
 #[test]
 #[verifies("rule_porcelain_discussion_targets", examples)]
-fn cli_discussion_actions_use_one_scope_and_preserve_receipt_identity() {
+fn cli_discussion_actions_use_one_scope_and_preserve_discussion_identity() {
     let directory = repo_with_requirement();
     let repo = directory.path().to_str().unwrap();
     let start = json(&[

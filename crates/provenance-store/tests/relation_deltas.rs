@@ -305,7 +305,7 @@ fn invalid_deltas_refuse_and_publish_nothing() {
         json!({"depends_on": {"remove": ["req_missing"]}}),
     );
     assert!(store.save_requirement(missing).is_err());
-    let mut typo = serde_json::to_value(save(&store, "typo", json!({}))).unwrap();
+    let mut typo = serde_json::to_value(save(&store, json!({}))).unwrap();
     typo["relationships"] = json!({"depends_on": {"depends": [], "remove": ["req_c"]}});
     assert!(
         serde_json::from_value::<SaveRequirement>(typo).is_err(),

@@ -12,14 +12,12 @@ use provenance_macros::rule;
 
 const MAX_SAFE_CYCLE: u64 = (1 << 53) - 1;
 
-pub(super) fn request_digest(input: &impl serde::Serialize) -> anyhow::Result<String> {
+pub(super) fn check_request_size(input: &impl serde::Serialize) -> anyhow::Result<()> {
     anyhow::ensure!(
         serde_json::to_vec(input)?.len() <= 1_048_576,
         "review request exceeds the operation byte budget"
     );
-    Ok(crate::canonical_digest::digest(
-        &crate::canonical_digest::canonical_bytes(input)?,
-    ))
+    Ok(())
 }
 
 /// The key of the review Proposal for one record and one review cycle.
@@ -38,14 +36,10 @@ pub(super) struct Receipt {
     pub(super) disposition_id: Option<StableId>,
     pub(super) feedback_message_id: Option<StableId>,
     pub(super) actor: String,
-    pub(super) request_id: StableId,
-    pub(super) intent_digest: String,
 }
 
 impl Receipt {
-    /// Builds the response of a decision-cycle write. The write changes only
-    /// graph record files, so this receipt is returned and not stored.
-    #[rule("rule_review_writes_change_only_record_files")]
+    /// Builds the response of a decision-cycle write.
     pub(super) fn entry(self) -> CycleEntry {
         CycleEntry {
             schema_version: REVIEW_SCHEMA_VERSION,
@@ -61,8 +55,6 @@ impl Receipt {
             disposition_id: self.disposition_id,
             feedback_message_id: self.feedback_message_id,
             actor: self.actor,
-            request_id: self.request_id,
-            intent_digest: self.intent_digest,
         }
     }
 }

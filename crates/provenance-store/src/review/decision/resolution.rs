@@ -1,11 +1,11 @@
 use super::validate_submission_address;
 use crate::{
-    publication::with_staged_state,
+    review::publication::with_record_state,
     review::{
         classifier,
         decision_input::{DecideRecordReview, ReviewFeedback},
-        decision_state::{request_digest, review_submission, CycleFacts, Receipt},
-        guard, new_id, new_request_id,
+        decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
+        guard, new_id,
     },
     shards,
     state_store::{CreateDispositionInput, StateStore},
@@ -39,7 +39,7 @@ impl StateStore {
         addressed: Option<(NodeType, StableId)>,
         input: DecideRecordReview,
     ) -> anyhow::Result<CycleEntry> {
-        let digest = request_digest(&input)?;
+        check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -68,8 +68,8 @@ impl StateStore {
                     anyhow::anyhow!("this review submission is no longer pending"),
                 ));
             }
-            with_staged_state(&self.layout, false, |layout| {
-                Self::new(layout.clone()).commit_decision(input, digest)
+            with_record_state(&self.layout, |layout| {
+                Self::new(layout.clone()).commit_decision(input)
             })
         })
     }
@@ -79,7 +79,7 @@ impl StateStore {
     fn commit_decision(
         &self,
         input: DecideRecordReview,
-        digest: String,
+
     ) -> anyhow::Result<CycleEntry> {
         let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
@@ -141,8 +141,8 @@ impl StateStore {
             disposition_id: Some(disposition_id),
             feedback_message_id,
             actor: input.actor.id,
-            request_id: new_request_id(),
-            intent_digest: digest,
+
+
         }
         .entry())
     }

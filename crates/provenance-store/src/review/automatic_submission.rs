@@ -1,6 +1,6 @@
 //! Automatic review submissions for enrolled graph record writes.
 
-use super::{decision_state::request_digest, guard, SubmitRecordReview};
+use super::{decision_state::check_request_size, guard, SubmitRecordReview};
 use crate::{shards, state_store::StateStore};
 use provenance_core::review::ReviewRecord;
 use provenance_macros::rule;
@@ -53,11 +53,11 @@ impl StateStore {
             expected_revision: Some(revision.clone()),
             revises: None,
         };
-        let digest = request_digest(&input)?;
+        check_request_size(&input)?;
         guard::with_writer(
             &shards::proposal_cards_path(&self.layout, record.scope_id()),
             "*",
-            || self.commit_submission(input, digest),
+            || self.commit_submission(input),
         )?;
         Ok(())
     }

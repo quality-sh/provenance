@@ -1,6 +1,6 @@
 use super::{classifier, guard};
 use crate::{
-    publication::with_staged_state,
+    review::publication::with_record_state,
     shards,
     state_store::{CreateRequirementInput, StateStore},
 };
@@ -80,7 +80,7 @@ impl StateStore {
             let scope = scope.clone();
             let id = input.create.id.clone();
             let stamp = self.current_record_stamp()?;
-            with_staged_state(&self.layout, false, |layout| {
+            with_record_state(&self.layout, |layout| {
                 guard::with_writer(
                     &shards::requirements_path(layout, &scope),
                     id.as_str(),
@@ -104,7 +104,6 @@ impl StateStore {
             Ok(record.clone())
         })?;
         self.validate_graph_scope(&scope)?;
-        self.enroll_review_manifest()?;
         let revision = classifier::review_revision(NodeType::Requirement, &after)?;
         if let Some(origin) = &input.origin {
             self.add_discussion_outcome(

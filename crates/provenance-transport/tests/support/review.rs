@@ -1,5 +1,5 @@
 use super::*;
-use provenance_core::Manifest;
+use crate::support::records::allow_reviewer;
 
 async fn enroll(host: &StatementHost) -> (String, String) {
     let (status, read, etag) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
@@ -86,17 +86,6 @@ fn conflict(submission: Option<&str>, revision: &str) -> Value {
         "current_submission":submission,
         "current_revision":revision
     },"meta":{}})
-}
-
-fn allow_reviewer(repo: &Repository) {
-    let mut manifest: Manifest =
-        serde_json::from_slice(&std::fs::read(repo.layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(
-        repo.layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
 }
 
 #[tokio::test]

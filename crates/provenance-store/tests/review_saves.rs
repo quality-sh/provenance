@@ -9,23 +9,22 @@ use serde_json::json;
 fn equal_review_content_has_equal_revision() {
     let (_temp, store) = fixture();
     let a = store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
     assert!(a.revision.is_some());
     let b = store
-        .save_requirement(save(&store, "edit_b", json!({"description":"B"})))
+        .save_requirement(save(&store, json!({"description":"B"})))
         .unwrap();
     let again = store
         .save_requirement(save(
             &store,
-            "edit_a",
             json!({"clear_fields":["description"]}),
         ))
         .unwrap();
     assert_ne!(a.revision, b.revision);
     assert_eq!(a.revision, again.revision);
     let lifecycle = store
-        .save_requirement(save(&store, "lifecycle", json!({"status":"active"})))
+        .save_requirement(save(&store, json!({"status":"active"})))
         .unwrap();
     assert_ne!(lifecycle.etag, again.etag);
     assert_eq!(lifecycle.revision, again.revision);
@@ -35,18 +34,17 @@ fn equal_review_content_has_equal_revision() {
 fn stale_etag_and_wrong_owner_refuse_without_changing_state() {
     let (_temp, store) = fixture();
     store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
-    let stale = save(&store, "stale", json!({"description":"stale"}));
+    let stale = save(&store, json!({"description":"stale"}));
     store
-        .save_requirement(save(&store, "new", json!({"status":"active"})))
+        .save_requirement(save(&store, json!({"status":"active"})))
         .unwrap();
     assert!(store.save_requirement(stale).is_err());
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store
         .save_requirement(save(
             &store,
-            "owner",
             json!({"declared_by":"other","description":"bad"})
         ))
         .is_err());
@@ -71,10 +69,10 @@ fn stale_etag_and_wrong_owner_refuse_without_changing_state() {
 fn concurrent_edits_with_one_etag_commit_exactly_once() {
     let (_temp, store) = fixture();
     store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
-    let a = save(&store, "a", json!({"description":"A"}));
-    let b = save(&store, "b", json!({"description":"B"}));
+    let a = save(&store, json!({"description":"A"}));
+    let b = save(&store, json!({"description":"B"}));
     let barrier = std::sync::Barrier::new(2);
     std::thread::scope(|threads| {
         let one = threads.spawn(|| {
@@ -108,7 +106,7 @@ fn enrollment_preserves_frozen_legacy_proposal_bytes() {
         b"{\"schema_version\":2,\"id\":\"old_proposal\",\"promotion_state\":\"accepted\"}\n";
     std::fs::write(&path, legacy).unwrap();
     store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
     assert_eq!(std::fs::read(path).unwrap(), legacy);
 }

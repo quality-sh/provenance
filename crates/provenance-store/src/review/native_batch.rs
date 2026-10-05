@@ -2,7 +2,7 @@
 
 use super::guard;
 use crate::{
-    publication::with_staged_state,
+    review::publication::with_record_state,
     state_store::{
         read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, StateStore,
     },
@@ -21,7 +21,7 @@ impl StateStore {
         write: impl FnOnce(&NativeRecordBatch<'_>) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         let stamp = self.current_record_stamp()?;
-        with_staged_state(&self.layout, false, |layout| {
+        with_record_state(&self.layout, |layout| {
             let staged = Self::staged(layout.clone(), stamp);
             write(&NativeRecordBatch { store: &staged })
         })
@@ -113,7 +113,6 @@ impl NativeRecordBatch<'_> {
             if let Some((_, after)) = changes.first() {
                 let review: ReviewRecord = after.clone().into();
                 self.store.validate_graph_scope(review.scope_id())?;
-                self.store.enroll_review_manifest()?;
             }
             Ok((result, changes))
         })

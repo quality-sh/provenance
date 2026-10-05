@@ -51,7 +51,7 @@ fn installed_legacy_writer_refuses_the_enrolled_shard() {
     mod support;
     let (temp, store) = support::fixture();
     store
-        .save_requirement(support::save(&store, "enroll", json!({})))
+        .save_requirement(support::save(&store, json!({})))
         .unwrap();
     let shard = temp
         .path()

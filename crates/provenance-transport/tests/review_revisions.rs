@@ -2,42 +2,16 @@
 
 mod support {
     pub mod records;
+    #[allow(dead_code)]
+    pub mod api_fixture;
 }
 
 use axum::{body::Body, http::Request};
-use provenance_core::Manifest;
 use provenance_macros::verifies;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
-use support::records::Repository;
+use support::{api_fixture::write_host as host, records::{allow_reviewer, Repository}};
 use tower::ServiceExt as _;
-
-fn host(repo: &Repository) -> StatementHost {
-    use provenance_transport::fixture::{FixtureAccess, Target};
-    let access = FixtureAccess::new(
-        vec![Target {
-            id: "selected".into(),
-            root: repo.dir.path().to_path_buf(),
-        }],
-        vec![("selected".into(), "default".into())],
-        "fixture-secret",
-        "fixture.test",
-    )
-    .unwrap()
-    .allow_writes();
-    StatementHost::with_fixture_access(access)
-}
-
-fn allow_reviewer(repo: &Repository) {
-    let mut manifest: Manifest =
-        serde_json::from_slice(&std::fs::read(repo.layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(
-        repo.layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-}
 
 async fn call(
     host: &StatementHost,
@@ -133,6 +107,9 @@ async fn accepted_text_returns_as_accepted() {
     .await;
     assert_eq!(status, 200, "{decided}");
     let disposition = decided["data"]["disposition_id"].clone();
+    let (status, accepted, _) = call(&host, "GET", "/requirements/req_flow", None, None).await;
+    assert_eq!(status, 200, "{accepted}");
+    assert_eq!(accepted["data"]["record"]["value"]["status"], "active");
 
     let changed = set_statement(&host, "The flow text is B.").await;
     assert_ne!(changed["edit"]["revision"], revision_a);
@@ -140,6 +117,7 @@ async fn accepted_text_returns_as_accepted() {
     assert!(changed["decision"]["pending"]["proposal_id"].is_string());
 
     let returned = set_statement(&host, "The flow text is A.").await;
+    assert_eq!(returned["record"]["value"]["status"], "active");
     assert_eq!(returned["edit"]["revision"], revision_a);
     assert!(returned["decision"]["pending"].is_null(), "{returned}");
     let acceptance = &returned["decision"]["current_acceptance"];

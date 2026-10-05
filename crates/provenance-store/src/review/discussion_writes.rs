@@ -1,7 +1,7 @@
 use super::{guard, DiscussionAction, WriteDiscussion};
 use crate::{
     canonical_digest,
-    publication::with_staged_state,
+    review::publication::with_record_state,
     shards,
     state_store::{PostMessageInput, StateStore},
 };
@@ -113,7 +113,7 @@ impl StateStore {
                 );
             }
         }
-        with_staged_state(&self.layout, false, |layout| {
+        with_record_state(&self.layout, |layout| {
             let staged = Self::new(layout.clone());
             guard::with_writer(&shards::threads_path(layout, &input.scope_id), "*", || {
                 guard::with_writer(&shards::messages_path(layout, &input.scope_id), "*", || {
@@ -251,17 +251,7 @@ impl StateStore {
                 })
             })?;
         }
-        self.enroll_review_manifest()?;
         Ok(())
     }
 
-    pub(super) fn enroll_review_manifest(&self) -> anyhow::Result<()> {
-        let mut manifest = self.manifest()?;
-        manifest.schema_version = REVIEW_SCHEMA_VERSION;
-        std::fs::write(
-            self.layout.manifest_path(),
-            serde_json::to_vec_pretty(&manifest)?,
-        )?;
-        Ok(())
-    }
 }

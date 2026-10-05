@@ -24,7 +24,6 @@ async fn history_pages_follow_versions_one_at_a_time() {
     store
         .save_requirement(save(
             &store,
-            "content_edit",
             json!({"description":"Changed"}),
         ))
         .unwrap();
@@ -61,11 +60,11 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     commit_state(&temp, "Create");
     let text = "😀\n\"é\\".repeat(25_000);
     store
-        .save_requirement(save(&store, "enroll", json!({"description":text})))
+        .save_requirement(save(&store, json!({"description":text})))
         .unwrap();
     let described = commit_state(&temp, "Describe");
     store
-        .save_requirement(save(&store, "next", json!({"description":"later"})))
+        .save_requirement(save(&store, json!({"description":"later"})))
         .unwrap();
     let mut offset = 0;
     let mut bytes = String::new();
@@ -121,7 +120,7 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     assert_eq!(three.result.entries[0].id.as_str(), "working");
     assert!(three.result.next_cursor.is_none());
     store
-        .save_requirement(save(&store, "again", json!({"description":"again"})))
+        .save_requirement(save(&store, json!({"description":"again"})))
         .unwrap();
     assert!(read_history(
         root,
@@ -142,7 +141,7 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
 fn saves_stay_authoritative_after_reopen() {
     let (temp, store) = fixture();
     let first = store
-        .save_requirement(save(&store, "enroll", json!({})))
+        .save_requirement(save(&store, json!({})))
         .unwrap();
     drop(store);
     let store = provenance_store::state_store::StateStore::new(
@@ -151,11 +150,11 @@ fn saves_stay_authoritative_after_reopen() {
         ),
     );
     let repeat: SaveRequirement =
-        serde_json::from_value(serde_json::to_value(save(&store, "enroll", json!({}))).unwrap())
+        serde_json::from_value(serde_json::to_value(save(&store, json!({}))).unwrap())
             .unwrap();
     assert_eq!(store.save_requirement(repeat).unwrap(), first);
     assert!(store
-        .save_requirement(save(&store, "missing", json!({"description":"new"})))
+        .save_requirement(save(&store, json!({"description":"new"})))
         .is_ok());
 }
 
@@ -166,7 +165,7 @@ async fn evidence_pages_a_long_field_from_git() {
     let (temp, store) = fixture();
     let text = "é\n".repeat(20_000);
     store
-        .save_requirement(save(&store, "field", json!({"description":text})))
+        .save_requirement(save(&store, json!({"description":text})))
         .unwrap();
     let described = commit_state(&temp, "Describe");
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
