@@ -208,16 +208,19 @@ fn assert_lifecycle_and_proposals_unchanged(store: &StateStore, statement: &str)
 }
 
 #[test]
-/// Implementation aid: pins submission guards before the review-cycle state is refactored.
-fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
+/// Implementation aid: a direct submission cannot duplicate a pending review.
+fn submission_gates_refuse_a_second_pending_record() {
     let (_temp, store, _, _) = enrolled();
     refused(
         submit(&store, None, None),
         "already has a pending review submission",
     );
     assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 1);
+}
 
-    // Seed an unenrolled Requirement.
+/// Implementation aid: submissions do not require format enrolment.
+#[test]
+fn submission_accepts_a_record_without_format_enrolment() {
     let fresh = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(fresh.path()).unwrap());
     crate::test_support::allow_reviewer(&layout);
@@ -225,7 +228,12 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     store
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
         .unwrap();
-    refused(submit(&store, None, None), "requires a review revision");
+    let submitted = submit(&store, None, None).unwrap();
+    assert_eq!(submitted.fact, CycleFact::Submitted);
+    assert_eq!(
+        state(&store).pending.unwrap().revision,
+        state(&store).current_revision.unwrap()
+    );
 }
 
 #[test]

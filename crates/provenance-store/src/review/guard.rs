@@ -114,7 +114,19 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
             }
         }
     }
+    let submitted = if let Some(family) = family {
+        submitted_ids(path, family.kind)?
+    } else {
+        std::collections::BTreeSet::new()
+    };
     for record in &before {
+        if family.is_some()
+            && !record["id"]
+                .as_str()
+                .is_some_and(|id| submitted.contains(id))
+        {
+            continue;
+        }
         if family.is_none()
             && !discussions
                 .iter()
@@ -134,6 +146,33 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
         }
     }
     Ok(())
+}
+
+fn submitted_ids(
+    path: &Utf8Path,
+    kind: provenance_core::NodeType,
+) -> anyhow::Result<std::collections::BTreeSet<String>> {
+    let Some(scope) = path.parent().and_then(Utf8Path::parent) else {
+        return Ok(Default::default());
+    };
+    let text = match std::fs::read_to_string(scope.join("ideation/proposal_cards.jsonl")) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Default::default()),
+        Err(error) => return Err(error.into()),
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for line in text.lines().filter(|line| !line.trim().is_empty()) {
+        let proposal: Value = serde_json::from_str(line)?;
+        let target = &proposal["traceability"]["target"];
+        if proposal["proposal_type"] == "record_revision"
+            && target["artifact_type"] == kind.as_str()
+        {
+            if let Some(id) = target["artifact_id"].as_str() {
+                ids.insert(id.to_owned());
+            }
+        }
+    }
+    Ok(ids)
 }
 
 impl crate::state_store::StateStore {

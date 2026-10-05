@@ -147,15 +147,13 @@ async fn message_selector_refuses_wrong_parent_and_missing_discussion() {
 }
 
 #[tokio::test]
-async fn missing_membership_is_a_conflict_instead_of_a_legacy_group() {
+async fn missing_discussion_message_is_a_conflict() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let a = start(&store, "a");
-    let discussions = provenance_store::shards::discussions_path(
-        &provenance_store::layout::ProvenanceLayout::new(root),
-        &scope(),
-    );
-    std::fs::remove_file(&discussions).unwrap();
+    let layout = provenance_store::layout::ProvenanceLayout::new(root);
+    let messages = provenance_store::shards::messages_path(&layout, &scope());
+    std::fs::remove_file(messages).unwrap();
     assert!(read_discussions(
         root,
         &scope(),

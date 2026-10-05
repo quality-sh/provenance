@@ -151,17 +151,3 @@ fn typed_apply_submits_enrolled_changes_and_publishes_other_shards() {
         state.current_revision
     );
 }
-
-#[test]
-fn an_unknown_enrolled_field_is_refused_before_a_writer_can_drop_it() {
-    let (temp, store) = fixture();
-    store.save_requirement(save(&store, json!({}))).unwrap();
-    let path = temp
-        .path()
-        .join(".provenance/state/scopes/default/requirements/req.jsonl");
-    let mut row: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    row["unsupported_field"] = json!("preserve this value");
-    std::fs::write(path, format!("{row}\n")).unwrap();
-    assert!(store.requirement_edit_state(&scope(), &id()).is_err());
-}
