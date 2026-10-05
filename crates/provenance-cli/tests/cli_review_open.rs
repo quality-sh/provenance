@@ -97,6 +97,7 @@ fn review_opens_the_page_at_startup() {
 
 #[test]
 #[verifies("rule_review_commands_open_the_browser", examples)]
+/// Flow: suppress browser launch and redeem the printed fallback link.
 fn no_open_does_not_run_the_browser() {
     let (repo, host) = running_review();
     let browser = BrowserRecorder::install();

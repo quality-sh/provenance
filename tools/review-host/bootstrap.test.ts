@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { verifies } from '../../packages/provenance/src/rules.ts';
 import { bootstrapReviewPage, type BrowserElement } from './bootstrap.ts';
 import type { ReviewMountOptions } from './session.ts';
 
@@ -33,8 +32,8 @@ function launchPage() {
   return { events, receivers, mounted, mounting };
 }
 
+// Implementation aid: fake page boundaries check that bootstrap passes the session to the renderer.
 test('a launch link mounts the record with the redeemed session', async () => {
-  verifies('rule_review_link_opens_signed_in', 'examples');
   const page = launchPage();
   await page.mounting;
   assert.deepEqual(page.mounted, [
