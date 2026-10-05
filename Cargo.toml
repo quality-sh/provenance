@@ -48,7 +48,7 @@ flate2 = "1"
 fs2 = "0.4"
 fs_at = "0.2"
 insta = "1.39"
-jsonschema = { version = "0.18", features = ["draft202012"] }
+jsonschema = { version = "0.24", features = ["draft202012"] }
 proc-macro2 = "1.0"
 pulldown-cmark = "0.10"
 quote = "1.0"
