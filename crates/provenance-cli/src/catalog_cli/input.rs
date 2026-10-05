@@ -110,14 +110,13 @@ pub(super) fn parse(
     if stdin {
         merge_stdin(&mut data, &assignments)?;
     }
-    let hide_terminal = matches!(query_action, None | Some("search"))
-        && definition
-            .parameters()
-            .iter()
-            .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
-    if hide_terminal && !query.contains_key("exclude_terminal") {
-        let exclude_terminal = crate::read_policy::exclude_terminal(false).to_string();
-        query.insert("exclude_terminal".into(), exclude_terminal);
+    if !query.contains_key("exclude_terminal") {
+        if let Some(default) = crate::read_policy::default_exclude_terminal(
+            query_action,
+            definition.parameters(),
+        ) {
+            query.insert("exclude_terminal".into(), default.to_string());
+        }
     }
     apply_defaults(definition, &mut data);
     if definition.parameters().iter().any(|parameter| {
@@ -163,8 +162,6 @@ fn unique_wire_fields(declared: &[Field]) -> Vec<String> {
     wire_fields
 }
 
-/// Refuses a malformed review guard and names its required form.
-#[provenance_macros::rule("rule_cli_guard_guidance")]
 fn bind_parameter(
     definition: &Definition,
     parameter: &catalog::Parameter,
@@ -191,11 +188,8 @@ fn bind_parameter(
                 .headers
                 .iter()
                 .any(|binding| binding.name == parameter.name && binding.field == "expected_etag");
-            if expects_review_etag && !super::input_guard::valid_review_etag(value) {
-                anyhow::bail!(
-                    "--if-match must equal data.edit.etag from the latest record read; \
-                     expected sha256:<64 lowercase hexadecimal characters>"
-                );
+            if expects_review_etag {
+                super::input_guard::validate_review_etag(value)?;
             }
             headers.insert(
                 HeaderName::from_bytes(parameter.name.as_bytes())?,

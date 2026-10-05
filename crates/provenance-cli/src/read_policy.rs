@@ -1,5 +1,23 @@
-/// Omits terminal records by default and includes them only on request.
+use provenance_store::operations::catalog;
+
+/// Omits terminal records from review reads by default. The `stale` and
+/// `resolve-symbol` queries keep terminal Rules because their code bindings
+/// remain necessary binding and symbol-resolution information.
 #[provenance_macros::rule("rule_review_defaults_exclude_terminal_records")]
+pub fn default_exclude_terminal<'a>(
+    query_action: Option<&str>,
+    route_parameters: impl IntoIterator<Item = &'a catalog::Parameter>,
+) -> Option<bool> {
+    let supports_filter = route_parameters
+        .into_iter()
+        .any(|parameter| parameter.location == "query" && parameter.name == "exclude_terminal");
+    if !supports_filter || matches!(query_action, Some("stale" | "resolve-symbol")) {
+        return None;
+    }
+    Some(true)
+}
+
+/// Includes terminal records only when the user requests them.
 #[provenance_macros::rule("rule_cli_terminal_records_opt_in")]
 pub const fn exclude_terminal(include_terminal: bool) -> bool {
     !include_terminal
