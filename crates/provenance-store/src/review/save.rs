@@ -77,7 +77,7 @@ impl StateStore {
         input: SaveRequirement,
         origin: DiscussionOrigin,
     ) -> anyhow::Result<RequirementEditState> {
-        self.save_requirement_with_origin(input, Some(origin), |_, after| {
+        self.save_requirement_with_origin(input, Some(&origin), |_, after| {
             Self::record_edit_state_for_record(&after.into())
         })
     }
@@ -85,7 +85,7 @@ impl StateStore {
     fn save_requirement_with_origin<R>(
         &self,
         mut input: SaveRequirement,
-        origin: Option<DiscussionOrigin>,
+        origin: Option<&DiscussionOrigin>,
         complete: impl FnOnce(&Self, Requirement) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         anyhow::ensure!(
@@ -107,7 +107,7 @@ impl StateStore {
             );
             let record = self.requirement(scope, &input.update.id)?;
             super::owner_matches(&record, input.update.declared_by.as_deref())?;
-            if let Some(origin) = &origin {
+            if let Some(origin) = origin {
                 self.validate_discussion_origin(scope, origin)?;
             }
             let current_etag = journal::etag(&ReviewRecord::from(record.clone()))?;
@@ -118,8 +118,7 @@ impl StateStore {
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
-                    let after =
-                        staged.commit_requirement(input, &record, origin.as_ref(), stale)?;
+                    let after = staged.commit_requirement(input, &record, origin, stale)?;
                     complete(&staged, after)
                 })
             })

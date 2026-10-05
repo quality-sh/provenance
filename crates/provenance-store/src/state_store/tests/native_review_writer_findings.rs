@@ -58,7 +58,7 @@ fn source_review_date_keeps_revision_and_name_changes_it() {
         || {
             update(
                 serde_json::json!({"scope_id":"default", "id":"source_native", "name":"Source B"}),
-            )
+            );
         },
     );
 }
@@ -186,7 +186,7 @@ fn domain_color_and_requirement_status_keep_revisions() {
         || {
             domain(
                 serde_json::json!({"scope_id":"default", "id":"domain_native", "name":"Domain B"}),
-            )
+            );
         },
     );
     let requirement = |value: serde_json::Value| {
