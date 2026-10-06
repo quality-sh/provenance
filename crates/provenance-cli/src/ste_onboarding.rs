@@ -248,24 +248,11 @@ fn asset_directory() -> Option<PathBuf> {
     if let Some(directory) = std::env::var_os("PROVENANCE_STE100_ASSET_DIR") {
         return Some(PathBuf::from(directory));
     }
-    Some(cache_directory()?.join("provenance").join("ste100-assets"))
-}
-
-#[cfg(target_os = "windows")]
-fn cache_directory() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
-}
-
-#[cfg(target_os = "macos")]
-fn cache_directory() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Caches"))
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn cache_directory() -> Option<PathBuf> {
-    std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
+    Some(
+        crate::user_cache::cache_directory()?
+            .join("provenance")
+            .join("ste100-assets"),
+    )
 }
 
 fn fallback_guidance(error: &anyhow::Error) -> String {

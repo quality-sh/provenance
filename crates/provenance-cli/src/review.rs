@@ -1,4 +1,5 @@
 mod assets;
+pub mod launch;
 
 use anyhow::Context;
 use axum::{
@@ -6,12 +7,15 @@ use axum::{
     http::{header, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Json,
 };
 use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
 use provenance_transport::{
-    local_host::{LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE},
+    local_host::{
+        LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE, LAUNCH_CODE_ROUTE,
+        LAUNCH_SESSION_ROUTE,
+    },
     HostAccess, LocalAccess, StatementHost,
 };
 use serde_json::{json, Value};
@@ -30,6 +34,9 @@ pub struct Options {
     /// Loopback port. Zero selects an available port.
     #[arg(long, default_value_t = 0)]
     port: u16,
+    /// Do not open the review page in a browser.
+    #[arg(long)]
+    no_open: bool,
 }
 
 pub async fn run(options: Options) -> anyhow::Result<()> {
@@ -71,6 +78,11 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         &options.repository_id,
     )?;
     let identity = runtime.identity();
+    // The codes own the launch key, so the key file is removed when the host stops.
+    let codes = launch::LaunchCodes::new(
+        &token,
+        launch::LaunchKey::publish(&identity.instance_nonce)?,
+    );
     let config = json!({
         "endpoint": endpoint, "repositoryId": options.repository_id, "scope": options.scope,
         "compatibility": provenance_core::protocol::host::COMPATIBILITY,
@@ -90,6 +102,14 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
             "/review-config",
             get(configuration).with_state(review_configuration),
         )
+        .route(
+            LAUNCH_CODE_ROUTE,
+            post(launch::issue_code).with_state(codes.clone()),
+        )
+        .route(
+            LAUNCH_SESSION_ROUTE,
+            post(launch::open_session).with_state(codes.clone()),
+        )
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(access, protect_origin));
     let signals = ShutdownSignals::new()?;
@@ -102,7 +122,36 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         })
     );
     std::io::stdout().flush()?;
+    open_review_page(&endpoint, &codes, options.no_open)?;
     serve(listener, router, host, signals).await
+}
+
+/// Opens the review page signed in, or tells the person which link to open.
+fn open_review_page(
+    endpoint: &str,
+    codes: &launch::LaunchCodes,
+    no_open: bool,
+) -> anyhow::Result<()> {
+    if no_open {
+        return Ok(());
+    }
+    let mut link = url::Url::parse(&format!("{endpoint}/"))?;
+    link.set_fragment(Some(&format!(
+        "launch={}",
+        codes.issue(std::time::Instant::now())
+    )));
+    // A browser program can stay open, so the host does not wait for it before it serves.
+    tokio::task::spawn_blocking(move || {
+        if let crate::browser::Opening::Printed(reason) =
+            crate::browser::open_or_print(&link, false)
+        {
+            eprintln!(
+                "The review page did not open because {}. Open this link in your browser: {link}",
+                reason.reason()
+            );
+        }
+    });
+    Ok(())
 }
 
 async fn serve(

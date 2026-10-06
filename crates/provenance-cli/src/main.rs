@@ -1,4 +1,5 @@
 mod atomic_file;
+mod browser;
 mod catalog_cli;
 mod cli;
 mod docs;
@@ -10,6 +11,7 @@ mod invocation;
 mod legacy_cleanup;
 mod onboarding;
 mod output;
+mod owner_file;
 mod read_policy;
 use provenance_cli::{repo_context, store};
 mod review;
@@ -17,6 +19,7 @@ mod review_link;
 mod reviewer;
 mod skills;
 mod ste_onboarding;
+mod user_cache;
 mod wiki;
 
 #[tokio::main]

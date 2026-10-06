@@ -131,6 +131,7 @@ fn start_host(work: &Path, repo: &Path) -> Host {
             "A",
             "--scope",
             "default",
+            "--no-open",
         ])
         .current_dir(work)
         // The copied executable has no Node executable or asset directory available.
@@ -141,7 +142,7 @@ fn start_host(work: &Path, repo: &Path) -> Host {
 
 #[test]
 #[ignore = "builds with the pinned renderer archive; set PROVENANCE_REVIEW_ARCHIVE or allow gh run download"]
-/// Release-check aid: validates the pinned archive in a standalone binary.
+/// Release-check aid: this flow validates the pinned archive in a standalone binary.
 fn pinned_archive_is_served_by_a_standalone_binary() {
     let pin = pin::pin();
     let work = tempfile::tempdir().expect("bundle workspace");

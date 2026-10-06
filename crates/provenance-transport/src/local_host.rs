@@ -15,6 +15,10 @@ use std::{
 use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 
 pub const IDENTITY_ROUTE: &str = "/local-host-identity";
+/// Issues a review launch code to a caller that sends the launch key.
+pub const LAUNCH_CODE_ROUTE: &str = "/review-launch/code";
+/// Exchanges a review launch code for the page session one time.
+pub const LAUNCH_SESSION_ROUTE: &str = "/review-launch/session";
 const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -117,11 +121,17 @@ impl Drop for LocalHostRegistration {
 #[derive(Clone, Debug)]
 pub struct DiscoveredLocalHost {
     endpoint: url::Url,
+    instance_nonce: String,
 }
 
 impl DiscoveredLocalHost {
     pub const fn endpoint(&self) -> &url::Url {
         &self.endpoint
+    }
+
+    /// Names the verified host instance.
+    pub fn instance_nonce(&self) -> &str {
+        &self.instance_nonce
     }
 }
 
@@ -137,6 +147,7 @@ pub fn discover(root: &Path, scope: &str) -> anyhow::Result<Option<DiscoveredLoc
     if record.schema_version == SCHEMA_VERSION && record.scope == scope && verified(&record) {
         return Ok(Some(DiscoveredLocalHost {
             endpoint: validate_endpoint(&record.endpoint)?,
+            instance_nonce: record.instance_nonce,
         }));
     }
     remove_stale(&root, scope, &record.instance_nonce)?;

@@ -24,9 +24,12 @@ it in the same change.
   Git supplies record history and change evidence. Proposal, Disposition, Withdrawal,
   and Discussion records hold review state.
 - Before you ask a person to review a record, start the review host if it is not running:
-  `{command} review --repo . --repository-id local --scope default`.
-- Get the review URL with `{command} <record-id> get --review-link --format json`. Give the person the
-  review URL. Never give the person a record ID.
+  `{command} review --repo . --repository-id local --scope default --no-open`.
+- Open the record for the person with `{command} <record-id> --review-link`. The command
+  opens the review page in the browser of the person. If it cannot open the browser, it
+  prints a link. Give the person that link. Never give the person a record ID.
+- In an app that shows web pages, such as Claude Desktop or the Codex app, run
+  `{command} <record-id> --review-link --no-open --format json` and open `review_url` in the app.
 - Read the decision and review feedback with `{command} <record-id> get --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.

@@ -5,7 +5,13 @@ mod review_host_support;
 
 use provenance_core::ScopeId;
 use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
-use review_host_support::{repository as initialized_repository, start_capturing_stderr, Host};
+use review_host_support::{
+    repository as initialized_repository, start_capturing_stderr, start_with, Host,
+};
+
+#[path = "review_host_support/persistent_browser.rs"]
+mod persistent_browser;
+use persistent_browser::PersistentBrowser;
 use serde_json::json;
 use std::{
     fs::File,
@@ -128,4 +134,32 @@ fn second_signal_forces_exit_from_a_blocked_operation_with_a_warning() {
         assert!(TcpStream::connect(host.address()).is_err());
         assert!(TcpListener::bind(host.address()).is_ok());
     }
+}
+
+#[test]
+/// Implementation aid: this flow checks shutdown while the browser stays open.
+fn first_signal_stops_the_host_while_the_browser_stays_open() {
+    let repo = initialized_repository();
+    let browser = PersistentBrowser::install();
+    let mut host = start_with(repo.path(), |command| browser.configure(command));
+    browser.wait_until_running();
+    host.signal("-TERM");
+    assert!(host.wait(Duration::from_secs(5)).success());
+    browser.assert_running();
+}
+
+#[test]
+/// Implementation aid: this flow checks forced exit with an active write and browser.
+fn second_signal_forces_exit_while_the_browser_stays_open() {
+    let (repo, layout, _) = repository();
+    let browser = PersistentBrowser::install();
+    let mut host = start_with(repo.path(), |command| browser.configure(command));
+    browser.wait_until_running();
+    let (_blocked, _request) = block_write(&host, &layout);
+    host.signal("-TERM");
+    std::thread::sleep(Duration::from_millis(1200));
+    assert!(host.is_running());
+    host.signal("-TERM");
+    assert_eq!(host.wait(Duration::from_secs(5)).code(), Some(1));
+    browser.assert_running();
 }

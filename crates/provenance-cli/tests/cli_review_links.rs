@@ -1,4 +1,5 @@
 mod porcelain_authoring_support;
+mod review_host_support;
 
 use porcelain_authoring_support::{
     initialized_repo, json_output, json_stdin_output, local_host, local_host_with_identity,
@@ -75,19 +76,32 @@ fn explicit_read_links_to_the_containing_requirement() {
         "--format",
         "json",
     ]);
-    let host = local_host(&repo);
-    let expected = format!("{}/?root=req_link&focus=rule_link", host.endpoint);
+    let host = review_host_support::start(std::path::Path::new(&repo));
+    let expected = format!(
+        "{}/?root=req_link&focus=rule_link#launch=",
+        host.config["endpoint"].as_str().unwrap()
+    );
 
-    let link = json_output(&[
-        "rule_link",
-        "get",
-        "--repo",
-        &repo,
-        "--review-link",
-        "--format",
-        "json",
-    ]);
-    assert_eq!(link["review_url"], expected);
+    let output = host
+        .cli()
+        .args([
+            "rule_link",
+            "--repo",
+            &repo,
+            "--review-link",
+            "--no-open",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let link: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(link["review_url"].as_str().unwrap().starts_with(&expected));
 }
 
 #[test]

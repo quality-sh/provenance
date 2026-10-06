@@ -47,14 +47,18 @@ semver.workspace = true
 serde.workspace = true
 serde_ignored.workspace = true
 serde_json.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["signal"] }
 uuid.workspace = true
 ureq.workspace = true
 url.workspace = true
 walkdir.workspace = true
 
+[target.'cfg(not(windows))'.dependencies]
+open.workspace = true
+
 [target.'cfg(windows)'.dependencies]
-windows-sys.workspace = true
+windows-sys = { workspace = true, features = ["Win32_System_Threading", "Win32_System_SystemServices"] }
 
 [features]
 default = []

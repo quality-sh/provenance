@@ -40,6 +40,7 @@ pub struct GetInvocation {
     format: Option<porcelain::OutputFormat>,
     input: provenance_porcelain::get::GetInput,
     review_link: bool,
+    no_open: bool,
 }
 
 pub struct TargetInvocation {
@@ -119,7 +120,7 @@ impl Invocation {
         if matches!(args.action, None | Some(TargetVerb::Get)) {
             catalog_cli::ensure_only_fields(
                 &matches,
-                &["kind", "view", "depth", "limit", "review-link"],
+                &["kind", "view", "depth", "limit", "review-link", "no-open"],
             );
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
@@ -136,6 +137,7 @@ impl Invocation {
                 format,
                 input,
                 review_link: args.review_link,
+                no_open: args.no_open,
             }));
         }
         let Some(TargetVerb::Action(action)) = args.action else {
@@ -165,6 +167,7 @@ impl Invocation {
                         &invocation.context.repo,
                         &invocation.input.target,
                         invocation.format,
+                        invocation.no_open,
                     )
                     .await;
                 }
