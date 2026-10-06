@@ -487,6 +487,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
@@ -501,16 +503,39 @@ jobs:
       # fails the job after the report is written.
       - name: Scan the whole repository for Rule binding findings
         run: |
-          target/debug/provenance coverage scan --repo . --path . --scope default --validate-rules --format json --output provenance-coverage-report.json
+          target/debug/provenance coverage scan --repo . --path . --scope default --validate-rules --format json --output "$RUNNER_TEMP/provenance-coverage-report.json"
+      - name: Build and render the pull request report
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          git fetch --no-tags origin "$HEAD_SHA"
+          REPORT_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          target/debug/provenance report build \
+            --repo . \
+            --base "$REPORT_BASE" \
+            --head "$HEAD_SHA" \
+            --repository "$REPOSITORY" \
+            --output "$RUNNER_TEMP/provenance-report-envelope.json"
+          target/debug/provenance report render \
+            --input "$RUNNER_TEMP/provenance-report-envelope.json" \
+            --format markdown >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.findings[]
+            | select(.comparison == "new")
+            | "::warning title=Provenance report finding::\(.code): \(.subject.id)"' \
+            "$RUNNER_TEMP/provenance-report-envelope.json"
       - name: Report Rule binding findings
         if: always()
         run: |
-          if [ ! -f provenance-coverage-report.json ]; then
+          if [ ! -f "$RUNNER_TEMP/provenance-coverage-report.json" ]; then
             echo "No coverage report was written; the scan failed before producing one." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          count=$(jq '.warnings | length' provenance-coverage-report.json)
-          governed=$(jq '[.warnings[] | select(.binding_finding)] | length' provenance-coverage-report.json)
+          count=$(jq '.warnings | length' "$RUNNER_TEMP/provenance-coverage-report.json")
+          governed=$(jq '[.warnings[] | select(.binding_finding)] | length' "$RUNNER_TEMP/provenance-coverage-report.json")
           # GitHub renders at most ten warning annotations per step, so the
           # stream stops there; the tail names where every finding lives.
           jq -r '.warnings
@@ -521,7 +546,7 @@ jobs:
                  else "file=\(.file_path)," end)
                else "" end) as $location
             | "::warning \($location)title=Rule binding finding::\(.rule_id): \(.message)"' \
-            provenance-coverage-report.json
+            "$RUNNER_TEMP/provenance-coverage-report.json"
           if [ "$governed" -gt 10 ]; then
             echo "::warning title=Rule binding finding::$((governed - 10)) more Rule binding finding(s) after the first 10; the job summary and the coverage report artifact list them all"
           fi
@@ -535,14 +560,14 @@ jobs:
               | "- `\(.rule_id)`: \(.message)"
                  + (if .file_path then
                      " (`" + .file_path + "`" + (if .line then ":\(.line)" else "" end) + ")"
-                   else "" end)' provenance-coverage-report.json
+                   else "" end)' "$RUNNER_TEMP/provenance-coverage-report.json"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload the machine-readable coverage report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: provenance-coverage-report
-          path: provenance-coverage-report.json
+          path: ${{ runner.temp }}/provenance-coverage-report.json
           retention-days: 1
           if-no-files-found: warn
 
