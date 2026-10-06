@@ -1,18 +1,17 @@
-use super::{feedback_request_id, validate_submission_address};
+use super::validate_submission_address;
 use crate::{
-    publication::with_staged_state,
+    review::publication::with_record_state,
     review::{
-        classifier,
         decision_input::{DecideRecordReview, ReviewFeedback},
-        decision_state::{request_digest, review_submission, write_receipt, CycleFacts},
-        guard, journal,
+        decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
+        guard, new_id,
     },
     shards,
     state_store::{CreateDispositionInput, StateStore},
     write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::{
-    review::{CycleEntry, CycleFact, REVIEW_SCHEMA_VERSION},
+    review::{CycleEntry, CycleFact},
     CanonicalArtifactType, DispositionDecision, NodeType, StableId, ThreadParent,
 };
 use provenance_macros::rule;
@@ -39,8 +38,7 @@ impl StateStore {
         addressed: Option<(NodeType, StableId)>,
         input: DecideRecordReview,
     ) -> anyhow::Result<CycleEntry> {
-        let digest = request_digest(&input)?;
-        let request_id = crate::review::new_request_id();
+        check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {
             anyhow::ensure!(
@@ -51,8 +49,6 @@ impl StateStore {
             let facts = CycleFacts::validated(self, &scope)?;
             validate_submission_address(
                 &proposal,
-                &facts,
-                &input.proposal_id,
                 addressed.as_ref().map(|(kind, id)| (*kind, id)),
             )?;
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
@@ -71,20 +67,15 @@ impl StateStore {
                     anyhow::anyhow!("this review submission is no longer pending"),
                 ));
             }
-            with_staged_state(&self.layout, false, |layout| {
-                Self::new(layout.clone()).commit_decision(input, request_id, digest)
+            with_record_state(&self.layout, |layout| {
+                Self::new(layout.clone()).commit_decision(input)
             })
         })
     }
 
     /// Creates the server-owned Disposition identity for a review decision.
     #[rule("rule_review_disposition_identity_server_created")]
-    fn commit_decision(
-        &self,
-        input: DecideRecordReview,
-        request_id: StableId,
-        digest: String,
-    ) -> anyhow::Result<CycleEntry> {
+    fn commit_decision(&self, input: DecideRecordReview) -> anyhow::Result<CycleEntry> {
         let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
         let record_id = proposal.traceability.target.artifact_id.clone();
@@ -94,19 +85,16 @@ impl StateStore {
             .expect("review_submission checks the binding");
         let record =
             crate::cache::review_families::record(self, &input.scope_id, kind, &record_id)?;
-        let head = self
-            .head(&record)?
-            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review history"))?;
-        if head.revision != binding.revision
-            || classifier::content_digest(kind, &record)? != binding.content_digest
-        {
+        let revision = super::super::save::current_revision(&record)?
+            .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
+        if revision != binding.revision {
             let facts = CycleFacts::validated(self, &input.scope_id)?;
             return Err(SourceFailure::wrap(
                 facts.conflict_failure(self, &input.scope_id, kind, &record_id)?,
                 anyhow::anyhow!("stale review selection"),
             ));
         }
-        let disposition_id = journal::new_id();
+        let disposition_id = new_id();
         guard::with_writer(
             &shards::dispositions_path(&self.layout, &input.scope_id),
             "*",
@@ -132,30 +120,22 @@ impl StateStore {
                     &record_id,
                     &input.actor,
                     input.declared_by.as_deref(),
-                    &request_id,
+                    &disposition_id,
                     feedback,
                 )
             })
             .transpose()?;
-        let entry = CycleEntry {
-            schema_version: REVIEW_SCHEMA_VERSION,
-            sequence: CycleFacts::validated(self, &input.scope_id)?
-                .next_sequence(kind, &record_id)?,
-            scope_id: input.scope_id,
-            id: journal::new_id(),
+        Ok(Receipt {
+            id: disposition_id.clone(),
             record_kind: kind,
             record_id,
-            proposal_id: input.proposal_id,
-            proposal_key: None,
+            proposal,
             fact: CycleFact::Decided,
             disposition_id: Some(disposition_id),
             feedback_message_id,
             actor: input.actor.id,
-            request_id,
-            intent_digest: digest,
-        };
-        write_receipt(self, &entry)?;
-        Ok(entry)
+        }
+        .entry())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -166,7 +146,7 @@ impl StateStore {
         record_id: &StableId,
         actor: &provenance_core::DispositionActor,
         declared_by: Option<&str>,
-        request_id: &StableId,
+        disposition_id: &StableId,
         feedback: ReviewFeedback,
     ) -> anyhow::Result<StableId> {
         use crate::review::discussion_input::{DiscussionAction, WriteDiscussion};
@@ -177,7 +157,6 @@ impl StateStore {
                 node_type: kind,
                 node_id: record_id.clone(),
             },
-            request_id: feedback_request_id(request_id)?,
             actor: actor.id.clone(),
             declared_by: declared_by.map(str::to_string),
             action: DiscussionAction::Start {
@@ -185,16 +164,14 @@ impl StateStore {
                 body: feedback.body,
             },
         };
-        let digest = crate::review::discussion_writes::intent(&discussion)?;
+        crate::review::discussion_writes::check_size(&discussion)?;
         self.authorize_discussion(&discussion)?;
-        let entry = guard::with_writer(&shards::threads_path(&self.layout, scope), "*", || {
+        let started = guard::with_writer(&shards::threads_path(&self.layout, scope), "*", || {
             guard::with_writer(&shards::messages_path(&self.layout, scope), "*", || {
-                self.commit_discussion(discussion, None, digest)
+                self.commit_discussion(discussion, None, Some(disposition_id.clone()))
             })
         })?;
-        entry
-            .message_id
-            .ok_or_else(|| anyhow::anyhow!("feedback published no Message"))
+        Ok(started.root_message_id)
     }
 }
 

@@ -1,18 +1,18 @@
-//! Recoverable Requirement edits and immutable evidence.
+//! Guarded graph record edits and their review state.
 mod classifier;
 pub(crate) mod guard;
 mod input;
-mod journal;
+mod publication;
 pub(crate) mod relationships;
 mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
-/// Creates the caller-independent identity for a review write.
-#[provenance_macros::rule("rule_review_request_identity_server_created")]
-pub(crate) fn new_request_id() -> provenance_core::StableId {
-    journal::new_id()
+/// Creates the identity of a review record.
+fn new_id() -> provenance_core::StableId {
+    provenance_core::StableId::new(uuid::Uuid::new_v4().to_string())
+        .expect("UUID uses valid stable ID characters")
 }
 
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
@@ -27,20 +27,14 @@ fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow:
     Ok(())
 }
 
-pub(crate) mod cache;
-
+mod history;
 mod reads;
 pub use reads::{read_evidence, read_history};
-
-mod snapshot;
 
 #[cfg(test)]
 mod concurrency_tests;
 #[cfg(test)]
 mod recovery_tests;
-
-#[cfg(all(test, any(unix, windows)))]
-mod path_tests;
 
 mod discussion_input;
 pub use discussion_input::{DiscussionAction, WriteDiscussion};

@@ -1,11 +1,10 @@
 use super::{shapes::scoped_write_operation, ExecutionNeed};
 use crate::review;
-use provenance_core::{threads::DiscussionEntry, MessageRole, NodeType, ScopeId, StableId};
+use provenance_core::{threads::Discussion, MessageRole, NodeType, ScopeId, StableId};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[provenance_macros::verifies("rule_review_request_identity_server_created", construction)]
 #[serde(deny_unknown_fields)]
 pub struct WriteTargetDiscussionRequest {
     pub scope_id: ScopeId,
@@ -22,13 +21,12 @@ scoped_write_operation!(
     pub WriteTargetDiscussion,
     "write-target-discussion",
     WriteTargetDiscussionRequest,
-    DiscussionEntry,
+    Discussion,
     &[409],
     &[ExecutionNeed::GraphStorage],
     scope = scope_id,
     |store, _scope, request| store.write_target_discussion(review::TargetDiscussionWrite {
         scope_id: request.scope_id,
-        request_id: review::new_request_id(),
         actor: request.actor,
         declared_by: request.declared_by,
         allowed_parent_kinds: request.allowed_parent_kinds,

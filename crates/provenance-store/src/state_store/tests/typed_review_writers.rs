@@ -5,8 +5,7 @@ use crate::{
 };
 use provenance_core::{
     protocol::{TypedRequirementInput, TypedRuleInput, TypedSourceInput},
-    review::SaveOutcome,
-    NodeType, SchemaVersion, SUPPORTED_SCHEMA_VERSION,
+    NodeType, SUPPORTED_SCHEMA_VERSION,
 };
 
 fn document(source_name: &str, rule_statement: &str) -> TypedSpecInput {
@@ -50,75 +49,6 @@ fn document(source_name: &str, rule_statement: &str) -> TypedSpecInput {
     }
 }
 
-fn entries_for(
-    store: &crate::state_store::StateStore,
-    scope: &provenance_core::ScopeId,
-    kind: NodeType,
-) -> Vec<provenance_core::review::ReviewEntry> {
-    let mut entries = store
-        .review_entries(scope)
-        .unwrap()
-        .into_iter()
-        .filter(|entry| entry.record_kind == kind)
-        .collect::<Vec<_>>();
-    entries.sort_by_key(|entry| entry.sequence);
-    entries
-}
-
-#[test]
-fn typed_source_and_rule_record_creation_and_each_repeated_value_change() {
-    let (_temp, store, scope) = initialized_store();
-    store
-        .apply_typed_spec(&scope, document("Policy A", "The system retains A."))
-        .unwrap();
-    store
-        .apply_typed_spec(&scope, document("Policy B", "The system retains B."))
-        .unwrap();
-    store
-        .apply_typed_spec(&scope, document("Policy A", "The system retains A."))
-        .unwrap();
-
-    assert_eq!(
-        store.list_sources(&scope).unwrap()[0].schema_version,
-        SchemaVersion(2)
-    );
-    assert_eq!(
-        store.list_rules(&scope).unwrap()[0].schema_version,
-        SchemaVersion(2)
-    );
-    for kind in [NodeType::Source, NodeType::Rule] {
-        let entries = entries_for(&store, &scope, kind);
-        assert_eq!(entries.len(), 3, "{kind:?}");
-        assert_eq!(entries[0].outcome, SaveOutcome::Created, "{kind:?}");
-        assert_eq!(entries[1].outcome, SaveOutcome::Changed, "{kind:?}");
-        assert_eq!(entries[2].outcome, SaveOutcome::Changed, "{kind:?}");
-        assert_eq!(entries[1].predecessor.as_ref(), Some(&entries[0].id));
-        assert_eq!(entries[2].predecessor.as_ref(), Some(&entries[1].id));
-    }
-}
-
-#[test]
-fn typed_source_and_rule_recreation_links_a_second_creation_occurrence() {
-    let (_temp, store, scope) = initialized_store();
-    let input = document("Policy A", "The system retains A.");
-    store.apply_typed_spec(&scope, input.clone()).unwrap();
-
-    let mut empty = input.clone();
-    empty.sources.clear();
-    empty.requirements.clear();
-    empty.rules.clear();
-    store.apply_typed_spec(&scope, empty).unwrap();
-    store.apply_typed_spec(&scope, input).unwrap();
-
-    for kind in [NodeType::Source, NodeType::Rule] {
-        let entries = entries_for(&store, &scope, kind);
-        assert_eq!(entries.len(), 2, "{kind:?}");
-        assert_eq!(entries[0].outcome, SaveOutcome::Created, "{kind:?}");
-        assert_eq!(entries[1].outcome, SaveOutcome::Created, "{kind:?}");
-        assert_eq!(entries[1].predecessor.as_ref(), Some(&entries[0].id));
-    }
-}
-
 fn assert_deletion_conflict(error: anyhow::Error, kind: NodeType, id: &str) {
     let error = WriteError(error);
     assert!(matches!(
@@ -149,6 +79,18 @@ fn empty_typed_replacement_refuses_enrolled_source_deletion() {
             .unwrap(),
         )
         .unwrap();
+    // A native edit does not itself submit this record for review.
+    store
+        .submit_record_review(
+            serde_json::from_value(serde_json::json!({
+                "scope_id":scope, "actor":"author", "record_kind":"source",
+                "record_id":"source_typed_history", "declared_by":"spec://review/history",
+                "title":"Review the record", "summary":"Review the stored text.",
+                "source_ids":[], "evidence_references":[], "builds_on":[]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     input.sources.clear();
 
     let error = store.apply_typed_spec(&scope, input).unwrap_err();
@@ -168,6 +110,18 @@ fn empty_typed_rule_replacement_refuses_enrolled_rule_deletion() {
                 "id": "rule_typed_history",
                 "declared_by": "spec://review/history",
                 "name": "Native rule name"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    // A native edit does not itself submit this record for review.
+    store
+        .submit_record_review(
+            serde_json::from_value(serde_json::json!({
+                "scope_id":scope, "actor":"author", "record_kind":"rule",
+                "record_id":"rule_typed_history", "declared_by":"spec://review/history",
+                "title":"Review the record", "summary":"Review the stored text.",
+                "source_ids":[], "evidence_references":[], "builds_on":[]
             }))
             .unwrap(),
         )

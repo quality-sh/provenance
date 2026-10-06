@@ -31,7 +31,6 @@ fn resource_from(snapshot: review::RequirementResourceSnapshot) -> RequirementRe
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[verifies("rule_review_request_identity_server_created", construction)]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequirementRequest {
     pub actor: String,
@@ -60,7 +59,6 @@ scoped_write_operation!(
     |store, scope, request| {
         let snapshot = store.create_review_requirement_resource(
             review::CreateReviewRequirement {
-                request_id: review::new_request_id(),
                 actor: request.actor,
                 origin: request.origin,
                 create: CreateRequirementInput {
@@ -85,7 +83,6 @@ scoped_write_operation!(
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[verifies("rule_review_request_identity_server_created", construction)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateRequirementRequest {
     pub actor: String,
@@ -112,7 +109,6 @@ scoped_write_operation!(
     scope = none,
     |store, scope, request| {
         let snapshot = store.save_requirement_resource(review::SaveRequirement {
-                request_id: review::new_request_id(),
                 actor: request.actor,
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,
@@ -152,7 +148,6 @@ decision!(
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[verifies("rule_review_disposition_identity_server_created", construction)]
-#[verifies("rule_review_request_identity_server_created", construction)]
 #[serde(deny_unknown_fields)]
 pub struct DecideRecordReviewRequest {
     pub scope_id: ScopeId,
@@ -169,7 +164,6 @@ pub struct DecideRecordReviewRequest {
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[verifies("rule_review_request_identity_server_created", construction)]
 #[serde(deny_unknown_fields)]
 pub struct WithdrawRecordReviewRequest {
     pub scope_id: ScopeId,

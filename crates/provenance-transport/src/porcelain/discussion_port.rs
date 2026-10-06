@@ -1,8 +1,7 @@
 use provenance_core::{
     protocol::{failure::OperationError, Stamped},
     threads::{
-        DiscussionConversationQuery, DiscussionConversationResult, DiscussionEntry,
-        DiscussionListQuery,
+        Discussion, DiscussionConversationQuery, DiscussionConversationResult, DiscussionListQuery,
     },
     NodeType, ScopeId,
 };
@@ -142,7 +141,7 @@ impl DiscussionPort for HostDiscussionPort {
         })
     }
 
-    fn start(&self, input: StartInput) -> PortFuture<'_, DiscussionEntry> {
+    fn start(&self, input: StartInput) -> PortFuture<'_, Discussion> {
         Box::pin(async move {
             let kinds = self.permitted_write_parent_kinds(Action::Discuss);
             if !kinds.contains(&input.parent.node_type) {
@@ -164,7 +163,7 @@ impl DiscussionPort for HostDiscussionPort {
         })
     }
 
-    fn reply(&self, input: ReplyInput) -> PortFuture<'_, DiscussionEntry> {
+    fn reply(&self, input: ReplyInput) -> PortFuture<'_, Discussion> {
         Box::pin(async move {
             let kinds = self.permitted_write_parent_kinds(Action::Reply);
             if kinds.is_empty() {

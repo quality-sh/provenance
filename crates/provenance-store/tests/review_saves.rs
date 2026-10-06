@@ -1,80 +1,43 @@
 #[allow(dead_code)]
 mod review_support;
-use provenance_core::review::SaveOutcome;
+use provenance_macros::verifies;
 use review_support::*;
 use serde_json::json;
 
 #[test]
-fn repeated_content_has_distinct_occurrences_and_lifecycle_keeps_revision() {
+#[verifies("rule_review_revision_follows_review_content", examples)]
+fn equal_review_content_has_equal_revision() {
     let (_temp, store) = fixture();
-    let a = store
-        .save_requirement(save(&store, "enroll", json!({})))
-        .unwrap();
-    assert_eq!(a.outcome, SaveOutcome::NoChange);
+    let a = store.save_requirement(save(&store, json!({}))).unwrap();
+    assert!(a.revision.is_some());
     let b = store
-        .save_requirement(save(&store, "edit_b", json!({"description":"B"})))
+        .save_requirement(save(&store, json!({"description":"B"})))
         .unwrap();
     let again = store
-        .save_requirement(save(
-            &store,
-            "edit_a",
-            json!({"clear_fields":["description"]}),
-        ))
+        .save_requirement(save(&store, json!({"clear_fields":["description"]})))
         .unwrap();
     assert_ne!(a.revision, b.revision);
-    assert_ne!(a.revision, again.revision);
-    assert_eq!(again.prior_revision, Some(b.revision));
-    assert_eq!(a.after.digest, again.after.digest);
+    assert_eq!(a.revision, again.revision);
     let lifecycle = store
-        .save_requirement(save(&store, "lifecycle", json!({"status":"active"})))
+        .save_requirement(save(&store, json!({"status":"active"})))
         .unwrap();
-    assert_eq!(lifecycle.revision, again.revision);
-    assert_eq!(lifecycle.outcome, SaveOutcome::LifecycleOnly);
     assert_ne!(lifecycle.etag, again.etag);
-}
-
-#[test]
-fn request_replay_precedes_stale_cas_and_different_intent_refuses() {
-    let (_temp, store) = fixture();
-    let input = save(&store, "first", json!({}));
-    let serialized = serde_json::to_value(&input).unwrap();
-    let first = store.save_requirement(input).unwrap();
-    store
-        .save_requirement(save(&store, "next", json!({"description":"B"})))
-        .unwrap();
-    assert_eq!(
-        first,
-        store
-            .save_requirement(serde_json::from_value(serialized.clone()).unwrap())
-            .unwrap()
-    );
-    let mut different = serialized;
-    different["update"]["description"] = json!("different");
-    assert!(store
-        .save_requirement(serde_json::from_value(different).unwrap())
-        .is_err());
-    let no_op = store
-        .save_requirement(save(&store, "noop", json!({})))
-        .unwrap();
-    assert_eq!(no_op.outcome, SaveOutcome::NoChange);
+    assert_eq!(lifecycle.revision, again.revision);
 }
 
 #[test]
 fn stale_etag_and_wrong_owner_refuse_without_changing_state() {
     let (_temp, store) = fixture();
+    store.save_requirement(save(&store, json!({}))).unwrap();
+    let stale = save(&store, json!({"description":"stale"}));
     store
-        .save_requirement(save(&store, "enroll", json!({})))
-        .unwrap();
-    let stale = save(&store, "stale", json!({"description":"stale"}));
-    store
-        .save_requirement(save(&store, "new", json!({"status":"active"})))
+        .save_requirement(save(&store, json!({"status":"active"})))
         .unwrap();
     assert!(store.save_requirement(stale).is_err());
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store
         .save_requirement(save(
             &store,
-            "owner",
             json!({"declared_by":"other","description":"bad"})
         ))
         .is_err());
@@ -98,11 +61,9 @@ fn stale_etag_and_wrong_owner_refuse_without_changing_state() {
 #[test]
 fn concurrent_edits_with_one_etag_commit_exactly_once() {
     let (_temp, store) = fixture();
-    store
-        .save_requirement(save(&store, "enroll", json!({})))
-        .unwrap();
-    let a = save(&store, "a", json!({"description":"A"}));
-    let b = save(&store, "b", json!({"description":"B"}));
+    store.save_requirement(save(&store, json!({}))).unwrap();
+    let a = save(&store, json!({"description":"A"}));
+    let b = save(&store, json!({"description":"B"}));
     let barrier = std::sync::Barrier::new(2);
     std::thread::scope(|threads| {
         let one = threads.spawn(|| {
@@ -135,8 +96,6 @@ fn enrollment_preserves_frozen_legacy_proposal_bytes() {
     let legacy =
         b"{\"schema_version\":2,\"id\":\"old_proposal\",\"promotion_state\":\"accepted\"}\n";
     std::fs::write(&path, legacy).unwrap();
-    store
-        .save_requirement(save(&store, "enroll", json!({})))
-        .unwrap();
+    store.save_requirement(save(&store, json!({}))).unwrap();
     assert_eq!(std::fs::read(path).unwrap(), legacy);
 }

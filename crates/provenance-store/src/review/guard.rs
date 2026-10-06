@@ -78,23 +78,27 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
         .iter()
         .map(serde_json::to_value)
         .collect::<Result<Vec<_>, _>>()?;
-    if directory == Some("threads")
-        && path.file_name() != Some("threads.jsonl")
-        && !writer_allows(path, "*")
-    {
-        let thread_path = path.parent().unwrap().join("threads.jsonl");
-        let threads = match std::fs::read_to_string(&thread_path) {
+    let discussions = if directory == Some("threads") {
+        let discussion_path = path.parent().unwrap().join("discussions.jsonl");
+        match std::fs::read_to_string(&discussion_path) {
             Ok(text) => text
                 .lines()
                 .map(serde_json::from_str::<Value>)
                 .collect::<Result<Vec<_>, _>>()?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(error) => return Err(error.into()),
-        };
+        }
+    } else {
+        Vec::new()
+    };
+    if directory == Some("threads") && path.file_name() != Some("threads.jsonl") {
+        if writer_allows(path, "*") {
+            return Ok(());
+        }
         for message in before.iter().chain(&after) {
-            if threads
+            if discussions
                 .iter()
-                .any(|t| t["schema_version"] == 3 && t["id"] == message["thread_id"])
+                .any(|discussion| discussion["thread_id"] == message["thread_id"])
             {
                 anyhow::ensure!(
                     before
@@ -105,16 +109,31 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
                             .iter()
                             .filter(|m| m["id"] == message["id"])
                             .collect::<Vec<_>>(),
-                    "enrolled Thread requires journaled Message membership"
+                    "enrolled Thread requires an addressed Discussion write"
                 );
             }
         }
     }
-    for record in before
-        .iter()
-        .chain(&after)
-        .filter(|r| r["schema_version"] == 3)
-    {
+    let submitted = if let Some(family) = family {
+        submitted_ids(path, family.kind)?
+    } else {
+        std::collections::BTreeSet::new()
+    };
+    for record in &before {
+        if family.is_some()
+            && !record["id"]
+                .as_str()
+                .is_some_and(|id| submitted.contains(id))
+        {
+            continue;
+        }
+        if family.is_none()
+            && !discussions
+                .iter()
+                .any(|discussion| discussion["thread_id"] == record["id"])
+        {
+            continue;
+        }
         let owner_field = family.map_or("id", |facts| facts.owner_field);
         let id = record[owner_field].as_str().unwrap_or_default();
         if !writer_allows(path, id) {
@@ -127,4 +146,63 @@ pub fn protect_rows<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Res
         }
     }
     Ok(())
+}
+
+fn submitted_ids(
+    path: &Utf8Path,
+    kind: provenance_core::NodeType,
+) -> anyhow::Result<std::collections::BTreeSet<String>> {
+    let Some(scope) = path.parent().and_then(Utf8Path::parent) else {
+        return Ok(std::collections::BTreeSet::new());
+    };
+    let text = match std::fs::read_to_string(scope.join("ideation/proposal_cards.jsonl")) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(std::collections::BTreeSet::new())
+        }
+        Err(error) => return Err(error.into()),
+    };
+    let mut ids = std::collections::BTreeSet::new();
+    for line in text.lines().filter(|line| !line.trim().is_empty()) {
+        let proposal: Value = serde_json::from_str(line)?;
+        let target = &proposal["traceability"]["target"];
+        if proposal["proposal_type"] == "record_revision"
+            && target["artifact_type"] == kind.as_str()
+        {
+            if let Some(id) = target["artifact_id"].as_str() {
+                ids.insert(id.to_owned());
+            }
+        }
+    }
+    Ok(ids)
+}
+
+impl crate::state_store::StateStore {
+    /// Full-scope import and export cannot yet carry review state.
+    pub fn ensure_review_portable(&self, scope: &provenance_core::ScopeId) -> anyhow::Result<()> {
+        self.with_repository_publication(|| {
+            anyhow::ensure!(
+                !self
+                    .layout
+                    .scopes_dir()
+                    .join(scope.as_str())
+                    .join("review")
+                    .try_exists()?,
+                "review-bearing scopes require lossless import/export support"
+            );
+            let has_review_state = !self.list_discussions(scope)?.is_empty()
+                || !self.list_withdrawals(scope)?.is_empty()
+                || self
+                    .list_proposal_definitions(scope)?
+                    .iter()
+                    .any(|proposal| {
+                        proposal.proposal_type == provenance_core::ProposalType::RecordRevision
+                    });
+            anyhow::ensure!(
+                !has_review_state,
+                "review-bearing scopes require lossless import/export support"
+            );
+            Ok(())
+        })
+    }
 }

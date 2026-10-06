@@ -1,7 +1,8 @@
 //! Current and historical decision reads for one record.
 //!
-//! The current read joins the bound submissions, their dispositions, the
-//! cycle receipts, and the record's current review revision. Legacy unbound
+//! The current read joins the bound submissions, their dispositions and
+//! withdrawals, the feedback Discussions, and the record's current review
+//! revision. Legacy unbound
 //! dispositions keep their place in the history and stay authoritative for
 //! their own proposals; none of them attests the record's current contents.
 
@@ -10,8 +11,7 @@ use crate::state_store::StateStore;
 use provenance_core::{
     protocol::DocumentReviewSummary,
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
-    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ProposalType, ScopeId,
-    StableId,
+    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ScopeId, StableId,
 };
 use provenance_macros::rule;
 
@@ -48,7 +48,7 @@ impl StateStore {
                 .iter()
                 .map(|(kind, id)| {
                     let record = crate::cache::review_families::record(self, scope, *kind, id)?;
-                    self.record_decision_state_from_parts(
+                    Self::record_decision_state_from_parts(
                         &record,
                         &proposals,
                         &dispositions,
@@ -103,11 +103,10 @@ impl StateStore {
         let proposals = self.list_proposal_definitions(scope)?;
         let dispositions = self.list_dispositions(scope)?;
         let facts = CycleFacts::validated(self, scope)?;
-        self.record_decision_state_from_parts(record, &proposals, &dispositions, &facts)
+        Self::record_decision_state_from_parts(record, &proposals, &dispositions, &facts)
     }
 
     fn record_decision_state_from_parts(
-        &self,
         record: &provenance_core::review::ReviewRecord,
         proposals: &[ProposalCard],
         dispositions: &[DispositionRecord],
@@ -115,42 +114,20 @@ impl StateStore {
     ) -> anyhow::Result<RequirementDecisionState> {
         let kind = record.kind();
         let record_id = record.id();
-        let head = self.head(record)?;
-        let current_revision = head.as_ref().map(|entry| entry.revision.clone());
+        let current_revision = super::save::current_revision(record)?;
         let targets_record = |target: &provenance_core::IdeationTarget| {
             NodeType::from(target.artifact_type) == kind && target.artifact_id == *record_id
         };
-        let submissions: Vec<_> = proposals
-            .iter()
-            .filter(|p| {
-                p.proposal_type == ProposalType::RecordRevision
-                    && targets_record(&p.traceability.target)
-            })
-            .collect();
         let pending = facts
-            .pending_submission_at_revision_in(
-                proposals,
-                dispositions,
-                kind,
-                record_id,
-                current_revision.as_ref(),
-            )
-            .map(|entry| {
-                let proposal = submissions
-                    .iter()
-                    .find(|p| p.id == entry.proposal_id)
-                    .expect("validated cycle entries name existing proposals");
-                PendingSubmission {
-                    proposal_id: proposal.id.clone(),
-                    revision: proposal
-                        .record_revision
-                        .as_ref()
-                        .expect("submissions carry bindings")
-                        .revision
-                        .clone(),
-                    actor: entry.actor,
-                    revises: proposal.revises.clone(),
-                }
+            .pending_submission_at_revision(kind, record_id, current_revision.as_ref())
+            .map(|proposal| PendingSubmission {
+                proposal_id: proposal.id,
+                revision: proposal
+                    .record_revision
+                    .expect("pending submissions carry bindings")
+                    .revision,
+                actor: proposal.actor.unwrap_or_default(),
+                revises: proposal.revises,
             });
         let mut recorded: Vec<RecordedDecision> = dispositions
             .iter()
@@ -169,11 +146,7 @@ impl StateStore {
                 })
             })
             .collect();
-        recorded.sort_by_key(|decision| {
-            facts
-                .sequence_of(&decision.disposition.proposal_id)
-                .unwrap_or(u64::MAX)
-        });
+        recorded.sort_by_key(|decision| facts.order_of(&decision.disposition.proposal_id));
         let current_acceptance = recorded
             .iter()
             .filter(|decision| decision.disposition.decision == DispositionDecision::Accepted)

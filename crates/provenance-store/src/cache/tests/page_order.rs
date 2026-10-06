@@ -65,8 +65,8 @@ const PAGED_TABLES: [&str; 18] = [
     <DispositionRecord as PayloadRow>::TABLE,
 ];
 
-/// `review_journal` keys on `(scope_id, id)`, but no ID page reads it.
-const UNPAGED_KEYED_TABLES: [&str; 1] = ["review_journal"];
+/// `withdrawals` keys on `(scope_id, id)`, but no ID page reads it.
+const UNPAGED_KEYED_TABLES: [&str; 1] = ["withdrawals"];
 
 /// Every table whose primary key is exactly `(scope_id, id)`.
 async fn keyed_tables(pool: &SqlitePool) -> BTreeSet<String> {

@@ -25,13 +25,9 @@ fn new_requirement(id: &str) -> CreateRequirementInput {
 }
 
 #[tokio::test]
-async fn the_legacy_create_enrolls_through_the_journal() {
+async fn the_legacy_create_enrolls_the_record() {
     let (temp, store) = fixture();
     let created = store.create_requirement(new_requirement("req_b")).unwrap();
-    assert_eq!(
-        created.schema_version,
-        provenance_core::review::REVIEW_SCHEMA_VERSION
-    );
 
     let again = store.create_requirement(new_requirement("req_b")).unwrap();
     assert_eq!(again.id, created.id);
@@ -70,11 +66,10 @@ async fn the_legacy_create_enrolls_through_the_journal() {
     .unwrap();
     assert_eq!(history.result.entries.len(), 1);
     assert_eq!(history.result.entries[0].outcome, SaveOutcome::Created);
-    assert_eq!(history.result.entries[0].actor, "authoring");
 }
 
 #[test]
-fn every_legacy_edit_publishes_a_journaled_outcome() {
+fn every_legacy_edit_publishes_its_change() {
     let (_temp, store) = fixture();
     store
         .create_source(
@@ -152,14 +147,14 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
     );
 
     let state = store.requirement_edit_state(&scope(), &id()).unwrap();
-    assert!(state.snapshot.is_some());
+    assert!(state.revision.is_some());
 }
 
 #[test]
 fn a_save_input_rejects_an_unknown_relationship_field() {
     let (_temp, store) = fixture();
     let input: Result<SaveRequirement, _> = serde_json::from_value(json!({
-        "request_id": "delta", "actor": "ben",
+        "actor": "ben",
         "expected_etag": store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update": {"scope_id": "default", "id": "req_a"},
         "relationships": {"cites": {"add": [], "removes": []}}

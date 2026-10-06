@@ -8,15 +8,14 @@ use provenance_store::{
         invoke_typed, PreparedContext, PreparedScope, WriteTargetDiscussion,
         WriteTargetDiscussionRequest,
     },
-    review::{DiscussionAction, TargetDiscussionWrite, WriteDiscussion},
-    state_store::StateStore,
+    review::{TargetDiscussionWrite, WriteDiscussion},
     write_error::{WriteError, WriteFailure},
 };
 use serde_json::json;
 
-fn request(id: &str, fields: &serde_json::Value) -> TargetDiscussionWrite {
+fn request(fields: &serde_json::Value) -> TargetDiscussionWrite {
     let mut request = json!({
-        "scope_id": "default", "request_id": id, "actor": "ben",
+        "scope_id": "default", "actor": "ben",
         "declared_by": null, "allowed_parent_kinds": [
             "source", "requirement", "resolution", "rule", "topic", "question", "domain", "boundary"
         ]
@@ -28,32 +27,26 @@ fn request(id: &str, fields: &serde_json::Value) -> TargetDiscussionWrite {
     serde_json::from_value(request).unwrap()
 }
 
-fn start(id: &str) -> WriteDiscussion {
+fn start(body: &str) -> WriteDiscussion {
     serde_json::from_value(json!({
-        "scope_id": "default", "request_id": id, "actor": "ben",
+        "scope_id": "default", "actor": "ben",
         "declared_by": null,
         "parent": {"node_type": "requirement", "node_id": "req_a"},
-        "action": {"kind": "start", "role": "user", "body": id}
+        "action": {"kind": "start", "role": "user", "body": body}
     }))
     .unwrap()
 }
 
-fn reply(
-    id: &str,
-    discussion: &provenance_core::threads::DiscussionEntry,
-) -> TargetDiscussionWrite {
-    request(
-        id,
-        &json!({
-            "discussion_id": discussion.discussion_id,
-            "expected_version": discussion.version, "role": "user", "body": id
-        }),
-    )
+fn reply(body: &str, discussion: &provenance_core::threads::Discussion) -> TargetDiscussionWrite {
+    request(&json!({
+        "discussion_id": discussion.discussion_id,
+        "expected_version": discussion.version, "role": "user", "body": body
+    }))
 }
 
 fn catalog_reply(
     body: &str,
-    discussion: &provenance_core::threads::DiscussionEntry,
+    discussion: &provenance_core::threads::Discussion,
 ) -> WriteTargetDiscussionRequest {
     serde_json::from_value(json!({
         "scope_id":"default", "actor":"ben", "declared_by":null,
@@ -64,20 +57,21 @@ fn catalog_reply(
     .unwrap()
 }
 
-fn failure(result: anyhow::Result<provenance_core::threads::DiscussionEntry>) -> WriteFailure {
+fn failure(result: anyhow::Result<provenance_core::threads::Discussion>) -> WriteFailure {
     WriteError(result.unwrap_err()).safe()
 }
 
 #[test]
 fn addressed_reply_contract_has_only_reply_fields() {
-    let request: TargetDiscussionWrite = serde_json::from_value(json!({
-        "scope_id":"default", "request_id":"reply_request", "actor":"ben",
+    let mut request = json!({
+        "scope_id":"default", "actor":"ben",
         "declared_by":null, "allowed_parent_kinds":["requirement"],
         "discussion_id":"discussion_a", "expected_version":1,
         "role":"user", "body":"A reply."
-    }))
-    .unwrap();
-    assert_eq!(request.request_id.as_str(), "reply_request");
+    });
+    assert!(serde_json::from_value::<TargetDiscussionWrite>(request.clone()).is_ok());
+    request["request_id"] = json!("reply_request");
+    assert!(serde_json::from_value::<TargetDiscussionWrite>(request).is_err());
 }
 
 #[test]
@@ -109,16 +103,13 @@ fn target_reply_checks_host_parent_grants_inside_publication() {
 fn target_refusals_do_not_append_messages() {
     let (_temp, store) = fixture();
     let a = store.write_discussion(start("a")).unwrap();
-    let missing = request(
-        "missing",
-        &json!({"discussion_id":"missing","expected_version":1,"role":"user","body":"x"}),
-    );
+    let missing =
+        request(&json!({"discussion_id":"missing","expected_version":1,"role":"user","body":"x"}));
     assert!(matches!(
         failure(store.write_target_discussion(missing)),
         WriteFailure::ResourceNotFound
     ));
     let stale = request(
-        "stale",
         &json!({"discussion_id":a.discussion_id,"expected_version":0,"role":"user","body":"x"}),
     );
     assert!(matches!(
@@ -126,70 +117,6 @@ fn target_refusals_do_not_append_messages() {
         WriteFailure::DiscussionVersionConflict
     ));
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 1);
-}
-
-#[test]
-fn replay_after_restart_returns_receipt_and_changed_intent_refuses() {
-    let (temp, store) = fixture();
-    let first = store.write_discussion(start("a")).unwrap();
-    let store = StateStore::new(ProvenanceLayout::new(
-        camino::Utf8Path::from_path(temp.path()).unwrap(),
-    ));
-    assert_eq!(store.write_discussion(start("a")).unwrap(), first);
-    let mut changed = start("a");
-    if let DiscussionAction::Start { body, .. } = &mut changed.action {
-        *body = "changed".into();
-    }
-    assert!(matches!(
-        failure(store.write_discussion(changed)),
-        WriteFailure::DiscussionIntentChanged
-    ));
-    store
-        .create_review_requirement(
-            serde_json::from_value(json!({
-                "request_id":"create_b","actor":"ben","origin":null,
-                "create": {
-                    "scope_id": "default", "id": "req_b",
-                    "statement": "The system stores notes.", "status": "discovery",
-                    "depends_on": [], "supersedes": []
-                }
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-    let mut wrong_parent = start("a");
-    wrong_parent.parent.node_id = provenance_core::StableId::new("req_b").unwrap();
-    assert!(matches!(
-        failure(store.write_discussion(wrong_parent)),
-        WriteFailure::DiscussionIntentChanged
-    ));
-    let other = store.write_discussion(start("b")).unwrap();
-    let first_reply = store.write_target_discussion(reply("r1", &first)).unwrap();
-    let store = StateStore::new(ProvenanceLayout::new(
-        camino::Utf8Path::from_path(temp.path()).unwrap(),
-    ));
-    assert_eq!(
-        store.write_target_discussion(reply("r1", &first)).unwrap(),
-        first_reply
-    );
-    let different_target = request(
-        "r1",
-        &json!({"discussion_id":other.discussion_id,"expected_version":first.version,"role":"user","body":"r1"}),
-    );
-    assert!(matches!(
-        failure(store.write_target_discussion(different_target)),
-        WriteFailure::DiscussionIntentChanged
-    ));
-    let wrong_target = request(
-        "r1",
-        &json!({"discussion_id":"missing","expected_version":first.version,"role":"user","body":"r1"}),
-    );
-    assert!(matches!(
-        failure(store.write_target_discussion(wrong_target)),
-        WriteFailure::DiscussionIntentChanged
-    ));
-    assert_eq!(first_reply.version, 2);
-    assert_eq!(store.list_messages(&scope()).unwrap().len(), 3);
 }
 
 #[test]
@@ -221,7 +148,7 @@ fn resolved_discussion_refuses_target_reply() {
     let (_temp, store) = fixture();
     let a = store.write_discussion(start("a")).unwrap();
     let resolved = store
-        .write_discussion(discussion_support::status(&a, "resolve", "resolved"))
+        .write_discussion(discussion_support::status(&a, "resolved"))
         .unwrap();
     assert_eq!(resolved.status, DiscussionStatus::Resolved);
     assert!(matches!(
@@ -244,7 +171,7 @@ fn owner_and_parent_membership_refuse_without_publication() {
     store
         .create_review_requirement(
             serde_json::from_value(json!({
-                "request_id":"create_b","actor":"ben","origin":null,
+                "actor":"ben","origin":null,
                 "create": {
                     "scope_id": "default", "id": "req_b",
                     "statement": "The system stores notes.", "status": "discovery",
@@ -308,8 +235,8 @@ async fn catalog_operation_uses_the_target_write_path() {
 async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
     let (temp, store) = fixture();
     let layout = ProvenanceLayout::new(camino::Utf8Path::from_path(temp.path()).unwrap());
-    let journal = layout.scopes_dir().join("default/review/journal");
-    let receipt_count = std::fs::read_dir(&journal).unwrap().count();
+    let state_files = || walkdir_count(&layout.scopes_dir());
+    let file_count = state_files();
     let requirement = store.requirement_edit_state(&scope(), &id()).unwrap();
     let context = PreparedContext::for_scope(PreparedScope {
         root: camino::Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap(),
@@ -335,7 +262,7 @@ async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
         json!({"kind":"scope_mismatch"})
     );
     assert_eq!(error.status(), 400);
-    assert_eq!(std::fs::read_dir(journal).unwrap().count(), receipt_count);
+    assert_eq!(state_files(), file_count);
     assert_eq!(
         store.list_threads(&scope()).unwrap(),
         [] as [provenance_core::Thread; 0]
@@ -349,4 +276,19 @@ async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
         requirement.etag
     );
     assert!(!layout.scopes_dir().join("other").exists());
+}
+
+fn walkdir_count(directory: &camino::Utf8Path) -> usize {
+    std::fs::read_dir(directory).map_or(0, |entries| {
+        entries
+            .map(|entry| {
+                let path = camino::Utf8PathBuf::from_path_buf(entry.unwrap().path()).unwrap();
+                if path.is_dir() {
+                    walkdir_count(&path)
+                } else {
+                    1
+                }
+            })
+            .sum()
+    })
 }

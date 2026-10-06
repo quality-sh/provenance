@@ -11,27 +11,14 @@ use support::resource_http::{call, host};
 use tower::ServiceExt as _;
 
 fn source_etag(repo: &Repository) -> String {
-    let journal = repo
-        .layout
-        .scopes_dir()
-        .join("default")
-        .join("review")
-        .join("journal");
-    std::fs::read_dir(journal)
+    provenance_store::state_store::StateStore::new(repo.layout.clone())
+        .record_edit_state(
+            &provenance_core::ScopeId::new("default").unwrap(),
+            provenance_core::NodeType::Source,
+            &provenance_core::StableId::new("source_shared").unwrap(),
+        )
         .unwrap()
-        .map(|entry| {
-            let bytes = std::fs::read(entry.unwrap().path()).unwrap();
-            serde_json::from_slice::<provenance_core::review::JournalEntry>(&bytes).unwrap()
-        })
-        .find_map(|entry| match entry {
-            provenance_core::review::JournalEntry::Record(entry)
-                if entry.record_kind == provenance_core::NodeType::Source =>
-            {
-                Some(entry.etag)
-            }
-            _ => None,
-        })
-        .unwrap()
+        .etag
 }
 
 #[tokio::test]

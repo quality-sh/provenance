@@ -233,7 +233,7 @@ fn read_records<T: DeserializeOwned>(
 
 const fn leave_as_written(_value: &mut serde_json::Value) {}
 
-pub(super) fn read_jsonl<T: DeserializeOwned>(
+pub fn read_jsonl<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {

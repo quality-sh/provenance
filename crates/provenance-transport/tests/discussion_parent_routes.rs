@@ -114,7 +114,6 @@ async fn repeated_discussion_start_after_a_lost_response_creates_another_discuss
         first["data"]["discussion_id"],
         second["data"]["discussion_id"]
     );
-    assert_ne!(first["data"]["request_id"], second["data"]["request_id"]);
 }
 
 #[tokio::test]

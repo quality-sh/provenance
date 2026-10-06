@@ -185,17 +185,19 @@ CREATE TABLE projection_validation (
     only_row INTEGER PRIMARY KEY CHECK (only_row = 1), version INTEGER NOT NULL
 );
 
-CREATE TABLE review_journal (
-    scope_id TEXT NOT NULL, kind TEXT NOT NULL, record_kind TEXT, record_id TEXT, id TEXT NOT NULL,
-    sequence INTEGER, request_id TEXT NOT NULL, payload TEXT NOT NULL,
-    discussion_id TEXT, thread_id TEXT, message_id TEXT, parent_type TEXT,
-    parent_id TEXT, version INTEGER, PRIMARY KEY (scope_id, id),
-    UNIQUE (scope_id, request_id), UNIQUE (scope_id, kind, record_kind, record_id, sequence),
-    UNIQUE (scope_id, discussion_id, version), UNIQUE (scope_id, message_id)
+CREATE TABLE discussions (
+    scope_id TEXT NOT NULL, discussion_id TEXT NOT NULL,
+    parent TEXT NOT NULL, thread_id TEXT NOT NULL, root_message_id TEXT NOT NULL,
+    message_ids TEXT NOT NULL, status TEXT NOT NULL, version INTEGER NOT NULL,
+    actor TEXT NOT NULL, outcomes TEXT NOT NULL, disposition_id TEXT,
+    PRIMARY KEY (scope_id, discussion_id)
 );
-CREATE INDEX discussion_parent ON review_journal(scope_id, parent_type, parent_id, discussion_id, version);
-CREATE INDEX discussion_thread ON review_journal(scope_id, thread_id, message_id);
-CREATE INDEX review_record ON review_journal(scope_id, record_kind, record_id, sequence);
+CREATE INDEX idx_discussions_parent ON discussions(scope_id, json_extract(parent, '$.node_type'), json_extract(parent, '$.node_id'), discussion_id);
+
+CREATE TABLE withdrawals (
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    proposal_id TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT, PRIMARY KEY (scope_id, id)
+);
 
 CREATE TABLE record_identities (
     scope_id TEXT NOT NULL, id TEXT NOT NULL, node_type TEXT NOT NULL,

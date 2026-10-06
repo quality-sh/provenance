@@ -28,6 +28,7 @@ mod typed_statement_policy;
 mod updates;
 mod verification_bindings;
 mod verification_runs;
+mod withdrawal_writers;
 mod writers;
 pub use updates::*;
 

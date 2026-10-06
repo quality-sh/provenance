@@ -1,7 +1,10 @@
 use super::{CreateReviewRequirement, WriteDiscussion};
 use crate::{layout::ProvenanceLayout, state_store::StateStore, test_probes};
 use camino::Utf8Path;
-use provenance_core::{threads::DiscussionEntry, ScopeId};
+use provenance_core::{
+    threads::{Discussion, DiscussionStatus},
+    ScopeId,
+};
 use serde_json::json;
 
 fn scope() -> ScopeId {
@@ -11,9 +14,9 @@ fn open(root: &Utf8Path) -> StateStore {
     StateStore::new(ProvenanceLayout::new(root))
 }
 fn root_input() -> WriteDiscussion {
-    serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"request_id":"root","actor":"ben","action":{"kind":"start","role":"user","body":"Concern"}})).unwrap()
+    serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"actor":"ben","action":{"kind":"start","role":"user","body":"Concern"}})).unwrap()
 }
-fn mutation(root: &DiscussionEntry, operation: &str) -> WriteDiscussion {
+fn mutation(root: &Discussion, operation: &str) -> WriteDiscussion {
     let action = if operation == "start" {
         json!({"kind":"start","role":"user","body":"New concern"})
     } else if operation == "reply" {
@@ -21,10 +24,13 @@ fn mutation(root: &DiscussionEntry, operation: &str) -> WriteDiscussion {
     } else {
         json!({"kind":"set_status","discussion_id":root.discussion_id,"expected_version":1,"status":"resolved"})
     };
-    serde_json::from_value(json!({"scope_id":"default","parent":root.parent,"request_id":"mutation","actor":"ben","action":action})).unwrap()
+    serde_json::from_value(
+        json!({"scope_id":"default","parent":root.parent,"actor":"ben","action":action}),
+    )
+    .unwrap()
 }
-fn creation(root: &DiscussionEntry) -> CreateReviewRequirement {
-    serde_json::from_value(json!({"request_id":"creation","actor":"ben","origin":{"discussion_id":root.discussion_id,"thread_id":root.thread_id,"message_id":root.message_id},
+fn creation(root: &Discussion) -> CreateReviewRequirement {
+    serde_json::from_value(json!({"actor":"ben","origin":{"discussion_id":root.discussion_id,"thread_id":root.thread_id,"message_id":root.root_message_id},
         "create":{"scope_id":"default","id":"req_new","statement":"The system stores evidence.","status":"discovery","depends_on":[],"supersedes":[]}})).unwrap()
 }
 fn fixture() -> tempfile::TempDir {
@@ -62,7 +68,7 @@ fn crash_child() {
         _ => panic!("unknown phase"),
     };
     let store = open(Utf8Path::new(&root));
-    let root = store.discussion_receipt(&root_input()).unwrap().unwrap();
+    let root = discussions(&store).remove(0);
     test_probes::arm(phase, || std::process::exit(86));
     match operation.as_str() {
         "create" => {
@@ -70,7 +76,7 @@ fn crash_child() {
         }
         "edit" => {
             store
-                .save_requirement_from_discussion(edit(&store), origin(&root))
+                .save_requirement_from_discussion(edit(&store), &origin(&root))
                 .unwrap();
         }
         _ => {
@@ -79,16 +85,22 @@ fn crash_child() {
     }
     panic!("crash phase was not reached");
 }
-fn origin(root: &DiscussionEntry) -> provenance_core::threads::DiscussionOrigin {
+fn origin(root: &Discussion) -> provenance_core::threads::DiscussionOrigin {
     provenance_core::threads::DiscussionOrigin {
         discussion_id: root.discussion_id.clone(),
         thread_id: root.thread_id.clone(),
-        message_id: root.message_id.clone().unwrap(),
+        message_id: root.root_message_id.clone(),
     }
+}
+/// Reads the Discussions after any interrupted publication recovers.
+fn discussions(store: &StateStore) -> Vec<Discussion> {
+    store
+        .with_repository_publication(|| store.list_discussions(&scope()))
+        .unwrap()
 }
 fn edit(store: &StateStore) -> super::SaveRequirement {
     let id = provenance_core::StableId::new("req_a").unwrap();
-    serde_json::from_value(json!({"request_id":"edit","actor":"ben","expected_etag":store.requirement_edit_state(&scope(),&id).unwrap().etag,"update":{"scope_id":"default","id":"req_a","description":"After"},"relationships":null})).unwrap()
+    serde_json::from_value(json!({"actor":"ben","expected_etag":store.requirement_edit_state(&scope(),&id).unwrap().etag,"update":{"scope_id":"default","id":"req_a","description":"After"},"relationships":null})).unwrap()
 }
 
 #[test]
@@ -118,83 +130,50 @@ fn process_restart_recovers_membership_status_and_outcome_as_one_state() {
                 .unwrap();
             assert_eq!(status.code(), Some(86), "{operation}/{phase}");
             let store = open(root);
-            // This receipt read must recover an absent live state before reporting absence.
-            let original = store.discussion_receipt(&root_input()).unwrap().unwrap();
+            let recovered = discussions(&store);
+            let original = recovered[0].clone();
+            let messages = store.list_messages(&scope()).unwrap().len();
+            let changes = usize::from(committed);
             if operation == "create" {
-                let entries = store.review_entries(&scope()).unwrap();
-                assert_eq!(entries.len(), usize::from(committed), "creation/{phase}");
                 assert_eq!(
                     store.list_requirements(&scope()).unwrap().len(),
-                    if committed { 2 } else { 1 }
+                    1 + changes
                 );
-                let result = store
-                    .create_review_requirement(creation(&original))
-                    .unwrap();
-                assert!(result.before.is_none());
-                assert_eq!(result.origin, Some(origin(&original)));
-                if committed {
-                    assert_eq!(result, entries[0]);
-                }
+                assert_eq!(original.outcomes.len(), changes, "creation/{phase}");
+                let retried = store.create_review_requirement(creation(&original));
+                assert_eq!(retried.is_ok(), !committed, "creation/{phase}");
             } else if operation == "edit" {
-                let request = provenance_core::StableId::new("edit").unwrap();
-                let entry = store
-                    .review_entries(&scope())
-                    .unwrap()
-                    .into_iter()
-                    .find(|e| e.request_id == request);
-                assert_eq!(entry.is_some(), committed);
+                assert_eq!(original.outcomes.len(), changes, "edit/{phase}");
                 assert_eq!(
                     store.list_requirements(&scope()).unwrap()[0]
                         .description
                         .as_deref(),
                     committed.then_some("After")
                 );
-                if let Some(entry) = entry {
-                    assert!(entry.before.is_some());
-                    assert_eq!(entry.origin, Some(origin(&original)));
-                }
-            } else {
-                let input = mutation(&original, operation);
-                let receipt = store.discussion_receipt(&input).unwrap();
-                assert_eq!(receipt.is_some(), committed, "{operation}/{phase}");
+            } else if operation == "start" {
+                assert_eq!(recovered.len(), 1 + changes, "{operation}/{phase}");
+                assert_eq!(messages, 1 + changes, "{operation}/{phase}");
+            } else if operation == "reply" {
                 assert_eq!(
-                    store.list_messages(&scope()).unwrap().len(),
-                    if committed && matches!(operation, "reply" | "start") {
-                        2
-                    } else {
-                        1
-                    }
+                    original.message_ids.len(),
+                    1 + changes,
+                    "{operation}/{phase}"
                 );
-                let result = store.write_discussion(input).unwrap();
-                if let Some(receipt) = receipt {
-                    assert_eq!(result, receipt);
-                }
-                assert_eq!(result.version, if operation == "start" { 1 } else { 2 });
+                assert_eq!(messages, 1 + changes, "{operation}/{phase}");
+                assert_eq!(original.version, 1 + u64::from(committed));
+            } else {
+                assert_eq!(
+                    original.status == DiscussionStatus::Resolved,
+                    committed,
+                    "{operation}/{phase}"
+                );
+                assert_eq!(original.version, 1 + u64::from(committed));
+                assert_eq!(messages, 1);
             }
-            store.validated_journal_entries(&scope()).unwrap();
+            store.validated_discussions(&scope()).unwrap();
             assert!(!ProvenanceLayout::new(root)
                 .publication_marker_path()
                 .exists());
         }
     }
-}
-
-#[test]
-fn lost_response_reconciles_receipt_after_failed_cleanup() {
-    let temp = fixture();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
-    let store = open(root);
-    let original = store.discussion_receipt(&root_input()).unwrap().unwrap();
-    let input = mutation(&original, "reply");
-    test_probes::crash_at("state_published");
-    let result = store.write_discussion(input.clone());
-    test_probes::disarm("state_published");
-    assert!(matches!(
-        crate::write_error::WriteError(result.unwrap_err()).safe(),
-        crate::write_error::WriteFailure::WriteFailed
-    ));
-    let reopened = open(root);
-    let receipt = reopened.discussion_receipt(&input).unwrap().unwrap();
-    assert_eq!(receipt, reopened.write_discussion(input).unwrap());
-    assert_eq!(reopened.list_messages(&scope()).unwrap().len(), 2);
 }

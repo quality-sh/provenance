@@ -28,6 +28,18 @@ fn replacement_source(
 fn source_creation_holds_the_lock_and_refuses_a_raw_followup_write() {
     let (_dir, store, scope) = seeded_source_requirement_store();
     let older_id = StableId::new("source_schads").unwrap();
+    // A review submission makes the existing Source subject to the write guard.
+    store
+        .submit_record_review(
+            serde_json::from_value(serde_json::json!({
+                "scope_id":scope, "actor":"author", "record_kind":"source",
+                "record_id":older_id, "title":"Review the Source",
+                "summary":"Review the stored Source.", "source_ids":[],
+                "evidence_references":[], "builds_on":[]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
     let sources_path = crate::shards::sources_path(&store.layout, &scope);
     let (validated_tx, validated_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();

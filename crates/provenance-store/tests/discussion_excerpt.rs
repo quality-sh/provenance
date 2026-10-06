@@ -55,12 +55,9 @@ async fn list_excerpt_counts_characters_across_nul_and_unicode() {
 
     let ids = cases
         .iter()
-        .map(|(name, body, _, _)| {
+        .map(|(_, body, _, _)| {
             store
-                .write_discussion(write(
-                    name,
-                    json!({"kind":"start", "role":"user", "body":body}),
-                ))
+                .write_discussion(write(json!({"kind":"start", "role":"user", "body":body})))
                 .unwrap()
                 .discussion_id
         })

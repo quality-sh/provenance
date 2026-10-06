@@ -58,7 +58,7 @@ impl StateStore {
             crate::fixture_probe::at("requirement_resource_record_read");
         }
         Ok(RecordResourceSnapshot {
-            edit: self.record_edit_state_for_record(&record)?,
+            edit: Self::record_edit_state_for_record(&record)?,
             decision: self.record_decision_state_for_record(&record)?,
             record,
         })

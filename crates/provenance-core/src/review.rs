@@ -18,74 +18,19 @@ const fn is_requirement_kind(kind: &NodeType) -> bool {
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SnapshotRef {
-    pub id: StableId,
-    pub digest: String,
-    pub bytes: u64,
-    pub fields: Vec<SnapshotField>,
-}
-
-/// A field range in an ordinary JSON snapshot. Offsets count UTF-8 bytes.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SnapshotField {
-    pub name: String,
-    pub offset: u64,
-    pub bytes: u64,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SaveOutcome {
     Created,
-    Enrolled,
     Changed,
     LifecycleOnly,
-    NoChange,
 }
 
-/// One committed save is also its durable request receipt.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReviewEntry {
-    pub schema_version: SchemaVersion,
-    pub scope_id: ScopeId,
-    pub record_kind: NodeType,
-    pub record_id: StableId,
-    pub id: StableId,
-    pub sequence: u64,
-    pub predecessor: Option<StableId>,
-    pub revision: StableId,
-    pub prior_revision: Option<StableId>,
-    pub before: Option<SnapshotRef>,
-    pub after: SnapshotRef,
-    pub changed_fields: Vec<String>,
-    pub actor: String,
-    pub request_id: StableId,
-    pub intent_digest: String,
-    pub etag: String,
-    pub outcome: SaveOutcome,
-    pub origin: Option<crate::threads::DiscussionOrigin>,
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone)]
-pub struct RecordSnapshot {
-    pub schema_version: SchemaVersion,
-    pub record: ReviewRecord,
-}
-
-/// Identifies one record type that the native review journal supports.
+/// Identifies one record type that native review supports.
 pub trait ReviewRecordKind {
     const KIND: NodeType;
 
     fn review_id(&self) -> &StableId;
-    fn review_schema_version(&self) -> SchemaVersion;
-    fn set_review_schema_version(&mut self, version: SchemaVersion);
 }
 
 /// The closed list of record kinds that native review evidence supports.
@@ -146,12 +91,6 @@ macro_rules! define_review_record {
                 }
             }
 
-            pub const fn schema_version(&self) -> SchemaVersion {
-                match self {
-                    $( Self::$variant(record) => record.schema_version, )*
-                }
-            }
-
             pub const fn as_requirement(&self) -> Option<&crate::Requirement> {
                 match self {
                     Self::Requirement(record) => Some(record),
@@ -173,14 +112,6 @@ macro_rules! define_review_record {
                 fn review_id(&self) -> &StableId {
                     &self.id
                 }
-
-                fn review_schema_version(&self) -> SchemaVersion {
-                    self.schema_version
-                }
-
-                fn set_review_schema_version(&mut self, version: SchemaVersion) {
-                    self.schema_version = version;
-                }
             }
         )*
     };
@@ -193,14 +124,35 @@ review_record_kinds!(define_review_record);
 pub struct RequirementEditState {
     pub etag: String,
     pub revision: Option<StableId>,
-    pub snapshot: Option<SnapshotRef>,
 }
 
-/// JSON text spans concatenate to the exact immutable snapshot document.
+/// One version of a record: a commit that changed the record in its graph
+/// record file, or the saved working copy when it differs from `HEAD`.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecordVersion {
+    /// The commit id, or `working` for the saved working copy.
+    pub id: StableId,
+    pub commit: Option<String>,
+    pub author: Option<String>,
+    /// Commit time in seconds since the Unix epoch.
+    pub committed_at: Option<i64>,
+    pub revision: StableId,
+    /// The id of the previous version, if any.
+    pub before: Option<StableId>,
+    pub changed_fields: Vec<String>,
+    pub outcome: SaveOutcome,
+    /// The Discussion outcome first recorded with this version.
+    pub origin: Option<crate::threads::DiscussionOrigin>,
+}
+
+/// JSON text spans concatenate to the canonical JSON of one record version,
+/// or of one field of it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvidencePage {
-    pub snapshot: SnapshotRef,
+    pub version: StableId,
     pub offset: u64,
     pub field: Option<String>,
     pub json_text: String,
@@ -229,7 +181,7 @@ const fn default_limit() -> usize {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewHistoryPage {
-    pub entries: Vec<ReviewEntry>,
+    pub entries: Vec<RecordVersion>,
     pub next_cursor: Option<String>,
 }
 
@@ -251,39 +203,6 @@ pub struct EvidenceQuery {
     pub offset: u64,
 }
 
-/// R1 Requirement entries keep their original representation in the shared journal.
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum JournalEntry {
-    Record(Box<ReviewEntry>),
-    Discussion(Box<crate::threads::DiscussionEntry>),
-    Cycle(Box<CycleEntry>),
-}
-impl JournalEntry {
-    pub const fn id(&self) -> &StableId {
-        match self {
-            Self::Record(e) => &e.id,
-            Self::Discussion(e) => &e.id,
-            Self::Cycle(e) => &e.id,
-        }
-    }
-    pub const fn scope_id(&self) -> &ScopeId {
-        match self {
-            Self::Record(e) => &e.scope_id,
-            Self::Discussion(e) => &e.scope_id,
-            Self::Cycle(e) => &e.scope_id,
-        }
-    }
-    pub const fn request_id(&self) -> &StableId {
-        match self {
-            Self::Record(e) => &e.request_id,
-            Self::Discussion(e) => &e.request_id,
-            Self::Cycle(e) => &e.request_id,
-        }
-    }
-}
-
 /// One decision-cycle fact: a submission, a decision, or a withdrawal.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -294,17 +213,16 @@ pub enum CycleFact {
     Withdrawn,
 }
 
-/// One committed decision-cycle fact is also its durable request receipt.
+/// The response to one decision-cycle write.
 ///
 /// The cycle never mutates a proposal, a disposition, or the record itself.
-/// Submission writes an immutable bound proposal, decision writes an immutable
-/// disposition, and this entry records which of the three happened, so the
-/// request can be replayed and the history read in order.
+/// Submission writes an immutable bound Proposal, decision writes an immutable
+/// Disposition, and withdrawal writes a Withdrawal. This receipt names the
+/// record that the write added and is not stored.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CycleEntry {
-    pub schema_version: SchemaVersion,
     pub scope_id: ScopeId,
     pub id: StableId,
     #[serde(
@@ -318,7 +236,7 @@ pub struct CycleEntry {
     /// The server-created key of a `Submitted` Proposal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proposal_key: Option<String>,
-    /// Submission and decision order for the addressed record.
+    /// The review cycle of the submission for the addressed record.
     pub sequence: u64,
     pub fact: CycleFact,
     /// The disposition a `Decided` fact recorded.
@@ -328,8 +246,6 @@ pub struct CycleEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feedback_message_id: Option<StableId>,
     pub actor: String,
-    pub request_id: StableId,
-    pub intent_digest: String,
 }
 
 /// A submission still waiting for a decision.
@@ -371,8 +287,9 @@ pub struct RequirementDecisionState {
     pub record_id: StableId,
     pub current_revision: Option<StableId>,
     pub pending: Option<PendingSubmission>,
-    /// The accepted decision whose revision matches current content. Editing
-    /// keeps past acceptances in `decisions` and leaves this empty.
+    /// The accepted decision whose revision matches current content. An edit
+    /// to other content leaves this empty and keeps past acceptances in
+    /// `decisions`.
     pub current_acceptance: Option<RecordedDecision>,
     /// Every terminal decision for the record, oldest first. Legacy unbound
     /// dispositions keep their place here.

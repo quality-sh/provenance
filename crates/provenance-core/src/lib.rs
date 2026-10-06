@@ -33,7 +33,7 @@ pub use model::{
     SuggestedArtifactChange, SynthesisPacket, Thread, ThreadParent, ThreadStatus, Topic,
     TopicStatus, UncertaintyLevel, UncertaintyRating, UnsupportedRecommendation,
     UnsupportedSpeculation, VerificationBinding, VerificationMethod, VerificationRun,
-    VerificationRunStatus, RESERVED_RECORD_IDS, SUPPORTED_SCHEMA_VERSION,
+    VerificationRunStatus, Withdrawal, RESERVED_RECORD_IDS, SUPPORTED_SCHEMA_VERSION,
 };
 pub use protocol::{EngineInfo, TargetAction, SDK_PROTOCOL_VERSION};
 

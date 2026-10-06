@@ -115,6 +115,7 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
             duplicate_of: None,
             superseded_by: None,
             record_revision: None,
+            actor: None,
             revises: None,
             revises_rejection: None,
         })

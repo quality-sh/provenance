@@ -197,15 +197,42 @@ pub(super) fn change_one_record(
 ) {
     let path = family.shard_path(layout, scope);
     match family {
-        ProjectionFamily::ReviewJournal => {
+        ProjectionFamily::Withdrawals => {
             let store = StateStore::new(layout.clone());
             let id = provenance_core::StableId::new("req_schads_overtime").unwrap();
             let etag = store.requirement_edit_state(scope, &id).unwrap().etag;
             store
                 .save_requirement(
                     serde_json::from_value(json!({
-                        "request_id":"fixture_review", "actor":"reviewer", "expected_etag":etag,
-                        "update":{"scope_id":scope,"id":id},"relationships":null
+                        "actor":"reviewer", "expected_etag":etag,
+                        "update":{"scope_id":scope,"id":id,"description":"Reviewed"},
+                        "relationships":null
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+            let pending = store
+                .requirement_decision_state(scope, &id)
+                .unwrap()
+                .pending
+                .unwrap();
+            store
+                .withdraw_record_review(
+                    serde_json::from_value(json!({
+                        "scope_id":scope, "actor":"reviewer",
+                        "proposal_id":pending.proposal_id, "declared_by":null, "reason":null
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+        ProjectionFamily::Discussions => {
+            StateStore::new(layout.clone())
+                .write_discussion(
+                    serde_json::from_value(json!({
+                        "scope_id":scope, "actor":"reviewer", "declared_by":null,
+                        "parent":{"node_type":"requirement","node_id":"req_schads_overtime"},
+                        "action":{"kind":"start","role":"user","body":"A concern"}
                     }))
                     .unwrap(),
                 )

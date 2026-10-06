@@ -1,7 +1,7 @@
 //! Stamp changed record content while the canonical publication lock is held.
 use camino::Utf8Path;
 use provenance_core::{
-    review::{ReviewRecord, ReviewRecordKind, REVIEW_SCHEMA_VERSION},
+    review::{ReviewRecord, ReviewRecordKind},
     NodeType, Stamp,
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -162,21 +162,6 @@ impl StateStore {
         Ok(())
     }
 
-    pub(crate) fn enroll_graph_record<T: GraphRecord>(
-        &self,
-        path: &Utf8Path,
-        id: &provenance_core::StableId,
-    ) -> anyhow::Result<T> {
-        self.mutate_graph_record(path, |records: &mut Vec<T>| {
-            let record = records
-                .iter_mut()
-                .find(|record| record.id() == id)
-                .ok_or_else(|| anyhow::anyhow!("created graph record is missing"))?;
-            record.set_review_schema_version(REVIEW_SCHEMA_VERSION);
-            Ok(record.clone())
-        })
-    }
-
     pub(crate) fn mutate_graph_record<T: GraphRecord>(
         &self,
         path: &Utf8Path,
@@ -230,7 +215,7 @@ impl StateStore {
             && has_stored_record
             && !crate::review::guard::writer_allows_path(path)
         {
-            return self.replace_native_records(path, replacement);
+            return self.replace_native_records(path, &replacement);
         }
         self.replace_graph_records_guarded(path, replacement)
             .map(|_| ())

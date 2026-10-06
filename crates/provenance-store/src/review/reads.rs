@@ -1,18 +1,14 @@
-use super::snapshot::evidence;
+use super::history::{evidence_page, VersionedRecord};
 use crate::operations::read_policy::ReadPolicy;
-use crate::operations::reader::{
-    self, Cursor, Live, Position, ReadContext, ReadSnapshot, PAGE_BYTES, RECORD_BYTES,
-};
+use crate::operations::reader::{self, Cursor, Live, Position, ReadContext, PAGE_BYTES};
 use camino::Utf8Path;
 use provenance_core::protocol::{read_failure::ReadFailure, Stamped};
-use provenance_core::review::{
-    EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryPage, ReviewHistoryQuery,
-};
-use provenance_core::{ScopeId, StableId};
+use provenance_core::review::{EvidencePage, EvidenceQuery, ReviewHistoryPage, ReviewHistoryQuery};
+use provenance_core::{NodeType, StableId};
 
 pub async fn read_history(
     repo: &Utf8Path,
-    scope: &ScopeId,
+    scope: &provenance_core::ScopeId,
     policy: ReadPolicy,
     query: ReviewHistoryQuery,
 ) -> anyhow::Result<Stamped<ReviewHistoryPage>> {
@@ -31,99 +27,87 @@ async fn history(
     ctx: &ReadContext,
     query: ReviewHistoryQuery,
 ) -> anyhow::Result<ReviewHistoryPage> {
-    let (cursor, mut position) = Cursor::open(
+    let (cursor, position) = Cursor::open(
         ctx,
         "review-history",
         &(&query.record_kind, &query.record_id, query.limit),
         query.cursor.as_deref(),
     )?;
     ctx.snapshot().bound_page_work().await?;
-    ctx.snapshot().attest("review_journal");
-    let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String, i64, i64)> = sqlx::query_as(
-        "SELECT id, sequence, length(CAST(payload AS BLOB)) FROM review_journal WHERE scope_id = ? AND kind IN ('requirement', 'record') AND record_kind = ? AND record_id = ? AND sequence > ? ORDER BY sequence LIMIT ?"
-    ).bind(ctx.snapshot().scope().as_str()).bind(query.record_kind.as_str()).bind(query.record_id.as_str()).bind(position.counter)
-        .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
-    drop(tx);
-    let mut more = keys.len() > query.limit;
+    let versions = versions(ctx, query.record_kind, query.record_id.clone()).await?;
+    let skip = usize::try_from(position.counter)?;
+    let mut more = versions.len() > skip + query.limit;
     let mut entries = Vec::new();
     let mut bytes = 0;
-    for (id, sequence, size) in keys.into_iter().take(query.limit) {
-        if size > i64::try_from(RECORD_BYTES)? {
-            return Err(ReadFailure::PageRecordTooLarge.into());
-        }
-        if bytes + usize::try_from(size)? > PAGE_BYTES - 16_384 {
+    let mut counter = position.counter;
+    for versioned in versions.into_iter().skip(skip).take(query.limit) {
+        let size = serde_json::to_vec(&versioned.version)?.len();
+        if bytes + size > PAGE_BYTES - 16_384 {
             more = true;
             break;
         }
-        let entry = ctx
-            .snapshot()
-            .review_entry(query.record_kind, &query.record_id, &id)
-            .await?;
-        bytes += serde_json::to_vec(&entry)?.len() + 1;
-        entries.push(entry);
-        position = Position {
-            counter: sequence,
-            ..Position::default()
-        };
+        bytes += size + 1;
+        entries.push(versioned.version);
+        counter += 1;
     }
     Ok(ReviewHistoryPage {
         entries,
-        next_cursor: more.then(|| cursor.encode(ctx, position)).transpose()?,
+        next_cursor: more
+            .then(|| {
+                cursor.encode(
+                    ctx,
+                    Position {
+                        counter,
+                        ..Position::default()
+                    },
+                )
+            })
+            .transpose()?,
     })
 }
 
-impl ReadSnapshot {
-    async fn review_entry(
-        &self,
-        kind: provenance_core::NodeType,
-        record: &StableId,
-        id: &str,
-    ) -> anyhow::Result<ReviewEntry> {
-        self.attest("review_journal");
-        let mut tx = self.connection().await;
-        let row: Option<(i64, Option<String>)> = sqlx::query_as(
-            "SELECT length(CAST(payload AS BLOB)), CASE WHEN length(CAST(payload AS BLOB)) <= ? THEN payload END FROM review_journal WHERE scope_id = ? AND kind IN ('requirement', 'record') AND record_kind = ? AND record_id = ? AND id = ?"
-        ).bind(i64::try_from(RECORD_BYTES)?).bind(self.scope().as_str()).bind(kind.as_str()).bind(record.as_str()).bind(id)
-            .fetch_optional(&mut **tx).await?;
-        drop(tx);
-        let (size, payload) = row.ok_or(ReadFailure::ResourceNotFound)?;
-        if size > i64::try_from(RECORD_BYTES)? {
-            return Err(ReadFailure::PageRecordTooLarge.into());
-        }
-        Ok(serde_json::from_str(&payload.unwrap())?)
-    }
+/// Reads the versions of one record from Git and the saved working copy.
+async fn versions(
+    ctx: &ReadContext,
+    kind: NodeType,
+    id: StableId,
+) -> anyhow::Result<Vec<VersionedRecord>> {
+    // Git history and the working copy are outside the projection stamp.
+    ctx.live(Live::Diff);
+    let store = ctx.live(Live::Canonical).store();
+    let scope = ctx.snapshot().scope().clone();
+    tokio::task::spawn_blocking(move || store.record_versions(&scope, kind, &id)).await?
 }
 
-/// Reads a bounded span from the immutable snapshot named by a pinned journal row.
+/// Reads a bounded span of one record version, or of the version before it.
 pub async fn read_evidence(
     repo: &Utf8Path,
-    scope: &ScopeId,
+    scope: &provenance_core::ScopeId,
     policy: ReadPolicy,
     query: EvidenceQuery,
 ) -> anyhow::Result<Stamped<EvidencePage>> {
     let answer = reader::answer(repo, scope, policy, move |ctx| {
         Box::pin(async move {
             ctx.snapshot().bound_page_work().await?;
-            let entry = ctx
-                .snapshot()
-                .review_entry(query.record_kind, &query.record_id, query.entry_id.as_str())
-                .await?;
-            let reference = if query.before {
-                entry
-                    .before
-                    .ok_or_else(|| anyhow::anyhow!("this change has no Before snapshot"))?
+            let versions = versions(ctx, query.record_kind, query.record_id.clone()).await?;
+            let index = versions
+                .iter()
+                .position(|versioned| versioned.version.id == query.entry_id)
+                .ok_or(ReadFailure::ResourceNotFound)?;
+            let selected = if query.before {
+                index
+                    .checked_sub(1)
+                    .ok_or_else(|| anyhow::anyhow!("this version has no Before version"))?
             } else {
-                entry.after
+                index
             };
-            let store = ctx.live(Live::Canonical).store();
-            let scope = ctx.snapshot().scope().clone();
-            tokio::task::spawn_blocking(move || {
-                store.with_repository_publication(|| {
-                    evidence(&store, &scope, reference, query.field, query.offset)
-                })
-            })
-            .await?
+            let versioned = &versions[selected];
+            evidence_page(
+                versioned.version.id.clone(),
+                &versioned.record,
+                query.field,
+                query.offset,
+            )
         })
     })
     .await?;

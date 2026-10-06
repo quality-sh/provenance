@@ -1,14 +1,11 @@
-use super::{guard, journal};
+use super::{classifier, guard};
 use crate::{
-    canonical_digest,
-    publication::with_staged_state,
+    review::publication::with_record_state,
     shards,
     state_store::{CreateRequirementInput, StateStore},
 };
 use provenance_core::{
-    review::{ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION},
-    threads::DiscussionOrigin,
-    Requirement,
+    review::RequirementEditState, threads::DiscussionOrigin, NodeType, Requirement,
 };
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
@@ -17,7 +14,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CreateReviewRequirement {
-    pub request_id: provenance_core::StableId,
     pub actor: String,
     pub create: CreateRequirementInput,
     pub origin: Option<DiscussionOrigin>,
@@ -31,30 +27,33 @@ impl StateStore {
     pub fn create_review_requirement(
         &self,
         input: CreateReviewRequirement,
-    ) -> anyhow::Result<ReviewEntry> {
-        self.create_review_requirement_with(input, |_, entry| Ok(entry))
+    ) -> anyhow::Result<RequirementEditState> {
+        self.create_review_requirement_with(input, |_, created| {
+            Self::record_edit_state_for_record(&created.into())
+        })
     }
 
     pub(crate) fn create_review_requirement_resource(
         &self,
         input: CreateReviewRequirement,
     ) -> anyhow::Result<super::RequirementResourceSnapshot> {
-        self.create_review_requirement_with(input, |store, entry| {
-            store.requirement_resource_snapshot_unlocked(&entry.scope_id, &entry.record_id)
+        self.create_review_requirement_with(input, |store, created| {
+            store.requirement_resource_snapshot_unlocked(&created.scope_id, &created.id)
         })
     }
 
     fn create_review_requirement_with<R>(
         &self,
         mut input: CreateReviewRequirement,
-        complete: impl FnOnce(&Self, ReviewEntry) -> anyhow::Result<R>,
+        complete: impl FnOnce(&Self, Requirement) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        let digest = normalize(&mut input)?;
+        normalize(&mut input)?;
         self.with_repository_publication(|| {
             let scope = &input.create.scope_id;
-            if let Some(receipt) = self.creation_receipt(&input, &digest)? {
-                return complete(self, receipt);
-            }
+            anyhow::ensure!(
+                self.manifest()?.scopes.iter().any(|s| s.id == *scope),
+                "review scope is not in the manifest"
+            );
             crate::write_error::ensure!(
                 AlreadyExists,
                 !self
@@ -63,7 +62,6 @@ impl StateStore {
                     .any(|r| r.id == input.create.id),
                 "Requirement already exists"
             );
-            self.validated_review_entries(scope)?;
             if let Some(origin) = &input.origin {
                 self.validate_discussion_origin(scope, origin)?;
             }
@@ -80,113 +78,40 @@ impl StateStore {
             let scope = scope.clone();
             let id = input.create.id.clone();
             let stamp = self.current_record_stamp()?;
-            with_staged_state(&self.layout, false, |layout| {
+            with_record_state(&self.layout, |layout| {
                 guard::with_writer(
                     &shards::requirements_path(layout, &scope),
                     id.as_str(),
                     || {
                         let staged = Self::staged(layout.clone(), stamp);
-                        let entry = staged.commit_creation(input, digest)?;
-                        complete(&staged, entry)
+                        let created = staged.commit_creation(input)?;
+                        complete(&staged, created)
                     },
                 )
             })
         })
     }
 
-    fn creation_receipt(
-        &self,
-        input: &CreateReviewRequirement,
-        digest: &str,
-    ) -> anyhow::Result<Option<ReviewEntry>> {
-        let scope = &input.create.scope_id;
-        anyhow::ensure!(
-            self.manifest()?.scopes.iter().any(|s| s.id == *scope),
-            "review scope is not in the manifest"
-        );
-        let records = self.list_requirements(scope)?;
-        let current = records
-            .iter()
-            .filter(|r| r.id == input.create.id)
-            .collect::<Vec<_>>();
-        anyhow::ensure!(current.len() <= 1, "duplicate Requirement identity");
-        if let Some(record) = current.first() {
-            anyhow::ensure!(record.scope_id == *scope, "Requirement scope mismatch");
-            super::owner_matches(record, None)?;
-        }
-        let path = journal::entry_path(&self.layout, scope, &input.request_id);
-        if !path.try_exists()? {
-            return Ok(None);
-        }
-        let entry = journal::read_entry(&self.layout, &path)?;
-        anyhow::ensure!(
-            !current.is_empty()
-                && entry.scope_id == *scope
-                && entry.record_id == input.create.id
-                && entry.request_id == input.request_id
-                && entry.actor == input.actor
-                && entry.intent_digest == digest,
-            "review request ID was reused with different intent"
-        );
-        Ok(Some(entry))
-    }
-
-    fn commit_creation(
-        &self,
-        input: CreateReviewRequirement,
-        intent_digest: String,
-    ) -> anyhow::Result<ReviewEntry> {
+    fn commit_creation(&self, input: CreateReviewRequirement) -> anyhow::Result<Requirement> {
         let scope = input.create.scope_id.clone();
-        let created = self.write_requirement(input.create)?;
-        let path = shards::requirements_path(&self.layout, &scope);
-        let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
-            let record = records.iter_mut().find(|r| r.id == created.id).unwrap();
-            record.schema_version = REVIEW_SCHEMA_VERSION;
-            Ok(record.clone())
-        })?;
+        let after = self.write_requirement(input.create)?;
         self.validate_graph_scope(&scope)?;
-        self.enroll_review_manifest()?;
-        let id = journal::new_id();
-        let entry = ReviewEntry {
-            schema_version: REVIEW_SCHEMA_VERSION,
-            scope_id: scope.clone(),
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: after.id.clone(),
-            sequence: 1,
-            predecessor: None,
-            prior_revision: None,
-            revision: journal::new_id(),
-            before: None,
-            after: journal::snapshot(&self.layout, &after.clone().into())?,
-            changed_fields: serde_json::to_value(&after)?
-                .as_object()
-                .unwrap()
-                .keys()
-                .filter(|k| k.as_str() != "schema_version")
-                .cloned()
-                .collect(),
-            actor: input.actor,
-            request_id: input.request_id,
-            intent_digest,
-            etag: journal::etag(&after.clone().into(), Some(&id))?,
-            id,
-            outcome: SaveOutcome::Created,
-            origin: input.origin,
-        };
-        anyhow::ensure!(
-            serde_json::to_vec(&entry)?.len() as u64 <= journal::ENTRY_BYTES,
-            "review receipt exceeds the entry byte budget"
-        );
-        journal::write_new(
-            &journal::entry_path(&self.layout, &scope, &entry.request_id),
-            &entry,
-        )?;
-        self.commit_automatic_submission(&after, &entry)?;
-        Ok(entry)
+        let revision = classifier::review_revision(NodeType::Requirement, &after)?;
+        if let Some(origin) = &input.origin {
+            self.add_discussion_outcome(
+                &scope,
+                origin,
+                NodeType::Requirement,
+                &after.id,
+                &revision,
+            )?;
+        }
+        self.commit_automatic_submission(&after, &input.actor, &revision)?;
+        Ok(after)
     }
 }
 
-fn normalize(input: &mut CreateReviewRequirement) -> anyhow::Result<String> {
+fn normalize(input: &mut CreateReviewRequirement) -> anyhow::Result<()> {
     anyhow::ensure!(
         !input.actor.trim().is_empty(),
         "invalid review request identity"
@@ -216,7 +141,5 @@ fn normalize(input: &mut CreateReviewRequirement) -> anyhow::Result<String> {
         input.create.origin_thread = Some(origin.thread_id.clone());
         input.create.origin_message = Some(origin.message_id.clone());
     }
-    Ok(canonical_digest::digest(
-        &canonical_digest::canonical_bytes(input)?,
-    ))
+    Ok(())
 }

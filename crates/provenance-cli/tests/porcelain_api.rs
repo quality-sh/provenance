@@ -456,5 +456,11 @@ fn directory_file(repo: &str, name: &str, content: &str) -> String {
 mod options;
 #[path = "porcelain_api/review_conflicts.rs"]
 mod review_conflicts;
+#[path = "porcelain_api/review_cycle.rs"]
+mod review_cycle;
+#[path = "porcelain_api/review_history.rs"]
+mod review_history;
+#[path = "porcelain_api/review_state_files.rs"]
+mod review_state_files;
 #[path = "porcelain_api/scope.rs"]
 mod scope;

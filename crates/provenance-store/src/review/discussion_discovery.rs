@@ -89,26 +89,24 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
             next_cursor: None,
         });
     }
-    for table in ["review_journal", "messages"] {
+    for table in ["discussions", "messages"] {
         ctx.snapshot().attest(table);
     }
     let mut sql = QueryBuilder::<Sqlite>::new(
-        "SELECT j.discussion_id,j.parent_type,j.parent_id,\
-         json_extract(j.payload,'$.status'),j.version,\
+        "SELECT d.discussion_id,json_extract(d.parent,'$.node_type'),\
+         json_extract(d.parent,'$.node_id'),d.status,d.version,\
          substr(CAST(m.body AS BLOB),1,",
     );
     sql.push_bind(i64::try_from(EXCERPT_PREFIX_BYTES)?);
     sql.push(
         "),length(CAST(m.body AS BLOB)) \
-         FROM review_journal j \
-         JOIN review_journal first ON first.scope_id=j.scope_id \
-           AND first.discussion_id=j.discussion_id AND first.version=1 \
-         JOIN messages m ON m.scope_id=first.scope_id AND m.id=first.message_id \
-         WHERE j.scope_id=",
+         FROM discussions d \
+         JOIN messages m ON m.scope_id=d.scope_id AND m.id=d.root_message_id \
+         WHERE d.scope_id=",
     );
     sql.push_bind(ctx.snapshot().scope().as_str());
-    sql.push(" AND j.discussion_id>").push_bind(&position.id);
-    sql.push(" AND j.parent_type IN (");
+    sql.push(" AND d.discussion_id>").push_bind(&position.id);
+    sql.push(" AND json_extract(d.parent,'$.node_type') IN (");
     {
         let mut separated = sql.separated(",");
         for kind in &kinds {
@@ -117,16 +115,15 @@ async fn list(ctx: &ReadContext, query: DiscussionListQuery) -> anyhow::Result<D
     }
     sql.push(")");
     if let Some(parent) = &query.parent {
-        sql.push(" AND j.parent_type=")
+        sql.push(" AND json_extract(d.parent,'$.node_type')=")
             .push_bind(super::discussion_state::discussion_kind_word(parent.node_type).unwrap());
-        sql.push(" AND j.parent_id=")
+        sql.push(" AND json_extract(d.parent,'$.node_id')=")
             .push_bind(parent.node_id.as_str());
     }
     if let Some(status) = status_word(query.status) {
-        sql.push(" AND json_extract(j.payload,'$.status')=")
-            .push_bind(status);
+        sql.push(" AND d.status=").push_bind(status);
     }
-    sql.push(" AND NOT EXISTS(SELECT 1 FROM review_journal newer WHERE newer.scope_id=j.scope_id AND newer.discussion_id=j.discussion_id AND newer.version>j.version) ORDER BY j.discussion_id LIMIT ")
+    sql.push(" ORDER BY d.discussion_id LIMIT ")
         .push_bind(i64::try_from(query.limit + 1)?);
     let mut tx = ctx.snapshot().connection().await;
     let rows: Vec<DiscussionListRow> = sql
@@ -210,21 +207,22 @@ async fn conversation(
         return Err(ReadFailure::ResourceNotFound.into());
     }
     ctx.snapshot().bound_page_work().await?;
-    ctx.snapshot().attest("review_journal");
+    ctx.snapshot().attest("discussions");
     let mut sql = QueryBuilder::<Sqlite>::new(
-        "SELECT parent_type,parent_id FROM review_journal WHERE scope_id=",
+        "SELECT json_extract(parent,'$.node_type'),json_extract(parent,'$.node_id') \
+         FROM discussions WHERE scope_id=",
     );
     sql.push_bind(ctx.snapshot().scope().as_str());
     sql.push(" AND discussion_id=")
         .push_bind(query.discussion_id.as_str());
-    sql.push(" AND parent_type IN (");
+    sql.push(" AND json_extract(parent,'$.node_type') IN (");
     {
         let mut separated = sql.separated(",");
         for kind in &kinds {
             separated.push_bind(*kind);
         }
     }
-    sql.push(") ORDER BY version DESC LIMIT 1");
+    sql.push(") LIMIT 1");
     let mut tx = ctx.snapshot().connection().await;
     let row: Option<(String, String)> = sql.build_query_as().fetch_optional(&mut **tx).await?;
     drop(tx);
@@ -236,7 +234,7 @@ async fn conversation(
     let DiscussionGroup::Addressed { discussion, .. } =
         super::discussion_reads::group(ctx, parent.clone(), query.discussion_id.clone()).await?
     else {
-        unreachable!("an addressed journal row has an addressed group")
+        unreachable!("a Discussion row has an addressed group")
     };
     let messages = super::discussion_messages::messages(
         ctx,

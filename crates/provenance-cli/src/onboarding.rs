@@ -19,7 +19,10 @@ it in the same change.
 - New obligation: `{command} rules create --scope default --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
-- To change a Requirement, Rule, or past decision, create a Proposal. A human decides each Proposal.
+- Change a Requirement, Rule, or Resolution with a guarded record update.
+  A content change opens a review submission unless a reviewer accepted that content.
+  Git supplies record history and change evidence. Proposal, Disposition, Withdrawal,
+  and Discussion records hold review state.
 - Before you ask a person to review a record, start the review host if it is not running:
   `{command} review --repo . --repository-id local --scope default --no-open`.
 - Open the record for the person with `{command} <record-id> --review-link`. The command
@@ -30,8 +33,8 @@ it in the same change.
 - Read the decision and review feedback with `{command} <record-id> get --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.
-- A guarded update after a rejection opens the new submission. Do not submit
-  or withdraw manually.
+- A guarded update after a rejection opens a new submission unless a reviewer
+  accepted that content. To end a pending review without a replacement, withdraw it.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a
   Topic also archives its Questions. Discussion history stays readable:
   `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope default --stdin --format json`

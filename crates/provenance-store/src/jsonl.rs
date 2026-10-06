@@ -65,8 +65,8 @@ where
         let _lock = AdvisoryLock::acquire(lock_path)?;
         let mut loaded = read_jsonl_unlocked(path)?;
         let result = mutate(loaded.records_mut())?;
-        crate::review::guard::protect_rows(path, loaded.records())?;
         let lines = loaded.into_lines(path)?;
+        guard_jsonl_lines(path, &lines)?;
         write_jsonl_lines_atomic_unlocked(path, &lines)
             .map_err(crate::write_error::publication_started)?;
         Ok(result)
@@ -141,9 +141,17 @@ pub fn write_preserved_jsonl_atomic(
 ) -> anyhow::Result<()> {
     let lines = crate::merge::preserved_lines(ours, theirs, records)?;
     with_state_publication(path, || {
-        crate::review::guard::protect_rows(path, records)?;
+        guard_jsonl_lines(path, &lines)?;
         write_jsonl_lines_atomic_unlocked(path, &lines)
     })
+}
+
+fn guard_jsonl_lines(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
+    let records = lines
+        .iter()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line))
+        .collect::<Result<Vec<_>, _>>()?;
+    crate::review::guard::protect_rows(path, &records)
 }
 
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {

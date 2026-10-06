@@ -134,16 +134,12 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
         .path()
         .join(".provenance/state/scopes/default/requirements/req.jsonl");
     let stored = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(
-        &path,
-        stored.replace(
-            // The CLI-created Requirement is enrolled, so it stands at the
-            // review journal schema version.
-            &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0),
-            &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0 + 1),
-        ),
-    )
-    .unwrap();
+    let planted = stored.replace(
+        &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+        &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0 + 1),
+    );
+    assert_ne!(planted, stored, "the fixture must change the stored marker");
+    std::fs::write(&path, planted).unwrap();
 
     let export = dir.path().join("export.json");
     Command::cargo_bin("provenance")
@@ -159,7 +155,7 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
             SUPPORTED_SCHEMA_VERSION.0
         )));
 
-    // The export refuses earlier, on the review-bearing portability gate.
+    // The export refuses on the same unsupported row.
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -175,9 +171,12 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
         ])
         .assert()
         .failure()
-        .stderr(contains(
-            "review-bearing scopes require lossless import/export support",
-        ));
+        .stderr(contains("record req_overtime"))
+        .stderr(contains(format!(
+            "has schema_version {}, but this build reads schema_version {} only",
+            REVIEW_SCHEMA_VERSION.0 + 1,
+            SUPPORTED_SCHEMA_VERSION.0
+        )));
 }
 
 /// Writing to a shard that holds a hand-edited record changes nothing.
@@ -203,16 +202,16 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
     let path = dir
         .path()
         .join(".provenance/state/scopes/default/requirements/req.jsonl");
-    let planted = std::fs::read_to_string(&path)
-        .unwrap()
-        .replace(
-            &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0),
-            &format!("\"schema_version\":{} ", REVIEW_SCHEMA_VERSION.0 + 1),
-        )
-        .replace(
-            "\"statement\"",
-            "\"unknown_to_this_build\":\"keep me\",\"statement\"",
-        );
+    let stored = std::fs::read_to_string(&path).unwrap();
+    let planted = stored.replace(
+        &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+        &format!("\"schema_version\":{} ", REVIEW_SCHEMA_VERSION.0 + 1),
+    );
+    assert_ne!(planted, stored, "the fixture must change the stored marker");
+    let planted = planted.replace(
+        "\"statement\"",
+        "\"unknown_to_this_build\":\"keep me\",\"statement\"",
+    );
     std::fs::write(&path, &planted).unwrap();
 
     Command::cargo_bin("provenance")

@@ -11,16 +11,10 @@ fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
 }
 
-fn write_for(
-    kind: NodeType,
-    node: &str,
-    request: &str,
-    declared_by: &serde_json::Value,
-) -> WriteDiscussion {
+fn write_for(kind: NodeType, node: &str, declared_by: &serde_json::Value) -> WriteDiscussion {
     serde_json::from_value(json!({
         "scope_id": "default",
         "parent": {"node_type": kind, "node_id": node},
-        "request_id": request,
         "actor": "ben",
         "declared_by": declared_by,
         "action": {"kind": "start", "role": "user", "body": "A concern"}
@@ -114,11 +108,11 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
         } else {
             json!(null)
         };
-        let started: provenance_core::threads::DiscussionEntry = store
+        let started: provenance_core::threads::Discussion = store
             .write_discussion(
                 serde_json::from_value(json!({
                     "scope_id": "default", "parent": parent,
-                    "request_id": format!("{node}_start"), "actor": "ben",
+                    "actor": "ben",
                     "declared_by": declared_by,
                     "action": {"kind": "start", "role": "user", "body": "A concern"}
                 }))
@@ -131,7 +125,7 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
             .write_discussion(
                 serde_json::from_value(json!({
                     "scope_id": "default", "parent": parent,
-                    "request_id": format!("{node}_reply"), "actor": "ben",
+                    "actor": "ben",
                     "declared_by": declared_by,
                     "action": {"kind": "reply", "discussion_id": started.discussion_id,
                                "expected_version": 1, "role": "user", "body": "A reply"}
@@ -144,7 +138,7 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
             .write_discussion(
                 serde_json::from_value(json!({
                     "scope_id": "default", "parent": parent,
-                    "request_id": format!("{node}_status"), "actor": "ben",
+                    "actor": "ben",
                     "declared_by": declared_by,
                     "action": {"kind": "set_status", "discussion_id": started.discussion_id,
                                "expected_version": 2, "status": "resolved"}
@@ -158,7 +152,7 @@ fn every_kind_starts_replies_and_resolves_a_concern() {
     assert_eq!(threads.len(), 6);
     assert!(threads
         .iter()
-        .all(|thread| thread.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION));
+        .all(|thread| thread.schema_version == provenance_core::SUPPORTED_SCHEMA_VERSION));
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 12);
 }
 
@@ -174,12 +168,7 @@ fn parent_ownership_and_existence_are_per_kind() {
     ] {
         assert!(
             store
-                .write_discussion(write_for(
-                    kind,
-                    node,
-                    &format!("wrong_{node}"),
-                    &json!("other")
-                ))
+                .write_discussion(write_for(kind, node, &json!("other")))
                 .is_err(),
             "{node} refuses a foreign declared owner"
         );
@@ -188,7 +177,6 @@ fn parent_ownership_and_existence_are_per_kind() {
         .write_discussion(write_for(
             NodeType::Resolution,
             "res_award",
-            "owned",
             &json!("maker"),
         ))
         .unwrap();
@@ -198,34 +186,19 @@ fn parent_ownership_and_existence_are_per_kind() {
     ] {
         assert!(
             store
-                .write_discussion(write_for(
-                    kind,
-                    node,
-                    &format!("claimed_{node}"),
-                    &json!("someone")
-                ))
+                .write_discussion(write_for(kind, node, &json!("someone")))
                 .is_err(),
             "{node} refuses a declared owner"
         );
         store
-            .write_discussion(write_for(kind, node, &format!("open_{node}"), &json!(null)))
+            .write_discussion(write_for(kind, node, &json!(null)))
             .unwrap_or_else(|error| panic!("{node}: {error}"));
     }
     assert!(store
-        .write_discussion(write_for(
-            NodeType::Source,
-            "source_missing",
-            "ghost",
-            &json!(null)
-        ))
+        .write_discussion(write_for(NodeType::Source, "source_missing", &json!(null)))
         .is_err());
     assert!(store
-        .write_discussion(write_for(
-            NodeType::Domain,
-            "domain_missing",
-            "domain",
-            &json!(null)
-        ))
+        .write_discussion(write_for(NodeType::Domain, "domain_missing", &json!(null)))
         .is_err());
 }
 
@@ -248,7 +221,6 @@ fn legacy_containers_stay_readable_beside_addressed_discussions() {
         .write_discussion(write_for(
             NodeType::Question,
             "question_award",
-            "addressed",
             &json!(null),
         ))
         .unwrap();
@@ -262,7 +234,7 @@ fn legacy_containers_stay_readable_beside_addressed_discussions() {
     assert_eq!(containers.len(), 1);
     assert_eq!(
         containers[0].schema_version,
-        provenance_core::review::REVIEW_SCHEMA_VERSION
+        provenance_core::SUPPORTED_SCHEMA_VERSION
     );
     assert_eq!(store.list_messages(&scope()).unwrap().len(), 2);
 }

@@ -2,7 +2,7 @@ use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use camino::Utf8Path;
 use provenance_core::{
     review::{CycleEntry, CycleFact},
-    DispositionDecision, NodeType, PromotionState, ScopeId, StableId,
+    DispositionDecision, PromotionState, ScopeId, StableId,
 };
 use serde_json::{json, Value};
 
@@ -26,16 +26,17 @@ fn fixture() -> tempfile::TempDir {
         .unwrap();
     let etag = store.requirement_edit_state(&scope(), &req()).unwrap().etag;
     store
-        .save_requirement(serde_json::from_value(json!({"request_id":"fixture-enroll","actor":"agent","expected_etag":etag,"update":{"scope_id":"default","id":"req_a"},"relationships":null})).unwrap())
+        .save_requirement(serde_json::from_value(json!({"actor":"agent","expected_etag":etag,"update":{"scope_id":"default","id":"req_a"},"relationships":null})).unwrap())
         .unwrap();
     temp
 }
-fn edit(store: &StateStore, request: &str, statement: &str) -> StableId {
+fn edit(store: &StateStore, _request: &str, statement: &str) -> StableId {
     let etag = store.requirement_edit_state(&scope(), &req()).unwrap().etag;
     store
-        .save_requirement(serde_json::from_value(json!({"request_id":request,"actor":"agent","expected_etag":etag,"update":{"scope_id":"default","id":"req_a","statement":statement},"relationships":null})).unwrap())
+        .save_requirement(serde_json::from_value(json!({"actor":"agent","expected_etag":etag,"update":{"scope_id":"default","id":"req_a","statement":statement},"relationships":null})).unwrap())
         .unwrap()
         .revision
+        .unwrap()
 }
 fn submit(
     store: &StateStore,
@@ -97,16 +98,11 @@ fn enrolled() -> (tempfile::TempDir, StateStore, StableId, StableId) {
 fn state(store: &StateStore) -> provenance_core::review::RequirementDecisionState {
     store.requirement_decision_state(&scope(), &req()).unwrap()
 }
-fn automatic_submission(store: &StateStore) -> CycleEntry {
-    let proposal = state(store).pending.unwrap().proposal_id;
-    store
-        .cycle_entries(&scope())
-        .unwrap()
-        .into_iter()
-        .find(|entry| entry.proposal_id == proposal && entry.fact == CycleFact::Submitted)
-        .unwrap()
+/// The submission that the last content edit opened.
+fn automatic_submission(store: &StateStore) -> provenance_core::review::PendingSubmission {
+    state(store).pending.unwrap()
 }
-fn binding_of(store: &StateStore, proposal: &StableId) -> (String, String) {
+fn binding_of(store: &StateStore, proposal: &StableId) -> String {
     let card = store
         .list_proposal_definitions(&scope())
         .unwrap()
@@ -114,7 +110,7 @@ fn binding_of(store: &StateStore, proposal: &StableId) -> (String, String) {
         .find(|p| p.id == *proposal)
         .unwrap();
     let binding = card.record_revision.unwrap();
-    (binding.revision.as_str().to_owned(), binding.content_digest)
+    binding.revision.as_str().to_owned()
 }
 /// Asserts a review operation is refused for the stated reason.
 fn refused<T: std::fmt::Debug>(attempt: anyhow::Result<T>, needle: &str) {
@@ -131,7 +127,7 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
     let r1 = edit(&store, "edit-1", "Statement v1");
     let proposal_1 = automatic_submission(&store).proposal_id;
-    let (prop1_revision, prop1_digest) = binding_of(&store, &proposal_1);
+    let prop1_revision = binding_of(&store, &proposal_1);
     assert_eq!(prop1_revision, r1.as_str());
     assert_eq!(state(&store).pending.unwrap().revision, r1);
 
@@ -162,10 +158,10 @@ fn full_cycle_persists_exact_versions_without_lifecycle_change() {
     // through the human existing-artifact path.
     let r2 = edit(&store, "edit-2", "Revised statement");
     let proposal_2 = automatic_submission(&store).proposal_id;
-    let (prop2_revision, prop2_digest) = binding_of(&store, &proposal_2);
+    let prop2_revision = binding_of(&store, &proposal_2);
     assert_eq!(prop2_revision, r2.as_str());
     assert_ne!(
-        prop1_digest, prop2_digest,
+        prop1_revision, prop2_revision,
         "each submission binds its exact revision"
     );
     let approval = decide(
@@ -212,16 +208,19 @@ fn assert_lifecycle_and_proposals_unchanged(store: &StateStore, statement: &str)
 }
 
 #[test]
-/// Implementation aid: pins submission guards before the review-cycle state is refactored.
-fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
+/// Implementation aid: a direct submission cannot duplicate a pending review.
+fn submission_gates_refuse_a_second_pending_record() {
     let (_temp, store, _, _) = enrolled();
     refused(
         submit(&store, None, None),
         "already has a pending review submission",
     );
     assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 1);
+}
 
-    // Seed an unenrolled Requirement.
+/// Implementation aid: submissions do not require format enrolment.
+#[test]
+fn submission_accepts_a_record_without_format_enrolment() {
     let fresh = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(fresh.path()).unwrap());
     crate::test_support::allow_reviewer(&layout);
@@ -229,7 +228,12 @@ fn submission_gates_refuse_a_second_pending_or_unrevised_record() {
     store
         .write_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"Statement v0","status":"discovery","depends_on":[],"supersedes":[]})).unwrap())
         .unwrap();
-    refused(submit(&store, None, None), "requires a review revision");
+    let submitted = submit(&store, None, None).unwrap();
+    assert_eq!(submitted.fact, CycleFact::Submitted);
+    assert_eq!(
+        state(&store).pending.unwrap().revision,
+        state(&store).current_revision.unwrap()
+    );
 }
 
 #[test]
@@ -440,51 +444,6 @@ fn withdrawal_allows_a_fresh_review_cycle() {
     refused(
         withdraw(&store, &proposal_2),
         "no longer current and pending",
-    );
-}
-
-#[test]
-/// Implementation aid: keeps JavaScript-safe receipt ordering within its numeric budget.
-fn review_finding_withdrawn_and_resubmitted_receipts_have_safe_sequences() {
-    let temp = fixture();
-    let store = open(Utf8Path::from_path(temp.path()).unwrap());
-    edit(&store, "edit-1", "Statement v1");
-    let proposal = state(&store).pending.unwrap().proposal_id;
-
-    let withdrawn = withdraw(&store, &proposal).unwrap();
-    let resubmitted = submit(&store, None, None).unwrap();
-
-    assert!(withdrawn.sequence < resubmitted.sequence);
-    assert!(resubmitted.sequence < (1_u64 << 53));
-}
-
-#[test]
-/// Implementation aid: rejects forged journal addresses before decision-state reads.
-fn cycle_receipt_refuses_a_different_record_kind_than_its_proposal() {
-    let (_temp, store, _, proposal) = enrolled();
-    let submitted = automatic_submission(&store);
-    let forged = CycleEntry {
-        id: super::journal::new_id(),
-        record_kind: NodeType::Source,
-        sequence: submitted.sequence + 1,
-        fact: CycleFact::Withdrawn,
-        request_id: super::journal::new_id(),
-        intent_digest: "sha256:forged-kind".into(),
-        ..submitted
-    };
-    super::decision_state::write_receipt(&store, &forged).unwrap();
-
-    refused(
-        store.validated_cycle_entries(&scope()),
-        "cycle entry address does not match its proposal target",
-    );
-    refused(
-        store.requirement_decision_state(&scope(), &req()),
-        "cycle entry address does not match its proposal target",
-    );
-    refused(
-        withdraw(&store, &proposal),
-        "cycle entry address does not match its proposal target",
     );
 }
 
