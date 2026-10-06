@@ -11,6 +11,11 @@ export interface ReviewMountOptions extends ReviewConfig {
   readonly focusId?: string;
 }
 
+/** Tells the person why the page did not sign in and how to get a new review link. */
+export const CONNECTION_REFUSED =
+  'Connection refused. This review link was used, expired, or is for a different review host. ' +
+  'To get a new link, run `provenance <record-id> --review-link`.';
+
 /** Keeps the credential in memory and lets only the latest connection take effect. */
 export function createSession(view: {
   mount(options: ReviewMountOptions): () => void;
@@ -36,7 +41,7 @@ export function createSession(view: {
         view.status(`Connected · ${config.repositoryId} / ${config.scope}`);
       } catch {
         if (request !== generation) return;
-        view.status('Connection refused. Enter the access token from this host session.');
+        view.status(CONNECTION_REFUSED);
       }
     },
     open(rootId: string, focusId?: string) {

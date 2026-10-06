@@ -1,54 +1,60 @@
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setImmediate } from 'node:timers/promises';
-import test from 'node:test';
 import { bootstrapReviewPage, type BrowserElement } from './bootstrap.ts';
 import type { ReviewMountOptions } from './session.ts';
 
-function page() {
-  const listeners = new Map<string, (event: { preventDefault(): void }) => void>();
-  const elements = new Map<string, BrowserElement>();
-  for (const id of ['root', 'access', 'selection', 'credential', 'requirement', 'status']) {
-    elements.set(id, {
-      hidden: false, textContent: '', value: '',
-      addEventListener(name, listener) { listeners.set(`${id}:${name}`, listener); },
-      focus() {},
-    });
-  }
-  const config = {
-    endpoint: 'http://127.0.0.1:1234', repositoryId: 'repo', scope: 'default',
-    dispositionActorIds: ['maintainer'],
-  };
-  const requests: unknown[] = [];
-  const mounted: ReviewMountOptions[] = [];
-  bootstrapReviewPage({
-    document: { getElementById: id => elements.get(id) },
-    location: { origin: config.endpoint, search: '?root=req_root' },
-    async fetch(this: unknown, path, init) {
-      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
-      requests.push({ path, init });
-      return { ok: true, json: async () => config };
-    },
-    mount(_root, options) { mounted.push(options); return () => {}; },
-  });
-  return {
-    config, requests, mounted, elements,
-    async connect(token: string) {
-      elements.get('credential')!.value = token;
-      listeners.get('access:submit')!({ preventDefault() {} });
-      await setImmediate();
-    },
-  };
+const origin = 'http://127.0.0.1:1234';
+const config = { endpoint: origin, repositoryId: 'repo', scope: 'default', dispositionActorIds: ['maintainer'] };
+
+function fakeElement(): BrowserElement {
+  return { hidden: false, textContent: null, value: '', addEventListener() {}, focus() {} };
 }
 
-// Regression aid: no Rule covers fetch receivers. The fake rejects the receiver
-// that caused valid credentials to fail when the page loaded its configuration.
+function launchPage() {
+  const events: string[] = [];
+  const receivers: unknown[] = [];
+  const mounted: ReviewMountOptions[] = [];
+  const elements = new Map(['root', 'selection', 'requirement', 'status'].map(id => [id, fakeElement()]));
+  let mountedPage!: () => void;
+  const mounting = new Promise<void>(resolve => { mountedPage = resolve; });
+  bootstrapReviewPage({
+    document: { getElementById: id => elements.get(id) },
+    location: { origin, pathname: '/', search: '?root=req_root&focus=rule_child', hash: '#launch=code-1' },
+    history: { replaceState(_data, _unused, url) { events.push(`address ${url}`); } },
+    async fetch(this: unknown, path, init) {
+      receivers.push(this);
+      events.push(`fetch ${path} ${init.body ?? ''}`.trim());
+      const body = path === '/review-launch/session' ? { bearer: 'session-bearer' } : config;
+      return { ok: true, json: async () => body };
+    },
+    mount(_root, options) { mounted.push(options); mountedPage(); return () => {}; },
+  });
+  return { events, receivers, mounted, mounting };
+}
+
+// Implementation aid: fake page boundaries check that bootstrap passes the session to the renderer.
+test('a launch link mounts the record with the redeemed session', async () => {
+  const page = launchPage();
+  await page.mounting;
+  assert.deepEqual(page.mounted, [
+    { ...config, bearer: 'session-bearer', rootId: 'req_root', focusId: 'rule_child' },
+  ]);
+});
+
+// Implementation aid: security hardening keeps the code out of history and the Referer value.
+test('the code leaves the address bar before the exchange', async () => {
+  const page = launchPage();
+  await page.mounting;
+  assert.deepEqual(page.events.slice(0, 2), [
+    'address /?root=req_root&focus=rule_child',
+    'fetch /review-launch/session {"code":"code-1"}',
+  ]);
+});
+
+// Regression aid: no Rule covers fetch receivers. A browser throws "Illegal invocation"
+// when the page calls fetch with another receiver, and the page then fails to connect.
 test('the page loads its configuration with a browser-compatible fetch receiver', async () => {
-  const fixture = page();
-  await fixture.connect('secret');
-  assert.equal(fixture.elements.get('status')!.textContent, 'Connected · repo / default');
-  assert.deepEqual(fixture.requests, [{
-    path: '/review-config',
-    init: { headers: { authorization: 'Bearer secret' }, redirect: 'error', cache: 'no-store' },
-  }]);
-  assert.deepEqual(fixture.mounted, [{ ...fixture.config, bearer: 'secret', rootId: 'req_root' }]);
+  const page = launchPage();
+  await page.mounting;
+  assert.deepEqual(page.receivers, [undefined, undefined]);
 });

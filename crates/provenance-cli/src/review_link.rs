@@ -1,11 +1,14 @@
 //! Builds reviewer-facing URLs from verified review hosts and canonical document reads.
 
+use anyhow::Context as _;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use provenance_porcelain::get::{GetInput, View};
+use provenance_transport::local_host::{DiscoveredLocalHost, LAUNCH_CODE_ROUTE};
 use serde::Serialize;
 use serde_json::Value;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct AffectedReviewRecord {
@@ -17,7 +20,16 @@ pub struct AffectedReviewRecord {
 struct LinkOutput {
     review_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    opened: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<String>,
+}
+
+/// The review document of a record and the verified host that serves it, if one runs.
+struct ReviewTarget {
+    host: Option<DiscoveredLocalHost>,
+    root: StableId,
+    focus: Option<String>,
 }
 
 #[rule("rule_agent_review_request_includes_link")]
@@ -25,6 +37,7 @@ pub async fn print(
     context: &RepoContext,
     record_id: &str,
     format: Option<provenance_cli::porcelain::OutputFormat>,
+    no_open: bool,
 ) -> anyhow::Result<()> {
     let host = context.local_host()?;
     let record = host
@@ -32,7 +45,7 @@ pub async fn print(
         .get()
         .get(GetInput::new(record_id, View::Record))
         .await?;
-    let output = link_output(
+    let target = review_target(
         context,
         &AffectedReviewRecord {
             kind: record.record.node_type(),
@@ -41,6 +54,18 @@ pub async fn print(
     )
     .await?
     .ok_or_else(|| anyhow::anyhow!("record {record_id} is not in a Requirement review document"))?;
+    let output = match &target.host {
+        Some(host) => opened_output(
+            launch_link(host, &target)?,
+            plain_link(host, &target),
+            no_open,
+        ),
+        None => LinkOutput {
+            review_url: None,
+            opened: None,
+            message: Some(start_message(context)),
+        },
+    };
     if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
         crate::output::print_json(&output)
     } else {
@@ -75,22 +100,46 @@ async fn try_annotate_write(
     affected: &AffectedReviewRecord,
     value: &mut Value,
 ) -> anyhow::Result<()> {
-    let Some(output) = link_output(context, affected).await? else {
+    let Some(target) = review_target(context, affected).await? else {
         return Ok(());
     };
-    if let Some(url) = output.review_url {
-        value["data"]["review_url"] = Value::String(url);
-    } else if let Some(message) = output.message {
-        value["data"]["review_message"] = Value::String(message);
+    match &target.host {
+        Some(host) => value["data"]["review_url"] = Value::String(plain_link(host, &target)),
+        None => value["data"]["review_message"] = Value::String(start_message(context)),
     }
     Ok(())
 }
 
-/// Builds the direct record link that an agent gives to a person for review.
-async fn link_output(
+/// Opens the launch link, or puts it in the output for the caller when the CLI cannot open it.
+#[rule("rule_review_link_printed_when_not_opened")]
+fn opened_output(launch: url::Url, plain: String, no_open: bool) -> LinkOutput {
+    match crate::browser::open_or_print(&launch, no_open) {
+        crate::browser::Opening::Opened => LinkOutput {
+            review_url: Some(plain),
+            opened: Some(true),
+            message: None,
+        },
+        crate::browser::Opening::Printed(_) => LinkOutput {
+            review_url: Some(launch.into()),
+            opened: Some(false),
+            message: None,
+        },
+    }
+}
+
+fn plain_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> String {
+    build_url(
+        host.endpoint(),
+        target.root.as_str(),
+        target.focus.as_deref(),
+    )
+}
+
+/// Finds the review document that holds the record and the host that can show it.
+async fn review_target(
     context: &RepoContext,
     record: &AffectedReviewRecord,
-) -> anyhow::Result<Option<LinkOutput>> {
+) -> anyhow::Result<Option<ReviewTarget>> {
     let roots = provenance_store::operations::queries::containing_review_documents(
         Some(context.repo.clone()),
         &context.scope_id()?,
@@ -114,18 +163,12 @@ async fn link_output(
                 .join(", ")
         );
     };
-    let Some(host) =
-        provenance_transport::local_host::discover(context.repo.as_std_path(), &context.scope)?
-    else {
-        return Ok(Some(LinkOutput {
-            review_url: None,
-            message: Some(start_message(context)),
-        }));
-    };
-    let focus = (root.as_str() != record.id).then_some(record.id.as_str());
-    Ok(Some(LinkOutput {
-        review_url: Some(build_url(host.endpoint(), root.as_str(), focus)),
-        message: None,
+    let host =
+        provenance_transport::local_host::discover(context.repo.as_std_path(), &context.scope)?;
+    Ok(Some(ReviewTarget {
+        host,
+        root: root.clone(),
+        focus: (root.as_str() != record.id).then(|| record.id.clone()),
     }))
 }
 
@@ -134,6 +177,30 @@ fn start_message(context: &RepoContext) -> String {
         "No review host is running. Start it with `provenance review --repo {} --repository-id local --scope {}`.",
         context.repo, context.scope
     )
+}
+
+/// Adds a single-use launch code that signs the review page in when the link opens.
+#[rule("rule_review_link_opens_signed_in")]
+fn launch_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> anyhow::Result<url::Url> {
+    let key = crate::review::launch::LaunchKey::read(host.instance_nonce())?;
+    let mut url = host.endpoint().clone();
+    url.set_path(LAUNCH_CODE_ROUTE);
+    let response = ureq::AgentBuilder::new()
+        .redirects(0)
+        .timeout(Duration::from_secs(5))
+        .build()
+        .post(url.as_str())
+        .set("Content-Type", "application/json")
+        .send_string(&serde_json::json!({ "launchKey": key }).to_string())
+        .context("the review host did not issue a launch code")?;
+    let body: Value = serde_json::from_str(&response.into_string()?)?;
+    let code = body["code"]
+        .as_str()
+        .filter(|code| code.len() == 64 && code.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .context("the review host sent a launch code that is not valid")?;
+    let mut link = url::Url::parse(&plain_link(host, target))?;
+    link.set_fragment(Some(&format!("launch={code}")));
+    Ok(link)
 }
 
 /// Puts the review document and optional focused record into the review URL.

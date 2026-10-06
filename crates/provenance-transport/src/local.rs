@@ -121,7 +121,8 @@ fn single<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     Some(value)
 }
 
-fn constant_time_eq(expected: &[u8], supplied: &[u8]) -> bool {
+/// Compares a secret with a supplied value without an early exit on the first different byte.
+pub fn constant_time_eq(expected: &[u8], supplied: &[u8]) -> bool {
     let mut difference = expected.len() ^ supplied.len();
     for (index, expected_byte) in expected.iter().enumerate() {
         let supplied_byte = supplied.get(index).copied().unwrap_or_default();
