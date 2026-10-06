@@ -1,3 +1,5 @@
+use super::graph_index::GraphIndex;
+use super::record_ref::RecordRef;
 use provenance_core::model::relations::RecordFront;
 use provenance_core::{
     Boundary, Contribution, Domain, NodeType, Question, Requirement, Resolution, Rule, ScopeId,
@@ -37,146 +39,93 @@ impl GapGraph<'_> {
     }
 }
 
-/// Read-only joins over a [`GapGraph`].
+/// Typed lookups and graph joins over a [`GapGraph`].
 ///
-/// Gap policy is written against these helpers, and they are the single home
-/// for the traversals the wiki assembler needs too, so both readers answer
-/// "what resolves this?" and "what did this produce?" the same way.
+/// Gap policy is written against these helpers, and they are the single
+/// home for the traversals the wiki assembler needs too, so both readers
+/// answer "what resolves this?" and "what did this produce?" the same
+/// way. Constructing the query builds one index over the graph; every
+/// lookup then answers from that index in the record order of the
+/// underlying vectors, and never rescans them per query.
 pub struct GraphQuery<'a, 'graph> {
     pub graph: &'a GapGraph<'graph>,
+    pub(super) index: GraphIndex<'graph>,
 }
 
 impl<'a, 'graph> GraphQuery<'a, 'graph> {
-    pub const fn new(graph: &'a GapGraph<'graph>) -> Self {
-        Self { graph }
-    }
-
-    pub fn source_exists(&self, id: &StableId) -> bool {
-        self.graph.sources.iter().any(|source| source.id == *id)
-    }
-
-    pub fn requirement_exists(&self, id: &StableId) -> bool {
-        self.graph
-            .requirements
-            .iter()
-            .any(|requirement| requirement.id == *id)
-    }
-
-    pub fn resolution_exists(&self, id: &StableId) -> bool {
-        self.graph
-            .resolutions
-            .iter()
-            .any(|resolution| resolution.id == *id)
-    }
-
-    pub fn topic_exists(&self, id: &StableId) -> bool {
-        self.graph.topics.iter().any(|topic| topic.id == *id)
-    }
-
-    pub fn node_exists(&self, node_type: NodeType, id: &StableId) -> bool {
-        match node_type {
-            NodeType::Source => self.source_exists(id),
-            NodeType::Requirement => self.requirement_exists(id),
-            NodeType::Resolution => self.resolution_exists(id),
-            NodeType::Rule => self.graph.rules.iter().any(|rule| rule.id == *id),
-            NodeType::Topic => self.topic_exists(id),
-            NodeType::Question => self
-                .graph
-                .questions
-                .iter()
-                .any(|question| question.id == *id),
-            NodeType::Domain => self.graph.domains.iter().any(|domain| domain.id == *id),
-            NodeType::Boundary => self
-                .graph
-                .boundaries
-                .iter()
-                .any(|boundary| boundary.id == *id),
+    pub fn new(graph: &'a GapGraph<'graph>) -> Self {
+        Self {
+            graph,
+            index: GraphIndex::new(graph),
         }
     }
 
-    /// The resolutions whose `requirement_ids` name the requirement.
-    pub fn resolving_resolutions(&self, requirement_id: &StableId) -> Vec<&'graph Resolution> {
-        self.graph
-            .resolutions
+    /// The first record holding the id under the node kind, in record
+    /// order. Ids are kind-qualified: a Requirement and a Resolution
+    /// sharing an id are two distinct records.
+    pub fn find(&self, node_type: NodeType, id: &str) -> Option<RecordRef<'graph>> {
+        let position = *self.index.records_with_id(node_type, id).first()?;
+        Some(self.record_at(node_type, position))
+    }
+
+    /// Every record holding the id under the node kind, in record order.
+    /// Duplicate records with one id stay distinct rows.
+    pub fn all(&self, node_type: NodeType, id: &str) -> Vec<RecordRef<'graph>> {
+        self.index
+            .records_with_id(node_type, id)
             .iter()
-            .filter(|resolution| resolution.requirement_ids.contains(requirement_id))
+            .map(|position| self.record_at(node_type, *position))
             .collect()
     }
 
-    /// The rules a requirement produces: named in `requirement_ids`, or
-    /// named in `resolution_ids` by a resolution that resolves it.
-    pub fn produced_rules_for_requirement(&self, requirement_id: &StableId) -> Vec<&'graph Rule> {
-        let resolving = self.resolving_resolutions(requirement_id);
-        self.graph
-            .rules
-            .iter()
-            .filter(|rule| {
-                rule.requirement_ids.contains(requirement_id)
-                    || rule.resolution_ids.iter().any(|resolution| {
-                        resolving
-                            .iter()
-                            .any(|resolving| resolving.id == *resolution)
-                    })
-            })
-            .collect()
+    fn record_at(&self, node_type: NodeType, position: usize) -> RecordRef<'graph> {
+        match node_type {
+            NodeType::Source => RecordRef::Source(&self.graph.sources[position]),
+            NodeType::Requirement => RecordRef::Requirement(&self.graph.requirements[position]),
+            NodeType::Resolution => RecordRef::Resolution(&self.graph.resolutions[position]),
+            NodeType::Rule => RecordRef::Rule(&self.graph.rules[position]),
+            NodeType::Topic => RecordRef::Topic(&self.graph.topics[position]),
+            NodeType::Question => RecordRef::Question(&self.graph.questions[position]),
+            NodeType::Domain => RecordRef::Domain(&self.graph.domains[position]),
+            NodeType::Boundary => RecordRef::Boundary(&self.graph.boundaries[position]),
+        }
     }
 
-    pub fn produced_rules_for_resolution(&self, resolution_id: &StableId) -> Vec<&'graph Rule> {
-        self.graph
-            .rules
-            .iter()
-            .filter(|rule| rule.resolution_ids.contains(resolution_id))
-            .collect()
+    /// The requirement with this id, or none when the scope holds no
+    /// such requirement.
+    pub fn find_requirement(&self, id: &StableId) -> Option<&'graph Requirement> {
+        self.index
+            .records_with_id(NodeType::Requirement, id.as_str())
+            .first()
+            .map(|position| &self.graph.requirements[*position])
     }
 
-    /// The requirements a rule names. A named requirement that is not in
-    /// the scope is a dangling reference, not a producer.
-    pub fn producing_requirements(&self, rule_id: &StableId) -> Vec<&'graph Requirement> {
-        let Some(rule) = self.graph.rules.iter().find(|rule| rule.id == *rule_id) else {
-            return Vec::new();
-        };
-        self.graph
-            .requirements
-            .iter()
-            .filter(|requirement| rule.requirement_ids.contains(&requirement.id))
-            .collect()
+    /// The source with this id, or none when the scope holds no such
+    /// source.
+    pub fn find_source(&self, id: &StableId) -> Option<&'graph Source> {
+        self.index
+            .records_with_id(NodeType::Source, id.as_str())
+            .first()
+            .map(|position| &self.graph.sources[*position])
     }
 
-    /// The resolutions a rule names, on the same terms as
-    /// [`Self::producing_requirements`].
-    pub fn producing_resolutions(&self, rule_id: &StableId) -> Vec<&'graph Resolution> {
-        let Some(rule) = self.graph.rules.iter().find(|rule| rule.id == *rule_id) else {
-            return Vec::new();
-        };
-        self.graph
-            .resolutions
-            .iter()
-            .filter(|resolution| rule.resolution_ids.contains(&resolution.id))
-            .collect()
+    pub fn source_exists(&self, id: &StableId) -> bool {
+        self.find(NodeType::Source, id.as_str()).is_some()
     }
 
-    /// True when a source reaches this rule through a requirement that
-    /// produces it. A sourced requirement elsewhere in the scope says
-    /// nothing about this rule.
-    pub fn rule_trace_reaches_source(&self, rule_id: &StableId) -> bool {
-        self.producing_requirements(rule_id)
-            .into_iter()
-            .any(|requirement| self.requirement_has_valid_source(requirement))
+    pub fn requirement_exists(&self, id: &StableId) -> bool {
+        self.find(NodeType::Requirement, id.as_str()).is_some()
     }
 
-    pub fn requirement_has_valid_source(&self, requirement: &Requirement) -> bool {
-        requirement
-            .source_refs
-            .iter()
-            .any(|reference| self.source_exists(&reference.source_id))
+    pub fn resolution_exists(&self, id: &StableId) -> bool {
+        self.find(NodeType::Resolution, id.as_str()).is_some()
     }
 
-    pub fn source_is_referenced(&self, source_id: &StableId) -> bool {
-        self.graph.requirements.iter().any(|requirement| {
-            requirement
-                .source_refs
-                .iter()
-                .any(|reference| reference.source_id == *source_id)
-        })
+    pub fn topic_exists(&self, id: &StableId) -> bool {
+        self.find(NodeType::Topic, id.as_str()).is_some()
+    }
+
+    pub fn node_exists(&self, node_type: NodeType, id: &StableId) -> bool {
+        self.find(node_type, id.as_str()).is_some()
     }
 }
