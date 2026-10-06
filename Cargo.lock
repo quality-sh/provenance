@@ -2219,7 +2219,7 @@ dependencies = [
  "serde",
  "serde_ignored",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "tar",
  "tempfile",
  "tokio",
@@ -2259,7 +2259,7 @@ dependencies = [
  "serde",
  "serde_ignored",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "thiserror 1.0.69",
  "time",
  "trybuild",
@@ -2360,7 +2360,7 @@ dependencies = [
  "schemars 1.2.2",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.0",
 ]
 
 [[package]]
@@ -2386,7 +2386,7 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "serde_path_to_error",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "sqlx",
  "tempfile",
  "thiserror 1.0.69",
