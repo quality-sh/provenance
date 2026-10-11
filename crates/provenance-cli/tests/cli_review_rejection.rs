@@ -156,7 +156,7 @@ fn page_rejection_stores_the_reason_and_keeps_the_resolution() {
     .call()
     .unwrap();
     let discussion: Value = serde_json::from_str(&discussion.into_string().unwrap()).unwrap();
-    let discussion = &discussion["data"];
+    let discussion = &discussion["data"]["discussion"];
     assert_eq!(discussion["actor"], "reviewer");
     assert_eq!(
         discussion["disposition_id"],
