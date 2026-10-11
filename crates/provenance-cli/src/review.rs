@@ -4,7 +4,7 @@ pub mod launch;
 use anyhow::Context;
 use axum::{
     extract::{Request, State},
-    http::{header, HeaderValue, StatusCode},
+    http::{header, HeaderValue, Method, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -253,7 +253,26 @@ async fn protect_origin(
     request: Request,
     next: Next,
 ) -> Response {
-    let mut response = match access.check_origin(request.headers()) {
+    // Only the static entry document can accept navigation from the private redirect.
+    let mut headers = request.headers().clone();
+    if matches!(*request.method(), Method::GET | Method::HEAD)
+        && matches!(request.uri().path(), "/" | "/index.html")
+        && [
+            ("sec-fetch-site", "cross-site"),
+            ("sec-fetch-mode", "navigate"),
+            ("sec-fetch-dest", "document"),
+        ]
+        .iter()
+        .all(|(name, expected)| {
+            let mut values = headers.get_all(*name).iter();
+            values.next().and_then(|value| value.to_str().ok()) == Some(*expected)
+                && values.next().is_none()
+        })
+    {
+        // Keep the exact Host and Origin checks, including duplicate header refusal.
+        headers.remove("sec-fetch-site");
+    }
+    let mut response = match access.check_origin(&headers) {
         Ok(()) => next.run(request).await,
         Err(error) => refusal(error),
     };
