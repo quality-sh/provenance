@@ -26,7 +26,7 @@ fn session_cookie(host: &Host) -> String {
 }
 
 #[test]
-/// Implementation aid: the real host must retain access when page memory is lost.
+/// The real host retains access when page memory is lost.
 #[verifies("rule_review_link_opens_signed_in", examples)]
 fn cookie_keeps_access_after_reload_and_in_a_new_tab() {
     let repo = repository();
@@ -37,11 +37,13 @@ fn cookie_keeps_access_after_reload_and_in_a_new_tab() {
             request(&host, "GET", "/", false).call().unwrap().status(),
             200
         );
-        for path in ["/review-config", "/metadata"] {
+        for path in ["/review-config", "/metadata", "/discussion-containers"] {
             assert_eq!(
                 request(&host, "GET", path, false)
                     .set("Cookie", &cookie)
                     .set("Sec-Fetch-Site", "same-origin")
+                    .set("Origin", host.config["endpoint"].as_str().unwrap())
+                    .set("Authorization", "Bearer")
                     .call()
                     .unwrap()
                     .status(),
