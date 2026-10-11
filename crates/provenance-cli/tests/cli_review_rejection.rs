@@ -144,13 +144,24 @@ fn page_rejection_stores_the_reason_and_keeps_the_resolution() {
         .unwrap();
     let discussions: Value = serde_json::from_str(&discussions.into_string().unwrap()).unwrap();
     assert_eq!(discussions["data"]["items"].as_array().unwrap().len(), 1);
-    let discussion = &discussions["data"]["items"][0];
+    let discussion_id = discussions["data"]["items"][0]["discussion_id"]
+        .as_str()
+        .unwrap();
+    let discussion = request(
+        &host,
+        "GET",
+        &format!("/resolutions/res_reject/discussions/{discussion_id}"),
+        true,
+    )
+    .call()
+    .unwrap();
+    let discussion: Value = serde_json::from_str(&discussion.into_string().unwrap()).unwrap();
+    let discussion = &discussion["data"];
     assert_eq!(discussion["actor"], "reviewer");
     assert_eq!(
         discussion["disposition_id"],
         result["data"]["disposition_id"]
     );
-    let discussion_id = discussion["discussion_id"].as_str().unwrap();
     let messages = request(
         &host,
         "GET",
