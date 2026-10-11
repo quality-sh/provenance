@@ -235,9 +235,9 @@ supported record kind. If the repository has no disposition actors, the
 renderer identifies the review as read-only.
 
 Build that application with the matching renderer to replace the shell with the
-local host entry. The credential stays in page memory and is
-sent only in the Authorization header to the current origin. It does not enter
-URLs, logs, assets, or browser storage. The page has no credential field. A new
+local host entry. The bearer stays in page memory and is sent only in the
+Authorization header to the current origin. It does not enter URLs, logs,
+assets, or browser storage. The browser manages the separate session cookie. The page has no credential field. A new
 connection removes the previous page. A superseded connection result cannot
 replace a later result.
 
