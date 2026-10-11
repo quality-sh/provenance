@@ -1,6 +1,7 @@
 #[path = "review_host_support/mod.rs"]
 mod review_host_support;
 
+use provenance_macros::verifies;
 use review_host_support::{redeem, repository, request, response, start, Host};
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -22,17 +23,26 @@ fn session_cookie(host: &Host) -> String {
 
 #[test]
 /// Implementation aid: the real host must retain access when page memory is lost.
+#[verifies("rule_review_link_opens_signed_in", examples)]
 fn cookie_keeps_access_after_reload_and_in_a_new_tab() {
     let repo = repository();
     let host = start(repo.path());
     let cookie = session_cookie(&host);
     for _ in 0..2 {
-        assert_eq!(request(&host, "GET", "/", false).call().unwrap().status(), 200);
+        assert_eq!(
+            request(&host, "GET", "/", false).call().unwrap().status(),
+            200
+        );
         for path in ["/review-config", "/metadata"] {
-            assert_eq!(request(&host, "GET", path, false)
-                .set("Cookie", &cookie)
-                .set("Sec-Fetch-Site", "same-origin")
-                .call().unwrap().status(), 200);
+            assert_eq!(
+                request(&host, "GET", path, false)
+                    .set("Cookie", &cookie)
+                    .set("Sec-Fetch-Site", "same-origin")
+                    .call()
+                    .unwrap()
+                    .status(),
+                200
+            );
         }
     }
 }
@@ -43,10 +53,22 @@ fn cookie_refuses_foreign_requests() {
     let repo = repository();
     let host = start(repo.path());
     let cookie = session_cookie(&host);
-    for (header, value) in [("Host", "foreign.test"), ("Origin", "http://foreign.test"),
-        ("Sec-Fetch-Site", "cross-site"), ("Sec-Fetch-Site", "same-site")] {
-        assert_eq!(response(request(&host, "GET", "/review-config", false)
-            .set("Cookie", &cookie).set(header, value).call()).status(), 403);
+    for (header, value) in [
+        ("Host", "foreign.test"),
+        ("Origin", "http://foreign.test"),
+        ("Sec-Fetch-Site", "cross-site"),
+        ("Sec-Fetch-Site", "same-site"),
+    ] {
+        assert_eq!(
+            response(
+                request(&host, "GET", "/review-config", false)
+                    .set("Cookie", &cookie)
+                    .set(header, value)
+                    .call()
+            )
+            .status(),
+            403
+        );
     }
 }
 
@@ -61,7 +83,40 @@ fn restarted_host_refuses_the_cookie() {
     let mut command = review_host_support::review_command(repo.path());
     command.args(["--port", &port]);
     let restarted = review_host_support::start_command(command);
-    assert_ne!(host.config["instanceNonce"], restarted.config["instanceNonce"]);
-    assert_eq!(response(request(&restarted, "GET", "/review-config", false)
-        .set("Cookie", &cookie).call()).status(), 401);
+    assert_ne!(
+        host.config["instanceNonce"],
+        restarted.config["instanceNonce"]
+    );
+    assert_eq!(
+        response(
+            request(&restarted, "GET", "/review-config", false)
+                .set("Cookie", &cookie)
+                .call()
+        )
+        .status(),
+        401
+    );
+}
+
+#[test]
+/// Implementation aid: ambiguous or changed cookies must not grant access.
+fn invalid_cookies_refuse_access() {
+    let repo = repository();
+    let host = start(repo.path());
+    let cookie = session_cookie(&host);
+    for value in [
+        format!("{cookie}; {cookie}"),
+        format!("{cookie}changed"),
+        format!("bearer={}", host.bearer()),
+    ] {
+        assert_eq!(
+            response(
+                request(&host, "GET", "/review-config", false)
+                    .set("Cookie", &value)
+                    .call()
+            )
+            .status(),
+            401
+        );
+    }
 }
