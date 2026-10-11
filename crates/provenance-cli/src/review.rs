@@ -111,7 +111,10 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
             post(launch::open_session).with_state(codes.clone()),
         )
         .fallback(assets::serve)
-        .layer(middleware::from_fn_with_state(access, protect_origin));
+        .layer(middleware::from_fn_with_state(
+            (access, codes),
+            protect_origin,
+        ));
     let signals = ShutdownSignals::new()?;
     println!(
         "{}",
@@ -249,8 +252,8 @@ async fn configuration(
 }
 
 async fn protect_origin(
-    State(access): State<Arc<LocalAccess>>,
-    request: Request,
+    State((access, codes)): State<(Arc<LocalAccess>, launch::LaunchCodes)>,
+    mut request: Request,
     next: Next,
 ) -> Response {
     // Only the static entry document can accept navigation from the private redirect.
@@ -273,7 +276,13 @@ async fn protect_origin(
         headers.remove("sec-fetch-site");
     }
     let mut response = match access.check_origin(&headers) {
-        Ok(()) => next.run(request).await,
+        Ok(()) => {
+            // A cross-site entry navigation serves only assets and cannot use a cookie.
+            if access.check_origin(request.headers()).is_ok() {
+                codes.authenticate_cookie(request.headers_mut());
+            }
+            next.run(request).await
+        }
         Err(error) => refusal(error),
     };
     if matches!(

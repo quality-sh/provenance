@@ -10,8 +10,9 @@ The page has no credential field. It reads a single-use launch code from the
 exchanges the code one time at `POST /review-launch/session` for the access
 token. The access token stays in page memory. It is sent only in an
 Authorization header to the current origin. The application does not store the
-token or put it in a URL. A used, expired, foreign, or missing code shows how to
-get a new link. The host's existing origin, repository, scope, and file-access
+token or put it in a URL. The host also sets a session cookie. With no launch
+code, the application tries the cookie session. A used, expired, or foreign
+code, or a refused session, shows how to get a new link. The host's existing origin, repository, scope, and file-access
 checks remain in effect.
 The renderer owns the generated Effect client and its reads and writes.
 

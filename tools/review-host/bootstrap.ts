@@ -102,20 +102,19 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
     session.open(requirement.value.trim());
   });
 
-  if (!code) {
-    status.textContent = CONNECTION_REFUSED;
-    return;
-  }
   void (async () => {
-    const launch = await fetch(LAUNCH_SESSION_ROUTE, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code }), redirect: 'error', cache: 'no-store',
-    });
-    if (!launch.ok) throw new Error('Launch refused');
-    const bearer = sessionBearer(await launch.json());
+    let bearer = '';
+    if (code) {
+      const launch = await fetch(LAUNCH_SESSION_ROUTE, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ code }), redirect: 'error', cache: 'no-store',
+      });
+      if (!launch.ok) throw new Error('Launch refused');
+      bearer = sessionBearer(await launch.json());
+    }
     await session.connect(bearer, async () => {
       const response = await fetch('/review-config', {
-        headers: { authorization: `Bearer ${bearer}` }, redirect: 'error', cache: 'no-store',
+        headers: bearer ? { authorization: `Bearer ${bearer}` } : {}, redirect: 'error', cache: 'no-store',
       });
       if (!response.ok) throw new Error('Access refused');
       return reviewConfig(await response.json(), location.origin);
