@@ -78,9 +78,9 @@ fn page_rejection_stores_the_reason_and_keeps_the_resolution() {
     assert!(after["decision"]["pending"].is_null());
     let decisions = after["decision"]["decisions"].as_array().unwrap();
     assert_eq!(decisions.len(), 1);
-    assert_eq!(decisions[0]["proposal_id"], proposal);
-    assert_eq!(decisions[0]["decision"], "rejected");
-    assert_eq!(decisions[0]["rationale"], "The result needs a clear condition.");
+    assert_eq!(decisions[0]["disposition"]["proposal_id"], proposal);
+    assert_eq!(decisions[0]["disposition"]["decision"], "rejected");
+    assert_eq!(decisions[0]["disposition"]["rationale"], "The result needs a clear condition.");
     for field in ["id", "status", "position", "rationale", "made_by", "edit"] {
         assert_eq!(after[field], before[field], "{field}");
     }
