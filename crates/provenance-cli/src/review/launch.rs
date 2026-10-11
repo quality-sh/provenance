@@ -178,6 +178,9 @@ impl LaunchCodes {
 
     /// Supplies the bearer to existing routes after a valid session cookie.
     pub(super) fn authenticate_cookie(&self, headers: &mut HeaderMap) {
+        if headers.get_all(header::AUTHORIZATION).iter().count() > 1 {
+            return;
+        }
         let mut supplied = None;
         for header in headers.get_all(header::COOKIE) {
             let Ok(value) = header.to_str() else { return };

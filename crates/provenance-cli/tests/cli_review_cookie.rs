@@ -18,6 +18,10 @@ fn session_cookie(host: &Host) -> String {
     let parts: Vec<_> = cookie.split("; ").collect();
     assert_eq!(&parts[1..], &["HttpOnly", "SameSite=Strict", "Path=/"]);
     assert!(!cookie.contains(host.bearer()));
+    assert!(parts[0].starts_with(&format!(
+        "provenance_review_session={}.",
+        host.config["instanceNonce"].as_str().unwrap()
+    )));
     parts[0].to_owned()
 }
 
@@ -119,4 +123,14 @@ fn invalid_cookies_refuse_access() {
             401
         );
     }
+}
+
+#[test]
+/// Implementation aid: a failed exchange cannot start or replace a session.
+fn a_refused_exchange_sets_no_cookie() {
+    let repo = repository();
+    let host = start(repo.path());
+    let refused = redeem(&host, "not-a-launch-code");
+    assert_eq!(refused.status(), 401);
+    assert_eq!(refused.header("Set-Cookie"), None);
 }
