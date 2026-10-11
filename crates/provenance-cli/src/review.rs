@@ -112,7 +112,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         )
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(
-            (access, codes),
+            (access, codes.clone()),
             protect_origin,
         ));
     let signals = ShutdownSignals::new()?;
