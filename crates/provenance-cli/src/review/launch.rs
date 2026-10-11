@@ -23,7 +23,6 @@ use std::os::unix::fs::PermissionsExt as _;
 
 const CODE_LIFETIME: Duration = Duration::from_secs(120);
 const MAX_LIVE_CODES: usize = 64;
-const SESSION_COOKIE: &str = "provenance_review_session";
 
 /// The secret that a local CLI sends to get a launch code. Only the per-user cache holds it.
 pub struct LaunchKey {
@@ -119,6 +118,7 @@ pub struct LaunchCodes {
 struct Inner {
     bearer: String,
     session: String,
+    cookie_name: String,
     key: LaunchKey,
     live: Mutex<Vec<IssuedCode>>,
 }
@@ -136,9 +136,11 @@ impl LaunchCodes {
             .expect("launch key instance nonce")
             .to_string_lossy();
         let session = format!("{nonce}.{}", secret());
+        let cookie_name = format!("provenance_review_session_{nonce}");
         Self {
             inner: Arc::new(Inner {
                 session,
+                cookie_name,
                 bearer: bearer.to_owned(),
                 key,
                 live: Mutex::new(Vec::new()),
@@ -188,7 +190,7 @@ impl LaunchCodes {
                 let Some((name, value)) = part.trim().split_once('=') else {
                     continue;
                 };
-                if name == SESSION_COOKIE {
+                if name == self.inner.cookie_name {
                     if supplied.is_some() {
                         return;
                     }
@@ -243,8 +245,8 @@ pub(super) async fn open_session(State(codes): State<LaunchCodes>, body: Bytes) 
             response.headers_mut().insert(
                 header::SET_COOKIE,
                 HeaderValue::from_str(&format!(
-                    "{SESSION_COOKIE}={}; HttpOnly; SameSite=Strict; Path=/",
-                    codes.inner.session
+                    "{}={}; HttpOnly; SameSite=Strict; Path=/",
+                    codes.inner.cookie_name, codes.inner.session
                 ))
                 .expect("generated session cookie"),
             );
