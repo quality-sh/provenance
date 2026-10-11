@@ -1,0 +1,6 @@
+{
+  "contaminated": ["The author recommends this; the owner has not decided it.", "This proposed choice awaits review."],
+  "clean": ["Ten points leaves time to recover after a busy day. Uncapped loss can kill the robot after one busy day."],
+  "negativeControl": "The owner authors personal goals. This is a product actor, not record authorship.",
+  "groundingDimensions": ["position", "locator", "reason", "alternative"]
+}
