@@ -64,7 +64,7 @@ fn create_resolution(root: &Path) {
     );
 }
 
-fn post(host: &Host, path: &str, data: Value) -> (u16, Value) {
+fn post(host: &Host, path: &str, data: &Value) -> (u16, Value) {
     let result = response(
         request(host, "POST", path, true)
             .set("Content-Type", "application/json")
@@ -88,7 +88,7 @@ fn pending(host: &Host) -> String {
     let (status, submitted) = post(
         host,
         "/resolutions/res_reject/submit",
-        json!({
+        &json!({
             "actor":"shaping_agent", "title":"Keep the result",
             "summary":"The system stores each result.", "source_ids":[],
             "evidence_references":[], "builds_on":[]
@@ -122,7 +122,7 @@ fn page_rejection_stores_the_reason_and_keeps_the_resolution() {
     let (status, result) = post(
         &host,
         &format!("/resolutions/res_reject/submissions/{proposal}/decide"),
-        rejection(),
+        &rejection(),
     );
     assert_eq!(status, 200, "{result}");
 
@@ -190,7 +190,7 @@ fn wrong_feedback_owner_leaves_the_submission_pending() {
     let (status, result) = post(
         &host,
         &format!("/resolutions/res_reject/submissions/{proposal}/decide"),
-        data,
+        &data,
     );
     assert_eq!(status, 409, "{result}");
     assert_eq!(result["error"]["kind"], "record_ownership_conflict");
