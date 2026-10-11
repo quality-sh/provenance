@@ -86,8 +86,10 @@ request can load only `/` or `/index.html`, with GET or HEAD,
 `Sec-Fetch-Mode: navigate`, and `Sec-Fetch-Dest: document`. These static pages
 contain no graph data and require no credential. All other cross-site requests
 are refused. The Host and Origin checks still apply to page navigation.
-Requests without Origin remain available to authorized non-browser clients. The host does not enable CORS. Only the session cookie from a successful launch code exchange can grant
-access. URL parameters and other cookies do not grant access. The exact Host check also refuses DNS rebinding through an attacker
+Requests without Origin remain available to authorized non-browser clients.
+The host does not enable CORS. Only the session cookie from a successful launch
+code exchange can grant access. URL parameters and other cookies do not grant
+access. The exact Host check also refuses DNS rebinding through an attacker
 hostname, even if that hostname resolves to loopback. Duplicate security headers
 refuse. Assets and protocol metadata contain no graph data and require no bearer
 token. Scripts, styles, and protocol metadata retain the full destination and
@@ -137,7 +139,8 @@ The page removes the fragment from the address bar before it exchanges the
 code. It keeps the bearer only in page memory. When a page has no launch code,
 it reads configuration through the cookie. Reloads and new tabs can thus keep
 access while the browser session and host run continue. A used, expired, or
-foreign code, or a page without a valid session, shows "Connection refused" and tells the person to
+foreign code, or a page without a valid session, shows "Connection refused".
+It tells the person to
 get a new link with `provenance <record-id> --review-link`.
 
 ## Opening the browser
@@ -315,7 +318,8 @@ closure. It does not mount a fixture store or claim complete document integratio
 The host tests submit valid denied reads and writes and compare repository bytes
 and directory entries. They also test foreign origins, DNS-rebinding Host values,
 duplicate headers, query and unknown cookie credential refusal, session cookie
-attributes, session access after reload, and cookie refusal after host restart, held source-file traversal,
+attributes, session access after reload, cookie refusal after host restart,
+held source-file traversal,
 invalid startup configuration, and shutdown with incomplete HTTP requests.
 
 Linux validation does not establish Windows or macOS signal and file-access
