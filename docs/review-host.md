@@ -81,13 +81,17 @@ review launch routes take a launch key or a launch code instead. The public
 `/local-host-identity` route contains only the schema version, repository target,
 scope, and non-secret instance nonce. It does not accept a credential. All routes require
 the bound Host value. Requests with an Origin must name the exact local
-origin. `Origin: null`, unrelated origins, and cross-site browser requests are
-refused. Requests without Origin remain available to authorized non-browser
-clients. The host does not enable CORS. Cookies and URL parameters do not grant
+origin. `Origin: null` and unrelated origins are refused. A cross-site browser
+request can load only `/` or `/index.html`, with GET or HEAD,
+`Sec-Fetch-Mode: navigate`, and `Sec-Fetch-Dest: document`. These static pages
+contain no graph data and require no credential. All other cross-site requests
+are refused. The Host and Origin checks still apply to page navigation.
+Requests without Origin remain available to authorized non-browser clients. The host does not enable CORS. Cookies and URL parameters do not grant
 access. The exact Host check also refuses DNS rebinding through an attacker
 hostname, even if that hostname resolves to loopback. Duplicate security headers
 refuse. Assets and protocol metadata contain no graph data and require no bearer
-token; they retain the same destination and origin checks.
+token. Scripts, styles, and protocol metadata retain the full destination and
+origin checks.
 
 Repository IDs are opaque names, not paths. The host resolves only its configured
 ID and refuses all other IDs. It refuses a different scope before it reads
@@ -122,7 +126,7 @@ or any response.
 The host compares the key in constant time. `POST /review-launch/session` with
 `{"code": "..."}` returns `{"bearer": "..."}` and removes the code. Both routes
 refuse a wrong key or code with 401 and the standard failure envelope. Both
-routes have the same Host and Origin checks as all other routes.
+routes retain the full Host and Origin checks, including cross-site refusal.
 
 The page removes the fragment from the address bar before it exchanges the
 code. It keeps the bearer only in page memory. A used, expired, or foreign code,
