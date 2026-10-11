@@ -144,7 +144,7 @@ fn page_rejection_stores_the_reason_and_keeps_the_resolution() {
         .unwrap();
     let discussions: Value = serde_json::from_str(&discussions.into_string().unwrap()).unwrap();
     assert_eq!(discussions["data"]["items"].as_array().unwrap().len(), 1);
-    let discussion_id = discussions["data"]["items"][0]["discussion_id"]
+    let discussion_id = discussions["data"]["items"][0]["discussion"]["discussion_id"]
         .as_str()
         .unwrap();
     let discussion = request(
