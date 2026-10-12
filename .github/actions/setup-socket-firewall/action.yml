@@ -39,6 +39,13 @@ runs:
         # log shows what the firewall saw.
         echo "SFW_VERBOSE=true" >> "$GITHUB_ENV"
         echo "SFW_DEBUG=true" >> "$GITHUB_ENV"
+        # Cargo on Windows validates certificates with schannel, and the
+        # revocation status of an intercepted chain is unknown. Cargo
+        # documents http.check-revoke for installs behind a proxy that
+        # intercepts TLS.
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          echo "CARGO_HTTP_CHECK_REVOKE=false" >> "$GITHUB_ENV"
+        fi
 
     - name: Report the installed sfw version
       shell: bash
