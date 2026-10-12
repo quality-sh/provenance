@@ -49,8 +49,8 @@ pub struct DecideRecordReview {
     /// ratified artifact instead of an assertion.
     pub canonical_artifact: Option<CanonicalArtifact>,
     pub feedback: Option<ReviewFeedback>,
-    /// The owning agent of the record under review, checked when feedback
-    /// opens a Discussion on it.
+    /// Optional owner check when feedback opens a Discussion. If absent,
+    /// feedback uses the stored record owner.
     pub declared_by: Option<String>,
 }
 
