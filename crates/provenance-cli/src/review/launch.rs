@@ -4,6 +4,7 @@ use anyhow::Context as _;
 use axum::{
     body::Bytes,
     extract::State,
+    http::{header, HeaderMap, HeaderValue},
     response::{IntoResponse, Response},
     Json,
 };
@@ -116,6 +117,8 @@ pub struct LaunchCodes {
 
 struct Inner {
     bearer: String,
+    session: String,
+    cookie_name: String,
     key: LaunchKey,
     live: Mutex<Vec<IssuedCode>>,
 }
@@ -127,8 +130,17 @@ struct IssuedCode {
 
 impl LaunchCodes {
     pub fn new(bearer: &str, key: LaunchKey) -> Self {
+        let nonce = key
+            .path
+            .file_stem()
+            .expect("launch key instance nonce")
+            .to_string_lossy();
+        let session = format!("{nonce}.{}", secret());
+        let cookie_name = format!("provenance_review_session_{nonce}");
         Self {
             inner: Arc::new(Inner {
+                session,
+                cookie_name,
                 bearer: bearer.to_owned(),
                 key,
                 live: Mutex::new(Vec::new()),
@@ -166,6 +178,37 @@ impl LaunchCodes {
         Some(self.inner.bearer.clone())
     }
 
+    /// Supplies the bearer to existing routes after a valid session cookie.
+    pub(super) fn authenticate_cookie(&self, headers: &mut HeaderMap) {
+        if headers.get_all(header::AUTHORIZATION).iter().count() > 1 {
+            return;
+        }
+        let mut supplied = None;
+        for header in headers.get_all(header::COOKIE) {
+            let Ok(value) = header.to_str() else { return };
+            for part in value.split(';') {
+                let Some((name, value)) = part.trim().split_once('=') else {
+                    continue;
+                };
+                if name == self.inner.cookie_name {
+                    if supplied.is_some() {
+                        return;
+                    }
+                    supplied = Some(value);
+                }
+            }
+        }
+        if supplied
+            .is_some_and(|value| constant_time_eq(self.inner.session.as_bytes(), value.as_bytes()))
+        {
+            headers.insert(
+                header::AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", self.inner.bearer))
+                    .expect("generated bearer header"),
+            );
+        }
+    }
+
     fn holds_key(&self, supplied: &str) -> bool {
         constant_time_eq(self.inner.key.value.as_bytes(), supplied.as_bytes())
     }
@@ -197,7 +240,18 @@ pub(super) async fn open_session(State(codes): State<LaunchCodes>, body: Bytes) 
         .and_then(|request| codes.redeem(&request.code, Instant::now()));
     bearer.map_or_else(
         || super::refusal(OperationFailure::Unauthenticated),
-        |bearer| Json(json!({ "bearer": bearer })).into_response(),
+        |bearer| {
+            let mut response = Json(json!({ "bearer": bearer })).into_response();
+            response.headers_mut().insert(
+                header::SET_COOKIE,
+                HeaderValue::from_str(&format!(
+                    "{}={}; HttpOnly; SameSite=Strict; Path=/",
+                    codes.inner.cookie_name, codes.inner.session
+                ))
+                .expect("generated session cookie"),
+            );
+            response
+        },
     )
 }
 
