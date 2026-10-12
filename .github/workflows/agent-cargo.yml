@@ -30,8 +30,9 @@ concurrency:
 
 jobs:
   # A snapshot branch is public when the shim pushes it. This job scans the
-  # commits of the snapshot that main does not contain, with the gitleaks
-  # config of main. A finding fails the run, and the shim reports it.
+  # commits of the snapshot that main does not contain. A push run uses the
+  # job from the snapshot, so only the gitleaks configuration comes from main.
+  # A finding fails the run, and the shim reports it.
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-24.04

@@ -8,6 +8,7 @@ import os
 import platform
 import re
 import secrets
+import shlex
 import shutil
 import subprocess
 import sys
@@ -102,8 +103,7 @@ def state_file(root):
 
 
 def push_snapshot(root, sha, repository, branch):
-    push_url = os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
-    git(root, "push", push_url, f"{sha}:refs/heads/{branch}")
+    git(root, "push", push_url_for(repository), f"{sha}:refs/heads/{branch}")
 
 
 def pushed_run(root, sha, repository, command_key):
@@ -187,7 +187,7 @@ def print_failed_logs(run_id, repository, job, url):
         print(logs)
 
 
-def show_result(run_id, repository, check, custom, artifact=False):
+def show_result(root, sha, run_id, repository, check, custom, artifact=False):
     url = f"https://github.com/{repository}/actions/runs/{run_id}"
     print(f"Remote Cargo: {check} in {url}", flush=True)
     command(["gh", "run", "watch", str(run_id), "--repo", repository])
@@ -204,16 +204,53 @@ def show_result(run_id, repository, check, custom, artifact=False):
         result = 1
     else:
         print(f"Remote Cargo: {check} passed")
+    # A snapshot from a branch without the scan job, or one that edits
+    # agent-cargo.yml, runs no scan.
     scan = next((item for item in jobs if item["name"] == SECRET_SCAN_JOB), None)
-    if scan is not None and scan["conclusion"] != "success":
+    if scan is None:
+        print("Remote Cargo: no secret scan ran for this snapshot")
+    elif scan["conclusion"] != "success":
         print_failed_logs(run_id, repository, scan, url)
-        print(f"Remote Cargo: secret scan failed ({scan['conclusion']}); the snapshot branch is public: {url}")
+        print(
+            f"Remote Cargo: secret scan failed ({scan['conclusion']}): {url}\n"
+            "The snapshot was public. Rotate each credential that the scan found; "
+            "deleting the branch does not remove the commit from GitHub."
+        )
+        remove_snapshot_branch(root, sha, repository)
         result = 1
     if result:
         return result
     if check == "build" and not artifact:
         print("Build outputs remain on the CI runner; no local target files were created.")
     return 0
+
+
+def push_url_for(repository):
+    return os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
+
+
+def delete_remote_branch(root, push_url, branch, sha):
+    ref = f"refs/heads/{branch}"
+    remote = git(root, "ls-remote", "--heads", push_url, ref)
+    if not remote:
+        return False
+    if remote.split()[0] != sha:
+        raise RuntimeError(f"Remote branch changed; leaving {branch} in place")
+    git(root, "push", f"--force-with-lease={ref}:{sha}", push_url, f":{ref}")
+    return True
+
+
+def remove_snapshot_branch(root, sha, repository):
+    push_url = push_url_for(repository)
+    branch = f"agent-snapshot/{sha}"
+    try:
+        if delete_remote_branch(root, push_url, branch, sha):
+            print(f"Remote Cargo: deleted {branch}")
+    except RuntimeError as error:
+        ref = f"refs/heads/{branch}"
+        delete = ["git", "push", f"--force-with-lease={ref}:{sha}", push_url, f":{ref}"]
+        print(f"Remote Cargo: could not delete {branch}: {error}")
+        print(f"Delete it with: {shlex.join(delete)}")
 
 
 def cleanup_completed_branch(root, sha, run_id, repository):
@@ -226,14 +263,7 @@ def cleanup_completed_branch(root, sha, run_id, repository):
         return
     if not isinstance(branch, str) or not re.fullmatch(rf"agent-ci/(build|build-artifact|check|clippy|test)/{sha}-[0-9a-f]{{8}}", branch):
         return
-    push_url = os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
-    ref = f"refs/heads/{branch}"
-    remote = git(root, "ls-remote", "--heads", push_url, ref)
-    if not remote:
-        return
-    if remote.split()[0] != sha:
-        raise RuntimeError(f"Remote branch changed; leaving {branch} in place")
-    git(root, "push", f"--force-with-lease={ref}:{sha}", push_url, f":{ref}")
+    delete_remote_branch(root, push_url_for(repository), branch, sha)
 
 
 def download_build(root, sha, run_id, repository):
@@ -276,7 +306,7 @@ def main():
     sha = snapshot(root)
     print(f"Remote Cargo: verifying snapshot {sha}", flush=True)
     run_id = run_id_for_snapshot(root, sha, repository, args, artifact)
-    result = show_result(run_id, repository, args[0], len(args) != 1, artifact)
+    result = show_result(root, sha, run_id, repository, args[0], len(args) != 1, artifact)
     try:
         if result == 0 and artifact:
             download_build(root, sha, run_id, repository)
