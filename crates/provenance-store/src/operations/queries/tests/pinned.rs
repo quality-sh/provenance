@@ -3,7 +3,7 @@
 //!
 //! The file holds one line for the key and the digest, then one compact
 //! line per answer, so a regeneration diff reads answer by answer. It is
-//! regenerated only in a commit that bumps the constant:
+//! updated in place when an approved record format changes:
 //! `PROVENANCE_PINNED_WRITE=1 cargo test -p provenance-store pinned`.
 
 use super::comparison::requests::{self, Request};
@@ -306,7 +306,7 @@ async fn the_pinned_answers_match_the_committed_file_for_this_derivation() {
     assert_eq!(
         header["derivation"],
         json!(READ_DERIVATION),
-        "the pinned file is keyed by READ_DERIVATION; regenerate it in the commit that bumps the constant"
+        "the pinned file is keyed by READ_DERIVATION"
     );
     if header["digest"] != json!(fresh) {
         for (index, answer) in answers.iter().enumerate() {
