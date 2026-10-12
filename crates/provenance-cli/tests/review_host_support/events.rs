@@ -73,10 +73,10 @@ impl Socket {
             .set_read_timeout(Some(Duration::from_millis(250)))
             .unwrap();
         let mut byte = [0];
-        let error = self
-            .0
-            .read(&mut byte)
-            .expect_err("no duplicate invalidation");
+        let error = match self.0.peek(&mut byte) {
+            Ok(_) => panic!("no duplicate invalidation: {}", self.frame()),
+            Err(error) => error,
+        };
         assert!(matches!(
             error.kind(),
             std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
