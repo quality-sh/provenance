@@ -10,7 +10,7 @@ function fakeElement(): BrowserElement {
   return { hidden: false, textContent: null, value: '', addEventListener() {}, focus() {} };
 }
 
-function launchPage() {
+function launchPage(hash = '#launch=code-1') {
   const events: string[] = [];
   const receivers: unknown[] = [];
   const mounted: ReviewMountOptions[] = [];
@@ -19,7 +19,7 @@ function launchPage() {
   const mounting = new Promise<void>(resolve => { mountedPage = resolve; });
   bootstrapReviewPage({
     document: { getElementById: id => elements.get(id) },
-    location: { origin, pathname: '/', search: '?root=req_root&focus=rule_child', hash: '#launch=code-1' },
+    location: { origin, pathname: '/', search: '?root=req_root&focus=rule_child', hash },
     history: { replaceState(_data, _unused, url) { events.push(`address ${url}`); } },
     async fetch(this: unknown, path, init) {
       receivers.push(this);
@@ -57,4 +57,14 @@ test('the page loads its configuration with a browser-compatible fetch receiver'
   const page = launchPage();
   await page.mounting;
   assert.deepEqual(page.receivers, [undefined, undefined]);
+});
+
+// Implementation aid: a reload has no launch code and must use the host cookie.
+test('a page without a launch code connects through the cookie', async () => {
+  const page = launchPage('');
+  await page.mounting;
+  assert.deepEqual(page.events, ['fetch /review-config']);
+  assert.deepEqual(page.mounted, [
+    { ...config, bearer: '', rootId: 'req_root', focusId: 'rule_child' },
+  ]);
 });

@@ -86,7 +86,9 @@ request can load only `/` or `/index.html`, with GET or HEAD,
 `Sec-Fetch-Mode: navigate`, and `Sec-Fetch-Dest: document`. These static pages
 contain no graph data and require no credential. All other cross-site requests
 are refused. The Host and Origin checks still apply to page navigation.
-Requests without Origin remain available to authorized non-browser clients. The host does not enable CORS. Cookies and URL parameters do not grant
+Requests without Origin remain available to authorized non-browser clients.
+The host does not enable CORS. Only the session cookie from a successful launch
+code exchange can grant access. URL parameters and other cookies do not grant
 access. The exact Host check also refuses DNS rebinding through an attacker
 hostname, even if that hostname resolves to loopback. Duplicate security headers
 refuse. Assets and protocol metadata contain no graph data and require no bearer
@@ -124,13 +126,26 @@ or any response.
 
 `POST /review-launch/code` with `{"launchKey": "..."}` returns `{"code": "..."}`.
 The host compares the key in constant time. `POST /review-launch/session` with
-`{"code": "..."}` returns `{"bearer": "..."}` and removes the code. Both routes
+`{"code": "..."}` returns `{"bearer": "..."}` and removes the code. The response
+also sets `provenance_review_session_<instance nonce>` with `HttpOnly`,
+`SameSite=Strict`, and
+`Path=/`. It has no `Max-Age`, `Expires`, or `Domain`. The cookie contains the
+instance nonce and a separate random secret held only by this host run. It
+contains no bearer. Each host reads only its own cookie name and refuses
+duplicate entries for that name. Concurrent hosts on the same loopback address
+retain separate session cookies. Cookies have no port scope, so another local
+server at that address can still receive them. A new host run refuses the old
+cookie. The host uses HTTP
+on loopback, so the cookie has no `Secure` attribute. Both routes
 refuse a wrong key or code with 401 and the standard failure envelope. Both
 routes retain the full Host and Origin checks, including cross-site refusal.
 
 The page removes the fragment from the address bar before it exchanges the
-code. It keeps the bearer only in page memory. A used, expired, or foreign code,
-or a page without a code, shows "Connection refused" and tells the person to
+code. It keeps the bearer only in page memory. When a page has no launch code,
+it reads configuration through the cookie. Reloads and new tabs can thus keep
+access while the browser session and host run continue. A used, expired, or
+foreign code, or a page without a valid session, shows "Connection refused".
+It tells the person to
 get a new link with `provenance <record-id> --review-link`.
 
 ## Opening the browser
@@ -210,10 +225,13 @@ an optional `focus=RECORD_ID` query parameter. The URL never contains the
 credential. After the page exchanges the launch code, the application opens
 `root` directly and hides the manual Requirement ID field. The field remains
 available when `root` is absent. The application reads `/review-config` with the
-credential. It then
+credential or the session cookie. It then
 calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
 `dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. The
-renderer creates and owns the generated Effect client.
+renderer creates and owns the generated Effect client. With no bearer in
+page memory, the application passes an empty bearer. Same-origin browser
+requests carry the session cookie, which the host checks before the operation
+routes authenticate the request.
 
 The pinned renderer reads documents with `exclude_terminal=true`. A refresh
 reloads the current search and the document text, submissions, review outcomes,
@@ -222,9 +240,9 @@ supported record kind. If the repository has no disposition actors, the
 renderer identifies the review as read-only.
 
 Build that application with the matching renderer to replace the shell with the
-local host entry. The credential stays in page memory and is
-sent only in the Authorization header to the current origin. It does not enter
-URLs, logs, assets, or browser storage. The page has no credential field. A new
+local host entry. The bearer stays in page memory and is sent only in the
+Authorization header to the current origin. It does not enter URLs, logs,
+assets, or browser storage. The browser manages the separate session cookie. The page has no credential field. A new
 connection removes the previous page. A superseded connection result cannot
 replace a later result.
 
@@ -304,7 +322,10 @@ path, and checks authenticated reads, target refusal, and listener
 closure. It does not mount a fixture store or claim complete document integration.
 The host tests submit valid denied reads and writes and compare repository bytes
 and directory entries. They also test foreign origins, DNS-rebinding Host values,
-duplicate headers, query/cookie credential refusal, held source-file traversal,
+duplicate headers, query and unknown cookie credential refusal, session cookie
+attributes, session access after reload, separate sessions on concurrent hosts,
+cookie refusal after host restart,
+held source-file traversal,
 invalid startup configuration, and shutdown with incomplete HTTP requests.
 
 Linux validation does not establish Windows or macOS signal and file-access
