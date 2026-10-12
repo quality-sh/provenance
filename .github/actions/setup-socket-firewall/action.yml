@@ -23,7 +23,8 @@ runs:
         esac
         directory="$RUNNER_TEMP/socket-firewall"
         mkdir -p "$directory"
-        curl --fail --silent --show-error --location --retry 3 \
+        curl --fail --silent --show-error --location \
+          --retry 5 --retry-delay 3 \
           --output "$directory/$name" \
           "https://github.com/SocketDev/sfw-free/releases/download/v${SFW_VERSION}/${asset}"
         printf '%s  %s\n' "$digest" "$directory/$name" > "$directory/sfw.sha256"
