@@ -35,7 +35,7 @@ crates_are_visible() {
 }
 
 retry_channel "$channel" crates_are_visible
-if ! cargo install --locked provenance-cli --version "=$version"; then
+if ! sfw cargo install --locked provenance-cli --version "=$version"; then
   channel_failure "$channel" "provenance-cli $version failed to install after it became visible"
   exit 1
 fi
