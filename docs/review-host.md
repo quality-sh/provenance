@@ -127,10 +127,15 @@ or any response.
 `POST /review-launch/code` with `{"launchKey": "..."}` returns `{"code": "..."}`.
 The host compares the key in constant time. `POST /review-launch/session` with
 `{"code": "..."}` returns `{"bearer": "..."}` and removes the code. The response
-also sets `provenance_review_session` with `HttpOnly`, `SameSite=Strict`, and
+also sets `provenance_review_session_<instance nonce>` with `HttpOnly`,
+`SameSite=Strict`, and
 `Path=/`. It has no `Max-Age`, `Expires`, or `Domain`. The cookie contains the
 instance nonce and a separate random secret held only by this host run. It
-contains no bearer. A new host run refuses the old cookie. The host uses HTTP
+contains no bearer. Each host reads only its own cookie name and refuses
+duplicate entries for that name. Concurrent hosts on the same loopback address
+retain separate session cookies. Cookies have no port scope, so another local
+server at that address can still receive them. A new host run refuses the old
+cookie. The host uses HTTP
 on loopback, so the cookie has no `Secure` attribute. Both routes
 refuse a wrong key or code with 401 and the standard failure envelope. Both
 routes retain the full Host and Origin checks, including cross-site refusal.
@@ -318,7 +323,8 @@ closure. It does not mount a fixture store or claim complete document integratio
 The host tests submit valid denied reads and writes and compare repository bytes
 and directory entries. They also test foreign origins, DNS-rebinding Host values,
 duplicate headers, query and unknown cookie credential refusal, session cookie
-attributes, session access after reload, cookie refusal after host restart,
+attributes, session access after reload, separate sessions on concurrent hosts,
+cookie refusal after host restart,
 held source-file traversal,
 invalid startup configuration, and shutdown with incomplete HTTP requests.
 

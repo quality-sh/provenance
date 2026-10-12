@@ -19,7 +19,7 @@ fn session_cookie(host: &Host) -> String {
     assert_eq!(&parts[1..], &["HttpOnly", "SameSite=Strict", "Path=/"]);
     assert!(!cookie.contains(host.bearer()));
     assert!(parts[0].starts_with(&format!(
-        "provenance_review_session={}.",
+        "provenance_review_session_{0}={0}.",
         host.config["instanceNonce"].as_str().unwrap()
     )));
     parts[0].to_owned()
@@ -135,4 +135,47 @@ fn a_refused_exchange_sets_no_cookie() {
     let refused = redeem(&host, "not-a-launch-code");
     assert_eq!(refused.status(), 401);
     assert_eq!(refused.header("Set-Cookie"), None);
+}
+
+#[test]
+/// Implementation aid: concurrent hosts must retain separate browser sessions.
+fn concurrent_hosts_keep_their_own_cookies() {
+    let first_repo = repository();
+    let second_repo = repository();
+    let first = start(first_repo.path());
+    let second = start(second_repo.path());
+    let first_cookie = session_cookie(&first);
+    let second_cookie = session_cookie(&second);
+    assert_ne!(
+        first_cookie.split_once('=').unwrap().0,
+        second_cookie.split_once('=').unwrap().0
+    );
+    let cookies = format!("{first_cookie}; {second_cookie}");
+    for (host, foreign) in [(&first, &second_cookie), (&second, &first_cookie)] {
+        assert_eq!(
+            request(host, "GET", "/", false).call().unwrap().status(),
+            200
+        );
+        assert_eq!(
+            request(host, "GET", "/review-config", false)
+                .set("Cookie", &cookies)
+                .set("Sec-Fetch-Site", "same-origin")
+                .set("Origin", host.config["endpoint"].as_str().unwrap())
+                .call()
+                .unwrap()
+                .status(),
+            200
+        );
+        assert_eq!(
+            response(
+                request(host, "GET", "/review-config", false)
+                    .set("Cookie", foreign)
+                    .set("Sec-Fetch-Site", "same-origin")
+                    .set("Origin", host.config["endpoint"].as_str().unwrap())
+                    .call()
+            )
+            .status(),
+            401
+        );
+    }
 }
