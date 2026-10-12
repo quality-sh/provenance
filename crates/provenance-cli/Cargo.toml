@@ -53,6 +53,7 @@ uuid.workspace = true
 ureq.workspace = true
 url.workspace = true
 walkdir.workspace = true
+notify = { version = "8.2.0", default-features = false, features = ["macos_kqueue"] }
 
 [target.'cfg(not(windows))'.dependencies]
 open.workspace = true
