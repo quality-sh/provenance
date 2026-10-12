@@ -28,10 +28,16 @@ jobs:
           tool: cargo-audit
       - run: cargo audit
 
+  # The scan range follows the event:
+  # - pull_request: only the commits of the pull request (base..head).
+  # - push to main: all of the history of main.
+  # - schedule and workflow_dispatch: all refs, which includes the public
+  #   snapshot branches that the cargo CI shim pushes.
   gitleaks:
     name: Gitleaks secret scan
     runs-on: ubuntu-24.04
     steps:
+      # The full history is necessary for each range above.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -40,7 +46,27 @@ jobs:
           curl -sSL -o gitleaks.tar.gz \
             https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
           tar -xzf gitleaks.tar.gz gitleaks
-      - run: ./gitleaks git . --no-banner --redact --exit-code 1
+      - name: Scan commits
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          case "$EVENT_NAME" in
+            pull_request)
+              git cat-file -e "$BASE_SHA^{commit}"
+              git cat-file -e "$HEAD_SHA^{commit}"
+              log_opts="$BASE_SHA..$HEAD_SHA"
+              ;;
+            push)
+              log_opts="$GITHUB_SHA"
+              ;;
+            *)
+              log_opts="--full-history --all"
+              ;;
+          esac
+          echo "gitleaks log options: $log_opts"
+          ./gitleaks git . --no-banner --redact --exit-code 1 --log-opts="$log_opts"
 
   dependency-review:
     name: Dependency review
