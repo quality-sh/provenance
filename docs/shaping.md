@@ -72,11 +72,17 @@ The turn loop, against an anchor requirement:
    requirements that can't produce a rule, open questions and unexplored topics.
 2. **Claim** — at method-dependent granularity (see table below). Claiming happens
    before any work so concurrent sessions skip claimed items.
-3. **Resolve and land as you go** — each question is recorded the moment it resolves,
+3. **Recover before each turn** — read the stored Topic and selected Question again.
+   Check the Topic claim, Question claim, Topic membership, status, and Question method.
+   Repeat these reads after a restart or context compaction. A Topic claim does not
+   select a method: each Question has its own method. Stop work on the selected item
+   if another actor holds a required claim, recovery is incomplete, or the Question
+   is no longer open. Use record reads and all collection pages to recover the map.
+4. **Resolve and land as you go** — each question is recorded the moment it resolves,
    before the dialogue moves on. Expect fan-out (see below).
-4. **Graduate fog** the answers made sharp; update or kill questions the decisions
+5. **Graduate fog** the answers made sharp; update or kill questions the decisions
    invalidated.
-5. **Stop and hand off** — the turn ends at the first stop condition:
+6. **Stop and hand off** — the turn ends at the first stop condition:
    context budget nearing its threshold, human done, a fork/verify spawn
    (two-phase boundary), or the topic drained.
 
