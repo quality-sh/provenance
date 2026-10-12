@@ -76,6 +76,8 @@ jobs:
               # binary with include_str!, and a test compares the installed
               # copies against what an install writes.
               - "skills/**"
+              - "tools/skills/**"
+              - "tools/operation-codegen/**"
               - ".agents/skills/**"
               - ".claude/skills/**"
             contract:
@@ -136,6 +138,7 @@ jobs:
       - name: Run the grammar linter tests
         run: node --test grammar-lint.test.mjs
         working-directory: tools/operation-codegen
+      - run: node --test tools/skills/*.test.mjs
       - run: node tools/operation-codegen/check-source-control.mjs
       - run: node tools/operation-codegen/generate.mjs
       - name: Archive generated source for dependent jobs
@@ -337,6 +340,10 @@ jobs:
       matrix: ${{ fromJSON(needs.changes.outputs.test-matrix) }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: node tools/skills/prepare.mjs
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: operation-generated
@@ -403,6 +410,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: node tools/skills/prepare.mjs
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
@@ -895,6 +906,30 @@ jobs:
           shared-key: repository-file-access-${{ matrix.target }}
       - run: cargo test --locked -p provenance-store --target ${{ matrix.target }} operations::files
 
+  skills-install:
+    name: Skill install (${{ matrix.os }})
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c
+        with:
+          shared-key: skills-install
+      - run: node tools/skills/prepare.mjs
+      - name: Test public skill installation and init
+        run: cargo test --locked -p provenance-cli --test cli_skills --test cli_skills_copy_tree --test cli_skills_committed_copies --test cli_skills_cleanup --test cli_init_onboarding --test cli_init_summary
+
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never
   # reports its expanded name, so requiring the jobs directly deadlocks a
@@ -922,6 +957,7 @@ jobs:
       - release-smoke-tools
       - operation-contract
       - repository-file-access
+      - skills-install
     if: always()
     runs-on: ubuntu-24.04
     steps:

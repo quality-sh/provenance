@@ -22,19 +22,31 @@ struct EmbeddedSkill {
 const EMBEDDED_SKILLS: &[EmbeddedSkill] = &[
     EmbeddedSkill {
         directory: "provenance-fork-tournament",
-        content: include_str!("../skills/provenance-fork-tournament/SKILL.md"),
+        content: include_str!(concat!(
+            env!("OUT_DIR"),
+            "/skills/provenance-fork-tournament/SKILL.md"
+        )),
     },
     EmbeddedSkill {
         directory: "provenance-grounded-writing",
-        content: include_str!("../skills/provenance-grounded-writing/SKILL.md"),
+        content: include_str!(concat!(
+            env!("OUT_DIR"),
+            "/skills/provenance-grounded-writing/SKILL.md"
+        )),
     },
     EmbeddedSkill {
         directory: "provenance-shaping",
-        content: include_str!("../skills/provenance-shaping/SKILL.md"),
+        content: include_str!(concat!(
+            env!("OUT_DIR"),
+            "/skills/provenance-shaping/SKILL.md"
+        )),
     },
     EmbeddedSkill {
         directory: "provenance-swarm-backtrace",
-        content: include_str!("../skills/provenance-swarm-backtrace/SKILL.md"),
+        content: include_str!(concat!(
+            env!("OUT_DIR"),
+            "/skills/provenance-swarm-backtrace/SKILL.md"
+        )),
     },
 ];
 

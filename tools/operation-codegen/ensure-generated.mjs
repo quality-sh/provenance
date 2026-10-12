@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generationIsCurrent } from './artifacts.mjs';
+import { prepareSkills } from '../skills/prepare.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export function runGenerator() {
@@ -10,6 +11,7 @@ export function runGenerator() {
   if (result.status !== 0) throw new Error('Operation generation failed. Install the pinned Rust toolchain and run npm ci --prefix tools/operation-codegen, then retry.');
 }
 export async function ensureGenerated() {
+  await prepareSkills(root);
   if (!await generationIsCurrent(root)) runGenerator();
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await ensureGenerated();
