@@ -7,7 +7,7 @@ runs:
     - name: Install the pinned sfw CLI
       shell: bash
       env:
-        SFW_VERSION: "1.15.4"
+        SFW_VERSION: '1.15.4'
       run: |
         set -euo pipefail
         # One pinned SocketDev/sfw-free release. The SHA-256 digest pins each
