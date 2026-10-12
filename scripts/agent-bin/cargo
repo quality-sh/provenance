@@ -17,6 +17,7 @@ from pathlib import Path
 
 
 CHECK_JOBS = {"build": "Build", "check": "Check", "clippy": "Clippy", "test": "Test"}
+SECRET_SCAN_JOB = "Secret scan"
 WORKFLOW = "agent-cargo.yml"
 
 
@@ -175,6 +176,17 @@ def run_id_for_snapshot(root, sha, repository, args, artifact=False):
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
+def print_failed_logs(run_id, repository, job, url):
+    try:
+        logs = command(
+            ["gh", "run", "view", str(run_id), "--job", str(job["databaseId"]), "--log-failed", "--repo", repository]
+        )
+    except RuntimeError:
+        logs = f"Failed-step logs are unavailable; inspect {url}"
+    if logs:
+        print(logs)
+
+
 def show_result(run_id, repository, check, custom, artifact=False):
     url = f"https://github.com/{repository}/actions/runs/{run_id}"
     print(f"Remote Cargo: {check} in {url}", flush=True)
@@ -185,18 +197,20 @@ def show_result(run_id, repository, check, custom, artifact=False):
     job = next((item for item in jobs if item["name"] == name), None)
     if job is None:
         raise RuntimeError(f"The remote {check} job did not run: {url}")
+    result = 0
     if job["conclusion"] != "success":
-        try:
-            logs = command(
-                ["gh", "run", "view", str(run_id), "--job", str(job["databaseId"]), "--log-failed", "--repo", repository]
-            )
-        except RuntimeError:
-            logs = f"Failed-step logs are unavailable; inspect {url}"
-        if logs:
-            print(logs)
+        print_failed_logs(run_id, repository, job, url)
         print(f"Remote Cargo: {check} failed ({job['conclusion']})")
-        return 1
-    print(f"Remote Cargo: {check} passed")
+        result = 1
+    else:
+        print(f"Remote Cargo: {check} passed")
+    scan = next((item for item in jobs if item["name"] == SECRET_SCAN_JOB), None)
+    if scan is not None and scan["conclusion"] != "success":
+        print_failed_logs(run_id, repository, scan, url)
+        print(f"Remote Cargo: secret scan failed ({scan['conclusion']}); the snapshot branch is public: {url}")
+        result = 1
+    if result:
+        return result
     if check == "build" and not artifact:
         print("Build outputs remain on the CI runner; no local target files were created.")
     return 0

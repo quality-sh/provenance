@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
+  group: security-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -29,44 +29,52 @@ jobs:
       - run: cargo audit
 
   # The scan range follows the event:
-  # - pull_request: only the commits of the pull request (base..head).
+  # - pull_request: the commits of the pull request that main does not
+  #   contain. This also covers a pull request with a base other than main.
   # - push to main: all of the history of main.
-  # - schedule and workflow_dispatch: all refs, which includes the public
-  #   snapshot branches that the cargo CI shim pushes.
+  # - schedule and workflow_dispatch: all refs. Agent Cargo verification
+  #   scans each snapshot when the cargo CI shim pushes it.
+  # --diff-merges=first-parent also scans the changes that a merge commit
+  # makes, which includes conflict resolutions.
   gitleaks:
     name: Gitleaks secret scan
     runs-on: ubuntu-24.04
     steps:
-      # The full history is necessary for each range above.
+      # The full history and origin/main are necessary for each range above.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Install gitleaks
+        shell: bash
         run: |
-          curl -sSL -o gitleaks.tar.gz \
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
             https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
-          tar -xzf gitleaks.tar.gz gitleaks
+          # From gitleaks_8.24.3_checksums.txt of the same release.
+          echo "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
       - name: Scan commits
+        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          set -euo pipefail
           case "$EVENT_NAME" in
             pull_request)
-              git cat-file -e "$BASE_SHA^{commit}"
               git cat-file -e "$HEAD_SHA^{commit}"
-              log_opts="$BASE_SHA..$HEAD_SHA"
+              git rev-parse --verify --quiet refs/remotes/origin/main >/dev/null
+              log_opts="--diff-merges=first-parent $HEAD_SHA --not origin/main"
               ;;
             push)
-              log_opts="$GITHUB_SHA"
+              log_opts="--diff-merges=first-parent $GITHUB_SHA"
               ;;
             *)
-              log_opts="--full-history --all"
+              log_opts="--diff-merges=first-parent --full-history --all"
               ;;
           esac
           echo "gitleaks log options: $log_opts"
-          ./gitleaks git . --no-banner --redact --exit-code 1 --log-opts="$log_opts"
+          "$RUNNER_TEMP/gitleaks" git . --no-banner --redact --exit-code 1 --log-opts="$log_opts"
 
   dependency-review:
     name: Dependency review

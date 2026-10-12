@@ -61,8 +61,8 @@ class AgentCargoTest(unittest.TestCase):
             "  result = os.environ.get('FAKE_TEST_RESULT', 'success')\n"
             "  payload = json.load(open(os.environ['FAKE_GH_PAYLOAD']))\n"
             "  inputs = payload['inputs']\n"
-            "  names = ['Command'] if inputs.get('command_json') else [inputs['command_key'].split('-')[0].capitalize()]\n"
-            "  print(json.dumps({'headBranch': payload.get('headBranch'), 'headSha': payload.get('headSha'), 'status': 'completed', 'jobs': [{'name': name, 'databaseId': i, 'conclusion': os.environ.get('FAKE_BUILD_RESULT', 'success') if name == 'Build' else result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
+            "  names = (['Command'] if inputs.get('command_json') else [inputs['command_key'].split('-')[0].capitalize()]) + ['Secret scan']\n"
+            "  print(json.dumps({'headBranch': payload.get('headBranch'), 'headSha': payload.get('headSha'), 'status': 'completed', 'jobs': [{'name': name, 'databaseId': i, 'conclusion': os.environ.get('FAKE_BUILD_RESULT', 'success') if name == 'Build' else os.environ.get('FAKE_SCAN_RESULT', 'success') if name == 'Secret scan' else result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
             "elif a[:2] == ['run', 'view'] and '--log-failed' in a:\n"
             "  if os.environ.get('FAKE_LOG_ERROR') == '1': sys.exit(1)\n"
             "  print('remote test failure')\n"
@@ -231,6 +231,22 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("LOCAL test", result.stdout)
         self.assertEqual(self.calls_matching("dispatches"), [])
+
+    def test_failed_secret_scan_fails_a_passing_check(self):
+        env = {**self.env, "FAKE_SCAN_RESULT": "failure"}
+        result = self.cargo("check", env=env)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Remote Cargo: check passed", result.stdout)
+        self.assertIn("Remote Cargo: secret scan failed (failure)", result.stdout)
+
+    def test_failed_secret_scan_is_reported_with_a_failed_check(self):
+        env = {**self.env, "FAKE_TEST_RESULT": "failure", "FAKE_SCAN_RESULT": "failure"}
+        result = self.cargo("test", env=env)
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Remote Cargo: test failed (failure)", result.stdout)
+        self.assertIn("Remote Cargo: secret scan failed (failure)", result.stdout)
 
     def test_failed_check_still_returns_failure_when_log_download_is_unavailable(self):
         env = {**self.env, "FAKE_TEST_RESULT": "failure", "FAKE_LOG_ERROR": "1"}
