@@ -50,12 +50,12 @@ fn repository() -> (tempfile::TempDir, ProvenanceLayout, Vec<u8>) {
 fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
     let path =
         provenance_store::shards::requirements_path(layout, &ScopeId::new("default").unwrap());
-    std::fs::remove_file(&path).unwrap();
-    assert!(Command::new("mkfifo")
-        .arg(&path)
-        .status()
-        .unwrap()
-        .success());
+    provenance_store::publication::with_repository_publication(layout, || {
+        std::fs::remove_file(&path)?;
+        assert!(Command::new("mkfifo").arg(&path).status()?.success());
+        Ok(())
+    })
+    .unwrap();
     let body = json!({"data":{
         "actor":"ben", "role":"user", "body":"The active write finishes before exit."
     }})
