@@ -73,9 +73,8 @@ impl Socket {
             .set_read_timeout(Some(Duration::from_millis(250)))
             .unwrap();
         let mut byte = [0];
-        let error = match self.0.peek(&mut byte) {
-            Ok(_) => panic!("no duplicate invalidation: {}", self.frame()),
-            Err(error) => error,
+        let Err(error) = self.0.peek(&mut byte) else {
+            panic!("no duplicate invalidation: {}", self.frame());
         };
         assert!(matches!(
             error.kind(),
