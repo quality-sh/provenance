@@ -80,7 +80,7 @@ cat > "$fixture/tests/sdk_macros.rs" <<'RUST'
 use provenance_sdk::{rule, verifies};
 RUST
 
-if ! cargo check --manifest-path "$fixture/Cargo.toml" --all-targets; then
+if ! sfw cargo check --manifest-path "$fixture/Cargo.toml" --all-targets; then
   channel_failure "$channel" "the installed provenance-sdk macro reexports did not compile"
   exit 1
 fi

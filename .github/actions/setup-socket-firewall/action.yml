@@ -24,6 +24,7 @@ runs:
         directory="$RUNNER_TEMP/socket-firewall"
         mkdir -p "$directory"
         curl --fail --silent --show-error --location \
+          --proto '=https' --proto-redir '=https' \
           --retry 5 --retry-delay 3 \
           --output "$directory/$name" \
           "https://github.com/SocketDev/sfw-free/releases/download/v${SFW_VERSION}/${asset}"
