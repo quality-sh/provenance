@@ -9,12 +9,14 @@ use tokio::sync::{mpsc, oneshot};
 
 /// Asks a connected page to show a record.
 #[derive(Clone, Debug, Serialize)]
-#[serde(tag = "type", rename = "show-record", rename_all = "camelCase")]
+#[serde(tag = "type", rename = "show-record")]
 pub(super) struct ShowRecord {
-    request_id: String,
-    root_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    focus_id: Option<String>,
+    #[serde(rename = "requestId")]
+    request: String,
+    #[serde(rename = "rootId")]
+    root: String,
+    #[serde(rename = "focusId", skip_serializing_if = "Option::is_none")]
+    focus: Option<String>,
 }
 
 /// A frame from a page.
@@ -51,10 +53,13 @@ pub(super) struct Page {
 impl Navigation {
     pub fn attach(&self) -> Page {
         let (sender, links) = mpsc::unbounded_channel();
-        let mut pages = self.inner.lock().unwrap();
-        pages.next += 1;
-        let id = pages.next;
-        pages.open.push((id, sender));
+        let id = {
+            let mut pages = self.inner.lock().unwrap();
+            pages.next += 1;
+            let id = pages.next;
+            pages.open.push((id, sender));
+            id
+        };
         Page {
             id,
             links,
@@ -77,9 +82,9 @@ impl Navigation {
             };
             let page = *page;
             let link = ShowRecord {
-                request_id: request_id.clone(),
-                root_id,
-                focus_id,
+                request: request_id.clone(),
+                root: root_id,
+                focus: focus_id,
             };
             if sender.send(link).is_err() {
                 return false;

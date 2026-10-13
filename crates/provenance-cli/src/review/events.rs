@@ -218,7 +218,7 @@ async fn connected(
 
 async fn send(
     socket: &mut WebSocket,
-    frame: &impl serde::Serialize,
+    frame: &(impl serde::Serialize + Sync),
     stopped: &mut stop_watch::Receiver<bool>,
 ) -> bool {
     if *stopped.borrow() {
