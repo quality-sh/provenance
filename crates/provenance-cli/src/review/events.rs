@@ -1,4 +1,5 @@
 mod frames;
+mod navigation;
 mod subscribers;
 mod watch;
 
@@ -9,7 +10,8 @@ use axum::{
     },
     http::{header, HeaderMap},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
+    Json,
 };
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_store::layout::ProvenanceLayout;
@@ -21,6 +23,7 @@ use tokio::sync::{watch as stop_watch, Mutex};
 #[derive(Clone)]
 struct RouteState {
     subscribers: Subscribers,
+    navigation: navigation::Navigation,
     access: Arc<LocalAccess>,
     codes: super::launch::LaunchCodes,
 }
@@ -68,6 +71,7 @@ impl ReviewEvents {
         Self {
             state: RouteState {
                 subscribers,
+                navigation: navigation::Navigation::default(),
                 access,
                 codes,
             },
@@ -78,6 +82,7 @@ impl ReviewEvents {
     pub fn router(&self) -> axum::Router {
         axum::Router::new()
             .route("/review-events", get(upgrade))
+            .route("/review-navigation", post(navigate))
             .with_state(self.state.clone())
     }
 
@@ -129,9 +134,33 @@ async fn upgrade(State(state): State<RouteState>, request: Request) -> Response 
     let Some(subscription) = state.subscribers.subscribe() else {
         return super::refusal(OperationFailure::UnavailableNeeds);
     };
+    let page = state.navigation.attach();
     upgrade
-        .on_upgrade(move |socket| connected(socket, subscription, state.subscribers))
+        .on_upgrade(move |socket| connected(socket, subscription, page, state.subscribers))
         .into_response()
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NavigationRequest {
+    launch_key: String,
+    root_id: String,
+    focus_id: Option<String>,
+}
+
+/// Lets the launch key holder show a record in a connected page; the reply waits for its
+/// acknowledgement, a disconnect or the caller's cancellation.
+async fn navigate(State(state): State<RouteState>, body: axum::body::Bytes) -> Response {
+    match serde_json::from_slice::<NavigationRequest>(&body) {
+        Ok(request) if state.codes.holds_key(&request.launch_key) => {
+            let shown = state
+                .navigation
+                .show(request.root_id, request.focus_id)
+                .await;
+            Json(serde_json::json!({ "shown": shown })).into_response()
+        }
+        _ => super::refusal(OperationFailure::Unauthenticated),
+    }
 }
 
 fn metadata(headers: &HeaderMap, name: &str, expected: &str) -> bool {
@@ -145,6 +174,7 @@ fn metadata(headers: &HeaderMap, name: &str, expected: &str) -> bool {
 async fn connected(
     mut socket: WebSocket,
     mut subscription: Subscription,
+    mut page: navigation::Page,
     subscribers: Subscribers,
 ) {
     if !send(&mut socket, &subscription.ready, &mut subscription.stopped).await {
@@ -153,8 +183,18 @@ async fn connected(
     loop {
         let delivery = tokio::select! {
             frame = subscription.receiver.recv() => frame,
-            incoming = socket.recv() => {
-                if matches!(incoming, None | Some(Err(_) | Ok(Message::Close(_)))) { break; }
+            incoming = socket.recv() => match incoming {
+                None | Some(Err(_) | Ok(Message::Close(_))) => break,
+                Some(Ok(Message::Text(text))) => {
+                    page.receive(&text);
+                    continue;
+                }
+                Some(Ok(_)) => continue,
+            },
+            Some(link) = page.links.recv() => {
+                if !send(&mut socket, &link, &mut subscription.stopped).await {
+                    break;
+                }
                 continue;
             }
             _ = subscription.stopped.changed() => break,
@@ -178,7 +218,7 @@ async fn connected(
 
 async fn send(
     socket: &mut WebSocket,
-    frame: &frames::Frame,
+    frame: &impl serde::Serialize,
     stopped: &mut stop_watch::Receiver<bool>,
 ) -> bool {
     if *stopped.borrow() {
