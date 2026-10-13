@@ -35,7 +35,7 @@ crates_are_visible() {
 }
 
 retry_channel "$channel" crates_are_visible
-if ! cargo install --locked provenance-cli --version "=$version"; then
+if ! sfw cargo install --locked provenance-cli --version "=$version"; then
   channel_failure "$channel" "provenance-cli $version failed to install after it became visible"
   exit 1
 fi
@@ -80,7 +80,7 @@ cat > "$fixture/tests/sdk_macros.rs" <<'RUST'
 use provenance_sdk::{rule, verifies};
 RUST
 
-if ! cargo check --manifest-path "$fixture/Cargo.toml" --all-targets; then
+if ! sfw cargo check --manifest-path "$fixture/Cargo.toml" --all-targets; then
   channel_failure "$channel" "the installed provenance-sdk macro reexports did not compile"
   exit 1
 fi
