@@ -34,6 +34,7 @@ function repository(): string {
 /** One canonical record as the state shard holds it. */
 interface WrittenRecord {
   id: string;
+  status?: string;
   requirement_ids?: string[];
   resolution_ids?: string[];
   refines?: string;
@@ -69,14 +70,14 @@ const requirementData = (id: string, statement: string) => ({
 
 /** A requirement and a resolution the writers already hold, for the
  *  declarations that name a resolution by canonical id. */
-function seedResolution(repo: string): void {
+function seedResolution(repo: string, status = "approved"): void {
   catalogWrite(repo, ["requirements", "create"], requirementData(
     "req_seed", "The seed requirement stands",
   ));
   catalogWrite(repo, ["resolutions", "create"], {
     id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
     supersedes: [], position: "Adopt", rationale: "Seeds the relations",
-    status: "proposed", inputs: [],
+    status, inputs: [],
   });
 }
 
@@ -623,6 +624,7 @@ test("relation fields on spec-bound declarations reach the written records", asy
     ({ id }) => id === idOf("rule", "decision"),
   );
   assert.deepEqual(writtenDecision?.resolution_ids, ["res_seed"]);
+  assert.equal(writtenDecision?.status, "active");
 });
 
 test("a spec-bound relation to a requirement outside the build is refused", () => {
@@ -633,4 +635,22 @@ test("a spec-bound relation to a requirement outside the build is refused", () =
     () => provenance.build(child),
     /Requirement `child` names Requirement `parent` not included in the spec/,
   );
+});
+
+// Implementation-aid test: checks the store refusal through the public SDK.
+test("an active Rule reports the store refusal for a proposed Resolution", async () => {
+  const repo = repository();
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/refused-resolution" });
+  seedResolution(repo, "proposed");
+  const provenance = defineSpec("refused-resolution");
+  const parent = provenance.requirement("parent").statement("Access is governed");
+  const decision = provenance.rule("decision")
+    .statement("Access follows the seed decision").resolutions("res_seed");
+
+  await assert.rejects(apply(provenance.build(parent.rules(decision))), (error: unknown) => {
+    assert.ok(error instanceof OperationError);
+    assert.equal(error.failure.error.kind, "invalid_update");
+    assert.equal(error.message, "invalid_update");
+    return true;
+  });
 });

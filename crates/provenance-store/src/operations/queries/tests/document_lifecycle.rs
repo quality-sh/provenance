@@ -337,7 +337,7 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
         "rule_visible_reference",
         &["req_overtime"],
         &["res_reference_only"],
-        RuleStatus::Active,
+        RuleStatus::Draft,
     );
     add_resolution(
         &store,
@@ -352,7 +352,7 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
         "rule_visible_hidden_parent",
         &["req_outside"],
         &["res_hidden_parent"],
-        RuleStatus::Active,
+        RuleStatus::Draft,
     );
     append_record(
         &crate::shards::threads_path(&store.layout, &scope),

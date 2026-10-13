@@ -44,6 +44,7 @@ function repository(): string {
 /** One canonical record as the state shard holds it. */
 interface WrittenRecord {
   id: string;
+  status?: string;
   requirement_ids?: string[];
   resolution_ids?: string[];
   refines?: string;
@@ -83,7 +84,7 @@ function seedResolution(repo: string): void {
   catalogCreate(repo, "resolutions", {
     id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
     supersedes: [], position: "Adopt", rationale: "Seeds the relations",
-    status: "proposed", inputs: [],
+    status: "approved", inputs: [],
   });
 }
 
@@ -594,6 +595,7 @@ test("relation fields on fluent declarations reach the written records", async (
     ({ id }) => id === idOf("rule", "decision"),
   );
   assert.deepEqual(writtenDecision?.resolution_ids, ["res_seed"]);
+  assert.equal(writtenDecision?.status, "active");
 });
 
 test("a fluent relation to a requirement outside the build is refused", () => {
