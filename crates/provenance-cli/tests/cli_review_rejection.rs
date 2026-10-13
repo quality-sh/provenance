@@ -144,3 +144,68 @@ fn wrong_feedback_owner_leaves_the_submission_pending() {
     let discussions: Value = serde_json::from_str(&discussions.into_string().unwrap()).unwrap();
     assert_eq!(discussions["data"]["items"], json!([]));
 }
+
+fn document(host: &Host) -> Value {
+    let result = request(
+        host,
+        "GET",
+        "/requirements/req_reject/document?exclude_terminal=true",
+        true,
+    )
+    .call()
+    .unwrap();
+    serde_json::from_str::<Value>(&result.into_string().unwrap()).unwrap()["data"].clone()
+}
+
+fn pending_ids(document: &Value) -> Vec<String> {
+    document["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry["review"]["outcome"] == "pending")
+        .map(|entry| entry["node"]["id"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+fn ids(document: &Value) -> Vec<&str> {
+    document["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| entry["node"]["id"].as_str())
+        .collect()
+}
+
+#[test]
+#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
+fn cli_rejection_removes_the_resolution_from_the_review_document() {
+    let repo = repository_with_actors(&["reviewer"]);
+    create_resolution(repo.path());
+    let host = start(repo.path());
+    pending(&host);
+    let before = document(&host);
+    assert!(pending_ids(&before).contains(&"res_reject".to_owned()));
+    let pending_before = before["review_totals"]["pending"].as_u64().unwrap();
+
+    // The agent rejects the proposal through the CLI after the owner decides.
+    let output = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
+        .args(["resolutions", "res_reject", "update", "--repo"])
+        .arg(repo.path())
+        .args(["--status", "rejected"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let after = document(&host);
+    assert!(!ids(&after).contains(&"res_reject"), "{after}");
+    assert!(!pending_ids(&after).contains(&"res_reject".to_owned()));
+    assert_eq!(
+        after["review_totals"]["pending"].as_u64().unwrap(),
+        pending_before - 1
+    );
+    assert_eq!(read(&host)["status"], "rejected");
+}
