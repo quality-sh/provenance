@@ -53,11 +53,16 @@ jobs:
           # From gitleaks_8.24.3_checksums.txt of the same release.
           echo "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+      - name: Test the scan script
+        env:
+          GITLEAKS: ${{ runner.temp }}/gitleaks
+        run: python3 .github/scripts/gitleaks-scan.test.py
       - name: Scan commits
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITLEAKS: ${{ runner.temp }}/gitleaks
         run: |
           set -euo pipefail
           case "$EVENT_NAME" in
@@ -73,8 +78,7 @@ jobs:
               log_opts="--diff-merges=first-parent --full-history --all"
               ;;
           esac
-          echo "gitleaks log options: $log_opts"
-          "$RUNNER_TEMP/gitleaks" git . --no-banner --redact --exit-code 1 --log-opts="$log_opts"
+          .github/scripts/gitleaks-scan.sh "$log_opts"
 
   dependency-review:
     name: Dependency review

@@ -62,7 +62,7 @@ class AgentCargoTest(unittest.TestCase):
             "  payload = json.load(open(os.environ['FAKE_GH_PAYLOAD']))\n"
             "  inputs = payload['inputs']\n"
             "  scan = os.environ.get('FAKE_SCAN_RESULT', 'success')\n"
-            "  names = (['Command'] if inputs.get('command_json') else [inputs['command_key'].split('-')[0].capitalize()]) + ([] if scan == 'absent' else ['Secret scan'])\n"
+            "  names = ([] if os.environ.get('FAKE_CHECK_JOB') == 'absent' else ['Command'] if inputs.get('command_json') else [inputs['command_key'].split('-')[0].capitalize()]) + ([] if scan == 'absent' else ['Secret scan'])\n"
             "  print(json.dumps({'headBranch': payload.get('headBranch'), 'headSha': payload.get('headSha'), 'status': 'completed', 'jobs': [{'name': name, 'databaseId': 99 if name == 'Secret scan' else i, 'conclusion': os.environ.get('FAKE_BUILD_RESULT', 'success') if name == 'Build' else scan if name == 'Secret scan' else result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
             "elif a[:2] == ['run', 'view'] and '--log-failed' in a:\n"
             "  if os.environ.get('FAKE_LOG_ERROR') == '1': sys.exit(1)\n"
@@ -309,6 +309,24 @@ class AgentCargoTest(unittest.TestCase):
 
                 self.assertEqual(result.returncode, 1)
                 self.assertIn(f"Remote Cargo: secret scan failed ({conclusion})", result.stdout)
+
+    def test_failed_secret_scan_is_acted_on_before_a_missing_check_job_is_reported(self):
+        for args in (("check",), ("test", "-p", "provenance-cli")):
+            with self.subTest(args=args):
+                env = {**self.env, "FAKE_CHECK_JOB": "absent", "FAKE_SCAN_RESULT": "failure", "PROVENANCE_CI_RERUN": "1"}
+                result = self.cargo(*args, env=env)
+
+                self.assertEqual(result.returncode, 2)
+                snapshot = result.stdout.split("Remote Cargo: verifying snapshot ", 1)[1].splitlines()[0]
+                self.assertIn("gitleaks finding in src.rs", result.stdout)
+                self.assertIn("Remote Cargo: secret scan failed (failure)", result.stdout)
+                self.assertIn("Rotate each credential that the scan found", result.stdout)
+                self.assertIn(f"Remote Cargo: The remote {args[0]} job did not run", result.stderr)
+                for prefix in ("agent-ci", "agent-snapshot"):
+                    refs = run("git", "for-each-ref", "--format=%(refname)", f"refs/heads/{prefix}", cwd=self.remote)
+                    self.assertEqual(refs.stdout.strip(), "", prefix)
+                if len(args) > 1:
+                    self.assertIn(f"Remote Cargo: deleted agent-snapshot/{snapshot}", result.stdout)
 
     def test_failed_check_still_returns_failure_when_log_download_is_unavailable(self):
         env = {**self.env, "FAKE_TEST_RESULT": "failure", "FAKE_LOG_ERROR": "1"}

@@ -195,14 +195,12 @@ def show_result(root, sha, run_id, repository, check, custom, artifact=False):
     jobs = json.loads(raw)["jobs"]
     name = "Command" if custom else CHECK_JOBS[check]
     job = next((item for item in jobs if item["name"] == name), None)
-    if job is None:
-        raise RuntimeError(f"The remote {check} job did not run: {url}")
     result = 0
-    if job["conclusion"] != "success":
+    if job is not None and job["conclusion"] != "success":
         print_failed_logs(run_id, repository, job, url)
         print(f"Remote Cargo: {check} failed ({job['conclusion']})")
         result = 1
-    else:
+    elif job is not None:
         print(f"Remote Cargo: {check} passed")
     # A snapshot from a branch without the scan job, or one that edits
     # agent-cargo.yml, runs no scan.
@@ -218,6 +216,10 @@ def show_result(root, sha, run_id, repository, check, custom, artifact=False):
         )
         remove_snapshot_branch(root, sha, repository)
         result = 1
+    # Act on the scan before this error, so that a leak is reported and its
+    # snapshot branch is deleted also when the check job is missing.
+    if job is None:
+        raise RuntimeError(f"The remote {check} job did not run: {url}")
     if result:
         return result
     if check == "build" and not artifact:
@@ -306,8 +308,8 @@ def main():
     sha = snapshot(root)
     print(f"Remote Cargo: verifying snapshot {sha}", flush=True)
     run_id = run_id_for_snapshot(root, sha, repository, args, artifact)
-    result = show_result(root, sha, run_id, repository, args[0], len(args) != 1, artifact)
     try:
+        result = show_result(root, sha, run_id, repository, args[0], len(args) != 1, artifact)
         if result == 0 and artifact:
             download_build(root, sha, run_id, repository)
     finally:
