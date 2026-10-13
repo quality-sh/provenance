@@ -276,7 +276,7 @@ async fn relationship_patches_accept_deltas_and_final_sets_atomically() {
     let (status, resolution_replaced) = patch(
         &host,
         "/resolutions/resolution_shared",
-        json!({"requirement_ids":["req_second"],"supersedes":[]}),
+        json!({"requirement_ids":["req_second"],"supersedes":[],"status":"approved"}),
     )
     .await;
     assert_eq!(status, 200, "{resolution_replaced}");
