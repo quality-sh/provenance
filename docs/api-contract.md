@@ -36,14 +36,14 @@ Collections:
   `dispositions`. An index entry carries the canonical parent address.
 - The optional `exclude_terminal` Boolean query parameter applies to graph
   collection lists and searches. When it is `true`, the result excludes
-  archived Rules and abandoned Resolutions. A superseded Resolution stays in
-  the result. The default is `false`.
+  archived Rules and abandoned or rejected Resolutions. A superseded
+  Resolution stays in the result. The default is `false`.
 
 Subresources have parent-owned addresses:
 
 - `GET /requirements/{id}/document` reads the assembled document. The optional
   `exclude_terminal` Boolean query parameter excludes archived Rules and
-  abandoned Resolutions when it is `true`. A superseded Resolution stays in the
+  abandoned or rejected Resolutions when it is `true`. A superseded Resolution stays in the
   document. Each record follows its own lifecycle. An active Rule stays in the
   document when its only document link is an abandoned Resolution. The
   abandoned Resolution and its discussions stay out of the document. The

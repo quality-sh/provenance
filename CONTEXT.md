@@ -215,8 +215,8 @@ at one unchanged projection revision. A failed refresh does not establish it.
 ## Terminal-and-dead record
 
 A record whose lifecycle removes it from the current review document but keeps
-it available for historical views. An archived Rule and an abandoned Resolution
-are terminal-and-dead records. A superseded Resolution is not a
+it available for historical views. An archived Rule and an abandoned or rejected
+Resolution are terminal-and-dead records. A superseded Resolution is not a
 terminal-and-dead record.
 
 ## Thread container

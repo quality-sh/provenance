@@ -172,7 +172,7 @@ macro_rules! expand_record_family_rows {
                     field: resolutions,
                     path: resolutions_path,
                     meta: { shard: "resolutions/res.jsonl", order: 30, budget: Resource,
-                        terminal: ["abandoned"] },
+                        terminal: ["abandoned", "rejected"] },
                     node: [Resolution],
                     reader: { open: list_resolutions, closed: [closed_resolutions],
                         strategy: direct },
