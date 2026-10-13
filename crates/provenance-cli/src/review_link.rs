@@ -56,7 +56,7 @@ pub async fn print(
     .ok_or_else(|| anyhow::anyhow!("record {record_id} is not in a Requirement review document"))?;
     let output = match &target.host {
         // A connected page shows the record, so its drafts and position stay.
-        Some(host) if !no_open && shown_in_connected_page(host, &target) => LinkOutput {
+        Some(host) if !no_open && shown_in_connected_page(host, &target).await => LinkOutput {
             review_url: Some(plain_link(host, &target)),
             opened: Some(true),
             message: None,
@@ -211,7 +211,7 @@ fn launch_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> anyhow::Res
 
 /// Asks the host to show the record in a connected page and waits, without a deadline, for the
 /// page to acknowledge it. Any other outcome uses the browser.
-fn shown_in_connected_page(host: &DiscoveredLocalHost, target: &ReviewTarget) -> bool {
+async fn shown_in_connected_page(host: &DiscoveredLocalHost, target: &ReviewTarget) -> bool {
     let Ok(key) = crate::review::launch::LaunchKey::read(host.instance_nonce()) else {
         return false;
     };
@@ -222,16 +222,20 @@ fn shown_in_connected_page(host: &DiscoveredLocalHost, target: &ReviewTarget) ->
         "rootId": target.root.as_str(),
         "focusId": target.focus,
     });
-    ureq::AgentBuilder::new()
-        .redirects(0)
-        .build()
-        .post(url.as_str())
-        .set("Content-Type", "application/json")
-        .send_string(&body.to_string())
-        .ok()
-        .and_then(|response| response.into_string().ok())
-        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-        .is_some_and(|reply| reply["shown"] == Value::Bool(true))
+    tokio::task::spawn_blocking(move || {
+        ureq::AgentBuilder::new()
+            .redirects(0)
+            .build()
+            .post(url.as_str())
+            .set("Content-Type", "application/json")
+            .send_string(&body.to_string())
+            .ok()
+            .and_then(|response| response.into_string().ok())
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+            .is_some_and(|reply| reply["shown"] == Value::Bool(true))
+    })
+    .await
+    .unwrap_or(false)
 }
 
 /// Puts the review document and optional focused record into the review URL.

@@ -49,11 +49,11 @@ interface BootstrapDependencies {
 
 /** Tells the person that the page does not show later saves until it reconnects. */
 export const LIVE_UPDATES_PAUSED =
-  'Live updates stopped. They start again when this page is active, or select Open / Refresh.';
+  'Live updates stopped. Focus this page to reconnect. Unsaved drafts stay open.';
 
 /** Tells the person that a reviewer setting changed and how to apply it. */
 export const SETTINGS_CHANGED =
-  'Reviewer settings changed. Select Open / Refresh to apply them; unsaved drafts close.';
+  'Reviewer settings changed. Save or discard your drafts, then reload this page to apply the settings.';
 
 const sameActors = (left: ReviewConfig, right: ReviewConfig) =>
   left.dispositionActorIds.length === right.dispositionActorIds.length &&
@@ -107,11 +107,16 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   }
   let configuration: (() => Promise<ReviewConfig>) | undefined;
   let current: ReviewConfig | undefined;
+  let firstReady = true;
   const events = connectEvents({
     open: dependencies.openEvents,
     refresh: change => {
       session.refresh(change);
       if (change._tag !== 'Everything' || !configuration) return;
+      if (change.reason === 'ready' && firstReady) {
+        firstReady = false;
+        return;
+      }
       // The configuration can change with the settings, so a full read reads it too.
       void configuration().then(next => {
         if (current && !sameActors(current, next)) status.textContent = SETTINGS_CHANGED;

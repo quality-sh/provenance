@@ -113,3 +113,77 @@ test('a review link shows its record in the mounted page and acknowledges it', a
   assert.deepEqual(addresses, ['/?root=req_other&focus=rule_b']);
   assert.deepEqual(socket.sent.map(text => JSON.parse(text)), [{ type: 'ack', requestId: 'r1' }]);
 });
+
+// Regression aid: exercise recovery through the host page without browser UI tests.
+function livePage() {
+  const elements = new Map(['root', 'selection', 'requirement', 'status'].map(id => [id, fakeElement()]));
+  const sockets: import('./events.ts').EventSocket[] = [];
+  let wake!: () => void;
+  let actors = ['maintainer'];
+  let reads = 0;
+  let mounts = 0;
+  let disposals = 0;
+  bootstrapReviewPage({
+    document: { getElementById: id => elements.get(id) },
+    location: { origin, pathname: '/', search: '?root=req_root', hash: '' },
+    history: { replaceState() {} },
+    fetch: async () => {
+      reads++;
+      return { ok: true, json: async () => ({ ...config, dispositionActorIds: actors }) };
+    },
+    mount() {
+      mounts++;
+      return { dispose() { disposals++; }, refresh() {}, showRecord: async () => {} };
+    },
+    openEvents() {
+      const socket = { onmessage: null, onclose: null, send() {}, close() {} };
+      sockets.push(socket);
+      return socket;
+    },
+    onWake(listener) { wake = listener; },
+  });
+  return {
+    elements, sockets, wake: () => wake(), settings: () => { actors = ['other']; },
+    state: () => ({ reads, mounts, disposals }),
+    frame: (type: string) => sockets.at(-1)?.onmessage?.({ data: JSON.stringify({ type, epoch: 'host', sequence: 0, reason: 'settings' }) }),
+  };
+}
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+test('the first ready reads the page without reading its configuration twice', async () => {
+  const page = livePage();
+  await settle();
+  page.frame('ready');
+  await settle();
+  assert.equal(page.state().reads, 1);
+  page.frame('reset');
+  await settle();
+  assert.equal(page.state().reads, 2);
+});
+
+test('a paused linked page tells the person to focus it and reconnects without disposal', async () => {
+  const page = livePage();
+  await settle();
+  page.sockets[0].onclose?.();
+  page.sockets[1].onclose?.();
+  assert.equal(page.elements.get('selection')?.hidden, true);
+  assert.equal(page.elements.get('status')?.textContent,
+    'Live updates stopped. Focus this page to reconnect. Unsaved drafts stay open.');
+  page.wake();
+  page.frame('ready');
+  await settle();
+  assert.equal(page.sockets.length, 3);
+  assert.equal(page.state().mounts, 1);
+  assert.equal(page.state().disposals, 0);
+});
+
+test('a settings notice gives a visible path after the person saves drafts', async () => {
+  const page = livePage();
+  await settle();
+  page.settings();
+  page.frame('reset');
+  await settle();
+  assert.equal(page.elements.get('status')?.textContent,
+    'Reviewer settings changed. Save or discard your drafts, then reload this page to apply the settings.');
+  assert.equal(page.state().disposals, 0);
+});

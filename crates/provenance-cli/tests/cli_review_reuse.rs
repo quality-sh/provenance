@@ -120,11 +120,15 @@ fn the_newest_page_shows_the_link_and_only_it_can_acknowledge() {
     let mut older = connected(&host);
     let mut newer = connected(&host);
     let browser = BrowserRecorder::install();
-    let child = review_link(&host, repo.path(), &browser, &[]);
+    let mut child = review_link(&host, repo.path(), &browser, &[]);
 
     let link = newer.frame();
     older.send(&json!({"type": "ack", "requestId": link["requestId"]}));
     older.quiet();
+    assert!(
+        child.try_wait().unwrap().is_none(),
+        "the older page cannot end the CLI wait"
+    );
     newer.send(&json!({"type": "ack", "requestId": link["requestId"]}));
 
     assert_eq!(finish(child)["opened"], true);
@@ -167,15 +171,37 @@ fn no_open_prints_the_link_without_moving_the_connected_page() {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 /// Implementation aid: a cancelled wait leaves no request that a later link must pass.
 fn a_cancelled_review_link_does_not_block_the_next_one() {
     let (repo, host) = running_review();
     let mut page = connected(&host);
     let browser = BrowserRecorder::install();
+    let sockets_before = host.socket_handles();
     let mut cancelled = review_link(&host, repo.path(), &browser, &[]);
     let first = page.frame();
+    let waiting_sockets = host.socket_handles();
+    let request_sockets: Vec<_> = waiting_sockets
+        .difference(&sockets_before)
+        .cloned()
+        .collect();
+    assert!(
+        !request_sockets.is_empty(),
+        "the host holds the waiting HTTP request"
+    );
     cancelled.kill().unwrap();
     cancelled.wait().unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while request_sockets
+        .iter()
+        .any(|socket| host.socket_handles().contains(socket))
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the host kept the cancelled HTTP handler"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
     page.send(&json!({"type": "ack", "requestId": first["requestId"]}));
 
     let child = review_link(&host, repo.path(), &browser, &[]);

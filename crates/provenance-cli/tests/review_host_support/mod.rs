@@ -26,6 +26,17 @@ impl Drop for Host {
 }
 
 impl Host {
+    /// Reads host socket ownership from the operating system, without a production hook.
+    #[cfg(target_os = "linux")]
+    pub fn socket_handles(&self) -> std::collections::HashSet<String> {
+        std::fs::read_dir(format!("/proc/{}/fd", self.child.id()))
+            .unwrap()
+            .filter_map(|entry| std::fs::read_link(entry.ok()?.path()).ok())
+            .filter_map(|path| path.to_str().map(str::to_owned))
+            .filter(|target| target.starts_with("socket:["))
+            .collect()
+    }
+
     /// Runs the CLI as the same user as the host, with the same per-user cache.
     pub fn cli(&self) -> Command {
         let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
