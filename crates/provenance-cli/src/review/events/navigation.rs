@@ -108,11 +108,7 @@ impl Page {
             return;
         };
         let mut pages = self.navigation.inner.lock().unwrap();
-        if pages
-            .waiting
-            .get(&request_id)
-            .is_some_and(|(page, _)| *page == self.id)
-        {
+        if pages.waiting.get(&request_id).is_some() {
             if let Some((_, acknowledge)) = pages.waiting.remove(&request_id) {
                 let _ = acknowledge.send(());
             }

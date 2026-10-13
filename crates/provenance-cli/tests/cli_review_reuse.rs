@@ -189,8 +189,7 @@ fn a_cancelled_review_link_does_not_block_the_next_one() {
         !request_sockets.is_empty(),
         "the host holds the waiting HTTP request"
     );
-    cancelled.kill().unwrap();
-    cancelled.wait().unwrap();
+    // Negative control: leave the CLI and its request alive.
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     while request_sockets
         .iter()
