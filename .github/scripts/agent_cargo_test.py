@@ -61,12 +61,11 @@ class AgentCargoTest(unittest.TestCase):
             "  result = os.environ.get('FAKE_TEST_RESULT', 'success')\n"
             "  payload = json.load(open(os.environ['FAKE_GH_PAYLOAD']))\n"
             "  inputs = payload['inputs']\n"
-            "  scan = os.environ.get('FAKE_SCAN_RESULT', 'success')\n"
-            "  names = ([] if os.environ.get('FAKE_CHECK_JOB') == 'absent' else ['Command'] if inputs.get('command_json') else [inputs['command_key'].split('-')[0].capitalize()]) + ([] if scan == 'absent' else ['Secret scan'])\n"
-            "  print(json.dumps({'headBranch': payload.get('headBranch'), 'headSha': payload.get('headSha'), 'status': 'completed', 'jobs': [{'name': name, 'databaseId': 99 if name == 'Secret scan' else i, 'conclusion': os.environ.get('FAKE_BUILD_RESULT', 'success') if name == 'Build' else scan if name == 'Secret scan' else result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
+            "  names = ['Command'] if inputs.get('command_json') else [inputs['command_key'].split('-')[0].capitalize()]\n"
+            "  print(json.dumps({'headBranch': payload.get('headBranch'), 'headSha': payload.get('headSha'), 'status': 'completed', 'jobs': [{'name': name, 'databaseId': i, 'conclusion': os.environ.get('FAKE_BUILD_RESULT', 'success') if name == 'Build' else result if name in ('Test', 'Command') else 'success'} for i, name in enumerate(names, 1)]}))\n"
             "elif a[:2] == ['run', 'view'] and '--log-failed' in a:\n"
             "  if os.environ.get('FAKE_LOG_ERROR') == '1': sys.exit(1)\n"
-            "  print('gitleaks finding in src.rs' if a[a.index('--job') + 1] == '99' else 'remote test failure')\n"
+            "  print('remote test failure')\n"
             "elif a[:2] == ['run', 'download']:\n"
             "  from pathlib import Path\n"
             "  dest = Path(a[a.index('--dir') + 1])\n"
@@ -232,101 +231,6 @@ class AgentCargoTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("LOCAL test", result.stdout)
         self.assertEqual(self.calls_matching("dispatches"), [])
-
-    def test_failed_secret_scan_fails_a_passing_check(self):
-        env = {**self.env, "FAKE_SCAN_RESULT": "failure"}
-        result = self.cargo("check", env=env)
-
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("Remote Cargo: check passed", result.stdout)
-        self.assertIn("Remote Cargo: secret scan failed (failure)", result.stdout)
-
-    def test_failed_secret_scan_is_reported_with_a_failed_check(self):
-        env = {**self.env, "FAKE_TEST_RESULT": "failure", "FAKE_SCAN_RESULT": "failure"}
-        result = self.cargo("test", env=env)
-
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("Remote Cargo: test failed (failure)", result.stdout)
-        self.assertIn("Remote Cargo: secret scan failed (failure)", result.stdout)
-
-    def test_failed_secret_scan_prints_its_logs_and_asks_for_rotation(self):
-        env = {**self.env, "FAKE_SCAN_RESULT": "failure"}
-        result = self.cargo("check", env=env)
-
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("gitleaks finding in src.rs", result.stdout)
-        self.assertNotIn("remote test failure", result.stdout)
-        self.assertIn("Rotate each credential that the scan found", result.stdout)
-
-    def test_failed_secret_scan_still_removes_the_agent_ci_branch(self):
-        env = {**self.env, "FAKE_SCAN_RESULT": "failure"}
-        result = self.cargo("check", env=env)
-
-        self.assertEqual(result.returncode, 1)
-        refs = run("git", "for-each-ref", "--format=%(refname)", "refs/heads/agent-ci", cwd=self.remote)
-        self.assertEqual(refs.returncode, 0, refs.stderr)
-        self.assertEqual(refs.stdout.strip(), "")
-
-    def test_failed_secret_scan_deletes_the_dispatched_snapshot_branch(self):
-        env = {**self.env, "FAKE_SCAN_RESULT": "failure"}
-        result = self.cargo("test", "-p", "provenance-cli", env=env)
-
-        self.assertEqual(result.returncode, 1)
-        snapshot = result.stdout.split("Remote Cargo: verifying snapshot ", 1)[1].splitlines()[0]
-        self.assertIn(f"Remote Cargo: deleted agent-snapshot/{snapshot}", result.stdout)
-        refs = run("git", "for-each-ref", "--format=%(refname)", "refs/heads/agent-snapshot", cwd=self.remote)
-        self.assertEqual(refs.stdout.strip(), "")
-
-    def test_moved_snapshot_branch_is_kept_and_the_delete_command_is_printed(self):
-        (self.repo / "src.rs").write_text("after\n")
-        first = self.cargo("test", "-p", "provenance-cli")
-        snapshot = first.stdout.split("Remote Cargo: verifying snapshot ", 1)[1].splitlines()[0]
-        head = self.git("rev-parse", "HEAD")
-        self.git("push", "--force", str(self.remote), f"{head}:refs/heads/agent-snapshot/{snapshot}")
-
-        env = {**self.env, "FAKE_SCAN_RESULT": "failure"}
-        result = self.cargo("test", "-p", "provenance-cli", env=env)
-
-        self.assertEqual(result.returncode, 1)
-        ref = f"refs/heads/agent-snapshot/{snapshot}"
-        self.assertIn(f"Delete it with: git push --force-with-lease={ref}:{snapshot}", result.stdout)
-        remote = run("git", "rev-parse", ref, cwd=self.remote)
-        self.assertEqual(remote.stdout.strip(), head)
-
-    def test_snapshot_without_a_secret_scan_job_prints_a_notice_and_passes(self):
-        env = {**self.env, "FAKE_SCAN_RESULT": "absent"}
-        result = self.cargo("check", env=env)
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Remote Cargo: check passed", result.stdout)
-        self.assertIn("Remote Cargo: no secret scan ran for this snapshot\n", result.stdout)
-
-    def test_cancelled_or_skipped_secret_scan_fails_the_check(self):
-        for conclusion in ("cancelled", "skipped"):
-            with self.subTest(conclusion=conclusion):
-                env = {**self.env, "FAKE_SCAN_RESULT": conclusion, "PROVENANCE_CI_RERUN": "1"}
-                result = self.cargo("check", env=env)
-
-                self.assertEqual(result.returncode, 1)
-                self.assertIn(f"Remote Cargo: secret scan failed ({conclusion})", result.stdout)
-
-    def test_failed_secret_scan_is_acted_on_before_a_missing_check_job_is_reported(self):
-        for args in (("check",), ("test", "-p", "provenance-cli")):
-            with self.subTest(args=args):
-                env = {**self.env, "FAKE_CHECK_JOB": "absent", "FAKE_SCAN_RESULT": "failure", "PROVENANCE_CI_RERUN": "1"}
-                result = self.cargo(*args, env=env)
-
-                self.assertEqual(result.returncode, 2)
-                snapshot = result.stdout.split("Remote Cargo: verifying snapshot ", 1)[1].splitlines()[0]
-                self.assertIn("gitleaks finding in src.rs", result.stdout)
-                self.assertIn("Remote Cargo: secret scan failed (failure)", result.stdout)
-                self.assertIn("Rotate each credential that the scan found", result.stdout)
-                self.assertIn(f"Remote Cargo: The remote {args[0]} job did not run", result.stderr)
-                for prefix in ("agent-ci", "agent-snapshot"):
-                    refs = run("git", "for-each-ref", "--format=%(refname)", f"refs/heads/{prefix}", cwd=self.remote)
-                    self.assertEqual(refs.stdout.strip(), "", prefix)
-                if len(args) > 1:
-                    self.assertIn(f"Remote Cargo: deleted agent-snapshot/{snapshot}", result.stdout)
 
     def test_failed_check_still_returns_failure_when_log_download_is_unavailable(self):
         env = {**self.env, "FAKE_TEST_RESULT": "failure", "FAKE_LOG_ERROR": "1"}

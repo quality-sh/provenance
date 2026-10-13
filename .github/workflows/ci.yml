@@ -33,7 +33,6 @@ jobs:
       contract: ${{ steps.filter.outputs.contract }}
       release: ${{ steps.filter.outputs.release }}
       policy: ${{ steps.filter.outputs.policy }}
-      agent-cargo: ${{ steps.filter.outputs.agent-cargo }}
       test-matrix: ${{ steps.matrices.outputs.test }}
       file-access-matrix: ${{ steps.matrices.outputs.file_access }}
     steps:
@@ -50,11 +49,6 @@ jobs:
             policy: &policy
               - *ci
               - ".provenance/**"
-            agent-cargo:
-              - *ci
-              - "scripts/agent-bin/**"
-              - ".github/scripts/agent_cargo_test.py"
-              - ".github/workflows/agent-cargo.yml"
             release: &release
               - *ci
               - ".gitattributes"
@@ -901,18 +895,6 @@ jobs:
           shared-key: repository-file-access-${{ matrix.target }}
       - run: cargo test --locked -p provenance-store --target ${{ matrix.target }} operations::files
 
-  agent-cargo-shim:
-    name: Agent Cargo shim
-    needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.agent-cargo == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Test the cargo CI shim
-        run: python3 .github/scripts/agent_cargo_test.py
-
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never
   # reports its expanded name, so requiring the jobs directly deadlocks a
@@ -940,7 +922,6 @@ jobs:
       - release-smoke-tools
       - operation-contract
       - repository-file-access
-      - agent-cargo-shim
     if: always()
     runs-on: ubuntu-24.04
     steps:

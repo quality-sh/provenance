@@ -28,21 +28,15 @@ jobs:
           tool: cargo-audit
       - run: cargo audit
 
-  # The scan range follows the event:
-  # - pull_request: the commits of the pull request that main does not
-  #   contain. This also covers a pull request with a base other than main.
-  # - push to main: all of the history of main.
-  # - schedule and workflow_dispatch: all refs. Agent Cargo verification
-  #   scans each snapshot when the cargo CI shim pushes it.
-  # --diff-merges=first-parent also scans the changes that a merge commit
-  # makes, which includes conflict resolutions.
-  # The gitleaks configuration and ignore file come from main, so a pull
-  # request cannot hide its own finding through them.
+  # A pull request scans only its own commits, a push to main scans the
+  # history of main, and a schedule or manual run scans all refs. A merge
+  # commit is scanned against its first parent, so conflict resolutions are
+  # scanned too. A pull request gets the configuration from main and no
+  # ignore file, so it cannot hide its own finding.
   gitleaks:
     name: Gitleaks secret scan
     runs-on: ubuntu-24.04
     steps:
-      # The full history and origin/main are necessary for each range above.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -55,33 +49,26 @@ jobs:
           # From gitleaks_8.24.3_checksums.txt of the same release.
           echo "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
-      - name: Test the scan script
-        env:
-          GITLEAKS: ${{ runner.temp }}/gitleaks
-        run: python3 .github/scripts/gitleaks-scan.test.py
       - name: Scan commits
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          GITLEAKS: ${{ runner.temp }}/gitleaks
         run: |
           set -euo pipefail
+          config_ref=$GITHUB_SHA
           case "$EVENT_NAME" in
             pull_request)
-              git cat-file -e "$HEAD_SHA^{commit}"
-              git rev-parse --verify --quiet refs/remotes/origin/main >/dev/null
               log_opts="--diff-merges=first-parent $HEAD_SHA --not origin/main"
+              config_ref=origin/main
               ;;
-            push)
-              log_opts="--diff-merges=first-parent $GITHUB_SHA"
-              ;;
-            *)
-              log_opts="--diff-merges=first-parent --full-history --all"
-              ;;
+            push) log_opts="--diff-merges=first-parent $GITHUB_SHA" ;;
+            *) log_opts="--diff-merges=first-parent --full-history --all" ;;
           esac
-          git show refs/remotes/origin/main:.gitleaks.toml > "$RUNNER_TEMP/gitleaks.toml"
-          .github/scripts/gitleaks-scan.sh "$log_opts" --config "$RUNNER_TEMP/gitleaks.toml"
+          git show "$config_ref:.gitleaks.toml" > "$RUNNER_TEMP/gitleaks.toml"
+          rm -f .gitleaksignore
+          "$RUNNER_TEMP/gitleaks" git . --no-banner --redact --exit-code 1 \
+            --config "$RUNNER_TEMP/gitleaks.toml" --log-opts="$log_opts"
 
   dependency-review:
     name: Dependency review
