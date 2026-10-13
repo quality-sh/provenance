@@ -1,6 +1,6 @@
 use super::{read_bindings, ScopeId};
 use crate::build::read_snapshots;
-use crate::envelope::BaselineCompatibility;
+use crate::envelope::{BaselineCompatibility, CommitRole};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -137,12 +137,23 @@ fn head_bindings_refuse_every_legacy_retired_field() {
         for retired in [json!(true), json!(false), Value::Null] {
             let (_dir, repo, _base) = repository();
             let clean = commit_record(&repo, shard, &row);
-            let (verifications, implementations) =
-                read_bindings(&repo, &clean, &ScopeId::new("default").unwrap()).unwrap();
+            let (verifications, implementations) = read_bindings(
+                &repo,
+                &clean,
+                &ScopeId::new("default").unwrap(),
+                CommitRole::Head,
+            )
+            .unwrap();
             assert_eq!(verifications.len() + implementations.len(), 1);
             row["retired"] = retired;
             let head = commit_record(&repo, shard, &row);
-            let error = read_bindings(&repo, &head, &ScopeId::new("default").unwrap()).unwrap_err();
+            let error = read_bindings(
+                &repo,
+                &head,
+                &ScopeId::new("default").unwrap(),
+                CommitRole::Head,
+            )
+            .unwrap_err();
             assert_migration_refusal(&format!("{error:#}"), shard, &row, &head);
             row.as_object_mut().unwrap().remove("retired");
         }

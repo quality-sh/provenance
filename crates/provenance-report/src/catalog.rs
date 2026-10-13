@@ -13,6 +13,8 @@ pub enum DiagnosticCode {
     ActiveRuleMissingVerification,
     /// A deprecated or archived Rule still has a current binding.
     InactiveRuleCurrentBinding,
+    /// An implementation site is gone.
+    ImplementationSiteRemoved,
     /// A verification site is gone while other evidence may remain.
     VerificationSiteRemoved,
     /// A verification site moved to a new location.
@@ -28,6 +30,7 @@ impl DiagnosticCode {
             "active_rule_missing_implementation" => Some(Self::ActiveRuleMissingImplementation),
             "active_rule_missing_verification" => Some(Self::ActiveRuleMissingVerification),
             "inactive_rule_current_binding" => Some(Self::InactiveRuleCurrentBinding),
+            "implementation_site_removed" => Some(Self::ImplementationSiteRemoved),
             "verification_site_removed" => Some(Self::VerificationSiteRemoved),
             "verification_site_moved" => Some(Self::VerificationSiteMoved),
             "requirement_statement_changed" => Some(Self::RequirementStatementChanged),
@@ -41,6 +44,7 @@ impl DiagnosticCode {
             Self::ActiveRuleMissingImplementation => "active_rule_missing_implementation",
             Self::ActiveRuleMissingVerification => "active_rule_missing_verification",
             Self::InactiveRuleCurrentBinding => "inactive_rule_current_binding",
+            Self::ImplementationSiteRemoved => "implementation_site_removed",
             Self::VerificationSiteRemoved => "verification_site_removed",
             Self::VerificationSiteMoved => "verification_site_moved",
             Self::RequirementStatementChanged => "requirement_statement_changed",
@@ -53,6 +57,7 @@ impl DiagnosticCode {
             Self::ActiveRuleMissingImplementation => "no current implementation binding found",
             Self::ActiveRuleMissingVerification => "no current verification binding found",
             Self::InactiveRuleCurrentBinding => "an inactive Rule still has current bindings",
+            Self::ImplementationSiteRemoved => "one implementation site is gone",
             Self::VerificationSiteRemoved => "one verification site is gone",
             Self::VerificationSiteMoved => "verification evidence moved",
             Self::RequirementStatementChanged => "the intent changed; evidence needs review",
@@ -78,6 +83,11 @@ impl DiagnosticCode {
                  remove or rebind the current sites as the approved replacement \
                  requires. If it was not, correct the lifecycle edit. Do not \
                  invent a replacement obligation."
+            }
+            Self::ImplementationSiteRemoved => {
+                "Restore the removed implementation, or bind the Rule to the \
+                 approved replacement. Review the replacement behavior; a new \
+                 marker alone does not show that it implements the same obligation."
             }
             Self::VerificationSiteRemoved => {
                 "Restore the removed check, or identify replacement evidence that \
