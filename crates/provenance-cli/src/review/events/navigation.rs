@@ -89,7 +89,9 @@ impl Navigation {
             if sender.send(link).is_err() {
                 return false;
             }
-            pages.waiting.insert(request_id.clone(), (page, acknowledge));
+            pages
+                .waiting
+                .insert(request_id.clone(), (page, acknowledge));
         }
         let _cancel = Waiting {
             navigation: self,
