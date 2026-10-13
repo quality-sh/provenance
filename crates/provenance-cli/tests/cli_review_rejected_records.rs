@@ -112,7 +112,9 @@ fn decide(host: &Host, id: &str, decision: &str) {
     } else {
         json!({
             "actor":{"identity_type":"human","id":"reviewer"},
-            "decision":"accepted", "rationale":null
+            "decision":"accepted", "rationale":null,
+            "canonical_artifact":{"artifact_type":"resolution","artifact_id":id},
+            "feedback":null, "declared_by":null
         })
     };
     post(
