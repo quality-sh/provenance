@@ -87,7 +87,7 @@ impl Assembler<'_> {
         let mut citations = Vec::new();
         let mut cited: BTreeSet<&str> = BTreeSet::new();
         for reference in &requirement.source_refs {
-            if let Some(source) = self.find_source(&reference.source_id) {
+            if let Some(source) = self.query.find_source(&reference.source_id) {
                 if cited.insert(source.id.as_str()) {
                     citations.push(self.source_citation(source, reference.clause.clone()));
                 }

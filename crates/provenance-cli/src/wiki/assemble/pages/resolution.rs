@@ -10,30 +10,26 @@ impl<'a> Assembler<'a> {
         resolution: &'a Resolution,
     ) -> ResolutionPage {
         let resolves: Vec<PageLink> = self
-            .state
-            .requirements
-            .iter()
-            .filter(|requirement| resolution.requirement_ids.contains(&requirement.id))
+            .query
+            .requirements_resolved_by(resolution)
+            .into_iter()
             .map(requirement_link)
             .collect();
         let spawned: Vec<PageLink> = self
-            .state
-            .requirements
-            .iter()
-            .filter(|requirement| requirement.spawned_by.as_ref() == Some(&resolution.id))
+            .query
+            .requirements_spawned_by(&resolution.id)
+            .into_iter()
             .map(requirement_link)
             .collect();
         let produced_rules: Vec<RuleCard> = self
+            .query
             .produced_rules_for_resolution(&resolution.id)
             .into_iter()
             .map(|rule| self.rule_card(rule))
             .collect();
         let superseded_by = self
-            .state
-            .resolutions
-            .iter()
-            .filter(|candidate| candidate.supersedes.contains(&resolution.id))
-            .min_by_key(|candidate| candidate.id.as_str())
+            .query
+            .resolution_superseded_by(&resolution.id)
             .map(resolution_link);
         ResolutionPage {
             id: PageId::new(RecordKind::Resolution, resolution.id.as_str()),
