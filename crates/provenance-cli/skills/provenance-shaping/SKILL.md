@@ -197,7 +197,8 @@ notes, fix the graph or trust the graph.
 
 ### 2. Claim
 
-Claim before work so concurrent sessions skip what you are touching.
+First complete the recovery reads below and inspect their output. Then claim before
+work so concurrent sessions skip what you are touching. A claim is a graph write.
 
 | Method | Claim | Command |
 |---|---|---|
@@ -220,7 +221,10 @@ lifecycle consultation fails, the topic claim is not persisted.
 At the start of EVERY shaping turn, read the stored Topic claim and the stored
 method of each Question that you will work on in that turn. Do this before the
 first graph write or Question work, including when the owner has already supplied
-an accepted answer. A read in the previous turn does not count. Repeat the reads
+an accepted answer. Complete these reads as a separate tool step. Inspect the
+output before any claim or write. Do not combine a recovery read and a claim or
+write in one command or tool call. A get after a claim does not count, even when
+both commands are in the same call. A read in the previous turn does not count. Repeat the reads
 after a restart, a saved handoff, or context compaction.
 
 Run these commands without output filters. Read the full JSON output. Do not pipe
@@ -263,8 +267,16 @@ the required get commands.
 
 Apply the stored method to the selected Question. If the owner directly chooses
 an answer to a prototype Question before prototypes are made, record that direct
-choice and explain why it settles the Question without prototypes. Record each accepted answer and its
-resulting artifacts before the next turn, then read the stored state again. A proposed
+choice and explain why it settles the Question without prototypes. Land every
+accepted owner decision before asking the next question or ending the turn. For
+each accepted decision in the owner reply, read the resulting graph records and
+check that they state that decision. Check all decisions, including several
+decisions in one reply. A thread note or a promise to write later is insufficient.
+Use the record kinds that the answer requires; do not create duplicate records.
+Do not add prerequisites that postpone an accepted decision. Preserve existing
+prerequisites and claim restrictions. If they prevent landing, report the specific
+blocker and keep the decision visible as unlanded; do not continue the interview.
+Then read the stored state again. A proposed
 answer that the human refuses remains unresolved. After a restart or compaction, recover
 accepted decisions from the graph before you continue the dialogue.
 

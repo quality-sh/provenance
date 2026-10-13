@@ -70,11 +70,12 @@ The turn loop, against an anchor requirement:
 1. **Prime** — load the map low-res. The frontier is *computed from graph semantics*,
    not hand-wired: requirements that cite no source, unresolved `contradicts` pairs,
    requirements that can't produce a rule, open questions and unexplored topics.
-2. **Claim** — at method-dependent granularity (see table below). Claiming happens
-   before any work so concurrent sessions skip claimed items.
-3. **Recover before each turn** — at the start of every turn, read the full stored
+2. **Recover before each turn** — at the start of every turn, read the full stored
    Topic and each Question that the turn will work on, before the first write or
-   Question work. This includes accepted answers supplied by the owner. Read the
+   Question work. This includes accepted answers supplied by the owner. Complete
+   the reads as a separate tool step and inspect the output before any claim or
+   write. Do not combine a recovery read and a claim or write in one command or
+   tool call. A get after a claim does not count, even in the same call. Read the
    Topic again for note-only, audit, and handoff turns. Run record get commands
    without output filters; keep claim and method fields visible. Do not pipe these
    reads through grep, rg, jq, sed, head, or another filter. A previous turn's read,
@@ -90,8 +91,17 @@ The turn loop, against an anchor requirement:
    reads and all collection pages to recover the missing data.
    If the owner directly settles a prototype Question before prototypes are made,
    record the choice and why it settles the Question without prototypes.
+3. **Claim** — at method-dependent granularity (see table below). Complete the
+   recovery step first. A claim is a graph write. Claim before Question work so
+   concurrent sessions skip claimed items.
 4. **Resolve and land as you go** — each question is recorded the moment it resolves,
-   before the dialogue moves on. Expect fan-out (see below).
+   before the dialogue moves on or the turn ends. For each accepted owner decision,
+   read its resulting graph records and check that they state that decision. Check
+   every decision in the reply. A thread note or a promise is insufficient. Use
+   only the record kinds the answer requires. Do not add prerequisites that
+   postpone an accepted decision. Preserve existing prerequisites and claims;
+   if they prevent landing, report the blocker and the unlanded decision, then
+   stop the interview. Expect fan-out (see below).
 5. **Graduate fog** the answers made sharp; update or kill questions the decisions
    invalidated.
 6. **Stop and hand off** — the turn ends at the first stop condition:
