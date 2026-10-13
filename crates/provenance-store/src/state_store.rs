@@ -17,6 +17,7 @@ pub(crate) mod record_stamps;
 mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;
+mod resolution_decisions;
 mod rule_writers;
 mod scope_ingestion;
 mod shaping_writers;
