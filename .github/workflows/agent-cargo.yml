@@ -59,10 +59,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - run: sfw npm ci --prefix tools/operation-codegen
-      - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
+      - run: sfw npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo build --workspace --all-features
       - name: Upload dev binary
         if: startsWith(github.ref, 'refs/heads/agent-ci/build-artifact/')
@@ -103,10 +103,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - run: sfw npm ci --prefix tools/operation-codegen
-      - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
+      - run: sfw npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo check --workspace --all-targets
 
   clippy:
@@ -140,10 +140,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - run: sfw npm ci --prefix tools/operation-codegen
-      - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
+      - run: sfw npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
   test:
@@ -176,10 +176,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - run: sfw npm ci --prefix tools/operation-codegen
-      - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
+      - run: sfw npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - run: cargo test --workspace --all-features --no-fail-fast
 
   command:
@@ -213,10 +213,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      - run: sfw npm ci --prefix tools/operation-codegen
-      - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
+      - run: sfw npm ci --prefix tools/operation-codegen
+      - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Run requested Cargo check
         env:
           CARGO_ARGS_JSON: ${{ inputs.command_json }}
