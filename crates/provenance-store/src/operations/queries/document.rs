@@ -78,6 +78,7 @@ async fn review_keys(
             &crate::operations::reader::Position::default(),
             8193,
             exclude_terminal,
+            &[],
         )
         .await?
         .into_iter()
@@ -109,9 +110,15 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         .live(crate::operations::reader::Live::Canonical)
         .store()
         .document_review_state(ctx.snapshot().scope(), &review_records)?;
+    // The terminal filter also hides records that review rejected as new.
+    let hidden: &[(NodeType, StableId)] = if request.exclude_terminal {
+        &review_state.rejected_new
+    } else {
+        &[]
+    };
     let mut review_totals = DocumentReviewTotals::default();
     for (kind, id, is_member) in &review_keys {
-        if *is_member {
+        if *is_member && !hidden.contains(&(*kind, id.clone())) {
             review_totals.include(&review_state.summary(*kind, id));
         }
     }
@@ -129,6 +136,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             &position,
             request.limit + 1,
             request.exclude_terminal,
+            hidden,
         )
         .await?;
     let mut entries = Vec::new();

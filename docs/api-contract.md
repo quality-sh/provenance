@@ -46,7 +46,13 @@ Subresources have parent-owned addresses:
   abandoned Resolutions when it is `true`. A superseded Resolution stays in the
   document. Each record follows its own lifecycle. An active Rule stays in the
   document when its only document link is an abandoned Resolution. The
-  abandoned Resolution and its discussions stay out of the document. The
+  abandoned Resolution and its discussions stay out of the document. When
+  `exclude_terminal` is `true`, the document also excludes a record that no
+  review accepted, that has no pending submission, and whose latest decision
+  is a rejection. Its lifecycle status does not change, and its decision
+  history still shows the rejection. A rejected change to an accepted record
+  keeps that record in the document. The review totals count only the records
+  in the document. The
   default is `false` so that omission keeps the complete historical view.
 - `GET /{collection}/{id}/history[/{entry_id}]` reads immutable outcomes for
   each graph record kind.
