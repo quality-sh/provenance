@@ -407,6 +407,8 @@ pub struct CreateDispositionInput {
     #[serde(default)]
     pub rationale: String,
     pub actor: DispositionActor,
+    /// An approval requires a prior assertion. A human can instead name an
+    /// existing canonical artifact.
     pub canonical_artifact: Option<CanonicalArtifact>,
     pub external_action: Option<provenance_core::ExternalActionCorrelation>,
 }
