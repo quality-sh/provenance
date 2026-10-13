@@ -165,7 +165,12 @@ fn outcomes(id: &str, host: &Host) -> Vec<String> {
         .as_array()
         .unwrap()
         .iter()
-        .map(|decision| decision["disposition"]["decision"].as_str().unwrap().to_owned())
+        .map(|decision| {
+            decision["disposition"]["decision"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
         .collect()
 }
 

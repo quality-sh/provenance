@@ -38,9 +38,10 @@ impl DocumentReviewState {
 #[rule("rule_review_document_hides_rejected_new_records")]
 fn rejected_before_acceptance(state: &RequirementDecisionState) -> bool {
     state.pending.is_none()
-        && state.decisions.last().is_some_and(|decision| {
-            decision.disposition.decision == DispositionDecision::Rejected
-        })
+        && state
+            .decisions
+            .last()
+            .is_some_and(|decision| decision.disposition.decision == DispositionDecision::Rejected)
         && !state
             .decisions
             .iter()

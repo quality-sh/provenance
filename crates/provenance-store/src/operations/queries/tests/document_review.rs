@@ -435,6 +435,8 @@ async fn document_review_totals_exclude_a_pending_parent_reference() {
         DispositionDecision::Rejected,
     );
     let rejected = serde_json::to_value(read(None).await.unwrap().result).unwrap();
+    // A rejected new record leaves the document, but the root never does.
+    assert_eq!(rejected["entries"][0]["node"]["id"], "req_first_release");
     assert_eq!(
         rejected["review_totals"],
         json!({"pending":0, "accepted":0, "rejected":1})
