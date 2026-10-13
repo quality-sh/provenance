@@ -17,6 +17,8 @@ use provenance_macros::rule;
 
 pub struct DocumentReviewState {
     pub records: Vec<(NodeType, StableId, DocumentReviewSummary)>,
+    /// The records whose review rejected them before any acceptance.
+    pub rejected_new: Vec<(NodeType, StableId)>,
     pub digest: String,
 }
 
@@ -29,6 +31,20 @@ impl DocumentReviewState {
             .cloned()
             .unwrap_or_default()
     }
+}
+
+/// A record that no review accepted and whose latest decision rejected it is
+/// a rejected new record. A rejected change to an accepted record is not.
+#[rule("rule_review_document_hides_rejected_new_records")]
+fn rejected_before_acceptance(state: &RequirementDecisionState) -> bool {
+    state.pending.is_none()
+        && state.decisions.last().is_some_and(|decision| {
+            decision.disposition.decision == DispositionDecision::Rejected
+        })
+        && !state
+            .decisions
+            .iter()
+            .any(|decision| decision.disposition.decision == DispositionDecision::Accepted)
 }
 
 impl StateStore {
@@ -59,6 +75,11 @@ impl StateStore {
             let digest = crate::canonical_digest::digest(
                 &crate::canonical_digest::canonical_bytes(&states)?,
             );
+            let rejected_new = states
+                .iter()
+                .filter(|state| rejected_before_acceptance(state))
+                .map(|state| (state.record_kind, state.record_id.clone()))
+                .collect();
             let records = states
                 .iter()
                 .map(|state| {
@@ -69,7 +90,11 @@ impl StateStore {
                     )
                 })
                 .collect::<Vec<_>>();
-            Ok(DocumentReviewState { records, digest })
+            Ok(DocumentReviewState {
+                records,
+                rejected_new,
+                digest,
+            })
         })
     }
 
