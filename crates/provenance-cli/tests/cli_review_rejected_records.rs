@@ -89,7 +89,7 @@ fn pending(host: &Host, id: &str) -> String {
         host,
         &format!("/resolutions/{id}/submit"),
         &json!({
-            "actor":"shaping_agent", "title":"Keep the result",
+            "actor":"shaping_agent", "declared_by":"shaping_agent", "title":"Keep the result",
             "summary":"The system stores each result.", "source_ids":[],
             "evidence_references":[], "builds_on":[]
         }),
@@ -114,7 +114,7 @@ fn decide(host: &Host, id: &str, decision: &str) {
             "actor":{"identity_type":"human","id":"reviewer"},
             "decision":"accepted", "rationale":null,
             "canonical_artifact":{"artifact_type":"resolution","artifact_id":id},
-            "feedback":null, "declared_by":null
+            "feedback":null
         })
     };
     post(
