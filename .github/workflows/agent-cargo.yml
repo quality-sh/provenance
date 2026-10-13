@@ -30,9 +30,11 @@ concurrency:
 
 jobs:
   # A snapshot branch is public when the shim pushes it. This job scans the
-  # commits of the snapshot that main does not contain. A push run uses the
-  # job from the snapshot, so only the gitleaks configuration and ignore file
-  # come from main.
+  # commits of the snapshot that main does not contain. The scan script comes
+  # from the commit that supplies this workflow: main for a dispatched run,
+  # and the snapshot for a push run, which uses the job from the snapshot.
+  # A snapshot therefore cannot change what a dispatched run executes. The
+  # gitleaks configuration and ignore file always come from main.
   # A finding fails the run, and the shim reports it.
   secret-scan:
     name: Secret scan
@@ -64,8 +66,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SNAPSHOT_SHA"
+          git show "$GITHUB_SHA:.github/scripts/gitleaks-scan.sh" > "$RUNNER_TEMP/gitleaks-scan.sh"
           git show refs/remotes/origin/main:.gitleaks.toml > "$RUNNER_TEMP/gitleaks.toml"
-          .github/scripts/gitleaks-scan.sh "--diff-merges=first-parent $SNAPSHOT_SHA --not origin/main" \
+          bash "$RUNNER_TEMP/gitleaks-scan.sh" "--diff-merges=first-parent $SNAPSHOT_SHA --not origin/main" \
             --config "$RUNNER_TEMP/gitleaks.toml"
 
   build:

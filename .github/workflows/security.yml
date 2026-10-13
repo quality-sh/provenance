@@ -36,6 +36,8 @@ jobs:
   #   scans each snapshot when the cargo CI shim pushes it.
   # --diff-merges=first-parent also scans the changes that a merge commit
   # makes, which includes conflict resolutions.
+  # The gitleaks configuration and ignore file come from main, so a pull
+  # request cannot hide its own finding through them.
   gitleaks:
     name: Gitleaks secret scan
     runs-on: ubuntu-24.04
@@ -78,7 +80,8 @@ jobs:
               log_opts="--diff-merges=first-parent --full-history --all"
               ;;
           esac
-          .github/scripts/gitleaks-scan.sh "$log_opts"
+          git show refs/remotes/origin/main:.gitleaks.toml > "$RUNNER_TEMP/gitleaks.toml"
+          .github/scripts/gitleaks-scan.sh "$log_opts" --config "$RUNNER_TEMP/gitleaks.toml"
 
   dependency-review:
     name: Dependency review

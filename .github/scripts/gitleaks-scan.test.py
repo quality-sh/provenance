@@ -1,4 +1,9 @@
-"""Tests gitleaks-scan.sh with the gitleaks binary in $GITLEAKS."""
+"""Tests gitleaks-scan.sh with the gitleaks binary in $GITLEAKS.
+
+Implementation aid with no Rule binding. Gitleaks always reads the
+.gitleaksignore file in the scanned tree, so these tests pin that the script
+ignores that copy and uses only the copy on origin/main.
+"""
 
 import secrets
 import string
@@ -40,7 +45,6 @@ class GitleaksScanTest(unittest.TestCase):
         (self.repo / ".gitleaksignore").write_text(self.fingerprint)
         self.git("add", ".gitleaksignore")
         self.git("commit", "-q", "-m", "ignore the leak")
-        (self.repo / ".gitleaksignore").write_text(self.fingerprint)
 
         result = self.scan()
 
