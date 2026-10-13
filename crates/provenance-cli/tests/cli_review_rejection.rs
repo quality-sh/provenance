@@ -2,67 +2,10 @@
 mod review_host_support;
 
 use provenance_macros::verifies;
-use review_host_support::{repository_with_actors, request, response, start, Host};
+use review_host_support::{
+    repository_with_actors, request, resolution::create_resolution, response, start, Host,
+};
 use serde_json::{json, Value};
-use std::{io::Write as _, path::Path};
-
-fn create_resolution(root: &Path) {
-    let output = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
-        .args([
-            "requirements",
-            "create",
-            "--repo",
-            root.to_str().unwrap(),
-            "--id",
-            "req_reject",
-            "--statement",
-            "The system stores each result.",
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
-        .args([
-            "resolutions",
-            "create",
-            "--repo",
-            root.to_str().unwrap(),
-            "--stdin",
-            "--format",
-            "json",
-        ])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(
-            json!({
-                "id":"res_reject", "title":"Keep the result",
-                "position":"The system stores each result.",
-                "rationale":"The result must remain available.",
-                "status":"proposed", "made_by":"shaping_agent",
-                "requirement_ids":["req_reject"]
-            })
-            .to_string()
-            .as_bytes(),
-        )
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
 
 fn post(host: &Host, path: &str, data: &Value) -> (u16, Value) {
     let result = response(
@@ -89,7 +32,7 @@ fn pending(host: &Host) -> String {
         host,
         "/resolutions/res_reject/submit",
         &json!({
-            "actor":"shaping_agent", "title":"Keep the result",
+            "actor":"shaping_agent", "declared_by":"shaping_agent", "title":"Keep the result",
             "summary":"The system stores each result.", "source_ids":[],
             "evidence_references":[], "builds_on":[]
         }),
@@ -115,7 +58,7 @@ fn rejection() -> Value {
 #[verifies("rule_rejection_keeps_graph_record", examples)]
 fn page_rejection_stores_the_reason_and_keeps_the_resolution() {
     let repo = repository_with_actors(&["reviewer"]);
-    create_resolution(repo.path());
+    create_resolution(repo.path(), Some("shaping_agent"));
     let host = start(repo.path());
     let proposal = pending(&host);
     let before = read(&host);
@@ -181,7 +124,7 @@ fn page_rejection_stores_the_reason_and_keeps_the_resolution() {
 /// Implementation aid: an explicit wrong owner must leave the decision and feedback unwritten.
 fn wrong_feedback_owner_leaves_the_submission_pending() {
     let repo = repository_with_actors(&["reviewer"]);
-    create_resolution(repo.path());
+    create_resolution(repo.path(), Some("shaping_agent"));
     let host = start(repo.path());
     let proposal = pending(&host);
     let before = read(&host);
@@ -200,4 +143,69 @@ fn wrong_feedback_owner_leaves_the_submission_pending() {
         .unwrap();
     let discussions: Value = serde_json::from_str(&discussions.into_string().unwrap()).unwrap();
     assert_eq!(discussions["data"]["items"], json!([]));
+}
+
+fn document(host: &Host) -> Value {
+    let result = request(
+        host,
+        "GET",
+        "/requirements/req_reject/document?exclude_terminal=true",
+        true,
+    )
+    .call()
+    .unwrap();
+    serde_json::from_str::<Value>(&result.into_string().unwrap()).unwrap()["data"].clone()
+}
+
+fn pending_ids(document: &Value) -> Vec<String> {
+    document["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry["review"]["outcome"] == "pending")
+        .map(|entry| entry["node"]["id"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+fn ids(document: &Value) -> Vec<&str> {
+    document["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| entry["node"]["id"].as_str())
+        .collect()
+}
+
+#[test]
+#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
+fn cli_rejection_removes_the_resolution_from_the_review_document() {
+    let repo = repository_with_actors(&["reviewer"]);
+    create_resolution(repo.path());
+    let host = start(repo.path());
+    pending(&host);
+    let before = document(&host);
+    assert!(pending_ids(&before).contains(&"res_reject".to_owned()));
+    let pending_before = before["review_totals"]["pending"].as_u64().unwrap();
+
+    // The agent rejects the proposal through the CLI after the owner decides.
+    let output = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
+        .args(["resolutions", "res_reject", "update", "--repo"])
+        .arg(repo.path())
+        .args(["--status", "rejected"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let after = document(&host);
+    assert!(!ids(&after).contains(&"res_reject"), "{after}");
+    assert!(!pending_ids(&after).contains(&"res_reject".to_owned()));
+    assert_eq!(
+        after["review_totals"]["pending"].as_u64().unwrap(),
+        pending_before - 1
+    );
+    assert_eq!(read(&host)["status"], "rejected");
 }

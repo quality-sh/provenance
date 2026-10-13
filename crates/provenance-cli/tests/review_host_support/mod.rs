@@ -1,5 +1,7 @@
 #![allow(dead_code, clippy::duplicated_attributes)]
 
+pub mod resolution;
+
 use provenance_transport::local_host::LAUNCH_SESSION_ROUTE;
 use serde_json::{json, Value};
 use std::{

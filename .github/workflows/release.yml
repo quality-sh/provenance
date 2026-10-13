@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-socket-firewall
       # Releases are cut from main, and main merges run the full platform
       # matrix. Refuse to build unless that run finished green on this exact
       # commit, so a red platform leg cannot ship unnoticed.
@@ -59,6 +60,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
+      # The release version check reads full Cargo metadata for the Rust
+      # SDK example, and generate.mjs builds the codegen crate. Fetch both
+      # lockfiles through the firewall first.
+      - name: Fetch crates through Socket Firewall
+        run: |
+          sfw cargo fetch --locked
+          sfw cargo fetch --locked --manifest-path examples/rust-sdk/Cargo.toml
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -79,7 +87,7 @@ jobs:
           python3 .github/scripts/release-contract.py \
             "$version" .github/release-targets.json >> "$GITHUB_OUTPUT"
 
-      - run: npm ci --prefix tools/operation-codegen
+      - run: sfw npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/generate.mjs
       - name: Archive generated release source
         run: |
@@ -106,6 +114,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-socket-firewall
       - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           toolchain: stable
@@ -123,6 +132,14 @@ jobs:
       - name: Restore composed review assets
         shell: bash
         run: tar -xzf target/review-artifact/review-composed.tar.gz
+      - name: Fetch crates through Socket Firewall
+        env:
+          # Cargo on Windows checks certificate revocation with schannel, and
+          # the revocation status of the firewall's intercepted TLS chain is
+          # unknown. Cargo documents http.check-revoke for a proxy that
+          # intercepts TLS. Only this firewalled fetch turns the check off.
+          CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        run: sfw cargo fetch --locked
       - run: cargo build --release -p provenance-cli --features scanner --target ${{ matrix.target }} --timings
       - name: The release binary must reject the development command
         shell: bash
@@ -237,6 +254,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-socket-firewall
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: operation-generated
@@ -256,6 +274,8 @@ jobs:
           # Cargo generates the archive checksum. Keep this version fixed so
           # a later rerun can compare the same bytes with crates.io.
           toolchain: 1.98.0
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
       - name: Verify packaged Rust workspace
         shell: bash
         run: |
@@ -303,6 +323,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - uses: ./.github/actions/setup-socket-firewall
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: operation-generated
@@ -315,7 +336,7 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - name: Install npm with trusted publishing support
-        run: npm install --global npm@^11.5.1
+        run: sfw npm install --global npm@^11.5.1
       - uses: actions/download-artifact@v8
         with:
           path: dist
@@ -332,7 +353,7 @@ jobs:
           done
       - name: Pack TypeScript SDK
         run: |
-          npm ci --prefix packages/provenance
+          sfw npm ci --prefix packages/provenance
           npm pack ./packages/provenance --pack-destination dist
       - name: Publish TypeScript SDK
         env:

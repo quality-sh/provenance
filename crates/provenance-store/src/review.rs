@@ -17,8 +17,11 @@ fn new_id() -> provenance_core::StableId {
 
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
     let value = serde_json::to_value(record)?;
-    let declared_by = value.get("declared_by").and_then(serde_json::Value::as_str);
-    if declared_by != owner {
+    let saved_owner = value
+        .get("declared_by")
+        .or_else(|| value.get("made_by"))
+        .and_then(serde_json::Value::as_str);
+    if saved_owner != owner {
         return Err(crate::write_error::SourceFailure::wrap(
             crate::write_error::WriteFailure::RecordOwnershipConflict,
             anyhow::anyhow!("declared_by must match the existing owner"),
