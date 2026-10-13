@@ -16,7 +16,7 @@ fn run(repo: &str, args: &[&str], input: Option<Value>) -> std::process::Output 
     command.output().unwrap()
 }
 
-fn success(output: std::process::Output) -> Value {
+fn success(output: &std::process::Output) -> Value {
     assert!(
         output.status.success(),
         "{}",
@@ -44,7 +44,7 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
         ])
         .assert()
         .success();
-    let created = success(run(
+    let created = success(&run(
         repo,
         &[
             "requirements",
@@ -60,7 +60,7 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
         .as_str()
         .unwrap();
     let decision = json!({"actor":{"identity_type":"human","id":"reviewer"},"decision":"accepted"});
-    let before = success(run(repo, &["requirements", "req_review", "get"], None));
+    let before = success(&run(repo, &["requirements", "req_review", "get"], None));
     let refused = run(
         repo,
         &[
@@ -89,13 +89,13 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
         "An approval requires a prior assertion or a human canonical_artifact."
     );
     assert_eq!(
-        success(run(repo, &["requirements", "req_review", "get"], None)),
+        success(&run(repo, &["requirements", "req_review", "get"], None)),
         before
     );
     let mut complete = decision;
     complete["canonical_artifact"] =
         json!({"artifact_type":"requirement","artifact_id":"req_review"});
-    success(run(
+    success(&run(
         repo,
         &[
             "requirements",
@@ -106,7 +106,7 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
         ],
         Some(complete),
     ));
-    let after = success(run(repo, &["requirements", "req_review", "get"], None));
+    let after = success(&run(repo, &["requirements", "req_review", "get"], None));
     eprintln!("After guarded approval read: {}", after["data"]["decision"]);
     assert!(after["data"]["decision"]["pending"].is_null());
     assert_eq!(
@@ -134,7 +134,7 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
         ])
         .assert()
         .success();
-    success(run(
+    success(&run(
         repo,
         &[
             "requirements",
@@ -146,7 +146,7 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
         ],
         None,
     ));
-    success(run(
+    success(&run(
         repo,
         &["proposals", "create"],
         Some(json!({
@@ -158,7 +158,7 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
             "builds_on":[]
         })),
     ));
-    let before = success(run(repo, &["proposals", "proposal_review", "get"], None));
+    let before = success(&run(repo, &["proposals", "proposal_review", "get"], None));
     let mut decision = json!({"id":"disposition_review",
         "decision":"accepted",
         "actor":{"identity_type":"human","id":"reviewer"}});
@@ -188,10 +188,10 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
             "An approval requires a prior assertion or a human canonical_artifact."
         );
         assert_eq!(
-            success(run(repo, &["proposals", "proposal_review", "get"], None)),
+            success(&run(repo, &["proposals", "proposal_review", "get"], None)),
             before
         );
-        let dispositions = success(run(
+        let dispositions = success(&run(
             repo,
             &["proposals", "proposal_review", "dispositions", "get"],
             None,
@@ -200,12 +200,12 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
     }
     decision["canonical_artifact"] =
         json!({"artifact_type":"requirement","artifact_id":"req_review"});
-    success(run(
+    success(&run(
         repo,
         &["proposals", "proposal_review", "dispositions", "create"],
         Some(decision),
     ));
-    let after = success(run(repo, &["proposals", "proposal_review", "get"], None));
+    let after = success(&run(repo, &["proposals", "proposal_review", "get"], None));
     eprintln!("After direct approval read: {after}");
     assert_eq!(after["data"]["promotion_state"], "accepted", "{after}");
 }
