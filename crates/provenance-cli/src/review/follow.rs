@@ -10,7 +10,7 @@ use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
 /// Streams saved document state when the repository host sends an invalidation.
 #[rule("rule_review_follow_push")]
-pub(crate) async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
+pub(super) async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     anyhow::ensure!(
         input.max_depth.is_none() && input.returned_kinds.is_empty(),
         "review follow does not accept --depth or --kind"
@@ -22,9 +22,9 @@ pub(crate) async fn run(context: &RepoContext, input: GetInput) -> anyhow::Resul
             .context("no review host is running for this repository and scope")?;
     let key = super::launch::LaunchKey::read(host.instance_nonce())?;
     let mut endpoint = host.endpoint().clone();
-    endpoint
-        .set_scheme("ws")
-        .map_err(|_| anyhow::anyhow!("invalid host endpoint"))?;
+    if endpoint.set_scheme("ws").is_err() {
+        anyhow::bail!("invalid host endpoint");
+    }
     endpoint.set_path("/review-events");
     let mut request = endpoint.as_str().into_client_request()?;
     request
@@ -56,7 +56,7 @@ pub(crate) async fn run(context: &RepoContext, input: GetInput) -> anyhow::Resul
             let next_sequence = frame["sequence"].as_u64().context("feed frame has no sequence")?;
             let reset = initialized && (frame["type"] == "reset" || next_epoch != epoch
                 || next_sequence != sequence + 1);
-            epoch = next_epoch.to_owned();
+            next_epoch.clone_into(&mut epoch);
             sequence = next_sequence;
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => return Ok(()),

@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use std::{collections::BTreeMap, io::Write};
 
 #[derive(Default)]
-pub(crate) struct Baseline {
+pub(in crate::review) struct Baseline {
     records: BTreeMap<String, Value>,
 }
 
@@ -91,7 +91,7 @@ fn record_id(entry: &Value) -> anyhow::Result<String> {
         .ok_or_else(|| anyhow::anyhow!("document entry has no record identity"))
 }
 
-pub(crate) fn emit(value: &Value) -> anyhow::Result<()> {
+pub(in crate::review) fn emit(value: &Value) -> anyhow::Result<()> {
     let mut output = std::io::stdout().lock();
     serde_json::to_writer(&mut output, value)?;
     writeln!(output)?;

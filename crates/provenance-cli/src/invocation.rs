@@ -11,8 +11,8 @@ mod api;
 mod discussion;
 pub mod grammar;
 use grammar::{
-    ApiArgs, ApiCommand, CatalogArgs, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute,
-    RootWord, SearchArgs, SearchCommand, TargetArgs, TargetVerb,
+    ApiArgs, ApiCommand, CatalogArgs, Delivery, DiscussionsArgs, DiscussionsCommand,
+    DiscussionsRoute, RootWord, SearchArgs, SearchCommand, TargetArgs, TargetVerb,
 };
 
 #[cfg(test)]
@@ -39,9 +39,7 @@ pub struct GetInvocation {
     context: GlobalContext,
     format: Option<porcelain::OutputFormat>,
     input: provenance_porcelain::get::GetInput,
-    follow: bool,
-    review_link: bool,
-    no_open: bool,
+    delivery: Delivery,
 }
 
 pub struct TargetInvocation {
@@ -106,6 +104,10 @@ impl Invocation {
             return Ok(Self::Catalog(catalog_cli::Invocation::new(&args, &matches)));
         }
 
+        Self::parse_target(arguments)
+    }
+
+    fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
         let command = catalog_cli::target_command()?;
         let matches = command
             .try_get_matches_from(arguments)
@@ -145,9 +147,7 @@ impl Invocation {
                 context,
                 format,
                 input,
-                follow: args.follow,
-                review_link: args.review_link,
-                no_open: args.no_open,
+                delivery: args.delivery,
             }));
         }
         let Some(TargetVerb::Action(action)) = args.action else {
@@ -172,7 +172,7 @@ impl Invocation {
             Self::Api(args) => api::dispatch(args).await,
             Self::Catalog(invocation) => catalog_cli::dispatch(invocation).await,
             Self::Get(invocation) => {
-                if invocation.follow {
+                if invocation.delivery == Delivery::Follow {
                     anyhow::ensure!(
                         invocation.input.view == View::Review
                             && invocation.format == Some(porcelain::OutputFormat::Json),
@@ -181,12 +181,12 @@ impl Invocation {
                     return crate::review::follow::run(&invocation.context.repo, invocation.input)
                         .await;
                 }
-                if invocation.review_link {
+                if let Delivery::ReviewLink { open } = invocation.delivery {
                     return crate::review_link::print(
                         &invocation.context.repo,
                         &invocation.input.target,
                         invocation.format,
-                        invocation.no_open,
+                        !open,
                     )
                     .await;
                 }
