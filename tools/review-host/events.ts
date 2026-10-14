@@ -1,4 +1,4 @@
-import type { ChangedRecord, ReviewChange } from './session.ts';
+import type { ChangedRecord, ReviewChange, RereadReason } from './session.ts';
 
 /** The WebSocket parts that the event client uses. */
 export interface EventSocket {
@@ -14,7 +14,7 @@ type Frame =
     readonly type: 'changed'; readonly epoch: string; readonly sequence: number;
     readonly records: ReadonlyArray<ChangedRecord>;
   }
-  | { readonly type: 'reset'; readonly epoch: string; readonly sequence: number; readonly reason: string }
+  | { readonly type: 'reset'; readonly epoch: string; readonly sequence: number; readonly reason: RereadReason }
   | { readonly type: 'show-record'; readonly requestId: string; readonly rootId: string; readonly focusId?: string };
 
 /** Where the client is: the last frame it applied, or no feed. */
@@ -71,7 +71,16 @@ export function parseFrame(text: unknown): Frame | undefined {
     case 'ready':
       return { type: 'ready', epoch, sequence };
     case 'reset':
-      return typeof value.reason === 'string' ? { type: 'reset', epoch, sequence, reason: value.reason } : undefined;
+      switch (value.reason) {
+        case 'ready':
+        case 'sequence-gap':
+        case 'file-events-lost':
+        case 'observation-recovered':
+        case 'subscriber-loss':
+          return { type: 'reset', epoch, sequence, reason: value.reason };
+        default:
+          return undefined;
+      }
     case 'changed': {
       const records = changedRecords(value.scopes);
       return records && { type: 'changed', epoch, sequence, records };

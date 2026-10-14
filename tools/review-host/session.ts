@@ -17,9 +17,17 @@ export interface ChangedRecord {
   readonly id: string;
 }
 
+/** The renderer reasons for reading all saved state again. */
+export type RereadReason =
+  | 'ready'
+  | 'sequence-gap'
+  | 'file-events-lost'
+  | 'observation-recovered'
+  | 'subscriber-loss';
+
 /** What the page reads again after a saved change. */
 export type ReviewChange =
-  | { readonly _tag: 'Everything'; readonly reason: string }
+  | { readonly _tag: 'Everything'; readonly reason: RereadReason }
   | { readonly _tag: 'Records'; readonly records: ReadonlyArray<ChangedRecord> };
 
 /** The mounted renderer. */

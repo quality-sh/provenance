@@ -126,3 +126,21 @@ test('a frame of another shape closes the socket', () => {
   assert.equal(parseFrame('not json'), undefined);
   assert.equal(parseFrame({ type: 'ready' }), undefined);
 });
+
+// Implementation aid: reset reasons must fit the renderer contract before a refresh.
+test('an unknown reset reason closes the feed without refreshing the page', () => {
+  const { sockets, changes } = client();
+  sockets[0]!.frame({ type: 'reset', epoch: 'run-1', sequence: 1, reason: 'unknown-reason' });
+  assert.equal(sockets[0]!.closed, true);
+  assert.deepEqual(changes, []);
+});
+
+// Implementation aid: every renderer reread reason can pass through the host.
+test('known reset reasons refresh the page with the received reason', () => {
+  for (const reason of ['ready', 'sequence-gap', 'file-events-lost', 'observation-recovered', 'subscriber-loss']) {
+    const { sockets, changes } = client();
+    sockets[0]!.frame({ type: 'reset', epoch: 'run-1', sequence: 1, reason });
+    assert.equal(sockets[0]!.closed, false);
+    assert.deepEqual(changes, [{ _tag: 'Everything', reason }]);
+  }
+});
