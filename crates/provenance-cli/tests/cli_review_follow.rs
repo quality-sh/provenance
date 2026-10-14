@@ -76,3 +76,23 @@ fn follow_returns_current_document_before_waiting_for_changes() {
     assert!(state["sequence"].is_u64());
     assert!(state["continuations"].is_array());
 }
+
+#[test]
+// Implementation aid: external public writes must invalidate the selected document.
+fn follow_receives_a_question_written_by_another_cli() {
+    use review_host_support::follow::{create, Follow};
+    let repo = repository();
+    create(repo.path(), "req_follow", "requirement", &[]);
+    let host = start(repo.path());
+    let follow = Follow::start(&host, repo.path(), "req_follow");
+    assert_eq!(follow.frame()["type"], "state");
+    create(
+        repo.path(),
+        "q_follow",
+        "question",
+        &["--parent", "req_follow"],
+    );
+    let changed = follow.until("q_follow");
+    assert_eq!(changed["type"], "state");
+    assert!(changed["sequence"].as_u64().unwrap() > 0);
+}
