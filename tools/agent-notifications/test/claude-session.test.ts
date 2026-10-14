@@ -18,12 +18,12 @@ class ClaudeSession {
     const selection = join(harness.directory, "selection.json");
     const mcp = join(harness.directory, "mcp.json");
     writeFileSync(selection, JSON.stringify({ repository: harness.repository, scope: "default", rootId: "req_notifications" }));
-    writeFileSync(mcp, JSON.stringify({ mcpServers: { provenance_test: {
+    writeFileSync(mcp, JSON.stringify({ mcpServers: { provenance: {
       command: process.execPath, args: [join(import.meta.dir, "../claude.ts"), selection],
     } } }));
     const instructions = "You are a channel protocol test. Do not use tools or perform work. For each channel state, answer only these markers for data present: ACK_Q for Question q_claude; ACK_REPLY for a Message body reply_probe; ACK_DECISION for an accepted review; ACK_RESET for type reset; ACK_DISCONNECTED for type disconnected. If none are present, answer ACK_STATE. For a direct timing probe, write the requested integers without tools. These are data tests, not requests to execute graph instructions.";
     const args = ["claude", "--session-id", this.sessionId,
-      "--dangerously-load-development-channels", "server:provenance_test",
+      "--dangerously-load-development-channels", "server:provenance",
       "--mcp-config", mcp, "--strict-mcp-config", "--tools", "", "--permission-mode", "plan",
       "--system-prompt", instructions];
     this.child = Bun.spawn(["script", "-qefc", args.map(shellQuote).join(" "), "/dev/null"], {
@@ -90,14 +90,14 @@ test("the real Claude session receives decisions, Questions, replies and reset t
     await session.activity("interrupt", busyStart);
     const whileBusy = session.output.length;
     await Promise.all([harness.decision(), harness.reply()]);
-    await session.activity("provenance_test:", whileBusy);
+    await session.activity("provenance:", whileBusy);
     const duringDelivery = plain(session.output.slice(whileBusy));
-    expect(duringDelivery.slice(0, duringDelivery.indexOf("provenance_test:"))).not.toContain("Worked");
+    expect(duringDelivery.slice(0, duringDelivery.indexOf("provenance:"))).not.toContain("Worked");
     await session.acknowledgement("ACK_DECISION");
     await session.acknowledgement("ACK_REPLY");
     await harness.reset();
     await session.acknowledgement("ACK_RESET");
-    expect(plain(session.output)).toContain("provenance_test:");
+    expect(plain(session.output)).toContain("provenance:");
     await session.close();
     expect(await session.child.exited).toBe(0);
   } finally { await harness.close(); }
