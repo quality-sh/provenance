@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: BNasraoui/workflowd/.github/workflows/agent-sandbox.yml@248846d65ba099684df73c0bdb0a7a6392647539
+    uses: BNasraoui/workflowd/.github/workflows/agent-sandbox.yml@248846d65ba099684df73c0bdb0a7a6392647539 # revision 248846d65ba099684df73c0bdb0a7a6392647539 (untagged)
     with:
       tooling-sha: 248846d65ba099684df73c0bdb0a7a6392647539
       repository-id: "1286590015"
@@ -34,7 +34,7 @@ jobs:
       contents: read
     steps:
       - name: Publish validated agent result
-        uses: BNasraoui/workflowd/.github/actions/agent-publish@248846d65ba099684df73c0bdb0a7a6392647539
+        uses: BNasraoui/workflowd/.github/actions/agent-publish@248846d65ba099684df73c0bdb0a7a6392647539 # revision 248846d65ba099684df73c0bdb0a7a6392647539 (untagged)
         with:
           github-token: ${{ github.token }}
           gate-actor-id: "306741873"
