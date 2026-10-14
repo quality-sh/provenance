@@ -464,9 +464,12 @@ Native subscriptions receive only changes made through the authenticated review 
 These include approvals, rejections, Questions, replies and record edits. The host
 marks the page session after it authenticates its cookie. It captures changed
 record IDs under the publication lock, then sends a native `reviewed` frame.
-CLI, SDK and other scope writes do not produce agent change messages. The host
+A person action means any write through the authenticated review page. An agent
+that drives that page will notify itself. CLI, SDK and MCP writes never notify. The host
 does not route those writes. Browser subscribers retain the file-observation feed.
 Browser and native subscribers have separate sequences and in-memory channels.
+Each page write reads the whole repository twice while it holds the publication
+lock. The cost increases with repository size. CLI writers wait for this lock.
 The client selects the Requirement root through the canonical document read.
 It sends no `rootId` subscription message.
 
