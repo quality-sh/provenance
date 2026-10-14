@@ -59,16 +59,16 @@ fn failed_publication_leaves_the_saved_document_and_stream_unchanged() {
         "req_follow",
         "update",
         "--statement",
-        "This write must fail.",
+        "The system records the changed statement.",
         "--if-match",
         &format!("sha256:{}", "0".repeat(64)),
         "--repo",
         repo.path().to_str().unwrap(),
     ]));
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr)
-        .to_lowercase()
-        .contains("precondition"));
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("\"kind\":\"requirement_edit_conflict\"")
+    );
     assert_eq!(std::fs::read(shard).unwrap(), before);
     follow.quiet();
 }
@@ -105,9 +105,9 @@ fn changed_root_membership_removes_the_record_from_the_bound_document() {
         "rules",
         "rule_follow",
         "update",
-        "--requirement-id",
-        "req_other",
-        "--if-match",
+        "--requirement-ids-json",
+        r#"["req_other"]"#,
+        "--expected-etag",
         record["data"]["edit"]["etag"].as_str().unwrap(),
         "--repo",
         repo.path().to_str().unwrap(),

@@ -114,7 +114,7 @@ pub fn upgrade_with_host(host: &Host, path: &str, headers: &str, authority: &str
     socket
         .set_read_timeout(Some(Duration::from_secs(15)))
         .unwrap();
-    write!(socket, "GET {path} HTTP/1.1\r\nHost: {}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n{headers}\r\n", authority).unwrap();
+    write!(socket, "GET {path} HTTP/1.1\r\nHost: {authority}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n{headers}\r\n").unwrap();
     let mut bytes = Vec::new();
     while !bytes.ends_with(b"\r\n\r\n") {
         let mut byte = [0];
