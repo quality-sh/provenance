@@ -60,3 +60,18 @@ fn capture(mut pipe: impl Read + Send + 'static) -> mpsc::Receiver<Vec<u8>> {
     });
     receive
 }
+
+/// Runs a publication with a deadline on lock acquisition.
+pub fn publish(
+    layout: &ProvenanceLayout,
+    operation: impl FnOnce() -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let guard = runtime.block_on(guard(layout));
+    let result = operation();
+    drop(guard);
+    result
+}

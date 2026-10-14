@@ -69,11 +69,11 @@ impl Host {
 
     #[cfg(unix)]
     pub fn signal(&self, signal: &str) {
-        assert!(Command::new("kill")
-            .args([signal, &self.child.id().to_string()])
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            waits::output(Command::new("kill").args([signal, &self.child.id().to_string()]))
+                .status
+                .success()
+        );
     }
 
     pub fn wait(&mut self, timeout: Duration) -> std::process::ExitStatus {

@@ -38,6 +38,10 @@ fn current_source(host: &review_host_support::Host, id: &str) -> Value {
 // Implementation aid: the notification-loss Rule remains a plan proposal without a version field.
 fn real_kernel_queue_loss_sends_reset_and_current_read() {
     let repo = repository();
+    let replacement = repository();
+    source_before_host(replacement.path(), "source_after_loss");
+    let shard = ".provenance/state/scopes/default/sources/source.jsonl";
+    let bytes = std::fs::read(replacement.path().join(shard)).unwrap();
     let host = start(repo.path());
     let mut socket = Socket::connect(&host);
     let ready = socket.frame();
@@ -50,17 +54,31 @@ fn real_kernel_queue_loss_sends_reset_and_current_read() {
         count <= 262_144,
         "a dedicated overflow runner is required for this queue size"
     );
-    host.signal("-STOP");
-    for index in 0..count + 1024 {
-        let path = repo
-            .path()
-            .join(format!(".provenance/state/event-{index}.noise"));
-        std::fs::write(&path, "event").unwrap();
-        std::fs::remove_file(path).unwrap();
-    }
-    source(&host, repo.path(), "source_after_loss");
-    host.signal("-CONT");
+    // Own the publication lock before suspension, so the observer cannot retain it.
+    review_host_support::waits::publish(&layout(repo.path()), || {
+        host.signal("-STOP");
+        for index in 0..count + 1024 {
+            let path = repo
+                .path()
+                .join(format!(".provenance/state/event-{index}.noise"));
+            std::fs::write(&path, "event")?;
+            std::fs::remove_file(path)?;
+        }
+        // Publish prepared canonical bytes without waiting for a stopped process.
+        let target = repo.path().join(shard);
+        let temporary = target.with_extension("replacement");
+        std::fs::write(&temporary, &bytes)?;
+        std::fs::rename(temporary, target)?;
+        host.signal("-CONT");
+        Ok(())
+    })
+    .unwrap();
+    let deadline = std::time::Instant::now() + review_host_support::waits::LIMIT;
     let reset = loop {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "reset frame did not arrive within 60 seconds"
+        );
         let frame = socket.frame();
         if frame["type"] == "reset" {
             break frame;
@@ -172,16 +190,22 @@ fn a_nonregular_shard_resets_without_waiting_for_fifo_data() {
     let shard = repo
         .path()
         .join(".provenance/state/scopes/default/sources/source.jsonl");
-    provenance_store::publication::with_repository_publication(&layout(repo.path()), || {
+    review_host_support::waits::publish(&layout(repo.path()), || {
         std::fs::remove_file(&shard)?;
-        assert!(std::process::Command::new("mkfifo")
-            .arg(&shard)
-            .status()?
-            .success());
+        assert!(review_host_support::waits::output(
+            std::process::Command::new("mkfifo").arg(&shard)
+        )
+        .status
+        .success());
         Ok(())
     })
     .unwrap();
+    let deadline = std::time::Instant::now() + review_host_support::waits::LIMIT;
     let reset = loop {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "reset frame did not arrive within 60 seconds"
+        );
         let frame = socket.frame();
         if frame["type"] == "reset" {
             break frame;
