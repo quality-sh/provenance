@@ -8,8 +8,9 @@ function selection(value: unknown): Selection {
   let config: Record<string, unknown>;
   try { config = object(value); }
   catch { throw new Error("Channel configuration must be an object"); }
-  return { repository: realpathSync(requiredString(config, "repository")),
+  const fields = { repository: requiredString(config, "repository"),
     scope: requiredString(config, "scope"), rootId: requiredString(config, "rootId") };
+  return { ...fields, repository: realpathSync(fields.repository) };
 }
 
 /** Sends current graph state through the opted-in session's existing channel contract. */

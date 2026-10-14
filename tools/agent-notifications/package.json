@@ -6,7 +6,7 @@
     "test:codex": "bun test test/codex.test.ts",
     "test:claude": "bun test test/claude.test.ts",
     "test:claude-session": "bun test test/claude-session.test.ts",
-    "test": "bun test test/codex.test.ts test/claude.test.ts test/stream.test.ts test/framing.test.ts test/cleanup.test.ts",
+    "test": "bun test test/codex.test.ts test/claude.test.ts test/stream.test.ts test/framing.test.ts test/cleanup.test.ts test/configuration.test.ts",
     "typecheck": "tsc --noEmit",
     "test:isolation": "bun test/isolation-mutation.ts"
   },

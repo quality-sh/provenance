@@ -86,13 +86,14 @@ function configuration(value: unknown): Configuration {
   let config: Record<string, unknown>;
   try { config = object(value); }
   catch { throw new Error("Adapter configuration must be an object"); }
-  return {
+  const fields = {
     clientEndpoint: requiredString(config, "clientEndpoint"),
     threadId: requiredString(config, "threadId"),
-    repository: realpathSync(requiredString(config, "repository")),
+    repository: requiredString(config, "repository"),
     scope: requiredString(config, "scope"),
     rootId: requiredString(config, "rootId"),
   };
+  return { ...fields, repository: realpathSync(fields.repository) };
 }
 
 function threadResponse(value: unknown): { thread: { id: string; cwd: string } } {
