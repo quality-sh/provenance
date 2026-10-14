@@ -1,7 +1,7 @@
 #[path = "review_host_support/mod.rs"]
 mod review_host_support;
 use review_host_support::{
-    follow::{create, Follow},
+    follow::{create, page_request, page_rule, Follow},
     repository, start, waits,
 };
 
@@ -14,9 +14,9 @@ fn two_writers_reach_the_same_subscription() {
     let follow = Follow::start(&host, repo.path(), "req_follow");
     follow.frame();
     std::thread::scope(|scope| {
-        let root = repo.path();
         for id in ["rule_first", "rule_second"] {
-            scope.spawn(move || create(root, id, "rule", &["--requirement-id", "req_follow"]));
+            let host = &host;
+            scope.spawn(move || page_rule(host, id, "req_follow"));
         }
     });
     let mut seen = String::new();
@@ -25,9 +25,6 @@ fn two_writers_reach_the_same_subscription() {
         assert_eq!(current["continuity"], "current");
         seen.push_str(&current.to_string());
     }
-    let current = serde_json::json!({"type":"state", "continuity":"current"});
-    assert_eq!(current["type"], "state");
-    assert_eq!(current["continuity"], "current");
 }
 
 #[test]
@@ -37,12 +34,7 @@ fn a_write_during_subscription_start_reaches_the_document() {
     create(repo.path(), "req_follow", "requirement", &[]);
     let host = start(repo.path());
     let follow = Follow::start(&host, repo.path(), "req_follow");
-    create(
-        repo.path(),
-        "rule_racing",
-        "rule",
-        &["--requirement-id", "req_follow"],
-    );
+    page_rule(&host, "rule_racing", "req_follow");
     let mut seen = String::new();
     while !seen.contains("req_follow") || !seen.contains("rule_racing") {
         let current = follow.frame();
@@ -110,22 +102,17 @@ fn changed_root_membership_removes_the_record_from_the_bound_document() {
     ]));
     assert!(output.status.success());
     let record: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let output = waits::output(host.cli().args([
-        "rules",
-        "rule_follow",
-        "update",
-        "--requirement-ids-json",
-        r#"["req_other"]"#,
-        "--expected-etag",
-        record["data"]["edit"]["etag"].as_str().unwrap(),
-        "--repo",
-        repo.path().to_str().unwrap(),
-    ]));
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+    let saved = review_host_support::response(
+        page_request(&host, "PATCH", "/rules/rule_follow")
+            .set(
+                "If-Match",
+                &format!("\"{}\"", record["data"]["edit"]["etag"].as_str().unwrap()),
+            )
+            .send_string(
+                &serde_json::json!({"data":{"requirement_ids":["req_other"]}}).to_string(),
+            ),
     );
+    assert_eq!(saved.status(), 200, "{}", saved.into_string().unwrap());
     let current = follow.frame();
     assert_eq!(current["type"], "state");
     assert_eq!(current["removedIds"], serde_json::json!(["rule_follow"]));

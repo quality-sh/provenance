@@ -13,6 +13,7 @@ use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
 /// Streams saved document state when the repository host sends an invalidation.
 #[rule("rule_review_follow_push")]
+#[rule("rule_review_follow_people_only")]
 pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     anyhow::ensure!(
         input.max_depth.is_none() && input.returned_kinds.is_empty(),
@@ -61,13 +62,23 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
                 || next_sequence != sequence + 1);
             next_epoch.clone_into(&mut epoch);
             sequence = next_sequence;
+            if initialized && !reset && matches!(frame, Frame::Changed { .. } | Frame::Ready { .. }) {
+                continue;
+            }
+            let selected = match &frame {
+                Frame::Reviewed { scopes, .. } => Some(scopes.iter()
+                    .filter(|scope| scope.scope == context.scope)
+                    .flat_map(|scope| scope.records.iter().map(|record| record.id.clone()))
+                    .collect::<std::collections::BTreeSet<_>>()),
+                _ => None,
+            };
             tokio::select! {
                 signal = tokio::signal::ctrl_c() => {
                     signal.context("cannot install the Ctrl-C handler")?;
                     return Ok(());
                 },
                 result = async {
-                    let frames = match baseline.reconcile(context, &input.target, limit, &epoch, sequence, reset).await {
+                    let frames = match baseline.reconcile(context, &input.target, limit, (&epoch, sequence), reset, selected.as_ref()).await {
                         Ok(frames) => frames,
                         Err(error) => {
                             read_failure = Some(OutputFrame::read_error(epoch.clone(), sequence, error.to_string()));

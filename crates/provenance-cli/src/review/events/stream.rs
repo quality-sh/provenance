@@ -5,7 +5,7 @@ use provenance_core::protocol::ReadDocumentQuery;
 use provenance_macros::rule;
 use provenance_store::operations::{queries, read_policy::ReadPolicy};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub(in crate::review) struct Baseline {
@@ -14,17 +14,18 @@ pub(in crate::review) struct Baseline {
 }
 
 impl Baseline {
-    /// Returns bounded current state after a notification; no notification history is stored.
+    /// Compares one complete document with the current baseline; no journal is stored.
     #[rule("rule_review_follow_reset")]
     pub async fn reconcile(
         &mut self,
         context: &RepoContext,
         root: &str,
         limit: usize,
-        epoch: &str,
-        sequence: u64,
+        position: (&str, u64),
         reset: bool,
+        selected: Option<&BTreeSet<String>>,
     ) -> anyhow::Result<Vec<OutputFrame>> {
+        let (epoch, sequence) = position;
         let mut cursor = None;
         let mut current = BTreeMap::new();
         let mut ordered = Vec::new();
@@ -57,18 +58,23 @@ impl Baseline {
                 break;
             }
         }
+        let full = reset || !self.initialized;
         let removed = self
             .records
             .keys()
-            .filter(|id| !current.contains_key(*id))
+            .filter(|id| {
+                !current.contains_key(*id) && (full || selected.is_none_or(|ids| ids.contains(*id)))
+            })
             .cloned()
             .collect::<Vec<_>>();
         let mut frames = Vec::new();
-        let full = reset || !self.initialized;
         let records = ordered
             .into_iter()
             .filter(|record| {
-                full || record_id(record).is_ok_and(|id| self.records.get(&id) != Some(record))
+                full || record_id(record).is_ok_and(|id| {
+                    selected.is_none_or(|ids| ids.contains(&id))
+                        && self.records.get(&id) != Some(record)
+                })
             })
             .collect::<Vec<_>>();
         if full || !records.is_empty() || !removed.is_empty() {
@@ -91,7 +97,18 @@ impl Baseline {
             });
         }
         self.initialized = true;
-        self.records = current;
+        if full || selected.is_none() {
+            self.records = current;
+        } else if let Some(ids) = selected {
+            // A later page notice must still compare its IDs with the delivered baseline.
+            for id in ids {
+                if let Some(record) = current.get(id) {
+                    self.records.insert(id.clone(), record.clone());
+                } else {
+                    self.records.remove(id);
+                }
+            }
+        }
         Ok(frames)
     }
 }
