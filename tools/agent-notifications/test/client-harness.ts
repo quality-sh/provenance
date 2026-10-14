@@ -86,7 +86,12 @@ export class Rpc {
 export class Harness {
   directory = mkdtempSync(join(tmpdir(), "provenance-client-"));
   repository = join(this.directory, "repository");
-  env = { ...process.env, XDG_CACHE_HOME: join(this.directory, "cache"), PATH: `${dirname(binary)}:${process.env.PATH}` };
+  env = { ...process.env,
+    // Delivery tests use the public dictionary-unavailable initialization path.
+    PROVENANCE_TEST_STE100_ASSET_URL: "http://127.0.0.1:9/unavailable",
+    PROVENANCE_STE100_ASSET_DIR: join(this.directory, "assets"),
+    PROVENANCE_STE100_INDEX_DIR: join(this.directory, "indexes"),
+    XDG_CACHE_HOME: join(this.directory, "cache"), PATH: `${dirname(binary)}:${process.env.PATH}` };
   children: Subprocess[] = [];
   rpc!: Rpc;
   endpoint!: string;
