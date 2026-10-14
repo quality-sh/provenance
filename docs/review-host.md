@@ -456,6 +456,10 @@ The existing operation drain still waits for writes.
 
 ## Native review stream
 
+A canonical document read failure emits `read-error` with `epoch`, `sequence`,
+`continuity: "unknown"` and the read's `reason`, then exits with failure.
+It does not report a lost host. Transport loss still emits `disconnected`.
+
 Native subscriptions receive invalidations for the host's scope. The client filters
 by Requirement root through the canonical document read. It sends no `rootId`
 subscription message. An unrelated scope write can cause a read, but unchanged

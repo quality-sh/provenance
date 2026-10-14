@@ -40,6 +40,7 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     let mut epoch = host.instance_nonce().to_owned();
     let mut sequence = 0;
     let mut initialized = false;
+    let mut read_failure = None;
     let result: anyhow::Result<()> = async {
         loop {
             let incoming = tokio::select! {
@@ -59,14 +60,20 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
             sequence = next_sequence;
             let frames = tokio::select! {
                 _ = tokio::signal::ctrl_c() => return Ok(()),
-                result = baseline.reconcile(context, &input.target, limit, &epoch, sequence, reset) => result?,
+                result = baseline.reconcile(context, &input.target, limit, &epoch, sequence, reset) => match result {
+                    Ok(frames) => frames,
+                    Err(error) => {
+                        read_failure = Some(OutputFrame::read_error(epoch.clone(), sequence, error.to_string()));
+                        return Err(error);
+                    }
+                },
             };
             for frame in frames { emit(&frame).await?; }
             initialized = true;
         }
     }.await;
     let emitted = if result.is_err() {
-        emit(&OutputFrame::disconnected(epoch, sequence)).await
+        emit(&read_failure.unwrap_or_else(|| OutputFrame::disconnected(epoch, sequence))).await
     } else {
         Ok(())
     };

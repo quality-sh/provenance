@@ -1,15 +1,15 @@
 import { realpathSync } from "node:fs";
+import { object, requiredString } from "./validation";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { FollowStream, type Selection } from "./stream";
 
 function selection(value: unknown): Selection {
-  if (!value || typeof value !== "object") throw new Error("Channel configuration must be an object");
-  const config = value as Selection;
-  for (const name of ["repository", "scope", "rootId"] as const) {
-    if (typeof config[name] !== "string" || !config[name].trim()) throw new Error(`Configuration requires ${name}`);
-  }
-  return { repository: realpathSync(config.repository), scope: config.scope, rootId: config.rootId };
+  let config: Record<string, unknown>;
+  try { config = object(value); }
+  catch { throw new Error("Channel configuration must be an object"); }
+  return { repository: realpathSync(requiredString(config, "repository")),
+    scope: requiredString(config, "scope"), rootId: requiredString(config, "rootId") };
 }
 
 /** Sends current graph state through the opted-in session's existing channel contract. */
@@ -38,6 +38,7 @@ export async function run(value: unknown) {
             type: state.type, epoch: state.epoch, sequence: String(state.sequence), continuity: state.continuity },
         } });
         if (state.type === "disconnected") throw new Error("Provenance host disconnected; continuity is unknown");
+        if (state.type === "read-error") throw new Error(`Provenance read failed: ${state.reason}`);
       }
     })().catch(async error => {
       if (!sessionClosed) failure = error;
