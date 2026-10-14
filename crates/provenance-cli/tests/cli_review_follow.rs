@@ -83,14 +83,46 @@ fn follow_receives_a_question_written_by_another_cli() {
     use review_host_support::follow::{create, Follow};
     let repo = repository();
     create(repo.path(), "req_follow", "requirement", &[]);
+    let output = waits::output(
+        std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance")).args([
+            "topic_follow",
+            "create",
+            "--type",
+            "topic",
+            "--requirement-id",
+            "req_follow",
+            "--title",
+            "Review delivery",
+            "--repo",
+            repo.path().to_str().unwrap(),
+        ]),
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let host = start(repo.path());
     let follow = Follow::start(&host, repo.path(), "req_follow");
     assert_eq!(follow.frame()["type"], "state");
-    create(
-        repo.path(),
+    let output = waits::output(host.cli().args([
         "q_follow",
+        "create",
+        "--type",
         "question",
-        &["--parent", "req_follow"],
+        "--topic-id",
+        "topic_follow",
+        "--question",
+        "Which changes reach the agent?",
+        "--resolution-method",
+        "research",
+        "--repo",
+        repo.path().to_str().unwrap(),
+    ]));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
     let changed = follow.until("q_follow");
     assert_eq!(changed["type"], "state");
