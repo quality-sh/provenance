@@ -36,7 +36,7 @@ async fn status(extra: &[(&str, &[u8])], valid_key: bool, host: Option<&str>) ->
     let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
     let mut request = format!(
         "GET /review-events HTTP/1.1\r\nHost: {}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n",
-        host.map(str::to_owned).unwrap_or_else(|| address.to_string())
+        host.map_or_else(|| address.to_string(), str::to_owned)
     ).into_bytes();
     if valid_key {
         request.extend_from_slice(format!("X-Provenance-Launch-Key: {value}\r\n").as_bytes());
