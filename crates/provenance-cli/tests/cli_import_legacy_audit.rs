@@ -195,7 +195,9 @@ fn export_shipped(dir: &tempfile::TempDir) -> serde_json::Value {
         ])
         .assert()
         .success();
-    serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap()
+    let mut document = serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap();
+    export_fixture_support::keep_decision_links_pending(&mut document);
+    document
 }
 
 fn init(repo: &std::path::Path) {

@@ -129,6 +129,8 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
     let resolution = provenance_json(&[
         "resolutions",
         "create",
+        "--status",
+        "approved",
         "--repo",
         &repo,
         "--scope",

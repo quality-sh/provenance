@@ -21,7 +21,10 @@ export class MalformedResponseError extends ClientError {
 export class OperationError<F = OperationFailure> extends ClientError {
   readonly _tag = 'OperationError';
   constructor(readonly status: number, readonly failure: F) {
-    super('OperationError', 'Operation failed');
+    const error = failure && typeof failure === 'object' && 'error' in failure ? failure.error : undefined;
+    const kind = error && typeof error === 'object' && 'kind' in error && typeof error.kind === 'string' ? error.kind : 'Operation failed';
+    const message = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : undefined;
+    super('OperationError', message ? `${kind}: ${message}` : kind);
   }
 }
 export class ProtocolMismatchError extends ClientError {

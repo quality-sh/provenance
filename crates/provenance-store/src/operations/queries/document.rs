@@ -78,6 +78,7 @@ async fn review_keys(
             &crate::operations::reader::Position::default(),
             8193,
             exclude_terminal,
+            &[],
         )
         .await?
         .into_iter()
@@ -89,6 +90,22 @@ async fn review_keys(
                 key.stage == 0,
             ))
         })
+        .collect()
+}
+
+/// The terminal filter also hides records that review rejected as new,
+/// but never the root that the read asks for.
+fn hidden_records(
+    request: &ReadDocumentQuery,
+    rejected_new: &[(NodeType, StableId)],
+) -> Vec<(NodeType, StableId)> {
+    if !request.exclude_terminal {
+        return Vec::new();
+    }
+    rejected_new
+        .iter()
+        .filter(|(kind, id)| *kind != NodeType::Requirement || id.as_str() != request.id)
+        .cloned()
         .collect()
 }
 
@@ -109,9 +126,10 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
         .live(crate::operations::reader::Live::Canonical)
         .store()
         .document_review_state(ctx.snapshot().scope(), &review_records)?;
+    let hidden = hidden_records(&request, &review_state.rejected_new);
     let mut review_totals = DocumentReviewTotals::default();
     for (kind, id, is_member) in &review_keys {
-        if *is_member {
+        if *is_member && !hidden.contains(&(*kind, id.clone())) {
             review_totals.include(&review_state.summary(*kind, id));
         }
     }
@@ -129,6 +147,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             &position,
             request.limit + 1,
             request.exclude_terminal,
+            &hidden,
         )
         .await?;
     let mut entries = Vec::new();
