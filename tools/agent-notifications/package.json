@@ -3,6 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:codex": "bun test test/codex.test.ts"
+    "test:codex": "bun test test/codex.test.ts",
+    "test:claude": "bun test test/claude.test.ts",
+    "test:claude-session": "bun test test/claude-session.test.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1"
   }
 }
