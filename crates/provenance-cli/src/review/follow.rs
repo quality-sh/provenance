@@ -33,9 +33,6 @@ pub(super) async fn run(context: &RepoContext, input: GetInput) -> anyhow::Resul
     let (mut socket, _) = tokio_tungstenite::connect_async(request)
         .await
         .context("cannot subscribe to the review host")?;
-    socket
-        .send(Message::Text(json!({"rootId": input.target}).to_string()))
-        .await?;
     let mut baseline = Baseline::default();
     let mut epoch = host.instance_nonce().to_owned();
     let mut sequence = 0;

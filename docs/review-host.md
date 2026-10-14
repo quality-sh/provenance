@@ -456,6 +456,11 @@ The existing operation drain still waits for writes.
 
 ## Native review stream
 
+Native subscriptions receive invalidations for the host's scope. The client filters
+by Requirement root through the canonical document read. It sends no `rootId`
+subscription message. An unrelated scope write can cause a read, but unchanged
+current state produces no output.
+
 Run `provenance REQUIREMENT_ID get --view review --follow --format json --repo REPOSITORY`.
 The command connects to the verified host for the selected repository and scope.
 It reads the owner-only launch key and sends it in `X-Provenance-Launch-Key` on
