@@ -64,6 +64,10 @@ prints the link without the code. With `--format json` the output is
 browser, it prints the launch link and `"opened": false`. If no host is
 running, the command explains how to start one instead of returning a URL.
 
+When a review page is connected to the host, the command shows the record in
+that page instead of a new browser tab. See
+[Review links in a connected page](#review-links-in-a-connected-page).
+
 In an app that shows web pages, the agent runs
 `provenance RECORD_ID --review-link --no-open --format json` and opens
 `review_url` in the app. Write output keeps a `review_url` without a launch
@@ -152,13 +156,16 @@ get a new link with `provenance <record-id> --review-link`.
 
 The CLI checks these conditions in this order:
 
-1. `--no-open`: the CLI does not open a browser.
-2. An SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `SSH_TTY` is set): the
-   CLI does not open a browser.
-3. Linux without `DISPLAY` or `WAYLAND_DISPLAY`: the CLI does not open a
+1. `--no-open`: the CLI does not open a browser, and it does not move a
+   connected page.
+2. A connected review page acknowledges the record: the CLI does not open a
    browser.
-4. `BROWSER` is set: the CLI starts that program with one argument.
-5. Otherwise the `open` crate opens the page with the default program. On
+3. An SSH session (`SSH_CONNECTION`, `SSH_CLIENT`, or `SSH_TTY` is set): the
+   CLI does not open a browser.
+4. Linux without `DISPLAY` or `WAYLAND_DISPLAY`: the CLI does not open a
+   browser.
+5. `BROWSER` is set: the CLI starts that program with one argument.
+6. Otherwise the `open` crate opens the page with the default program. On
    Windows, Explorer opens it.
 
 The CLI does not wait for the opener to exit. A process that cannot start counts
@@ -331,3 +338,118 @@ invalid startup configuration, and shutdown with incomplete HTTP requests.
 Linux validation does not establish Windows or macOS signal and file-access
 behavior. Existing platform CI remains responsible for those checks. Native
 operation tests continue to use direct calls without a host credential.
+
+## Canonical state events
+
+`GET /review-events` opens a WebSocket for the selected repository and scope.
+It requires the host session cookie, one exact Host, and one exact Origin.
+A bearer token alone cannot open this route. Duplicate credentials, cross-site
+metadata, query credentials, and absolute request URLs are refused before upgrade.
+The content security policy permits the WebSocket at this host's exact port.
+
+The host uses native operating-system file events. It watches `.provenance`
+without recursion and `state` with recursion before the initial guarded read.
+It also observes `.provenance/settings.json` in its existing location. It ignores
+cache, registry, and read-access events. There is no polling, timed debounce,
+interval, or event log. The host captures the repository path at startup, so a
+later change to a repository symlink does not select another repository.
+
+Writers use the existing store, publication guards, and atomic renames. The host
+reads canonical records under the same publication guard on the blocking pool.
+It does not route CLI writes or change command admission. Native watcher failure
+reports that live updates are unavailable; other host operations keep their
+existing paths.
+
+Frames have these forms:
+
+```json
+{"type":"ready","epoch":"host-instance","sequence":0}
+{"type":"changed","epoch":"host-instance","sequence":1,"scopes":[{"scope":"default","records":[{"kind":"source","id":"source_example"}],"families":["source"]}]}
+{"type":"reset","epoch":"host-instance","sequence":2,"reason":"configuration-changed"}
+```
+
+The epoch identifies one host run. The sequence increases for each delta or
+reset, not for each file event. Subscription and ready capture occur under one
+mutex. Events that arrive during a read stay queued. A changed frame identifies
+added, changed, and deleted records. It contains no record content. A family with
+a graph node type uses that type's singular name; other families use their table
+name. Scope, kind, record ID, and family order follow byte order.
+
+Equal canonical records produce no duplicate delta. Guarded changes can merge
+into one delta. The feed does not promise intermediate states or replay after a
+disconnect. Manifest or settings changes produce a full-read reset. On ready or
+reset, a client must read its active data and configuration again. An epoch change,
+sequence gap, or reconnect also requires a full current-state read. Clients must
+subscribe before data reads and retain invalidations that arrive during a read.
+Git remains the source for history.
+
+## Page refresh and drafts
+
+The page opens `/review-events` after it reads its configuration and before it
+mounts the review document, so a save between the two is not lost. Ready,
+reset, a new epoch, a sequence gap, and a reconnect read all active data again:
+the document, search, opened record details, discussions, and history. The page
+also reads its configuration again. When the reviewer settings changed, the
+status line asks the person to select Open / Refresh.
+
+A changed frame reads the document and search again, and the details,
+discussions, and history of the changed records. Details of other records are
+not read again. A changed family without record details, such as a discussion
+message, reads all open details again. A read in progress starts again, so an
+invalidation that arrives during a read is kept.
+
+An open edit, an open rejection or question, and a new-discussion comment are
+drafts. A reread or a remount keeps each draft with the ETag or pending
+submission that was current when the draft opened. A save of a stale draft gets
+the existing typed conflict. Only Override uses the current guard that the
+conflict returns; Discard closes the draft.
+
+When the socket closes, the page connects again once at once. If that attempt
+closes too, the status line says that live updates stopped. The page connects
+again when it is online or active again, or when the person selects
+Open / Refresh. There is no timer or polling.
+
+## Review links in a connected page
+
+`POST /review-navigation` takes `{"launchKey", "rootId", "focusId"}`. Only the
+holder of the launch key can call it. The host sends this frame to the most
+recently connected page:
+
+```json
+{"type":"show-record","requestId":"...","rootId":"req_example","focusId":"rule_example"}
+```
+
+The page shows the record and answers `{"type":"ack","requestId":"..."}`. Only
+the page that received a request can acknowledge it. The host then answers
+`{"shown": true}`. With no connected page, or when that page disconnects first,
+the host answers `{"shown": false}` and the CLI opens the browser as before. The
+wait has no deadline. When the CLI stops waiting, the host removes the request.
+
+A record in the open document is selected at once. Another Requirement opens
+only after the person saves or cancels the open drafts in the current document.
+Until then the page shows that a review link waits, and the CLI waits. A newer
+review link replaces a waiting one, and the page acknowledges both when it
+shows the newer record.
+
+## Notification loss and recovery
+
+Native queue overflow, `need_rescan`, and the host event queue's overflow
+invalidate the previous snapshot. The host attaches fresh parent and child
+watches and reads current canonical state under the publication guard before
+it sends `reset` with reason `file-events-lost`. It does not compare the new
+snapshot with a baseline that can have missed changes.
+
+A failed snapshot or watch attachment gets one immediate recovery attempt.
+There is no delay or timer. If the attempt fails, connected readers receive
+`reset` with reason `observation-failed`, then their sockets close. The host
+reports unavailable updates on stderr. Event upgrades return 503 while
+observation is unavailable. A later file event can restore observation. The
+host then reads fully and sends `observation-recovered`; new connections receive
+ready at the current sequence and must read current data.
+
+A subscriber that loses queued frames gets `subscriber-loss` and disconnects.
+This reset also reaches other connected readers, so their sequence stays valid.
+Clients must treat every reset and any epoch or sequence gap as a full-read
+request. The feed cannot recover missed event count, order, or intermediate
+values. On shutdown, observation stops and a started guarded read finishes.
+The existing operation drain still waits for writes.

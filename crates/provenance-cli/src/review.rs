@@ -1,4 +1,5 @@
 mod assets;
+mod events;
 pub mod launch;
 
 use anyhow::Context;
@@ -49,22 +50,13 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         uuid::Uuid::new_v4().simple(),
         uuid::Uuid::new_v4().simple()
     );
-    let access = Arc::new(
-        LocalAccess::new(
-            &options.repo,
-            &options.repository_id,
-            &options.scope,
-            &token,
-            address,
-        )
-        .context("cannot configure review repository access")?,
-    );
+    let (canonical_repo, access) = repository_access(&options, &token, address)?;
     if access.disposition_actor_ids()?.is_empty() {
         eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
     }
     let host = StatementHost::with_access(access.clone()).with_check_port(Arc::new(
         crate::handlers::check::RepositoryCheckPort::new(
-            camino::Utf8PathBuf::from_path_buf(options.repo.clone())
+            camino::Utf8PathBuf::from_path_buf(canonical_repo.clone())
                 .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
             false,
             None,
@@ -72,7 +64,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     ));
     let endpoint = format!("http://{address}");
     let runtime = LocalHostRegistration::publish(
-        &options.repo,
+        &canonical_repo,
         &options.scope,
         &endpoint,
         &options.repository_id,
@@ -83,6 +75,17 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         &token,
         launch::LaunchKey::publish(&identity.instance_nonce)?,
     );
+    let events = events::ReviewEvents::start(
+        provenance_store::layout::ProvenanceLayout::new(
+            camino::Utf8PathBuf::from_path_buf(canonical_repo)
+                .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
+        ),
+        options.scope.clone(),
+        identity.instance_nonce.clone(),
+        access.clone(),
+        codes.clone(),
+    )
+    .await;
     let config = json!({
         "endpoint": endpoint, "repositoryId": options.repository_id, "scope": options.scope,
         "compatibility": provenance_core::protocol::host::COMPATIBILITY,
@@ -110,9 +113,10 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
             LAUNCH_SESSION_ROUTE,
             post(launch::open_session).with_state(codes.clone()),
         )
+        .merge(events.router())
         .fallback(assets::serve)
         .layer(middleware::from_fn_with_state(
-            (access, codes.clone()),
+            (access, codes.clone(), format!("ws://{address}")),
             protect_origin,
         ));
     let signals = ShutdownSignals::new()?;
@@ -126,7 +130,33 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     );
     std::io::stdout().flush()?;
     open_review_page(&endpoint, &codes, options.no_open)?;
-    serve(listener, router, host, signals).await
+    serve(listener, router, host, events, signals).await
+}
+
+fn repository_access(
+    options: &Options,
+    token: &str,
+    address: std::net::SocketAddr,
+) -> anyhow::Result<(PathBuf, Arc<LocalAccess>)> {
+    let canonical_repo = options
+        .repo
+        .canonicalize()
+        .map_err(|_| OperationFailure::InvalidInput {
+            field: None,
+            reason: provenance_core::protocol::failure::InvalidInputReason::InvalidValue,
+        })
+        .context("cannot configure review repository access")?;
+    let access = Arc::new(
+        LocalAccess::new(
+            &canonical_repo,
+            &options.repository_id,
+            &options.scope,
+            token,
+            address,
+        )
+        .context("cannot configure review repository access")?,
+    );
+    Ok((canonical_repo, access))
 }
 
 /// Opens the review page signed in, or tells the person which link to open.
@@ -161,6 +191,7 @@ async fn serve(
     listener: tokio::net::TcpListener,
     router: axum::Router,
     host: StatementHost,
+    events: events::ReviewEvents,
     mut signals: ShutdownSignals,
 ) -> anyhow::Result<()> {
     let (stop, stopped) = tokio::sync::oneshot::channel();
@@ -177,11 +208,13 @@ async fn serve(
             None
         }
     };
+    events.stop();
     eprintln!("Review host is stopping. Wait for active operations, or send a second signal to force exit; writes may be incomplete.");
     let result = tokio::select! {
         result = async {
             // Join started operations before limiting the remaining HTTP drain.
             host.shutdown().await;
+            events.shutdown().await;
             match result {
                 Some(result) => result,
                 None => tokio::time::timeout(Duration::from_secs(1), &mut server)
@@ -252,7 +285,7 @@ async fn configuration(
 }
 
 async fn protect_origin(
-    State((access, codes)): State<(Arc<LocalAccess>, launch::LaunchCodes)>,
+    State((access, codes, websocket)): State<(Arc<LocalAccess>, launch::LaunchCodes, String)>,
     mut request: Request,
     next: Next,
 ) -> Response {
@@ -299,10 +332,16 @@ async fn protect_origin(
         ("x-content-type-options", "nosniff"),
         ("x-frame-options", "DENY"),
         ("cross-origin-resource-policy", "same-origin"),
-        ("content-security-policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; worker-src 'none'"),
     ] {
-        response.headers_mut().insert(name, HeaderValue::from_static(value));
+        response
+            .headers_mut()
+            .insert(name, HeaderValue::from_static(value));
     }
+    response.headers_mut().insert(
+        "content-security-policy",
+        HeaderValue::from_str(&format!("default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' {websocket}; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; worker-src 'none'"))
+            .expect("loopback WebSocket policy"),
+    );
     response
 }
 
