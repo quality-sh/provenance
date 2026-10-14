@@ -1,6 +1,6 @@
 mod assets;
 mod events;
-pub(super) mod follow;
+pub mod follow;
 pub mod launch;
 
 use anyhow::Context;

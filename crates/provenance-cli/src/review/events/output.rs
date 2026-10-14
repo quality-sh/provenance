@@ -53,7 +53,7 @@ pub(in crate::review) enum OutputFrame {
 }
 
 impl OutputFrame {
-    pub fn disconnected(epoch: String, sequence: u64) -> Self {
+    pub const fn disconnected(epoch: String, sequence: u64) -> Self {
         Self::Disconnected {
             document: Document {
                 epoch,
@@ -65,7 +65,7 @@ impl OutputFrame {
             },
         }
     }
-    pub fn read_error(epoch: String, sequence: u64, reason: String) -> Self {
+    pub const fn read_error(epoch: String, sequence: u64, reason: String) -> Self {
         Self::ReadError {
             epoch,
             sequence,

@@ -5,7 +5,7 @@ use super::events::{
     stream::Baseline,
 };
 use anyhow::Context as _;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use provenance_cli::repo_context::RepoContext;
 use provenance_macros::rule;
 use provenance_porcelain::get::GetInput;
