@@ -89,7 +89,7 @@ test("a thread in another repository refuses the binding", async () => {
     expect(await deadline(adapter.exited, "wrong repository refusal")).not.toBe(0);
     expect(harness.requests).toHaveLength(0);
     expect(await harness.adapterError).toContain("thread repository does not match");
-    expect(JSON.stringify(await harness.transcript(thread, false))).not.toContain("req_notifications");
+    expect((await harness.rpc.call("thread/queue/list", { threadId: thread })).data).toEqual([]);
   } finally { await harness.close(); }
 }, 60000);
 

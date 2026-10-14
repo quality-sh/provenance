@@ -64,12 +64,25 @@ fn kernel_queue_overflow_reconciles_the_current_document() {
         Ok(result?)
     })
     .unwrap();
-    let reset = follow.frame();
+    let deadline = std::time::Instant::now() + review_host_support::waits::LIMIT;
+    let mut removed = Vec::new();
+    let reset = loop {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "overflow must deliver a reset"
+        );
+        let frame = follow.frame();
+        removed.extend(frame["removedIds"].as_array().unwrap().iter().cloned());
+        if frame["type"] == "reset" {
+            break frame;
+        }
+        assert_eq!(frame["type"], "state");
+    };
     assert_eq!(reset["type"], "reset");
     assert_eq!(reset["continuity"], "unknown");
     assert_eq!(reset["epoch"], initial["epoch"]);
     assert!(reset["records"].to_string().contains("rule_after"));
-    assert_eq!(reset["removedIds"], serde_json::json!(["rule_before"]));
+    assert_eq!(removed, vec![serde_json::json!("rule_before")]);
 }
 
 #[test]

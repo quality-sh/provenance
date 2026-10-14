@@ -61,20 +61,23 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
                 || next_sequence != sequence + 1);
             next_epoch.clone_into(&mut epoch);
             sequence = next_sequence;
-            let frames = tokio::select! {
+            tokio::select! {
                 signal = tokio::signal::ctrl_c() => {
                     signal.context("cannot install the Ctrl-C handler")?;
                     return Ok(());
                 },
-                result = baseline.reconcile(context, &input.target, limit, &epoch, sequence, reset) => match result {
-                    Ok(frames) => frames,
-                    Err(error) => {
-                        read_failure = Some(OutputFrame::read_error(epoch.clone(), sequence, error.to_string()));
-                        return Err(error);
-                    }
-                },
-            };
-            for frame in frames { emit(&frame).await?; }
+                result = async {
+                    let frames = match baseline.reconcile(context, &input.target, limit, &epoch, sequence, reset).await {
+                        Ok(frames) => frames,
+                        Err(error) => {
+                            read_failure = Some(OutputFrame::read_error(epoch.clone(), sequence, error.to_string()));
+                            return Err(error);
+                        }
+                    };
+                    for frame in frames { emit(&frame).await?; }
+                    Ok::<(), anyhow::Error>(())
+                } => result?,
+            }
             initialized = true;
         }
     }.await;
