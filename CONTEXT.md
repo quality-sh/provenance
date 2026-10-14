@@ -192,8 +192,10 @@ that host session.
 
 ## Review page action
 
-A saved approval, rejection, Question, reply, or record edit made through an
-authenticated review page session. CLI and SDK writes are not Review page actions.
+Any write made through an authenticated review page session. A person action
+means a Review page action; the mark does not establish browser or human identity.
+An agent that drives the review page itself, such as the in-app browser of the
+Codex app or Claude Desktop, will notify itself. CLI, SDK and MCP writes never notify.
 
 ## Review document
 
