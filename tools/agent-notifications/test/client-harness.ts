@@ -84,6 +84,7 @@ export class Harness {
   rpc!: Rpc;
   endpoint!: string;
   requests: any[] = [];
+  requestThreads: (string | null)[] = [];
   requestListeners = new Set<() => void>();
   release?: () => void;
   blocked?: Promise<void>;
@@ -104,6 +105,7 @@ export class Harness {
     this.drain(host.stderr);
     if (!withCodex) return this;
     this.server = Bun.serve({ port: 0, fetch: async request => {
+      this.requestThreads.push(request.headers.get("thread-id"));
       this.requests.push(await request.json());
       for (const notify of this.requestListeners) notify();
       const blocked = this.blocked; this.blocked = undefined;
