@@ -50,7 +50,7 @@ serde.workspace = true
 serde_ignored.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["signal"] }
+tokio = { workspace = true, features = ["signal", "io-std", "io-util"] }
 uuid.workspace = true
 ureq.workspace = true
 url.workspace = true

@@ -1,9 +1,9 @@
 use provenance_store::review_changes::ScopeChanges;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
-pub(super) enum Frame {
+pub(in crate::review) enum Frame {
     Ready {
         epoch: String,
         sequence: u64,
@@ -18,4 +18,18 @@ pub(super) enum Frame {
         sequence: u64,
         reason: String,
     },
+}
+
+impl Frame {
+    pub fn position(&self) -> (&str, u64) {
+        match self {
+            Self::Ready { epoch, sequence }
+            | Self::Changed {
+                epoch, sequence, ..
+            }
+            | Self::Reset {
+                epoch, sequence, ..
+            } => (epoch, *sequence),
+        }
+    }
 }

@@ -1,5 +1,6 @@
-mod frames;
+pub(super) mod frames;
 mod navigation;
+pub(super) mod output;
 pub(super) mod stream;
 mod subscribers;
 mod watch;

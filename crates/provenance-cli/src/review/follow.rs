@@ -1,11 +1,14 @@
 //! Native review subscription. Reads run in order while the socket retains invalidations.
-use super::events::stream::{emit, Baseline};
+use super::events::{
+    frames::Frame,
+    output::{emit, OutputFrame},
+    stream::Baseline,
+};
 use anyhow::Context as _;
 use futures_util::{SinkExt, StreamExt};
 use provenance_cli::repo_context::RepoContext;
 use provenance_macros::rule;
 use provenance_porcelain::get::GetInput;
-use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
 /// Streams saved document state when the repository host sends an invalidation.
@@ -45,29 +48,29 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
             };
             let Some(incoming) = incoming else { anyhow::bail!("review host disconnected"); };
             let frame = match incoming? {
-                Message::Text(text) => serde_json::from_str::<Value>(&text)?,
+                Message::Text(text) => serde_json::from_str::<Frame>(&text)?,
                 Message::Close(_) => anyhow::bail!("review host disconnected"),
                 _ => continue,
             };
-            let next_epoch = frame["epoch"].as_str().context("feed frame has no epoch")?;
-            let next_sequence = frame["sequence"].as_u64().context("feed frame has no sequence")?;
-            let reset = initialized && (frame["type"] == "reset" || next_epoch != epoch
+            let (next_epoch, next_sequence) = frame.position();
+            let reset = initialized && (matches!(frame, Frame::Reset { .. }) || next_epoch != epoch
                 || next_sequence != sequence + 1);
             next_epoch.clone_into(&mut epoch);
             sequence = next_sequence;
-            tokio::select! {
+            let frames = tokio::select! {
                 _ = tokio::signal::ctrl_c() => return Ok(()),
                 result = baseline.reconcile(context, &input.target, limit, &epoch, sequence, reset) => result?,
-            }
+            };
+            for frame in frames { emit(&frame).await?; }
             initialized = true;
         }
     }.await;
-    if result.is_err() {
-        emit(
-            &json!({"type": "disconnected", "epoch": epoch, "sequence": sequence,
-            "continuity": "unknown", "records": [], "removedIds": [], "continuations": []}),
-        )?;
-    }
+    let emitted = if result.is_err() {
+        emit(&OutputFrame::disconnected(epoch, sequence)).await
+    } else {
+        Ok(())
+    };
     let _ = socket.close(None).await;
+    emitted?;
     result
 }

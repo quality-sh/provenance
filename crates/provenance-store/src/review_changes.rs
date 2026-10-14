@@ -2,7 +2,7 @@
 mod diff;
 mod snapshot;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -15,14 +15,14 @@ pub struct ReviewStateSnapshot {
 }
 
 /// Record identities that a reader must read again.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ChangedRecord {
     pub kind: String,
     pub id: String,
 }
 
 /// Changed records and families in one scope, including deleted records.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ScopeChanges {
     pub scope: String,
     pub records: Vec<ChangedRecord>,
