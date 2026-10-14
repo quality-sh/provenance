@@ -387,3 +387,5 @@ pub fn list_discussions(host: &Host) -> ureq::Response {
 pub mod events;
 
 pub mod follow;
+
+pub mod scripted_feed;
