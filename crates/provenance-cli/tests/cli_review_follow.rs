@@ -27,6 +27,7 @@ fn follow_returns_current_document_before_waiting_for_changes() {
 
 #[test]
 #[provenance_macros::verifies("rule_review_follow_push", examples)]
+#[provenance_macros::verifies("rule_review_follow_people_only", examples)]
 fn follow_receives_only_the_question_written_by_the_review_page() {
     let repo = repository();
     create(repo.path(), "req_follow", "requirement", &[]);

@@ -13,7 +13,6 @@ use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
 /// Streams saved document state when the repository host sends an invalidation.
 #[rule("rule_review_follow_push")]
-#[rule("rule_review_follow_people_only")]
 pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     anyhow::ensure!(
         input.max_depth.is_none() && input.returned_kinds.is_empty(),

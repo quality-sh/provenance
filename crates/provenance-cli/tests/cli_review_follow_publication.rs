@@ -76,6 +76,7 @@ fn failed_publication_leaves_the_saved_document_and_stream_unchanged() {
 
 #[test]
 // Implementation aid: moving a member to another root must report its removal from this root.
+#[provenance_macros::verifies("rule_review_follow_people_only", examples)]
 fn changed_root_membership_removes_the_record_from_the_bound_document() {
     let repo = repository();
     create(repo.path(), "req_follow", "requirement", &[]);

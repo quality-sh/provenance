@@ -90,6 +90,8 @@ impl Subscribers {
         }
     }
 
+    /// Routes only writes marked by the authenticated page host to native subscribers.
+    #[rule("rule_review_follow_people_only")]
     pub fn page_changed(&self, mut changes: ReviewChanges) {
         let mut state = self.inner.lock().unwrap();
         changes.scopes.retain(|scope| scope.scope == state.scope);
