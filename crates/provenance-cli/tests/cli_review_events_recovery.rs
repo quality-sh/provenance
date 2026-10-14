@@ -42,6 +42,7 @@ fn real_kernel_queue_loss_sends_reset_and_current_read() {
     source_before_host(replacement.path(), "source_after_loss");
     let shard = ".provenance/state/scopes/default/sources/source.jsonl";
     let bytes = std::fs::read(replacement.path().join(shard)).unwrap();
+    std::fs::create_dir_all(repo.path().join(shard).parent().unwrap()).unwrap();
     let host = start(repo.path());
     let mut socket = Socket::connect(&host);
     let ready = socket.frame();

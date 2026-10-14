@@ -31,3 +31,8 @@ priority = 90
 # Real host event tests must fail within minutes if an operation stops.
 filter = 'binary(/^cli_review_events/) & !test(repeat_kernel_queue_loss_thirty_times)'
 slow-timeout = { period = "60s", terminate-after = 3 }
+
+[[profile.default.overrides]]
+# The manual stress check includes 30 repetitions but also has a process limit.
+filter = 'binary(cli_review_events_recovery) & test(repeat_kernel_queue_loss_thirty_times)'
+slow-timeout = { period = "60s", terminate-after = 4 }

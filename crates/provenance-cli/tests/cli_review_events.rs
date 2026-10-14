@@ -96,7 +96,7 @@ fn unrelated_scope_cache_and_equal_content_do_not_invalidate() {
     let host = start(repo.path());
     let mut socket = Socket::connect(&host);
     socket.frame();
-    let output = review_host_support::waits::output(&mut host.cli().args([
+    let output = review_host_support::waits::output(host.cli().args([
         "sources",
         "create",
         "--repo",
@@ -178,7 +178,7 @@ async fn rename_burst_is_coherent_and_failed_cli_preparation_is_quiet() {
         .unwrap();
     let read: Value = serde_json::from_str(&read).unwrap();
     assert_eq!(read["data"]["name"], "Final");
-    let output = review_host_support::waits::output(&mut host.cli().args([
+    let output = review_host_support::waits::output(host.cli().args([
         "sources",
         "create",
         "--repo",
