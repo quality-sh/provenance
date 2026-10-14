@@ -145,7 +145,7 @@ function livePage() {
   return {
     elements, sockets, wake: () => wake(), settings: () => { actors = ['other']; },
     state: () => ({ reads, mounts, disposals }),
-    frame: (type: string) => sockets.at(-1)?.onmessage?.({ data: JSON.stringify({ type, epoch: 'host', sequence: 0, reason: 'settings' }) }),
+    frame: (type: string) => sockets.at(-1)?.onmessage?.({ data: JSON.stringify({ type, epoch: 'host', sequence: 0, reason: 'observation-recovered' }) }),
   };
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
