@@ -21,9 +21,7 @@ async fn a_saved_page_write_succeeds_when_notification_fails() {
     let host = host(&repo, true).with_page_writes(
         repo.layout.clone(),
         Arc::new(move |changes| {
-            if !changes.configuration_changed {
-                panic!("notification unavailable");
-            }
+            assert!(changes.configuration_changed, "notification unavailable");
             seen.lock().unwrap().push(changes);
         }),
     );
@@ -61,4 +59,5 @@ async fn a_saved_page_write_succeeds_when_notification_fails() {
     assert_eq!(notifications.len(), 1);
     assert!(notifications[0].configuration_changed);
     assert!(notifications[0].scopes.is_empty());
+    drop(notifications);
 }
