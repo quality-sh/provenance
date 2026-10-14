@@ -23,6 +23,13 @@ export async function command(args: string[], env: Record<string, string | undef
   return stdout;
 }
 
+export function inputText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(inputText).join("\n");
+  if (value && typeof value === "object") return Object.values(value).map(inputText).join("\n");
+  return "";
+}
+
 export class Rpc {
   counter = 0;
   pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }>();
@@ -176,7 +183,7 @@ export class Harness {
     return this.adapter;
   }
   async input(text: string, start = 0) {
-    const find = () => this.requests.slice(start).find(value => JSON.stringify(value.input).includes(text));
+    const find = () => this.requests.slice(start).find(value => inputText(value.input).includes(text));
     if (find()) return find();
     let listener: () => void;
     const observed = new Promise<any>(resolve => {

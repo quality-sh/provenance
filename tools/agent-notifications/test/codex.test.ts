@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { Harness, deadline } from "./client-harness";
+import { Harness, deadline, inputText } from "./client-harness";
 import { verifies } from "../../../packages/provenance/src/rules";
 
 // Real host, CLI stream and App Server; only inference is deterministic.
@@ -19,14 +19,14 @@ test("saved Questions reach the bound idle thread and its model-visible transcri
     await harness.rpc.event(event => event.method === "item/completed" && event.params.threadId === thread && JSON.stringify(event.params.item).includes("q_idle"));
     const questionInput = harness.requests.length;
     await harness.decision();
-    await harness.input("accepted", questionInput);
+    await harness.input('"outcome":"accepted"', questionInput);
     const decisionInput = harness.requests.length;
     await harness.reply();
     await harness.input("reply_probe", decisionInput);
     await harness.rpc.event(event => event.method === "item/completed" && event.params.threadId === thread && JSON.stringify(event.params.item).includes("reply_probe"));
     const transcript = JSON.stringify(await harness.transcript(thread));
     expect(transcript).toContain("q_idle");
-    expect(transcript).toContain("accepted");
+    expect(inputText(await harness.transcript(thread))).toContain('"outcome":"accepted"');
     expect(transcript).toContain("reply_probe");
     expect(transcript).toContain("clientId");
     expect(harness.requestThreads.length).toBeGreaterThan(0);
@@ -69,11 +69,13 @@ test("busy delivery preserves message order and reports a stream disconnect", as
     expect(reset).toHaveLength(3);
     expect(reset[2].input[0].text).toContain('"type":"reset"');
     expect(reset[2].input[0].text).toContain('"continuity":"unknown"');
-    const before = harness.requests.length;
-    harness.release!();
-    await harness.input("q_busy_second", before);
     harness.children[0].kill();
     expect(await deadline(harness.adapter!.exited, "host-loss adapter exit")).not.toBe(0);
+    const disconnected = await harness.rpc.call("thread/queue/list", { threadId: thread });
+    expect(disconnected.data).toHaveLength(4);
+    expect(disconnected.data[3].input[0].text).toContain('"type":"disconnected"');
+    expect(disconnected.data[3].input[0].text).toContain('"continuity":"unknown"');
+    expect(harness.requestThreads.every(id => id === thread)).toBe(true);
   } finally { await harness.close(); }
 }, 60000);
 
