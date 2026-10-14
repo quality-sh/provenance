@@ -1,5 +1,6 @@
 mod frames;
 mod navigation;
+pub(super) mod stream;
 mod subscribers;
 mod watch;
 
@@ -102,29 +103,50 @@ impl ReviewEvents {
 }
 
 async fn upgrade(State(state): State<RouteState>, request: Request) -> Response {
-    if request.uri().query().is_some()
-        || request.uri().authority().is_some()
-        || request.headers().get_all(header::ORIGIN).iter().count() != 1
-        || !metadata(request.headers(), "sec-fetch-mode", "websocket")
-        || !metadata(request.headers(), "sec-fetch-dest", "empty")
-    {
+    let headers = request.headers();
+    let native = headers.contains_key("x-provenance-launch-key");
+    if request.uri().query().is_some() || request.uri().authority().is_some() {
         return super::refusal(OperationFailure::AccessDenied);
     }
-    if request
-        .headers()
-        .get_all(header::AUTHORIZATION)
+    if native {
+        // Native credentials cannot be used by a browser, including same-origin scripts.
+        if [
+            "origin",
+            "cookie",
+            "authorization",
+            "sec-fetch-site",
+            "sec-fetch-mode",
+            "sec-fetch-dest",
+        ]
         .iter()
-        .count()
-        > 1
-    {
-        return super::refusal(OperationFailure::Unauthenticated);
-    }
-    // This route accepts the host session cookie, without a bearer fallback.
-    let mut authentication = request.headers().clone();
-    authentication.remove(header::AUTHORIZATION);
-    state.codes.authenticate_cookie(&mut authentication);
-    if let Err(error) = state.access.authenticate(&authentication) {
-        return super::refusal(error);
+        .any(|name| headers.contains_key(*name))
+        {
+            return super::refusal(OperationFailure::AccessDenied);
+        }
+        let mut keys = headers.get_all("x-provenance-launch-key").iter();
+        let key = keys.next().and_then(|value| value.to_str().ok());
+        if keys.next().is_some() || !key.is_some_and(|key| state.codes.holds_key(key)) {
+            return super::refusal(OperationFailure::Unauthenticated);
+        }
+        if let Err(error) = state.access.check_origin(headers) {
+            return super::refusal(error);
+        }
+    } else {
+        if headers.get_all(header::ORIGIN).iter().count() != 1
+            || !metadata(headers, "sec-fetch-mode", "websocket")
+            || !metadata(headers, "sec-fetch-dest", "empty")
+        {
+            return super::refusal(OperationFailure::AccessDenied);
+        }
+        if headers.get_all(header::AUTHORIZATION).iter().count() > 1 {
+            return super::refusal(OperationFailure::Unauthenticated);
+        }
+        let mut authentication = headers.clone();
+        authentication.remove(header::AUTHORIZATION);
+        state.codes.authenticate_cookie(&mut authentication);
+        if let Err(error) = state.access.authenticate(&authentication) {
+            return super::refusal(error);
+        }
     }
     let (mut parts, _) = request.into_parts();
     let upgrade = match WebSocketUpgrade::from_request_parts(&mut parts, &()).await {
@@ -134,7 +156,7 @@ async fn upgrade(State(state): State<RouteState>, request: Request) -> Response 
     let Some(subscription) = state.subscribers.subscribe() else {
         return super::refusal(OperationFailure::UnavailableNeeds);
     };
-    let page = state.navigation.attach();
+    let page = (!native).then(|| state.navigation.attach());
     upgrade
         .on_upgrade(move |socket| connected(socket, subscription, page, state.subscribers))
         .into_response()
@@ -174,7 +196,7 @@ fn metadata(headers: &HeaderMap, name: &str, expected: &str) -> bool {
 async fn connected(
     mut socket: WebSocket,
     mut subscription: Subscription,
-    mut page: navigation::Page,
+    mut page: Option<navigation::Page>,
     subscribers: Subscribers,
 ) {
     if !send(&mut socket, &subscription.ready, &mut subscription.stopped).await {
@@ -186,12 +208,17 @@ async fn connected(
             incoming = socket.recv() => match incoming {
                 None | Some(Err(_) | Ok(Message::Close(_))) => break,
                 Some(Ok(Message::Text(text))) => {
-                    page.receive(&text);
+                    if let Some(page) = &mut page { page.receive(&text); }
                     continue;
                 }
                 Some(Ok(_)) => continue,
             },
-            Some(link) = page.links.recv() => {
+            Some(link) = async {
+                match &mut page {
+                    Some(page) => page.links.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
                 if !send(&mut socket, &link, &mut subscription.stopped).await {
                     break;
                 }

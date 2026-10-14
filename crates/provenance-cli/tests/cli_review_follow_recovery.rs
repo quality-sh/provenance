@@ -27,3 +27,54 @@ fn host_loss_reports_unknown_continuity_and_fails() {
         std::thread::sleep(std::time::Duration::from_millis(25));
     }
 }
+
+#[cfg(unix)]
+#[test]
+// Implementation aid: user cancellation must stop a blocked subscription with success.
+fn interrupt_stops_a_waiting_follow_command() {
+    let repo = repository();
+    create(repo.path(), "req_follow", "requirement", &[]);
+    let host = start(repo.path());
+    let mut follow = Follow::start(&host, repo.path(), "req_follow");
+    assert_eq!(follow.frame()["type"], "state");
+    let result = std::process::Command::new("kill")
+        .args(["-INT", &follow.child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(result.success());
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    loop {
+        if let Some(status) = follow.child.try_wait().unwrap() {
+            assert!(status.success());
+            break;
+        }
+        assert!(std::time::Instant::now() < end);
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+}
+
+#[test]
+#[provenance_macros::verifies("rule_review_follow_reset", examples)]
+fn configuration_reset_returns_current_document_with_unknown_continuity() {
+    let repo = repository();
+    create(repo.path(), "req_follow", "requirement", &[]);
+    let host = start(repo.path());
+    let follow = Follow::start(&host, repo.path(), "req_follow");
+    assert_eq!(follow.frame()["type"], "state");
+    let output = review_host_support::waits::output(host.cli().args([
+        "init",
+        "--path",
+        repo.path().to_str().unwrap(),
+        "--disposition-actor-id",
+        "new-reviewer",
+    ]));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let reset = follow.frame();
+    assert_eq!(reset["type"], "reset");
+    assert_eq!(reset["continuity"], "unknown");
+    assert!(reset["records"].to_string().contains("req_follow"));
+}

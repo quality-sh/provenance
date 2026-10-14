@@ -39,6 +39,7 @@ pub struct GetInvocation {
     context: GlobalContext,
     format: Option<porcelain::OutputFormat>,
     input: provenance_porcelain::get::GetInput,
+    follow: bool,
     review_link: bool,
     no_open: bool,
 }
@@ -120,7 +121,15 @@ impl Invocation {
         if matches!(args.action, None | Some(TargetVerb::Get)) {
             catalog_cli::ensure_only_fields(
                 &matches,
-                &["kind", "view", "depth", "limit", "review-link", "no-open"],
+                &[
+                    "kind",
+                    "view",
+                    "depth",
+                    "limit",
+                    "review-link",
+                    "no-open",
+                    "follow",
+                ],
             );
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
@@ -136,6 +145,7 @@ impl Invocation {
                 context,
                 format,
                 input,
+                follow: args.follow,
                 review_link: args.review_link,
                 no_open: args.no_open,
             }));
@@ -162,6 +172,15 @@ impl Invocation {
             Self::Api(args) => api::dispatch(args).await,
             Self::Catalog(invocation) => catalog_cli::dispatch(invocation).await,
             Self::Get(invocation) => {
+                if invocation.follow {
+                    anyhow::ensure!(
+                        invocation.input.view == View::Review
+                            && invocation.format == Some(porcelain::OutputFormat::Json),
+                        "--follow requires --view review --format json"
+                    );
+                    return crate::review::follow::run(&invocation.context.repo, invocation.input)
+                        .await;
+                }
                 if invocation.review_link {
                     return crate::review_link::print(
                         &invocation.context.repo,
