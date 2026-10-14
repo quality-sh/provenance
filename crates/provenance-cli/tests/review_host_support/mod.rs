@@ -151,7 +151,7 @@ pub fn configure_disposition_actors(root: &std::path::Path, actor_ids: &[&str]) 
     let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
     command.args(["init", "--path", root.to_str().unwrap()]);
     set_actor_arguments(&mut command, actor_ids);
-    let output = waits::output(command);
+    let output = waits::output(&mut command);
     assert!(
         output.status.success(),
         "{}",
