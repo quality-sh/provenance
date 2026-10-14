@@ -113,45 +113,13 @@ async fn upgrade(State(state): State<RouteState>, request: Request) -> Response 
     if request.uri().query().is_some() || request.uri().authority().is_some() {
         return super::refusal(OperationFailure::AccessDenied);
     }
-    if native {
-        // Native credentials cannot be used by a browser, including same-origin scripts.
-        if [
-            "origin",
-            "cookie",
-            "authorization",
-            "sec-fetch-site",
-            "sec-fetch-mode",
-            "sec-fetch-dest",
-        ]
-        .iter()
-        .any(|name| headers.contains_key(*name))
-        {
-            return super::refusal(OperationFailure::AccessDenied);
-        }
-        let mut keys = headers.get_all("x-provenance-launch-key").iter();
-        let key = keys.next().and_then(|value| value.to_str().ok());
-        if keys.next().is_some() || !key.is_some_and(|key| state.codes.holds_key(key)) {
-            return super::refusal(OperationFailure::Unauthenticated);
-        }
-        if let Err(error) = state.access.check_origin(headers) {
-            return super::refusal(error);
-        }
+    let authentication = if native {
+        authenticate_native(&state, headers)
     } else {
-        if headers.get_all(header::ORIGIN).iter().count() != 1
-            || !metadata(headers, "sec-fetch-mode", "websocket")
-            || !metadata(headers, "sec-fetch-dest", "empty")
-        {
-            return super::refusal(OperationFailure::AccessDenied);
-        }
-        if headers.get_all(header::AUTHORIZATION).iter().count() > 1 {
-            return super::refusal(OperationFailure::Unauthenticated);
-        }
-        let mut authentication = headers.clone();
-        authentication.remove(header::AUTHORIZATION);
-        state.codes.authenticate_cookie(&mut authentication);
-        if let Err(error) = state.access.authenticate(&authentication) {
-            return super::refusal(error);
-        }
+        authenticate_browser(&state, headers)
+    };
+    if let Err(error) = authentication {
+        return super::refusal(error);
     }
     let (mut parts, _) = request.into_parts();
     let upgrade = match WebSocketUpgrade::from_request_parts(&mut parts, &()).await {
@@ -165,6 +133,45 @@ async fn upgrade(State(state): State<RouteState>, request: Request) -> Response 
     upgrade
         .on_upgrade(move |socket| connected(socket, subscription, page, state.subscribers))
         .into_response()
+}
+
+fn authenticate_native(state: &RouteState, headers: &HeaderMap) -> Result<(), OperationFailure> {
+    // Native credentials cannot be used by a browser, including same-origin scripts.
+    if [
+        "origin",
+        "cookie",
+        "authorization",
+        "sec-fetch-site",
+        "sec-fetch-mode",
+        "sec-fetch-dest",
+    ]
+    .iter()
+    .any(|name| headers.contains_key(*name))
+    {
+        return Err(OperationFailure::AccessDenied);
+    }
+    let mut keys = headers.get_all("x-provenance-launch-key").iter();
+    let key = keys.next().and_then(|value| value.to_str().ok());
+    if keys.next().is_some() || !key.is_some_and(|key| state.codes.holds_key(key)) {
+        return Err(OperationFailure::Unauthenticated);
+    }
+    state.access.check_origin(headers)
+}
+
+fn authenticate_browser(state: &RouteState, headers: &HeaderMap) -> Result<(), OperationFailure> {
+    if headers.get_all(header::ORIGIN).iter().count() != 1
+        || !metadata(headers, "sec-fetch-mode", "websocket")
+        || !metadata(headers, "sec-fetch-dest", "empty")
+    {
+        return Err(OperationFailure::AccessDenied);
+    }
+    if headers.get_all(header::AUTHORIZATION).iter().count() > 1 {
+        return Err(OperationFailure::Unauthenticated);
+    }
+    let mut authentication = headers.clone();
+    authentication.remove(header::AUTHORIZATION);
+    state.codes.authenticate_cookie(&mut authentication);
+    state.access.authenticate(&authentication)
 }
 
 #[derive(serde::Deserialize)]
