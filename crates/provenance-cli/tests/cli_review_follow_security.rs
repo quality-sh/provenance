@@ -26,22 +26,38 @@ fn native_subscription_refuses_ambiguous_and_browser_credentials() {
     let host = start(repo.path());
     let key = std::fs::read_to_string(host.launch_key_path()).unwrap();
     let header = format!("X-Provenance-Launch-Key: {key}\r\n");
-    for headers in [
-        "X-Provenance-Launch-Key: wrong\r\n".to_owned(),
-        format!("{header}{header}"),
-        format!("{header}Cookie: arbitrary=value\r\n"),
-        format!("{header}Sec-Fetch-Site: same-origin\r\n"),
-        format!(
-            "{header}Origin: {}\r\n",
-            host.config["endpoint"].as_str().unwrap()
+    for (headers, expected) in [
+        ("X-Provenance-Launch-Key: wrong\r\n".to_owned(), 401),
+        (format!("{header}{header}"), 401),
+        (format!("{header}Cookie: arbitrary=value\r\n"), 403),
+        (format!("{header}Sec-Fetch-Site: same-origin\r\n"), 403),
+        (format!("{header}Authorization: Bearer unused\r\n"), 403),
+        (
+            format!(
+                "{header}Origin: {}\r\n",
+                host.config["endpoint"].as_str().unwrap()
+            ),
+            403,
         ),
     ] {
         let (status, _) = upgrade(&host, "/review-events", &headers);
-        assert!(
-            matches!(status, 401 | 403),
-            "native credential was accepted: {status}"
-        );
+        assert_eq!(status, expected, "headers: {headers}");
     }
     let (status, _) = upgrade(&host, "/review-events?key=unused", &header);
+    assert_eq!(status, 403);
+}
+
+#[test]
+// Implementation aid: a native key cannot authorize a DNS rebinding Host header.
+fn native_subscription_refuses_a_wrong_host() {
+    let repo = repository();
+    let host = start(repo.path());
+    let key = std::fs::read_to_string(host.launch_key_path()).unwrap();
+    let (status, _) = review_host_support::events::upgrade_with_host(
+        &host,
+        "/review-events",
+        &format!("X-Provenance-Launch-Key: {key}\r\n"),
+        "example.com",
+    );
     assert_eq!(status, 403);
 }

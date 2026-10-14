@@ -104,13 +104,17 @@ impl Socket {
 }
 
 pub fn upgrade(host: &Host, path: &str, headers: &str) -> (u16, Socket) {
+    upgrade_with_host(host, path, headers, host.address())
+}
+
+pub fn upgrade_with_host(host: &Host, path: &str, headers: &str, authority: &str) -> (u16, Socket) {
     let address = host.address().parse().unwrap();
     let mut socket = TcpStream::connect_timeout(&address, waits::LIMIT).unwrap();
     socket.set_write_timeout(Some(waits::LIMIT)).unwrap();
     socket
         .set_read_timeout(Some(Duration::from_secs(15)))
         .unwrap();
-    write!(socket, "GET {path} HTTP/1.1\r\nHost: {}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n{headers}\r\n", host.address()).unwrap();
+    write!(socket, "GET {path} HTTP/1.1\r\nHost: {}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n{headers}\r\n", authority).unwrap();
     let mut bytes = Vec::new();
     while !bytes.ends_with(b"\r\n\r\n") {
         let mut byte = [0];
