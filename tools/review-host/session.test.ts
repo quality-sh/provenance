@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSession, type ReviewConfig } from './session.ts';
+import { createSession, type ReviewConfig, type ReviewHandle } from './session.ts';
+
+const page = (dispose: () => void = () => {}): ReviewHandle => ({
+  dispose, refresh() {}, showRecord: async () => {},
+});
 
 const config: ReviewConfig = {
   endpoint: 'http://127.0.0.1:1234',
@@ -12,7 +16,7 @@ const config: ReviewConfig = {
 test('open passes all named connection fields and the selected Requirement', async () => {
   const mounted: unknown[] = [];
   const session = createSession({
-    mount(options) { mounted.push(options); return () => {}; },
+    mount(options) { mounted.push(options); return page(); },
     connected() {},
     status() {},
   });
@@ -25,7 +29,7 @@ test('a new connection unmounts the page and a failed connection clears access',
   let unmounted = 0;
   const statuses: string[] = [];
   const session = createSession({
-    mount: () => () => { unmounted++; },
+    mount: () => page(() => { unmounted++; }),
     connected() {},
     status(message) { statuses.push(message); },
   });
@@ -41,7 +45,7 @@ test('a new connection unmounts the page and a failed connection clears access',
 test('a superseded connection result cannot replace a later one', async () => {
   const connected: string[] = [];
   const session = createSession({
-    mount: () => () => {},
+    mount: () => page(),
     connected(value) { connected.push(value.repositoryId); },
     status() {},
   });
@@ -55,7 +59,7 @@ test('a superseded connection result cannot replace a later one', async () => {
 
 test('a superseded failure cannot replace the latest status', async () => {
   const statuses: string[] = [];
-  const session = createSession({ mount: () => () => {}, connected() {}, status(message) { statuses.push(message); } });
+  const session = createSession({ mount: () => page(), connected() {}, status(message) { statuses.push(message); } });
   let reject!: (error: Error) => void;
   const pending = session.connect('older', () => new Promise((_, fail) => { reject = fail; }));
   await session.connect('newer', async () => config);

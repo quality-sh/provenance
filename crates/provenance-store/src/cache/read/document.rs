@@ -9,8 +9,11 @@ use sqlx::Row;
 // and references are separate sets, so a cross-link cannot widen the branch.
 fn sets(exclude_terminal: bool) -> String {
     let decision_filter = visibility_filter(exclude_terminal, "'resolution'", "candidate.id");
-    let member_filter = visibility_filter(exclude_terminal, "candidate.kind", "candidate.id");
-    let reference_filter = visibility_filter(exclude_terminal, "candidate.kind", "candidate.id");
+    let member_filter = format!(
+        "{} AND {HIDDEN_FILTER}",
+        visibility_filter(exclude_terminal, "candidate.kind", "candidate.id")
+    );
+    let reference_filter = member_filter.clone();
     format!(
         r"
 WITH RECURSIVE
@@ -92,6 +95,10 @@ ordered AS (
     )
 }
 
+// ?3 holds the `kind:id` keys that the caller hides by review outcome.
+const HIDDEN_FILTER: &str = "NOT EXISTS (SELECT 1 FROM json_each(?3) hidden \
+ WHERE hidden.value = candidate.kind || ':' || candidate.id)";
+
 fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
     if exclude_terminal {
         format!(
@@ -125,7 +132,7 @@ impl ReadSnapshot {
         let mut roots = Vec::new();
         for root in root_ids {
             let contains = self
-                .document_keys(&root, &Position::default(), 8193, false)
+                .document_keys(&root, &Position::default(), 8193, false, &[])
                 .await?
                 .iter()
                 .any(|(entry_kind, key)| {
@@ -139,6 +146,8 @@ impl ReadSnapshot {
     }
 
     /// Selects members from the root branch and leaves ancestors in references.
+    /// The `hidden` records stay out of members and references, and so do
+    /// their discussions.
     #[rule("rule_requirement_document_canonical_membership")]
     #[rule("rule_review_ancestors_are_not_descendants")]
     pub(crate) async fn document_keys(
@@ -147,6 +156,7 @@ impl ReadSnapshot {
         after: &Position,
         limit: usize,
         exclude_terminal: bool,
+        hidden: &[(NodeType, StableId)],
     ) -> anyhow::Result<Vec<(String, Position)>> {
         for family in [
             "requirements",
@@ -164,6 +174,12 @@ impl ReadSnapshot {
         }
         let mut tx = self.connection().await;
         let sets = sets(exclude_terminal);
+        let hidden = serde_json::to_string(
+            &hidden
+                .iter()
+                .map(|(kind, id)| format!("{}:{}", kind.as_str(), id.as_str()))
+                .collect::<Vec<_>>(),
+        )?;
         let overflow: i64 = sqlx::query_scalar(&format!(
             "{sets} SELECT \
             (SELECT count(*) FROM members) > 4096 OR (SELECT count(*) FROM refs) > 4096 \
@@ -172,6 +188,7 @@ impl ReadSnapshot {
         ))
         .bind(self.scope().as_str())
         .bind(root)
+        .bind(&hidden)
         .fetch_one(&mut **tx)
         .await?;
         if overflow != 0 {
@@ -179,11 +196,12 @@ impl ReadSnapshot {
         }
         let rows = sqlx::query(&format!(
             "{sets} SELECT stage, kind, CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id, counter, rank FROM ordered \
-            WHERE (stage, rank, counter, id) > (?3, ?4, ?5, ?6) \
-            ORDER BY stage, rank, counter, id LIMIT ?7"
+            WHERE (stage, rank, counter, id) > (?4, ?5, ?6, ?7) \
+            ORDER BY stage, rank, counter, id LIMIT ?8"
         ))
         .bind(self.scope().as_str())
         .bind(root)
+        .bind(&hidden)
         .bind(i64::from(after.stage))
         .bind(i64::from(after.rank))
         .bind(after.counter)

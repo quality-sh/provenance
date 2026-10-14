@@ -1,5 +1,8 @@
 #![allow(dead_code, clippy::duplicated_attributes)]
 
+pub mod resolution;
+pub mod waits;
+
 use provenance_transport::local_host::LAUNCH_SESSION_ROUTE;
 use serde_json::{json, Value};
 use std::{
@@ -24,6 +27,17 @@ impl Drop for Host {
 }
 
 impl Host {
+    /// Reads host socket ownership from the operating system, without a production hook.
+    #[cfg(target_os = "linux")]
+    pub fn socket_handles(&self) -> std::collections::HashSet<String> {
+        std::fs::read_dir(format!("/proc/{}/fd", self.child.id()))
+            .unwrap()
+            .filter_map(|entry| std::fs::read_link(entry.ok()?.path()).ok())
+            .filter_map(|path| path.to_str().map(str::to_owned))
+            .filter(|target| target.starts_with("socket:["))
+            .collect()
+    }
+
     /// Runs the CLI as the same user as the host, with the same per-user cache.
     pub fn cli(&self) -> Command {
         let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
@@ -55,11 +69,11 @@ impl Host {
 
     #[cfg(unix)]
     pub fn signal(&self, signal: &str) {
-        assert!(Command::new("kill")
-            .args([signal, &self.child.id().to_string()])
-            .status()
-            .unwrap()
-            .success());
+        assert!(
+            waits::output(Command::new("kill").args([signal, &self.child.id().to_string()]))
+                .status
+                .success()
+        );
     }
 
     pub fn wait(&mut self, timeout: Duration) -> std::process::ExitStatus {
@@ -125,7 +139,7 @@ pub fn initialize_repository(command: &mut Command, root: &std::path::Path, acto
         ".",
     ]);
     set_actor_arguments(command, actor_ids);
-    let output = command.output().unwrap();
+    let output = waits::output(command);
     assert!(
         output.status.success(),
         "{}",
@@ -137,7 +151,7 @@ pub fn configure_disposition_actors(root: &std::path::Path, actor_ids: &[&str]) 
     let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
     command.args(["init", "--path", root.to_str().unwrap()]);
     set_actor_arguments(&mut command, actor_ids);
-    let output = command.output().unwrap();
+    let output = waits::output(&mut command);
     assert!(
         output.status.success(),
         "{}",
@@ -369,3 +383,5 @@ pub fn response(result: Result<ureq::Response, ureq::Error>) -> ureq::Response {
 pub fn list_discussions(host: &Host) -> ureq::Response {
     response(request(host, "GET", "/discussion-containers", true).call())
 }
+
+pub mod events;

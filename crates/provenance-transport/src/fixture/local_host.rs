@@ -91,6 +91,8 @@ fn serve(listener: TcpListener, body: String) -> (Arc<AtomicBool>, JoinHandle<()
                 std::thread::sleep(Duration::from_millis(5));
                 continue;
             };
+            // Accepted sockets can inherit the listener mode on macOS.
+            stream.set_nonblocking(false).unwrap();
             let mut request = [0_u8; 2048];
             let count = stream.read(&mut request).unwrap_or(0);
             let path_matches = String::from_utf8_lossy(&request[..count])

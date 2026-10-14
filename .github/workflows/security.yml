@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
+  group: security-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -22,32 +22,60 @@ jobs:
     name: Cargo audit (RustSec)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: taiki-e/install-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2
         with:
           tool: cargo-audit
       - run: cargo audit
 
+  # A pull request scans only its own commits, a push to main scans the
+  # history of main, and a schedule or manual run scans all refs. A merge
+  # commit is scanned against its first parent, so conflict resolutions are
+  # scanned too. A pull request gets the configuration from main and no
+  # ignore file, so it cannot hide its own finding.
   gitleaks:
     name: Gitleaks secret scan
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Install gitleaks
+        shell: bash
         run: |
-          curl -sSL -o gitleaks.tar.gz \
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
             https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz
-          tar -xzf gitleaks.tar.gz gitleaks
-      - run: ./gitleaks git . --no-banner --redact --exit-code 1
+          # From gitleaks_8.24.3_checksums.txt of the same release.
+          echo "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan commits
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          config_ref=$GITHUB_SHA
+          case "$EVENT_NAME" in
+            pull_request)
+              log_opts="--diff-merges=first-parent $HEAD_SHA --not origin/main"
+              config_ref=origin/main
+              ;;
+            push) log_opts="--diff-merges=first-parent $GITHUB_SHA" ;;
+            *) log_opts="--diff-merges=first-parent --full-history --all" ;;
+          esac
+          git show "$config_ref:.gitleaks.toml" > "$RUNNER_TEMP/gitleaks.toml"
+          rm -f .gitleaksignore
+          "$RUNNER_TEMP/gitleaks" git . --no-banner --redact --exit-code 1 \
+            --config "$RUNNER_TEMP/gitleaks.toml" --log-opts="$log_opts"
 
   dependency-review:
     name: Dependency review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/dependency-review-action@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high

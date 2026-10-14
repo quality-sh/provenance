@@ -16,6 +16,7 @@ pub mod operations;
 pub mod publication;
 pub mod repository_init;
 pub mod review;
+pub mod review_changes;
 pub mod settings;
 pub mod shards;
 pub mod stale;

@@ -1,0 +1,21 @@
+{
+  "brief": "Shape a fictional desktop robot, Taskling. Its owner authors personal work goals. The robot rewards evidence of completed tasks and loses health when goals are neglected. Read the installed provenance-shaping and provenance-grounded-writing skills. Use only the real Provenance CLI to record the owner's answers. Do not edit canonical files directly. Anchor: req_robot; existing child Requirements: req_tasks (goals and task evidence), req_health (neglect and health), req_appearance (appearance). A supplied negative control is independently grounded: rule_negative_control remains active while its linked res_negative_control is proposed. Do not treat that lifecycle pair alone as an unsupported decision. Work only in this repository. Do not run agents or contact external services. At each turn record what the answer implies, then stop. Do not ask additional questions. First read the graph and wait for the first owner response.",
+  "responses": [
+    "I want to author my own personal goals. The robot should work toward the goals that I write.",
+    "When a completed task has evidence, award its points without asking me to confirm the weight. I do not want a confirmation step for each task.",
+    "For health, choose a daily loss budget of ten points over uncapped loss. Uncapped loss can kill the robot after one busy day; ten points leaves time to recover.",
+    "Choose a small friendly robot over a realistic animal. It should look cheerful at a desk and the robot motif suits work tasks. Also, show a warning light when health falls below twenty points. I accepted the daily loss budget in the review UI. Finish with a summary of what is still awaiting review."
+  ],
+  "expectedPlacement": {
+    "owner goals": "req_tasks",
+    "evidence and weight confirmation": "req_tasks",
+    "daily loss budget": "req_health",
+    "friendly robot motif": "req_appearance",
+    "warning light threshold": "req_health"
+  },
+  "negativeControl": {
+    "id": "rule_negative_control",
+    "obligation": "Health cannot decrease below 0.",
+    "evidence": "The owner requires a zero health floor independently of the proposed Resolution."
+  }
+}
