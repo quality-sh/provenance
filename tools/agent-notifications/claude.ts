@@ -1,3 +1,4 @@
+import { recordData } from "./envelope";
 import { realpathSync } from "node:fs";
 import { object, requiredString } from "./validation";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -34,7 +35,7 @@ export async function run(value: unknown) {
       stream = new FollowStream(config);
       for await (const state of stream.frames()) {
         await channel.notification({ method: "notifications/claude/channel", params: {
-          content: JSON.stringify(state),
+          content: recordData(config, state),
           meta: { repository: config.repository, scope: config.scope, rootId: config.rootId,
             type: state.type, epoch: state.epoch, sequence: String(state.sequence), continuity: state.continuity },
         } });

@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub struct ReviewPageWrite;
 
 #[derive(Clone)]
-pub(crate) struct PageWrites {
+pub struct PageWrites {
     pub layout: ProvenanceLayout,
     pub observed: Arc<dyn Fn(ReviewChanges) + Send + Sync>,
 }

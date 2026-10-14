@@ -37,15 +37,9 @@ fn review_page_decision_sends_only_the_changed_record_once() {
     );
     let host = start(repo.path());
     let session = cookie(&host);
-    let follow = Follow::with_options(&host, repo.path(), "req_follow", &["--limit", "1"]);
+    let follow = Follow::start(&host, repo.path(), "req_follow");
     let initial = follow.frame();
     assert_eq!(initial["records"].as_array().unwrap().len(), 2);
-    create(
-        repo.path(),
-        "rule_agent",
-        "rule",
-        &["--requirement-id", "req_follow"],
-    );
     let root: Value = serde_json::from_str(
         &response(request(&host, "GET", "/requirements/req_follow", true).call())
             .into_string()
@@ -80,8 +74,19 @@ fn review_page_decision_sends_only_the_changed_record_once() {
     assert_eq!(changed["records"].as_array().unwrap().len(), 1);
     assert!(changed["records"].to_string().contains("accepted"));
     assert!(!changed["records"].to_string().contains("rule_unchanged"));
-    assert!(!changed["records"].to_string().contains("rule_agent"));
     assert_eq!(changed["continuations"], json!([]));
+    follow.quiet();
+    create(
+        repo.path(),
+        "rule_agent",
+        "rule",
+        &["--requirement-id", "req_follow"],
+    );
+    follow.quiet();
+    review_host_support::follow::page_rule(&host, "rule_person", "req_follow");
+    let next = follow.until("rule_person");
+    assert_eq!(next["records"].as_array().unwrap().len(), 1);
+    assert!(!next["records"].to_string().contains("rule_agent"));
     follow.quiet();
 }
 
