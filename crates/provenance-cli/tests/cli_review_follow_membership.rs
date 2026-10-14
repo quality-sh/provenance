@@ -60,6 +60,6 @@ fn deleted_root_reports_a_read_error_with_its_reason() {
     let error = follow.frame();
     assert_eq!(error["type"], "read-error");
     assert_eq!(error["continuity"], "unknown");
-    assert!(error["reason"].as_str().unwrap().contains("req_follow"));
+    assert_eq!(error["reason"], "document root is missing");
     assert!(host.is_running());
 }

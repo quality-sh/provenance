@@ -472,8 +472,8 @@ It reads the owner-only launch key and sends it in `X-Provenance-Launch-Key` on
 browser fetch metadata. Browser subscriptions still require the exact Origin and
 a valid session cookie. Native subscriptions do not count as connected review pages.
 
-The command flushes one JSON line for each bounded current-state page. Each line
-has `type`, `epoch`, `sequence`, `continuity`, `records`, `removedIds` and
+The command flushes one JSON line for each bounded current-state page. Each state
+or reset line has `type`, `epoch`, `sequence`, `continuity`, `records`, `removedIds` and
 `continuations`. Records are canonical document entries, including Questions,
 Threads and Messages. `--limit` sets the page size. A nonempty continuation array
 identifies the next page; the stream reads it before it waits for another notice.
@@ -531,9 +531,11 @@ stream and App Server. A local inference fixture records the actual model input
 and returns a fixed answer. It does not call an external model. The public
 transcript proves decision, Question and reply delivery. Other tests check busy
 queue order, repository binding, host loss and a deliberately lost response.
-`cargo test -p provenance-cli --test cli_agent_notifications` runs the same
-harness with pinned Bun and Codex tools through npm; maintainer hosts use the
-Cargo shim for that command.
+The dedicated Agent notification adapters CI job installs the pinned tools with
+`sfw npm ci` and the committed lockfile. It runs TypeScript checks, the
+wrong-thread mutation check and the client tests. Rust tests do not install
+adapter tools. `cargo test --workspace --offline` can use cached Rust dependencies
+without npm, Bun, Codex or a network connection.
 
 The adapter stops its `--follow` child on SIGTERM, SIGINT, normal completion
 and an ordinary process exit. SIGKILL prevents cleanup handlers from running.
@@ -583,3 +585,8 @@ on a Linux host with `script`, an authenticated Claude account, and development
 channels permitted by account policy. This separate interactive check uses the
 real Claude session. It checks saved decisions, Questions, replies, busy delivery,
 reset and session closure. It does not run in an unauthenticated CI account.
+
+The Claude channel Rule's model-visible evidence is the separate authenticated
+manual probe. CI checks the public MCP notification contract. CI does not verify
+model processing, busy delivery in a signed-in Claude session, organization policy
+or the development-channel consent flow.
