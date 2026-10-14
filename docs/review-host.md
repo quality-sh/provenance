@@ -462,7 +462,7 @@ It does not report a lost host. Transport loss still emits `disconnected`.
 
 Native subscriptions receive invalidations for the host's scope. The client filters
 by Requirement root through the canonical document read. It sends no `rootId`
-subscription message. An unrelated scope write can cause a read, but unchanged
+subscription message. An unrelated record write in the scope can cause a read, but unchanged
 current state produces no output.
 
 Run `provenance REQUIREMENT_ID get --view review --follow --format json --repo REPOSITORY`.
@@ -535,6 +535,11 @@ queue order, repository binding, host loss and a deliberately lost response.
 harness with pinned Bun and Codex tools through npm; maintainer hosts use the
 Cargo shim for that command.
 
+The adapter stops its `--follow` child on SIGTERM, SIGINT, normal completion
+and an ordinary process exit. SIGKILL prevents cleanup handlers from running.
+After SIGKILL, stop the remaining child yourself; its next failed output write
+can also stop it. No retry or delivery journal is added.
+
 ## Claude Code channel adapter
 
 The one-way channel declares the experimental `claude/channel` capability and
@@ -547,7 +552,7 @@ failure. Transport acceptance does not acknowledge model processing. There is
 no automatic resend or durable replay.
 
 Install the declared dependency with
-`npm install --prefix tools/agent-notifications --package-lock=false`. Create a
+`npm ci --prefix tools/agent-notifications`. Create a
 selection file with `repository`, `scope` and `rootId`. Put `provenance` on the
 session's PATH. Add this server to an MCP configuration, with absolute paths:
 

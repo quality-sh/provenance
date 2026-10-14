@@ -11,7 +11,11 @@ fn remove_shard(root: &std::path::Path, shard: &str) {
         ProvenanceLayout::new(camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap());
     waits::publish(&layout, || {
         let target = root.join(format!(".provenance/state/scopes/default/{shard}"));
-        assert!(target.exists(), "canonical shard must exist: {}", target.display());
+        assert!(
+            target.exists(),
+            "canonical shard must exist: {}",
+            target.display()
+        );
         let replacement = target.with_extension("replacement");
         std::fs::write(&replacement, "")?;
         std::fs::rename(replacement, target)?;

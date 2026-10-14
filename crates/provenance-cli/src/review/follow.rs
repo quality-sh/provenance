@@ -44,7 +44,10 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     let result: anyhow::Result<()> = async {
         loop {
             let incoming = tokio::select! {
-                _ = tokio::signal::ctrl_c() => return Ok(()),
+                signal = tokio::signal::ctrl_c() => {
+                    signal.context("cannot install the Ctrl-C handler")?;
+                    return Ok(());
+                },
                 frame = socket.next() => frame,
             };
             let Some(incoming) = incoming else { anyhow::bail!("review host disconnected"); };
@@ -59,7 +62,10 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
             next_epoch.clone_into(&mut epoch);
             sequence = next_sequence;
             let frames = tokio::select! {
-                _ = tokio::signal::ctrl_c() => return Ok(()),
+                signal = tokio::signal::ctrl_c() => {
+                    signal.context("cannot install the Ctrl-C handler")?;
+                    return Ok(());
+                },
                 result = baseline.reconcile(context, &input.target, limit, &epoch, sequence, reset) => match result {
                     Ok(frames) => frames,
                     Err(error) => {
