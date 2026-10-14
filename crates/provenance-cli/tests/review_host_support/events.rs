@@ -1,5 +1,5 @@
 //! Real WebSocket client for review event tests.
-use super::{redeem, request, Host};
+use super::{redeem, request, waits, Host};
 use serde_json::{json, Value};
 use std::{
     io::{Read, Write},
@@ -43,6 +43,7 @@ impl Socket {
     }
 
     pub fn frame(&mut self) -> Value {
+        self.0.set_read_timeout(Some(waits::LIMIT)).unwrap();
         let mut head = [0; 2];
         self.0
             .read_exact(&mut head)
@@ -103,7 +104,9 @@ impl Socket {
 }
 
 pub fn upgrade(host: &Host, path: &str, headers: &str) -> (u16, Socket) {
-    let mut socket = TcpStream::connect(host.address()).unwrap();
+    let address = host.address().parse().unwrap();
+    let mut socket = TcpStream::connect_timeout(&address, waits::LIMIT).unwrap();
+    socket.set_write_timeout(Some(waits::LIMIT)).unwrap();
     socket
         .set_read_timeout(Some(Duration::from_secs(15)))
         .unwrap();
@@ -133,19 +136,17 @@ pub fn source_before_host(root: &Path, id: &str) {
 }
 
 fn source_with(mut command: std::process::Command, root: &Path, id: &str) {
-    let output = command
-        .args([
-            "sources",
-            "create",
-            "--repo",
-            root.to_str().unwrap(),
-            "--id",
-            id,
-            "--name",
-            id,
-        ])
-        .output()
-        .unwrap();
+    command.args([
+        "sources",
+        "create",
+        "--repo",
+        root.to_str().unwrap(),
+        "--id",
+        id,
+        "--name",
+        id,
+    ]);
+    let output = waits::output(&mut command);
     assert!(
         output.status.success(),
         "{}",

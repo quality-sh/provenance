@@ -54,9 +54,7 @@ async fn atomic_external_deletion_is_observed_after_guard_release() {
     let layout = provenance_store::layout::ProvenanceLayout::new(
         camino::Utf8PathBuf::from_path_buf(repo.path().to_path_buf()).unwrap(),
     );
-    let guard = provenance_store::publication::publication_guard(&layout)
-        .await
-        .unwrap();
+    let guard = review_host_support::waits::guard(&layout).await;
     let shard = layout.scopes_dir().join("default/sources/source.jsonl");
     let replacement = shard.with_extension("replacement");
     std::fs::write(&replacement, "").unwrap();
@@ -151,9 +149,7 @@ async fn rename_burst_is_coherent_and_failed_cli_preparation_is_quiet() {
     let layout = provenance_store::layout::ProvenanceLayout::new(
         camino::Utf8PathBuf::from_path_buf(repo.path().to_path_buf()).unwrap(),
     );
-    let guard = provenance_store::publication::publication_guard(&layout)
-        .await
-        .unwrap();
+    let guard = review_host_support::waits::guard(&layout).await;
     let shard = layout.scopes_dir().join("default/sources/source.jsonl");
     let records: Vec<Value> = std::fs::read_to_string(&shard)
         .unwrap()

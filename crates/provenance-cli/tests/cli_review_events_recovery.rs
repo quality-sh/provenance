@@ -1,7 +1,7 @@
 #[path = "review_host_support/mod.rs"]
 mod review_host_support;
 
-use provenance_store::{layout::ProvenanceLayout, publication::publication_guard};
+use provenance_store::layout::ProvenanceLayout;
 use review_host_support::{
     events::{source, source_before_host, Socket},
     repository, request, response, start,
@@ -87,7 +87,7 @@ async fn failed_snapshot_resets_disconnects_and_recovers_on_a_file_event() {
     let layout = layout(repo.path());
     let shard = layout.scopes_dir().join("default/sources/source.jsonl");
     let original = std::fs::read(&shard).unwrap();
-    let guard = publication_guard(&layout).await.unwrap();
+    let guard = review_host_support::waits::guard(&layout).await;
     let temporary = shard.with_extension("replacement");
     std::fs::write(&temporary, "not JSON\n").unwrap();
     std::fs::rename(&temporary, &shard).unwrap();
@@ -97,7 +97,7 @@ async fn failed_snapshot_resets_disconnects_and_recovers_on_a_file_event() {
     assert_eq!(reset["reason"], "observation-failed");
     assert_eq!(reset["epoch"], ready["epoch"]);
     closes(&mut socket);
-    let guard = publication_guard(&layout).await.unwrap();
+    let guard = review_host_support::waits::guard(&layout).await;
     std::fs::write(&temporary, original).unwrap();
     std::fs::rename(temporary, shard).unwrap();
     drop(guard);
@@ -128,14 +128,14 @@ async fn removed_state_resets_then_replacement_reattaches_to_current_records() {
     socket.frame();
     let layout = layout(repo.path());
     let old = layout.provenance_dir().join("old-state");
-    let guard = publication_guard(&layout).await.unwrap();
+    let guard = review_host_support::waits::guard(&layout).await;
     std::fs::rename(layout.state_dir(), &old).unwrap();
     drop(guard);
     let reset = socket.frame();
     assert_eq!(reset["type"], "reset");
     assert_eq!(reset["reason"], "observation-failed");
     closes(&mut socket);
-    let guard = publication_guard(&layout).await.unwrap();
+    let guard = review_host_support::waits::guard(&layout).await;
     std::fs::rename(
         replacement.path().join(".provenance/state"),
         layout.state_dir(),
@@ -190,4 +190,19 @@ fn a_nonregular_shard_resets_without_waiting_for_fifo_data() {
     };
     assert_eq!(reset["reason"], "observation-failed");
     closes(&mut socket);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "manual 30-run kernel queue loss stress check"]
+// Implementation aid: repeat the real host recovery test to detect timing failures.
+fn repeat_kernel_queue_loss_thirty_times() {
+    let mut passed = 0;
+    for attempt in 1..=30 {
+        if std::panic::catch_unwind(real_kernel_queue_loss_sends_reset_and_current_read).is_ok() {
+            passed += 1;
+        }
+        println!("queue loss repeat {attempt}/30: {passed} passed");
+    }
+    assert_eq!(passed, 30, "kernel queue loss repeat pass count");
 }

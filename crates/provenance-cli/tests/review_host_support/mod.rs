@@ -1,6 +1,7 @@
 #![allow(dead_code, clippy::duplicated_attributes)]
 
 pub mod resolution;
+pub mod waits;
 
 use provenance_transport::local_host::LAUNCH_SESSION_ROUTE;
 use serde_json::{json, Value};
@@ -138,7 +139,7 @@ pub fn initialize_repository(command: &mut Command, root: &std::path::Path, acto
         ".",
     ]);
     set_actor_arguments(command, actor_ids);
-    let output = command.output().unwrap();
+    let output = waits::output(command);
     assert!(
         output.status.success(),
         "{}",
@@ -150,7 +151,7 @@ pub fn configure_disposition_actors(root: &std::path::Path, actor_ids: &[&str]) 
     let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
     command.args(["init", "--path", root.to_str().unwrap()]);
     set_actor_arguments(&mut command, actor_ids);
-    let output = command.output().unwrap();
+    let output = waits::output(command);
     assert!(
         output.status.success(),
         "{}",

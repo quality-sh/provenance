@@ -26,3 +26,8 @@ filter = 'binary(cargo_nested_sdk) | binary(compile_fail) | binary(relation_deri
 test-group = "cargo"
 threads-required = 4
 priority = 90
+
+[[profile.default.overrides]]
+# Real host event tests must fail within minutes if an operation stops.
+filter = 'binary(/^cli_review_events/) & !test(repeat_kernel_queue_loss_thirty_times)'
+slow-timeout = { period = "60s", terminate-after = 3 }
