@@ -1,5 +1,5 @@
 //! Current document reconciliation, using the canonical bounded document read.
-use super::output::{Continuation, Continuity, Document, OutputFrame};
+use super::output::{Continuity, Document, OutputFrame};
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::protocol::ReadDocumentQuery;
 use provenance_macros::rule;
@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 #[derive(Default)]
 pub(in crate::review) struct Baseline {
     records: BTreeMap<String, Value>,
+    initialized: bool,
 }
 
 impl Baseline {
@@ -26,7 +27,7 @@ impl Baseline {
     ) -> anyhow::Result<Vec<OutputFrame>> {
         let mut cursor = None;
         let mut current = BTreeMap::new();
-        let mut pages = Vec::new();
+        let mut ordered = Vec::new();
         loop {
             let page = queries::read_document(
                 Some(context.repo.clone()),
@@ -51,16 +52,7 @@ impl Baseline {
                 current.insert(id, record.clone());
             }
             cursor = page.next_cursor;
-            let continuations = cursor
-                .as_ref()
-                .map(|cursor| {
-                    vec![Continuation {
-                        root_id: root.to_owned(),
-                        cursor: cursor.clone(),
-                    }]
-                })
-                .unwrap_or_default();
-            pages.push((records, continuations));
+            ordered.extend(records);
             if cursor.is_none() {
                 break;
             }
@@ -72,32 +64,33 @@ impl Baseline {
             .cloned()
             .collect::<Vec<_>>();
         let mut frames = Vec::new();
-        if reset || self.records != current {
-            let last = pages.len().saturating_sub(1);
-            for (index, (records, continuations)) in pages.into_iter().enumerate() {
-                let document = Document {
-                    epoch: epoch.to_owned(),
-                    sequence,
-                    continuity: if reset || self.records.is_empty() {
-                        Continuity::Unknown
-                    } else {
-                        Continuity::Current
-                    },
-                    records,
-                    removed_ids: if index == last {
-                        removed.clone()
-                    } else {
-                        vec![]
-                    },
-                    continuations,
-                };
-                frames.push(if reset {
-                    OutputFrame::Reset { document }
+        let full = reset || !self.initialized;
+        let records = ordered
+            .into_iter()
+            .filter(|record| {
+                full || record_id(record).is_ok_and(|id| self.records.get(&id) != Some(record))
+            })
+            .collect::<Vec<_>>();
+        if full || !records.is_empty() || !removed.is_empty() {
+            let document = Document {
+                epoch: epoch.to_owned(),
+                sequence,
+                continuity: if full {
+                    Continuity::Unknown
                 } else {
-                    OutputFrame::State { document }
-                });
-            }
+                    Continuity::Current
+                },
+                records,
+                removed_ids: removed,
+                continuations: vec![],
+            };
+            frames.push(if reset {
+                OutputFrame::Reset { document }
+            } else {
+                OutputFrame::State { document }
+            });
         }
+        self.initialized = true;
         self.records = current;
         Ok(frames)
     }

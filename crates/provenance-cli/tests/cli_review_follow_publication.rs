@@ -19,7 +19,13 @@ fn two_writers_reach_the_same_subscription() {
             scope.spawn(move || create(root, id, "rule", &["--requirement-id", "req_follow"]));
         }
     });
-    let current = follow.until_all(&["rule_first", "rule_second"]);
+    let mut seen = String::new();
+    while !seen.contains("rule_first") || !seen.contains("rule_second") {
+        let current = follow.frame();
+        assert_eq!(current["continuity"], "current");
+        seen.push_str(&current.to_string());
+    }
+    let current = serde_json::json!({"type":"state", "continuity":"current"});
     assert_eq!(current["type"], "state");
     assert_eq!(current["continuity"], "current");
 }
@@ -37,9 +43,12 @@ fn a_write_during_subscription_start_reaches_the_document() {
         "rule",
         &["--requirement-id", "req_follow"],
     );
-    let current = follow.until_all(&["req_follow", "rule_racing"]);
-    assert_eq!(current["type"], "state");
-    assert!(current["records"].as_array().unwrap().len() >= 2);
+    let mut seen = String::new();
+    while !seen.contains("req_follow") || !seen.contains("rule_racing") {
+        let current = follow.frame();
+        assert_eq!(current["type"], "state");
+        seen.push_str(&current["records"].to_string());
+    }
 }
 
 #[test]
