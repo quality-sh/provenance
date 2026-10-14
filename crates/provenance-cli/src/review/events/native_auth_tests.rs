@@ -1,10 +1,9 @@
 //! Implementation aid: exercise native refusals through the public event route in process.
 use super::ReviewEvents;
-use axum::http::HeaderValue;
 use provenance_store::{layout::ProvenanceLayout, repository_init::plan_manifest};
 use provenance_transport::LocalAccess;
 use std::sync::Arc;
-use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Error};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 async fn status(extra: &[(&str, &[u8])], valid_key: bool, host: Option<&str>) -> u16 {
     let directory = tempfile::tempdir().unwrap();
@@ -35,32 +34,31 @@ async fn status(extra: &[(&str, &[u8])], valid_key: bool, host: Option<&str>) ->
     let events = ReviewEvents::start(layout, "default".into(), nonce, access, codes).await;
     let router = events.router();
     let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
-    let mut request = format!("ws://{address}/review-events")
-        .into_client_request()
-        .unwrap();
+    let mut request = format!(
+        "GET /review-events HTTP/1.1\r\nHost: {}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n",
+        host.map(str::to_owned).unwrap_or_else(|| address.to_string())
+    ).into_bytes();
     if valid_key {
-        request
-            .headers_mut()
-            .insert("x-provenance-launch-key", value.parse().unwrap());
+        request.extend_from_slice(format!("X-Provenance-Launch-Key: {value}\r\n").as_bytes());
     }
     for (name, value) in extra {
-        request.headers_mut().append(
-            axum::http::HeaderName::from_bytes(name.as_bytes()).unwrap(),
-            HeaderValue::from_bytes(value).unwrap(),
-        );
+        request.extend_from_slice(name.as_bytes());
+        request.extend_from_slice(b": ");
+        request.extend_from_slice(value);
+        request.extend_from_slice(b"\r\n");
     }
-    if let Some(host) = host {
-        request.headers_mut().insert("host", host.parse().unwrap());
-    }
-    let result = tokio_tungstenite::connect_async(request).await;
-    let status = match result {
-        Ok((socket, response)) => {
-            drop(socket);
-            response.status().as_u16()
-        }
-        Err(Error::Http(response)) => response.status().as_u16(),
-        Err(error) => panic!("unexpected handshake error: {error}"),
-    };
+    request.extend_from_slice(b"\r\n");
+    let mut socket = tokio::net::TcpStream::connect(address).await.unwrap();
+    socket.write_all(&request).await.unwrap();
+    let mut response = String::new();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        BufReader::new(socket).read_line(&mut response),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let status = response.split_whitespace().nth(1).unwrap().parse().unwrap();
     events.shutdown().await;
     server.abort();
     status
