@@ -46,7 +46,6 @@ const LIST_SEARCH_OPERATIONS: [&str; 8] = [
     "list-boundaries",
 ];
 
-
 async fn assert_search_hidden_and_refused(
     client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
 ) {
@@ -276,11 +275,15 @@ async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
     let client = &session.client;
     let result = call(client, "search", json!({})).await;
     assert_eq!(result.is_error, Some(true));
-    let message = &result.content[0].as_text().unwrap().text;
+    let message = result.structured_content.as_ref().unwrap()["error"]["message"]
+        .as_str()
+        .unwrap();
     for text in [
         "search requires text or at least one filter",
         "provenance search --text <query>",
         "provenance search --kind <kind>",
+        "\"text\": \"<query>\"",
+        "\"node_types\": [\"<kind>\"]",
     ] {
         assert!(message.contains(text), "{message}");
     }

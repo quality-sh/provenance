@@ -267,7 +267,10 @@ fn help_exits_before_other_input_validation() {
         let help = String::from_utf8(output.stdout).unwrap();
         assert!(help.contains("Print help"), "{help}");
         if args.contains(&"create") {
-            assert!(help.contains("provenance <id> create --type <kind> --help"), "{help}");
+            assert!(
+                help.contains("provenance <id> create --type <kind> --help"),
+                "{help}"
+            );
             assert!(!help.contains("--statement"), "{help}");
         } else {
             assert!(help.contains("--view"), "{help}");
