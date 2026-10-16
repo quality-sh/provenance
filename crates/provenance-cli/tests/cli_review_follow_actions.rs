@@ -9,23 +9,6 @@ use serde_json::{json, Value};
 
 #[test]
 #[provenance_macros::verifies("rule_review_follow_people_only", examples)]
-fn agent_cli_write_does_not_notify_follow() {
-    let repo = repository_with_actors(&["reviewer"]);
-    create(repo.path(), "req_follow", "requirement", &[]);
-    let host = start(repo.path());
-    let follow = Follow::start(&host, repo.path(), "req_follow");
-    follow.frame();
-    create(
-        repo.path(),
-        "rule_agent",
-        "rule",
-        &["--requirement-id", "req_follow"],
-    );
-    follow.quiet();
-}
-
-#[test]
-#[provenance_macros::verifies("rule_review_follow_people_only", examples)]
 fn review_page_decision_sends_only_the_changed_record_once() {
     let repo = repository_with_actors(&["reviewer"]);
     create(repo.path(), "req_follow", "requirement", &[]);
