@@ -390,3 +390,8 @@ pub(super) fn header(name: &'static str) -> Parameter {
         schema: json!({"type":"string","minLength":1}),
     }
 }
+
+/// The CLI flag that carries one whole JSON body value.
+pub fn json_flag(wire_field: &str) -> String {
+    format!("{}-json", wire_field.to_ascii_lowercase().replace('_', "-"))
+}

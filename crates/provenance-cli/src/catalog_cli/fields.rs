@@ -178,11 +178,7 @@ pub(super) fn augment_with_overrides(
     Ok(command)
 }
 
-/// The `--<field>-json` flag that carries one whole JSON body value. One
-/// spelling per body wire field, so alias flags gain no JSON variant.
-pub(super) fn json_flag(wire_field: &str) -> String {
-    format!("{}-json", cli_name(wire_field))
-}
+pub(super) use provenance_store::operations::catalog::json_flag;
 
 fn flag(name: &str, repeated: bool) -> Arg {
     let argument = Arg::new(name.to_owned())
