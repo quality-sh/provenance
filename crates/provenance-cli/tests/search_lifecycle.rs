@@ -112,8 +112,11 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
         &["search", "--text", "search", "--format", "json"],
     ))
     .unwrap();
-    assert_eq!(page["nodes"][1]["status"], "deprecated");
-    assert_eq!(page["nodes"][3]["status"], "answered");
+    for (id, status) in [("rule_search", "deprecated"), ("question_search", "answered")] {
+        let node = page["nodes"].as_array().unwrap().iter()
+            .find(|node| node["id"] == id).unwrap();
+        assert_eq!(node["status"], status);
+    }
 
     let stamp = r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#;
     run(
