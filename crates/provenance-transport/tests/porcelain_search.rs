@@ -293,13 +293,14 @@ async fn mcp_search_shows_each_record_lifecycle() {
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
-    for (target, mut data) in [
+    for (target, data) in [
         ("rule_shared", json!({"status":"deprecated"})),
         (
             "question_shared",
             json!({"status":"answered", "answer":"Use the current state."}),
         ),
     ] {
+        let mut arguments = json!({"target":target,"data":data});
         if target == "question_shared" {
             let current = client
                 .call_tool(
@@ -313,17 +314,13 @@ async fn mcp_search_shows_each_record_lifecycle() {
                 .await
                 .unwrap();
             assert_ne!(current.is_error, Some(true), "{current:?}");
-            data["expected_etag"] =
+            arguments["if_match"] =
                 current.structured_content.as_ref().unwrap()["data"]["edit"]["etag"].clone();
         }
         let updated = client
             .call_tool(
-                CallToolRequestParams::new("update").with_arguments(
-                    json!({"target":target,"data":data})
-                        .as_object()
-                        .unwrap()
-                        .clone(),
-                ),
+                CallToolRequestParams::new("update")
+                    .with_arguments(arguments.as_object().unwrap().clone()),
             )
             .await
             .unwrap();
