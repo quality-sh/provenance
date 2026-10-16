@@ -101,6 +101,7 @@ test("reset and host loss reach the channel and do not start a replay", async ()
     expect(JSON.parse(reset.params.content.split("\n").slice(2).join("\n")).continuity).toBe("unknown");
     harness.children[0].kill();
     const lost = await channel.state('"type":"disconnected"');
+    expect(lost.params.content).toContain("No document (continuity unknown).\n");
     expect(JSON.parse(lost.params.content.split("\n").slice(2).join("\n")).continuity).toBe("unknown");
     expect(await deadline(channel.child.exited, "host-loss channel exit")).not.toBe(0);
   } finally { await harness.close(); }

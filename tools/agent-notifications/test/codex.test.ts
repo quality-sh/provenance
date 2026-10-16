@@ -83,6 +83,7 @@ test("busy delivery preserves message order and reports a stream disconnect", as
     expect(await deadline(harness.adapter!.exited, "host-loss adapter exit")).not.toBe(0);
     const disconnected = await harness.rpc.call("thread/queue/list", { threadId: thread });
     expect(disconnected.data).toHaveLength(4);
+    expect(disconnected.data[3].input[0].text).toContain("No document (continuity unknown).\n");
     expect(disconnected.data[3].input[0].text).toContain('"type":"disconnected"');
     expect(disconnected.data[3].input[0].text).toContain('"continuity":"unknown"');
     expect(harness.requestThreads.every(id => id === thread)).toBe(true);
