@@ -98,6 +98,9 @@ pub(crate) fn search_tool() -> rmcp::model::Tool {
     input.as_object_mut().map(|object| object.remove("$schema"));
     if let Some(properties) = input.get_mut("properties").and_then(Value::as_object_mut) {
         properties.remove("protocol_version");
+        if let Some(exclude_terminal) = properties.get_mut("exclude_terminal") {
+            exclude_terminal["default"] = Value::Bool(true);
+        }
     }
     if let Some(required) = input.get_mut("required").and_then(Value::as_array_mut) {
         required.retain(|field| field != "protocol_version");
@@ -186,8 +189,11 @@ pub(crate) async fn call_get(
 /// Returns compact readable content and the canonical structured search result.
 pub(crate) async fn call_search(
     host: &crate::StatementHost,
-    arguments: serde_json::Map<String, Value>,
+    mut arguments: serde_json::Map<String, Value>,
 ) -> CallToolResult {
+    arguments
+        .entry("exclude_terminal")
+        .or_insert(Value::Bool(true));
     let Ok(mut request) =
         serde_json::from_value::<provenance_core::protocol::SearchQuery>(Value::Object(arguments))
     else {
