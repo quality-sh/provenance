@@ -31,6 +31,8 @@ fn native_subscription_refuses_ambiguous_and_browser_credentials() {
         (format!("{header}{header}"), 401),
         (format!("{header}Cookie: arbitrary=value\r\n"), 403),
         (format!("{header}Sec-Fetch-Site: same-origin\r\n"), 403),
+        (format!("{header}Sec-Fetch-Mode: websocket\r\n"), 403),
+        (format!("{header}Sec-Fetch-Dest: empty\r\n"), 403),
         (format!("{header}Authorization: Bearer unused\r\n"), 403),
         (
             format!(

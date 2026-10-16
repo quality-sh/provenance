@@ -1,6 +1,4 @@
 pub(super) mod frames;
-#[cfg(test)]
-mod native_auth_tests;
 mod navigation;
 pub(super) mod output;
 pub(super) mod stream;
