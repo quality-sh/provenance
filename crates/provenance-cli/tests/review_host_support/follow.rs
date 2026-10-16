@@ -130,3 +130,16 @@ pub fn page_rule(host: &Host, id: &str, requirement: &str) {
     );
     assert_eq!(saved.status(), 200, "{}", saved.into_string().unwrap());
 }
+
+pub fn pending_proposal(host: &Host, id: &str) -> String {
+    let root: Value = serde_json::from_str(
+        &super::response(super::request(host, "GET", &format!("/requirements/{id}"), true).call())
+            .into_string()
+            .unwrap(),
+    )
+    .unwrap();
+    root["data"]["decision"]["pending"]["proposal_id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}

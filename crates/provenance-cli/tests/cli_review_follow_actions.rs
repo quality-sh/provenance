@@ -1,11 +1,10 @@
 #[path = "review_host_support/mod.rs"]
 mod review_host_support;
 use review_host_support::{
-    events::cookie,
-    follow::{create, Follow},
+    follow::{create, page_request, pending_proposal, Follow},
     repository_with_actors, request, response, start,
 };
-use serde_json::{json, Value};
+use serde_json::json;
 
 #[test]
 #[provenance_macros::verifies("rule_review_follow_people_only", examples)]
@@ -19,29 +18,16 @@ fn review_page_decision_sends_only_the_changed_record_once() {
         &["--requirement-id", "req_follow"],
     );
     let host = start(repo.path());
-    let session = cookie(&host);
     let follow = Follow::start(&host, repo.path(), "req_follow");
     let initial = follow.frame();
     assert_eq!(initial["records"].as_array().unwrap().len(), 2);
-    let root: Value = serde_json::from_str(
-        &response(request(&host, "GET", "/requirements/req_follow", true).call())
-            .into_string()
-            .unwrap(),
-    )
-    .unwrap();
-    let proposal = root["data"]["decision"]["pending"]["proposal_id"]
-        .as_str()
-        .unwrap();
+    let proposal = pending_proposal(&host, "req_follow");
     let saved = response(
-        request(
+        page_request(
             &host,
             "POST",
             &format!("/requirements/req_follow/submissions/{proposal}/decide"),
-            false,
         )
-        .set("Cookie", &session)
-        .set("Origin", host.config["endpoint"].as_str().unwrap())
-        .set("Content-Type", "application/json")
         .send_string(
             &json!({"data":{
                 "actor":{"identity_type":"human","id":"reviewer"},
@@ -102,17 +88,9 @@ fn review_page_rejection_without_a_canonical_artifact_reaches_the_agent() {
     let host = start(repo.path());
     let follow = Follow::start(&host, repo.path(), "req_follow");
     follow.frame();
-    let root: Value = serde_json::from_str(
-        &response(request(&host, "GET", "/requirements/req_follow", true).call())
-            .into_string()
-            .unwrap(),
-    )
-    .unwrap();
-    let proposal = root["data"]["decision"]["pending"]["proposal_id"]
-        .as_str()
-        .unwrap();
+    let proposal = pending_proposal(&host, "req_follow");
     let saved = response(
-        review_host_support::follow::page_request(
+        page_request(
             &host,
             "POST",
             &format!("/requirements/req_follow/submissions/{proposal}/decide"),
