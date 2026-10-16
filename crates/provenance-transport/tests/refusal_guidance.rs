@@ -90,6 +90,10 @@ async fn mcp_submit_names_all_missing_lists_before_store_checks() {
         assert_eq!(result.is_error, Some(true), "{result:?}");
         let error = &result.structured_content.as_ref().unwrap()["error"];
         assert_eq!(error["kind"], "invalid_input");
+        assert_eq!(error["missing_fields"], json!(fields[supplied..]));
+        for field in &fields[..supplied] {
+            assert!(!error.to_string().contains(field), "{error}");
+        }
         for field in &fields[supplied..] {
             assert!(error.to_string().contains(field), "{error}");
             assert!(

@@ -299,6 +299,9 @@ fn submit_names_every_missing_evidence_list_before_pending_conflict() {
         let error = String::from_utf8(output.stderr).unwrap();
         assert!(error.contains("invalid_input"), "{error}");
         assert!(!error.contains("review_submission_conflict"), "{error}");
+        for field in &fields[..supplied] {
+            assert!(!error.contains(field), "{error}");
+        }
         for field in &fields[supplied..] {
             assert!(error.contains(&format!("{field} '[]'")), "{error}");
         }
