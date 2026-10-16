@@ -22,9 +22,8 @@ fn json(repo: &str, args: &[&str]) -> Value {
 fn repository() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_str().unwrap();
-    let output = run(
-        repo,
-        &[
+    let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+        .args([
             "init",
             "--path",
             repo,
@@ -32,9 +31,14 @@ fn repository() -> tempfile::TempDir {
             "default",
             "--path-prefix",
             ".",
-        ],
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
-    assert!(output.status.success());
     dir
 }
 
