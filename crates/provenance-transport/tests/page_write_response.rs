@@ -294,12 +294,24 @@ fn page_changes_report_removed_records_after_scope_replacement() {
 // A separate thread also bounds synchronous filesystem and OS lock waits.
 fn bounded(test: impl FnOnce() + Send + 'static) {
     let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
+    let worker = std::thread::spawn(move || {
         test();
         let _ = sender.send(());
     });
-    receiver
-        .recv_timeout(std::time::Duration::from_secs(45))
-        .expect("the page-write test must finish within 45 seconds");
+    if receiver.recv_timeout(std::time::Duration::from_secs(45))
+        == Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+    {
+        panic!("the page-write test must finish within 45 seconds");
+    }
+    if let Err(panic) = worker.join() {
+        std::panic::resume_unwind(panic);
+    }
 }
 
+// Implementation aid: preserve assertion diagnostics from the bounded test thread.
+#[test]
+fn bounded_preserves_the_test_panic() {
+    let panic = std::panic::catch_unwind(|| bounded(|| panic!("original test failure")))
+        .expect_err("the bounded test must propagate its panic");
+    assert_eq!(panic.downcast_ref::<&str>(), Some(&"original test failure"));
+}
