@@ -248,3 +248,14 @@ fn submit_names_every_missing_evidence_list_before_pending_conflict() {
         for field in &fields[supplied..] { assert!(error.contains(&format!("{field} '[]'")), "{error}"); }
     }
 }
+
+#[test]
+fn help_exits_before_other_input_validation() {
+    for args in [vec!["req_x", "--follow", "--help"], vec!["req_x", "create", "--type", "bogus", "--help"]] {
+        let output = run("/no-repository", &args);
+        assert_eq!(output.status.code(), Some(0), "{output:?}");
+        let help = String::from_utf8(output.stdout).unwrap();
+        assert!(help.contains("Print help"), "{help}");
+    }
+}
+
