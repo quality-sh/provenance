@@ -1,6 +1,6 @@
 //! Scope-wide discovery through the canonical search operation.
 
-use provenance_core::protocol::{QueryResponse, SearchQuery, SearchResult};
+use provenance_core::protocol::{GraphNode, QueryResponse, SearchQuery, SearchResult};
 use std::{fmt::Display, future::Future, pin::Pin};
 
 /// One future returned by an injected search port.
@@ -55,9 +55,10 @@ pub fn render_readable(response: &QueryResponse<SearchResult>) -> String {
     let mut lines = vec![format!("search: {} returned", result.nodes.len())];
     for node in &result.nodes {
         lines.push(format!(
-            "- {} {}\n  {}",
+            "- {} {}{}\n  {}",
             node.node_type().as_str(),
             node.id().as_str(),
+            lifecycle_suffix(node),
             node.searchable_text().get(1).copied().unwrap_or("")
         ));
     }
@@ -71,4 +72,22 @@ pub fn render_readable(response: &QueryResponse<SearchResult>) -> String {
         lines.push(format!("warning: freshness: {error}"));
     }
     lines.join("\n")
+}
+
+fn lifecycle_suffix(node: &GraphNode) -> String {
+    let status = match node {
+        GraphNode::Requirement(record) => serde_json::to_value(&record.status),
+        GraphNode::Resolution(record) => serde_json::to_value(&record.status),
+        GraphNode::Rule(record) => serde_json::to_value(&record.status),
+        GraphNode::Topic(record) => serde_json::to_value(record.status),
+        GraphNode::Question(record) => serde_json::to_value(record.status),
+        GraphNode::Source(_) | GraphNode::Domain(_) | GraphNode::Boundary(_) => {
+            return String::new()
+        }
+    }
+    .expect("lifecycle status serializes as a wire word");
+    format!(
+        " · {}",
+        status.as_str().expect("lifecycle status is a string")
+    )
 }
