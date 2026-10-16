@@ -1,4 +1,3 @@
-use assert_cmd::Command;
 use provenance_macros::verifies;
 mod support {
     pub mod review_paths;
@@ -10,7 +9,7 @@ fn json(repo: &str, args: &[&str]) -> serde_json::Value {
 }
 
 fn run(repo: &str, args: &[&str]) -> std::process::Output {
-    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+    provenance()
         .args(args)
         .args(["--repo", repo])
         .output()
