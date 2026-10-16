@@ -24,7 +24,7 @@ pub fn with_read_only_validation<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let key = layout.publication_lock_path().to_string();
+    let key = super::publication_lock_identity(layout)?;
     let inserted = VALIDATIONS.with(|validations| validations.borrow_mut().insert(key.clone()));
     let _validation = ReadOnlyValidation { key, inserted };
     operation()

@@ -297,7 +297,7 @@ fn publication_lock_marker_is_cleared_after_panic() {
         .unwrap();
     });
     assert!(panic.is_err());
-    let key = layout.publication_lock_path().to_string();
+    let key = publication_lock_identity(&layout).unwrap();
     assert!(!HELD_LOCKS.with(|locks| locks.borrow().contains(&key)));
 
     let transaction = layout.import_transactions_dir().join("completed");
@@ -332,4 +332,31 @@ fn nested_publication_through_a_repository_alias_completes() {
         .recv_timeout(std::time::Duration::from_secs(5))
         .expect("a nested publication through an alias must complete")
         .unwrap();
+}
+
+// Implementation aid: checks alias identity during validation, without a guarded store.
+#[cfg(unix)]
+#[test]
+fn read_only_validation_through_an_alias_does_not_publish() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("repo");
+    std::fs::create_dir(&root).unwrap();
+    let alias = temporary.path().join("alias");
+    std::os::unix::fs::symlink(&root, &alias).unwrap();
+    let layout = ProvenanceLayout::new(root.to_str().unwrap());
+    let alias = ProvenanceLayout::new(alias.to_str().unwrap());
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    with_read_only_validation(&layout, || {
+        with_read_only_validation(&alias, || Ok(()))?;
+        with_repository_publication(&alias, || Ok(()))?;
+        let _guard = runtime.block_on(publication_guard(&alias))?;
+        assert!(!layout.publication_lock_path().exists());
+        assert!(!layout.import_transactions_dir().exists());
+        Ok(())
+    })
+    .unwrap();
 }

@@ -59,21 +59,13 @@ pub(crate) fn with_repository_publication_checked<R>(
     check: impl FnOnce() -> anyhow::Result<()>,
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let key = layout.publication_lock_path().to_string();
+    let key = publication_lock_identity(layout)?;
     if read_only::active(&key) {
         check()?;
         return operation();
     }
     prepare_publication_lock(layout)?;
     let lock_path = layout.publication_lock_path();
-    // Request preparation can resolve a repository alias while an outer caller
-    // retains it. Both paths must identify the same held publication lock.
-    let key = canonical_utf8(
-        lock_path.parent().expect("publication lock has a parent"),
-        "publication lock directory",
-    )?
-    .join(lock_path.file_name().expect("publication lock has a name"))
-    .to_string();
     if HELD_LOCKS.with(|locks| locks.borrow().contains(&key)) {
         check()?;
         return operation();
@@ -84,6 +76,14 @@ pub(crate) fn with_repository_publication_checked<R>(
     prepare_transaction_dirs(layout)?;
     source_edit_recovery::recover_pending_source_edit(layout)?;
     recover_pending_publication(layout).and_then(|()| operation())
+}
+
+// Resolve only the repository root so validation does not create cache paths.
+fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
+    let root = canonical_utf8(layout.root(), "repository path")?;
+    Ok(ProvenanceLayout::new(root)
+        .publication_lock_path()
+        .to_string())
 }
 
 fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()> {
