@@ -8,6 +8,11 @@ use axum::{
 };
 use provenance_transport::local_host::{LocalHostRegistration, IDENTITY_ROUTE};
 use serde_json::Value;
+use std::io::Write as _;
+
+#[allow(dead_code)]
+#[path = "../../src/owner_file.rs"]
+mod owner_file;
 use std::{
     path::Path,
     sync::{Arc, Mutex},
@@ -38,12 +43,10 @@ impl Feed {
         std::fs::create_dir_all(&directory).unwrap();
         let path = directory.join(format!("{epoch}.key"));
         let key = "a".repeat(64);
-        std::fs::write(&path, &key).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt as _;
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
-        }
+        owner_file::create(&path)
+            .unwrap()
+            .write_all(key.as_bytes())
+            .unwrap();
         let (sender, receiver) = mpsc::unbounded_channel::<Value>();
         let receiver = Arc::new(Mutex::new(Some(receiver)));
         let (stop, stopped) = oneshot::channel();
