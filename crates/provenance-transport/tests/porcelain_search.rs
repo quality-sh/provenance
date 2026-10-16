@@ -338,11 +338,15 @@ async fn mcp_search_shows_each_record_lifecycle() {
         ("resolution_shared", "review"),
     ] {
         let mut arguments = json!({"target":target,"data":{"status":status}});
-        if target == "question_shared" {
+        if let Some(collection) = match target {
+            "question_shared" => Some("questions"),
+            "topic_shared" => Some("topics"),
+            _ => None,
+        } {
             let current = client
                 .call_tool(
                     CallToolRequestParams::new("api").with_arguments(
-                        json!({"path":"questions/question_shared"})
+                        json!({"path":format!("{collection}/{target}")})
                             .as_object()
                             .unwrap()
                             .clone(),
