@@ -196,6 +196,7 @@ fn assert_notification(notifications: &Notifications, expected: &[(&str, &str)])
     let mut notifications = notifications.lock().unwrap();
     assert_eq!(notifications.len(), 1);
     let changes = notifications.pop().unwrap().unwrap();
+    drop(notifications);
     assert!(!changes.configuration_changed);
     let mut actual = Vec::new();
     for scope in &changes.scopes {
@@ -207,9 +208,9 @@ fn assert_notification(notifications: &Notifications, expected: &[(&str, &str)])
                 .map(|record| (record.kind.as_str(), record.id.as_str())),
         );
     }
-    actual.sort();
+    actual.sort_unstable();
     let mut expected = expected.to_vec();
-    expected.sort();
+    expected.sort_unstable();
     assert_eq!(actual, expected, "{changes:?}");
 }
 
