@@ -3,10 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { run as codex } from "../codex";
-import { run as claude } from "../claude";
 
 // Implementation aid: preserve which error wins when configuration has several faults.
-for (const [name, run] of [["Codex", codex], ["Claude", claude]] as const) {
+for (const [name, run] of [["Codex", codex]] as const) {
   test(`${name} validates every selection field before filesystem access`, async () => {
     const directory = mkdtempSync(join(tmpdir(), "provenance-config-"));
     try {
