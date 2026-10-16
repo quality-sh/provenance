@@ -286,17 +286,17 @@ async fn failure_with_guidance(
         .get("declared_by")
         .or_else(|| record.get("made_by"))
         .and_then(Value::as_str);
-    match owner {
-        Some(owner) => anyhow::anyhow!(
+    owner.map_or_else(
+        || anyhow::anyhow!(
+            "{original}; this is a manual record with no declared_by owner; omit --declared-by. \
+             If you cannot act for this record, ask the owner to make the change"
+        ),
+        |owner| anyhow::anyhow!(
             "{original}; record {} is owned by {owner}; declared_by identifies the record owner. \
              Set --declared-by to this owner when you act for them; otherwise ask the owner to make the change",
             record_id(path).unwrap_or("unknown")
         ),
-        None => anyhow::anyhow!(
-            "{original}; this is a manual record with no declared_by owner; omit --declared-by. \
-             If you cannot act for this record, ask the owner to make the change"
-        ),
-    }
+    )
 }
 
 /// Names the command that reads the review after a review-workflow refusal.
