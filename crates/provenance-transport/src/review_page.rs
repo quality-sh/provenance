@@ -13,7 +13,7 @@ pub struct ReviewPageWrite;
 #[derive(Clone)]
 pub struct PageWrites {
     pub layout: ProvenanceLayout,
-    pub observed: Arc<dyn Fn(ReviewChanges) + Send + Sync>,
+    pub observed: Arc<dyn Fn(anyhow::Result<ReviewChanges>) + Send + Sync>,
 }
 
 impl PageWrites {
@@ -22,16 +22,9 @@ impl PageWrites {
             let before = ReviewStateSnapshot::read(guard)?;
             let result = work();
             // Notification work cannot change the result of a completed write.
-            match ReviewStateSnapshot::read(guard) {
-                Ok(after) => (self.observed)(after.page_changes_since(&before)),
-                Err(_) => {
-                    eprintln!("Review page notification failed; current document reset requested");
-                    (self.observed)(ReviewChanges {
-                        configuration_changed: true,
-                        scopes: vec![],
-                    });
-                }
-            }
+            (self.observed)(
+                ReviewStateSnapshot::read(guard).map(|after| after.page_changes_since(&before)),
+            );
             Ok(result)
         })
     }

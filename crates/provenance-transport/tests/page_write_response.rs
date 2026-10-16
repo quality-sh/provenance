@@ -105,7 +105,6 @@ async fn a_saved_page_write_succeeds_when_the_snapshot_fails() {
     assert_eq!(value["data"]["id"], "rule_saved");
     let notifications = notifications.lock().unwrap();
     assert_eq!(notifications.len(), 1);
-    assert!(notifications[0].configuration_changed);
-    assert!(notifications[0].scopes.is_empty());
+    assert!(notifications[0].is_err());
     drop(notifications);
 }

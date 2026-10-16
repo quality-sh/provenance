@@ -88,7 +88,17 @@ impl ReviewEvents {
             .with_state(self.state.clone())
     }
 
-    pub fn page_changed(&self, changes: provenance_store::review_changes::ReviewChanges) {
+    pub fn page_changed(
+        &self,
+        changes: anyhow::Result<provenance_store::review_changes::ReviewChanges>,
+    ) {
+        let changes = changes.unwrap_or_else(|error| {
+            eprintln!("Review page capture failed; current document reset requested: {error}");
+            provenance_store::review_changes::ReviewChanges {
+                configuration_changed: true,
+                scopes: vec![],
+            }
+        });
         self.state.subscribers.page_changed(changes);
     }
 

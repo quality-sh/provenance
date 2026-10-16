@@ -75,7 +75,7 @@ impl StatementHost {
     pub fn with_page_writes(
         mut self,
         layout: provenance_store::layout::ProvenanceLayout,
-        observed: Arc<dyn Fn(provenance_store::review_changes::ReviewChanges) + Send + Sync>,
+        observed: Arc<dyn Fn(anyhow::Result<provenance_store::review_changes::ReviewChanges>) + Send + Sync>,
     ) -> Self {
         self.page_writes = Some(review_page::PageWrites { layout, observed });
         self
