@@ -337,18 +337,31 @@ async fn mcp_search_shows_each_record_lifecycle() {
         ("question_shared", "blocked_on_human"),
         ("resolution_shared", "review"),
     ] {
+        let mut arguments = json!({"target":target,"data":{"status":status}});
+        if target == "question_shared" {
+            let current = client
+                .call_tool(
+                    CallToolRequestParams::new("api").with_arguments(
+                        json!({"path":"questions/question_shared"})
+                            .as_object()
+                            .unwrap()
+                            .clone(),
+                    ),
+                )
+                .await
+                .unwrap();
+            assert_ne!(current.is_error, Some(true), "{current:?}");
+            arguments["if_match"] =
+                current.structured_content.as_ref().unwrap()["data"]["edit"]["etag"].clone();
+        }
         let updated = client
             .call_tool(
-                CallToolRequestParams::new("update").with_arguments(
-                    json!({"target":target,"data":{"status":status}})
-                        .as_object()
-                        .unwrap()
-                        .clone(),
-                ),
+                CallToolRequestParams::new("update")
+                    .with_arguments(arguments.as_object().unwrap().clone()),
             )
             .await
             .unwrap();
-        assert_ne!(updated.is_error, Some(true), "{updated:?}");
+        assert_ne!(updated.is_error, Some(true), "{target}: {updated:?}");
         let result = call(&client, json!({"text":target})).await;
         let readable = &result.content[0].as_text().unwrap().text;
         assert!(
