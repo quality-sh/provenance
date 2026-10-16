@@ -3,6 +3,21 @@
 use super::*;
 use crate::operations::catalog as operation;
 
+const SUBMIT_DEFAULTS: &[CliDefault] = &[
+    CliDefault {
+        field: "source_ids",
+        value: CliDefaultValue::EmptyArray,
+    },
+    CliDefault {
+        field: "evidence_references",
+        value: CliDefaultValue::EmptyArray,
+    },
+    CliDefault {
+        field: "builds_on",
+        value: CliDefaultValue::EmptyArray,
+    },
+];
+
 pub(super) fn register(out: &mut Vec<Definition>) {
     computations(out);
     topic_actions(out);
@@ -84,6 +99,7 @@ fn review_actions_for_kind(
         .fixed("record_kind", kind.as_str())
         .scope("scope_id")
         .target(TargetAction::Submit, Some(kind))
+        .cli_defaults(SUBMIT_DEFAULTS)
         .review_link(Some(kind)),
     );
     out.push(

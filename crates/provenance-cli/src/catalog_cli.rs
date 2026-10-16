@@ -257,7 +257,11 @@ async fn failure_with_guidance(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     path: &str,
 ) -> anyhow::Error {
-    let original = actionable_failure(failure, record_id(path));
+    let original = actionable_failure(
+        failure,
+        record_id(path),
+        path.trim_matches('/').split('/').next(),
+    );
     let value = serde_json::to_value(failure).unwrap_or_default();
     if value["error"]["kind"] != "record_ownership_conflict" {
         return original;
@@ -298,21 +302,26 @@ async fn failure_with_guidance(
 /// Names the command that reads the review after a review-workflow refusal.
 #[provenance_macros::rule("rule_review_refusal_names_read_command")]
 fn review_read_command(id: &str) -> String {
-    format!("provenance {id} get --view review")
+    format!("provenance {id} --view review")
 }
 
 fn actionable_failure(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     record_id: Option<&str>,
+    collection: Option<&str>,
 ) -> anyhow::Error {
     let value = serde_json::to_value(failure).unwrap_or_default();
     let error = &value["error"];
     let kind = error["kind"].as_str();
     if kind == Some("review_submission_conflict") {
-        if let (Some(id), Some(submission)) = (record_id, error["current_submission"].as_str()) {
+        if let (Some(id), Some(submission), Some(collection)) =
+            (record_id, error["current_submission"].as_str(), collection)
+        {
             return anyhow::anyhow!(
                 "record {id} already has pending submission {submission}; \
-                 run `{}` to see it",
+                 run `{}` to see it; to withdraw it, run \
+                 `provenance {collection} {id} submissions {submission} withdraw --actor <actor>`. \
+                 For an owned record, also pass --declared-by <owner>",
                 review_read_command(id)
             );
         }

@@ -138,7 +138,7 @@ fn wrong_feedback_form_names_the_review_command() {
         ])
         .assert()
         .failure()
-        .stderr(contains("provenance req_wrong_form get --view review"));
+        .stderr(contains("provenance req_wrong_form --view review"));
 }
 
 #[test]
@@ -161,7 +161,7 @@ fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
         )
         .assert()
         .failure()
-        .stderr(contains("provenance req_pending get --view review"));
+        .stderr(contains("provenance req_pending --view review"));
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn stale_edit_names_the_review_command() {
         .assert()
         .failure()
         .stderr(contains("requirement_edit_conflict"))
-        .stderr(contains("provenance req_stale get --view review"));
+        .stderr(contains("provenance req_stale --view review"));
 }
 
 #[test]
