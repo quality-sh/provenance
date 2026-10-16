@@ -178,7 +178,7 @@ pub(super) fn augment_with_overrides(
     Ok(command)
 }
 
-pub(super) use provenance_store::operations::catalog::json_flag;
+pub(super) use provenance_store::operations::catalog::{cli_name, json_flag};
 
 fn flag(name: &str, repeated: bool) -> Arg {
     let argument = Arg::new(name.to_owned())
@@ -198,10 +198,6 @@ pub(super) fn wire_field_schema<'a>(request: &'a Value, wire_field: &str) -> Opt
         .pointer("/properties/data/properties")?
         .as_object()?
         .get(wire_field)
-}
-
-pub(super) fn cli_name(name: &str) -> String {
-    name.to_ascii_lowercase().replace('_', "-")
 }
 
 fn schema_properties(schema: &Value) -> anyhow::Result<&Map<String, Value>> {

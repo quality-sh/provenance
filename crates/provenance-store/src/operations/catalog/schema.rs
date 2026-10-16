@@ -393,5 +393,10 @@ pub(super) fn header(name: &'static str) -> Parameter {
 
 /// The CLI flag that carries one whole JSON body value.
 pub fn json_flag(wire_field: &str) -> String {
-    format!("{}-json", wire_field.to_ascii_lowercase().replace('_', "-"))
+    format!("{}-json", cli_name(wire_field))
+}
+
+/// Convert a wire field name to its CLI spelling.
+pub fn cli_name(name: &str) -> String {
+    name.to_ascii_lowercase().replace('_', "-")
 }
