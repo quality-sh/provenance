@@ -38,7 +38,7 @@ async fn mcp_ownership_refusal_preserves_owner_and_guidance() {
         };
         let created = call(&client, "create", json!({"target":target,"type":"resolution","data":{
             "title":"Owner", "position":"Keep the owner.", "rationale":"The owner controls changes.",
-            "made_by":owner, "supersedes":[], "requirement_ids":["req_shared"], "status":"active", "inputs":[]
+            "made_by":owner, "supersedes":[], "requirement_ids":["req_shared"], "status":"proposed", "inputs":[]
         }})).await;
         assert_ne!(created.is_error, Some(true), "{created:?}");
         let result = call(&client, "submit", json!({"target":target,"data":{
