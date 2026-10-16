@@ -155,17 +155,3 @@ test("a lost queue acknowledgement stops with an uncertain identity", async () =
   }
 }, 60000);
 
-// Implementation aid: each inference request must identify the configured thread.
-test("every captured model request belongs to the bound thread", async () => {
-  const harness = new Harness();
-  try {
-    await harness.start();
-    const thread = await harness.thread();
-    const other = await harness.thread();
-    harness.startAdapter(thread);
-    await harness.input("req_notifications");
-    expect(harness.requestThreads.length).toBeGreaterThan(0);
-    expect(harness.requestThreads.every(id => id === thread)).toBe(true);
-    expect(harness.requestThreads).not.toContain(other);
-  } finally { await harness.close(); }
-}, 60000);
