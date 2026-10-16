@@ -1,6 +1,7 @@
 #![cfg(feature = "test-fixture")]
 
 mod support {
+    pub mod mcp;
     pub mod records;
 }
 
@@ -9,8 +10,9 @@ use provenance_transport::{
     fixture::{FixtureAccess, Target},
     StatementHost,
 };
-use rmcp::{model::CallToolRequestParams, ServiceExt as _};
-use serde_json::{json, Value};
+use rmcp::model::CallToolRequestParams;
+use serde_json::json;
+use support::mcp::{call, Session};
 use support::records::Repository;
 
 fn access(repository: &Repository) -> FixtureAccess {
@@ -44,18 +46,6 @@ const LIST_SEARCH_OPERATIONS: [&str; 8] = [
     "list-boundaries",
 ];
 
-async fn call(
-    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
-    arguments: Value,
-) -> rmcp::model::CallToolResult {
-    client
-        .call_tool(
-            CallToolRequestParams::new("search")
-                .with_arguments(arguments.as_object().unwrap().clone()),
-        )
-        .await
-        .unwrap()
-}
 
 async fn assert_search_hidden_and_refused(
     client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
@@ -71,9 +61,8 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
     let repository = Repository::new("The shared graph is searchable.");
     repository.all_kinds();
     let host = StatementHost::with_fixture_access(access(&repository));
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
+    let session = Session::start(host).await;
+    let client = &session.client;
 
     let tools = client.list_all_tools().await.unwrap();
     let tool = tools.iter().find(|tool| tool.name == "search").unwrap();
@@ -81,13 +70,13 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
     assert!(tool.input_schema["properties"]["node_types"].is_object());
     assert!(tool.output_schema.is_some());
 
-    let text_only = call(&client, json!({"text":"excludes code"})).await;
+    let text_only = call(client, "search", json!({"text":"excludes code"})).await;
     assert_eq!(
         text_only.structured_content.as_ref().unwrap()["nodes"][0]["node_type"],
         "boundary"
     );
 
-    let kind_only = call(&client, json!({"node_types":["domain", "rule"]})).await;
+    let kind_only = call(client, "search", json!({"node_types":["domain", "rule"]})).await;
     let kinds = kind_only.structured_content.as_ref().unwrap()["nodes"]
         .as_array()
         .unwrap()
@@ -97,7 +86,8 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
     assert_eq!(kinds, ["rule", "domain"]);
 
     let combined = call(
-        &client,
+        client,
+        "search",
         json!({"text":"searchable", "node_types":["requirement", "rule"]}),
     )
     .await;
@@ -107,8 +97,7 @@ async fn named_mcp_search_intersects_text_and_multiple_kinds() {
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes[0]["node_type"], "rule");
 
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
 
 #[tokio::test]
@@ -116,11 +105,10 @@ async fn mcp_search_content_matches_the_structured_bounded_page() {
     let repository = Repository::new("The shared graph is searchable.");
     repository.all_kinds();
     let host = StatementHost::with_fixture_access(access(&repository));
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
+    let session = Session::start(host).await;
+    let client = &session.client;
 
-    let first = call(&client, json!({"text":"shared", "limit":2})).await;
+    let first = call(client, "search", json!({"text":"shared", "limit":2})).await;
     assert_ne!(first.is_error, Some(true), "{first:?}");
     let structured = first.structured_content.as_ref().unwrap();
     assert_eq!(structured["limit"], 2);
@@ -137,7 +125,8 @@ async fn mcp_search_content_matches_the_structured_bounded_page() {
     assert!(readable.contains(cursor), "{readable}");
 
     let second = call(
-        &client,
+        client,
+        "search",
         json!({"text":"shared", "limit":2, "cursor":cursor}),
     )
     .await;
@@ -156,14 +145,14 @@ async fn mcp_search_content_matches_the_structured_bounded_page() {
     assert!(first_ids.iter().all(|id| !second_ids.contains(id)));
 
     let wrong_query = call(
-        &client,
+        client,
+        "search",
         json!({"text":"different", "limit":2, "cursor":cursor}),
     )
     .await;
     assert_eq!(wrong_query.is_error, Some(true), "{wrong_query:?}");
 
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
 
 #[tokio::test]
@@ -172,11 +161,10 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
     repository.all_kinds();
     let restricted = access(&repository).deny_operation("list-sources");
     let host = StatementHost::with_fixture_access(restricted);
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
+    let session = Session::start(host).await;
+    let client = &session.client;
 
-    let source_only = call(&client, json!({"node_types":["source"]})).await;
+    let source_only = call(client, "search", json!({"node_types":["source"]})).await;
     assert_eq!(source_only.is_error, Some(true), "{source_only:?}");
     assert_eq!(
         source_only.structured_content.as_ref().unwrap()["error"]["kind"],
@@ -184,7 +172,8 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
     );
 
     let first = call(
-        &client,
+        client,
+        "search",
         json!({"node_types":["source", "requirement", "rule"], "limit":1}),
     )
     .await;
@@ -198,7 +187,8 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
         .contains("source_shared"));
 
     let second = call(
-        &client,
+        client,
+        "search",
         json!({
             "node_types":["source", "requirement", "rule"],
             "limit":1,
@@ -215,7 +205,7 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
         .unwrap()
         .contains("source_shared"));
 
-    let implicit = call(&client, json!({"text":"shared", "limit":20})).await;
+    let implicit = call(client, "search", json!({"text":"shared", "limit":20})).await;
     let implicit_page = implicit.structured_content.as_ref().unwrap();
     assert_eq!(implicit_page["nodes"].as_array().unwrap().len(), 7);
     assert!(implicit_page["nodes"]
@@ -229,8 +219,7 @@ async fn list_denial_excludes_a_kind_before_selection_and_paging() {
         .unwrap()
         .contains("source_shared"));
 
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
 
 #[tokio::test]
@@ -239,19 +228,17 @@ async fn list_grant_allows_search_when_get_is_denied() {
     repository.all_kinds();
     let restricted = access(&repository).deny_operation("get-source");
     let host = StatementHost::with_fixture_access(restricted);
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
+    let session = Session::start(host).await;
+    let client = &session.client;
 
-    let result = call(&client, json!({"node_types":["source"]})).await;
+    let result = call(client, "search", json!({"node_types":["source"]})).await;
     assert_ne!(result.is_error, Some(true), "{result:?}");
     assert_eq!(
         result.structured_content.as_ref().unwrap()["nodes"][0]["id"],
         "source_shared"
     );
 
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
 
 #[tokio::test]
@@ -259,14 +246,12 @@ async fn no_list_search_grant_hides_and_refuses_named_search() {
     let repository = Repository::new("The shared graph is searchable.");
     let restricted = deny_operations(access(&repository), &LIST_SEARCH_OPERATIONS);
     let host = StatementHost::with_fixture_access(restricted);
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
+    let session = Session::start(host).await;
+    let client = &session.client;
 
-    assert_search_hidden_and_refused(&client).await;
+    assert_search_hidden_and_refused(client).await;
 
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
 
 #[tokio::test]
@@ -274,14 +259,12 @@ async fn global_search_denial_hides_and_refuses_named_search() {
     let repository = Repository::new("The shared graph is searchable.");
     let restricted = access(&repository).deny_operation(catalog::Search::NAME);
     let host = StatementHost::with_fixture_access(restricted);
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
+    let session = Session::start(host).await;
+    let client = &session.client;
 
-    assert_search_hidden_and_refused(&client).await;
+    assert_search_hidden_and_refused(client).await;
 
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
 
 #[tokio::test]
@@ -289,10 +272,9 @@ async fn global_search_denial_hides_and_refuses_named_search() {
 async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
     let repository = Repository::new("The shared graph is searchable.");
     let host = StatementHost::with_fixture_access(access(&repository));
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
-    let result = call(&client, json!({})).await;
+    let session = Session::start(host).await;
+    let client = &session.client;
+    let result = call(client, "search", json!({})).await;
     assert_eq!(result.is_error, Some(true));
     let message = &result.content[0].as_text().unwrap().text;
     for text in [
@@ -302,6 +284,5 @@ async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
     ] {
         assert!(message.contains(text), "{message}");
     }
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
