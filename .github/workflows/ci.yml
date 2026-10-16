@@ -425,7 +425,10 @@ jobs:
           NEXTEST_PROFILE: ci
         run: |
           mkdir -p target/crap
-          cargo llvm-cov nextest --workspace --all-features --no-fail-fast --lcov --output-path target/crap/lcov.info
+          # Host lifecycle tests kill instrumented children. llvm-profdata reports
+          # each corrupt profile path and merges the remaining valid profiles.
+          # Test failures still fail this command; an entirely invalid set fails too.
+          cargo llvm-cov nextest --workspace --all-features --no-fail-fast --lcov --failure-mode all --output-path target/crap/lcov.info
       - name: Save coverage for the CRAP gate
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

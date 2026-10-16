@@ -349,6 +349,11 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertNotIn("continue-on-error", self.test_job)
         self.assertNotIn("PROVENANCE_CI_LOCAL", self.test_job)
 
+    def test_coverage_merge_skips_corrupt_child_profiles_without_hiding_test_failures(self):
+        self.assertIn("--failure-mode all", self.test_job)
+        self.assertNotIn("continue-on-error", self.test_job)
+        self.assertNotIn("|| true", self.test_job)
+
     def test_job_reads_the_test_coverage_instead_of_running_tests(self):
         self.assertIn("needs: [changes, generate-operations, test]", self.job)
         self.assertIn("cargo-crap@0.5.0", self.job)
