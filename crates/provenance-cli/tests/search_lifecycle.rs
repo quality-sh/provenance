@@ -146,4 +146,8 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
     let readable = run(repo, &["search", "--text", "search"]);
     assert!(!readable.contains("rule_search"), "{readable}");
     assert!(!readable.contains("question_search"), "{readable}");
+    let included = run(repo, &["search", "--text", "search", "--include-terminal"]);
+    for expected in ["rule rule_search · archived", "question question_search · archived"] {
+        assert!(included.contains(expected), "{included}");
+    }
 }
