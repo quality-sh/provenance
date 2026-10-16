@@ -18,7 +18,9 @@ mod mcp;
 mod mcp_io;
 mod mcp_surface;
 pub mod porcelain;
+mod review_page;
 mod routing;
+pub use review_page::ReviewPageWrite;
 
 pub use access::HostAccess;
 pub use local::{constant_time_eq, LocalAccess};
@@ -35,6 +37,7 @@ pub(crate) const MAX_BODY_BYTES: usize = 1024 * 1024;
 #[derive(Clone)]
 pub struct StatementHost {
     execution: Execution,
+    page_writes: Option<review_page::PageWrites>,
     access: Arc<dyn access::HostAccess>,
     check_port: Option<Arc<dyn provenance_porcelain::check::CheckPort>>,
     ingress: Arc<Semaphore>,
@@ -45,6 +48,7 @@ impl Default for StatementHost {
     fn default() -> Self {
         Self {
             execution: Execution::default(),
+            page_writes: None,
             access: Arc::new(access::DataFreeAccess),
             check_port: None,
             ingress: Arc::new(Semaphore::new(8)),
@@ -65,6 +69,18 @@ impl StatementHost {
             access,
             ..Self::default()
         }
+    }
+    /// Observes only changes from HTTP requests marked by the owning review page host.
+    #[must_use]
+    pub fn with_page_writes(
+        mut self,
+        layout: provenance_store::layout::ProvenanceLayout,
+        observed: Arc<
+            dyn Fn(anyhow::Result<provenance_store::review_changes::ReviewChanges>) + Send + Sync,
+        >,
+    ) -> Self {
+        self.page_writes = Some(review_page::PageWrites { layout, observed });
+        self
     }
     /// Inject the repository-aware computations used by the MCP `check` tool.
     #[must_use]
@@ -214,7 +230,7 @@ impl StatementHost {
             };
             FailureEnvelope::new(None, failure)
         })?;
-        routing::invoke(self, &matched, data, query, &headers)
+        routing::invoke(self, &matched, data, query, &headers, false)
             .await
             .map(|result| result.0.into_value())
     }
@@ -231,19 +247,29 @@ impl StatementHost {
         public_name: &str,
         backing: &str,
         call: Value,
+        page_write: bool,
     ) -> Result<Value, FailureEnvelope> {
+        let page_writes = page_write.then(|| self.page_writes.clone()).flatten();
         let runtime = tokio::runtime::Handle::current();
         let access: Arc<dyn provenance_store::operations::catalog::ContextResolver> =
             self.access.clone();
         let backing = backing.to_owned();
         self.execution
             .run(public_name, move || {
-                runtime.block_on(provenance_store::operations::catalog::invoke_with(
-                    &backing,
-                    provenance_core::SDK_PROTOCOL_VERSION,
-                    call,
-                    access,
-                ))
+                let work = || {
+                    runtime.block_on(provenance_store::operations::catalog::invoke_with(
+                        &backing,
+                        provenance_core::SDK_PROTOCOL_VERSION,
+                        call,
+                        access,
+                    ))
+                };
+                match page_writes {
+                    Some(page) => page
+                        .run(work)
+                        .map_err(|_| FailureEnvelope::new(None, OperationFailure::Internal))?,
+                    None => work(),
+                }
             })
             .await
     }

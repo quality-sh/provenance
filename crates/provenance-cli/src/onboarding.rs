@@ -33,6 +33,10 @@ it in the same change.
 - Read the decision and review feedback with `{command} <record-id> get --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.
+- Receive saved changes while you work with
+  `{command} <requirement-id> get --view review --follow --format json`.
+  The command needs a running review host. It returns current state, not a delivery journal.
+  A reset or disconnect means notification continuity is unknown.
 - A guarded update after a rejection opens a new submission unless a reviewer
   accepted that content. To end a pending review without a replacement, withdraw it.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a

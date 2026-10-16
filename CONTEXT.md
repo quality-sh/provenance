@@ -190,6 +190,13 @@ The person who starts a local review host and the clients to which that person
 gives access. They share access to the repository target and scope selected for
 that host session.
 
+## Review page action
+
+Any write made through an authenticated review page session. A person action
+means a Review page action; the mark does not establish browser or human identity.
+An agent that drives the review page itself, such as the in-app browser of the
+Codex app or Claude Desktop, will notify itself. CLI, SDK and MCP writes never notify.
+
 ## Review document
 
 A view of one explicit Requirement and the records related to it through

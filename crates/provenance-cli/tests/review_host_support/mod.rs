@@ -42,6 +42,10 @@ impl Host {
     pub fn cli(&self) -> Command {
         let mut command = Command::new(assert_cmd::cargo::cargo_bin("provenance"));
         use_user_cache(&mut command, self.user_cache.path());
+        command.env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            "http://127.0.0.1:9/unavailable",
+        );
         command
     }
 
@@ -129,6 +133,11 @@ pub fn repository_with_actors(actor_ids: &[&str]) -> tempfile::TempDir {
 }
 
 pub fn initialize_repository(command: &mut Command, root: &std::path::Path, actor_ids: &[&str]) {
+    // Review delivery does not depend on an external dictionary asset.
+    command.env(
+        "PROVENANCE_TEST_STE100_ASSET_URL",
+        "http://127.0.0.1:9/unavailable",
+    );
     command.args([
         "init",
         "--path",
@@ -385,3 +394,7 @@ pub fn list_discussions(host: &Host) -> ureq::Response {
 }
 
 pub mod events;
+
+pub mod follow;
+
+pub mod scripted_feed;

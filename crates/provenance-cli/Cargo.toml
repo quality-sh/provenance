@@ -25,6 +25,8 @@ path = "src/bin/cargo-provenance.rs"
 
 [dependencies]
 anyhow.workspace = true
+futures-util = "0.3"
+tokio-tungstenite = "0.24"
 axum = { workspace = true, features = ["ws"] }
 camino.workspace = true
 clap.workspace = true
@@ -48,7 +50,7 @@ serde.workspace = true
 serde_ignored.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["signal"] }
+tokio = { workspace = true, features = ["signal", "io-std", "io-util"] }
 uuid.workspace = true
 ureq.workspace = true
 url.workspace = true
