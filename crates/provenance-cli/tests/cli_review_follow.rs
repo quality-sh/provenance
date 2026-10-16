@@ -7,25 +7,6 @@ use review_host_support::{
 };
 
 #[test]
-// Implementation aid: this public characterization must fail before follow exists.
-fn follow_returns_current_document_before_waiting_for_changes() {
-    let repo = repository();
-    create(repo.path(), "req_follow", "requirement", &[]);
-    let host = start(repo.path());
-    let follow = Follow::start(&host, repo.path(), "req_follow");
-    let state = follow.frame();
-    assert_eq!(state["type"], "state");
-    assert!(state["records"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|record| record.to_string().contains("req_follow")));
-    assert!(state["epoch"].is_string());
-    assert!(state["sequence"].is_u64());
-    assert!(state["continuations"].is_array());
-}
-
-#[test]
 #[provenance_macros::verifies("rule_review_follow_push", examples)]
 #[provenance_macros::verifies("rule_review_follow_people_only", examples)]
 fn follow_receives_only_the_question_written_by_the_review_page() {
