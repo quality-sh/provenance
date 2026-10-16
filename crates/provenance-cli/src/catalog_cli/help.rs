@@ -22,6 +22,7 @@ pub(super) fn target(
 
     if let Some(TargetVerb::Action(action)) = action {
         if catalog::TargetAction::RECORD.contains(&action) {
+            let needs_type = action == catalog::TargetAction::Create && kind.is_none();
             let mut allowed = [
                 "target", "action", "repo", "scope", "format", "quiet", "stdin", "help",
             ]
@@ -31,9 +32,9 @@ pub(super) fn target(
             if action == catalog::TargetAction::Create {
                 allowed.insert("record_type".into());
             }
-            for (_, definition) in catalog::target_definitions(action)
-                .filter(|(registered, _)| kind.is_none_or(|kind| *registered == kind))
-            {
+            for (_, definition) in catalog::target_definitions(action).filter(|(registered, _)| {
+                !needs_type && kind.is_none_or(|kind| *registered == kind)
+            }) {
                 for field in fields::declared(definition)? {
                     if let Source::Body { wire_field, .. } = &field.source {
                         if wire_field == "id" {
@@ -48,6 +49,11 @@ pub(super) fn target(
                 let hidden = !allowed.contains(arg.get_id().as_str());
                 arg.hide(hidden)
             });
+            if needs_type {
+                command = command.after_help(
+                    "Select a record type to see its accepted fields:\n  provenance <id> create --type <kind> --help",
+                );
+            }
         }
     }
     println!("{}", command.render_help());

@@ -265,3 +265,18 @@ fn ownership_refusal_names_the_declared_owner() {
     assert!(error.contains("--declared-by"), "{error}");
     assert!(error.contains("ask the owner"), "{error}");
 }
+
+#[test]
+fn generic_create_help_asks_for_a_type_before_listing_record_fields() {
+    let output = run("/no-repository", &["req_help", "create", "--help"]);
+    assert!(output.status.success());
+    let help = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        !help.contains("--source-ref") && !help.contains("--source-ids-json"),
+        "{help}"
+    );
+    assert!(
+        help.contains("provenance <id> create --type <kind> --help"),
+        "{help}"
+    );
+}
