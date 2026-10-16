@@ -26,7 +26,7 @@ fn create_help_excludes_options_from_other_actions_and_types() {
     assert!(output.status.success());
     let help = String::from_utf8(output.stdout).unwrap();
     assert!(help.contains("--statement"));
-    for flag in ["--source-ids", "--source-ref", "--if-match", "--view"] {
+    for flag in ["--source-ids", "--source-ref", "--if-match", "--view", "--position", "--made-by"] {
         assert!(!help.contains(flag), "{help}");
     }
 }
@@ -222,7 +222,7 @@ fn generic_create_help_asks_for_a_type_before_listing_record_fields() {
     assert!(output.status.success());
     let help = String::from_utf8(output.stdout).unwrap();
     assert!(
-        !help.contains("--source-ref") && !help.contains("--source-ids-json"),
+        !help.contains("--source-ref") && !help.contains("--source-ids-json") && !help.contains("--statement"),
         "{help}"
     );
     assert!(
