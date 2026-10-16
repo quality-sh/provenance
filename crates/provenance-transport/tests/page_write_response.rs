@@ -76,19 +76,19 @@ fn a_saved_page_write_succeeds_when_the_snapshot_fails() {
                 Arc::new(move |changes| seen.lock().unwrap().push(changes)),
             );
             let mut request = Request::builder()
-        .method("POST")
-        .uri("/rules")
-        .header("host", "fixture.test")
-        .header("authorization", "Bearer fixture-secret")
-        .header("content-type", "application/json")
-        .body(Body::from(
-            json!({"data":{
-                "id":"rule_saved", "statement":"The saved write succeeds.", "status":"draft",
-                "severity":"high", "requirement_ids":["req_shared"], "resolution_ids":[]
-            }})
-            .to_string(),
-        ))
-        .unwrap();
+                .method("POST")
+                .uri("/rules")
+                .header("host", "fixture.test")
+                .header("authorization", "Bearer fixture-secret")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    json!({"data":{
+                        "id":"rule_saved", "statement":"The saved write succeeds.", "status":"draft",
+                        "severity":"high", "requirement_ids":["req_shared"], "resolution_ids":[]
+                    }})
+                    .to_string(),
+                ))
+                .unwrap();
             request.extensions_mut().insert(ReviewPageWrite);
             let response = host.router().oneshot(request).await.unwrap();
             let status = response.status();
@@ -302,3 +302,4 @@ fn bounded(test: impl FnOnce() + Send + 'static) {
         .recv_timeout(std::time::Duration::from_secs(45))
         .expect("the page-write test must finish within 45 seconds");
 }
+
