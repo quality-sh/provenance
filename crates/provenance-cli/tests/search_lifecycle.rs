@@ -1,5 +1,5 @@
-use provenance_macros::verifies;
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use serde_json::Value;
 
 fn run(repo: &str, args: &[&str]) -> String {
@@ -112,9 +112,16 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
         &["search", "--text", "search", "--format", "json"],
     ))
     .unwrap();
-    for (id, status) in [("rule_search", "deprecated"), ("question_search", "answered")] {
-        let node = page["nodes"].as_array().unwrap().iter()
-            .find(|node| node["id"] == id).unwrap();
+    for (id, status) in [
+        ("rule_search", "deprecated"),
+        ("question_search", "answered"),
+    ] {
+        let node = page["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["id"] == id)
+            .unwrap();
         assert_eq!(node["status"], status);
     }
 
@@ -150,7 +157,10 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
     assert!(!readable.contains("rule_search"), "{readable}");
     assert!(!readable.contains("question_search"), "{readable}");
     let included = run(repo, &["search", "--text", "search", "--include-terminal"]);
-    for expected in ["rule rule_search · archived", "question question_search · archived"] {
+    for expected in [
+        "rule rule_search · archived",
+        "question question_search · archived",
+    ] {
         assert!(included.contains(expected), "{included}");
     }
 }
