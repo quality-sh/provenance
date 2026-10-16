@@ -10,19 +10,6 @@ pub async fn dispatch_search(
     query: SearchQuery,
 ) -> anyhow::Result<()> {
     let host = RepoContext::new(repo, scope).local_host()?;
-    if let Err(error) = query.validate() {
-        if matches!(
-            error.into_failure(),
-            provenance_core::protocol::failure::OperationFailure::InvalidInput {
-                field: Some(field), ..
-            } if field == "request.text"
-        ) {
-            anyhow::bail!(
-                "a search query is required; run `provenance search --text <query>` \
-                 or `provenance search --kind <kind>`"
-            );
-        }
-    }
     let service = host.porcelain().search();
     let response = service.search(query).await?;
     let rendered = if format == Some(OutputFormat::Json) {

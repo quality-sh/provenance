@@ -186,7 +186,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
             crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
             crate::output::print_json(&value)?;
         }
-        Err(failure) => return Err(failure_with_guidance(&host, &failure, &path, record_id(&path)).await),
+        Err(failure) => return Err(failure_with_guidance(&failure, &path, record_id(&path))),
     }
     Ok(())
 }
@@ -228,7 +228,7 @@ pub async fn dispatch_target(
     }
     let mut value = match host.invoke_target(&route, data, headers).await {
         Ok(value) => value,
-        Err(failure) => return Err(failure_with_guidance(&host, &failure, &route.path, Some(&target)).await),
+        Err(failure) => return Err(failure_with_guidance(&failure, &route.path, Some(&target))),
     };
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
@@ -252,52 +252,12 @@ fn record_id(path: &str) -> Option<&str> {
     path.trim_matches('/').split('/').nth(1)
 }
 
-async fn failure_with_guidance(
-    host: &provenance_transport::StatementHost,
+fn failure_with_guidance(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     path: &str,
     target: Option<&str>,
 ) -> anyhow::Error {
-    let original = actionable_failure(
-        failure,
-        target,
-        path.trim_matches('/').split('/').next(),
-    );
-    let value = serde_json::to_value(failure).unwrap_or_default();
-    if value["error"]["kind"] != "record_ownership_conflict" {
-        return original;
-    }
-    let resource = path.split('/').take(3).collect::<Vec<_>>().join("/");
-    let Ok(record) = host
-        .invoke_resource(
-            Method::GET,
-            &resource,
-            serde_json::json!({}),
-            BTreeMap::new(),
-            HeaderMap::new(),
-        )
-        .await
-    else {
-        return anyhow::anyhow!(
-            "{original}; read the record to find its declared_by owner; ask the owner to make the change"
-        );
-    };
-    let record = &record["data"];
-    let owner = record
-        .get("declared_by")
-        .or_else(|| record.get("made_by"))
-        .and_then(Value::as_str);
-    owner.map_or_else(
-        || anyhow::anyhow!(
-            "{original}; this is a manual record with no declared_by owner; omit --declared-by. \
-             If you cannot act for this record, ask the owner to make the change"
-        ),
-        |owner| anyhow::anyhow!(
-            "{original}; record {} is owned by {owner}; declared_by identifies the record owner. \
-             Set --declared-by to this owner when you act for them; otherwise ask the owner to make the change",
-            record_id(path).unwrap_or("unknown")
-        ),
-    )
+    actionable_failure(failure, target, path.trim_matches('/').split('/').next())
 }
 
 /// Names the command that reads the review after a review-workflow refusal.

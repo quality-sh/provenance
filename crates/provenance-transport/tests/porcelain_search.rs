@@ -283,3 +283,20 @@ async fn global_search_denial_hides_and_refuses_named_search() {
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
+
+#[tokio::test]
+async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
+    let repository = Repository::new("The shared graph is searchable.");
+    let host = StatementHost::with_fixture_access(access(&repository));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let result = call(&client, json!({})).await;
+    assert_eq!(result.is_error, Some(true));
+    let message = &result.content[0].as_text().unwrap().text;
+    for text in ["search requires text or at least one filter", "provenance search --text <query>", "provenance search --kind <kind>"] {
+        assert!(message.contains(text), "{message}");
+    }
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}

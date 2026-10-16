@@ -110,7 +110,7 @@ async fn search_refuses_a_request_without_text_or_kinds_before_the_port() {
 
     assert!(matches!(
         service.search(query).await,
-        Err(SearchError::InvalidOptions)
+        Err(SearchError::InvalidOptions { .. })
     ));
     assert!(port.0.lock().unwrap().is_none());
 }
