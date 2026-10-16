@@ -78,12 +78,31 @@ pub(crate) fn with_repository_publication_checked<R>(
     recover_pending_publication(layout).and_then(|()| operation())
 }
 
-// Resolve only the repository root so validation does not create cache paths.
+// Resolve the existing ancestor so planned-state validation creates no paths.
 fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
-    let root = canonical_utf8(layout.root(), "repository path")?;
-    Ok(ProvenanceLayout::new(root)
-        .publication_lock_path()
-        .to_string())
+    let absolute = std::path::absolute(layout.root())?;
+    for ancestor in absolute.ancestors() {
+        match std::fs::canonicalize(ancestor) {
+            Ok(resolved) => {
+                let root = resolved.join(absolute.strip_prefix(ancestor)?);
+                let root = Utf8PathBuf::from_path_buf(root).map_err(|path| {
+                    anyhow::anyhow!("repository path is not UTF-8: {}", path.display())
+                })?;
+                return Ok(ProvenanceLayout::new(root)
+                    .publication_lock_path()
+                    .to_string());
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("resolve repository path {}", layout.root()));
+            }
+        }
+    }
+    anyhow::bail!(
+        "repository path has no existing ancestor: {}",
+        layout.root()
+    )
 }
 
 fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()> {
