@@ -84,10 +84,10 @@ pub(crate) fn registered_operation_names_for_test() -> Vec<&'static str> {
 }
 #[cfg(feature = "schema")]
 pub use schema::{
-    definitions, json_flag, operation_request_schema, operation_success_schema, parse_parameter_value,
-    parse_schema_value, parse_schema_value_in, serialize_parameter_value, target_definition,
-    target_definitions, Definition, HttpMethod, Parameter, ParseValueError, QueryVariant,
-    ResponseKind,
+    definitions, json_flag, operation_request_schema, operation_success_schema,
+    parse_parameter_value, parse_schema_value, parse_schema_value_in, serialize_parameter_value,
+    target_definition, target_definitions, Definition, HttpMethod, Parameter, ParseValueError,
+    QueryVariant, ResponseKind,
 };
 pub use statement::CheckStatement;
 pub use target_discussion_writes::{WriteTargetDiscussion, WriteTargetDiscussionRequest};
