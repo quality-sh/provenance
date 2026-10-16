@@ -93,7 +93,7 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
         ],
     );
 
-    let readable = run(repo, &["search"]);
+    let readable = run(repo, &["search", "--text", "search"]);
     for expected in [
         "requirement req_search · active",
         "rule rule_search · deprecated",
@@ -102,7 +102,11 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
     ] {
         assert!(readable.contains(expected), "{readable}");
     }
-    let page: Value = serde_json::from_str(&run(repo, &["search", "--format", "json"])).unwrap();
+    let page: Value = serde_json::from_str(&run(
+        repo,
+        &["search", "--text", "search", "--format", "json"],
+    ))
+    .unwrap();
     assert_eq!(page["nodes"][1]["status"], "deprecated");
     assert_eq!(page["nodes"][3]["status"], "answered");
 
@@ -134,7 +138,7 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
             stamp,
         ],
     );
-    let readable = run(repo, &["search"]);
+    let readable = run(repo, &["search", "--text", "search"]);
     assert!(!readable.contains("rule_search"), "{readable}");
     assert!(!readable.contains("question_search"), "{readable}");
 }

@@ -326,7 +326,7 @@ async fn mcp_search_shows_each_record_lifecycle() {
             .unwrap();
         assert_ne!(updated.is_error, Some(true), "{updated:?}");
     }
-    let result = call(&client, json!({})).await;
+    let result = call(&client, json!({"text":"shared"})).await;
     assert_ne!(result.is_error, Some(true), "{result:?}");
     let readable = &result.content[0].as_text().unwrap().text;
     for expected in [
