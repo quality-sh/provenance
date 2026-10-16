@@ -1,5 +1,12 @@
 use assert_cmd::Command;
-use serde_json::Value;
+mod support {
+    pub mod review_paths;
+}
+use support::review_paths::{init, json_output, create_requirement, provenance};
+
+fn json(repo: &str, args: &[&str]) -> serde_json::Value {
+    json_output(provenance().args(args).args(["--repo", repo]))
+}
 
 fn run(repo: &str, args: &[&str]) -> std::process::Output {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
@@ -7,39 +14,6 @@ fn run(repo: &str, args: &[&str]) -> std::process::Output {
         .args(["--repo", repo])
         .output()
         .unwrap()
-}
-
-fn json(repo: &str, args: &[&str]) -> Value {
-    let output = run(repo, args);
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
-}
-
-fn repository() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    let repo = dir.path().to_str().unwrap();
-    let output = Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .args([
-            "init",
-            "--path",
-            repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    dir
 }
 
 // Implementation aids: public CLI refusals must name a usable recovery command.
@@ -59,8 +33,8 @@ fn create_help_excludes_options_from_other_actions_and_types() {
 
 #[test]
 fn empty_search_names_text_and_kind_forms() {
-    let dir = repository();
-    let repo = dir.path().to_str().unwrap();
+    let (_dir, repo) = init();
+    let repo = repo.as_str();
     let output = run(repo, &["search"]);
     assert_eq!(output.status.code(), Some(1));
     let error = String::from_utf8(output.stderr).unwrap();
@@ -77,21 +51,9 @@ fn empty_search_names_text_and_kind_forms() {
 
 #[test]
 fn ownership_refusal_names_the_manual_owner_and_handoff() {
-    let dir = repository();
-    let repo = dir.path().to_str().unwrap();
-    let before = json(
-        repo,
-        &[
-            "req_owner",
-            "create",
-            "--type",
-            "requirement",
-            "--statement",
-            "The owner controls edits.",
-            "--format",
-            "json",
-        ],
-    );
+    let (_dir, repo) = init();
+    let repo = repo.as_str();
+    let before = create_requirement(repo, "req_owner");
     let output = run(
         repo,
         &[
@@ -120,21 +82,9 @@ fn ownership_refusal_names_the_manual_owner_and_handoff() {
 
 #[test]
 fn submit_after_guarded_update_names_the_pending_review_and_withdrawal() {
-    let dir = repository();
-    let repo = dir.path().to_str().unwrap();
-    let before = json(
-        repo,
-        &[
-            "req_pending",
-            "create",
-            "--type",
-            "requirement",
-            "--statement",
-            "The record keeps review state.",
-            "--format",
-            "json",
-        ],
-    );
+    let (_dir, repo) = init();
+    let repo = repo.as_str();
+    let before = create_requirement(repo, "req_pending");
     let updated = json(
         repo,
         &[
@@ -201,8 +151,8 @@ fn submit_after_guarded_update_names_the_pending_review_and_withdrawal() {
 
 #[test]
 fn ownership_refusal_names_the_declared_owner() {
-    let dir = repository();
-    let repo = dir.path().to_str().unwrap();
+    let (_dir, repo) = init();
+    let repo = repo.as_str();
     json(
         repo,
         &[
