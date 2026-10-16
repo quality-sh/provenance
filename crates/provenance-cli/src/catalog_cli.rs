@@ -271,7 +271,7 @@ async fn failure_with_guidance(
         .invoke_resource(
             Method::GET,
             &resource,
-            Value::Null,
+            serde_json::json!({}),
             BTreeMap::new(),
             HeaderMap::new(),
         )
