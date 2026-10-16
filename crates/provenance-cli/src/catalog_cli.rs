@@ -302,7 +302,7 @@ fn actionable_failure(
     anyhow::anyhow!(message)
 }
 
-pub(super) const COMMON: &[&str] = &[
+const COMMON: &[&str] = &[
     "repo",
     "scope",
     "format",
