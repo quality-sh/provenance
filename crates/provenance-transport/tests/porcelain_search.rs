@@ -1,5 +1,7 @@
 #![cfg(feature = "test-fixture")]
 
+use provenance_macros::verifies;
+
 mod support {
     pub mod records;
 }
@@ -284,8 +286,8 @@ async fn global_search_denial_hides_and_refuses_named_search() {
     server.await.unwrap().cancel().await.unwrap();
 }
 
-// Regression evidence for lifecycle labels through the public MCP tool.
 #[tokio::test]
+#[verifies("rule_search_readable_lifecycle", examples)]
 async fn mcp_search_shows_each_record_lifecycle() {
     let repository = Repository::new("The shared graph is searchable.");
     repository.all_kinds();

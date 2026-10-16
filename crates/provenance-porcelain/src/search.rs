@@ -1,6 +1,7 @@
 //! Scope-wide discovery through the canonical search operation.
 
 use provenance_core::protocol::{GraphNode, QueryResponse, SearchQuery, SearchResult};
+use provenance_macros::rule;
 use std::{fmt::Display, future::Future, pin::Pin};
 
 /// One future returned by an injected search port.
@@ -74,6 +75,8 @@ pub fn render_readable(response: &QueryResponse<SearchResult>) -> String {
     lines.join("\n")
 }
 
+/// Names the stored lifecycle state in shared readable search output.
+#[rule("rule_search_readable_lifecycle")]
 fn lifecycle_suffix(node: &GraphNode) -> String {
     let status = match node {
         GraphNode::Requirement(record) => serde_json::to_value(&record.status),

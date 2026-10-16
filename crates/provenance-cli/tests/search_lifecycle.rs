@@ -1,3 +1,4 @@
+use provenance_macros::verifies;
 use assert_cmd::Command;
 use serde_json::Value;
 
@@ -78,8 +79,8 @@ fn seed(repo: &str) {
     );
 }
 
-// Regression evidence for the reported search fault; no graph Rule was added.
 #[test]
+#[verifies("rule_search_readable_lifecycle", examples)]
 fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
