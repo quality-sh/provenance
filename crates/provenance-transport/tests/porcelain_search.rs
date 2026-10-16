@@ -286,6 +286,42 @@ async fn global_search_denial_hides_and_refuses_named_search() {
     server.await.unwrap().cancel().await.unwrap();
 }
 
+async fn update_status(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    target: &str,
+    status: &str,
+) {
+    let mut arguments = json!({"target":target,"data":{"status":status}});
+    if let Some(collection) = match target {
+        "question_shared" => Some("questions"),
+        "topic_shared" => Some("topics"),
+        _ => None,
+    } {
+        let current = client
+            .call_tool(
+                CallToolRequestParams::new("api").with_arguments(
+                    json!({"path":format!("{collection}/{target}")})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                ),
+            )
+            .await
+            .unwrap();
+        assert_ne!(current.is_error, Some(true), "{current:?}");
+        arguments["if_match"] =
+            current.structured_content.as_ref().unwrap()["data"]["edit"]["etag"].clone();
+    }
+    let updated = client
+        .call_tool(
+            CallToolRequestParams::new("update")
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap();
+    assert_ne!(updated.is_error, Some(true), "{target}: {updated:?}");
+}
+
 #[tokio::test]
 #[verifies("rule_search_readable_lifecycle", examples)]
 async fn mcp_search_shows_each_record_lifecycle() {
@@ -337,35 +373,7 @@ async fn mcp_search_shows_each_record_lifecycle() {
         ("question_shared", "blocked_on_human"),
         ("resolution_shared", "review"),
     ] {
-        let mut arguments = json!({"target":target,"data":{"status":status}});
-        if let Some(collection) = match target {
-            "question_shared" => Some("questions"),
-            "topic_shared" => Some("topics"),
-            _ => None,
-        } {
-            let current = client
-                .call_tool(
-                    CallToolRequestParams::new("api").with_arguments(
-                        json!({"path":format!("{collection}/{target}")})
-                            .as_object()
-                            .unwrap()
-                            .clone(),
-                    ),
-                )
-                .await
-                .unwrap();
-            assert_ne!(current.is_error, Some(true), "{current:?}");
-            arguments["if_match"] =
-                current.structured_content.as_ref().unwrap()["data"]["edit"]["etag"].clone();
-        }
-        let updated = client
-            .call_tool(
-                CallToolRequestParams::new("update")
-                    .with_arguments(arguments.as_object().unwrap().clone()),
-            )
-            .await
-            .unwrap();
-        assert_ne!(updated.is_error, Some(true), "{target}: {updated:?}");
+        update_status(&client, target, status).await;
         let result = call(&client, json!({"text":target})).await;
         let readable = &result.content[0].as_text().unwrap().text;
         assert!(
