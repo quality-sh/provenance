@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 mod support {
     pub mod review_paths;
 }
-use support::review_paths::{provenance, init, json_output, create_requirement};
+use support::review_paths::{create_requirement, init, json_output, provenance};
 
 fn reject_pending(repo: &str, id: &str, created: &Value) {
     let proposal = created["data"]["decision"]["pending"]["proposal_id"]

@@ -106,9 +106,19 @@ pub fn target_command() -> anyhow::Result<Command> {
     let command = fields::augment_with_overrides(
         grammar::target_command(),
         definitions,
-        &COMMON.iter().copied().chain([
-            "type", "view", "depth", "kind", "limit", "review_link", "stdin",
-        ]).collect::<Vec<_>>(),
+        &COMMON
+            .iter()
+            .copied()
+            .chain([
+                "type",
+                "view",
+                "depth",
+                "kind",
+                "limit",
+                "review_link",
+                "stdin",
+            ])
+            .collect::<Vec<_>>(),
         &[],
     )?;
     fields::augment_schemas(
@@ -293,17 +303,17 @@ fn actionable_failure(
 }
 
 pub(super) const COMMON: &[&str] = &[
-        "repo",
-        "scope",
-        "format",
-        "quiet",
-        "target",
-        "action",
-        "collection",
-        "address",
-        "command",
-        "discussion_id",
-    ];
+    "repo",
+    "scope",
+    "format",
+    "quiet",
+    "target",
+    "action",
+    "collection",
+    "address",
+    "command",
+    "discussion_id",
+];
 
 pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
     for id in matches.ids() {

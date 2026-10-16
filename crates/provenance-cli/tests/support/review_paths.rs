@@ -49,4 +49,3 @@ pub fn create_requirement(repo: &str, id: &str) -> Value {
         "json",
     ]))
 }
-

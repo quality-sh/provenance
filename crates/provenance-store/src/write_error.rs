@@ -67,12 +67,16 @@ pub enum WriteFailure {
 }
 
 impl WriteFailure {
+    #[provenance_macros::rule("rule_ownership_refusal_names_owner")]
     pub(crate) fn record_ownership_conflict(owner: Option<&str>) -> Self {
         let message = owner.map_or_else(
             || "This is a manual record; omit --declared-by.".to_owned(),
             |owner| format!("Record owner: {owner}; set --declared-by to {owner} when you act for them, or ask the owner to make the change."),
         );
-        Self::RecordOwnershipConflict { owner: owner.map(str::to_owned), message }
+        Self::RecordOwnershipConflict {
+            owner: owner.map(str::to_owned),
+            message,
+        }
     }
 }
 

@@ -112,8 +112,15 @@ impl Invocation {
         let matches = match command.clone().try_get_matches_from(arguments.clone()) {
             Ok(matches) => matches,
             Err(error) if error.kind() == clap::error::ErrorKind::DisplayHelp => {
-                let selection = command.clone().disable_help_flag(true).ignore_errors(true)
-                    .get_matches_from(arguments.into_iter().filter(|arg| arg != "--help" && arg != "-h"));
+                let selection = command
+                    .clone()
+                    .disable_help_flag(true)
+                    .ignore_errors(true)
+                    .get_matches_from(
+                        arguments
+                            .into_iter()
+                            .filter(|arg| arg != "--help" && arg != "-h"),
+                    );
                 catalog_cli::print_target_help(
                     command,
                     selection.get_one::<TargetVerb>("action").copied(),

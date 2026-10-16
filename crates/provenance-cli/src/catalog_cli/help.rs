@@ -12,6 +12,7 @@ use std::fmt::Write as _;
 
 mod schema;
 
+#[provenance_macros::rule("rule_create_help_accepted_fields")]
 pub(super) fn target(
     mut command: clap::Command,
     action: Option<crate::invocation::grammar::TargetVerb>,
@@ -23,8 +24,12 @@ pub(super) fn target(
     if let Some(TargetVerb::Action(action)) = action {
         if catalog::TargetAction::RECORD.contains(&action) {
             let needs_type = action == catalog::TargetAction::Create && kind.is_none();
-            let mut allowed = super::COMMON.iter().copied().chain(["stdin", "help"])
-                .map(str::to_owned).collect::<BTreeSet<_>>();
+            let mut allowed = super::COMMON
+                .iter()
+                .copied()
+                .chain(["stdin", "help"])
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>();
             if action == catalog::TargetAction::Create {
                 allowed.insert("record_type".into());
             }

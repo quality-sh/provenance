@@ -285,6 +285,7 @@ async fn global_search_denial_hides_and_refuses_named_search() {
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_search_refusal_names_query", examples)]
 async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
     let repository = Repository::new("The shared graph is searchable.");
     let host = StatementHost::with_fixture_access(access(&repository));
@@ -294,7 +295,11 @@ async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
     let result = call(&client, json!({})).await;
     assert_eq!(result.is_error, Some(true));
     let message = &result.content[0].as_text().unwrap().text;
-    for text in ["search requires text or at least one filter", "provenance search --text <query>", "provenance search --kind <kind>"] {
+    for text in [
+        "search requires text or at least one filter",
+        "provenance search --text <query>",
+        "provenance search --kind <kind>",
+    ] {
         assert!(message.contains(text), "{message}");
     }
     client.cancel().await.unwrap();
