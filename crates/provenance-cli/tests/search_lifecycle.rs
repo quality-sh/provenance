@@ -107,19 +107,33 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
     assert_eq!(page["nodes"][3]["status"], "answered");
 
     let stamp = r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#;
-    for id in ["rule_search", "question_search"] {
-        run(
-            repo,
-            &[
-                id,
-                "update",
-                "--status",
-                "archived",
-                "--archived-in-commit-json",
-                stamp,
-            ],
-        );
-    }
+    run(
+        repo,
+        &[
+            "rule_search",
+            "update",
+            "--status",
+            "archived",
+            "--archived-in-commit-json",
+            stamp,
+        ],
+    );
+    let current: Value =
+        serde_json::from_str(&run(repo, &["api", "questions/question_search"])).unwrap();
+    let etag = current["data"]["edit"]["etag"].as_str().unwrap();
+    run(
+        repo,
+        &[
+            "question_search",
+            "update",
+            "--if-match",
+            etag,
+            "--status",
+            "archived",
+            "--archived-in-commit-json",
+            stamp,
+        ],
+    );
     let readable = run(repo, &["search"]);
     assert!(!readable.contains("rule_search"), "{readable}");
     assert!(!readable.contains("question_search"), "{readable}");
