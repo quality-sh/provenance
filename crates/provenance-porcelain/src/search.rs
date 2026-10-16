@@ -77,20 +77,46 @@ pub fn render_readable(response: &QueryResponse<SearchResult>) -> String {
 
 /// Names the stored lifecycle state in shared readable search output.
 #[rule("rule_search_readable_lifecycle")]
-fn lifecycle_suffix(node: &GraphNode) -> String {
-    let status = match node {
-        GraphNode::Requirement(record) => serde_json::to_value(&record.status),
-        GraphNode::Resolution(record) => serde_json::to_value(&record.status),
-        GraphNode::Rule(record) => serde_json::to_value(&record.status),
-        GraphNode::Topic(record) => serde_json::to_value(record.status),
-        GraphNode::Question(record) => serde_json::to_value(record.status),
-        GraphNode::Source(_) | GraphNode::Domain(_) | GraphNode::Boundary(_) => {
-            return String::new()
-        }
+fn lifecycle_suffix(node: &GraphNode) -> &'static str {
+    use provenance_core::model::{
+        QuestionStatus, RequirementStatus, ResolutionStatus, RuleStatus, TopicStatus,
+    };
+    match node {
+        GraphNode::Requirement(record) => match record.status {
+            RequirementStatus::Active => " · active",
+            RequirementStatus::Discovery => " · discovery",
+            RequirementStatus::Refinement => " · refinement",
+            RequirementStatus::Resolved => " · resolved",
+        },
+        GraphNode::Resolution(record) => match record.status {
+            ResolutionStatus::Draft => " · draft",
+            ResolutionStatus::Review => " · review",
+            ResolutionStatus::Proposed => " · proposed",
+            ResolutionStatus::Approved => " · approved",
+            ResolutionStatus::Rejected => " · rejected",
+            ResolutionStatus::Revised => " · revised",
+            ResolutionStatus::Superseded => " · superseded",
+            ResolutionStatus::Abandoned => " · abandoned",
+        },
+        GraphNode::Rule(record) => match record.status {
+            RuleStatus::Draft => " · draft",
+            RuleStatus::Review => " · review",
+            RuleStatus::Active => " · active",
+            RuleStatus::Deprecated => " · deprecated",
+            RuleStatus::Archived => " · archived",
+        },
+        GraphNode::Topic(record) => match record.status {
+            TopicStatus::Open => " · open",
+            TopicStatus::Explored => " · explored",
+            TopicStatus::Closed => " · closed",
+            TopicStatus::Archived => " · archived",
+        },
+        GraphNode::Question(record) => match record.status {
+            QuestionStatus::Open => " · open",
+            QuestionStatus::BlockedOnHuman => " · blocked_on_human",
+            QuestionStatus::Answered => " · answered",
+            QuestionStatus::Archived => " · archived",
+        },
+        GraphNode::Source(_) | GraphNode::Domain(_) | GraphNode::Boundary(_) => "",
     }
-    .expect("lifecycle status serializes as a wire word");
-    format!(
-        " · {}",
-        status.as_str().expect("lifecycle status is a string")
-    )
 }
