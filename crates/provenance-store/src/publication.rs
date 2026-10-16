@@ -92,7 +92,7 @@ fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String
                     .publication_lock_path()
                     .to_string());
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => {
                 return Err(error)
                     .with_context(|| format!("resolve repository path {}", layout.root()));
