@@ -110,11 +110,15 @@ impl Invocation {
     #[provenance_macros::rule("rule_record_help_exits_before_validation")]
     fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
         let command = catalog_cli::target_command()?;
-        let matches = match command.clone().try_get_matches_from(arguments.clone()) {
-            Ok(matches) => matches,
+        let help_command = command.clone().mut_arg("record_type", |arg| {
+            arg.value_parser(clap::builder::StringValueParser::new())
+        });
+        let matches = match help_command.clone().try_get_matches_from(arguments.clone()) {
+            Ok(_) => command
+                .try_get_matches_from(arguments)
+                .unwrap_or_else(|error| error.exit()),
             Err(error) if error.kind() == clap::error::ErrorKind::DisplayHelp => {
-                let selection = command
-                    .clone()
+                let selection = help_command
                     .disable_help_flag(true)
                     .ignore_errors(true)
                     .get_matches_from(
@@ -125,7 +129,9 @@ impl Invocation {
                 catalog_cli::print_target_help(
                     command,
                     selection.get_one::<TargetVerb>("action").copied(),
-                    selection.get_one::<NodeType>("record_type").copied(),
+                    selection
+                        .get_one::<String>("record_type")
+                        .and_then(|kind| NodeType::parse(kind).ok()),
                 )?;
                 std::process::exit(0);
             }
