@@ -152,6 +152,17 @@ pub(super) fn invoke_resolved<O: Operation>(
 }
 
 fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T, FailureEnvelope> {
+    if O::NAME == "submit-record-review" {
+        let fields = ["source_ids", "evidence_references", "builds_on"];
+        let missing = fields.into_iter().filter(|field| call["request"].get(field).is_none()).collect::<Vec<_>>();
+        if let Some(first) = missing.first() {
+            let guidance = missing.iter().map(|field| format!("{field}: supply --{}-json '[]' or JSON \"{field}\": []", field.replace('_', "-"))).collect::<Vec<_>>().join("; ");
+            return Err(FailureEnvelope::declared(O::NAME, serde_json::json!({
+                "kind":"invalid_input", "field":format!("request.{first}"), "reason":"required",
+                "missing_fields":missing, "message":format!("Required submit fields are missing: {guidance}")
+            }), 400));
+        }
+    }
     serde_path_to_error::deserialize(call.into_deserializer()).map_err(|error| {
         let path = error.path().to_string();
         FailureEnvelope::new(

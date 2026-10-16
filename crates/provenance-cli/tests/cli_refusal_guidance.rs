@@ -112,6 +112,7 @@ fn submit_after_guarded_update_names_the_pending_review_and_withdrawal() {
             "Review",
             "--summary",
             "Review the record.",
+            "--source-ids-json", "[]", "--evidence-references-json", "[]", "--builds-on-json", "[]",
         ],
     );
     assert_eq!(output.status.code(), Some(1));
@@ -229,4 +230,21 @@ fn generic_create_help_asks_for_a_type_before_listing_record_fields() {
         help.contains("provenance <id> create --type <kind> --help"),
         "{help}"
     );
+}
+
+#[test]
+fn submit_names_every_missing_evidence_list_before_pending_conflict() {
+    let (_dir, repo) = init();
+    create_requirement(&repo, "req_missing");
+    for supplied in 0..3 {
+        let mut args = vec!["req_missing", "submit", "--actor", "agent", "--title", "Review", "--summary", "Review the record."];
+        let fields = ["--source-ids-json", "--evidence-references-json", "--builds-on-json"];
+        for field in &fields[..supplied] { args.extend([field, "[]"]); }
+        let output = run(&repo, &args);
+        assert_eq!(output.status.code(), Some(1));
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(error.contains("invalid_input"), "{error}");
+        assert!(!error.contains("review_submission_conflict"), "{error}");
+        for field in &fields[supplied..] { assert!(error.contains(&format!("{field} '[]'")), "{error}"); }
+    }
 }
