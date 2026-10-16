@@ -16,12 +16,11 @@ interface Position {
 interface DocumentFrame extends Position {
   records: unknown[];
   removedIds: string[];
-  continuations: { rootId: string; cursor: string }[];
 }
 export type StateFrame =
   | ({ type: "state" } & DocumentFrame)
   | ({ type: "reset" } & DocumentFrame)
-  | (Position & { type: "disconnected"; continuity: "unknown"; records: []; removedIds: []; continuations: [] })
+  | (Position & { type: "disconnected"; continuity: "unknown"; records: []; removedIds: [] })
   | (Position & { type: "read-error"; continuity: "unknown"; reason: string });
 
 const validate = new Ajv({ strict: false }).compile<StateFrame>(schema);

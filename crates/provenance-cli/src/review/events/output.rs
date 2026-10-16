@@ -12,13 +12,6 @@ pub(in crate::review) enum Continuity {
 }
 
 #[derive(Serialize)]
-pub(in crate::review) struct Continuation {
-    #[serde(rename = "rootId")]
-    pub root_id: String,
-    pub cursor: String,
-}
-
-#[derive(Serialize)]
 pub(in crate::review) struct Document {
     pub epoch: String,
     pub sequence: u64,
@@ -26,7 +19,6 @@ pub(in crate::review) struct Document {
     pub records: Vec<Value>,
     #[serde(rename = "removedIds")]
     pub removed_ids: Vec<String>,
-    pub continuations: Vec<Continuation>,
 }
 
 #[derive(Serialize)]
@@ -61,7 +53,6 @@ impl OutputFrame {
                 continuity: Continuity::Unknown,
                 records: Vec::new(),
                 removed_ids: Vec::new(),
-                continuations: Vec::new(),
             },
         }
     }

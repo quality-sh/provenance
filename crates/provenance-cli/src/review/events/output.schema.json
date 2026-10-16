@@ -9,13 +9,12 @@
     "continuity": {"enum": ["current", "unknown"]},
     "records": {"type": "array"},
     "removedIds": {"type": "array", "items": {"type": "string"}},
-    "continuations": {"type": "array", "items": {"type": "object", "required": ["rootId", "cursor"], "properties": {"rootId": {"type": "string"}, "cursor": {"type": "string"}}, "additionalProperties": false}},
     "reason": {"type": "string", "minLength": 1}
   },
   "additionalProperties": false,
   "oneOf": [
-    {"properties": {"type": {"enum": ["state", "reset"]}}, "required": ["records", "removedIds", "continuations"], "not": {"required": ["reason"]}},
-    {"properties": {"type": {"const": "disconnected"}, "continuity": {"const": "unknown"}, "records": {"maxItems": 0}, "removedIds": {"maxItems": 0}, "continuations": {"maxItems": 0}}, "required": ["records", "removedIds", "continuations"], "not": {"required": ["reason"]}},
-    {"properties": {"type": {"const": "read-error"}, "continuity": {"const": "unknown"}}, "required": ["reason"], "not": {"anyOf": [{"required": ["records"]}, {"required": ["removedIds"]}, {"required": ["continuations"]}]}}
+    {"properties": {"type": {"enum": ["state", "reset"]}}, "required": ["records", "removedIds"], "not": {"required": ["reason"]}},
+    {"properties": {"type": {"const": "disconnected"}, "continuity": {"const": "unknown"}, "records": {"maxItems": 0}, "removedIds": {"maxItems": 0}: {"maxItems": 0}}, "required": ["records", "removedIds"], "not": {"required": ["reason"]}},
+    {"properties": {"type": {"const": "read-error"}, "continuity": {"const": "unknown"}}, "required": ["reason"], "not": {"anyOf": [{"required": ["records"]}, {"required": ["removedIds"]}]}}
   ]
 }

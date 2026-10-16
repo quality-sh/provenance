@@ -20,7 +20,7 @@ async function withFrame(value: unknown) {
     return { status, stdout, error };
   } finally { child.kill(); rmSync(directory, { force: true, recursive: true }); }
 }
-const state = { type: "state", epoch: "host", sequence: 0, continuity: "unknown", records: [], removedIds: [], continuations: [] };
+const state = { type: "state", epoch: "host", sequence: 0, continuity: "unknown", records: [], removedIds: [] };
 
 test("a read error retains its reason without claiming host loss", async () => {
   const value = { type: "read-error", epoch: "host", sequence: 1, continuity: "unknown", reason: "req_test was removed" };
@@ -35,8 +35,3 @@ test("disconnected frames cannot carry saved records", async () => {
   expect(result.error).toContain("Invalid Provenance state frame");
 });
 
-test("continuations must contain a root and cursor", async () => {
-  const result = await withFrame({ ...state, continuations: [42] });
-  expect(result.status).not.toBe(0);
-  expect(result.error).toContain("Invalid Provenance state frame");
-});

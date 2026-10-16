@@ -88,7 +88,6 @@ impl Baseline {
                 },
                 records,
                 removed_ids: removed,
-                continuations: vec![],
             };
             frames.push(if reset {
                 OutputFrame::Reset { document }

@@ -485,7 +485,7 @@ after a reset or sequence gap. Later lines contain only records changed by the
 page action and IDs removed from the current-state baseline. The command collects
 bounded document pages before it emits a line. `--limit` sets the internal read
 page size. Each state or reset line has `type`, `epoch`, `sequence`, `continuity`,
-`records`, `removedIds` and an empty `continuations` array. Records are canonical
+`records` and `removedIds`. Records are canonical
 document entries, including Questions, Threads and Messages.
 
 Reads run in order while the native channel retains later notices. A reset or

@@ -68,7 +68,6 @@ fn follow_collects_bounded_reads_into_one_initial_document() {
     let follow = Follow::with_options(&host, repo.path(), "req_follow", &["--limit", "1"]);
     let page = follow.frame();
     assert_eq!(page["type"], "state");
-    assert_eq!(page["continuations"], serde_json::json!([]));
     let seen = page["records"].to_string();
     assert!(seen.contains("req_follow") && seen.contains("rule_follow"));
     follow.quiet();

@@ -8,7 +8,7 @@ function chunks(...text: string[]) {
     controller.close();
   } }).getReader();
 }
-const state = { type: "state", epoch: "host", sequence: 0, continuity: "unknown", records: [], removedIds: [], continuations: [] };
+const state = { type: "state", epoch: "host", sequence: 0, continuity: "unknown", records: [], removedIds: [] };
 
 // Implementation aid: transport chunks can contain more than one bounded page.
 test("several bounded lines can share a chunk above the line limit", async () => {

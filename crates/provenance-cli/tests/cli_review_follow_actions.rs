@@ -57,7 +57,6 @@ fn review_page_decision_sends_only_the_changed_record_once() {
     assert_eq!(changed["records"].as_array().unwrap().len(), 1);
     assert!(changed["records"].to_string().contains("accepted"));
     assert!(!changed["records"].to_string().contains("rule_unchanged"));
-    assert_eq!(changed["continuations"], json!([]));
     follow.quiet();
     create(
         repo.path(),
