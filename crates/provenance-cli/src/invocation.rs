@@ -108,11 +108,21 @@ impl Invocation {
     }
 
     fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
-        let command = catalog_cli::target_command()?;
+        let command = catalog_cli::target_command()?.disable_help_flag(true).arg(
+            clap::Arg::new("help")
+                .long("help")
+                .short('h')
+                .action(clap::ArgAction::SetTrue),
+        );
+        let help_command = command.clone();
         let matches = command
             .try_get_matches_from(arguments)
             .unwrap_or_else(|error| error.exit());
         let args = TargetArgs::from_matches(&matches);
+        if matches.get_flag("help") {
+            catalog_cli::print_target_help(help_command, args.action, args.record_type)?;
+            std::process::exit(0);
+        }
         if let Some(TargetVerb::Action(action)) = args.action {
             if Action::DISCUSSION.contains(&action) {
                 return Ok(Self::DiscussionTarget(args, action, Box::new(matches)));

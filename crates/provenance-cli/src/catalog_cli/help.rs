@@ -12,6 +12,48 @@ use std::fmt::Write as _;
 
 mod schema;
 
+pub(super) fn target(
+    mut command: clap::Command,
+    action: Option<crate::invocation::grammar::TargetVerb>,
+    kind: Option<provenance_core::NodeType>,
+) -> anyhow::Result<()> {
+    use crate::invocation::grammar::TargetVerb;
+    use provenance_store::operations::catalog;
+
+    if let Some(TargetVerb::Action(action)) = action {
+        if catalog::TargetAction::RECORD.contains(&action) {
+            let mut allowed = [
+                "target", "action", "repo", "scope", "format", "quiet", "stdin", "help",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>();
+            if action == catalog::TargetAction::Create {
+                allowed.insert("record_type".into());
+            }
+            for (_, definition) in catalog::target_definitions(action)
+                .filter(|(registered, _)| kind.is_none_or(|kind| *registered == kind))
+            {
+                for field in fields::declared(definition)? {
+                    if let Source::Body { wire_field, .. } = &field.source {
+                        if wire_field == "id" {
+                            continue;
+                        }
+                        allowed.insert(fields::json_flag(wire_field));
+                    }
+                    allowed.insert(field.name);
+                }
+            }
+            command = command.mut_args(|arg| {
+                let hidden = !allowed.contains(arg.get_id().as_str());
+                arg.hide(hidden)
+            });
+        }
+    }
+    println!("{}", command.render_help());
+    Ok(())
+}
+
 /// Render the help block that lists every registered operation.
 pub(super) fn collection(collection: &str) -> String {
     let mut registrations = address::registrations(collection);

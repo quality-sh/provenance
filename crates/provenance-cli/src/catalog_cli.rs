@@ -84,7 +84,7 @@ pub fn command(collection: &str) -> anyhow::Result<Command> {
     );
     let mut help = help::collection(collection);
     help.push_str(
-        "\n\nFor a bounded view across related record kinds, run:\n  provenance <id> get --view children --depth <N>",
+        "\n\nFor a bounded view across related record kinds, run:\n  provenance <id> --view children --depth N",
     );
     if collection == "questions" {
         help.push_str(help::question_guidance());
@@ -127,6 +127,14 @@ pub fn target_command() -> anyhow::Result<Command> {
             .map(provenance_porcelain::discussion::input_schema),
         &["parent", "discussion_id", "declared_by"],
     )
+}
+
+pub fn print_target_help(
+    command: Command,
+    action: Option<grammar::TargetVerb>,
+    kind: Option<provenance_core::NodeType>,
+) -> anyhow::Result<()> {
+    help::target(command, action, kind)
 }
 
 /// Dispatch one catalog request through the local in-process host.
