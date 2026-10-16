@@ -186,7 +186,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
             crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
             crate::output::print_json(&value)?;
         }
-        Err(failure) => return Err(failure_with_guidance(&host, &failure, &path).await),
+        Err(failure) => return Err(failure_with_guidance(&host, &failure, &path, record_id(&path)).await),
     }
     Ok(())
 }
@@ -228,7 +228,7 @@ pub async fn dispatch_target(
     }
     let mut value = match host.invoke_target(&route, data, headers).await {
         Ok(value) => value,
-        Err(failure) => return Err(failure_with_guidance(&host, &failure, &route.path).await),
+        Err(failure) => return Err(failure_with_guidance(&host, &failure, &route.path, Some(&target)).await),
     };
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
@@ -256,10 +256,11 @@ async fn failure_with_guidance(
     host: &provenance_transport::StatementHost,
     failure: &provenance_core::protocol::failure::ErasedFailure,
     path: &str,
+    target: Option<&str>,
 ) -> anyhow::Error {
     let original = actionable_failure(
         failure,
-        record_id(path),
+        target,
         path.trim_matches('/').split('/').next(),
     );
     let value = serde_json::to_value(failure).unwrap_or_default();
