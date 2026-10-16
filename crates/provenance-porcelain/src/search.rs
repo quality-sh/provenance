@@ -1,5 +1,8 @@
 //! Scope-wide discovery through the canonical search operation.
 
+use provenance_core::model::{
+    QuestionStatus, RequirementStatus, ResolutionStatus, RuleStatus, TopicStatus,
+};
 use provenance_core::protocol::{GraphNode, QueryResponse, SearchQuery, SearchResult};
 use provenance_macros::rule;
 use std::{fmt::Display, future::Future, pin::Pin};
@@ -78,45 +81,62 @@ pub fn render_readable(response: &QueryResponse<SearchResult>) -> String {
 /// Names the stored lifecycle state in shared readable search output.
 #[rule("rule_search_readable_lifecycle")]
 fn lifecycle_suffix(node: &GraphNode) -> &'static str {
-    use provenance_core::model::{
-        QuestionStatus, RequirementStatus, ResolutionStatus, RuleStatus, TopicStatus,
-    };
     match node {
-        GraphNode::Requirement(record) => match record.status {
-            RequirementStatus::Active => " · active",
-            RequirementStatus::Discovery => " · discovery",
-            RequirementStatus::Refinement => " · refinement",
-            RequirementStatus::Resolved => " · resolved",
-        },
-        GraphNode::Resolution(record) => match record.status {
-            ResolutionStatus::Draft => " · draft",
-            ResolutionStatus::Review => " · review",
-            ResolutionStatus::Proposed => " · proposed",
-            ResolutionStatus::Approved => " · approved",
-            ResolutionStatus::Rejected => " · rejected",
-            ResolutionStatus::Revised => " · revised",
-            ResolutionStatus::Superseded => " · superseded",
-            ResolutionStatus::Abandoned => " · abandoned",
-        },
-        GraphNode::Rule(record) => match record.status {
-            RuleStatus::Draft => " · draft",
-            RuleStatus::Review => " · review",
-            RuleStatus::Active => " · active",
-            RuleStatus::Deprecated => " · deprecated",
-            RuleStatus::Archived => " · archived",
-        },
-        GraphNode::Topic(record) => match record.status {
-            TopicStatus::Open => " · open",
-            TopicStatus::Explored => " · explored",
-            TopicStatus::Closed => " · closed",
-            TopicStatus::Archived => " · archived",
-        },
-        GraphNode::Question(record) => match record.status {
-            QuestionStatus::Open => " · open",
-            QuestionStatus::BlockedOnHuman => " · blocked_on_human",
-            QuestionStatus::Answered => " · answered",
-            QuestionStatus::Archived => " · archived",
-        },
+        GraphNode::Requirement(record) => requirement_suffix(&record.status),
+        GraphNode::Resolution(record) => resolution_suffix(&record.status),
+        GraphNode::Rule(record) => rule_suffix(&record.status),
+        GraphNode::Topic(record) => topic_suffix(&record.status),
+        GraphNode::Question(record) => question_suffix(&record.status),
         GraphNode::Source(_) | GraphNode::Domain(_) | GraphNode::Boundary(_) => "",
+    }
+}
+
+fn requirement_suffix(status: &RequirementStatus) -> &'static str {
+    match status {
+        RequirementStatus::Active => " · active",
+        RequirementStatus::Discovery => " · discovery",
+        RequirementStatus::Refinement => " · refinement",
+        RequirementStatus::Resolved => " · resolved",
+    }
+}
+
+fn resolution_suffix(status: &ResolutionStatus) -> &'static str {
+    match status {
+        ResolutionStatus::Draft => " · draft",
+        ResolutionStatus::Review => " · review",
+        ResolutionStatus::Proposed => " · proposed",
+        ResolutionStatus::Approved => " · approved",
+        ResolutionStatus::Rejected => " · rejected",
+        ResolutionStatus::Revised => " · revised",
+        ResolutionStatus::Superseded => " · superseded",
+        ResolutionStatus::Abandoned => " · abandoned",
+    }
+}
+
+fn rule_suffix(status: &RuleStatus) -> &'static str {
+    match status {
+        RuleStatus::Draft => " · draft",
+        RuleStatus::Review => " · review",
+        RuleStatus::Active => " · active",
+        RuleStatus::Deprecated => " · deprecated",
+        RuleStatus::Archived => " · archived",
+    }
+}
+
+fn topic_suffix(status: &TopicStatus) -> &'static str {
+    match status {
+        TopicStatus::Open => " · open",
+        TopicStatus::Explored => " · explored",
+        TopicStatus::Closed => " · closed",
+        TopicStatus::Archived => " · archived",
+    }
+}
+
+fn question_suffix(status: &QuestionStatus) -> &'static str {
+    match status {
+        QuestionStatus::Open => " · open",
+        QuestionStatus::BlockedOnHuman => " · blocked_on_human",
+        QuestionStatus::Answered => " · answered",
+        QuestionStatus::Archived => " · archived",
     }
 }
