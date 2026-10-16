@@ -597,8 +597,7 @@ order while busy and group on the next turn. Policy can silently drop an event.
 These are [Claude Code channel limits](https://code.claude.com/docs/en/channels-reference).
 
 `bun test tools/agent-notifications/test/claude.test.ts` checks the public MCP
-transport against the real host and CLI stream. The Cargo shim can run this test
-through `cli_agent_notifications`. For model-visible evidence, run
+transport against the real host and CLI stream. For model-visible evidence, run
 `PROVENANCE_TEST_BIN=/absolute/provenance bun test tools/agent-notifications/test/claude-session.test.ts`
 on a Linux host with `script`, an authenticated Claude account, and development
 channels permitted by account policy. This separate interactive check uses the
