@@ -149,7 +149,7 @@ fn readable_search_renders_records_continuation_and_freshness() {
         render_readable(&page),
         concat!(
             "search: 2 returned\n",
-            "- requirement req_one\n  First requirement statement.\n",
+            "- requirement req_one · active\n  First requirement statement.\n",
             "- source source_two\n  Source archive\n",
             "bounds: limit=2 has_more=true continuation=cursor-two\n",
             "warning: freshness: projection is stale"
