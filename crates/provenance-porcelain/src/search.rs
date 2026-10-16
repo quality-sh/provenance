@@ -80,18 +80,18 @@ pub fn render_readable(response: &QueryResponse<SearchResult>) -> String {
 
 /// Names the stored lifecycle state in shared readable search output.
 #[rule("rule_search_readable_lifecycle")]
-fn lifecycle_suffix(node: &GraphNode) -> &'static str {
+const fn lifecycle_suffix(node: &GraphNode) -> &'static str {
     match node {
         GraphNode::Requirement(record) => requirement_suffix(&record.status),
         GraphNode::Resolution(record) => resolution_suffix(&record.status),
         GraphNode::Rule(record) => rule_suffix(&record.status),
-        GraphNode::Topic(record) => topic_suffix(&record.status),
-        GraphNode::Question(record) => question_suffix(&record.status),
+        GraphNode::Topic(record) => topic_suffix(record.status),
+        GraphNode::Question(record) => question_suffix(record.status),
         GraphNode::Source(_) | GraphNode::Domain(_) | GraphNode::Boundary(_) => "",
     }
 }
 
-fn requirement_suffix(status: &RequirementStatus) -> &'static str {
+const fn requirement_suffix(status: &RequirementStatus) -> &'static str {
     match status {
         RequirementStatus::Active => " · active",
         RequirementStatus::Discovery => " · discovery",
@@ -100,7 +100,7 @@ fn requirement_suffix(status: &RequirementStatus) -> &'static str {
     }
 }
 
-fn resolution_suffix(status: &ResolutionStatus) -> &'static str {
+const fn resolution_suffix(status: &ResolutionStatus) -> &'static str {
     match status {
         ResolutionStatus::Draft => " · draft",
         ResolutionStatus::Review => " · review",
@@ -113,7 +113,7 @@ fn resolution_suffix(status: &ResolutionStatus) -> &'static str {
     }
 }
 
-fn rule_suffix(status: &RuleStatus) -> &'static str {
+const fn rule_suffix(status: &RuleStatus) -> &'static str {
     match status {
         RuleStatus::Draft => " · draft",
         RuleStatus::Review => " · review",
@@ -123,7 +123,7 @@ fn rule_suffix(status: &RuleStatus) -> &'static str {
     }
 }
 
-fn topic_suffix(status: &TopicStatus) -> &'static str {
+const fn topic_suffix(status: TopicStatus) -> &'static str {
     match status {
         TopicStatus::Open => " · open",
         TopicStatus::Explored => " · explored",
@@ -132,7 +132,7 @@ fn topic_suffix(status: &TopicStatus) -> &'static str {
     }
 }
 
-fn question_suffix(status: &QuestionStatus) -> &'static str {
+const fn question_suffix(status: QuestionStatus) -> &'static str {
     match status {
         QuestionStatus::Open => " · open",
         QuestionStatus::BlockedOnHuman => " · blocked_on_human",
