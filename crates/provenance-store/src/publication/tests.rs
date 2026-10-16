@@ -310,7 +310,8 @@ fn publication_lock_marker_is_cleared_after_panic() {
     assert!(!layout.publication_marker_path().exists());
 }
 
-// Implementation aid: path aliases must not make a nested write take its own lock.
+// Implementation aid: checks nested publication sections through path aliases.
+// rule_store_under_guard_takes_no_second_lock covers guarded store reads instead.
 #[cfg(unix)]
 #[test]
 fn nested_publication_through_a_repository_alias_completes() {
