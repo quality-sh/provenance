@@ -460,13 +460,9 @@ A canonical document read failure emits `read-error` with `epoch`, `sequence`,
 `continuity: "unknown"` and the read's `reason`, then exits with failure.
 It does not report a lost host. Transport loss still emits `disconnected`.
 
-Native subscriptions receive only changes made through the authenticated review page.
-These include approvals, rejections, Questions, replies and record edits. The host
-marks the page session after it authenticates its cookie. It captures changed
+The host marks the page session after it authenticates its cookie. It captures changed
 record IDs under the publication lock, then sends a native `reviewed` frame.
-A person action means any write through the authenticated review page. An agent
-that drives that page will notify itself. CLI, SDK and MCP writes never notify. The host
-does not route those writes. Browser subscribers retain the file-observation feed.
+Browser subscribers retain the file-observation feed.
 Browser and native subscribers have separate sequences and in-memory channels.
 Each page write reads the whole repository twice while it holds the publication
 lock. The cost increases with repository size. CLI writers wait for this lock.
@@ -549,12 +545,6 @@ stream and App Server. A local inference fixture records the actual model input
 and returns a fixed answer. It does not call an external model. The public
 transcript checks decision, Question and reply delivery. Other tests check busy
 queue order, repository binding, host loss and a deliberately lost response.
-The dedicated Agent notification adapters CI job installs the pinned tools with
-`sfw npm ci` and the committed lockfile. It runs TypeScript checks, the
-wrong-thread mutation check and the client tests. Cargo-shim artifact builds also
-install the pinned tools and run these public adapter tests. Rust tests do not install
-adapter tools. `cargo test --workspace --offline` can use cached Rust dependencies
-without npm, Bun, Codex or a network connection.
 
 The adapter stops its `--follow` child on SIGTERM, SIGINT, normal completion
 and an ordinary process exit. SIGKILL prevents cleanup handlers from running.
@@ -604,7 +594,3 @@ channels permitted by account policy. This separate interactive check uses the
 real Claude session. It checks saved decisions, Questions, replies, busy delivery,
 reset and session closure. It does not run in an unauthenticated CI account.
 
-The Claude channel Rule's model-visible evidence is the separate authenticated
-manual probe. CI checks the public MCP notification contract. CI does not verify
-model processing, busy delivery in a signed-in Claude session, organization policy
-or the development-channel consent flow.
