@@ -309,3 +309,26 @@ fn publication_lock_marker_is_cleared_after_panic() {
 
     assert!(!layout.publication_marker_path().exists());
 }
+
+// Implementation aid: path aliases must not make a nested write take its own lock.
+#[cfg(unix)]
+#[test]
+fn nested_publication_through_a_repository_alias_completes() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("repo");
+    std::fs::create_dir(&root).unwrap();
+    let alias = temporary.path().join("alias");
+    std::os::unix::fs::symlink(&root, &alias).unwrap();
+    let layout = ProvenanceLayout::new(root.to_str().unwrap());
+    let alias = ProvenanceLayout::new(alias.to_str().unwrap());
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let result =
+            with_repository_publication(&layout, || with_repository_publication(&alias, || Ok(())));
+        sender.send(result).unwrap();
+    });
+    receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("a nested publication through an alias must complete")
+        .unwrap();
+}
