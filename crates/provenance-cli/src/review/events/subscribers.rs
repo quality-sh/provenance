@@ -92,11 +92,24 @@ impl Subscribers {
 
     /// Routes only writes marked by the authenticated page host to native subscribers.
     #[rule("rule_review_follow_people_only")]
-    pub fn page_changed(&self, mut changes: ReviewChanges) {
+    pub fn page_changed(&self, changes: anyhow::Result<ReviewChanges>) {
         let mut state = self.inner.lock().unwrap();
+        let mut changes = match changes {
+            Ok(changes) => changes,
+            Err(error) => {
+                eprintln!("Review page capture failed; current document reset requested: {error}");
+                state.native_sequence += 1;
+                let _ = state.native.send(Some(Frame::Reset {
+                    epoch: state.epoch.clone(),
+                    sequence: state.native_sequence,
+                    reason: "page-capture-failed".to_owned(),
+                }));
+                return;
+            }
+        };
         changes.scopes.retain(|scope| scope.scope == state.scope);
         if changes.configuration_changed {
-            Self::reset_locked(&mut state, "page-capture-failed");
+            Self::reset_locked(&mut state, "configuration-changed");
         } else if !changes.scopes.is_empty() {
             state.native_sequence += 1;
             let _ = state.native.send(Some(Frame::Reviewed {
