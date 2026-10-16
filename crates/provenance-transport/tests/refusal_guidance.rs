@@ -68,6 +68,7 @@ async fn mcp_ownership_refusal_preserves_owner_and_guidance() {
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_submit_refusal_names_missing_lists", examples)]
 async fn mcp_submit_names_all_missing_lists_before_store_checks() {
     let repository = Repository::new("The shared graph is readable.");
     let host = support::resource_http::host(&repository, true);

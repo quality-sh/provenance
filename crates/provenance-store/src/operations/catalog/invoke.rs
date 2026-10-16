@@ -151,6 +151,7 @@ pub(super) fn invoke_resolved<O: Operation>(
     })
 }
 
+#[provenance_macros::rule("rule_submit_refusal_names_missing_lists")]
 fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T, FailureEnvelope> {
     if O::NAME == "submit-record-review" {
         let fields = ["source_ids", "evidence_references", "builds_on"];

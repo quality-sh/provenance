@@ -107,6 +107,7 @@ impl Invocation {
         Self::parse_target(arguments)
     }
 
+    #[provenance_macros::rule("rule_record_help_exits_before_validation")]
     fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
         let command = catalog_cli::target_command()?;
         let matches = match command.clone().try_get_matches_from(arguments.clone()) {

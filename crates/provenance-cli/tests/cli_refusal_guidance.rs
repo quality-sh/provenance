@@ -257,6 +257,7 @@ fn generic_create_help_asks_for_a_type_before_listing_record_fields() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_record_help_exits_before_validation", examples)]
 fn help_exits_before_other_input_validation() {
     for args in [
         vec!["req_x", "--follow", "--help"],
@@ -270,6 +271,7 @@ fn help_exits_before_other_input_validation() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_submit_refusal_names_missing_lists", examples)]
 fn submit_names_every_missing_evidence_list_before_pending_conflict() {
     let (_dir, repo) = init();
     create_requirement(&repo, "req_missing");
