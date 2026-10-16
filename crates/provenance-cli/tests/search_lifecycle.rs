@@ -15,23 +15,7 @@ fn run(repo: &str, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-// Regression evidence for the reported search fault; no graph Rule was added.
-#[test]
-fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
-    let directory = tempfile::tempdir().unwrap();
-    let repo = directory.path().to_str().unwrap();
-    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
-        .args([
-            "init",
-            "--path",
-            repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
-        .assert()
-        .success();
+fn seed(repo: &str) {
     run(
         repo,
         &[
@@ -92,6 +76,26 @@ fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
             "Use the current state.",
         ],
     );
+}
+
+// Regression evidence for the reported search fault; no graph Rule was added.
+#[test]
+fn search_shows_lifecycle_and_keeps_archived_records_hidden() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+        .args([
+            "init",
+            "--path",
+            repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
+        .assert()
+        .success();
+    seed(repo);
 
     let readable = run(repo, &["search", "--text", "search"]);
     for expected in [

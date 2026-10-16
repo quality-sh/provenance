@@ -289,7 +289,7 @@ async fn global_search_denial_hides_and_refuses_named_search() {
 async fn mcp_search_shows_each_record_lifecycle() {
     let repository = Repository::new("The shared graph is searchable.");
     repository.all_kinds();
-    let host = StatementHost::with_fixture_access(access(&repository));
+    let host = StatementHost::with_fixture_access(access(&repository).allow_writes());
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
