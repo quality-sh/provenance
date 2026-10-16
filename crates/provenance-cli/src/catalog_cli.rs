@@ -106,19 +106,9 @@ pub fn target_command() -> anyhow::Result<Command> {
     let command = fields::augment_with_overrides(
         grammar::target_command(),
         definitions,
-        &[
-            "repo",
-            "scope",
-            "format",
-            "quiet",
-            "type",
-            "view",
-            "depth",
-            "kind",
-            "limit",
-            "review_link",
-            "stdin",
-        ],
+        &COMMON.iter().copied().chain([
+            "type", "view", "depth", "kind", "limit", "review_link", "stdin",
+        ]).collect::<Vec<_>>(),
         &[],
     )?;
     fields::augment_schemas(
@@ -302,8 +292,7 @@ fn actionable_failure(
     anyhow::anyhow!(message)
 }
 
-pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
-    const COMMON: &[&str] = &[
+pub(super) const COMMON: &[&str] = &[
         "repo",
         "scope",
         "format",
@@ -315,6 +304,8 @@ pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
         "command",
         "discussion_id",
     ];
+
+pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
     for id in matches.ids() {
         let name = id.as_str();
         if matches.value_source(name) != Some(ValueSource::CommandLine) {

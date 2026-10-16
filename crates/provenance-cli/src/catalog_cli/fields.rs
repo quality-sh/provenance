@@ -17,6 +17,18 @@ pub(super) enum Source {
     },
 }
 
+/// Accepted flag names for validation and operation help.
+pub(super) fn accepted_flags(declared: &[Field]) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    for field in declared {
+        names.insert(field.name.clone());
+        if let Source::Body { wire_field, .. } = &field.source {
+            names.insert(json_flag(wire_field));
+        }
+    }
+    names
+}
+
 pub(super) fn declared(definition: &Definition) -> anyhow::Result<Vec<Field>> {
     let mut fields = Vec::new();
     let mut names = BTreeSet::new();

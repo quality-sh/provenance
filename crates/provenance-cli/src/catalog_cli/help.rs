@@ -23,28 +23,18 @@ pub(super) fn target(
     if let Some(TargetVerb::Action(action)) = action {
         if catalog::TargetAction::RECORD.contains(&action) {
             let needs_type = action == catalog::TargetAction::Create && kind.is_none();
-            let mut allowed = [
-                "target", "action", "repo", "scope", "format", "quiet", "stdin", "help",
-            ]
-            .into_iter()
-            .map(str::to_owned)
-            .collect::<BTreeSet<_>>();
+            let mut allowed = super::COMMON.iter().copied().chain(["stdin", "help"])
+                .map(str::to_owned).collect::<BTreeSet<_>>();
             if action == catalog::TargetAction::Create {
                 allowed.insert("record_type".into());
             }
             for (_, definition) in catalog::target_definitions(action).filter(|(registered, _)| {
                 !needs_type && kind.is_none_or(|kind| *registered == kind)
             }) {
-                for field in fields::declared(definition)? {
-                    if let Source::Body { wire_field, .. } = &field.source {
-                        if wire_field == "id" {
-                            continue;
-                        }
-                        allowed.insert(fields::json_flag(wire_field));
-                    }
-                    allowed.insert(field.name);
-                }
+                allowed.extend(fields::accepted_flags(&fields::declared(definition)?));
             }
+            allowed.remove("id");
+            allowed.remove("id-json");
             command = command.mut_args(|arg| {
                 let hidden = !allowed.contains(arg.get_id().as_str());
                 arg.hide(hidden)
