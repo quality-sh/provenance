@@ -9,6 +9,16 @@ use std::{
     time::Duration,
 };
 
+/// Starts a public subscription and consumes its initial document.
+pub fn setup() -> (tempfile::TempDir, Host, Follow, Value) {
+    let repo = super::repository_with_actors(&["reviewer"]);
+    create(repo.path(), "req_follow", "requirement", &[]);
+    let host = super::start(repo.path());
+    let follow = Follow::start(&host, repo.path(), "req_follow");
+    let initial = follow.frame();
+    (repo, host, follow, initial)
+}
+
 pub struct Follow {
     pub child: Child,
     lines: mpsc::Receiver<String>,
