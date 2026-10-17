@@ -52,8 +52,14 @@ fn scan_command(repo: &Path) -> Value {
 #[test]
 fn issue_442_finds_both_typescript_annotations() {
     let report = scan(&[
-        ("src/a.ts", include_str!("fixtures/coverage_regex/src/a.ts.txt")),
-        ("src/b.ts", include_str!("fixtures/coverage_regex/src/b.ts.txt")),
+        (
+            "src/a.ts",
+            include_str!("fixtures/coverage_regex/src/a.ts.txt"),
+        ),
+        (
+            "src/b.ts",
+            include_str!("fixtures/coverage_regex/src/b.ts.txt"),
+        ),
     ]);
     assert_eq!(report["total_annotations"], 2, "{report}");
     assert_eq!(report["warnings"], serde_json::json!([]), "{report}");
