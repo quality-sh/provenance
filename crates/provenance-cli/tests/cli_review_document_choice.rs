@@ -195,20 +195,83 @@ fn equal_distances_use_the_lowest_id_regardless_of_creation_order() {
 #[verifies("rule_review_document_choice", examples)]
 fn a_source_cited_only_by_a_deep_leaf_gets_a_link() {
     let (_directory, repo) = initialized_repo();
-    json_output(&["sources", "create", "--id", "source_leaf", "--name", "Task evidence",
-        "--source-type", "document", "--reference", "https://example.com/task", "--repo", &repo, "--format", "json"]);
+    json_output(&[
+        "sources",
+        "create",
+        "--id",
+        "source_leaf",
+        "--name",
+        "Task evidence",
+        "--source-type",
+        "document",
+        "--reference",
+        "https://example.com/task",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]);
     requirement(&repo, "req_00", None);
     for depth in 1..=12 {
         let id = format!("req_{depth:02}");
         let parent = format!("req_{:02}", depth - 1);
         let extra = vec!["--refines", parent.as_str()];
-        review_host_support::follow::create(std::path::Path::new(&repo), &id, "requirement", &extra);
+        review_host_support::follow::create(
+            std::path::Path::new(&repo),
+            &id,
+            "requirement",
+            &extra,
+        );
     }
-    let record = json_output(&["api", "requirements/req_12", "--repo", &repo, "--format", "json"]);
-    json_output(&["requirements", "req_12", "update", "--repo", &repo,
-        "--if-match", record["data"]["edit"]["etag"].as_str().unwrap(),
-        "--relationships-json", r#"{"cites":[{"source_id":"source_leaf"}]}"#, "--format", "json"]);
+    let record = json_output(&[
+        "api",
+        "requirements/req_12",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]);
+    json_output(&[
+        "requirements",
+        "req_12",
+        "update",
+        "--repo",
+        &repo,
+        "--if-match",
+        record["data"]["edit"]["etag"].as_str().unwrap(),
+        "--relationships-json",
+        r#"{"cites":[{"source_id":"source_leaf"}]}"#,
+        "--format",
+        "json",
+    ]);
     let host = review_host_support::start(std::path::Path::new(&repo));
-    assert_target(&link(&host, &repo, "source_leaf"), "req_12", Some("source_leaf"));
+    assert_target(
+        &link(&host, &repo, "source_leaf"),
+        "req_12",
+        Some("source_leaf"),
+    );
 }
 
+#[test]
+#[verifies("rule_review_document_choice", examples)]
+fn a_rule_naming_root_and_leaf_opens_the_deepest_document() {
+    let (_directory, repo) = initialized_repo();
+    nested(&repo);
+    review_host_support::follow::create(
+        std::path::Path::new(&repo),
+        "rule_shared",
+        "rule",
+        &[
+            "--requirement-id",
+            "req_a_root",
+            "--requirement-id",
+            "req_z_leaf",
+        ],
+    );
+    let host = review_host_support::start(std::path::Path::new(&repo));
+    assert_target(
+        &link(&host, &repo, "rule_shared"),
+        "req_z_leaf",
+        Some("rule_shared"),
+    );
+}

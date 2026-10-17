@@ -42,7 +42,7 @@ pub async fn read_document_answer(
     })
 }
 
-/// Finds review documents in shortest graph distance order, then Requirement ID order.
+/// Returns at most one document: nearest, then deepest, then lowest Requirement ID.
 ///
 /// A Requirement selects its own document. Other graph records must be members,
 /// except Sources and Domains, which the document stores as references.

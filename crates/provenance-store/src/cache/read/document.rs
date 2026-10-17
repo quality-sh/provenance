@@ -113,7 +113,7 @@ fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
 }
 
 impl ReadSnapshot {
-    /// Returns the nearest member document, with Requirement ID order for ties.
+    /// Returns the nearest member document, then prefers depth and Requirement ID.
     /// Sources and Domains remain eligible as document references.
     #[rule("rule_review_document_choice")]
     pub(crate) async fn containing_document_roots(
@@ -136,15 +136,24 @@ impl ReadSnapshot {
                     .iter()
                     .any(|(entry_kind, key)| {
                         let eligible = key.stage == 0
-                            || (key.stage == 1 && matches!(kind, NodeType::Source | NodeType::Domain));
+                            || (key.stage == 1
+                                && matches!(kind, NodeType::Source | NodeType::Domain));
                         eligible && entry_kind == kind.as_str() && key.id == id.as_str()
                     });
                 if contains {
-                    layer.push(root.clone());
+                    let mut tx = self.connection().await;
+                    let depth: i64 = sqlx::query_scalar(
+                        "WITH RECURSIVE ancestors(id) AS (                         SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2                          AND refines IS NOT NULL UNION                          SELECT r.refines FROM ancestors a JOIN requirements r                          ON r.scope_id = ?1 AND r.id = a.id WHERE r.refines IS NOT NULL)                          SELECT COUNT(*) FROM ancestors",
+                    )
+                    .bind(self.scope().as_str())
+                    .bind(root.as_str())
+                    .fetch_one(&mut **tx)
+                    .await?;
+                    layer.push((std::cmp::Reverse(depth), root.clone()));
                 }
             }
             layer.sort();
-            if let Some(root) = layer.into_iter().next() {
+            if let Some((_, root)) = layer.into_iter().next() {
                 return Ok(vec![root]);
             }
             let front = super::front::SqlFront::hop(&self.relations(), &frontier).await?;
