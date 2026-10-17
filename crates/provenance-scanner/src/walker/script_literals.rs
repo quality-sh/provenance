@@ -96,8 +96,7 @@ pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
             }
         }
     }
-    // Only regex spans are replaced, with ASCII spaces of equal
-    // length. Bytes outside those spans retain their original UTF-8 encoding.
+    // Regex spans have ASCII boundaries and are fully replaced, so UTF-8 stays valid.
     (
         String::from_utf8(masked).expect("masked source is UTF-8"),
         warnings,
