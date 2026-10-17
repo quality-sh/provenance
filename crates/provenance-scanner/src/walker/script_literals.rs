@@ -37,8 +37,8 @@ pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
                 let opening_line = line;
                 let quote = bytes[index];
                 let (end, closed) = quoted_end(bytes, index, &mut line);
-                if !closed {
-                    warnings.push(unterminated(opening_line, "string literal"));
+                if !closed && quote == b'`' {
+                    warnings.push(unterminated(opening_line, "template literal"));
                 }
                 index = end;
                 expression_start = false;
