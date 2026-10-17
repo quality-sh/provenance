@@ -149,10 +149,45 @@ fn readable_search_renders_records_continuation_and_freshness() {
         render_readable(&page),
         concat!(
             "search: 2 returned\n",
-            "- requirement req_one\n  First requirement statement.\n",
+            "- requirement req_one · active\n  First requirement statement.\n",
             "- source source_two\n  Source archive\n",
             "bounds: limit=2 has_more=true continuation=cursor-two\n",
             "warning: freshness: projection is stale"
         )
     );
+    for (kind, statuses) in [
+        ("requirement", "active discovery refinement resolved"),
+        (
+            "resolution",
+            "draft review proposed approved rejected revised superseded abandoned",
+        ),
+        ("rule", "draft review active deprecated archived"),
+        ("topic", "open explored closed archived"),
+        ("question", "open blocked_on_human answered archived"),
+    ] {
+        for status in statuses.split_whitespace() {
+            let mut record = serde_json::to_value(&page.result.nodes[0]).unwrap();
+            for (key, value) in [
+                ("node_type", kind),
+                ("status", status),
+                ("requirement_id", "req_parent"),
+                ("topic_id", "topic_parent"),
+                ("title", "Lifecycle record"),
+                ("question", "Which state?"),
+                ("position", "Use the stored state."),
+                ("rationale", "The state selects current work."),
+                ("resolution_method", "research"),
+                ("severity", "medium"),
+            ] {
+                record[key] = serde_json::json!(value);
+            }
+            record["answer"] = serde_json::json!("Use the stored state.");
+            let state_page = response(vec![node(record)], 50, false, None, None);
+            let readable = render_readable(&state_page);
+            assert!(
+                readable.contains(&format!("- {kind} req_one · {status}\n")),
+                "{readable}"
+            );
+        }
+    }
 }
