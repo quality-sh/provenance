@@ -113,7 +113,7 @@ fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
 }
 
 impl ReadSnapshot {
-    /// Returns member documents in distance order, then Requirement ID order.
+    /// Returns the nearest member document, with Requirement ID order for ties.
     /// Sources and Domains remain eligible as document references.
     #[rule("rule_review_document_choice")]
     pub(crate) async fn containing_document_roots(
@@ -122,55 +122,30 @@ impl ReadSnapshot {
         id: &StableId,
     ) -> anyhow::Result<Vec<StableId>> {
         self.attest("requirements");
-        let mut tx = self.connection().await;
-        let root_ids: Vec<String> = sqlx::query_scalar(
-            "SELECT id FROM requirements WHERE scope_id = ? ORDER BY id LIMIT 4097",
-        )
-        .bind(self.scope().as_str())
-        .fetch_all(&mut **tx)
-        .await?;
-        drop(tx);
-        if root_ids.len() > 4096 {
-            return Err(ReadFailure::PageBudgetExceeded.into());
-        }
-        if kind == NodeType::Requirement {
-            return root_ids
-                .into_iter()
-                .filter(|root| root == id.as_str())
-                .map(StableId::new)
-                .collect();
-        }
-        let mut roots = BTreeSet::new();
-        for root in root_ids {
-            let contains = self
-                .document_keys(&root, &Position::default(), 8193, false, &[])
-                .await?
-                .iter()
-                .any(|(entry_kind, key)| {
-                    let eligible = key.stage == 0
-                        || (key.stage == 1 && matches!(kind, NodeType::Source | NodeType::Domain));
-                    eligible && entry_kind == kind.as_str() && key.id == id.as_str()
-                });
-            if contains {
-                roots.insert(root);
-            }
-        }
-        let mut ordered = Vec::new();
         let mut frontier = vec![(kind, id.clone())];
         let mut seen = BTreeSet::from([(kind.rank(), id.as_str().to_owned())]);
-        while !roots.is_empty() && !frontier.is_empty() {
-            let mut layer = frontier
-                .iter()
-                .filter(|(kind, _)| *kind == NodeType::Requirement)
-                .map(|(_, id)| id.as_str().to_owned())
-                .filter(|id| roots.remove(id))
-                .collect::<Vec<_>>();
-            layer.sort();
-            for id in layer {
-                ordered.push(StableId::new(id)?);
+        while !frontier.is_empty() {
+            let mut layer = Vec::new();
+            for (candidate_kind, root) in &frontier {
+                if *candidate_kind != NodeType::Requirement {
+                    continue;
+                }
+                let contains = self
+                    .document_keys(root.as_str(), &Position::default(), 8193, false, &[])
+                    .await?
+                    .iter()
+                    .any(|(entry_kind, key)| {
+                        let eligible = key.stage == 0
+                            || (key.stage == 1 && matches!(kind, NodeType::Source | NodeType::Domain));
+                        eligible && entry_kind == kind.as_str() && key.id == id.as_str()
+                    });
+                if contains {
+                    layer.push(root.clone());
+                }
             }
-            if roots.is_empty() {
-                break;
+            layer.sort();
+            if let Some(root) = layer.into_iter().next() {
+                return Ok(vec![root]);
             }
             let front = super::front::SqlFront::hop(&self.relations(), &frontier).await?;
             let mut next = Vec::new();
@@ -185,22 +160,9 @@ impl ReadSnapshot {
                     }
                 }
             }
-            if seen.len() > 4096 {
-                return Err(ReadFailure::PageBudgetExceeded.into());
-            }
             frontier = next;
         }
-        anyhow::ensure!(
-            roots.is_empty(),
-            "record {} has document members with no path to their Requirement: {}",
-            id.as_str(),
-            roots
-                .iter()
-                .map(|root| format!("{root} (provenance {root} --review-link)"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-        Ok(ordered)
+        Ok(Vec::new())
     }
 
     /// Selects members from the root branch and leaves ancestors in references.

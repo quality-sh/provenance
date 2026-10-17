@@ -7,22 +7,8 @@ use review_host_support::Host;
 use serde_json::Value;
 
 fn requirement(repo: &str, id: &str, parent: Option<&str>) {
-    let mut args = vec![
-        "requirements",
-        "create",
-        "--id",
-        id,
-        "--statement",
-        "The reviewer can read the task.",
-        "--repo",
-        repo,
-        "--format",
-        "json",
-    ];
-    if let Some(parent) = parent {
-        args.extend(["--refines", parent]);
-    }
-    json_output(&args);
+    let extra = parent.map(|id| vec!["--refines", id]).unwrap_or_default();
+    review_host_support::follow::create(std::path::Path::new(repo), id, "requirement", &extra);
 }
 
 fn nested(repo: &str) {
@@ -204,3 +190,25 @@ fn equal_distances_use_the_lowest_id_regardless_of_creation_order() {
         Some("rule_shared"),
     );
 }
+
+#[test]
+#[verifies("rule_review_document_choice", examples)]
+fn a_source_cited_only_by_a_deep_leaf_gets_a_link() {
+    let (_directory, repo) = initialized_repo();
+    json_output(&["sources", "create", "--id", "source_leaf", "--name", "Task evidence",
+        "--source-type", "document", "--reference", "https://example.com/task", "--repo", &repo, "--format", "json"]);
+    requirement(&repo, "req_00", None);
+    for depth in 1..=12 {
+        let id = format!("req_{depth:02}");
+        let parent = format!("req_{:02}", depth - 1);
+        let extra = vec!["--refines", parent.as_str()];
+        review_host_support::follow::create(std::path::Path::new(&repo), &id, "requirement", &extra);
+    }
+    let record = json_output(&["api", "requirements/req_12", "--repo", &repo, "--format", "json"]);
+    json_output(&["requirements", "req_12", "update", "--repo", &repo,
+        "--if-match", record["data"]["edit"]["etag"].as_str().unwrap(),
+        "--relationships-json", r#"{"cites":[{"source_id":"source_leaf"}]}"#, "--format", "json"]);
+    let host = review_host_support::start(std::path::Path::new(&repo));
+    assert_target(&link(&host, &repo, "source_leaf"), "req_12", Some("source_leaf"));
+}
+
