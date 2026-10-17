@@ -15,15 +15,11 @@ fn fresh_init_names_the_explicit_scope() {
 fn reinit_without_scope_keeps_the_single_manifest_scope() {
     let temporary = tempfile::tempdir().unwrap();
     init(temporary.path(), &["--scope", "demo"]);
-    // A corrected managed section must survive initialization without --scope.
     let agents = temporary.path().join("AGENTS.md");
-    let corrected = std::fs::read_to_string(&agents)
-        .unwrap()
-        .replace("--scope default", "--scope demo");
-    std::fs::write(&agents, &corrected).unwrap();
+    let before = std::fs::read_to_string(&agents).unwrap();
     init(temporary.path(), &[]);
     assert_scope(temporary.path(), "demo");
-    assert_eq!(std::fs::read_to_string(agents).unwrap(), corrected);
+    assert_eq!(std::fs::read_to_string(agents).unwrap(), before);
 }
 
 #[test]
