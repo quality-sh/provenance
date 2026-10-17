@@ -30,11 +30,11 @@ it in the same change.
   prints a link. Give the person that link. Never give the person a record ID.
 - In an app that shows web pages, such as Claude Desktop or the Codex app, run
   `{command} <record-id> --review-link --no-open --format json` and open `review_url` in the app.
-- Read the decision and review feedback with `{command} <record-id> get --view review`.
+- Read the decision and review feedback with `{command} <record-id> --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.
 - Receive saved changes while you work with
-  `{command} <requirement-id> get --view review --follow --format json`.
+  `{command} <requirement-id> --view review --follow --format json`.
   The command needs a running review host. It returns current state, not a delivery journal.
   A reset or disconnect means notification continuity is unknown.
 - A guarded update after a rejection opens a new submission unless a reviewer
