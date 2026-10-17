@@ -1,9 +1,11 @@
 //! Root-related key selection. Payload reads use the same bounded snapshot.
 use crate::operations::reader::{Position, ReadSnapshot};
+use provenance_core::model::relations::RelationSource;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use sqlx::Row;
+use std::collections::BTreeSet;
 
 // The recursive term follows only active refinement children. Production
 // and references are separate sets, so a cross-link cannot widen the branch.
@@ -111,7 +113,9 @@ fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
 }
 
 impl ReadSnapshot {
-    /// Returns each Requirement whose canonical document contains the record.
+    /// Returns member documents in distance order, then Requirement ID order.
+    /// Sources and Domains remain eligible as document references.
+    #[rule("rule_review_document_choice")]
     pub(crate) async fn containing_document_roots(
         &self,
         kind: NodeType,
@@ -129,20 +133,73 @@ impl ReadSnapshot {
         if root_ids.len() > 4096 {
             return Err(ReadFailure::PageBudgetExceeded.into());
         }
-        let mut roots = Vec::new();
+        if kind == NodeType::Requirement {
+            return Ok(root_ids
+                .into_iter()
+                .filter(|root| root == id.as_str())
+                .map(StableId::new)
+                .collect::<anyhow::Result<_>>()?);
+        }
+        let mut roots = BTreeSet::new();
         for root in root_ids {
             let contains = self
                 .document_keys(&root, &Position::default(), 8193, false, &[])
                 .await?
                 .iter()
                 .any(|(entry_kind, key)| {
-                    key.stage < 2 && entry_kind == kind.as_str() && key.id == id.as_str()
+                    let eligible = key.stage == 0
+                        || (key.stage == 1 && matches!(kind, NodeType::Source | NodeType::Domain));
+                    eligible && entry_kind == kind.as_str() && key.id == id.as_str()
                 });
             if contains {
-                roots.push(StableId::new(root)?);
+                roots.insert(root);
             }
         }
-        Ok(roots)
+        let mut ordered = Vec::new();
+        let mut frontier = vec![(kind, id.clone())];
+        let mut seen = BTreeSet::from([(kind.rank(), id.as_str().to_owned())]);
+        while !roots.is_empty() && !frontier.is_empty() {
+            let mut layer = frontier
+                .iter()
+                .filter(|(kind, _)| *kind == NodeType::Requirement)
+                .map(|(_, id)| id.as_str().to_owned())
+                .filter(|id| roots.remove(id))
+                .collect::<Vec<_>>();
+            layer.sort();
+            for id in layer {
+                ordered.push(StableId::new(id)?);
+            }
+            if roots.is_empty() {
+                break;
+            }
+            let front = super::front::SqlFront::hop(&self.relations(), &frontier).await?;
+            let mut next = Vec::new();
+            for (kind, id) in &frontier {
+                for (_, endpoint) in front
+                    .outgoing(*kind, id)
+                    .into_iter()
+                    .chain(front.incoming(*kind, id))
+                {
+                    if seen.insert((endpoint.node_type.rank(), endpoint.id.as_str().to_owned())) {
+                        next.push((endpoint.node_type, endpoint.id));
+                    }
+                }
+            }
+            if seen.len() > 4096 {
+                return Err(ReadFailure::PageBudgetExceeded.into());
+            }
+            frontier = next;
+        }
+        anyhow::ensure!(
+            roots.is_empty(),
+            "record {id} has document members with no path to their Requirement: {}",
+            roots
+                .iter()
+                .map(|root| format!("{root} (provenance {root} --review-link)"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        Ok(ordered)
     }
 
     /// Selects members from the root branch and leaves ancestors in references.
