@@ -35,6 +35,7 @@ it in the same change.
   If feedback is truncated, use the continuation commands in the review view.
 - Receive saved changes while you work with
   `{command} <requirement-id> get --view review --follow --format json`.
+  Claude Code: run the follow command with the Monitor tool.
   The command needs a running review host. It returns current state, not a delivery journal.
   A reset or disconnect means notification continuity is unknown.
 - A guarded update after a rejection opens a new submission unless a reviewer
@@ -104,6 +105,7 @@ pub fn project(existing: &[u8], invocation: &Invocation) -> anyhow::Result<Vec<u
 #[rule("rule_init_statement_preflight_guidance")]
 #[rule("rule_init_statement_claim_limit")]
 #[rule("rule_init_canonical_write_path")]
+#[rule("rule_init_follow_monitor_guidance")]
 fn instructions(invocation: &Invocation) -> String {
     INSTRUCTIONS.replace("{command}", invocation.0)
 }

@@ -5,6 +5,20 @@ use {provenance_macros::verifies, std::path::Path};
 #[path = "cli_dictionary/support.rs"]
 #[allow(dead_code)]
 mod dictionary_support;
+
+#[test]
+#[verifies("rule_init_follow_monitor_guidance", examples)]
+fn init_tells_claude_code_to_receive_review_changes_with_monitor() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    init(&repo).success();
+    let agents = read_agents(&repo);
+    assert!(agents.contains("Claude Code: run the follow command with the Monitor tool."));
+    assert!(agents.contains("provenance <requirement-id> get --view review --follow --format json"));
+    init(&repo).success();
+    assert_eq!(read_agents(&repo), agents);
+}
+
 #[test]
 #[verifies("rule_init_installs_bundled_skills", examples)]
 fn init_installs_complete_bundled_skills() {
