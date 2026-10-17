@@ -51,12 +51,14 @@ pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
             }
             b'/' if expression_start => {
                 let (end, closed) = regex_end(bytes, index);
-                if !closed {
-                    warnings.push(unterminated(line, "regular expression literal"));
+                if closed {
+                    masked[index..end].fill(b' ');
+                    masked[index] = b'0';
+                    index = end;
+                } else {
+                    // An unclosed candidate can be division or JSX. Keep its bytes.
+                    index += 1;
                 }
-                masked[index..end].fill(b' ');
-                masked[index] = b'0';
-                index = end;
                 expression_start = false;
                 after_dot = false;
             }
@@ -90,7 +92,7 @@ pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
                 after_dot = false;
             }
             byte => {
-                expression_start = !matches!(byte, b')' | b']' | b'}' | b'.');
+                expression_start = !matches!(byte, b')' | b']' | b'}' | b'.' | b'<');
                 after_dot = byte == b'.';
                 index += 1;
             }
