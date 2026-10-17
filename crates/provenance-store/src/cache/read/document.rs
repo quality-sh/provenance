@@ -154,6 +154,7 @@ impl ReadSnapshot {
                     .bind(root.as_str())
                     .fetch_one(&mut **tx)
                     .await?;
+                    drop(tx);
                     layer.push((std::cmp::Reverse(depth), root.clone()));
                 }
             }
