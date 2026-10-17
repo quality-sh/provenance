@@ -3,18 +3,23 @@ mod review_host_support;
 
 use porcelain_authoring_support::{initialized_repo, json_output, provenance};
 use provenance_macros::verifies;
-use review_host_support::Host;
+use review_host_support::{follow::create, Host};
 use serde_json::Value;
 
-fn requirement(repo: &str, id: &str, parent: Option<&str>) {
-    let extra = parent.map(|id| vec!["--refines", id]).unwrap_or_default();
-    review_host_support::follow::create(std::path::Path::new(repo), id, "requirement", &extra);
-}
-
 fn nested(repo: &str) {
-    requirement(repo, "req_a_root", None);
-    requirement(repo, "req_m_middle", Some("req_a_root"));
-    requirement(repo, "req_z_leaf", Some("req_m_middle"));
+    create(std::path::Path::new(repo), "req_a_root", "requirement", &[]);
+    create(
+        std::path::Path::new(repo),
+        "req_m_middle",
+        "requirement",
+        &["--refines", "req_a_root"],
+    );
+    create(
+        std::path::Path::new(repo),
+        "req_z_leaf",
+        "requirement",
+        &["--refines", "req_m_middle"],
+    );
     json_output(&[
         "topics",
         "create",
@@ -153,7 +158,7 @@ fn nested_write_returns_a_link_without_a_warning() {
 #[verifies("rule_review_document_choice", examples)]
 fn single_requirement_keeps_its_document() {
     let (_directory, repo) = initialized_repo();
-    requirement(&repo, "req_only", None);
+    create(std::path::Path::new(&repo), "req_only", "requirement", &[]);
     let host = review_host_support::start(std::path::Path::new(&repo));
     assert_target(&link(&host, &repo, "req_only"), "req_only", None);
 }
@@ -162,8 +167,8 @@ fn single_requirement_keeps_its_document() {
 #[verifies("rule_review_document_choice", examples)]
 fn equal_distances_use_the_lowest_id_regardless_of_creation_order() {
     let (_directory, repo) = initialized_repo();
-    requirement(&repo, "req_z", None);
-    requirement(&repo, "req_a", None);
+    create(std::path::Path::new(&repo), "req_z", "requirement", &[]);
+    create(std::path::Path::new(&repo), "req_a", "requirement", &[]);
     provenance()
         .args([
             "rules",
@@ -211,17 +216,12 @@ fn a_source_cited_only_by_a_deep_leaf_gets_a_link() {
         "--format",
         "json",
     ]);
-    requirement(&repo, "req_00", None);
+    create(std::path::Path::new(&repo), "req_00", "requirement", &[]);
     for depth in 1..=12 {
         let id = format!("req_{depth:02}");
         let parent = format!("req_{:02}", depth - 1);
         let extra = vec!["--refines", parent.as_str()];
-        review_host_support::follow::create(
-            std::path::Path::new(&repo),
-            &id,
-            "requirement",
-            &extra,
-        );
+        create(std::path::Path::new(&repo), &id, "requirement", &extra);
     }
     let record = json_output(&[
         "api",
@@ -257,7 +257,7 @@ fn a_source_cited_only_by_a_deep_leaf_gets_a_link() {
 fn a_rule_naming_root_and_leaf_opens_the_deepest_document() {
     let (_directory, repo) = initialized_repo();
     nested(&repo);
-    review_host_support::follow::create(
+    create(
         std::path::Path::new(&repo),
         "rule_shared",
         "rule",
@@ -273,5 +273,36 @@ fn a_rule_naming_root_and_leaf_opens_the_deepest_document() {
         &link(&host, &repo, "rule_shared"),
         "req_z_leaf",
         Some("rule_shared"),
+    );
+}
+
+#[test]
+#[verifies("rule_review_document_choice", examples)]
+fn a_nested_resolution_opens_the_leaf_document() {
+    let (_directory, repo) = initialized_repo();
+    nested(&repo);
+    json_output(&[
+        "resolutions",
+        "create",
+        "--id",
+        "res_leaf",
+        "--title",
+        "Keep task evidence",
+        "--position",
+        "The reviewer can read the task.",
+        "--rationale",
+        "The task needs review.",
+        "--requirement-id",
+        "req_z_leaf",
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]);
+    let host = review_host_support::start(std::path::Path::new(&repo));
+    assert_target(
+        &link(&host, &repo, "res_leaf"),
+        "req_z_leaf",
+        Some("res_leaf"),
     );
 }
