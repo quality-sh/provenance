@@ -192,7 +192,8 @@ impl ReadSnapshot {
         }
         anyhow::ensure!(
             roots.is_empty(),
-            "record {id} has document members with no path to their Requirement: {}",
+            "record {} has document members with no path to their Requirement: {}",
+            id.as_str(),
             roots
                 .iter()
                 .map(|root| format!("{root} (provenance {root} --review-link)"))
