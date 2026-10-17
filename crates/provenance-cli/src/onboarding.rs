@@ -90,7 +90,7 @@ pub fn owns_section(existing: &str) -> bool {
 }
 
 /// Selects a declared scope before init plans any project writes.
-pub(super) fn guidance_scope(
+pub fn guidance_scope(
     path: &camino::Utf8Path,
     explicit: Option<&str>,
     manifest: &provenance_core::Manifest,
