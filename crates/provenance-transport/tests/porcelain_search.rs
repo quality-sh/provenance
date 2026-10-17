@@ -334,9 +334,8 @@ async fn mcp_search_shows_each_record_lifecycle() {
     let repository = Repository::new("The shared graph is searchable.");
     repository.all_kinds();
     let host = StatementHost::with_fixture_access(access(&repository).allow_writes());
-    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
-    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
-    let client = ().serve(client_io).await.unwrap();
+    let session = Session::start(host).await;
+    let client = &session.client;
     for (action, target, data) in [
         ("update", "rule_shared", json!({"status":"deprecated"})),
         (
@@ -358,7 +357,7 @@ async fn mcp_search_shows_each_record_lifecycle() {
             .unwrap();
         assert_ne!(updated.is_error, Some(true), "{updated:?}");
     }
-    let result = call(&client, json!({"text":"shared"})).await;
+    let result = call(client, "search", json!({"text":"shared"})).await;
     assert_ne!(result.is_error, Some(true), "{result:?}");
     let readable = &result.content[0].as_text().unwrap().text;
     for expected in [
@@ -379,8 +378,8 @@ async fn mcp_search_shows_each_record_lifecycle() {
         ("question_shared", "blocked_on_human"),
         ("resolution_shared", "review"),
     ] {
-        update_status(&client, target, status).await;
-        let result = call(&client, json!({"text":target})).await;
+        update_status(client, target, status).await;
+        let result = call(client, "search", json!({"text":target})).await;
         let readable = &result.content[0].as_text().unwrap().text;
         assert!(
             readable.contains(&format!("{target} · {status}")),
@@ -404,13 +403,14 @@ async fn mcp_search_shows_each_record_lifecycle() {
         .await
         .unwrap();
     assert_ne!(archived.is_error, Some(true), "{archived:?}");
-    let hidden = call(&client, json!({"node_types":["rule"]})).await;
+    let hidden = call(client, "search", json!({"node_types":["rule"]})).await;
     assert_eq!(
         hidden.structured_content.as_ref().unwrap()["nodes"],
         json!([])
     );
     let included = call(
-        &client,
+        client,
+        "search",
         json!({"node_types":["rule"], "exclude_terminal":false}),
     )
     .await;
@@ -419,6 +419,5 @@ async fn mcp_search_shows_each_record_lifecycle() {
         .unwrap()
         .text
         .contains("rule rule_shared · archived"));
-    client.cancel().await.unwrap();
-    server.await.unwrap().cancel().await.unwrap();
+    session.close().await;
 }
