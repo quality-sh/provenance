@@ -1,7 +1,9 @@
 //! Removes regex contents before the shared comment and binding lexers run.
 use crate::parser::ParseWarning;
+use provenance_macros::rule;
 
 /// Keeps byte offsets and line breaks intact, including source anchor positions.
+#[rule("rule_prov_annot_regex")]
 pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
     let bytes = source.as_bytes();
     let mut masked = bytes.to_vec();

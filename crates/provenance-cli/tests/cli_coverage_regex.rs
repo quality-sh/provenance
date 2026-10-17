@@ -1,5 +1,6 @@
 //! Two-file command regression for GitHub issue #442.
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use serde_json::Value;
 use std::path::Path;
 
@@ -50,6 +51,7 @@ fn scan_command(repo: &Path) -> Value {
 }
 
 #[test]
+#[verifies("rule_prov_annot_regex", examples)]
 fn issue_442_finds_both_typescript_annotations() {
     let report = scan(&[
         (

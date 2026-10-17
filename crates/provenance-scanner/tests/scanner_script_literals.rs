@@ -1,5 +1,6 @@
 //! Public scanner regressions for JavaScript and TypeScript literal handling.
 use camino::Utf8Path;
+use provenance_macros::verifies;
 use provenance_scanner::{scan_file, FileScan, Language};
 
 fn scan(path: &str, source: &str) -> FileScan {
@@ -11,6 +12,7 @@ fn scan(path: &str, source: &str) -> FileScan {
 }
 
 #[test]
+#[verifies("rule_prov_annot_regex", examples)]
 fn regex_quotes_classes_and_escapes_do_not_hide_annotations() {
     for extension in ["ts", "js", "tsx", "jsx"] {
         for expression in [
@@ -62,6 +64,7 @@ fn division_preserves_annotations() {
 }
 
 #[test]
+#[verifies("rule_prov_annot_regex", examples)]
 fn regex_quotes_do_not_turn_template_contents_into_annotations() {
     for literal in [r#"/"/"#, r"/'/", r"/[/]/"] {
         let source = format!(
@@ -78,6 +81,7 @@ fn regex_quotes_do_not_turn_template_contents_into_annotations() {
 }
 
 #[test]
+#[verifies("rule_prov_annot_regex", examples)]
 fn regex_contents_are_not_helper_bindings_or_block_comments() {
     let report = scan(
         "helpers.ts",
@@ -90,6 +94,7 @@ fn regex_contents_are_not_helper_bindings_or_block_comments() {
 }
 
 #[test]
+#[verifies("rule_prov_annot_regex", examples)]
 fn expression_context_allows_regex() {
     for source in [
         "function f() { return /`/; }",
