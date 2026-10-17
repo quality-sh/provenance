@@ -36,7 +36,10 @@ pub enum WriteFailure {
     UnsupportedReviewFeedback {
         record_kind: provenance_core::NodeType,
     },
-    RecordOwnershipConflict,
+    RecordOwnershipConflict {
+        owner: Option<String>,
+        message: String,
+    },
     OwnershipConflict {
         conflicts: Vec<ReconciledResource>,
     },
@@ -61,6 +64,20 @@ pub enum WriteFailure {
     FileUnavailable,
     RecordTooLarge,
     WriteFailed,
+}
+
+impl WriteFailure {
+    #[provenance_macros::rule("rule_ownership_refusal_names_owner")]
+    pub(crate) fn record_ownership_conflict(owner: Option<&str>) -> Self {
+        let message = owner.map_or_else(
+            || "This is a manual record; declared-by claims ownership. CLI: omit --declared-by; MCP: omit data.declared_by.".to_owned(),
+            |owner| format!("Record owner: {owner}; declared-by claims ownership. Set CLI --declared-by or MCP data.declared_by to {owner} when you act for them, or ask the owner to make the change."),
+        );
+        Self::RecordOwnershipConflict {
+            owner: owner.map(str::to_owned),
+            message,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -162,7 +179,7 @@ impl WriteError {
             WriteFailure::FileAccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
             WriteFailure::ResourceNotFound => 404,
-            WriteFailure::RecordOwnershipConflict
+            WriteFailure::RecordOwnershipConflict { .. }
             | WriteFailure::AlreadyExists
             | WriteFailure::OwnershipConflict { .. }
             | WriteFailure::EnrolledRecordDeletionConflict { .. }

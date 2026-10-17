@@ -151,7 +151,42 @@ pub(super) fn invoke_resolved<O: Operation>(
     })
 }
 
+#[provenance_macros::rule("rule_submit_refusal_names_missing_lists")]
 fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T, FailureEnvelope> {
+    #[cfg(feature = "schema")]
+    {
+        let schema = super::operation_request_schema::<O>();
+        let missing = schema["required"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .filter(|field| {
+                schema["properties"][*field]["type"] == "array"
+                    && call["request"].get(*field).is_none()
+            })
+            .collect::<Vec<_>>();
+        if let Some(first) = missing.first() {
+            let guidance = missing
+                .iter()
+                .map(|field| {
+                    format!(
+                        "{field}: supply --{} '[]' or JSON \"{field}\": []",
+                        super::schema::json_flag(field)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(FailureEnvelope::declared(
+                O::NAME,
+                serde_json::json!({
+                    "kind":"invalid_input", "field":format!("request.{first}"), "reason":"required",
+                    "missing_fields":missing, "message":format!("Required list fields are missing: {guidance}")
+                }),
+                400,
+            ));
+        }
+    }
     serde_path_to_error::deserialize(call.into_deserializer()).map_err(|error| {
         let path = error.path().to_string();
         FailureEnvelope::new(

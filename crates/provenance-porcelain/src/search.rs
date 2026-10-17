@@ -14,7 +14,9 @@ pub type PortFuture<'a> =
 /// A failure from search validation, authorization, or the canonical operation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SearchError {
-    InvalidOptions,
+    InvalidOptions {
+        reason: String,
+    },
     AccessDenied,
     Operation {
         message: String,
@@ -23,9 +25,10 @@ pub enum SearchError {
 }
 
 impl Display for SearchError {
+    #[provenance_macros::rule("rule_search_refusal_names_query")]
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidOptions => formatter.write_str("unsupported search options"),
+            Self::InvalidOptions { reason } => write!(formatter, "{reason}; run `provenance search --text <query>` or `provenance search --kind <kind>`; MCP JSON: {{\"text\": \"<query>\"}} or {{\"node_types\": [\"<kind>\"]}}"),
             Self::AccessDenied => formatter.write_str("search access denied"),
             Self::Operation { message, .. } => formatter.write_str(message),
         }
@@ -47,7 +50,9 @@ impl<P: SearchPort> crate::Porcelain<P> {
     ) -> Result<QueryResponse<SearchResult>, SearchError> {
         request
             .validate()
-            .map_err(|_| SearchError::InvalidOptions)?;
+            .map_err(|error| SearchError::InvalidOptions {
+                reason: error.to_string(),
+            })?;
         self.port.search(request).await
     }
 }
