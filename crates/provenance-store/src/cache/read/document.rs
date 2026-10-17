@@ -157,7 +157,11 @@ impl ReadSnapshot {
                     layer.push((std::cmp::Reverse(depth), root.clone()));
                 }
             }
-            layer.sort();
+            layer.sort_by(|(depth_a, id_a), (depth_b, id_b)| {
+                depth_a
+                    .cmp(depth_b)
+                    .then_with(|| id_a.as_str().cmp(id_b.as_str()))
+            });
             if let Some((_, root)) = layer.into_iter().next() {
                 return Ok(vec![root]);
             }
