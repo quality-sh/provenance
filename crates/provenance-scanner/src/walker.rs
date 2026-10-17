@@ -16,6 +16,7 @@ mod bounded;
 mod bounded_tests;
 mod ignore;
 mod rust_lines;
+mod script_literals;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum Language {
@@ -149,7 +150,7 @@ fn is_ignored_directory(entry: &walkdir::DirEntry) -> bool {
 /// channels.
 pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> FileScan {
     if matches!(language, Language::JavaScript | Language::TypeScript) {
-        let (lexical_content, warnings) = crate::script_literals::mask_regex_literals(content);
+        let (lexical_content, warnings) = script_literals::mask_regex_literals(content);
         let mut scan = scan_file_contents(file_path, language, content, &lexical_content);
         scan.warnings.splice(0..0, warnings);
         scan

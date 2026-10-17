@@ -5,7 +5,6 @@ mod binding_lexer;
 mod coverage;
 mod coverage_anchors;
 mod rule_evidence;
-mod script_literals;
 mod site;
 
 pub mod parser;
