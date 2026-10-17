@@ -150,8 +150,14 @@ fn is_ignored_directory(entry: &walkdir::DirEntry) -> bool {
 pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> FileScan {
     let mut annotations = Vec::new();
     let mut bindings = Vec::new();
-    let mut warnings = Vec::new();
-    let lines = content.lines().collect::<Vec<_>>();
+    let (lexical_content, mut warnings) =
+        if matches!(language, Language::JavaScript | Language::TypeScript) {
+            crate::script_literals::mask_regex_literals(content)
+        } else {
+            (content.to_owned(), Vec::new())
+        };
+    let original_lines = content.lines().collect::<Vec<_>>();
+    let lines = lexical_content.lines().collect::<Vec<_>>();
     let rust_states = rust_line_states(language, &lines);
     let mut idx = 0;
     let mut in_block_comment = false;
@@ -183,7 +189,7 @@ pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> Fil
             bindings.push(AttributeBinding {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
-                anchor: EvidenceAnchor::new(item_name.clone(), lines[idx]),
+                anchor: EvidenceAnchor::new(item_name.clone(), original_lines[idx]),
                 item_name,
                 rule_id: binding.rule_id,
                 verification: binding.verification,
@@ -225,7 +231,7 @@ pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> Fil
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
                 function_name: function_name.clone(),
-                anchor: EvidenceAnchor::new(function_name.clone(), lines[idx]),
+                anchor: EvidenceAnchor::new(function_name.clone(), original_lines[idx]),
                 annotation,
             });
         }
