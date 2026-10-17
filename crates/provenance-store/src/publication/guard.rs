@@ -86,7 +86,7 @@ pub fn with_publication_guard<R>(
 /// The blocking wait runs on the blocking pool. Pending-publication recovery
 /// runs before the caller sees the guard.
 pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<PublicationGuard> {
-    let key = layout.publication_lock_path().to_string();
+    let key = super::publication_lock_identity(layout)?;
     if read_only::active(&key) {
         return Ok(PublicationGuard {
             _lock: None,
