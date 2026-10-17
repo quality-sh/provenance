@@ -2,7 +2,7 @@
 use crate::parser::ParseWarning;
 use provenance_macros::rule;
 
-/// Keeps byte offsets and line breaks intact, including source anchor positions.
+/// Keeps regex contents out of string and comment scans without moving source anchors.
 #[rule("rule_prov_annot_regex")]
 pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
     let bytes = source.as_bytes();
@@ -53,7 +53,7 @@ pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
                     break;
                 }
             }
-            b'/' if expression_start => {
+            b'/' if expression_start && (index == 0 || bytes[index - 1] != b'<') => {
                 let (end, closed) = regex_end(bytes, index);
                 if closed {
                     masked[index..end].fill(b' ');
@@ -96,7 +96,7 @@ pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
                 after_dot = false;
             }
             byte => {
-                expression_start = !matches!(byte, b')' | b']' | b'}' | b'.' | b'<');
+                expression_start = !matches!(byte, b')' | b']' | b'}' | b'.');
                 after_dot = byte == b'.';
                 index += 1;
             }

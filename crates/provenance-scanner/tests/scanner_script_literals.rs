@@ -1,4 +1,6 @@
 //! Public scanner regressions for JavaScript and TypeScript literal handling.
+//! Unbound examples pin existing language gates, division, JSX, and incomplete
+//! literal behavior; the shebang example checks the requested lexical correction.
 use camino::Utf8Path;
 use provenance_macros::verifies;
 use provenance_scanner::{scan_file, FileScan, Language};
