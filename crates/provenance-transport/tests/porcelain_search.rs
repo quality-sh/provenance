@@ -1,5 +1,7 @@
 #![cfg(feature = "test-fixture")]
 
+use provenance_macros::verifies;
+
 mod support {
     pub mod records;
 }
@@ -280,6 +282,137 @@ async fn global_search_denial_hides_and_refuses_named_search() {
 
     assert_search_hidden_and_refused(&client).await;
 
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+async fn update_status(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    target: &str,
+    status: &str,
+) {
+    let mut arguments = json!({"target":target,"data":{"status":status}});
+    if let Some(collection) = match target {
+        "question_shared" => Some("questions"),
+        "topic_shared" => Some("topics"),
+        _ => None,
+    } {
+        let current = client
+            .call_tool(
+                CallToolRequestParams::new("api").with_arguments(
+                    json!({"path":format!("{collection}/{target}")})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                ),
+            )
+            .await
+            .unwrap();
+        assert_ne!(current.is_error, Some(true), "{current:?}");
+        arguments["if_match"] =
+            current.structured_content.as_ref().unwrap()["data"]["edit"]["etag"].clone();
+    }
+    let updated = client
+        .call_tool(
+            CallToolRequestParams::new("update")
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap();
+    assert_ne!(updated.is_error, Some(true), "{target}: {updated:?}");
+}
+
+#[tokio::test]
+#[verifies("rule_search_readable_lifecycle", examples)]
+async fn mcp_search_shows_each_record_lifecycle() {
+    let repository = Repository::new("The shared graph is searchable.");
+    repository.all_kinds();
+    let host = StatementHost::with_fixture_access(access(&repository).allow_writes());
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    for (action, target, data) in [
+        ("update", "rule_shared", json!({"status":"deprecated"})),
+        (
+            "answer",
+            "question_shared",
+            json!({"answer":"Use the current state."}),
+        ),
+    ] {
+        let updated = client
+            .call_tool(
+                CallToolRequestParams::new(action).with_arguments(
+                    json!({"target":target,"data":data})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                ),
+            )
+            .await
+            .unwrap();
+        assert_ne!(updated.is_error, Some(true), "{updated:?}");
+    }
+    let result = call(&client, json!({"text":"shared"})).await;
+    assert_ne!(result.is_error, Some(true), "{result:?}");
+    let readable = &result.content[0].as_text().unwrap().text;
+    for expected in [
+        "source source_shared\n",
+        "requirement req_shared · active",
+        "resolution resolution_shared · draft",
+        "rule rule_shared · deprecated",
+        "topic topic_shared · open",
+        "question question_shared · answered",
+        "domain domain_shared\n",
+        "boundary boundary_shared\n",
+    ] {
+        assert!(readable.contains(expected), "{readable}");
+    }
+    for (target, status) in [
+        ("rule_shared", "review"),
+        ("topic_shared", "closed"),
+        ("question_shared", "blocked_on_human"),
+        ("resolution_shared", "review"),
+    ] {
+        update_status(&client, target, status).await;
+        let result = call(&client, json!({"text":target})).await;
+        let readable = &result.content[0].as_text().unwrap().text;
+        assert!(
+            readable.contains(&format!("{target} · {status}")),
+            "{readable}"
+        );
+    }
+    let archived = client
+        .call_tool(
+            CallToolRequestParams::new("update").with_arguments(
+                json!({
+                    "target":"rule_shared", "data":{
+                        "status":"archived",
+                        "archived_in_commit":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+                    }
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_ne!(archived.is_error, Some(true), "{archived:?}");
+    let hidden = call(&client, json!({"node_types":["rule"]})).await;
+    assert_eq!(
+        hidden.structured_content.as_ref().unwrap()["nodes"],
+        json!([])
+    );
+    let included = call(
+        &client,
+        json!({"node_types":["rule"], "exclude_terminal":false}),
+    )
+    .await;
+    assert!(included.content[0]
+        .as_text()
+        .unwrap()
+        .text
+        .contains("rule rule_shared · archived"));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
