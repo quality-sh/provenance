@@ -69,13 +69,13 @@ fn issue_442_finds_both_typescript_annotations() {
 fn regex_quotes_classes_and_escapes_do_not_hide_annotations() {
     for extension in ["ts", "js", "tsx", "jsx"] {
         for expression in [
-            r#"/`/"#,
+            r"/`/",
             r#"/"`/"#,
-            r#"/'`/"#,
-            r#"/[/]`/"#,
-            r#"/[\]`/]/"#,
-            r#"/\/(?:`)/gi"#,
-            r#"/`\/`/"#,
+            r"/'`/",
+            r"/[/]`/",
+            r"/[\]`/]/",
+            r"/\/(?:`)/gi",
+            r"/`\/`/",
         ] {
             let source = format!("const pattern = {expression};\n// @provenance rule: rule_regex\nfunction f() {{}}\n");
             let report = scan(&[(&format!("src/input.{extension}"), &source)]);
