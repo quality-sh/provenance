@@ -80,16 +80,11 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     let manifest_bytes = format!("{}\n", serde_json::to_string_pretty(&manifest)?).into_bytes();
     let skills = crate::skills::plan_init_at(path.as_std_path())
         .context("failed to plan the bundled Provenance skills")?;
-    let guidance_scope = scope
-        .as_deref()
-        .unwrap_or_else(|| match manifest.scopes.as_slice() {
-            [only] => only.id.as_str(),
-            _ => "default",
-        });
+    let guidance_scope = crate::onboarding::guidance_scope(path, scope.as_deref(), &manifest)?;
     let planned = PlannedFiles::plan(
         path,
         &invocation,
-        guidance_scope,
+        &guidance_scope,
         manifest_before,
         manifest_bytes,
     )?;
