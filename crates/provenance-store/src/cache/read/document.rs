@@ -143,7 +143,12 @@ impl ReadSnapshot {
                 if contains {
                     let mut tx = self.connection().await;
                     let depth: i64 = sqlx::query_scalar(
-                        "WITH RECURSIVE ancestors(id) AS (                         SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2                          AND refines IS NOT NULL UNION                          SELECT r.refines FROM ancestors a JOIN requirements r                          ON r.scope_id = ?1 AND r.id = a.id WHERE r.refines IS NOT NULL)                          SELECT COUNT(*) FROM ancestors",
+                        "WITH RECURSIVE ancestors(id) AS (
+                         SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2
+                         AND refines IS NOT NULL UNION
+                         SELECT r.refines FROM ancestors a JOIN requirements r
+                         ON r.scope_id = ?1 AND r.id = a.id WHERE r.refines IS NOT NULL)
+                         SELECT COUNT(*) FROM ancestors",
                     )
                     .bind(self.scope().as_str())
                     .bind(root.as_str())
