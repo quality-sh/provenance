@@ -18,8 +18,9 @@ schema = ["dep:schemars"]
 [dependencies]
 schemars = { workspace = true, optional = true }
 fs2.workspace = true
-# office_oxide 0.1.15 uses zip 9 and has the DocumentIR shape used by pdf_oxide.
-office_oxide = { version = "0.1.15", default-features = false }
+# Keep the DocumentIR shape that pdf_oxide supports.
+# Raise the ceiling only with a pdf_oxide release that builds with the newer DocumentIR.
+office_oxide = { version = ">=0.1.15, <0.1.16", default-features = false }
 pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy-crypto"] }
 provenance-macros.workspace = true
 serde.workspace = true
