@@ -2,7 +2,7 @@
 use crate::parser::ParseWarning;
 
 /// Keeps byte offsets and line breaks intact, including source anchor positions.
-pub(crate) fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
+pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
     let bytes = source.as_bytes();
     let mut masked = bytes.to_vec();
     let mut warnings = Vec::new();
@@ -94,7 +94,7 @@ pub(crate) fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
             }
         }
     }
-    // Only complete regex spans are replaced, with ASCII spaces of equal
+    // Only regex spans are replaced, with ASCII spaces of equal
     // length. Bytes outside those spans retain their original UTF-8 encoding.
     (
         String::from_utf8(masked).expect("masked source is UTF-8"),
@@ -113,14 +113,14 @@ fn unterminated(line: usize, kind: &str) -> ParseWarning {
     }
 }
 
-fn line_end(bytes: &[u8], mut index: usize) -> usize {
+const fn line_end(bytes: &[u8], mut index: usize) -> usize {
     while index < bytes.len() && !matches!(bytes[index], b'\n' | b'\r') {
         index += 1;
     }
     index
 }
 
-fn regex_end(bytes: &[u8], start: usize) -> (usize, bool) {
+const fn regex_end(bytes: &[u8], start: usize) -> (usize, bool) {
     let mut index = start + 1;
     let mut in_class = false;
     while index < bytes.len() {

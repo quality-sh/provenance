@@ -148,14 +148,25 @@ fn is_ignored_directory(entry: &walkdir::DirEntry) -> bool {
 /// honest string, raw-string, and nested-comment tracking on top, gating both
 /// channels.
 pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> FileScan {
+    if matches!(language, Language::JavaScript | Language::TypeScript) {
+        let (lexical_content, warnings) = crate::script_literals::mask_regex_literals(content);
+        let mut scan = scan_file_contents(file_path, language, content, &lexical_content);
+        scan.warnings.splice(0..0, warnings);
+        scan
+    } else {
+        scan_file_contents(file_path, language, content, content)
+    }
+}
+
+fn scan_file_contents(
+    file_path: &Utf8Path,
+    language: Language,
+    content: &str,
+    lexical_content: &str,
+) -> FileScan {
     let mut annotations = Vec::new();
     let mut bindings = Vec::new();
-    let (lexical_content, mut warnings) =
-        if matches!(language, Language::JavaScript | Language::TypeScript) {
-            crate::script_literals::mask_regex_literals(content)
-        } else {
-            (content.to_owned(), Vec::new())
-        };
+    let mut warnings = Vec::new();
     let original_lines = content.lines().collect::<Vec<_>>();
     let lines = lexical_content.lines().collect::<Vec<_>>();
     let rust_states = rust_line_states(language, &lines);
