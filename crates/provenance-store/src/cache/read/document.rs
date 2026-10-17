@@ -134,11 +134,11 @@ impl ReadSnapshot {
             return Err(ReadFailure::PageBudgetExceeded.into());
         }
         if kind == NodeType::Requirement {
-            return Ok(root_ids
+            return root_ids
                 .into_iter()
                 .filter(|root| root == id.as_str())
                 .map(StableId::new)
-                .collect::<anyhow::Result<_>>()?);
+                .collect();
         }
         let mut roots = BTreeSet::new();
         for root in root_ids {

@@ -26,16 +26,16 @@ fn requirement(repo: &str, id: &str, parent: Option<&str>) {
 }
 
 fn nested(repo: &str) {
-    requirement(repo, "req_root", None);
-    requirement(repo, "req_middle", Some("req_root"));
-    requirement(repo, "req_leaf", Some("req_middle"));
+    requirement(repo, "req_a_root", None);
+    requirement(repo, "req_m_middle", Some("req_a_root"));
+    requirement(repo, "req_z_leaf", Some("req_m_middle"));
     json_output(&[
         "topics",
         "create",
         "--id",
         "topic_leaf",
         "--requirement-id",
-        "req_leaf",
+        "req_z_leaf",
         "--title",
         "Review the task",
         "--repo",
@@ -98,7 +98,7 @@ fn nested_requirements_each_open_their_own_document() {
     let (_directory, repo) = initialized_repo();
     nested(&repo);
     let host = review_host_support::start(std::path::Path::new(&repo));
-    for id in ["req_root", "req_middle", "req_leaf"] {
+    for id in ["req_a_root", "req_m_middle", "req_z_leaf"] {
         assert_target(&link(&host, &repo, id), id, None);
     }
 }
@@ -114,7 +114,7 @@ fn nested_rule_and_question_open_the_leaf_document() {
         "--id",
         "rule_leaf",
         "--requirement-id",
-        "req_leaf",
+        "req_z_leaf",
         "--statement",
         "The reviewer can read the rule.",
         "--repo",
@@ -124,7 +124,7 @@ fn nested_rule_and_question_open_the_leaf_document() {
     ]);
     let host = review_host_support::start(std::path::Path::new(&repo));
     for id in ["rule_leaf", "question_leaf"] {
-        assert_target(&link(&host, &repo, id), "req_leaf", Some(id));
+        assert_target(&link(&host, &repo, id), "req_z_leaf", Some(id));
     }
 }
 
@@ -142,7 +142,7 @@ fn nested_write_returns_a_link_without_a_warning() {
             "--id",
             "rule_write",
             "--requirement-id",
-            "req_leaf",
+            "req_z_leaf",
             "--statement",
             "The reviewer can read the rule.",
             "--repo",
@@ -160,7 +160,7 @@ fn nested_write_returns_a_link_without_a_warning() {
     );
     let value: Value = serde_json::from_slice(&output.stdout).unwrap();
     let url = url::Url::parse(value["data"]["review_url"].as_str().unwrap()).unwrap();
-    assert_target(&url, "req_leaf", Some("rule_write"));
+    assert_target(&url, "req_z_leaf", Some("rule_write"));
 }
 
 #[test]
