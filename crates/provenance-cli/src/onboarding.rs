@@ -16,7 +16,7 @@ it in the same change.
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
   conformance.
 - Plan: `{command} prime --quiet`
-- New obligation: `{command} rules create --scope {scope} --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
+- New obligation: `{command} rules create --scope {selected_scope} --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
 - Change a Requirement, Rule, or Resolution with a guarded record update.
@@ -24,7 +24,7 @@ it in the same change.
   Git supplies record history and change evidence. Proposal, Disposition, Withdrawal,
   and Discussion records hold review state.
 - Before you ask a person to review a record, start the review host if it is not running:
-  `{command} review --repo . --repository-id local --scope {scope} --no-open`.
+  `{command} review --repo . --repository-id local --scope {selected_scope} --no-open`.
 - Open the record for the person with `{command} <record-id> --review-link`. The command
   opens the review page in the browser of the person. If it cannot open the browser, it
   prints a link. Give the person that link. Never give the person a record ID.
@@ -41,12 +41,12 @@ it in the same change.
   accepted that content. To end a pending review without a replacement, withdraw it.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a
   Topic also archives its Questions. Discussion history stays readable:
-  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope {scope} --stdin --format json`
-  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} topics <topic_id> update --scope {scope} --stdin --format json`
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope {selected_scope} --stdin --format json`
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} topics <topic_id> update --scope {selected_scope} --stdin --format json`
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` directly.
 - Pre-commit: `{command} check --quiet` and
-  `{command} coverage scan --path . --scope {scope} --validate-rules`.
+  `{command} coverage scan --path . --scope {selected_scope} --validate-rules`.
   Commit graph updates with the code.
 - ASD owns ASD-STE100. STEMG maintains it. Use the official Issue 9 request page:
   https://www.asd-ste100.org/STE_downloads.html#article02-2l. Provenance names
@@ -108,7 +108,7 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 fn instructions(invocation: &Invocation, scope: &str) -> String {
     INSTRUCTIONS
         .replace("{command}", invocation.0)
-        .replace("{scope}", scope)
+        .replace("{selected_scope}", scope)
 }
 
 fn update_agents(existing: &str, instructions: &str) -> String {
