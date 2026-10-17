@@ -12,6 +12,10 @@ pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
     let mut after_dot = false;
     let mut line = 1;
     let mut index = 0;
+    if bytes.starts_with(b"#!") {
+        index = line_end(bytes, 0);
+        masked[..index].fill(b' ');
+    }
     while index < bytes.len() {
         match bytes[index] {
             b'\n' => {
@@ -98,7 +102,7 @@ pub fn mask_regex_literals(source: &str) -> (String, Vec<ParseWarning>) {
             }
         }
     }
-    // Regex spans have ASCII boundaries and are fully replaced, so UTF-8 stays valid.
+    // Masked spans have ASCII boundaries and are fully replaced, so UTF-8 stays valid.
     (
         String::from_utf8(masked).expect("masked source is UTF-8"),
         warnings,
