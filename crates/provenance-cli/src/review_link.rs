@@ -155,19 +155,8 @@ async fn review_target(
     )
     .await?
     .result;
-    let [root] = roots.as_slice() else {
-        if roots.is_empty() {
-            return Ok(None);
-        }
-        anyhow::bail!(
-            "record {} appears in multiple Requirement review documents: {}",
-            record.id,
-            roots
-                .iter()
-                .map(StableId::as_str)
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+    let Some(root) = roots.first() else {
+        return Ok(None);
     };
     let host =
         provenance_transport::local_host::discover(context.repo.as_std_path(), &context.scope)?;
