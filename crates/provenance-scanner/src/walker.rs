@@ -16,6 +16,7 @@ mod bounded;
 mod bounded_tests;
 mod ignore;
 mod rust_lines;
+mod script_literals;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum Language {
@@ -148,10 +149,27 @@ fn is_ignored_directory(entry: &walkdir::DirEntry) -> bool {
 /// honest string, raw-string, and nested-comment tracking on top, gating both
 /// channels.
 pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> FileScan {
+    if matches!(language, Language::JavaScript | Language::TypeScript) {
+        let (lexical_content, warnings) = script_literals::mask_regex_literals(content);
+        let mut scan = scan_file_contents(file_path, language, content, &lexical_content);
+        scan.warnings.splice(0..0, warnings);
+        scan
+    } else {
+        scan_file_contents(file_path, language, content, content)
+    }
+}
+
+fn scan_file_contents(
+    file_path: &Utf8Path,
+    language: Language,
+    content: &str,
+    lexical_content: &str,
+) -> FileScan {
     let mut annotations = Vec::new();
     let mut bindings = Vec::new();
     let mut warnings = Vec::new();
-    let lines = content.lines().collect::<Vec<_>>();
+    let original_lines = content.lines().collect::<Vec<_>>();
+    let lines = lexical_content.lines().collect::<Vec<_>>();
     let rust_states = rust_line_states(language, &lines);
     let mut idx = 0;
     let mut in_block_comment = false;
@@ -183,7 +201,7 @@ pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> Fil
             bindings.push(AttributeBinding {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
-                anchor: EvidenceAnchor::new(item_name.clone(), lines[idx]),
+                anchor: EvidenceAnchor::new(item_name.clone(), original_lines[idx]),
                 item_name,
                 rule_id: binding.rule_id,
                 verification: binding.verification,
@@ -225,7 +243,7 @@ pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> Fil
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
                 function_name: function_name.clone(),
-                anchor: EvidenceAnchor::new(function_name.clone(), lines[idx]),
+                anchor: EvidenceAnchor::new(function_name.clone(), original_lines[idx]),
                 annotation,
             });
         }
