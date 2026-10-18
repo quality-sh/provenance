@@ -71,7 +71,7 @@ const name: string = source.name;
     run(buildBinary(root, ['--locked', '-p', 'provenance-codegen', '--bin', 'provenance-codegen'], 'provenance-codegen'), ['rust', join(root, 'contracts/operations/fixtures.openapi.json'), join(temporary, 'src/generated')]);
     await writeFile(join(temporary, 'fixtures.json'), JSON.stringify(document['x-wire-fixtures']));
     // Read the root lockfile through Cargo so duplicate package names use workspace edges.
-    const metadata = spawnSync('cargo', ['metadata', '--locked', '--offline', '--format-version', '1'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+    const metadata = spawnSync('cargo', ['metadata', '--locked', '--format-version', '1'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
     assert.equal(metadata.status, 0, metadata.stdout + metadata.stderr);
     const versions = workspaceDependencyVersions(JSON.parse(metadata.stdout), ['serde', 'serde_json', 'chrono', 'uuid', 'regress']);
     await writeFile(join(temporary, 'Cargo.toml'), `[package]\nname="operation-generator-candidate"\nversion="0.0.0"\nedition="2021"\n[workspace]\n[dependencies]\nserde={version="=${versions.serde}",features=["derive"]}\nserde_json="=${versions.serde_json}"\nchrono={version="=${versions.chrono}",features=["serde"]}\nuuid={version="=${versions.uuid}",features=["serde"]}\nregress="=${versions.regress}"\n`);
