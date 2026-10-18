@@ -84,7 +84,7 @@ pub fn command(collection: &str) -> anyhow::Result<Command> {
     );
     let mut help = help::collection(collection);
     help.push_str(
-        "\n\nFor a bounded view across related record kinds, run:\n  provenance <id> get --view children --depth <N>",
+        "\n\nFor a bounded view across related record kinds, run:\n  provenance <id> --view children --depth N",
     );
     if collection == "questions" {
         help.push_str(help::question_guidance());
@@ -106,19 +106,19 @@ pub fn target_command() -> anyhow::Result<Command> {
     let command = fields::augment_with_overrides(
         grammar::target_command(),
         definitions,
-        &[
-            "repo",
-            "scope",
-            "format",
-            "quiet",
-            "type",
-            "view",
-            "depth",
-            "kind",
-            "limit",
-            "review_link",
-            "stdin",
-        ],
+        &COMMON
+            .iter()
+            .copied()
+            .chain([
+                "type",
+                "view",
+                "depth",
+                "kind",
+                "limit",
+                "review_link",
+                "stdin",
+            ])
+            .collect::<Vec<_>>(),
         &[],
     )?;
     fields::augment_schemas(
@@ -127,6 +127,14 @@ pub fn target_command() -> anyhow::Result<Command> {
             .map(provenance_porcelain::discussion::input_schema),
         &["parent", "discussion_id", "declared_by"],
     )
+}
+
+pub fn print_target_help(
+    command: Command,
+    action: Option<grammar::TargetVerb>,
+    kind: Option<provenance_core::NodeType>,
+) -> anyhow::Result<()> {
+    help::target(command, action, kind)
 }
 
 /// Dispatch one catalog request through the local in-process host.
@@ -178,7 +186,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
             crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
             crate::output::print_json(&value)?;
         }
-        Err(failure) => return Err(actionable_failure(&failure, record_id(&path))),
+        Err(failure) => return Err(failure_with_guidance(&failure, &path, record_id(&path))),
     }
     Ok(())
 }
@@ -218,10 +226,10 @@ pub async fn dispatch_target(
             "target actions do not accept query options"
         ));
     }
-    let mut value = host
-        .invoke_target(&route, data, headers)
-        .await
-        .map_err(|failure| actionable_failure(&failure, Some(&target)))?;
+    let mut value = match host.invoke_target(&route, data, headers).await {
+        Ok(value) => value,
+        Err(failure) => return Err(failure_with_guidance(&failure, &route.path, Some(&target))),
+    };
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
             kind,
@@ -244,24 +252,37 @@ fn record_id(path: &str) -> Option<&str> {
     path.trim_matches('/').split('/').nth(1)
 }
 
+fn failure_with_guidance(
+    failure: &provenance_core::protocol::failure::ErasedFailure,
+    path: &str,
+    target: Option<&str>,
+) -> anyhow::Error {
+    actionable_failure(failure, target, path.trim_matches('/').split('/').next())
+}
+
 /// Names the command that reads the review after a review-workflow refusal.
 #[provenance_macros::rule("rule_review_refusal_names_read_command")]
 fn review_read_command(id: &str) -> String {
-    format!("provenance {id} get --view review")
+    format!("provenance {id} --view review")
 }
 
 fn actionable_failure(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     record_id: Option<&str>,
+    collection: Option<&str>,
 ) -> anyhow::Error {
     let value = serde_json::to_value(failure).unwrap_or_default();
     let error = &value["error"];
     let kind = error["kind"].as_str();
     if kind == Some("review_submission_conflict") {
-        if let (Some(id), Some(submission)) = (record_id, error["current_submission"].as_str()) {
+        if let (Some(id), Some(submission), Some(collection)) =
+            (record_id, error["current_submission"].as_str(), collection)
+        {
             return anyhow::anyhow!(
                 "record {id} already has pending submission {submission}; \
-                 run `{}` to see it",
+                 run `{}` to see it; to withdraw it, run \
+                 `provenance {collection} {id} submissions {submission} withdraw --actor <actor>`. \
+                 For an owned record, also pass --declared-by <owner>",
                 review_read_command(id)
             );
         }
@@ -281,19 +302,20 @@ fn actionable_failure(
     anyhow::anyhow!(message)
 }
 
+const COMMON: &[&str] = &[
+    "repo",
+    "scope",
+    "format",
+    "quiet",
+    "target",
+    "action",
+    "collection",
+    "address",
+    "command",
+    "discussion_id",
+];
+
 pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
-    const COMMON: &[&str] = &[
-        "repo",
-        "scope",
-        "format",
-        "quiet",
-        "target",
-        "action",
-        "collection",
-        "address",
-        "command",
-        "discussion_id",
-    ];
     for id in matches.ids() {
         let name = id.as_str();
         if matches.value_source(name) != Some(ValueSource::CommandLine) {

@@ -12,6 +12,49 @@ use std::fmt::Write as _;
 
 mod schema;
 
+#[provenance_macros::rule("rule_create_help_accepted_fields")]
+pub(super) fn target(
+    mut command: clap::Command,
+    action: Option<crate::invocation::grammar::TargetVerb>,
+    kind: Option<provenance_core::NodeType>,
+) -> anyhow::Result<()> {
+    use crate::invocation::grammar::TargetVerb;
+    use provenance_store::operations::catalog;
+
+    if let Some(TargetVerb::Action(action)) = action {
+        if catalog::TargetAction::RECORD.contains(&action) {
+            let needs_type = action == catalog::TargetAction::Create && kind.is_none();
+            let mut allowed = super::COMMON
+                .iter()
+                .copied()
+                .chain(["stdin", "help"])
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>();
+            if action == catalog::TargetAction::Create {
+                allowed.insert("record_type".into());
+            }
+            for (_, definition) in catalog::target_definitions(action).filter(|(registered, _)| {
+                !needs_type && kind.is_none_or(|kind| *registered == kind)
+            }) {
+                allowed.extend(fields::accepted_flags(&fields::declared(definition)?));
+            }
+            allowed.remove("id");
+            allowed.remove("id-json");
+            command = command.mut_args(|arg| {
+                let hidden = !allowed.contains(arg.get_id().as_str());
+                arg.hide(hidden)
+            });
+            if needs_type {
+                command = command.after_help(
+                    "Select a record type to see its accepted fields:\n  provenance <id> create --type <kind> --help",
+                );
+            }
+        }
+    }
+    println!("{}", command.render_help());
+    Ok(())
+}
+
 /// Render the help block that lists every registered operation.
 pub(super) fn collection(collection: &str) -> String {
     let mut registrations = address::registrations(collection);
