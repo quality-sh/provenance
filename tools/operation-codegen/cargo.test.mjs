@@ -38,7 +38,6 @@ test('runs a real Cargo binary built outside the checkout target directory', asy
   assert.equal(result.stdout.trim(), 'fixture');
 });
 
-// Implementation aid: candidate crates must use the workspace lockfile resolution.
 const metadata = (dependencies) => ({
   workspace_members: ['workspace'],
   packages: [
@@ -49,10 +48,12 @@ const metadata = (dependencies) => ({
   resolve: { nodes: [{ id: 'workspace', dependencies }] },
 });
 
+// Implementation aid: candidate crates must use the workspace lockfile resolution.
 test('workspace dependency versions select the workspace resolution among duplicate packages', () => {
   assert.deepEqual(workspaceDependencyVersions(metadata(['current']), ['uuid']), { uuid: '1.28.0' });
 });
 
+// Implementation aid: reject missing or ambiguous workspace dependency versions.
 test('workspace dependency versions reject missing and conflicting workspace resolutions', () => {
   assert.throws(() => workspaceDependencyVersions(metadata([]), ['uuid']), /uuid.*no workspace dependency/);
   assert.throws(() => workspaceDependencyVersions(metadata(['old', 'current']), ['uuid']), /uuid.*1\.24\.0.*1\.28\.0/);
