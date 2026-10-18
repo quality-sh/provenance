@@ -29,13 +29,6 @@ fn nested_workspace_package_applies_package_relative_implementation_after_init()
     );
     assert!(!fixture.root().join("Cargo.lock").exists());
 
-    // Build the consumer with the repository's checked dependency selection.
-    std::fs::copy(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.lock"),
-        fixture.root().join("Cargo.lock"),
-    )
-    .unwrap();
-
     let output = Command::new("cargo")
         .args(["run", "--quiet", "--package", "app"])
         .current_dir(fixture.root())
