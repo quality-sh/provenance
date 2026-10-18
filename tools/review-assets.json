@@ -1,11 +1,11 @@
 {
   "repository": "quality-sh/provenance-web",
-  "commit": "16e08ac7a92bc58f92f1abf9a83cbf80eae5158a",
-  "authorCommit": "16e08ac7a92bc58f92f1abf9a83cbf80eae5158a",
-  "run": 38524365689,
-  "artifact": "provenance-review-16e08ac7a92bc58f92f1abf9a83cbf80eae5158a",
+  "commit": "6dbadae433e76bb156dce3d964f1ba6877962426",
+  "authorCommit": "6dbadae433e76bb156dce3d964f1ba6877962426",
+  "run": 39033725349,
+  "artifact": "provenance-review-6dbadae433e76bb156dce3d964f1ba6877962426",
   "archive": "provenance-review.tar.gz",
-  "url": "https://github.com/quality-sh/provenance/releases/download/renderer-16e08ac7a92b/provenance-review.tar.gz",
-  "sha256": "1274f2b39fad678f978dd664dff1a2e6685146bff8d54d1ad959b5f238400eb7",
+  "url": "https://github.com/quality-sh/provenance/releases/download/renderer-6dbadae433e7/provenance-review.tar.gz",
+  "sha256": "837720093c3a8cc5caf831dae770b8cde3f3fdf6c490437f5fdbfed156e38112",
   "sdkVersion": "0.2.3"
 }
