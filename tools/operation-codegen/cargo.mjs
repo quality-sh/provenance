@@ -19,3 +19,18 @@ export function buildBinary(root, args, binary) {
   if (result.status !== 0) throw new Error(`Cargo build failed for ${binary} (${result.status})`);
   return executableFromMessages(result.stdout, binary);
 }
+
+export function workspaceDependencyVersions(metadata, names) {
+  const members = new Set(metadata.workspace_members);
+  const dependencies = new Set(metadata.resolve.nodes
+    .filter(node => members.has(node.id)).flatMap(node => node.dependencies));
+  return Object.fromEntries(names.map(name => {
+    const versions = [...new Set(metadata.packages
+      .filter(pkg => pkg.name === name && dependencies.has(pkg.id))
+      .map(pkg => pkg.version))].sort();
+    if (versions.length !== 1) {
+      throw new Error(`Cannot select locked version for ${name}: ${versions.length ? `workspace dependencies use ${versions.join(', ')}` : 'no workspace dependency'}`);
+    }
+    return [name, versions[0]];
+  }));
+}
