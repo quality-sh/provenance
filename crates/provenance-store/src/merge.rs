@@ -150,25 +150,18 @@ pub(crate) fn preserved_lines(
         .collect()
 }
 
-/// Merges three sides of one JSONL shard by record id.
-///
-/// This decides *which* record survives, not whether the survivor is a legal
-/// record: it merges untyped JSON and never inspects a field other than `id`.
-/// A merged set can therefore hold a record that no writer would have accepted,
-/// because each side's record was legal on its own branch and only the
-/// combination is not. The caller must put the merged records back through the
-/// write gate before they land: [`validate_merged_records`] re-checks them
-/// against the type the shard holds, and the merge fails rather than storing an
-/// invalid record.
+/// Merges three JSONL inputs by the selected record key, preserving the moved side.
+/// The caller must validate the selected records before publication.
 #[rule("rule_record_merge")]
 pub fn merge_records(
+    key: &str,
     base: &[CanonicalRecord],
     ours: &[CanonicalRecord],
     theirs: &[CanonicalRecord],
 ) -> anyhow::Result<MergeOutcome<Vec<CanonicalRecord>>> {
-    let base = index_by_id(base)?;
-    let ours = index_by_id(ours)?;
-    let theirs = index_by_id(theirs)?;
+    let base = index_by_id(key, base)?;
+    let ours = index_by_id(key, ours)?;
+    let theirs = index_by_id(key, theirs)?;
     let mut ids = BTreeSet::new();
     ids.extend(base.keys().cloned());
     ids.extend(ours.keys().cloned());
@@ -252,13 +245,16 @@ pub fn read_jsonl_records_for_shard(
         .collect())
 }
 
-fn index_by_id(records: &[CanonicalRecord]) -> anyhow::Result<BTreeMap<String, CanonicalRecord>> {
+fn index_by_id(
+    key: &str,
+    records: &[CanonicalRecord],
+) -> anyhow::Result<BTreeMap<String, CanonicalRecord>> {
     let mut indexed = BTreeMap::new();
     for record in records {
         let id = record
-            .get("id")
+            .get(key)
             .and_then(Value::as_str)
-            .ok_or_else(|| anyhow::anyhow!("record is missing string id"))?;
+            .ok_or_else(|| anyhow::anyhow!("record is missing string {key}"))?;
         anyhow::ensure!(!indexed.contains_key(id), "duplicate record id {id}");
         indexed.insert(id.to_string(), record.clone());
     }

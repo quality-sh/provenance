@@ -284,16 +284,19 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
         "a refused message is not published"
     );
 
-    // A refused write persists nothing, so the accepted message takes the
-    // first identity and lands exactly at the message read budget.
+    // The UUID identity and millisecond write time determine the encoded size.
+    // The accepted message lands exactly at the message read budget.
     let base = ReadBudget::read_bytes(&Message {
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
-        id: StableId::new("msg_000001").unwrap(),
+        id: StableId::new(format!("msg_{}", uuid::Uuid::new_v4())).unwrap(),
         thread_id: thread,
         role: MessageRole::User,
         body: String::new(),
-        created_at: 1,
+        created_at: i64::try_from(
+            time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000,
+        )
+        .unwrap(),
         ai_metadata: None,
     })
     .unwrap();
@@ -305,7 +308,10 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
             "x".repeat(crate::cache::read::page::RECORD_BYTES - base),
         )
         .expect("a message at the message read budget is accepted");
-    assert_eq!(message.id.as_str(), "msg_000001");
+    assert_eq!(
+        ReadBudget::read_bytes(&message).unwrap(),
+        crate::cache::read::page::RECORD_BYTES
+    );
 }
 
 #[test]
@@ -365,7 +371,7 @@ fn oversized_post_refuses_before_creating_or_archiving_threads() {
         before
     );
     assert_eq!(store.list_messages(&scope).unwrap().len(), 1);
-    assert_eq!(first.message.id.as_str(), "msg_000001");
+    assert_eq!(store.list_messages(&scope).unwrap(), vec![first.message]);
 }
 
 fn resolution_input(scope: &ScopeId, id: &str, title: String) -> CreateResolutionInput {
