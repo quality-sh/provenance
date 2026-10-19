@@ -190,3 +190,118 @@ fn replies_to_one_discussion_report_a_typed_conflict() {
     assert!(diagnostic.contains("divergent_edit"), "{diagnostic}");
     assert!(diagnostic.contains(&id), "{diagnostic}");
 }
+
+fn rows(path: &Path) -> Vec<Value> {
+    std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+fn write_rows(path: &Path, rows: &[Value]) {
+    let text = rows
+        .iter()
+        .map(|row| serde_json::to_string(row).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(path, text + "\n").unwrap();
+}
+
+#[test]
+#[verifies("rule_duplicate_message_id_names_lines", examples)]
+fn duplicate_message_diagnostics_and_documented_hand_repair() {
+    let dir = repository();
+    let repo = dir.path();
+    let x = discuss(repo, "first Discussion");
+    let y = discuss(repo, "second Discussion");
+    let threads = repo.join(".provenance/state/scopes/default/threads");
+    let shard = std::fs::read_dir(&threads)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| {
+            let name = path.file_name().unwrap().to_str().unwrap();
+            path.extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("jsonl"))
+                && name != "threads.jsonl"
+                && name != "discussions.jsonl"
+        })
+        .unwrap();
+    let mut messages = rows(&shard);
+    assert_eq!(messages.len(), 2);
+    for message in &mut messages {
+        message["id"] = Value::from("msg_000021");
+    }
+    write_rows(&shard, &messages);
+    let discussions_path = threads.join("discussions.jsonl");
+    let mut discussions = rows(&discussions_path);
+    for discussion in &mut discussions {
+        discussion["message_ids"] = serde_json::json!(["msg_000021"]);
+        discussion["root_message_id"] = Value::from("msg_000021");
+    }
+    write_rows(&discussions_path, &discussions);
+
+    for args in [
+        vec!["req_a", "discuss", "--body", "refused"],
+        vec![
+            x.as_str(),
+            "reply",
+            "--expected-version",
+            "1",
+            "--body",
+            "refused",
+        ],
+        vec!["check"],
+    ] {
+        let output = cli(repo, &args);
+        assert_eq!(output.status.code(), Some(1));
+        let diagnostic = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            diagnostic.contains("Message ID msg_000021 appears more than once:"),
+            "{diagnostic}"
+        );
+        for line in [1, 2] {
+            assert!(
+                diagnostic.contains(&format!(
+                    "{}:{line}",
+                    shard.file_name().unwrap().to_str().unwrap()
+                )),
+                "{diagnostic}"
+            );
+        }
+        assert!(
+            diagnostic.contains("docs/cli.md#repairing-a-duplicate-message-id"),
+            "{diagnostic}"
+        );
+    }
+    let read = cli(repo, &["discussions"]);
+    let diagnostic = format!(
+        "{}{}",
+        String::from_utf8_lossy(&read.stdout),
+        String::from_utf8_lossy(&read.stderr)
+    );
+    assert!(
+        diagnostic.contains("Message ID msg_000021 appears more than once:"),
+        "{diagnostic}"
+    );
+
+    let replacement = format!("msg_{}", uuid::Uuid::new_v4());
+    messages[1]["id"] = Value::from(replacement.clone());
+    write_rows(&shard, &messages);
+    let owner = discussions
+        .iter_mut()
+        .find(|discussion| discussion["discussion_id"] == y)
+        .unwrap();
+    owner["root_message_id"] = Value::from(replacement.clone());
+    owner["message_ids"] = serde_json::json!([replacement]);
+    write_rows(&discussions_path, &discussions);
+    assert_eq!(assert_readable(repo, &[&x, &y]), 2);
+    let z = discuss(repo, "after repair");
+    reply(repo, &x, "1", "after repair");
+    assert_eq!(assert_readable(repo, &[&x, &y, &z]), 4);
+    json(repo, &["check"]);
+}
