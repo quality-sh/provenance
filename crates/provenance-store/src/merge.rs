@@ -150,11 +150,9 @@ pub(crate) fn preserved_lines(
         .collect()
 }
 
-/// Merges three JSONL inputs by the selected record key, keeping the changed record
-/// when the other side matches the base. This selects records without checking
-/// their types: records valid on separate branches can be invalid in combination.
-/// The caller must run [`validate_merged_records`] before publication to refuse
-/// records that a writer would not accept.
+/// Merges by the selected key, keeping a change when the other side matches the
+/// base. Call [`validate_merged_records`] before publication: records valid alone
+/// can be invalid together.
 #[rule("rule_record_merge")]
 pub fn merge_records(
     key: &str,
