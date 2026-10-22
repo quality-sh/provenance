@@ -74,6 +74,7 @@ mod ideation_targets;
 mod implementation_bindings;
 mod legacy_coexistence;
 mod manifest;
+mod message_ids;
 mod native_review_writer_findings;
 mod native_review_writers;
 mod native_rule_creation;

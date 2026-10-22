@@ -35,6 +35,8 @@ use crate::statement_analysis::{analyze_changed_statements, StatementDiagnostic}
 pub enum ShardFamily {
     /// `.provenance/state/scopes/<scope>/ideation/landings.jsonl`
     IdeationLandings,
+    /// `.provenance/state/scopes/<scope>/threads/discussions.jsonl`
+    Discussions,
     /// `.provenance/state/scopes/<scope>/sources/*.jsonl`
     Sources,
     /// `.provenance/state/scopes/<scope>/requirements/*.jsonl`
@@ -66,6 +68,16 @@ const SCOPED_FAMILIES: [(&str, ShardFamily); 7] = [
 ];
 
 impl ShardFamily {
+    /// Discussion records use `discussion_id`; all other records use `id`.
+    #[provenance_macros::rule("rule_discussion_merge_keys_discussion_id")]
+    #[must_use]
+    pub const fn record_key(self) -> &'static str {
+        match self {
+            Self::Discussions => "discussion_id",
+            _ => "id",
+        }
+    }
+
     /// Recognizes the family from the path the merged result will be stored at.
     ///
     /// The recognizers inspect the trailing canonical state layout, including
@@ -82,6 +94,9 @@ impl ShardFamily {
             .find(|(name, _)| is_scoped_family(path, name))
         {
             return *family;
+        }
+        if path.file_name() == Some("discussions.jsonl") && is_scoped_family(path, "threads") {
+            return Self::Discussions;
         }
         if path.file_name() == Some("landings.jsonl")
             && directory.file_name() == Some("ideation")
@@ -131,7 +146,7 @@ pub fn validate_merged_records(
         ShardFamily::Topics => validate_typed_records::<Topic>(records, "topic"),
         ShardFamily::Questions => validate_typed_records::<Question>(records, "question"),
         ShardFamily::Boundaries => validate_typed_records::<Boundary>(records, "boundary"),
-        ShardFamily::Unrecognized => Ok(()),
+        ShardFamily::Discussions | ShardFamily::Unrecognized => Ok(()),
     }
 }
 

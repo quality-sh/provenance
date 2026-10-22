@@ -156,6 +156,39 @@ The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
 complete scope. They remain separate from resource writes.
 
+## Repairing a duplicate Message ID
+
+New Message IDs use `msg_` followed by a random UUID. An existing store can
+contain duplicate IDs from writes on separate branches. A Message read refuses
+that store and names the duplicate ID and all its shard lines:
+
+```text
+Message ID msg_000021 appears more than once: <shard>:<line>, <shard>:<line>
+```
+
+To repair the store by hand:
+
+1. Stop writes to the repository. Make a backup of `.provenance/state`.
+2. Read each named row. Use its body and Thread to identify the Discussion that
+   owns it. Two Discussions can share a Thread. Do not use the Thread alone to
+   select the owner, and do not delete either Message.
+3. Choose a fresh `msg_<uuid>` ID for one duplicate row. Replace that row's `id`
+   in the named Message shard. Keep its other fields, including `created_at`.
+4. In the same scope's `threads/discussions.jsonl`, replace the old ID in the
+   owning Discussion's `message_ids`. If this is its root Message, also replace
+   `root_message_id`. Update any `outcomes[].message_id` or graph-record
+   `origin_message` reference that belongs to the renamed Message. Keep the
+   references to the other duplicate row unchanged. If ownership is unclear,
+   use the branch history to identify it before you change a reference.
+5. Review the diff. Run `provenance check --repo <repository>`, then
+   `provenance discussions --repo <repository>` and
+   `provenance discussions <discussion-id> get --repo <repository>` for each
+   affected Discussion. Repeat the repair for any other duplicate ID that the
+   reader reports. Commit the repaired shards when the checks pass.
+
+There is no automatic repair command. The duplicate rows do not always contain
+enough information to select the owning Discussion.
+
 ## Agent guidance
 
 `provenance prime` introduces the Provenance domain. It explains Requirements,
