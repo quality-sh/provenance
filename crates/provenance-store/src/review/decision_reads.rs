@@ -7,10 +7,10 @@
 //! their own proposals; none of them attests the record's current contents.
 
 use super::decision_state::CycleFacts;
-use crate::state_store::StateStore;
+use crate::{cache::review_families::ReviewFamilyIndex, state_store::StateStore};
 use provenance_core::{
     protocol::DocumentReviewSummary,
-    review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
+    review::{PendingSubmission, RecordedDecision, RequirementDecisionState, ReviewRecord},
     DispositionDecision, DispositionRecord, NodeType, ProposalCard, ScopeId, StableId,
 };
 use provenance_macros::rule;
@@ -61,12 +61,13 @@ impl StateStore {
             let proposals = self.list_proposal_definitions(scope)?;
             let dispositions = self.list_dispositions(scope)?;
             let facts = CycleFacts::validated(self, scope)?;
+            let mut families = ReviewFamilyIndex::new(self, scope, records);
             let states = records
                 .iter()
                 .map(|(kind, id)| {
-                    let record = crate::cache::review_families::record(self, scope, *kind, id)?;
+                    let record = families.get(*kind, id)?;
                     Self::record_decision_state_from_parts(
-                        &record,
+                        record,
                         &proposals,
                         &dispositions,
                         &facts,
@@ -123,7 +124,7 @@ impl StateStore {
 
     pub(super) fn record_decision_state_for_record(
         &self,
-        record: &provenance_core::review::ReviewRecord,
+        record: &ReviewRecord,
     ) -> anyhow::Result<RequirementDecisionState> {
         let scope = record.scope_id();
         let proposals = self.list_proposal_definitions(scope)?;
@@ -133,7 +134,7 @@ impl StateStore {
     }
 
     fn record_decision_state_from_parts(
-        record: &provenance_core::review::ReviewRecord,
+        record: &ReviewRecord,
         proposals: &[ProposalCard],
         dispositions: &[DispositionRecord],
         facts: &CycleFacts,
