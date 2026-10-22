@@ -1,0 +1,86 @@
+//! The generated AGENTS.md tells an agent when to start the review host, how to hand the
+//! person its link, and what a description holds.
+
+use assert_cmd::Command;
+use provenance_macros::verifies;
+use std::path::Path;
+
+fn agents_after_init() -> String {
+    let temporary = tempfile::tempdir().unwrap();
+    let repo = temporary.path().join("repo");
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "init",
+            "--path",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+        ])
+        .assert()
+        .success();
+    std::fs::read_to_string(Path::new(&repo).join("AGENTS.md")).unwrap()
+}
+
+fn normalized(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[test]
+#[verifies("rule_init_review_host_guidance", examples)]
+fn init_guidance_starts_the_host_early_and_hands_the_link_over_as_text() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        prose.contains("When a session starts to write records, start or reuse the review host:"),
+        "{agents}"
+    );
+    assert!(
+        agents.contains(
+            "`provenance review --repo . --repository-id local --scope default --detach --no-open`"
+        ),
+        "{agents}"
+    );
+    assert!(
+        prose.contains("The host keeps running after the command returns."),
+        "{agents}"
+    );
+    assert!(
+        prose.contains("give the person `review_url` as plain text in chat, whether or not `opened` is true."),
+        "{agents}"
+    );
+    assert!(
+        prose.contains("That is extra, never the only route."),
+        "{agents}"
+    );
+    assert!(
+        prose.contains("The page is served on the machine that runs the host."),
+        "{agents}"
+    );
+    assert!(
+        !prose.contains("Before you ask a person to review a record"),
+        "{agents}"
+    );
+}
+
+#[test]
+#[verifies("rule_init_description_guidance", examples)]
+fn init_guidance_says_what_a_description_holds() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        prose.contains(
+            "A Requirement or Rule description says how the product behaves, in the present \
+             tense: its states, what changes them, what the person sees, and one example."
+        ),
+        "{agents}"
+    );
+    assert!(
+        prose.contains("History goes on the record's thread. Unknowns go in fog or a Question."),
+        "{agents}"
+    );
+}

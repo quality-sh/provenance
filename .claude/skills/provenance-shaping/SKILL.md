@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:e900657e4b3a81b1 -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:77d47052e3777036 -->
 
 # Shaping
 
@@ -21,6 +21,8 @@ graph before you move on. The graph holds state between turns, not the conversat
    position, it is a Proposal, open Question, or `blocked_on_human` fork, not a decision.
 4. **Leave the map consistent at handoff.** Claims, fog, questions, and frontier must tell
    the next session what to do without reconstructing your chat.
+5. **The tree reads as a spec.** At every handoff a developer can build from the anchor's
+   requirement tree alone. See "The tree is the spec".
 
 One question per session is **not** the invariant. Grill turns can drain a topic question
 by question; expensive methods claim one question and often stop at a phase boundary.
@@ -55,7 +57,28 @@ disagree, update the binary first, then shape.
    provenance init --path . --scope <scope> --path-prefix .
    ```
 
-2. Read the domain guidance, then load the low-resolution map:
+2. Start or reuse the review host, and give the person its link in your first reply:
+
+   ```sh
+   provenance review --repo . --repository-id local --scope <scope> --detach --no-open
+   ```
+
+   The host keeps running after the command returns. Paste `review_url` from its output
+   into the chat as plain text. Opening it in a browser or in the app that shows your chat
+   is a bonus; the pasted link is the route that always works. The link signs the person
+   in for two minutes; if it has expired, get a new one with
+   `provenance <record_id> --review-link --format json`. The page is served on the machine
+   that runs the host. If that is not the person's machine, say so and give them the
+   command above to run on theirs.
+
+   As soon as the anchor exists, send its link, and send it again at handoff. The page
+   follows records as they land, so the person reads the tree while you shape:
+
+   ```sh
+   provenance <anchor_requirement_id> --review-link --format json
+   ```
+
+3. Read the domain guidance, then load the low-resolution map:
 
    ```sh
    provenance prime
@@ -68,10 +91,33 @@ disagree, update the binary first, then shape.
    provenance boundaries list --scope <scope> --format json
    ```
 
-3. Treat the map as an index, not a store. Keep only gists in your working context and
+4. Treat the map as an index, not a store. Keep only gists in your working context and
    zoom into the available graph and rule views with `provenance graph <requirement_id>`
    and `provenance traceability <rule_id>`; use the shaping list commands above for their
    full records. Refer to artifacts by meaningful names plus ids; never hand off bare ids.
+
+## The tree is the spec
+
+The anchor's requirement tree is the product spec. A developer must be able to build from
+it without the chat. Each part of a record holds one kind of content:
+
+- **Statement**: one obligation in one plain clause.
+- **Description**: how the product behaves, in the present tense: its states, what moves it
+  between them, what the person sees, and one example or edge case. Write it for a builder
+  who has not read the thread.
+- **Thread**: who said what. The person's words, the brief's words, and what changed go
+  here, never in a description.
+- **Fog and Questions**: what is not decided. A description does not list open items or say
+  what remains to be shaped. Name an unknown in fog or mint a Question. A description may
+  end with one `Open:` line that names them, so a builder knows where the spec stops.
+
+A Question is answered only when the answer covers all of it. If an answer settles part of
+a Question, land that part, leave the Question open, and narrow its text to what remains.
+
+Before you hand off, read the tree as a builder would: open the review page, or run
+`provenance requirements <anchor_requirement_id> document get --scope <scope> --format json`,
+and read every statement and description in order. Fix a description that retells history,
+describes another record's behaviour, or lists open items before you hand off.
 
 ## Mode 1: Chart
 
@@ -88,9 +134,12 @@ resolve the questions you create.
    provenance requirements create --scope <scope> \
      --id req_<stable_slug> \
      --statement "<feature-sized idea as a requirement>" \
+     --description "<how the product behaves, as far as the brief says>" \
      --status discovery \
      --format json
    ```
+
+   Then send the anchor's review link (see "Start every session").
 
 2. **Attach known sources to the anchor.** Requirements with no valid source reference
    remain on the missing-source frontier, so add source references when evidence already
@@ -246,6 +295,10 @@ sequence of commands.
    Omit guessed authorship. Keep proposals proposed until the graph records review.
    An active Rule with a proposed Resolution can have independent grounding in a
    Requirement or Source; that pair of lifecycle values alone is not a defect.
+5. Give each new Requirement and Rule a `--description` that states the behaviour
+   (see "The tree is the spec"). The person's words go on the thread, not in it.
+6. Answer the Question only when the answer covers all of it. Otherwise land what
+   was settled and narrow the Question to what remains.
 
 Record the dialogue on the selected Requirement:
 
@@ -278,6 +331,7 @@ that obligation; it does not replace `refines`.
 provenance requirements create --scope <scope> \
   --id req_<child_slug> \
   --statement "<additional broad obligation>" \
+  --description "<states, what changes them, what the person sees, one example>" \
   --status discovery \
   --format json
 
@@ -340,6 +394,7 @@ change the artifact's kind.
      --id rule_<stable_slug> \
      --requirement-id <relevant_requirement_id> \
      --statement "<atomic behavioural obligation, in one clause>" \
+     --description "<trigger, result, what the person sees, one example>" \
      --severity high \
      --format json
    ```
@@ -447,7 +502,9 @@ Stop at the first condition:
 
 Before final response:
 
-1. Clear claims you finished. These commands are alternatives, not a sequence: close a
+1. Read the tree as a builder would (see "The tree is the spec") and fix what does not
+   read as a spec.
+2. Clear claims you finished. These commands are alternatives, not a sequence: close a
    finished topic **or** release it if it remains open; answered questions clear their
    claims automatically, while unanswered questions should be released.
 
@@ -469,7 +526,7 @@ Before final response:
      provenance topics <topic_id> update --scope <scope> --if-match <current_etag> --stdin --format json
    ```
 
-2. Post a handoff on the requirement thread:
+3. Post a handoff on the requirement thread:
 
    ```sh
    provenance requirements <anchor_requirement_id> discussions create --scope <scope> \
@@ -478,8 +535,8 @@ Before final response:
      --format json
    ```
 
-3. Tell the user what landed, what remains, and the next commands. Use artifact names and
-   ids together, never bare ids.
+4. Tell the user what landed, what remains, and the next commands, and paste the anchor's
+   review link again. Use artifact names and ids together, never bare ids.
 
 ## Auditing a Rule
 
@@ -538,6 +595,9 @@ against it. Do not make it `active` to clear a report.
 Before moving to the next question, verify the current answer has been handled:
 
 - thread message records the relevant dialogue;
+- each new Requirement and Rule has a description that states behaviour in the present
+  tense, with no history and no list of open items;
+- a Question marked answered is covered completely by its answer;
 - resolution records the accepted decision, if there is one;
 - each precise atomic behavioural obligation is landed as a Rule; any known primary
   implementation and evidence carry `#[rule]` and `#[verifies]` bindings, and

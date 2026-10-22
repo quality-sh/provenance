@@ -45,9 +45,22 @@ into several questions, or none, once the frontier reaches it.
 Fog is the anti-over-modeling guard. A rich schema tempts agents into speculative
 node-minting; fog gives the not-yet-sharp a home that isn't forty premature Question nodes.
 
+### The tree is the spec
+
+The anchor's requirement tree is the product spec, and a developer must be able to build
+from it without the chat. A statement is one obligation in one plain clause. A description
+says how the product behaves, in the present tense: its states, what moves it between them,
+what the person sees, and one example or edge case. History, the person's words, and the
+brief's words go on the record's thread. Unknowns go in fog or a Question, never in a list of
+open items inside a description. A Question is answered only when the answer covers all of
+it; a partial answer lands what it settled and narrows the Question. Before each handoff the
+session reads the rendered tree as a builder would, and fixes what does not read as a spec.
+
 ## Invocation
 
-Two modes. Every session ends with a handoff.
+Two modes. Every session starts or reuses the review host (`provenance review --detach`)
+and gives the person the page link as plain text, so they follow records as they land. Every
+session ends with a handoff that gives the link again.
 
 ### Chart
 

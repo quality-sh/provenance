@@ -11,6 +11,9 @@ it in the same change.
 
 - Use the `provenance-grounded-writing` skill before you write or change a
   Requirement or Rule statement.
+- A Requirement or Rule description says how the product behaves, in the present
+  tense: its states, what changes them, what the person sees, and one example.
+  History goes on the record's thread. Unknowns go in fog or a Question.
 - Before a graph write, run
   `{command} statement-checks create --statement "<statement>" --format json`. A clean report covers only the
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
@@ -23,13 +26,18 @@ it in the same change.
   A content change opens a review submission unless a reviewer accepted that content.
   Git supplies record history and change evidence. Proposal, Disposition, Withdrawal,
   and Discussion records hold review state.
-- Before you ask a person to review a record, start the review host if it is not running:
-  `{command} review --repo . --repository-id local --scope {selected_scope} --no-open`.
-- Open the record for the person with `{command} <record-id> --review-link`. The command
-  opens the review page in the browser of the person. If it cannot open the browser, it
-  prints a link. Give the person that link. Never give the person a record ID.
-- In an app that shows web pages, such as Claude Desktop or the Codex app, run
-  `{command} <record-id> --review-link --no-open --format json` and open `review_url` in the app.
+- When a session starts to write records, start or reuse the review host:
+  `{command} review --repo . --repository-id local --scope {selected_scope} --detach --no-open`.
+  The host keeps running after the command returns. Give the person the `review_url`
+  it prints, as plain text in chat. The page follows records as they land.
+- After you create or change a record, run
+  `{command} <record-id> --review-link --format json` and give the person `review_url`
+  as plain text in chat, whether or not `opened` is true. In an app that shows web
+  pages, such as Claude Desktop or the Codex app, you can also open `review_url` in
+  the app. That is extra, never the only route. Never give the person a record ID.
+- The page is served on the machine that runs the host. If that is not the person's
+  machine, add `--no-open`, say so, and give the person the review command to run
+  on their own machine.
 - Read the decision and review feedback with `{command} <record-id> --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.
@@ -153,6 +161,8 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 #[rule("rule_init_statement_claim_limit")]
 #[rule("rule_init_canonical_write_path")]
 #[rule("rule_init_guidance_selected_scope")]
+#[rule("rule_init_review_host_guidance")]
+#[rule("rule_init_description_guidance")]
 fn instructions(invocation: &Invocation, scope: &str) -> String {
     INSTRUCTIONS
         .replace("{command}", invocation.0)
