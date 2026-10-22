@@ -6,6 +6,7 @@ for `time` before and after the change. No time limit is checked in CI.
 """
 import argparse
 import json
+import hashlib
 import statistics
 import subprocess
 import time
@@ -18,15 +19,28 @@ parser.add_argument("repository", type=Path)
 args = parser.parse_args()
 binary = str(args.binary.resolve())
 repository = str(args.repository.resolve())
+checkpoint = args.repository / ".document-page-seed.json"
+completed = json.loads(checkpoint.read_text()) if checkpoint.exists() else {}
+started = time.monotonic()
 
 
 def call(*command, body=None):
     command = [binary, *command, "--repo", repository, "--format", "json", "--quiet"]
     if body is not None:
         command.append("--stdin")
+    key = hashlib.sha256(json.dumps([command, body]).encode()).hexdigest()
+    if args.action == "seed" and key in completed:
+        return completed[key]
+    if args.action == "seed" and time.monotonic() - started > 220:
+        print("Seed paused. Run the same command to continue.", flush=True)
+        raise SystemExit(0)
     result = subprocess.run(command, input=json.dumps(body) if body is not None else None,
                             text=True, capture_output=True, timeout=120, check=True)
-    return json.loads(result.stdout)
+    value = json.loads(result.stdout)
+    if args.action == "seed":
+        completed[key] = value
+        checkpoint.write_text(json.dumps(completed))
+    return value
 
 
 def create(collection, **body):
@@ -73,6 +87,7 @@ else:
         start = time.perf_counter()
         page = call("requirements", "req_document", "document", "get", "--limit", "50")
         samples.append(time.perf_counter() - start)
+        page = page["data"]
         assert len(page["entries"]) == 50, page
     print(json.dumps({"seconds": samples, "median": statistics.median(samples),
                       "review_totals": page["review_totals"]}, indent=2))
