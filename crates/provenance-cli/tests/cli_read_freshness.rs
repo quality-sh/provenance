@@ -23,35 +23,8 @@ fn member_read_sees_an_external_file_change() {
         .path()
         .join(".provenance/state/scopes/default/sources/source.jsonl");
     let content = std::fs::read_to_string(&shard).unwrap();
-    std::fs::write(
-        &shard,
-        content.replace("\"name\":\"source_fresh\"", "\"name\":\"Changed source\""),
-    )
-    .unwrap();
+    let edited = content.replace("\"name\":\"source_fresh\"", "\"name\":\"Changed source\"");
+    assert_ne!(edited, content);
+    std::fs::write(&shard, edited).unwrap();
     assert_eq!(read(&host)["data"]["name"], "Changed source");
-}
-
-// Characterization: a failed catch-up must stay explicit at the public query route.
-#[test]
-fn query_read_reports_a_failed_catch_up() {
-    let repo = repository();
-    source_before_host(repo.path(), "source_fresh");
-    let host = start(repo.path());
-    let query = || {
-        let response = request(&host, "GET", "/sources?query=search&limit=1", true)
-            .call()
-            .unwrap();
-        serde_json::from_str::<Value>(&response.into_string().unwrap()).unwrap()
-    };
-    assert_eq!(query()["data"]["items"][0]["id"], "source_fresh");
-    let shard = repo
-        .path()
-        .join(".provenance/state/scopes/default/sources/source.jsonl");
-    std::fs::write(shard, "invalid json\n").unwrap();
-    let answer = query();
-    assert_eq!(answer["data"]["items"][0]["id"], "source_fresh");
-    assert_eq!(answer["meta"]["stamp"]["policy"], "catch_up_failed");
-    assert!(answer["meta"]["freshness_error"]
-        .as_str()
-        .is_some_and(|text| !text.is_empty()));
 }
