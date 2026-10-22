@@ -5,7 +5,11 @@
 //! review fields, and this module derives the kind, guarded directory, owner
 //! field, and closed record deserialization from those two registries.
 
-use provenance_core::{review::ReviewRecord, NodeType};
+use crate::state_store::StateStore;
+use provenance_core::{
+    protocol::read_failure::ReadFailure, review::ReviewRecord, NodeType, ScopeId, StableId,
+};
+use std::collections::{btree_map::Entry, BTreeMap};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ReviewFamily {
@@ -56,7 +60,9 @@ macro_rules! define_review_families {
             scope: &provenance_core::ScopeId,
         ) -> anyhow::Result<Vec<ReviewRecord>> {
             let mut records = Vec::new();
-            $(records.extend(store.$reader(scope)?.into_iter().map(ReviewRecord::from));)*
+            for family in REVIEW_FAMILIES {
+                records.extend(records_of_kind(store, scope, family.kind)?);
+            }
             Ok(records)
         }
 
@@ -84,18 +90,44 @@ macro_rules! define_review_families {
             kind: NodeType,
             id: &provenance_core::StableId,
         ) -> anyhow::Result<ReviewRecord> {
-            match kind {
-                $(NodeType::$kind => store.$reader(scope)?
-                    .into_iter()
-                    .find(|record| record.id == *id)
-                    .map(Into::into),)*
-            }
-            .ok_or_else(|| provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound.into())
+            records_of_kind(store, scope, kind)?
+                .into_iter()
+                .find(|record| record.id() == id)
+                .ok_or_else(|| ReadFailure::ResourceNotFound.into())
         }
     };
 }
 
 crate::cache::family_table::record_family_rows!(define_review_families);
+
+/// Loads each family at first use, in caller order, and keeps its first record per id.
+/// The index belongs to one read under the repository publication lock.
+pub(crate) struct ReviewFamilyIndex<'a> {
+    store: &'a StateStore,
+    scope: &'a ScopeId,
+    // NodeType and StableId have neither Ord nor Hash; rank and text preserve their identity.
+    families: BTreeMap<u8, BTreeMap<String, ReviewRecord>>,
+}
+
+impl<'a> ReviewFamilyIndex<'a> {
+    pub(crate) fn new(store: &'a StateStore, scope: &'a ScopeId) -> Self {
+        Self { store, scope, families: BTreeMap::new() }
+    }
+
+    pub(crate) fn get(&mut self, kind: NodeType, id: &StableId) -> anyhow::Result<&ReviewRecord> {
+        let family = match self.families.entry(kind.rank()) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let mut indexed = BTreeMap::new();
+                for record in records_of_kind(self.store, self.scope, kind)? {
+                    indexed.entry(record.id().as_str().to_owned()).or_insert(record);
+                }
+                entry.insert(indexed)
+            }
+        };
+        family.get(id.as_str()).ok_or_else(|| ReadFailure::ResourceNotFound.into())
+    }
+}
 
 pub fn by_kind(kind: NodeType) -> &'static ReviewFamily {
     REVIEW_FAMILIES
