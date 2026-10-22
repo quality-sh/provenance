@@ -35,7 +35,9 @@ def call(*command, body=None):
         print("Seed paused. Run the same command to continue.", flush=True)
         raise SystemExit(0)
     result = subprocess.run(command, input=json.dumps(body) if body is not None else None,
-                            text=True, capture_output=True, timeout=120, check=True)
+                            text=True, capture_output=True, timeout=120)
+    if result.returncode:
+        raise RuntimeError(f"{command}: {result.stderr} {result.stdout}")
     value = json.loads(result.stdout)
     if args.action == "seed":
         completed[key] = value
@@ -77,7 +79,7 @@ if args.action == "seed":
         create("questions", id=f"question_{i:03}", topic_id=f"topic_{i:03}",
                question="Which fields does the record store?", resolution_method="research")
     for i in range(176):
-        create("rules", id=f"rule_{i:03}", statement="The store keeps the record fields.",
+        create("rules", id=f"rule_{i:03}", statement="The system uses the policy.",
                requirement_ids=[f"req_child_{i % 26:03}"], status="draft")
         if i % 25 == 0:
             print(f"Created {i + 1}/176 Rules", flush=True)
