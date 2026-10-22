@@ -35,35 +35,35 @@ impl<'g> UnitReader<'g> {
         }
     }
 
-    /// Hashes one unit. `stored` is the pair the projection holds for it;
-    /// a unit whose bytes did not move keeps that pair without a parse.
+    /// Hashes one unit. `known` is the pair the projection holds for it;
+    /// a unit whose bytes have not changed keeps that pair without a parse.
     pub fn hash(
         &mut self,
         unit: &units::Unit,
-        stored: Option<&units::UnitDigests>,
+        known: Option<&units::UnitDigests>,
     ) -> anyhow::Result<units::UnitDigests> {
-        hash(&self.state_dir, unit, stored, &mut self.units_hashed)
+        hash(&self.state_dir, unit, known, &mut self.units_hashed)
     }
 
     /// A global change validates every scope. Other passes validate only changed scopes.
     #[rule("rule_catch_up_validates_changed_units_only")]
     pub fn global(
         &mut self,
-        stored: Option<&units::UnitDigests>,
+        known: Option<&units::UnitDigests>,
     ) -> anyhow::Result<(Manifest, units::UnitDigests)> {
         let unit = units::Unit::Global;
         let path = self.state_dir.join("manifest.json");
         let mut manifest_bytes = None;
         self.units_hashed += 1;
         crate::test_probes::at("catch_up_unit_hashed")?;
-        let digests = units::digests_with(&self.state_dir, &unit, stored, |read_path, bytes| {
+        let digests = units::digests_with(&self.state_dir, &unit, known, |read_path, bytes| {
             if read_path == path {
                 manifest_bytes = Some(bytes.to_vec());
             }
         })?;
         crate::test_probes::at("catch_up_global_before_parse")?;
         crate::test_probes::record_read(&path);
-        if stored == Some(&digests) {
+        if known == Some(&digests) {
             let bytes =
                 manifest_bytes.ok_or_else(|| anyhow::anyhow!("missing manifest: {path}"))?;
             return Ok((crate::state_store::manifest_from_bytes(&bytes)?, digests));
@@ -115,12 +115,12 @@ fn validate(store: &GuardedStore<'_>, scope: &ScopeId) -> anyhow::Result<()> {
 fn hash(
     state_dir: &Utf8Path,
     unit: &units::Unit,
-    stored: Option<&units::UnitDigests>,
+    known: Option<&units::UnitDigests>,
     hashes: &mut u64,
 ) -> anyhow::Result<units::UnitDigests> {
     *hashes += 1;
     crate::test_probes::at("catch_up_unit_hashed")?;
-    Ok(units::unit_digests(state_dir, unit, stored)?)
+    Ok(units::unit_digests(state_dir, unit, known)?)
 }
 
 /// A parsed unit is used only when its hashes before and after parsing match.

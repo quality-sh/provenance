@@ -107,8 +107,8 @@ pub(super) fn digest_with(
 
 /// The digests of one unit. `known` is the pair a previous pass stored for
 /// the unit: when the stored bytes still hash to its stored digest, the
-/// canonical content is unchanged too, so the pair is returned without a
-/// parse of the records.
+/// bytes have not changed and neither has their content, so the pair is
+/// returned without a parse of the records.
 pub(super) fn unit_digests(
     state_dir: &Utf8Path,
     unit: &Unit,
@@ -121,8 +121,44 @@ pub(super) fn digests_with(
     state_dir: &Utf8Path,
     unit: &Unit,
     known: Option<&UnitDigests>,
-    mut retain: impl FnMut(&Utf8Path, &[u8]),
+    retain: impl FnMut(&Utf8Path, &[u8]),
 ) -> Result<UnitDigests, UnitHashError> {
+    let read = read_unit(state_dir, unit, retain)?;
+    if let Some(known) = known.filter(|known| known.stored == read.stored) {
+        return Ok(known.clone());
+    }
+    let mut content = Vec::new();
+    for ((relative, path), bytes) in read.files.iter().zip(&read.contents) {
+        let content_bytes =
+            content::hash_bytes(path, bytes).map_err(|error| UnitHashError::at(path, error))?;
+        frame(&mut content, relative, &content_bytes);
+    }
+    Ok(UnitDigests {
+        content: crate::canonical_digest::digest(&content),
+        stored: read.stored,
+    })
+}
+
+fn stored_digest_with(
+    state_dir: &Utf8Path,
+    unit: &Unit,
+    retain: impl FnMut(&Utf8Path, &[u8]),
+) -> Result<String, UnitHashError> {
+    Ok(read_unit(state_dir, unit, retain)?.stored)
+}
+
+/// The files of one unit, their bytes, and the digest of those exact bytes.
+struct UnitBytes {
+    files: Vec<(String, Utf8PathBuf)>,
+    contents: Vec<Vec<u8>>,
+    stored: String,
+}
+
+fn read_unit(
+    state_dir: &Utf8Path,
+    unit: &Unit,
+    mut retain: impl FnMut(&Utf8Path, &[u8]),
+) -> Result<UnitBytes, UnitHashError> {
     let files = unit_files(state_dir, unit)?;
     crate::test_probes::at("unit_files_collected")
         .map_err(|error| UnitHashError::at(state_dir, error))?;
@@ -135,38 +171,11 @@ pub(super) fn digests_with(
         contents.push(bytes);
     }
     ensure_file_list_unchanged(state_dir, unit, &files)?;
-    let stored = crate::canonical_digest::digest(&stored);
-    if let Some(known) = known.filter(|known| known.stored == stored) {
-        return Ok(known.clone());
-    }
-    let mut content = Vec::new();
-    for ((relative, path), bytes) in files.iter().zip(&contents) {
-        let content_bytes =
-            content::hash_bytes(path, bytes).map_err(|error| UnitHashError::at(path, error))?;
-        frame(&mut content, relative, &content_bytes);
-    }
-    Ok(UnitDigests {
-        content: crate::canonical_digest::digest(&content),
-        stored,
+    Ok(UnitBytes {
+        files,
+        contents,
+        stored: crate::canonical_digest::digest(&stored),
     })
-}
-
-fn stored_digest_with(
-    state_dir: &Utf8Path,
-    unit: &Unit,
-    mut retain: impl FnMut(&Utf8Path, &[u8]),
-) -> Result<String, UnitHashError> {
-    let files = unit_files(state_dir, unit)?;
-    crate::test_probes::at("unit_files_collected")
-        .map_err(|error| UnitHashError::at(state_dir, error))?;
-    let mut stored = Vec::new();
-    for (relative, path) in &files {
-        let bytes = std::fs::read(path).map_err(|error| UnitHashError::at(path, error))?;
-        retain(path, &bytes);
-        frame(&mut stored, relative, &bytes);
-    }
-    ensure_file_list_unchanged(state_dir, unit, &files)?;
-    Ok(crate::canonical_digest::digest(&stored))
 }
 
 fn ensure_file_list_unchanged(

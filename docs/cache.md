@@ -69,7 +69,9 @@ same hash, parse, and hash-again step in place.
 A rebuild records `VALIDATION_VERSION` in `projection_validation`. A
 catch-up pass rebuilds when the stored version differs from this build's
 version, or when no version is stored. Validator changes that need to check
-existing scopes increase this constant. `provenance materialize` and
+existing scopes increase this constant. Catch-up keeps the stored content
+digest of a unit whose bytes have not changed, so a change to what the content
+digest covers also increases this constant. `provenance materialize` and
 `provenance check` always validate every scope.
 
 A pass that changes rows, digests, or the unit set commits them together

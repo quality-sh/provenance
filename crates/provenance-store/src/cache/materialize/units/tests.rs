@@ -1,4 +1,4 @@
-use super::{digest_with, unit_digest, Unit};
+use super::{digest_with, digests_with, unit_digest, unit_stored_digest, Unit, UnitDigests};
 
 #[test]
 fn a_file_added_after_bytes_are_read_invalidates_the_digest() {
@@ -77,4 +77,42 @@ fn stamps_do_not_change_unit_digests_but_every_other_field_does() {
             "archive permalink is content"
         );
     }
+}
+
+fn requirement_shard(bytes: &[u8]) -> (tempfile::TempDir, Unit) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("scopes/default/requirements/record.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, bytes).unwrap();
+    (dir, Unit::Scope(provenance_core::ScopeId::new("default").unwrap()))
+}
+
+#[test]
+fn a_known_pair_with_the_current_stored_digest_is_returned_without_a_parse() {
+    // The shard is not JSON, so any parse of it fails.
+    let (dir, unit) = requirement_shard(b"not json\n");
+    let state = camino::Utf8Path::from_path(dir.path()).unwrap();
+    let known = UnitDigests {
+        content: "fake content digest".to_string(),
+        stored: unit_stored_digest(state, &unit).unwrap(),
+    };
+
+    let digests = digests_with(state, &unit, Some(&known), |_, _| {}).unwrap();
+
+    assert_eq!(digests, known);
+}
+
+#[test]
+fn a_known_pair_with_a_different_stored_digest_gets_the_computed_content_digest() {
+    let (dir, unit) = requirement_shard(br#"{"id":"one","statement":"Original content"}"#);
+    let state = camino::Utf8Path::from_path(dir.path()).unwrap();
+    let known = UnitDigests {
+        content: "fake content digest".to_string(),
+        stored: "fake stored digest".to_string(),
+    };
+
+    let digests = digests_with(state, &unit, Some(&known), |_, _| {}).unwrap();
+
+    assert_eq!(digests.content, unit_digest(state, &unit).unwrap());
+    assert_eq!(digests.stored, unit_stored_digest(state, &unit).unwrap());
 }

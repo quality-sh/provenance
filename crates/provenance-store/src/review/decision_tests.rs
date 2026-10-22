@@ -449,6 +449,7 @@ fn withdrawal_allows_a_fresh_review_cycle() {
 
 mod bypass_tests;
 mod canonical_artifacts;
+mod error_order;
 #[path = "decision_tests/conflict_tests.rs"]
 mod conflict_tests;
 #[path = "decision_tests/legacy.rs"]
