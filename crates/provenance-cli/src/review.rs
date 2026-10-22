@@ -114,30 +114,15 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         ),
         Arc::new(move |changes| page_events.page_changed(changes)),
     );
-    let router = host
-        .router()
-        .route(
-            IDENTITY_ROUTE,
-            get(local_host_identity).with_state(identity.clone()),
-        )
-        .route(
-            "/review-config",
-            get(configuration).with_state(review_configuration),
-        )
-        .route(
-            LAUNCH_CODE_ROUTE,
-            post(launch::issue_code).with_state(codes.clone()),
-        )
-        .route(
-            LAUNCH_SESSION_ROUTE,
-            post(launch::open_session).with_state(codes.clone()),
-        )
-        .merge(events.router())
-        .fallback(assets::serve)
-        .layer(middleware::from_fn_with_state(
-            (access, codes.clone(), format!("ws://{address}")),
-            protect_origin,
-        ));
+    let router = review_router(
+        &host,
+        &identity,
+        review_configuration,
+        &codes,
+        &events,
+        access,
+        address,
+    );
     let signals = ShutdownSignals::new()?;
     let (stop, stopped) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(
@@ -160,6 +145,41 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     std::io::stdout().flush()?;
     open_review_page(&endpoint, &codes, options.no_open)?;
     serve(server, stop, host, events, signals).await
+}
+
+/// The host routes plus the review page's identity, configuration, launch, and event routes.
+fn review_router(
+    host: &StatementHost,
+    identity: &LocalHostIdentity,
+    review_configuration: ReviewConfiguration,
+    codes: &launch::LaunchCodes,
+    events: &events::ReviewEvents,
+    access: Arc<LocalAccess>,
+    address: std::net::SocketAddr,
+) -> axum::Router {
+    host.router()
+        .route(
+            IDENTITY_ROUTE,
+            get(local_host_identity).with_state(identity.clone()),
+        )
+        .route(
+            "/review-config",
+            get(configuration).with_state(review_configuration),
+        )
+        .route(
+            LAUNCH_CODE_ROUTE,
+            post(launch::issue_code).with_state(codes.clone()),
+        )
+        .route(
+            LAUNCH_SESSION_ROUTE,
+            post(launch::open_session).with_state(codes.clone()),
+        )
+        .merge(events.router())
+        .fallback(assets::serve)
+        .layer(middleware::from_fn_with_state(
+            (access, codes.clone(), format!("ws://{address}")),
+            protect_origin,
+        ))
 }
 
 fn repository_access(

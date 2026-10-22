@@ -76,12 +76,15 @@ fn detach(root: &Path, cache: &UserCache, configure: impl FnOnce(&mut Command)) 
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn identity(endpoint: &str) -> Result<ureq::Response, ureq::Error> {
-    ureq::AgentBuilder::new()
+/// The host's public identity, or `None` when nothing answers at the endpoint.
+fn identity(endpoint: &str) -> Option<Value> {
+    let response = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(2))
         .build()
         .get(&format!("{endpoint}/local-host-identity"))
         .call()
+        .ok()?;
+    serde_json::from_str(&response.into_string().ok()?).ok()
 }
 
 fn wait_until(condition: impl Fn() -> bool, what: &str) {
@@ -121,8 +124,7 @@ fn a_detached_host_outlives_the_command_and_is_reused() {
     assert!(Path::new(started["log"].as_str().unwrap()).is_file());
 
     // The parent process has returned; the host still answers from its own process.
-    let answer: Value =
-        serde_json::from_str(&identity(&endpoint).unwrap().into_string().unwrap()).unwrap();
+    let answer = identity(&endpoint).expect("the detached host answers");
     assert_eq!(answer["scope"], Value::String("default".to_owned()));
     assert!(registry(repo.path()).is_file());
 
@@ -195,7 +197,7 @@ fn a_detached_host_outlives_the_command_and_is_reused() {
         .unwrap()
         .success());
     wait_until(
-        || identity(&endpoint).is_err(),
+        || identity(&endpoint).is_none(),
         "the host did not stop after SIGTERM",
     );
     wait_until(

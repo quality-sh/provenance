@@ -35,12 +35,11 @@ pub fn run(options: &super::Options) -> anyhow::Result<()> {
         .repo
         .canonicalize()
         .with_context(|| format!("cannot find repository {}", options.repo.display()))?;
-    let (host, started) = match discover(&repo, &options.scope)? {
-        Some(host) => (host, None),
-        None => {
-            let (host, child, log) = start(options, &repo)?;
-            (host, Some((child.id(), log)))
-        }
+    let (host, started) = if let Some(host) = discover(&repo, &options.scope)? {
+        (host, None)
+    } else {
+        let (host, child, log) = start(options, &repo)?;
+        (host, Some((child.id(), log)))
     };
     if manifest(&repo)?.disposition_actor_ids.is_empty() {
         eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
