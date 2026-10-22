@@ -84,7 +84,10 @@ fn requirement_shard(bytes: &[u8]) -> (tempfile::TempDir, Unit) {
     let path = dir.path().join("scopes/default/requirements/record.jsonl");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, bytes).unwrap();
-    (dir, Unit::Scope(provenance_core::ScopeId::new("default").unwrap()))
+    (
+        dir,
+        Unit::Scope(provenance_core::ScopeId::new("default").unwrap()),
+    )
 }
 
 #[test]

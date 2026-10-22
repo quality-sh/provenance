@@ -39,14 +39,14 @@ fn revision_edit_reports_the_withdrawals_error_first_and_changes_nothing() {
     let before = store.requirement_edit_state(&scope(), &req()).unwrap().etag;
     corrupt_withdrawals_and_dispositions(&store);
 
-    reports_the_withdrawals_error(store.save_requirement(
-        serde_json::from_value(json!({
-            "actor":"agent","expected_etag":before,
-            "update":{"scope_id":"default","id":"req_a","statement":"Statement v2"},
-            "relationships":null
-        }))
-        .unwrap(),
-    ));
+    let edit = serde_json::from_value(json!({
+        "actor":"agent","expected_etag":before,
+        "update":{"scope_id":"default","id":"req_a","statement":"Statement v2"},
+        "relationships":null
+    }))
+    .unwrap();
+
+    reports_the_withdrawals_error(store.save_requirement(edit));
 
     let after = store.requirement_edit_state(&scope(), &req()).unwrap().etag;
     assert_eq!(before, after);
