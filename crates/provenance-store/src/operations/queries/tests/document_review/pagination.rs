@@ -1,4 +1,6 @@
 use super::*;
+use provenance_core::protocol::read_failure::ReadFailure;
+use std::collections::BTreeSet;
 
 async fn read(root: &camino::Utf8Path, cursor: Option<String>) -> anyhow::Result<Value> {
     let answer = queries::read_document(
@@ -49,7 +51,7 @@ async fn document_pages_keep_membership_and_whole_totals() {
         }
     }
     assert_eq!(
-        found.into_iter().collect::<std::collections::BTreeSet<_>>(),
+        found.into_iter().collect::<BTreeSet<_>>(),
         [
             ("member", "req_overtime"),
             ("member", "resolution_policy"),
@@ -60,7 +62,9 @@ async fn document_pages_keep_membership_and_whole_totals() {
             ("reference", "source_policy"),
             ("reference", "domain_payroll"),
         ]
-        .map(|(kind, id)| (kind.to_owned(), id.to_owned())).into_iter().collect::<std::collections::BTreeSet<_>>()
+        .map(|(kind, id)| (kind.to_owned(), id.to_owned()))
+        .into_iter()
+        .collect::<BTreeSet<_>>()
     );
 }
 
@@ -80,11 +84,10 @@ async fn document_page_refuses_cursor_after_public_write() {
         .await
         .unwrap_err();
     assert_eq!(
-        error.downcast_ref::<provenance_core::protocol::read_failure::ReadFailure>(),
-        Some(&provenance_core::protocol::read_failure::ReadFailure::CursorRevisionChanged)
+        error.downcast_ref::<ReadFailure>(),
+        Some(&ReadFailure::CursorRevisionChanged)
     );
 }
-
 
 // Characterization: preserve the observed order while the family reads change.
 #[tokio::test]
@@ -92,9 +95,16 @@ async fn document_entries_keep_observed_member_reference_order() {
     let (dir, store, scope) = seeded_store();
     create_document_records(&store, &scope);
     let result = page(&root_of(&dir), 50, false).await;
-    let found = result["entries"].as_array().unwrap().iter()
-        .map(|entry| (entry["kind"].as_str().unwrap().to_owned(),
-                      entry["node"]["id"].as_str().unwrap().to_owned()))
+    let found = result["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            (
+                entry["kind"].as_str().unwrap().to_owned(),
+                entry["node"]["id"].as_str().unwrap().to_owned(),
+            )
+        })
         .collect::<Vec<_>>();
     assert_eq!(
         found,

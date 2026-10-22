@@ -72,19 +72,27 @@ async fn document_distinguishes_decisions_within_each_family() {
     let (dir, store, scope) = seeded_store();
     allow_reviewer(&store);
     create_document_records(&store, &scope);
-    store.create_rule(input::<CreateRuleInput>(json!({
-        "scope_id":scope, "id":"rule_second", "statement":"The system checks the policy.",
-        "status":"draft", "severity":"medium", "requirement_ids":["req_overtime"],
-        "resolution_ids":[]
-    }))).unwrap();
-    store.create_resolution(input::<CreateResolutionInput>(json!({
-        "scope_id":scope, "id":"resolution_second", "title":"Second decision",
-        "position":"Check the policy.", "rationale":"The policy needs a check.",
-        "status":"draft", "requirement_ids":["req_overtime"], "supersedes":[], "inputs":[]
-    }))).unwrap();
+    store
+        .create_rule(input::<CreateRuleInput>(json!({
+            "scope_id":scope, "id":"rule_second", "statement":"The system checks the policy.",
+            "status":"draft", "severity":"medium", "requirement_ids":["req_overtime"],
+            "resolution_ids":[]
+        })))
+        .unwrap();
+    store
+        .create_resolution(input::<CreateResolutionInput>(json!({
+            "scope_id":scope, "id":"resolution_second", "title":"Second decision",
+            "position":"Check the policy.", "rationale":"The policy needs a check.",
+            "status":"draft", "requirement_ids":["req_overtime"], "supersedes":[], "inputs":[]
+        })))
+        .unwrap();
     for (kind, accepted, rejected) in [
         (NodeType::Rule, "rule_policy", "rule_second"),
-        (NodeType::Resolution, "resolution_policy", "resolution_second"),
+        (
+            NodeType::Resolution,
+            "resolution_policy",
+            "resolution_second",
+        ),
     ] {
         for (id, decision) in [
             (accepted, DispositionDecision::Accepted),
@@ -102,5 +110,8 @@ async fn document_distinguishes_decisions_within_each_family() {
     for id in ["rule_second", "resolution_second"] {
         assert_eq!(review(&result, id)["outcome"], "rejected", "{id}");
     }
-    assert_eq!(result["review_totals"], json!({"pending":1,"accepted":2,"rejected":2}));
+    assert_eq!(
+        result["review_totals"],
+        json!({"pending":1,"accepted":2,"rejected":2})
+    );
 }

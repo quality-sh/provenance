@@ -56,8 +56,8 @@ macro_rules! define_review_families {
         ];
 
         pub fn review_records(
-            store: &crate::state_store::StateStore,
-            scope: &provenance_core::ScopeId,
+            store: &StateStore,
+            scope: &ScopeId,
         ) -> anyhow::Result<Vec<ReviewRecord>> {
             let mut records = Vec::new();
             for family in REVIEW_FAMILIES {
@@ -68,14 +68,14 @@ macro_rules! define_review_families {
 
         pub fn review_paths(
             layout: &crate::layout::ProvenanceLayout,
-            scope: &provenance_core::ScopeId,
+            scope: &ScopeId,
         ) -> Vec<camino::Utf8PathBuf> {
             vec![$(crate::shards::$path(layout, scope),)*]
         }
 
         pub fn records_of_kind(
-            store: &crate::state_store::StateStore,
-            scope: &provenance_core::ScopeId,
+            store: &StateStore,
+            scope: &ScopeId,
             kind: NodeType,
         ) -> anyhow::Result<Vec<ReviewRecord>> {
             match kind {
@@ -85,10 +85,10 @@ macro_rules! define_review_families {
         }
 
         pub fn record(
-            store: &crate::state_store::StateStore,
-            scope: &provenance_core::ScopeId,
+            store: &StateStore,
+            scope: &ScopeId,
             kind: NodeType,
-            id: &provenance_core::StableId,
+            id: &StableId,
         ) -> anyhow::Result<ReviewRecord> {
             records_of_kind(store, scope, kind)?
                 .into_iter()
@@ -120,7 +120,12 @@ impl<'a> ReviewFamilyIndex<'a> {
         for (kind, id) in records {
             wanted.entry(kind.rank()).or_default().insert(id.as_str());
         }
-        Self { store, scope, wanted, families: BTreeMap::new() }
+        Self {
+            store,
+            scope,
+            wanted,
+            families: BTreeMap::new(),
+        }
     }
 
     pub(crate) fn get(&mut self, kind: NodeType, id: &StableId) -> anyhow::Result<&ReviewRecord> {
@@ -129,16 +134,22 @@ impl<'a> ReviewFamilyIndex<'a> {
             Entry::Vacant(entry) => {
                 let mut indexed = BTreeMap::new();
                 for record in records_of_kind(self.store, self.scope, kind)? {
-                    if self.wanted.get(&kind.rank())
+                    if self
+                        .wanted
+                        .get(&kind.rank())
                         .is_some_and(|ids| ids.contains(record.id().as_str()))
                     {
-                        indexed.entry(record.id().as_str().to_owned()).or_insert(record);
+                        indexed
+                            .entry(record.id().as_str().to_owned())
+                            .or_insert(record);
                     }
                 }
                 entry.insert(indexed)
             }
         };
-        family.get(id.as_str()).ok_or_else(|| ReadFailure::ResourceNotFound.into())
+        family
+            .get(id.as_str())
+            .ok_or_else(|| ReadFailure::ResourceNotFound.into())
     }
 }
 
