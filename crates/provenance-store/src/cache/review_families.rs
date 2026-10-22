@@ -9,7 +9,7 @@ use crate::state_store::StateStore;
 use provenance_core::{
     protocol::read_failure::ReadFailure, review::ReviewRecord, NodeType, ScopeId, StableId,
 };
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ReviewFamily {
@@ -105,13 +105,22 @@ crate::cache::family_table::record_family_rows!(define_review_families);
 pub(crate) struct ReviewFamilyIndex<'a> {
     store: &'a StateStore,
     scope: &'a ScopeId,
+    wanted: BTreeMap<u8, BTreeSet<&'a str>>,
     // NodeType and StableId have neither Ord nor Hash; rank and text preserve their identity.
     families: BTreeMap<u8, BTreeMap<String, ReviewRecord>>,
 }
 
 impl<'a> ReviewFamilyIndex<'a> {
-    pub(crate) fn new(store: &'a StateStore, scope: &'a ScopeId) -> Self {
-        Self { store, scope, families: BTreeMap::new() }
+    pub(crate) fn new(
+        store: &'a StateStore,
+        scope: &'a ScopeId,
+        records: &'a [(NodeType, StableId)],
+    ) -> Self {
+        let mut wanted = BTreeMap::<u8, BTreeSet<&str>>::new();
+        for (kind, id) in records {
+            wanted.entry(kind.rank()).or_default().insert(id.as_str());
+        }
+        Self { store, scope, wanted, families: BTreeMap::new() }
     }
 
     pub(crate) fn get(&mut self, kind: NodeType, id: &StableId) -> anyhow::Result<&ReviewRecord> {
@@ -120,7 +129,11 @@ impl<'a> ReviewFamilyIndex<'a> {
             Entry::Vacant(entry) => {
                 let mut indexed = BTreeMap::new();
                 for record in records_of_kind(self.store, self.scope, kind)? {
-                    indexed.entry(record.id().as_str().to_owned()).or_insert(record);
+                    if self.wanted.get(&kind.rank())
+                        .is_some_and(|ids| ids.contains(record.id().as_str()))
+                    {
+                        indexed.entry(record.id().as_str().to_owned()).or_insert(record);
+                    }
                 }
                 entry.insert(indexed)
             }

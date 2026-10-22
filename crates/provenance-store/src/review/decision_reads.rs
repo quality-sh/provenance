@@ -61,7 +61,7 @@ impl StateStore {
             let proposals = self.list_proposal_definitions(scope)?;
             let dispositions = self.list_dispositions(scope)?;
             let facts = CycleFacts::validated(self, scope)?;
-            let mut families = ReviewFamilyIndex::new(self, scope);
+            let mut families = ReviewFamilyIndex::new(self, scope, records);
             let states = records
                 .iter()
                 .map(|(kind, id)| {
