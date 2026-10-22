@@ -155,7 +155,8 @@ pub(super) fn invoke_resolved<O: Operation>(
 fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T, FailureEnvelope> {
     #[cfg(feature = "schema")]
     {
-        let schema = super::schema::schema::<O::Request>(schemars::generate::Contract::Deserialize);
+        let schema =
+            super::schema::schema::<O::Request>(schemars::generate::Contract::Deserialize);
         let missing = schema["required"]
             .as_array()
             .into_iter()

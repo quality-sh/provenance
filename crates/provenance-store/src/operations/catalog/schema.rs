@@ -300,7 +300,10 @@ pub(super) fn schema<T: JsonSchema + 'static>(contract: Contract) -> Value {
     type Key = (std::any::TypeId, bool);
     static SCHEMAS: std::sync::LazyLock<std::sync::Mutex<std::collections::BTreeMap<Key, Value>>> =
         std::sync::LazyLock::new(Default::default);
-    let key = (std::any::TypeId::of::<T>(), matches!(contract, Contract::Serialize));
+    let key = (
+        std::any::TypeId::of::<T>(),
+        matches!(contract, Contract::Serialize),
+    );
     let cached = SCHEMAS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
