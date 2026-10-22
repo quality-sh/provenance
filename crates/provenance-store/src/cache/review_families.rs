@@ -102,7 +102,7 @@ crate::cache::family_table::record_family_rows!(define_review_families);
 
 /// Loads each family at first use, in caller order, and keeps its first record per id.
 /// The index belongs to one read under the repository publication lock.
-pub(crate) struct ReviewFamilyIndex<'a> {
+pub struct ReviewFamilyIndex<'a> {
     store: &'a StateStore,
     scope: &'a ScopeId,
     wanted: BTreeMap<u8, BTreeSet<&'a str>>,
