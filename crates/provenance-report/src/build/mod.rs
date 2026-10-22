@@ -24,6 +24,8 @@ use provenance_store::{cache, layout::ProvenanceLayout, settings};
 
 mod findings;
 mod graph_snapshots;
+#[cfg(test)]
+mod tests;
 
 use findings::BaselineView;
 use graph_snapshots::{GraphSnapshot, SnapshotRead};
@@ -71,10 +73,29 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
     let (completeness, incompleteness_reason) =
         scan_completeness(input.repo, input.scan_path, scan_covers, &head)?;
 
-    let (baseline, baseline_reason, base_snapshot, head_snapshot) =
+    let (mut baseline, mut baseline_reason, base_snapshot, head_snapshot) =
         read_snapshots(input.repo, &base, &head, &scope)?;
     let (verifications, implementations) =
-        graph_snapshots::read_bindings(input.repo, &head, &scope)?;
+        graph_snapshots::read_bindings(input.repo, &head, &scope, CommitRole::Head)?;
+    let mut base_evidence = BaselineEvidence::default();
+    if baseline == BaselineCompatibility::Compatible {
+        match read_baseline_evidence(input.repo, &base, &scope)? {
+            BaselineEvidenceRead::Present(evidence) => base_evidence = evidence,
+            BaselineEvidenceRead::Incompatible(reason) => {
+                baseline = BaselineCompatibility::Incompatible;
+                baseline_reason = Some(format!(
+                    "binding records at base commit {base} do not parse: {reason}"
+                ));
+            }
+        }
+    }
+    let baseline_view = BaselineView::for_rules(
+        baseline,
+        &base_snapshot.rules,
+        &base_evidence.scans,
+        &base_evidence.implementations,
+        &base_evidence.verifications,
+    );
 
     let collected = collect_findings(&FindingInput {
         repo: input.repo,
@@ -88,7 +109,7 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         base_snapshot: &base_snapshot,
         head_snapshot: &head_snapshot,
         baseline,
-        baseline_view: &BaselineView::for_rules(baseline, &base_snapshot.rules),
+        baseline_view: &baseline_view,
         binding_severity: binding_severity(configured),
         completeness,
     })?;
@@ -123,6 +144,46 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         verification_runs: Vec::new(),
     };
     Ok(render::normalize(&envelope))
+}
+
+#[derive(Default)]
+struct BaselineEvidence {
+    scans: Vec<provenance_scanner::FileScan>,
+    verifications: Vec<provenance_core::VerificationBinding>,
+    implementations: Vec<provenance_core::ImplementationBinding>,
+}
+
+enum BaselineEvidenceRead {
+    Present(BaselineEvidence),
+    Incompatible(String),
+}
+
+fn read_baseline_evidence(
+    repo: &Utf8Path,
+    base: &str,
+    scope: &ScopeId,
+) -> anyhow::Result<BaselineEvidenceRead> {
+    let scans = git::revision_files(repo, base)?
+        .into_iter()
+        .map(|file| {
+            let language = file
+                .path
+                .extension()
+                .and_then(provenance_scanner::Language::from_extension)
+                .expect("revision files contain only supported languages");
+            provenance_scanner::scan_file(&file.path, language, &file.content)
+        })
+        .collect();
+    let (verifications, implementations) =
+        match graph_snapshots::read_bindings(repo, base, scope, CommitRole::Base) {
+            Ok(bindings) => bindings,
+            Err(error) => return Ok(BaselineEvidenceRead::Incompatible(format!("{error:#}"))),
+        };
+    Ok(BaselineEvidenceRead::Present(BaselineEvidence {
+        scans,
+        verifications,
+        implementations,
+    }))
 }
 
 /// Read both committed snapshots. The head must parse: the report describes
