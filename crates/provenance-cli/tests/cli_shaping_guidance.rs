@@ -67,10 +67,7 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
     );
     assert!(prose.contains("Description as minutes — bad:"), "{writing}");
     assert!(prose.contains("Description as spec — good:"), "{writing}");
-    assert!(
-        !prose.contains("where being fuller is fine"),
-        "{writing}"
-    );
+    assert!(!prose.contains("where being fuller is fine"), "{writing}");
 }
 
 /// A Question closes only on a complete answer.

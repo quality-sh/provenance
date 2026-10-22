@@ -49,7 +49,9 @@ fn init_guidance_starts_the_host_early_and_hands_the_link_over_as_text() {
         "{agents}"
     );
     assert!(
-        prose.contains("give the person `review_url` as plain text in chat, whether or not `opened` is true."),
+        prose.contains(
+            "give the person `review_url` as plain text in chat, whether or not `opened` is true."
+        ),
         "{agents}"
     );
     assert!(

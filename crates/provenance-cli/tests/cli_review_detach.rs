@@ -242,5 +242,8 @@ fn a_detached_start_opens_the_page_when_a_browser_is_available() {
     assert_eq!(started["opened"], Value::Bool(true));
     assert_eq!(started["review_url"], Value::String(format!("{endpoint}/")));
     let opened = browser.wait_for_link(Duration::from_secs(10));
-    assert!(opened.starts_with(&format!("{endpoint}/#launch=")), "{opened}");
+    assert!(
+        opened.starts_with(&format!("{endpoint}/#launch=")),
+        "{opened}"
+    );
 }
