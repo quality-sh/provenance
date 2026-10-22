@@ -67,6 +67,17 @@ macro_rules! define_review_families {
             vec![$(crate::shards::$path(layout, scope),)*]
         }
 
+        pub(crate) fn records_of_kind(
+            store: &crate::state_store::StateStore,
+            scope: &provenance_core::ScopeId,
+            kind: NodeType,
+        ) -> anyhow::Result<Vec<ReviewRecord>> {
+            match kind {
+                $(NodeType::$kind => Ok(store.$reader(scope)?
+                    .into_iter().map(ReviewRecord::from).collect()),)*
+            }
+        }
+
         pub fn record(
             store: &crate::state_store::StateStore,
             scope: &provenance_core::ScopeId,

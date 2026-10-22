@@ -92,7 +92,8 @@ else:
     samples = []
     for _ in range(5):
         start = time.perf_counter()
-        page = call("requirements", "req_document", "document", "get", "--limit", "50")
+        page = call("requirements", "req_document", "document", "get", "--limit", "50",
+                    "--exclude-terminal", "false")
         samples.append(time.perf_counter() - start)
         page = page["data"]
         assert len(page["entries"]) == 50, page

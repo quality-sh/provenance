@@ -14,6 +14,7 @@ use provenance_core::{
     DispositionDecision, DispositionRecord, NodeType, ProposalCard, ScopeId, StableId,
 };
 use provenance_macros::rule;
+use std::collections::{btree_map::Entry, BTreeMap};
 
 pub struct DocumentReviewState {
     pub records: Vec<(NodeType, StableId, DocumentReviewSummary)>,
@@ -61,12 +62,29 @@ impl StateStore {
             let proposals = self.list_proposal_definitions(scope)?;
             let dispositions = self.list_dispositions(scope)?;
             let facts = CycleFacts::validated(self, scope)?;
+            let mut families =
+                BTreeMap::<u8, BTreeMap<StableId, provenance_core::review::ReviewRecord>>::new();
             let states = records
                 .iter()
                 .map(|(kind, id)| {
-                    let record = crate::cache::review_families::record(self, scope, *kind, id)?;
+                    // Load a family at its first use to keep read failures in order.
+                    let family = match families.entry(kind.rank()) {
+                        Entry::Occupied(entry) => entry.into_mut(),
+                        Entry::Vacant(entry) => {
+                            let mut indexed = BTreeMap::new();
+                            for record in
+                                crate::cache::review_families::records_of_kind(self, scope, *kind)?
+                            {
+                                indexed.entry(record.id().clone()).or_insert(record);
+                            }
+                            entry.insert(indexed)
+                        }
+                    };
+                    let record = family.get(id).ok_or(
+                        provenance_core::protocol::read_failure::ReadFailure::ResourceNotFound,
+                    )?;
                     Self::record_decision_state_from_parts(
-                        &record,
+                        record,
                         &proposals,
                         &dispositions,
                         &facts,
