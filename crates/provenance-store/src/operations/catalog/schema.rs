@@ -95,12 +95,12 @@ pub(super) struct RawDefinition {
 
 /// Return the canonical request schema for one registered operation type.
 pub fn operation_request_schema<O: Operation>() -> Value {
-    raw_definition::<O>().request_schema
+    derive_schema::<O::Request>(Contract::Deserialize)
 }
 
 /// Return the canonical success schema for one registered operation type.
 pub fn operation_success_schema<O: Operation>() -> Value {
-    raw_definition::<O>().success_schema
+    derive_schema::<O::Success>(Contract::Serialize)
 }
 
 impl Definition {
@@ -294,7 +294,29 @@ fn merge_variants(variants: Vec<Value>) -> Value {
     schema
 }
 
+// Only the closed route catalog uses this cache. Public schema derivation remains direct.
 fn schema<T: JsonSchema>(contract: Contract) -> Value {
+    type Key = (std::borrow::Cow<'static, str>, bool);
+    static SCHEMAS: std::sync::LazyLock<std::sync::Mutex<std::collections::BTreeMap<Key, Value>>> =
+        std::sync::LazyLock::new(Default::default);
+    let key = (T::schema_id(), matches!(contract, Contract::Serialize));
+    let cached = SCHEMAS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&key)
+        .cloned();
+    if let Some(schema) = cached {
+        return schema;
+    }
+    let schema = derive_schema::<T>(contract);
+    SCHEMAS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(key, schema.clone());
+    schema
+}
+
+fn derive_schema<T: JsonSchema>(contract: Contract) -> Value {
     serde_json::to_value(
         SchemaSettings::draft2020_12()
             .with(|settings| settings.contract = contract)

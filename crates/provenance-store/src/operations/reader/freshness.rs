@@ -41,14 +41,10 @@ impl Freshness {
         scan_limit: usize,
         run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
     ) -> anyhow::Result<Stamped<R>> {
-        let started = std::time::Instant::now();
         let outcome = self
             .answer_at_snapshot(layout, repo, scope, scan_limit, run)
             .await;
-        eprintln!("diw3 answer {:?}", started.elapsed());
-        let started = std::time::Instant::now();
         self.connection.close().await?;
-        eprintln!("diw3 close {:?}", started.elapsed());
         let (result, stamp) = outcome?;
         Ok(Stamped {
             result: result?,
@@ -125,17 +121,11 @@ pub(super) async fn run(
 /// costs nothing.
 #[rule("rule_read_holds_guard_for_freshness_only")]
 async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<Freshness> {
-    let started = std::time::Instant::now();
     let guard = publication_guard(layout).await?;
-    eprintln!("diw3 guard {:?}", started.elapsed());
-    let started = std::time::Instant::now();
     let connection = open_cache(layout).await?;
-    eprintln!("diw3 open {:?}", started.elapsed());
-    let started = std::time::Instant::now();
     if let Err(error) = catch_up_with_guard(&guard, connection.pool()).await {
         return Err(connection.close_reporting(error).await);
     }
-    eprintln!("diw3 catch_up {:?}", started.elapsed());
     drop(guard);
     Ok(Freshness {
         connection,

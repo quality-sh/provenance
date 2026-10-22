@@ -32,14 +32,10 @@ pub async fn compatibility(pool: &SqlitePool) -> anyhow::Result<Compatibility> {
             }
             Err(error) => return Err(error.into()),
         };
-    let started = std::time::Instant::now();
     let expected = expected_catalog().await?;
-    eprintln!("diw3 expected_catalog {:?}", started.elapsed());
-    let started = std::time::Instant::now();
     let live = catalog(pool).await?;
-    eprintln!("diw3 live_catalog {:?}", started.elapsed());
     Ok(
-        if stored.as_deref() == Some(expected.digest().as_str()) && live == expected {
+        if stored.as_deref() == Some(expected.digest().as_str()) && &live == expected {
             Compatibility::Current
         } else {
             Compatibility::RebuildRequired
@@ -98,7 +94,12 @@ struct SchemaObject {
     sql: String,
 }
 
-async fn expected_catalog() -> anyhow::Result<SchemaCatalog> {
+async fn expected_catalog() -> anyhow::Result<&'static SchemaCatalog> {
+    static EXPECTED: tokio::sync::OnceCell<SchemaCatalog> = tokio::sync::OnceCell::const_new();
+    EXPECTED.get_or_try_init(build_expected_catalog).await
+}
+
+async fn build_expected_catalog() -> anyhow::Result<SchemaCatalog> {
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
         .connect("sqlite::memory:")
