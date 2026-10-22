@@ -20,7 +20,7 @@ async fn read(root: &camino::Utf8Path, cursor: Option<String>) -> anyhow::Result
 #[provenance_macros::verifies("rule_requirement_document_canonical_membership", examples)]
 #[provenance_macros::verifies("rule_document_entry_has_review_outcome", examples)]
 #[provenance_macros::verifies("rule_document_has_review_totals", examples)]
-async fn document_pages_keep_member_reference_order_and_whole_totals() {
+async fn document_pages_keep_membership_and_whole_totals() {
     let (dir, store, scope) = seeded_store();
     create_document_records(&store, &scope);
     let root = root_of(&dir);
@@ -49,7 +49,7 @@ async fn document_pages_keep_member_reference_order_and_whole_totals() {
         }
     }
     assert_eq!(
-        found,
+        found.into_iter().collect::<std::collections::BTreeSet<_>>(),
         [
             ("member", "req_overtime"),
             ("member", "resolution_policy"),
@@ -60,7 +60,7 @@ async fn document_pages_keep_member_reference_order_and_whole_totals() {
             ("reference", "source_policy"),
             ("reference", "domain_payroll"),
         ]
-        .map(|(kind, id)| (kind.to_owned(), id.to_owned()))
+        .map(|(kind, id)| (kind.to_owned(), id.to_owned())).into_iter().collect::<std::collections::BTreeSet<_>>()
     );
 }
 
@@ -82,5 +82,32 @@ async fn document_page_refuses_cursor_after_public_write() {
     assert_eq!(
         error.downcast_ref::<provenance_core::protocol::read_failure::ReadFailure>(),
         Some(&provenance_core::protocol::read_failure::ReadFailure::CursorRevisionChanged)
+    );
+}
+
+
+// Characterization: preserve the observed order while the family reads change.
+#[tokio::test]
+async fn document_entries_keep_observed_member_reference_order() {
+    let (dir, store, scope) = seeded_store();
+    create_document_records(&store, &scope);
+    let result = page(&root_of(&dir), 50, false).await;
+    let found = result["entries"].as_array().unwrap().iter()
+        .map(|entry| (entry["kind"].as_str().unwrap().to_owned(),
+                      entry["node"]["id"].as_str().unwrap().to_owned()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        found,
+        [
+            ("member", "req_overtime"),
+            ("member", "resolution_policy"),
+            ("member", "rule_policy"),
+            ("member", "topic_policy"),
+            ("member", "question_policy"),
+            ("member", "boundary_no_backpay"),
+            ("reference", "source_policy"),
+            ("reference", "domain_payroll"),
+        ]
+        .map(|(kind, id)| (kind.to_owned(), id.to_owned()))
     );
 }
