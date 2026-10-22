@@ -78,5 +78,8 @@ async fn document_page_refuses_cursor_after_public_write() {
     let error = read(&root, Some(first["next_cursor"].as_str().unwrap().into()))
         .await
         .unwrap_err();
-    assert!(error.to_string().contains("revision"), "{error}");
+    assert_eq!(
+        error.downcast_ref::<provenance_core::protocol::read_failure::ReadFailure>(),
+        Some(&provenance_core::protocol::read_failure::ReadFailure::CursorRevisionChanged)
+    );
 }
