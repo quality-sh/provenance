@@ -20,6 +20,18 @@ resolver = "2"
 [profile.dev]
 debug = "line-tables-only"
 
+# A dev build serves the review page. Its reads hash every canonical shard,
+# parse JSON Lines, and query SQLite on each request; those three crates run
+# optimized so an unoptimized build does not spend most of a request there.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.serde_json]
+opt-level = 3
+
+[profile.dev.package.libsqlite3-sys]
+opt-level = 3
+
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
