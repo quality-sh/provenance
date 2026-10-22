@@ -18,7 +18,7 @@ struct ReviewStateSchema {
     decision: provenance_core::review::RequirementDecisionState,
 }
 
-fn reviewed_resource_schema<T: schemars::JsonSchema>() -> Value {
+fn reviewed_resource_schema<T: schemars::JsonSchema + 'static>() -> Value {
     let mut record = schema::type_schema::<T>(Contract::Serialize);
     let mut state = schema::type_schema::<ReviewStateSchema>(Contract::Serialize);
     for field in ["properties", "$defs"] {
@@ -90,7 +90,7 @@ fn backed<O: Operation>(
     }
 }
 
-fn read<T: schemars::JsonSchema, O: Operation>(
+fn read<T: schemars::JsonSchema + 'static, O: Operation>(
     name: &'static str,
     operation_id: &'static str,
     path: &'static str,
@@ -244,7 +244,7 @@ impl Definition {
         self
     }
 
-    fn reviewed_result<T: schemars::JsonSchema>(mut self) -> Self {
+    fn reviewed_result<T: schemars::JsonSchema + 'static>(mut self) -> Self {
         self.registration.response.adapter = ResponseAdapter::Result;
         let payload = reviewed_resource_schema::<T>();
         self.registration.response.schema =
