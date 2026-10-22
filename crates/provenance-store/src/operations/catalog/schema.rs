@@ -294,12 +294,13 @@ fn merge_variants(variants: Vec<Value>) -> Value {
     schema
 }
 
-// Only the closed route catalog uses this cache. Public schema derivation remains direct.
-fn schema<T: JsonSchema>(contract: Contract) -> Value {
-    type Key = (std::borrow::Cow<'static, str>, bool);
+// Keeps one schema for each type and contract.
+// Derivation is pure, so a stored schema is always correct.
+pub(super) fn schema<T: JsonSchema + 'static>(contract: Contract) -> Value {
+    type Key = (std::any::TypeId, bool);
     static SCHEMAS: std::sync::LazyLock<std::sync::Mutex<std::collections::BTreeMap<Key, Value>>> =
         std::sync::LazyLock::new(Default::default);
-    let key = (T::schema_id(), matches!(contract, Contract::Serialize));
+    let key = (std::any::TypeId::of::<T>(), matches!(contract, Contract::Serialize));
     let cached = SCHEMAS
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -379,7 +380,7 @@ pub fn definitions() -> &'static [Definition] {
     DEFINITIONS.get_or_init(super::routes::definitions)
 }
 
-pub(super) fn type_schema<T: JsonSchema>(contract: Contract) -> Value {
+pub(super) fn type_schema<T: JsonSchema + 'static>(contract: Contract) -> Value {
     schema::<T>(contract)
 }
 
