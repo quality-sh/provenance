@@ -66,6 +66,7 @@ async fn document_pages_keep_member_reference_order_and_whole_totals() {
 
 #[tokio::test]
 #[provenance_macros::verifies("rule_review_partial_reads_remain_explicit", examples)]
+#[provenance_macros::verifies("rule_cursor_restarts_on_revision_change", examples)]
 async fn document_page_refuses_cursor_after_public_write() {
     let (dir, store, scope) = seeded_store();
     let root = root_of(&dir);
