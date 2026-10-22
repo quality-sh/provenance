@@ -32,8 +32,12 @@ pub async fn compatibility(pool: &SqlitePool) -> anyhow::Result<Compatibility> {
             }
             Err(error) => return Err(error.into()),
         };
+    let started = std::time::Instant::now();
     let expected = expected_catalog().await?;
+    eprintln!("diw3 expected_catalog {:?}", started.elapsed());
+    let started = std::time::Instant::now();
     let live = catalog(pool).await?;
+    eprintln!("diw3 live_catalog {:?}", started.elapsed());
     Ok(
         if stored.as_deref() == Some(expected.digest().as_str()) && live == expected {
             Compatibility::Current
