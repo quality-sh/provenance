@@ -5,8 +5,8 @@ Use a new directory for `seed`. Use the same directory and CI artifact binary
 for `time` before and after the change. No time limit is checked in CI.
 """
 import argparse
-import json
 import hashlib
+import json
 import statistics
 import subprocess
 import time
@@ -27,7 +27,7 @@ started = time.monotonic()
 def call(*command, body=None):
     command = [binary, *command, "--repo", repository, "--format", "json", "--quiet"]
     if body is not None:
-        command.append("--stdin")
+        command.extend(["--input", "-"] if command[1] == "api" else ["--stdin"])
     key = hashlib.sha256(json.dumps([command, body]).encode()).hexdigest()
     if args.action == "seed" and key in completed:
         return completed[key]
@@ -78,6 +78,11 @@ if args.action == "seed":
         create("topics", id=f"topic_{i:03}", requirement_id=f"req_child_{i:03}", title="Record fields")
         create("questions", id=f"question_{i:03}", topic_id=f"topic_{i:03}",
                question="Which fields does the record store?", resolution_method="research")
+    topic = call("topics", "topic_000", "get")["data"]
+    call("api", "/topics/topic_000", "--method", "PATCH", "--header",
+         f"If-Match: {topic['edit']['etag']}",
+         body={"links": [{"target_type": "source", "target_id": f"source_{i:03}"}
+                         for i in range(19)]})
     for i in range(176):
         create("rules", id=f"rule_{i:03}", statement="The system uses the policy.",
                requirement_ids=[f"req_child_{i % 26:03}"], status="draft")
