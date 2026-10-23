@@ -94,13 +94,12 @@ mod tests {
         let execution = Execution::new(1);
         let worker = execution.clone();
         let (started, ready) = oneshot::channel();
-        let barrier = Arc::new(Barrier::new(2));
-        let work_barrier = barrier.clone();
+        let (release, wait) = std::sync::mpsc::channel();
         let call = tokio::spawn(async move {
             worker
                 .run("apply", move || {
                     started.send(()).unwrap();
-                    work_barrier.wait();
+                    let _ = wait.recv();
                     Ok(Value::Null)
                 })
                 .await
@@ -111,15 +110,13 @@ mod tests {
             .run("apply", || panic!("Rejected work must not run"))
             .await
             .unwrap_err();
+        release.send(()).unwrap();
+        call.await.unwrap().unwrap();
         assert_eq!(
             refused.error,
             serde_json::json!({"kind":"host_busy"})
         );
         assert!(started_wait.elapsed() >= std::time::Duration::from_secs(2));
-        tokio::task::spawn_blocking(move || barrier.wait())
-            .await
-            .unwrap();
-        call.await.unwrap().unwrap();
         execution.shutdown().await;
     }
 
