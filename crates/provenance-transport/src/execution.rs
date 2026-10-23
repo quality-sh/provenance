@@ -78,11 +78,12 @@ mod publication_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use provenance_macros::verifies;
     use std::sync::{Arc, Barrier};
     use tokio::sync::oneshot;
 
-    // Implementation aid: no queue Rule exists in the coverage scan.
-    #[tokio::test]
+    #[verifies("rule_host_slot_refusal_kind", examples)]
+    #[tokio::test(start_paused = true)]
     async fn admission_wait_has_a_bound_and_reports_host_busy() {
         let execution = Execution::new(1);
         let worker = execution.clone();
@@ -99,21 +100,21 @@ mod tests {
         });
         ready.await.unwrap();
         let started_wait = tokio::time::Instant::now();
-        let refused = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            execution.run("apply", || panic!("Rejected work must not run")),
-        )
-        .await
-        .expect("The slot wait must have a bound")
-        .unwrap_err();
+        let waiting = execution.run("apply", || panic!("Rejected work must not run"));
+        tokio::pin!(waiting);
+        assert!(futures::poll!(&mut waiting).is_pending());
+        tokio::time::advance(std::time::Duration::from_millis(2999)).await;
+        assert!(futures::poll!(&mut waiting).is_pending());
+        tokio::time::advance(std::time::Duration::from_millis(1)).await;
+        let refused = waiting.await.unwrap_err();
+        assert_eq!(started_wait.elapsed(), std::time::Duration::from_secs(3));
         release.send(()).unwrap();
         call.await.unwrap().unwrap();
         assert_eq!(refused.error, serde_json::json!({"kind":"host_busy"}));
-        assert!(started_wait.elapsed() >= std::time::Duration::from_secs(2));
         execution.shutdown().await;
     }
 
-    // Implementation aid: no queue Rule exists in the coverage scan.
+    #[verifies("rule_host_slot_queue_bound", examples)]
     #[tokio::test]
     async fn execution_waiters_keep_arrival_order() {
         let execution = Execution::new(1);
@@ -131,29 +132,27 @@ mod tests {
         });
         ready.await.unwrap();
         let order = Arc::new(Mutex::new(Vec::new()));
-        let second_order = order.clone();
-        let second = execution.run("read", move || {
-            second_order.lock().unwrap().push(2);
-            Ok(Value::Null)
-        });
-        tokio::pin!(second);
-        assert!(futures::poll!(&mut second).is_pending());
-        let third = execution.run("write", move || {
-            order.lock().unwrap().push(3);
-            assert_eq!(*order.lock().unwrap(), vec![2, 3]);
-            Ok(Value::Null)
-        });
-        tokio::pin!(third);
-        assert!(futures::poll!(&mut third).is_pending());
+        let mut waiters = Vec::new();
+        for index in 0..5 {
+            let order = order.clone();
+            let mut waiter = Box::pin(execution.run("read", move || {
+                order.lock().unwrap().push(index);
+                Ok(Value::Null)
+            }));
+            assert!(futures::poll!(&mut waiter).is_pending());
+            waiters.push(waiter);
+        }
         release.send(()).unwrap();
         first.await.unwrap().unwrap();
-        let (second, third) = tokio::join!(second, third);
-        second.unwrap();
-        third.unwrap();
+        // Poll in reverse order so task polling cannot supply the expected order.
+        for result in futures::future::join_all(waiters.into_iter().rev()).await {
+            result.unwrap();
+        }
+        assert_eq!(*order.lock().unwrap(), vec![0, 1, 2, 3, 4]);
         execution.shutdown().await;
     }
 
-    // Implementation aid: shutdown must release queued calls before work finishes.
+    #[verifies("rule_host_slot_refusal_kind", examples)]
     #[tokio::test]
     async fn shutdown_ends_execution_waits_at_once() {
         let execution = Execution::new(1);
@@ -181,6 +180,10 @@ mod tests {
             .unwrap()
             .unwrap_err();
         assert_eq!(refused.status_code(), 503);
+        assert_eq!(
+            refused.error,
+            serde_json::json!({"kind":"unavailable_needs"})
+        );
         release.send(()).unwrap();
         first.await.unwrap().unwrap();
         closing.await;

@@ -8,6 +8,8 @@
 //! This library does not open a listener. The CLI owns the local review listener.
 mod access;
 mod admission;
+#[cfg(test)]
+mod admission_tests;
 mod execution;
 mod failure;
 #[cfg(feature = "test-fixture")]
