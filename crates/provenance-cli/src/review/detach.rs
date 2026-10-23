@@ -4,6 +4,7 @@ use anyhow::Context as _;
 use provenance_macros::rule;
 use provenance_transport::local_host::{discover, DiscoveredLocalHost};
 use serde::Serialize;
+use sha2::Digest as _;
 use std::{
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
@@ -35,6 +36,9 @@ pub fn run(options: &super::Options) -> anyhow::Result<()> {
         .repo
         .canonicalize()
         .with_context(|| format!("cannot find repository {}", options.repo.display()))?;
+    // Concurrent starts for one repository and scope wait here, so the later one reuses
+    // the host the earlier one started instead of starting a second.
+    let _start = start_lock(&repo, &options.scope)?;
     let (host, started) = if let Some(host) = discover(&repo, &options.scope)? {
         (host, None)
     } else {
@@ -128,8 +132,31 @@ fn leave_caller_process_group(command: &mut Command) {
     command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
 }
 
+/// An exclusive lock on one file per repository and scope in the owner-only cache, held
+/// until dropped.
+fn start_lock(repo: &Path, scope: &str) -> anyhow::Result<std::fs::File> {
+    let mut key = repo.as_os_str().as_encoded_bytes().to_vec();
+    key.push(0);
+    key.extend_from_slice(scope.as_bytes());
+    let path = host_directory()?.join(format!("{:x}.lock", sha2::Sha256::digest(&key)));
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("cannot open the review host lock {}", path.display()))?;
+    fs2::FileExt::lock_exclusive(&file)
+        .with_context(|| format!("cannot lock {}", path.display()))?;
+    Ok(file)
+}
+
 /// An owner-only log in the per-user cache; the host's startup line is not kept.
 fn log_path() -> anyhow::Result<PathBuf> {
+    Ok(host_directory()?.join(format!("{}.log", uuid::Uuid::new_v4().simple())))
+}
+
+/// The owner-only per-user cache directory for detached host logs and locks.
+fn host_directory() -> anyhow::Result<PathBuf> {
     let directory = crate::user_cache::cache_directory()
         .context("cannot find the per-user cache directory")?
         .join("provenance")
@@ -141,7 +168,7 @@ fn log_path() -> anyhow::Result<PathBuf> {
         use std::os::unix::fs::PermissionsExt as _;
         std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))?;
     }
-    Ok(directory.join(format!("{}.log", uuid::Uuid::new_v4().simple())))
+    Ok(directory)
 }
 
 fn manifest(repo: &Path) -> anyhow::Result<provenance_core::Manifest> {

@@ -34,7 +34,9 @@ operation paths.
 background process and returns. The host runs in its own process group with no
 terminal, so it keeps serving after the shell or agent session that started it ends.
 If a verified host already serves the repository and scope, the command reuses it
-and starts nothing.
+and starts nothing. Concurrent starts for one repository and scope wait for each other,
+so only one host starts. A record left by a host that stopped is removed, and a new
+host starts.
 
 The command prints one JSON line with `endpoint`, `url`, `review_url`, `opened`,
 `reused`, and, for a host it started, `pid` and `log`. `review_url` is the

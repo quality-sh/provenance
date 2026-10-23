@@ -249,3 +249,99 @@ fn a_detached_start_opens_the_page_when_a_browser_is_available() {
         "{opened}"
     );
 }
+
+#[test]
+/// A record left by a host that was killed is not reused; the next start replaces it.
+#[verifies("rule_review_detach_reuses_running_host", examples)]
+fn a_start_after_a_crash_replaces_the_dead_host() {
+    let repo = repository();
+    let cache = UserCache::new();
+    let first = detach(repo.path(), &cache, |command| {
+        command.arg("--no-open");
+    });
+    let first_pid = u32::try_from(first["pid"].as_u64().unwrap()).unwrap();
+    let first_endpoint = first["endpoint"].as_str().unwrap().to_owned();
+    assert!(Command::new("kill")
+        .args(["-KILL", &first_pid.to_string()])
+        .status()
+        .unwrap()
+        .success());
+    wait_until(
+        || identity(&first_endpoint).is_none(),
+        "the killed host still answers",
+    );
+    assert!(registry(repo.path()).is_file(), "SIGKILL leaves the record");
+
+    let second = detach(repo.path(), &cache, |command| {
+        command.arg("--no-open");
+    });
+    let second_pid = u32::try_from(second["pid"].as_u64().expect("a new host")).unwrap();
+    let _stop = Detached(second_pid);
+    assert_eq!(second["reused"], Value::Bool(false));
+    assert_ne!(second_pid, first_pid);
+    let endpoint = second["endpoint"].as_str().unwrap();
+    assert!(identity(endpoint).is_some(), "the new host answers");
+    assert!(
+        second["review_url"]
+            .as_str()
+            .unwrap()
+            .starts_with(&format!("{endpoint}/#launch=")),
+        "{second}"
+    );
+}
+
+#[test]
+/// Concurrent starts for one repository start one host; another repository gets its own.
+#[verifies("rule_review_detach_reuses_running_host", examples)]
+fn concurrent_starts_share_one_host_per_repository() {
+    let first = repository();
+    let second = repository();
+    let cache = UserCache::new();
+    let roots = [first.path(), first.path(), first.path(), second.path()];
+    let children: Vec<_> = roots
+        .iter()
+        .map(|root| {
+            let mut command = detach_command(root, &cache);
+            command
+                .arg("--no-open")
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped());
+            command.spawn().unwrap()
+        })
+        .collect();
+    let outputs: Vec<Value> = children
+        .into_iter()
+        .map(|child| {
+            let output = child.wait_with_output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            serde_json::from_slice(&output.stdout).unwrap()
+        })
+        .collect();
+    let _stops: Vec<_> = outputs
+        .iter()
+        .filter_map(|output| output["pid"].as_u64())
+        .map(|pid| Detached(u32::try_from(pid).unwrap()))
+        .collect();
+
+    let (shared, other) = outputs.split_at(3);
+    let started = shared
+        .iter()
+        .filter(|output| output["reused"] == Value::Bool(false))
+        .count();
+    assert_eq!(started, 1, "{shared:?}");
+    assert!(
+        shared
+            .iter()
+            .all(|output| output["endpoint"] == shared[0]["endpoint"]),
+        "{shared:?}"
+    );
+    assert_eq!(other[0]["reused"], Value::Bool(false));
+    assert_ne!(other[0]["endpoint"], shared[0]["endpoint"]);
+    for output in &outputs {
+        assert!(identity(output["endpoint"].as_str().unwrap()).is_some());
+    }
+}

@@ -49,6 +49,7 @@ semver.workspace = true
 serde.workspace = true
 serde_ignored.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["signal", "io-std", "io-util"] }
 uuid.workspace = true
@@ -78,6 +79,5 @@ jsonschema.workspace = true
 tempfile.workspace = true
 predicates.workspace = true
 rmcp = { version = "=1.4.0", default-features = false, features = ["client"] }
-sha2.workspace = true
 tar.workspace = true
 provenance-transport = { path = "../provenance-transport", version = "0.2.3", features = ["test-fixture"] }
