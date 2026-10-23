@@ -99,10 +99,13 @@ mod tests {
         });
         ready.await.unwrap();
         let started_wait = tokio::time::Instant::now();
-        let refused = execution
-            .run("apply", || panic!("Rejected work must not run"))
-            .await
-            .unwrap_err();
+        let refused = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            execution.run("apply", || panic!("Rejected work must not run")),
+        )
+        .await
+        .expect("The slot wait must have a bound")
+        .unwrap_err();
         release.send(()).unwrap();
         call.await.unwrap().unwrap();
         assert_eq!(refused.error, serde_json::json!({"kind":"host_busy"}));

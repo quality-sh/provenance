@@ -87,7 +87,12 @@ async fn ingress_wait_has_a_bound_and_reports_host_busy() {
     tokio::pin!(reads);
     assert!(poll!(&mut reads).is_pending());
     let started = tokio::time::Instant::now();
-    let (status, body) = call(&host, "GET", "/requirements/req_shared", None).await;
+    let (status, body) = tokio::time::timeout(
+        Duration::from_secs(5),
+        call(&host, "GET", "/requirements/req_shared", None),
+    )
+    .await
+    .expect("The slot wait must have a bound");
     assert!(started.elapsed() >= Duration::from_secs(2));
     assert!(started.elapsed() < Duration::from_secs(5));
     assert_eq!(status, 503);
