@@ -72,7 +72,7 @@ fn held_reads(
 
 type HeldRead = Pin<Box<dyn Future<Output = axum::response::Response> + Send>>;
 
-fn full_ingress(host: &StatementHost) -> (Vec<oneshot::Sender<()>>, Vec<HeldRead>) {
+async fn full_ingress(host: &StatementHost) -> (Vec<oneshot::Sender<()>>, Vec<HeldRead>) {
     let (releases, reads) = held_reads(host);
     let mut reads: Vec<_> = reads
         .into_iter()
@@ -183,7 +183,7 @@ async fn ingress_waiters_keep_arrival_order() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo, true);
-    let (mut releases, mut reads) = full_ingress(&host);
+    let (mut releases, mut reads) = full_ingress(&host).await;
     let order = Arc::new(Mutex::new(Vec::new()));
     let mut queued = Vec::new();
     for index in 0..4 {
@@ -219,7 +219,7 @@ async fn dropped_ingress_waiter_frees_its_place() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo, true);
-    let (mut releases, mut reads) = full_ingress(&host);
+    let (mut releases, mut reads) = full_ingress(&host).await;
     let mut disconnected = Box::pin(call(&host, "GET", "/requirements/req_shared", None));
     assert!(poll!(&mut disconnected).is_pending());
     let next = call(&host, "GET", "/requirements/req_shared", None);
