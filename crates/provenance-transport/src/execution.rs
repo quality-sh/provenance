@@ -88,6 +88,7 @@ mod tests {
     use std::sync::{Arc, Barrier};
     use tokio::sync::oneshot;
 
+    // Implementation aid: no queue Rule exists in the coverage scan.
     #[tokio::test]
     async fn admission_wait_has_a_bound_and_reports_host_busy() {
         let execution = Execution::new(1);
@@ -120,6 +121,73 @@ mod tests {
             .unwrap();
         call.await.unwrap().unwrap();
         execution.shutdown().await;
+    }
+
+    // Implementation aid: no queue Rule exists in the coverage scan.
+    #[tokio::test]
+    async fn execution_waiters_keep_arrival_order() {
+        let execution = Execution::new(1);
+        let (release, wait) = std::sync::mpsc::channel();
+        let (started, ready) = oneshot::channel();
+        let worker = execution.clone();
+        let first = tokio::spawn(async move {
+            worker.run("read", move || {
+                started.send(()).unwrap();
+                wait.recv().unwrap();
+                Ok(Value::Null)
+            }).await
+        });
+        ready.await.unwrap();
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let second_order = order.clone();
+        let second = execution.run("read", move || {
+            second_order.lock().unwrap().push(2);
+            Ok(Value::Null)
+        });
+        tokio::pin!(second);
+        assert!(futures::poll!(&mut second).is_pending());
+        let third = execution.run("write", move || {
+            order.lock().unwrap().push(3);
+            assert_eq!(*order.lock().unwrap(), vec![2, 3]);
+            Ok(Value::Null)
+        });
+        tokio::pin!(third);
+        assert!(futures::poll!(&mut third).is_pending());
+        release.send(()).unwrap();
+        first.await.unwrap().unwrap();
+        let (second, third) = tokio::join!(second, third);
+        second.unwrap();
+        third.unwrap();
+        execution.shutdown().await;
+    }
+
+    // Implementation aid: shutdown must release queued calls before work finishes.
+    #[tokio::test]
+    async fn shutdown_ends_execution_waits_at_once() {
+        let execution = Execution::new(1);
+        let (release, wait) = std::sync::mpsc::channel();
+        let (started, ready) = oneshot::channel();
+        let worker = execution.clone();
+        let first = tokio::spawn(async move {
+            worker.run("read", move || {
+                started.send(()).unwrap();
+                wait.recv().unwrap();
+                Ok(Value::Null)
+            }).await
+        });
+        ready.await.unwrap();
+        let waiting = execution.run("read", || panic!("Closed work must not run"));
+        tokio::pin!(waiting);
+        assert!(futures::poll!(&mut waiting).is_pending());
+        let closing = execution.shutdown();
+        tokio::pin!(closing);
+        assert!(futures::poll!(&mut closing).is_pending());
+        let refused = tokio::time::timeout(std::time::Duration::from_millis(200), waiting)
+            .await.unwrap().unwrap_err();
+        assert_eq!(refused.status_code(), 503);
+        release.send(()).unwrap();
+        first.await.unwrap().unwrap();
+        closing.await;
     }
 
     #[tokio::test]
