@@ -14,6 +14,7 @@ use serde_json::json;
 use std::{
     convert::Infallible,
     future::Future,
+    pin::Pin,
     sync::{Arc, Mutex},
     task::Poll,
     time::Duration,
@@ -60,13 +61,36 @@ fn observed_read(
     )
 }
 
+fn held_reads(
+    host: &StatementHost,
+) -> (
+    Vec<oneshot::Sender<()>>,
+    Vec<impl Future<Output = axum::response::Response>>,
+) {
+    (0..8).map(|_| held_read(host)).unzip()
+}
+
+type HeldRead = Pin<Box<dyn Future<Output = axum::response::Response> + Send>>;
+
+fn full_ingress(host: &StatementHost) -> (Vec<oneshot::Sender<()>>, Vec<HeldRead>) {
+    let (releases, reads) = held_reads(host);
+    let mut reads: Vec<_> = reads
+        .into_iter()
+        .map(|read| Box::pin(read) as HeldRead)
+        .collect();
+    for read in &mut reads {
+        assert!(poll!(read).is_pending());
+    }
+    (releases, reads)
+}
+
 #[verifies("rule_host_slot_queue_bound", examples)]
 #[tokio::test]
 async fn sixteen_reads_and_a_write_wait_for_ingress_slots() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo, true);
-    let (releases, reads): (Vec<_>, Vec<_>) = (0..8).map(|_| held_read(&host)).unzip();
+    let (releases, reads): (Vec<_>, Vec<_>) = held_reads(&host);
     let reads = join_all(reads);
     tokio::pin!(reads);
     assert!(poll!(&mut reads).is_pending());
@@ -80,7 +104,7 @@ async fn sixteen_reads_and_a_write_wait_for_ingress_slots() {
     );
     tokio::pin!(write);
     assert!(poll!(&mut write).is_pending(), "the write must queue");
-    let (later_releases, later_reads): (Vec<_>, Vec<_>) = (0..8).map(|_| held_read(&host)).unzip();
+    let (later_releases, later_reads): (Vec<_>, Vec<_>) = held_reads(&host);
     let later_reads = join_all(later_reads);
     tokio::pin!(later_reads);
     assert!(poll!(&mut later_reads).is_pending());
@@ -101,7 +125,7 @@ async fn ingress_wait_has_a_bound_and_reports_host_busy() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = support::resource_http::host(&repo, true);
-    let (releases, reads): (Vec<_>, Vec<_>) = (0..8).map(|_| held_read(&host)).unzip();
+    let (releases, reads): (Vec<_>, Vec<_>) = held_reads(&host);
     let reads = join_all(reads);
     tokio::pin!(reads);
     assert!(poll!(&mut reads).is_pending());
@@ -127,7 +151,7 @@ async fn shutdown_ends_ingress_waits_at_once() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo, true);
-    let (_releases, reads): (Vec<_>, Vec<_>) = (0..8).map(|_| held_read(&host)).unzip();
+    let (_releases, reads): (Vec<_>, Vec<_>) = held_reads(&host);
     let reads = join_all(reads);
     tokio::pin!(reads);
     assert!(poll!(&mut reads).is_pending());
@@ -159,15 +183,7 @@ async fn ingress_waiters_keep_arrival_order() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo, true);
-    let (mut releases, mut reads): (Vec<_>, Vec<_>) = (0..8)
-        .map(|_| {
-            let (release, read) = held_read(&host);
-            (release, Box::pin(read))
-        })
-        .unzip();
-    for read in &mut reads {
-        assert!(poll!(read).is_pending());
-    }
+    let (mut releases, mut reads) = full_ingress(&host);
     let order = Arc::new(Mutex::new(Vec::new()));
     let mut queued = Vec::new();
     for index in 0..4 {
@@ -203,15 +219,7 @@ async fn dropped_ingress_waiter_frees_its_place() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo, true);
-    let (mut releases, mut reads): (Vec<_>, Vec<_>) = (0..8)
-        .map(|_| {
-            let (release, read) = held_read(&host);
-            (release, Box::pin(read))
-        })
-        .unzip();
-    for read in &mut reads {
-        assert!(poll!(read).is_pending());
-    }
+    let (mut releases, mut reads) = full_ingress(&host);
     let mut disconnected = Box::pin(call(&host, "GET", "/requirements/req_shared", None));
     assert!(poll!(&mut disconnected).is_pending());
     let next = call(&host, "GET", "/requirements/req_shared", None);

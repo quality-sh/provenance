@@ -17,7 +17,7 @@ async fn http_ingress_and_execution_share_one_deadline() {
     for _ in 0..8 {
         let execution = host.execution.clone();
         let (started, ready) = oneshot::channel();
-        let (release, wait) = std::sync::mpsc::channel();
+        let (release, wait) = std::sync::mpsc::channel::<()>();
         workers.push(tokio::spawn(async move {
             execution
                 .run("check-statement", move || {

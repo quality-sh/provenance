@@ -82,23 +82,33 @@ mod tests {
     use std::sync::{Arc, Barrier};
     use tokio::sync::oneshot;
 
-    #[verifies("rule_host_slot_refusal_kind", examples)]
-    #[tokio::test(start_paused = true)]
-    async fn admission_wait_has_a_bound_and_reports_host_busy() {
-        let execution = Execution::new(1);
+    struct HeldWork {
+        release: std::sync::mpsc::Sender<()>,
+        call: tokio::task::JoinHandle<Result<Value, FailureEnvelope>>,
+    }
+
+    async fn hold_work(execution: &Execution) -> HeldWork {
         let worker = execution.clone();
         let (started, ready) = oneshot::channel();
         let (release, wait) = std::sync::mpsc::channel();
         let call = tokio::spawn(async move {
             worker
-                .run("apply", move || {
-                    started.send(()).unwrap();
+                .run("read", move || {
+                    let _ = started.send(());
                     let _ = wait.recv();
                     Ok(Value::Null)
                 })
                 .await
         });
         ready.await.unwrap();
+        HeldWork { release, call }
+    }
+
+    #[verifies("rule_host_slot_refusal_kind", examples)]
+    #[tokio::test(start_paused = true)]
+    async fn admission_wait_has_a_bound_and_reports_host_busy() {
+        let execution = Execution::new(1);
+        let HeldWork { release, call } = hold_work(&execution).await;
         let started_wait = tokio::time::Instant::now();
         let waiting = execution.run("apply", || panic!("Rejected work must not run"));
         tokio::pin!(waiting);
@@ -118,19 +128,7 @@ mod tests {
     #[tokio::test]
     async fn execution_waiters_keep_arrival_order() {
         let execution = Execution::new(1);
-        let (release, wait) = std::sync::mpsc::channel();
-        let (started, ready) = oneshot::channel();
-        let worker = execution.clone();
-        let first = tokio::spawn(async move {
-            worker
-                .run("read", move || {
-                    started.send(()).unwrap();
-                    wait.recv().unwrap();
-                    Ok(Value::Null)
-                })
-                .await
-        });
-        ready.await.unwrap();
+        let HeldWork { release, call } = hold_work(&execution).await;
         let order = Arc::new(Mutex::new(Vec::new()));
         let mut waiters = Vec::new();
         for index in 0..5 {
@@ -143,7 +141,7 @@ mod tests {
             waiters.push(waiter);
         }
         release.send(()).unwrap();
-        first.await.unwrap().unwrap();
+        call.await.unwrap().unwrap();
         // Poll in reverse order so task polling cannot supply the expected order.
         for result in futures::future::join_all(waiters.into_iter().rev()).await {
             result.unwrap();
@@ -156,19 +154,7 @@ mod tests {
     #[tokio::test]
     async fn shutdown_ends_execution_waits_at_once() {
         let execution = Execution::new(1);
-        let (release, wait) = std::sync::mpsc::channel();
-        let (started, ready) = oneshot::channel();
-        let worker = execution.clone();
-        let first = tokio::spawn(async move {
-            worker
-                .run("read", move || {
-                    started.send(()).unwrap();
-                    wait.recv().unwrap();
-                    Ok(Value::Null)
-                })
-                .await
-        });
-        ready.await.unwrap();
+        let HeldWork { release, call } = hold_work(&execution).await;
         let waiting = execution.run("read", || panic!("Closed work must not run"));
         tokio::pin!(waiting);
         assert!(futures::poll!(&mut waiting).is_pending());
@@ -185,7 +171,7 @@ mod tests {
             serde_json::json!({"kind":"unavailable_needs"})
         );
         release.send(()).unwrap();
-        first.await.unwrap().unwrap();
+        call.await.unwrap().unwrap();
         closing.await;
     }
 
