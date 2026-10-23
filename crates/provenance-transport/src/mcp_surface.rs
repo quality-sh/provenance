@@ -27,7 +27,7 @@ where
     F: FnOnce(Map<String, Value>) -> Fut,
     Fut: Future<Output = CallToolResult>,
 {
-    let _admission = match host.admit() {
+    let _admission = match host.admit().await {
         Ok(permit) => permit,
         Err(failure) => return Ok(failure_result(failure)),
     };

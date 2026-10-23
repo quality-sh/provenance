@@ -33,6 +33,7 @@ impl Execution {
     where
         F: FnOnce() -> Result<Value, FailureEnvelope> + Send + 'static,
     {
+        let permit = crate::admission::acquire(self.state.admission.clone()).await?;
         let task = {
             let closed = self
                 .state
@@ -40,14 +41,8 @@ impl Execution {
                 .lock()
                 .expect("admission lock is not poisoned");
             if *closed {
-                return Err(unavailable());
+                return Err(crate::admission::busy());
             }
-            let permit = self
-                .state
-                .admission
-                .clone()
-                .try_acquire_owned()
-                .map_err(|_| unavailable())?;
             let task = self.state.tasks.spawn_blocking(move || {
                 let _permit = permit;
                 work()
@@ -68,14 +63,12 @@ impl Execution {
                 .lock()
                 .expect("admission lock is not poisoned");
             *closed = true;
+            self.state.admission.close();
             self.state.tasks.close();
             drop(closed);
         }
         self.state.tasks.wait().await;
     }
-}
-fn unavailable() -> FailureEnvelope {
-    FailureEnvelope::new(None, OperationFailure::UnavailableNeeds)
 }
 
 #[cfg(all(test, feature = "test-fixture"))]
@@ -112,10 +105,7 @@ mod tests {
             .unwrap_err();
         release.send(()).unwrap();
         call.await.unwrap().unwrap();
-        assert_eq!(
-            refused.error,
-            serde_json::json!({"kind":"host_busy"})
-        );
+        assert_eq!(refused.error, serde_json::json!({"kind":"host_busy"}));
         assert!(started_wait.elapsed() >= std::time::Duration::from_secs(2));
         execution.shutdown().await;
     }
@@ -128,11 +118,13 @@ mod tests {
         let (started, ready) = oneshot::channel();
         let worker = execution.clone();
         let first = tokio::spawn(async move {
-            worker.run("read", move || {
-                started.send(()).unwrap();
-                wait.recv().unwrap();
-                Ok(Value::Null)
-            }).await
+            worker
+                .run("read", move || {
+                    started.send(()).unwrap();
+                    wait.recv().unwrap();
+                    Ok(Value::Null)
+                })
+                .await
         });
         ready.await.unwrap();
         let order = Arc::new(Mutex::new(Vec::new()));
@@ -166,11 +158,13 @@ mod tests {
         let (started, ready) = oneshot::channel();
         let worker = execution.clone();
         let first = tokio::spawn(async move {
-            worker.run("read", move || {
-                started.send(()).unwrap();
-                wait.recv().unwrap();
-                Ok(Value::Null)
-            }).await
+            worker
+                .run("read", move || {
+                    started.send(()).unwrap();
+                    wait.recv().unwrap();
+                    Ok(Value::Null)
+                })
+                .await
         });
         ready.await.unwrap();
         let waiting = execution.run("read", || panic!("Closed work must not run"));
@@ -180,7 +174,9 @@ mod tests {
         tokio::pin!(closing);
         assert!(futures::poll!(&mut closing).is_pending());
         let refused = tokio::time::timeout(std::time::Duration::from_millis(200), waiting)
-            .await.unwrap().unwrap_err();
+            .await
+            .unwrap()
+            .unwrap_err();
         assert_eq!(refused.status_code(), 503);
         release.send(()).unwrap();
         first.await.unwrap().unwrap();
