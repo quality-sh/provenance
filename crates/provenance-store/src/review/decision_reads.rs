@@ -11,7 +11,7 @@ use crate::{cache::review_families::ReviewFamilyIndex, state_store::StateStore};
 use provenance_core::{
     protocol::DocumentReviewSummary,
     review::{PendingSubmission, RecordedDecision, RequirementDecisionState, ReviewRecord},
-    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ScopeId, StableId,
+    DispositionDecision, NodeType, ScopeId, StableId,
 };
 use provenance_macros::rule;
 
@@ -58,20 +58,13 @@ impl StateStore {
         records: &[(NodeType, StableId)],
     ) -> anyhow::Result<DocumentReviewState> {
         self.with_repository_publication(|| {
-            let proposals = self.list_proposal_definitions(scope)?;
-            let dispositions = self.list_dispositions(scope)?;
             let facts = CycleFacts::validated(self, scope)?;
             let mut families = ReviewFamilyIndex::new(self, scope, records);
             let states = records
                 .iter()
                 .map(|(kind, id)| {
                     let record = families.get(*kind, id)?;
-                    Self::record_decision_state_from_parts(
-                        record,
-                        &proposals,
-                        &dispositions,
-                        &facts,
-                    )
+                    Self::record_decision_state_from_parts(record, &facts)
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?;
             let digest = crate::canonical_digest::digest(
@@ -126,19 +119,18 @@ impl StateStore {
         &self,
         record: &ReviewRecord,
     ) -> anyhow::Result<RequirementDecisionState> {
-        let scope = record.scope_id();
-        let proposals = self.list_proposal_definitions(scope)?;
-        let dispositions = self.list_dispositions(scope)?;
-        let facts = CycleFacts::validated(self, scope)?;
-        Self::record_decision_state_from_parts(record, &proposals, &dispositions, &facts)
+        let facts = CycleFacts::validated(self, record.scope_id())?;
+        Self::record_decision_state_from_parts(record, &facts)
     }
 
+    /// The decision state of one record from one read of the scope's
+    /// review records.
     fn record_decision_state_from_parts(
         record: &ReviewRecord,
-        proposals: &[ProposalCard],
-        dispositions: &[DispositionRecord],
         facts: &CycleFacts,
     ) -> anyhow::Result<RequirementDecisionState> {
+        let proposals = facts.proposals();
+        let dispositions = facts.dispositions();
         let kind = record.kind();
         let record_id = record.id();
         let current_revision = super::save::current_revision(record)?;

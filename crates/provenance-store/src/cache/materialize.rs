@@ -117,7 +117,7 @@ async fn rebuild_rows(
         .collect();
     for unit in units::units_for(&scopes) {
         let Unit::Scope(scope) = &unit else { continue };
-        let digests = reader.hash(&unit)?;
+        let digests = reader.hash(&unit, None)?;
         let (records, digests) = reader.scope(scope, digests)?;
         for records in &records.families {
             records_loaded +=
