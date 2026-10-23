@@ -73,6 +73,10 @@ async fn invoke(State(host): State<StatementHost>, request: Request) -> Response
     if let Err(error) = host.authenticate(request.headers()) {
         return failure::response(error);
     }
+    crate::admission::with_deadline(invoke_admitted(host, request)).await
+}
+
+async fn invoke_admitted(host: StatementHost, request: Request) -> Response {
     let _admission = match host.admit().await {
         Ok(permit) => permit,
         Err(error) => return failure::response(error),
@@ -96,7 +100,7 @@ async fn invoke(State(host): State<StatementHost>, request: Request) -> Response
     let expects_body = matched.definition.request_schema().is_some();
     let Ok(bytes) = (tokio::select! {
         biased;
-        () = host.stopping.cancelled() => return failure::response(crate::admission::busy()),
+        () = host.stopping.cancelled() => return failure::response(crate::admission::unavailable()),
         bytes = to_bytes(request.into_body(), MAX_BODY_BYTES) => bytes,
     }) else {
         return invalid(InvalidInputReason::TooLarge);

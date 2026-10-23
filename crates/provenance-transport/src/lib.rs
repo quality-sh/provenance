@@ -184,7 +184,7 @@ impl StatementHost {
     async fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
         tokio::select! {
             biased;
-            () = self.stopping.cancelled() => Err(admission::busy()),
+            () = self.stopping.cancelled() => Err(admission::unavailable()),
             permit = admission::acquire(self.ingress.clone()) => permit,
         }
     }

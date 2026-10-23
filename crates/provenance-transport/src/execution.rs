@@ -41,7 +41,7 @@ impl Execution {
                 .lock()
                 .expect("admission lock is not poisoned");
             if *closed {
-                return Err(crate::admission::busy());
+                return Err(crate::admission::unavailable());
             }
             let task = self.state.tasks.spawn_blocking(move || {
                 let _permit = permit;

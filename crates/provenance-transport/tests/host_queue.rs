@@ -140,9 +140,9 @@ async fn ingress_wait_has_a_bound_and_reports_host_busy() {
     assert_eq!(started.elapsed(), Duration::from_secs(3));
     assert_eq!(status, 503);
     assert_eq!(body["error"]["kind"], "host_busy");
-    drop(releases);
-    let _ = reads.await;
     host.shutdown().await;
+    let _ = reads.await;
+    drop(releases);
 }
 
 #[verifies("rule_host_slot_refusal_kind", examples)]

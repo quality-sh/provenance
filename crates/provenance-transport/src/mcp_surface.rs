@@ -27,23 +27,26 @@ where
     F: FnOnce(Map<String, Value>) -> Fut,
     Fut: Future<Output = CallToolResult>,
 {
-    let _admission = match host.admit().await {
-        Ok(permit) => permit,
-        Err(failure) => return Ok(failure_result(failure)),
-    };
-    let arguments = arguments.unwrap_or_default();
-    let encoded = serde_json::to_vec(&arguments)
-        .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?;
-    if encoded.len() > MAX_BODY_BYTES {
-        return Ok(failure_result(ErasedFailure::new(
-            None,
-            provenance_core::protocol::failure::OperationFailure::InvalidInput {
-                field: None,
-                reason: provenance_core::protocol::failure::InvalidInputReason::TooLarge,
-            },
-        )));
-    }
-    Ok(invoke(arguments).await)
+    crate::admission::with_deadline(async {
+        let _admission = match host.admit().await {
+            Ok(permit) => permit,
+            Err(failure) => return Ok(failure_result(failure)),
+        };
+        let arguments = arguments.unwrap_or_default();
+        let encoded = serde_json::to_vec(&arguments)
+            .map_err(|_| ErrorData::internal_error("Cannot encode input", None))?;
+        if encoded.len() > MAX_BODY_BYTES {
+            return Ok(failure_result(ErasedFailure::new(
+                None,
+                provenance_core::protocol::failure::OperationFailure::InvalidInput {
+                    field: None,
+                    reason: provenance_core::protocol::failure::InvalidInputReason::TooLarge,
+                },
+            )));
+        }
+        Ok(invoke(arguments).await)
+    })
+    .await
 }
 
 /// Build one MCP tool from its JSON input and output schemas.

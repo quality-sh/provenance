@@ -75,10 +75,7 @@ async fn http_ingress_and_execution_share_one_deadline() {
     tokio::time::advance(Duration::from_millis(999)).await;
     assert!(poll!(&mut waiting).is_pending());
     tokio::time::advance(Duration::from_millis(1)).await;
-    let response = tokio::time::timeout(Duration::ZERO, waiting)
-        .await
-        .expect("The slot wait must end at the request deadline")
-        .unwrap();
+    let response = tokio::time::timeout(Duration::ZERO, waiting).await;
     let elapsed = started.elapsed();
     // Release blocking work before assertions so a regression cannot hold the runner.
     drop(work_releases);
@@ -88,6 +85,9 @@ async fn http_ingress_and_execution_share_one_deadline() {
     drop(bodies);
     drop(body_releases);
     host.shutdown().await;
+    let response = response
+        .expect("The slot wait must end at the request deadline")
+        .unwrap();
     assert_eq!(elapsed, Duration::from_secs(3));
     assert_eq!(response.status(), 503);
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
