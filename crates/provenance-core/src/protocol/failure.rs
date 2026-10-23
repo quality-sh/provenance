@@ -39,6 +39,8 @@ pub enum OperationFailure {
     UnknownScope,
     #[error("required execution resources are unavailable")]
     UnavailableNeeds,
+    #[error("host is busy")]
+    HostBusy,
     #[error("internal operation failure")]
     Internal,
 }
@@ -51,7 +53,7 @@ impl OperationFailure {
             Self::MethodNotAllowed => 405,
             Self::Unauthenticated => 401,
             Self::AccessDenied => 403,
-            Self::UnavailableNeeds => 503,
+            Self::UnavailableNeeds | Self::HostBusy => 503,
             Self::Internal => 500,
         }
     }

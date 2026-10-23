@@ -235,6 +235,8 @@ fn with(mut value: Value, field: &str, content: &str) -> Value {
 }
 
 mod focused;
+mod pagination;
+mod visibility;
 
 #[tokio::test]
 /// This flow checks the full decision cycle for every reviewable record kind.

@@ -357,7 +357,7 @@ fn discussion_route<O: Operation>(
 }
 
 impl Definition {
-    fn with_request_schema<T: schemars::JsonSchema>(mut self) -> Self {
+    fn with_request_schema<T: schemars::JsonSchema + 'static>(mut self) -> Self {
         self.registration.request.schema = Some(schema::request_envelope(
             schema::type_schema::<T>(Contract::Deserialize),
         ));

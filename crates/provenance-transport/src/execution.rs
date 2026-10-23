@@ -33,6 +33,7 @@ impl Execution {
     where
         F: FnOnce() -> Result<Value, FailureEnvelope> + Send + 'static,
     {
+        let permit = crate::admission::acquire(self.state.admission.clone()).await?;
         let task = {
             let closed = self
                 .state
@@ -40,14 +41,8 @@ impl Execution {
                 .lock()
                 .expect("admission lock is not poisoned");
             if *closed {
-                return Err(unavailable());
+                return Err(crate::admission::unavailable());
             }
-            let permit = self
-                .state
-                .admission
-                .clone()
-                .try_acquire_owned()
-                .map_err(|_| unavailable())?;
             let task = self.state.tasks.spawn_blocking(move || {
                 let _permit = permit;
                 work()
@@ -68,14 +63,12 @@ impl Execution {
                 .lock()
                 .expect("admission lock is not poisoned");
             *closed = true;
+            self.state.admission.close();
             self.state.tasks.close();
             drop(closed);
         }
         self.state.tasks.wait().await;
     }
-}
-fn unavailable() -> FailureEnvelope {
-    FailureEnvelope::new(None, OperationFailure::UnavailableNeeds)
 }
 
 #[cfg(all(test, feature = "test-fixture"))]
@@ -85,39 +78,101 @@ mod publication_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use provenance_macros::verifies;
     use std::sync::{Arc, Barrier};
     use tokio::sync::oneshot;
 
-    #[tokio::test]
-    async fn admission_refuses_excess_work_without_running_it() {
-        let execution = Execution::new(1);
+    struct HeldWork {
+        release: std::sync::mpsc::Sender<()>,
+        call: tokio::task::JoinHandle<Result<Value, FailureEnvelope>>,
+    }
+
+    async fn hold_work(execution: &Execution) -> HeldWork {
         let worker = execution.clone();
         let (started, ready) = oneshot::channel();
-        let barrier = Arc::new(Barrier::new(2));
-        let work_barrier = barrier.clone();
+        let (release, wait) = std::sync::mpsc::channel();
         let call = tokio::spawn(async move {
             worker
-                .run("apply", move || {
-                    started.send(()).unwrap();
-                    work_barrier.wait();
+                .run("read", move || {
+                    let _ = started.send(());
+                    let _ = wait.recv();
                     Ok(Value::Null)
                 })
                 .await
         });
         ready.await.unwrap();
-        let refused = execution
-            .run("apply", || panic!("Rejected work must not run"))
+        HeldWork { release, call }
+    }
+
+    #[verifies("rule_host_slot_refusal_kind", examples)]
+    #[tokio::test(start_paused = true)]
+    async fn admission_wait_has_a_bound_and_reports_host_busy() {
+        let execution = Execution::new(1);
+        let HeldWork { release, call } = hold_work(&execution).await;
+        let started_wait = tokio::time::Instant::now();
+        let waiting = execution.run("apply", || panic!("Rejected work must not run"));
+        tokio::pin!(waiting);
+        assert!(futures::poll!(&mut waiting).is_pending());
+        tokio::time::advance(std::time::Duration::from_millis(2999)).await;
+        assert!(futures::poll!(&mut waiting).is_pending());
+        tokio::time::advance(std::time::Duration::from_millis(1)).await;
+        let refused = waiting.await.unwrap_err();
+        assert_eq!(started_wait.elapsed(), std::time::Duration::from_secs(3));
+        release.send(()).unwrap();
+        call.await.unwrap().unwrap();
+        assert_eq!(refused.error, serde_json::json!({"kind":"host_busy"}));
+        execution.shutdown().await;
+    }
+
+    #[verifies("rule_host_slot_queue_bound", examples)]
+    #[tokio::test]
+    async fn execution_waiters_keep_arrival_order() {
+        let execution = Execution::new(1);
+        let HeldWork { release, call } = hold_work(&execution).await;
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let mut waiters = Vec::new();
+        for index in 0..5 {
+            let order = order.clone();
+            let mut waiter = Box::pin(execution.run("read", move || {
+                order.lock().unwrap().push(index);
+                Ok(Value::Null)
+            }));
+            assert!(futures::poll!(&mut waiter).is_pending());
+            waiters.push(waiter);
+        }
+        release.send(()).unwrap();
+        call.await.unwrap().unwrap();
+        // Poll in reverse order so task polling cannot supply the expected order.
+        for result in futures::future::join_all(waiters.into_iter().rev()).await {
+            result.unwrap();
+        }
+        assert_eq!(*order.lock().unwrap(), vec![0, 1, 2, 3, 4]);
+        execution.shutdown().await;
+    }
+
+    #[verifies("rule_host_slot_refusal_kind", examples)]
+    #[tokio::test]
+    async fn shutdown_ends_execution_waits_at_once() {
+        let execution = Execution::new(1);
+        let HeldWork { release, call } = hold_work(&execution).await;
+        let waiting = execution.run("read", || panic!("Closed work must not run"));
+        tokio::pin!(waiting);
+        assert!(futures::poll!(&mut waiting).is_pending());
+        let closing = execution.shutdown();
+        tokio::pin!(closing);
+        assert!(futures::poll!(&mut closing).is_pending());
+        let refused = tokio::time::timeout(std::time::Duration::from_millis(200), waiting)
             .await
+            .unwrap()
             .unwrap_err();
+        assert_eq!(refused.status_code(), 503);
         assert_eq!(
             refused.error,
             serde_json::json!({"kind":"unavailable_needs"})
         );
-        tokio::task::spawn_blocking(move || barrier.wait())
-            .await
-            .unwrap();
+        release.send(()).unwrap();
         call.await.unwrap().unwrap();
-        execution.shutdown().await;
+        closing.await;
     }
 
     #[tokio::test]

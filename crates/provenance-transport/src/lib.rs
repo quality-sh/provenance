@@ -7,6 +7,9 @@
 //!
 //! This library does not open a listener. The CLI owns the local review listener.
 mod access;
+mod admission;
+#[cfg(test)]
+mod admission_tests;
 mod execution;
 mod failure;
 #[cfg(feature = "test-fixture")]
@@ -178,11 +181,12 @@ impl StatementHost {
         .await
     }
 
-    fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
-        self.ingress
-            .clone()
-            .try_acquire_owned()
-            .map_err(|_| FailureEnvelope::new(None, OperationFailure::UnavailableNeeds))
+    async fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
+        tokio::select! {
+            biased;
+            () = self.stopping.cancelled() => Err(admission::unavailable()),
+            permit = admission::acquire(self.ingress.clone()) => permit,
+        }
     }
 
     /// Serve a bounded MCP session on a caller-owned test stream.
