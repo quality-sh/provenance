@@ -64,11 +64,10 @@ disagree, update the binary first, then shape.
 
    The host keeps running after the command returns. Paste `review_url` from its output
    into the chat as plain text. Opening it in a browser or in the app that shows your chat
-   is a bonus; the pasted link is the route that always works. The link signs the person
-   in for two minutes; if it has expired, get a new one with
-   `provenance <record_id> --review-link --format json`. The page is served on the machine
-   that runs the host. If that is not the person's machine, say so and give them the
-   command above to run on theirs.
+   is a bonus; the pasted link is the route that always works. The link works once, within
+   two minutes; if it has expired, run the command again for a new one. It reuses the host.
+   The page is served on the machine that runs the host. If that is not the person's
+   machine, say so and give them the command, without `--no-open`, to run on theirs.
 
    As soon as the anchor exists, send its link, and send it again at handoff. The page
    follows records as they land, so the person reads the tree while you shape:
@@ -294,10 +293,7 @@ sequence of commands.
    Omit guessed authorship. Keep proposals proposed until the graph records review.
    An active Rule with a proposed Resolution can have independent grounding in a
    Requirement or Source; that pair of lifecycle values alone is not a defect.
-5. Give each new Requirement and Rule a `--description` that states the behaviour
-   (see "The tree is the spec"). The person's words go on the thread, not in it.
-6. Answer the Question only when the answer covers all of it. Otherwise land what
-   was settled and narrow the Question to what remains.
+5. Write descriptions and answer the Question as "The tree is the spec" says.
 
 Record the dialogue on the selected Requirement:
 
@@ -342,7 +338,8 @@ provenance requirements req_<child_slug> update --scope <scope> \
 
 For a direct Requirement, omit `spawned_by`. For a direct Rule, use the Rule
 commands below without `--resolution-id`. Answer the Question with references to
-records actually created. Add `--resolution-id` only when a Resolution exists:
+records actually created. Add `--resolution-id` only for an approved Resolution (see
+"Landing a Rule and its bindings"):
 
 ```sh
 provenance questions <question_id> answer --scope <scope> \
@@ -387,6 +384,10 @@ change the artifact's kind.
    really produced the Rule. A Resolution producer is not required, and inventing one to
    satisfy the command misrecords how the obligation arose. If the CLI rejects a Rule that
    cites only a Requirement, the installed binary is out of date; see "Check your CLI".
+
+   Only an approved Resolution can produce an active Rule or answer a Question. While the
+   Resolution is `proposed`, create the Rule with `--status review`, and answer the
+   Question without `--resolution-id`, naming the Resolution in the answer text.
 
    ```sh
    provenance rules create --scope <scope> \

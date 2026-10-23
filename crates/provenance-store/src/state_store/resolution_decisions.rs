@@ -70,20 +70,43 @@ pub(super) fn ensure_resolution_decisions(
     Ok(())
 }
 
+#[provenance_macros::rule("rule_unapproved_resolution_refusal_says_what_to_do")]
 fn ensure_approved(
     resolutions: &[Resolution],
     id: &StableId,
     kind: &str,
     owner: &StableId,
 ) -> anyhow::Result<()> {
-    crate::write_error::ensure!(
-        InvalidUpdate,
-        resolutions.iter().any(|resolution| {
-            &resolution.id == id && resolution.status == ResolutionStatus::Approved
-        }),
-        "{kind} {} is refused: resolution {} must be approved",
-        owner.as_str(),
-        id.as_str()
+    let status = resolutions
+        .iter()
+        .find(|resolution| &resolution.id == id)
+        .map(|resolution| resolution.status.clone());
+    if status == Some(ResolutionStatus::Approved) {
+        return Ok(());
+    }
+    let state = status.map_or_else(
+        || "does not exist".to_owned(),
+        |status| {
+            let word = serde_json::to_value(status).unwrap_or_default();
+            format!("is {}", word.as_str().unwrap_or("not approved"))
+        },
     );
-    Ok(())
+    let id = id.as_str();
+    let message = format!(
+        "{kind} {} cites resolution {id}, which {state}. An answered Question or an active \
+         Rule can cite only an approved Resolution. Until a reviewer approves {id}, keep the \
+         Rule in draft or review, or leave the Question open, or remove the citation and name \
+         {id} in the text.",
+        owner.as_str()
+    );
+    Err(crate::write_error::SourceFailure::wrap(
+        crate::write_error::WriteFailure::ResolutionNotApproved {
+            resolution_id: id.to_owned(),
+            message,
+        },
+        anyhow::anyhow!(
+            "{kind} {} is refused: resolution {id} must be approved",
+            owner.as_str()
+        ),
+    ))
 }

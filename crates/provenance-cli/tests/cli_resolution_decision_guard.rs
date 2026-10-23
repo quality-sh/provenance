@@ -85,7 +85,7 @@ fn cli_answer_refuses_proposed_resolution_and_keeps_question_open() {
     result
         .failure()
         .code(1)
-        .stderr(contains(r#""kind":"invalid_update""#));
+        .stderr(contains(r#""kind":"resolution_not_approved""#));
     provenance(&[
         "questions",
         "question_code_scores_health",
@@ -108,7 +108,7 @@ fn cli_active_rule_refuses_proposed_resolution() {
     provenance_stdin(&[
         "rules", "create", "--repo", repo, "--scope", "default", "--stdin",
     ], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#)
-        .failure().code(1).stderr(contains(r#""kind":"invalid_update""#));
+        .failure().code(1).stderr(contains(r#""kind":"resolution_not_approved""#));
 }
 
 fn edit(repo: &str, kind: &str, id: &str, body: &str) -> assert_cmd::assert::Assert {
@@ -155,7 +155,7 @@ fn cli_answer_checks_existing_resolution_link() {
     ])
     .failure()
     .code(1)
-    .stderr(contains(r#""kind":"invalid_update""#));
+    .stderr(contains(r#""kind":"resolution_not_approved""#));
 }
 
 #[test]
@@ -186,7 +186,7 @@ fn cli_answered_question_creation_refuses_proposed_resolution() {
     ])
     .failure()
     .code(1)
-    .stderr(contains(r#""kind":"invalid_update""#));
+    .stderr(contains(r#""kind":"resolution_not_approved""#));
 }
 
 #[test]
@@ -213,7 +213,7 @@ fn cli_answered_question_edit_refuses_proposed_resolution() {
     )
     .failure()
     .code(1)
-    .stderr(contains(r#""kind":"invalid_update""#));
+    .stderr(contains(r#""kind":"resolution_not_approved""#));
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn cli_active_rule_edit_refuses_proposed_resolution() {
     )
     .failure()
     .code(1)
-    .stderr(contains(r#""kind":"invalid_update""#));
+    .stderr(contains(r#""kind":"resolution_not_approved""#));
     provenance(&[
         "rules",
         "rule_code_scores_health",
@@ -313,7 +313,7 @@ fn cli_resolution_cannot_lose_approval_while_it_answers_a_question() {
     )
     .failure()
     .code(1)
-    .stderr(contains(r#""kind":"invalid_update""#));
+    .stderr(contains(r#""kind":"resolution_not_approved""#));
     edit(
         repo,
         "questions",
@@ -422,7 +422,7 @@ fn cli_answer_refuses_each_unapproved_resolution_status() {
         ])
         .failure()
         .code(1)
-        .stderr(contains(r#""kind":"invalid_update""#));
+        .stderr(contains(r#""kind":"resolution_not_approved""#));
     }
 }
 
@@ -448,7 +448,7 @@ fn cli_resolution_cannot_lose_approval_while_it_produces_an_active_rule() {
     )
     .failure()
     .code(1)
-    .stderr(contains(r#""kind":"invalid_update""#));
+    .stderr(contains(r#""kind":"resolution_not_approved""#));
     edit(
         repo,
         "rules",
