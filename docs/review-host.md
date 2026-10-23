@@ -28,6 +28,29 @@ Check repository state before you retry a write. Closing stdin does not stop
 this interactive host. Native CLI and Rust calls still use their direct
 operation paths.
 
+## Detached host
+
+`provenance review --repo R --repository-id A --scope S --detach` starts the host as a
+background process and returns. The host runs in its own process group with no
+terminal, so it keeps serving after the shell or agent session that started it ends.
+If a verified host already serves the repository and scope, the command reuses it
+and starts nothing. Concurrent starts for one repository and scope wait for each other,
+so only one host starts. A record left by a host that stopped is removed, and a new
+host starts.
+
+The command prints one JSON line with `endpoint`, `url`, `review_url`, `opened`,
+`reused`, and, for a host it started, `pid` and `log`. `review_url` is the
+signed-in link to the page root, or the plain `url` when the command opened the
+page itself. `--no-open` prevents the opening, as for `--review-link`. The
+started host's startup line, with the bearer, is not kept. Its stderr goes to the
+owner-only `log` under `<user cache>/provenance/review-host/`. Clients reach a
+detached host through launch links and the discovery registry as before.
+
+The detached host does not open a browser. Stop it with `kill PID` on Unix or
+`taskkill /PID PID` on Windows; Ctrl-C in the starting shell does not reach it.
+If the host stops before it publishes its location, the command fails and prints
+the log.
+
 ## Local caller and repository access
 
 Startup writes one JSON line to stdout with `endpoint`, `bearer`, `repositoryId`,
