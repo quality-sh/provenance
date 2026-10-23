@@ -72,7 +72,13 @@ async fn http_ingress_and_execution_share_one_deadline() {
     assert!(poll!(&mut waiting).is_pending());
     read.await
         .expect("The request must pass ingress before the deadline");
-    let response = waiting.await.unwrap();
+    tokio::time::advance(Duration::from_millis(999)).await;
+    assert!(poll!(&mut waiting).is_pending());
+    tokio::time::advance(Duration::from_millis(1)).await;
+    let response = tokio::time::timeout(Duration::ZERO, waiting)
+        .await
+        .expect("The slot wait must end at the request deadline")
+        .unwrap();
     let elapsed = started.elapsed();
     // Release blocking work before assertions so a regression cannot hold the runner.
     drop(work_releases);
