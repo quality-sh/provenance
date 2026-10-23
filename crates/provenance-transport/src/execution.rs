@@ -89,7 +89,7 @@ mod tests {
     use tokio::sync::oneshot;
 
     #[tokio::test]
-    async fn admission_refuses_excess_work_without_running_it() {
+    async fn admission_wait_has_a_bound_and_reports_host_busy() {
         let execution = Execution::new(1);
         let worker = execution.clone();
         let (started, ready) = oneshot::channel();
@@ -105,14 +105,16 @@ mod tests {
                 .await
         });
         ready.await.unwrap();
+        let started_wait = tokio::time::Instant::now();
         let refused = execution
             .run("apply", || panic!("Rejected work must not run"))
             .await
             .unwrap_err();
         assert_eq!(
             refused.error,
-            serde_json::json!({"kind":"unavailable_needs"})
+            serde_json::json!({"kind":"host_busy"})
         );
+        assert!(started_wait.elapsed() >= std::time::Duration::from_secs(2));
         tokio::task::spawn_blocking(move || barrier.wait())
             .await
             .unwrap();
