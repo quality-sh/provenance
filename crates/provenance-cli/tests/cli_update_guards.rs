@@ -225,6 +225,14 @@ fn only_requirement_topic_and_question_updates_require_the_guard() {
             );
         } else {
             assert_eq!(result["succeeded"], true, "{collection}: {result}");
+            let after = json_output(
+                provenance().args([collection, id, "get", "--repo", &repo, "--format", "json"]),
+            );
+            assert_eq!(
+                after["data"][flag.trim_start_matches("--")],
+                "The unguarded change holds.",
+                "{collection}: {after}"
+            );
         }
     }
 }
@@ -233,7 +241,16 @@ fn only_requirement_topic_and_question_updates_require_the_guard() {
 #[test]
 fn no_review_update_accepts_expected_etag() {
     let (_directory, repo) = records();
-    for (collection, id) in [("rules", "rule_guard"), ("sources", "source_guard")] {
+    for (collection, id) in [
+        ("requirements", "req_guard"),
+        ("topics", "topic_guard"),
+        ("questions", "question_guard"),
+        ("rules", "rule_guard"),
+        ("sources", "source_guard"),
+        ("resolutions", "resolution_guard"),
+        ("domains", "domain_guard"),
+        ("boundaries", "boundary_guard"),
+    ] {
         let etag = etag(&repo, collection, id);
         provenance()
             .args([

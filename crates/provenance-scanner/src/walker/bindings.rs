@@ -92,18 +92,25 @@ fn parse_script_call(
     in_block_comment: bool,
 ) -> Result<Option<ParsedBinding>, MalformedBinding> {
     if let Some(rest) = call_arguments(line, in_block_comment, "verifies") {
-        // The helper's own declaration, `function verifies(ruleId, method)`,
-        // is not a binding site. Every other call must read as one.
-        if declares_verifies(line) {
+        // A function or method declared with the name `verifies`, such as the
+        // helper's own `function verifies(ruleId, method)`, is not a binding
+        // site. A member call (`provenance.verifies(...)`) binds when it reads
+        // as one; otherwise it calls some other `verifies` and gives no
+        // warning. Every other call must read as a binding.
+        let before = &line[..line.len() - rest.len() - "verifies(".len()];
+        if declares_verifies(before, rest) {
             return Ok(None);
         }
-        let Some((rule_id, after_id)) = quoted_literal(rest) else {
-            return Err(malformed_verifies(line));
+        let member_call = before.trim_end().ends_with('.');
+        let binding = quoted_literal(rest).and_then(|(rule_id, after_id)| {
+            let method = argument_after_comma(after_id).and_then(parse_method)?;
+            Some(one_line(rule_id, Some(method)))
+        });
+        return match binding {
+            Some(binding) => Ok(Some(binding)),
+            None if member_call => Ok(None),
+            None => Err(malformed_verifies(line)),
         };
-        let Some(method) = argument_after_comma(after_id).and_then(parse_method) else {
-            return Err(malformed_verifies(line));
-        };
-        return Ok(Some(one_line(rule_id, Some(method))));
     }
     // A Rule-options object after the id marks the SDK's typed Rule
     // declaration (`requirement.rule("key", { statement })`), which builds a
@@ -122,10 +129,60 @@ fn parse_script_call(
     Ok((!payload.trim_start().starts_with('{')).then(|| one_line(rule_id, None)))
 }
 
-fn declares_verifies(line: &str) -> bool {
-    let line = line.trim_start();
-    let line = line.strip_prefix("export ").unwrap_or(line).trim_start();
-    line.starts_with("function verifies(")
+/// Declaration keywords and modifiers that can come before a function or
+/// method name. A call to `verifies` never follows only these words.
+const DECLARATION_WORDS: [&str; 10] = [
+    "export",
+    "default",
+    "async",
+    "function",
+    "public",
+    "private",
+    "protected",
+    "static",
+    "override",
+    "abstract",
+];
+
+/// `before` is the text on the line before `verifies(` and `arguments` the
+/// text after it. A line with only declaration words before the name declares
+/// a function or method. A bare `verifies(...)` at the start of the line
+/// declares a method when a body or a return type follows the parameters.
+fn declares_verifies(before: &str, arguments: &str) -> bool {
+    let mut words = before.split_whitespace().peekable();
+    if words.peek().is_some() {
+        return words.all(|word| DECLARATION_WORDS.contains(&word));
+    }
+    after_closing_parenthesis(arguments)
+        .is_some_and(|after| after.trim_start().starts_with(['{', ':']))
+}
+
+/// The text after the parenthesis that closes an argument list, skipping
+/// nested parentheses and quoted text.
+fn after_closing_parenthesis(arguments: &str) -> Option<&str> {
+    let mut depth = 0_usize;
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, character) in arguments.char_indices() {
+        if let Some(active) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == active {
+                quote = None;
+            }
+            continue;
+        }
+        match character {
+            '\'' | '"' | '`' => quote = Some(character),
+            '(' => depth += 1,
+            ')' if depth == 0 => return Some(&arguments[index + 1..]),
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
 }
 
 fn parse_rule_call(line: &str, in_block_comment: bool) -> Option<ParsedBinding> {

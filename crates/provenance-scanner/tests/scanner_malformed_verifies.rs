@@ -73,3 +73,61 @@ fn well_formed_sites_and_other_calls_warn_about_nothing() {
     assert!(scan.warnings.is_empty(), "{:?}", scan.warnings);
     assert_eq!(scan.bindings.len(), 1);
 }
+
+/// A TypeScript line that only shares the name `verifies` with the binding
+/// helper gives no warning and no binding.
+fn assert_not_a_binding_site(source: &str) {
+    let scan = scan("other.ts", source);
+
+    assert!(scan.warnings.is_empty(), "{source}: {:?}", scan.warnings);
+    assert!(scan.bindings.is_empty(), "{source}: {:?}", scan.bindings);
+}
+
+#[test]
+#[verifies("rule_verification_method_words", examples)]
+fn a_class_method_named_verifies_is_not_a_binding_site() {
+    assert_not_a_binding_site(
+        "class Signer {\n  verifies(sig: string) {\n    return true;\n  }\n}\n",
+    );
+    assert_not_a_binding_site(
+        "class Signer {\n  public async verifies(sig: string): Promise<boolean> {\n    return true;\n  }\n}\n",
+    );
+    assert_not_a_binding_site("interface Signer {\n  verifies(sig: string): boolean;\n}\n");
+}
+
+#[test]
+#[verifies("rule_verification_method_words", examples)]
+fn a_member_call_to_another_verifies_is_not_a_binding_site() {
+    assert_not_a_binding_site("const ok = token.verifies(key);\n");
+    assert_not_a_binding_site("if (signer?.verifies(\"payload\")) {}\n");
+}
+
+#[test]
+#[verifies("rule_verification_method_words", examples)]
+fn an_async_function_named_verifies_is_not_a_binding_site() {
+    assert_not_a_binding_site("async function verifies(sig: string) {}\n");
+    assert_not_a_binding_site("export async function verifies(sig: string) {}\n");
+}
+
+#[test]
+#[verifies("rule_verification_method_words", examples)]
+fn a_default_export_named_verifies_is_not_a_binding_site() {
+    assert_not_a_binding_site("export default function verifies(sig: string) {}\n");
+}
+
+#[test]
+#[verifies("rule_verification_method_words", examples)]
+fn a_namespace_verifies_call_still_binds_and_a_bare_call_still_warns() {
+    let scan = scan(
+        "bindings.ts",
+        "provenance.verifies('rule_pw', 'examples');\nverifies(sig);\n",
+    );
+
+    assert_eq!(scan.bindings.len(), 1, "{:?}", scan.bindings);
+    let lines = scan
+        .warnings
+        .iter()
+        .map(|warning| warning.line)
+        .collect::<Vec<_>>();
+    assert_eq!(lines, vec![2], "{:?}", scan.warnings);
+}

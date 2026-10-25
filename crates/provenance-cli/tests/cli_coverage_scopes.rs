@@ -235,8 +235,9 @@ fn scope_reports_refuse_a_scope_the_manifest_does_not_declare() {
     }
 }
 
+// Implementation aid: a scan in a directory with no graph and no enclosing
+// repository refuses and creates no `.provenance` directory.
 #[test]
-#[verifies("rule_command_names_enclosing_repository", examples)]
 fn coverage_scan_outside_a_repository_refuses_without_writing() {
     let directory = tempfile::tempdir().unwrap();
     let plain = directory.path();
