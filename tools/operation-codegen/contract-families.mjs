@@ -50,7 +50,7 @@ export function envelopeOf(name, envelopes) {
   return best;
 }
 
-function schemaShapes(schemas) {
+export function schemaShapes(schemas) {
   const cache = new Map();
   const active = new Set();
   const shape = (node, depth = 0) => {
@@ -99,6 +99,19 @@ function constDiscriminant(variant) {
   if (!properties || typeof properties !== 'object') return null;
   for (const [key, schema] of Object.entries(properties)) {
     if (schema && typeof schema === 'object' && 'const' in schema && typeof schema.const === 'string') return [key, schema.const];
+  }
+  return null;
+}
+
+// The first key path where two schemas differ, such as `description` or
+// `properties.field`; null when the shapes are equal.
+export function differingKey(shapes, left, right, path = '') {
+  const isObject = node => node !== null && typeof node === 'object' && !Array.isArray(node);
+  if (!isObject(left) || !isObject(right)) return shapes.node(left) === shapes.node(right) ? null : path;
+  for (const key of [...new Set([...Object.keys(left), ...Object.keys(right)])].sort()) {
+    if (shapes.node(left[key]) === shapes.node(right[key])) continue;
+    const at = path ? `${path}.${key}` : key;
+    return isObject(left[key]) && isObject(right[key]) ? differingKey(shapes, left[key], right[key], at) : at;
   }
   return null;
 }
@@ -199,7 +212,8 @@ export function hoistSharedFamilies(document) {
       const shape = shapes.node(variant);
       const existing = variantBodies.get(name);
       if (existing && existing.shape !== shape) {
-        throw new Error(`contract-families: failure variant ${name} has two different wire shapes`);
+        const key = differingKey(shapes, existing.body, variant) || '(root)';
+        throw new Error(`contract-families: failure variant ${name} has two different wire shapes at ${key}`);
       }
       variantBodies.set(name, { shape, body: structuredClone(variant) });
       if (!seen.has(name)) { seen.add(name); entries.push({ $ref: `#/components/schemas/${name}` }); }

@@ -103,7 +103,7 @@ async fn relation_and_shaping_refusals_retain_typed_causes() {
     let error = fixture
         .call(
             "release-question",
-            json!({"scope_id":"default","id":"question_missing"}),
+            json!({"scope_id":"default","id":"question_missing","actor":"worker"}),
         )
         .await
         .unwrap_err();

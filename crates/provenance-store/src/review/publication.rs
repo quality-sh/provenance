@@ -1,11 +1,16 @@
 //! Publication of review changes to graph record files.
 
-use crate::{cache::ProjectionFamily, layout::ProvenanceLayout, state_store::StateStore};
+use crate::{
+    cache::ProjectionFamily,
+    layout::ProvenanceLayout,
+    state_store::{readers, StateStore},
+};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Refuses a review write if it changes a file outside the graph record files.
+/// The record files include the Message month shards that already exist.
 #[rule("rule_review_writes_change_only_record_files")]
 pub(super) fn with_record_state<R>(
     live: &ProvenanceLayout,
@@ -13,14 +18,18 @@ pub(super) fn with_record_state<R>(
 ) -> anyhow::Result<R> {
     crate::publication::with_staged_state(live, false, |staged| {
         let manifest = StateStore::new(live.clone()).manifest()?;
-        let allowed = manifest
-            .scopes
-            .iter()
-            .flat_map(|scope| {
+        let mut allowed = Vec::new();
+        for scope in &manifest.scopes {
+            allowed.extend(
                 ProjectionFamily::ALL
                     .into_iter()
-                    .map(move |family| family.shard_path(live, &scope.id))
-            })
+                    .map(|family| family.shard_path(live, &scope.id)),
+            );
+            // Messages can also be in the month shards that already exist.
+            allowed.extend(readers::message_shard_paths(live, &scope.id)?);
+        }
+        let allowed = allowed
+            .iter()
             .map(|path| path.strip_prefix(live.state_dir()).map(Utf8Path::to_owned))
             .collect::<Result<BTreeSet<_>, _>>()?;
         let before = files(&live.state_dir())?;
