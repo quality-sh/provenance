@@ -108,7 +108,7 @@ fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
             json!({
                 "schema_version":2, "scope_id":"default", "id":"msg_legacy",
                 "thread_id":THREAD, "role":"user", "body":"An earlier note.",
-                "created_at":1789814529628_u64
+                "created_at":1_789_814_529_628_u64
             })
         ),
     )
