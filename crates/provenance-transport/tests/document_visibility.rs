@@ -135,7 +135,8 @@ async fn rejected_candidate_proposal_keeps_its_target_in_the_filtered_document()
     assert_eq!(entry_ids(&all), entry_ids(&filtered));
 }
 
-/// Implementation aid: this checks that a reference to a missing record leaves the document readable.
+/// Implementation aid: this checks that a reference to a missing record leaves
+/// the document readable.
 #[tokio::test]
 async fn document_skips_a_reference_to_a_missing_record() {
     let repo = Repository::new("The shared graph is readable.");

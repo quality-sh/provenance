@@ -13,23 +13,9 @@ use provenance_store::{
     review::{CreateReviewRequirement, SaveRequirement},
     state_store::StateStore,
 };
-use provenance_transport::fixture::{FixtureAccess, Target};
 use serde_json::json;
 use support::records::Repository;
-use support::resource_http::{call, host};
-
-fn access(repo: &Repository) -> FixtureAccess {
-    FixtureAccess::new(
-        vec![Target {
-            id: "selected".into(),
-            root: repo.dir.path().to_path_buf(),
-        }],
-        vec![("selected".into(), "default".into())],
-        "fixture-secret",
-        "fixture.test",
-    )
-    .unwrap()
-}
+use support::resource_http::{access, call, host};
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
