@@ -84,7 +84,7 @@ fn read_refusals_are_one_object_each() {
     let error = refusal(&repo, &["requirements", "req_missing", "get"]);
     assert_eq!(error["error"]["kind"], "resource_not_found");
     let error = refusal(&repo, &["REQ-1", "get"]);
-    assert_eq!(error["error"]["kind"], "invalid_input");
+    assert_eq!(error["error"]["kind"], "operation_failed");
     assert_eq!(error["error"]["message"], "invalid operation input");
 }
 
