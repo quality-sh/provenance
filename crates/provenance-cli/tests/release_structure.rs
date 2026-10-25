@@ -111,8 +111,9 @@ fn release_workflow_publishes_rust_crates_in_dependency_order() {
         .expect("read release prerequisite check");
     assert!(check.contains("release-crates.txt"));
     assert!(workflow.contains("done < .github/release-crates.txt"));
-    let smoke = fs::read_to_string(workspace.join(".github/scripts/release-smoke/cargo-registry.sh"))
-        .expect("read registry smoke check");
+    let smoke =
+        fs::read_to_string(workspace.join(".github/scripts/release-smoke/cargo-registry.sh"))
+            .expect("read registry smoke check");
     assert!(smoke.contains("release-crates.txt"));
     let npm = workflow.split_once("  publish-npm:").unwrap().1;
     let needs = npm.split_once("    environment: npm").unwrap().0;
