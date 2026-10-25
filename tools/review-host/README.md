@@ -82,7 +82,7 @@ node --test tools/review-host/*.test.ts
 node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
 ```
 
-The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-f9e60a1c9523/provenance-review.tar.gz)
+The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-13d51d69ae34/provenance-review.tar.gz)
 contains the exact bytes from the pinned upstream build. The release contains
 only the renderer. It is separate from the CLI releases and is not the latest
 CLI release. CI and release preparation use this archive without access to the
