@@ -4,9 +4,9 @@
 
 mod support {
     pub mod records;
+    pub mod resource_http;
 }
 
-use axum::{body::Body, http::Request};
 use provenance_core::{
     NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ScopeId, StableId, TopicStatus,
 };
@@ -14,44 +14,9 @@ use provenance_macros::verifies;
 use provenance_store::state_store::{
     CreateQuestionInput, CreateRequirementInput, CreateTopicInput, StateStore,
 };
-use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use support::records::{allow_reviewer, Repository};
-use tower::ServiceExt as _;
-
-fn host(repo: &Repository) -> StatementHost {
-    use provenance_transport::fixture::{FixtureAccess, Target};
-    let access = FixtureAccess::new(
-        vec![Target {
-            id: "selected".into(),
-            root: repo.dir.path().to_path_buf(),
-        }],
-        vec![("selected".into(), "default".into())],
-        "fixture-secret",
-        "fixture.test",
-    )
-    .unwrap();
-    StatementHost::with_fixture_access(access)
-}
-
-async fn get(host: &StatementHost, path: &str) -> (u16, Value) {
-    let request = Request::builder()
-        .method("GET")
-        .uri(path)
-        .header("host", "fixture.test")
-        .header("authorization", "Bearer fixture-secret")
-        .body(Body::empty())
-        .unwrap();
-    let response = host.router().oneshot(request).await.unwrap();
-    let status = response.status().as_u16();
-    let value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-    (status, value)
-}
+use support::resource_http::{call, host};
 
 fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
@@ -141,11 +106,13 @@ async fn rejected_candidate_proposal_keeps_its_target_in_the_filtered_document()
             .unwrap(),
         )
         .unwrap();
-    let host = host(&repo);
+    let host = host(&repo, false);
 
-    let (status, filtered) = get(
+    let (status, filtered) = call(
         &host,
+        "GET",
         "/requirements/req_shared/document?exclude_terminal=true",
+        None,
     )
     .await;
     assert_eq!(status, 200, "{filtered}");
@@ -157,9 +124,11 @@ async fn rejected_candidate_proposal_keeps_its_target_in_the_filtered_document()
         filtered["data"]["review_totals"]["rejected"], 0,
         "{filtered}"
     );
-    let (status, all) = get(
+    let (status, all) = call(
         &host,
+        "GET",
         "/requirements/req_shared/document?exclude_terminal=false",
+        None,
     )
     .await;
     assert_eq!(status, 200, "{all}");
@@ -189,11 +158,13 @@ async fn document_skips_a_reference_to_a_missing_record() {
             kept
         });
     std::fs::write(&path, kept).unwrap();
-    let host = host(&repo);
+    let host = host(&repo, false);
 
-    let (status, document) = get(
+    let (status, document) = call(
         &host,
+        "GET",
         "/requirements/req_shared/document?exclude_terminal=true",
+        None,
     )
     .await;
     assert_eq!(status, 200, "{document}");
@@ -266,11 +237,13 @@ async fn legacy_review_acceptance_keeps_a_record_after_a_rejected_change() {
             .unwrap(),
         )
         .unwrap();
-    let host = host(&repo);
+    let host = host(&repo, false);
 
-    let (status, filtered) = get(
+    let (status, filtered) = call(
         &host,
+        "GET",
         "/requirements/req_shared/document?exclude_terminal=true",
+        None,
     )
     .await;
     assert_eq!(status, 200, "{filtered}");

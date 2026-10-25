@@ -4,22 +4,19 @@
 
 mod support {
     pub mod records;
+    pub mod resource_http;
 }
 
-use axum::{body::Body, http::Request};
 use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;
 use provenance_store::{
     review::{CreateReviewRequirement, SaveRequirement},
     state_store::StateStore,
 };
-use provenance_transport::{
-    fixture::{FixtureAccess, Target},
-    StatementHost,
-};
-use serde_json::{json, Value};
+use provenance_transport::fixture::{FixtureAccess, Target};
+use serde_json::json;
 use support::records::Repository;
-use tower::ServiceExt as _;
+use support::resource_http::{call, host};
 
 fn access(repo: &Repository) -> FixtureAccess {
     FixtureAccess::new(
@@ -32,29 +29,6 @@ fn access(repo: &Repository) -> FixtureAccess {
         "fixture.test",
     )
     .unwrap()
-}
-
-fn host(repo: &Repository) -> StatementHost {
-    StatementHost::with_fixture_access(access(repo))
-}
-
-async fn get(host: &StatementHost, path: &str) -> (u16, Value) {
-    let request = Request::builder()
-        .method("GET")
-        .uri(path)
-        .header("host", "fixture.test")
-        .header("authorization", "Bearer fixture-secret")
-        .body(Body::empty())
-        .unwrap();
-    let response = host.router().oneshot(request).await.unwrap();
-    let status = response.status().as_u16();
-    let value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-    (status, value)
 }
 
 fn sid(value: &str) -> StableId {
@@ -126,13 +100,19 @@ fn repository_with_domain_change() -> (Repository, String, String) {
 #[verifies("rule_change_view_has_before_and_after_states", examples)]
 async fn before_evidence_of_an_added_field_is_null() {
     let (repo, created, assigned) = repository_with_domain_change();
-    let host = host(&repo);
+    let host = host(&repo, false);
     let base = format!("/requirements/req_domain/history/{assigned}/evidence");
 
-    let (status, after) = get(&host, &format!("{base}/after?field=domain_id")).await;
+    let (status, after) = call(&host, "GET", &format!("{base}/after?field=domain_id"), None).await;
     assert_eq!(status, 200, "{after}");
     assert_eq!(after["data"]["json_text"], "\"domain_shared\"", "{after}");
-    let (status, before) = get(&host, &format!("{base}/before?field=domain_id")).await;
+    let (status, before) = call(
+        &host,
+        "GET",
+        &format!("{base}/before?field=domain_id"),
+        None,
+    )
+    .await;
     assert_eq!(status, 200, "{before}");
     assert_eq!(before["data"]["json_text"], "null", "{before}");
     assert_eq!(before["data"]["version"], created, "{before}");
@@ -145,20 +125,24 @@ async fn before_evidence_of_an_added_field_is_null() {
 #[verifies("rule_evidence_read_states_absent_fields", examples)]
 async fn evidence_refuses_a_missing_before_version_and_an_unknown_field() {
     let (repo, created, assigned) = repository_with_domain_change();
-    let host = host(&repo);
+    let host = host(&repo, false);
     let base = "/requirements/req_domain/history";
 
-    let (status, failure) = get(
+    let (status, failure) = call(
         &host,
+        "GET",
         &format!("{base}/{created}/evidence/before?field=statement"),
+        None,
     )
     .await;
     assert_eq!(status, 404, "{failure}");
     assert_eq!(failure["error"]["kind"], "resource_not_found", "{failure}");
     for side in ["before", "after"] {
-        let (status, failure) = get(
+        let (status, failure) = call(
             &host,
+            "GET",
             &format!("{base}/{assigned}/evidence/{side}?field=nope"),
+            None,
         )
         .await;
         assert_eq!(status, 404, "{side}: {failure}");
@@ -173,14 +157,14 @@ async fn evidence_refuses_a_missing_before_version_and_an_unknown_field() {
 #[verifies("rule_evidence_read_states_absent_fields", examples)]
 async fn evidence_refuses_an_offset_outside_the_selected_text() {
     let (repo, _, assigned) = repository_with_domain_change();
-    let host = host(&repo);
+    let host = host(&repo, false);
     let path =
         format!("/requirements/req_domain/history/{assigned}/evidence/after?field=domain_id");
 
-    let (status, page) = get(&host, &format!("{path}&offset=14")).await;
+    let (status, page) = call(&host, "GET", &format!("{path}&offset=14"), None).await;
     assert_eq!(status, 200, "{page}");
     assert_eq!(page["data"]["json_text"], "\"", "{page}");
-    let (status, failure) = get(&host, &format!("{path}&offset=15")).await;
+    let (status, failure) = call(&host, "GET", &format!("{path}&offset=15"), None).await;
     assert_eq!(status, 400, "{failure}");
     assert_eq!(failure["error"]["kind"], "invalid_input", "{failure}");
     assert_eq!(failure["error"]["field"], "offset", "{failure}");

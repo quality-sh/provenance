@@ -54,10 +54,6 @@ pub struct ResourcePage<T> {
     pub next_cursor: Option<String>,
 }
 
-pub(super) fn validate_limit(limit: usize) -> anyhow::Result<()> {
-    crate::operations::reader::check_limit(limit)
-}
-
 async fn collect_page<T, F, Fut>(
     ids: Vec<String>,
     limit: usize,
@@ -115,7 +111,7 @@ async fn projection_page<K: ProjectionRow>(
     operation: &str,
     request: ResourcePageRequest,
 ) -> anyhow::Result<ResourcePage<K>> {
-    validate_limit(request.limit)?;
+    reader::check_limit(request.limit)?;
     let selector = (request.limit, request.exclude_terminal);
     let (cursor, position) = Cursor::open(ctx, operation, &selector, request.cursor.as_deref())?;
     ctx.snapshot().bound_page_work().await?;
@@ -136,7 +132,7 @@ async fn payload_page<T: PayloadRow>(
     operation: &str,
     request: ResourcePageRequest,
 ) -> anyhow::Result<ResourcePage<T>> {
-    validate_limit(request.limit)?;
+    reader::check_limit(request.limit)?;
     let selector = (request.limit, request.exclude_terminal);
     let (cursor, position) = Cursor::open(ctx, operation, &selector, request.cursor.as_deref())?;
     ctx.snapshot().bound_page_work().await?;
@@ -155,7 +151,7 @@ async fn proposal_fact_page<T: ProposalPayloadRow>(
     operation: &str,
     request: ProposalFactPageRequest,
 ) -> anyhow::Result<ResourcePage<T>> {
-    validate_limit(request.limit)?;
+    reader::check_limit(request.limit)?;
     let selector = (&request.proposal_id, request.limit);
     let (cursor, position) = Cursor::open(ctx, operation, &selector, request.cursor.as_deref())?;
     ctx.snapshot().bound_page_work().await?;
@@ -176,7 +172,7 @@ async fn verification_binding_page(
     ctx: &ReadContext,
     request: VerificationPageRequest,
 ) -> anyhow::Result<ResourcePage<provenance_core::VerificationBinding>> {
-    validate_limit(request.limit)?;
+    reader::check_limit(request.limit)?;
     let selector = (&request.rule, request.limit);
     let (cursor, position) = Cursor::open(
         ctx,
