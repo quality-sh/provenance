@@ -33,6 +33,30 @@ fn spec(sources: &Value, requirements: &Value) -> Value {
     }})
 }
 
+/// Only `other` and its Thread and Message stay in the Discussion shards.
+fn assert_only_the_other_discussion_stays(repo: &Repository, other: &Value, removed: &[&Value]) {
+    let store = StateStore::new(repo.layout.clone());
+    let scope = ScopeId::new("default").unwrap();
+    let discussions = store.list_discussions(&scope).unwrap();
+    assert_eq!(discussions.len(), 1, "{discussions:?}");
+    assert_eq!(
+        discussions[0].discussion_id.as_str(),
+        other["discussion_id"].as_str().unwrap()
+    );
+    let removed_threads = removed
+        .iter()
+        .map(|discussion| discussion["thread_id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    let threads = store.list_threads(&scope).unwrap();
+    assert_eq!(threads.len(), 1, "{threads:?}");
+    assert_eq!(threads[0].parent.node_id.as_str(), "req_shared");
+    let messages = store.list_messages(&scope).unwrap();
+    assert!(messages
+        .iter()
+        .all(|message| !removed_threads.contains(&message.thread_id.as_str())));
+    assert_eq!(messages.len(), 1, "{messages:?}");
+}
+
 #[tokio::test]
 #[verifies("rule_typed_deletion_deletes_discussions", examples)]
 async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
@@ -114,26 +138,7 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
         assert_eq!(status, 404, "{path}: {read}");
     }
 
-    let store = StateStore::new(repo.layout.clone());
-    let scope = ScopeId::new("default").unwrap();
-    let discussions = store.list_discussions(&scope).unwrap();
-    assert_eq!(discussions.len(), 1, "{discussions:?}");
-    assert_eq!(
-        discussions[0].discussion_id.as_str(),
-        other["discussion_id"].as_str().unwrap()
-    );
-    let removed_threads = [&on_source, &on_resolution]
-        .iter()
-        .map(|discussion| discussion["thread_id"].as_str().unwrap())
-        .collect::<Vec<_>>();
-    let threads = store.list_threads(&scope).unwrap();
-    assert_eq!(threads.len(), 1, "{threads:?}");
-    assert_eq!(threads[0].parent.node_id.as_str(), "req_shared");
-    let messages = store.list_messages(&scope).unwrap();
-    assert!(messages
-        .iter()
-        .all(|message| !removed_threads.contains(&message.thread_id.as_str())));
-    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert_only_the_other_discussion_stays(&repo, &other, &[&on_source, &on_resolution]);
 
     // Discussion reads and writes on the other records keep working.
     start(&host, PARENT, Value::Null).await;
