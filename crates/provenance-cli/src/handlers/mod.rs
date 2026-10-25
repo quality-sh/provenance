@@ -154,7 +154,7 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
 
 /// Opens the graph for a report over one scope, after the manifest confirms
 /// that the scope exists.
-fn scoped_store(context: &RepoContext) -> anyhow::Result<crate::store::Store> {
+fn scoped_store(context: &crate::repo_context::RepoContext) -> anyhow::Result<crate::store::Store> {
     context.declared_scope()?;
     context.open_graph()
 }
