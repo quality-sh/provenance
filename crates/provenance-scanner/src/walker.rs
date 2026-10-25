@@ -190,20 +190,18 @@ fn scan_file_contents(
             in_block_comment =
                 block_comment_state(line, in_block_comment, language == Language::Rust);
         }
-        let binding = if language != Language::Rust || rust_states[idx] == RustLexicalState::Code {
-            match parse_binding_line(language, line, &lines[idx + 1..], started_in_block_comment) {
-                Ok(binding) => binding,
-                Err(malformed) => {
-                    warnings.push(ParseWarning {
-                        line: idx + 1,
-                        message: malformed.0,
-                    });
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        let binding = (language != Language::Rust || rust_states[idx] == RustLexicalState::Code)
+            .then(|| {
+                binding_or_warning(
+                    language,
+                    line,
+                    &lines[idx + 1..],
+                    started_in_block_comment,
+                    idx + 1,
+                    &mut warnings,
+                )
+            })
+            .flatten();
         if let Some(binding) = binding {
             let end_idx = idx + binding.extra_lines;
             let item_name = binding_item_name(language, &lines, end_idx, binding.verification);
@@ -273,6 +271,28 @@ fn scan_file_contents(
         annotations,
         bindings,
         warnings,
+    }
+}
+
+/// The binding on one line, or a warning with the line number when the line
+/// opens a `verifies` site that the scanner cannot read.
+fn binding_or_warning(
+    language: Language,
+    line: &str,
+    following: &[&str],
+    in_block_comment: bool,
+    line_number: usize,
+    warnings: &mut Vec<ParseWarning>,
+) -> Option<bindings::ParsedBinding> {
+    match parse_binding_line(language, line, following, in_block_comment) {
+        Ok(binding) => binding,
+        Err(malformed) => {
+            warnings.push(ParseWarning {
+                line: line_number,
+                message: malformed.0,
+            });
+            None
+        }
     }
 }
 
