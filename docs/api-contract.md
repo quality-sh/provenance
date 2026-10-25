@@ -109,8 +109,10 @@ dispatch, and no weaker authoring ownership checks.
 Typed-spec apply (`POST /authoring-changes`) records an occurrence for each
 changed enrolled record and refuses to delete an enrolled record. It continues
 to replace un-enrolled graph state without journal entries because those
-records have not entered review. Full-scope import still requires separate
-lossless support for review history.
+records have not entered review. When apply deletes a record, also by cascade,
+it deletes the Discussions of that record, active or resolved, with their
+Threads and Messages, in the same publication. Git keeps their history.
+Full-scope import still requires separate lossless support for review history.
 
 Receipts stay internal. A write returns success or an error. The client does not
 replay a write, and no client-side uncertain-write ledger exists. The journal
