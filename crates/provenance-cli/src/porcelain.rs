@@ -51,8 +51,9 @@ pub async fn dispatch_get(
     Ok(())
 }
 
-/// The `edit` state of the record, read from its member route so that a
-/// record read shows the etag that the next guarded update needs.
+/// The `edit` state of the record, read from its member route so that a JSON
+/// record read shows the etag that the next guarded update needs. The text
+/// form stays identical to the shared readable rendering.
 async fn edit_state(
     host: &provenance_transport::StatementHost,
     outcome: &GetOutcome,
@@ -90,13 +91,6 @@ fn render_get(
         }
         serde_json::to_string_pretty(&value)
     } else {
-        let mut text = render_get_readable(outcome)?;
-        if let Some(etag) = edit
-            .and_then(|edit| edit.get("etag"))
-            .and_then(|etag| etag.as_str())
-        {
-            text.push_str(&format!("\n\netag: {etag}"));
-        }
-        Ok(text)
+        render_get_readable(outcome)
     }
 }

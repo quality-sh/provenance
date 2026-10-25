@@ -10,6 +10,7 @@ use std::str::FromStr;
 use super::Language;
 use crate::binding_lexer::call_arguments;
 use crate::parser::Verification;
+use crate::ParseWarning;
 
 /// A recognized binding site: the rule id, the verification method for a
 /// `verifies` site, and how many lines past the first the site consumed (a
@@ -245,4 +246,26 @@ fn string_literal(rest: &str) -> Option<String> {
     let after_quote = rest.strip_prefix('"')?;
     let (literal, _) = after_quote.split_once('"')?;
     (!literal.is_empty()).then(|| literal.to_string())
+}
+
+/// The binding on one line, or a warning with the line number when the line
+/// opens a `verifies` site that the scanner cannot read.
+pub(super) fn parse_binding_or_warn(
+    language: Language,
+    line: &str,
+    following: &[&str],
+    in_block_comment: bool,
+    line_number: usize,
+    warnings: &mut Vec<ParseWarning>,
+) -> Option<ParsedBinding> {
+    match parse_binding_line(language, line, following, in_block_comment) {
+        Ok(binding) => binding,
+        Err(malformed) => {
+            warnings.push(ParseWarning {
+                line: line_number,
+                message: malformed.0,
+            });
+            None
+        }
+    }
 }

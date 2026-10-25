@@ -206,11 +206,6 @@ fn a_record_read_shows_the_edit_etag() {
         assert_eq!(read["edit"]["etag"].as_str(), Some(etag), "{id}");
         let read = json(provenance().args([id, "get", "--repo", repo, "--format", "json"]));
         assert_eq!(read["edit"]["etag"].as_str(), Some(etag), "{id}");
-        provenance()
-            .args([id, "--repo", repo])
-            .assert()
-            .success()
-            .stdout(predicate::str::contains(format!("etag: {etag}")));
     }
 }
 
