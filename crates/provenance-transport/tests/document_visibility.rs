@@ -166,8 +166,8 @@ async fn rejected_candidate_proposal_keeps_its_target_in_the_filtered_document()
     assert_eq!(entry_ids(&all), entry_ids(&filtered));
 }
 
+/// Implementation aid: this checks that a reference to a missing record leaves the document readable.
 #[tokio::test]
-#[verifies("rule_requirement_document_canonical_membership", examples)]
 async fn document_skips_a_reference_to_a_missing_record() {
     let repo = Repository::new("The shared graph is readable.");
     let store = StateStore::new(repo.layout.clone());
@@ -200,4 +200,82 @@ async fn document_skips_a_reference_to_a_missing_record() {
     let ids = entry_ids(&document);
     assert!(ids.contains(&"req_citing".to_owned()), "{document}");
     assert!(!ids.contains(&"req_cited".to_owned()), "{document}");
+}
+
+#[tokio::test]
+#[verifies("rule_review_document_hides_rejected_new_records", examples)]
+async fn legacy_review_acceptance_keeps_a_record_after_a_rejected_change() {
+    let repo = Repository::new("The shared graph is readable.");
+    allow_reviewer(&repo);
+    let store = StateStore::new(repo.layout.clone());
+    store
+        .create_requirement(requirement("req_reviewed", vec![]))
+        .unwrap();
+    // An older review submission carries no revision binding; its acceptance
+    // is still a decision of the record's own review.
+    let records = provenance_store::shards::path_for(&repo.layout, &scope(), NodeType::Requirement);
+    let ideation = records.parent().unwrap().parent().unwrap().join("ideation");
+    std::fs::create_dir_all(&ideation).unwrap();
+    let append = |name: &str, row: Value| {
+        use std::io::Write as _;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(ideation.join(name))
+            .unwrap();
+        writeln!(file, "{row}").unwrap();
+    };
+    append(
+        "proposal_cards.jsonl",
+        json!({
+            "schema_version":2,"scope_id":"default","id":"prop_legacy_review",
+            "proposal_key":"legacy-review","proposal_type":"record_revision",
+            "title":"Review req_reviewed","summary":"The older review.",
+            "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_reviewed"},
+                "source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},
+            "promotion_state":"accepted"
+        }),
+    );
+    append(
+        "dispositions.jsonl",
+        json!({
+            "schema_version":2,"scope_id":"default","id":"disp_legacy_review",
+            "proposal_id":"prop_legacy_review","decision":"accepted","rationale":"Ratified offline.",
+            "actor":{"identity_type":"human","id":"reviewer"},
+            "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_reviewed"}
+        }),
+    );
+    let submitted = store
+        .submit_record_review(
+            serde_json::from_value(json!({
+                "scope_id":"default","actor":"author","record_kind":"requirement",
+                "record_id":"req_reviewed","declared_by":null,"title":"Review again",
+                "summary":"Review the changed record.","source_ids":[],
+                "evidence_references":[],"builds_on":[],"expected_revision":null,"revises":null
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    store
+        .decide_record_review(
+            serde_json::from_value(json!({
+                "scope_id":"default","actor":{"identity_type":"human","id":"reviewer"},
+                "proposal_id":submitted.id,"decision":"rejected","rationale":"Not this change.",
+                "canonical_artifact":null,"declared_by":null,"feedback":null
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let host = host(&repo);
+
+    let (status, filtered) = get(
+        &host,
+        "/requirements/req_shared/document?exclude_terminal=true",
+    )
+    .await;
+    assert_eq!(status, 200, "{filtered}");
+    assert!(
+        entry_ids(&filtered).contains(&"req_reviewed".to_owned()),
+        "{filtered}"
+    );
 }
