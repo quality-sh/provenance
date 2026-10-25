@@ -54,8 +54,11 @@ tag the release:
 ```sh
 git diff --exit-code HEAD --
 test -z "$(git ls-files --others --exclude-standard)"
-cargo package --workspace --locked --allow-dirty
+cargo package --workspace --locked --allow-dirty --registry crates-io
 ```
+
+The explicit registry lets Cargo package workspace dependencies before their
+new versions exist on crates.io.
 
 Generated client source stays outside Git and enters the crate archives. Cargo
 requires `--allow-dirty` for those files. The preceding checks reject changes to

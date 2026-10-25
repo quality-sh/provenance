@@ -225,6 +225,7 @@ jobs:
       - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Run requested Cargo check
         env:
+          CARGO_BUILD_JOBS: 3
           CARGO_ARGS_JSON: ${{ inputs.command_json }}
         run: |
           python3 - <<'PY'
