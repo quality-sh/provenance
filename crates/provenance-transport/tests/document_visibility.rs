@@ -183,8 +183,11 @@ async fn document_skips_a_reference_to_a_missing_record() {
         .unwrap()
         .lines()
         .filter(|line| !line.contains("\"id\":\"req_cited\""))
-        .map(|line| format!("{line}\n"))
-        .collect::<String>();
+        .fold(String::new(), |mut kept, line| {
+            kept.push_str(line);
+            kept.push('\n');
+            kept
+        });
     std::fs::write(&path, kept).unwrap();
     let host = host(&repo);
 
