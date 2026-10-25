@@ -52,7 +52,7 @@ jobs:
           cp -rf packages/provenance/dist/. target/review-sdk/dist/
           cp -f packages/provenance/package.json target/review-sdk/
           tar -czf target/review-artifact/review-composed.tar.gz crates/provenance-cli/review-assets-generated target/review-sdk
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: review-composed
           path: target/review-artifact/review-composed.tar.gz
