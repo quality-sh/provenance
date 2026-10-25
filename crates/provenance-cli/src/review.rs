@@ -64,13 +64,15 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         ),
     ));
     let endpoint = format!("http://{address}");
-    let runtime = LocalHostRegistration::publish(
+    // Discovery treats a registered host that does not answer as stale, so the record is
+    // announced only after the listener serves.
+    let registration = LocalHostRegistration::prepare(
         &canonical_repo,
         &options.scope,
         &endpoint,
         &options.repository_id,
     )?;
-    let identity = runtime.identity();
+    let identity = registration.identity();
     // The codes own the launch key, so the key file is removed when the host stops.
     let codes = launch::LaunchCodes::new(
         &token,
@@ -104,8 +106,52 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         ),
         Arc::new(move |changes| page_events.page_changed(changes)),
     );
-    let router = host
-        .router()
+    let router = review_router(
+        &host,
+        &identity,
+        review_configuration,
+        &codes,
+        &events,
+        access,
+        address,
+    );
+    let signals = ShutdownSignals::new()?;
+    let (stop, stopped) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(
+        axum::serve(listener, router)
+            .with_graceful_shutdown(async {
+                let _ = stopped.await;
+            })
+            .into_future(),
+    );
+    tokio::task::yield_now().await;
+    registration.announce()?;
+    println!(
+        "{}",
+        json!({
+            "endpoint": endpoint, "bearer": token, "repositoryId": options.repository_id,
+            "scope": options.scope, "instanceNonce": identity.instance_nonce,
+            "url": format!("{endpoint}/"),
+        })
+    );
+    std::io::stdout().flush()?;
+    open_review_page(&endpoint, &codes, options.no_open)?;
+    serve(server, stop, host, events, signals).await
+}
+
+/// The host routes plus the review page's identity, configuration, launch, event, and
+/// asset routes.
+fn review_router(
+    host: &StatementHost,
+    identity: &LocalHostIdentity,
+    review_configuration: ReviewConfiguration,
+    codes: &launch::LaunchCodes,
+    events: &events::ReviewEvents,
+    access: Arc<LocalAccess>,
+    address: std::net::SocketAddr,
+) -> axum::Router {
+    let asset_access = access.clone();
+    host.router()
         .route(
             IDENTITY_ROUTE,
             get(local_host_identity).with_state(identity.clone()),
@@ -123,23 +169,13 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
             post(launch::open_session).with_state(codes.clone()),
         )
         .merge(events.router())
-        .fallback(assets::serve)
+        .fallback(move |request: Request| {
+            std::future::ready(assets::serve(&asset_access, &request))
+        })
         .layer(middleware::from_fn_with_state(
             (access, codes.clone(), format!("ws://{address}")),
             protect_origin,
-        ));
-    let signals = ShutdownSignals::new()?;
-    println!(
-        "{}",
-        json!({
-            "endpoint": endpoint, "bearer": token, "repositoryId": options.repository_id,
-            "scope": options.scope, "instanceNonce": identity.instance_nonce,
-            "url": format!("{endpoint}/"),
-        })
-    );
-    std::io::stdout().flush()?;
-    open_review_page(&endpoint, &codes, options.no_open)?;
-    serve(listener, router, host, events, signals).await
+        ))
 }
 
 fn repository_access(
@@ -197,19 +233,12 @@ fn open_review_page(
 }
 
 async fn serve(
-    listener: tokio::net::TcpListener,
-    router: axum::Router,
+    mut server: tokio::task::JoinHandle<std::io::Result<()>>,
+    stop: tokio::sync::oneshot::Sender<()>,
     host: StatementHost,
     events: events::ReviewEvents,
     mut signals: ShutdownSignals,
 ) -> anyhow::Result<()> {
-    let (stop, stopped) = tokio::sync::oneshot::channel();
-    let server = axum::serve(listener, router)
-        .with_graceful_shutdown(async {
-            let _ = stopped.await;
-        })
-        .into_future();
-    tokio::pin!(server);
     let result = tokio::select! {
         result = &mut server => Some(result),
         () = signals.recv() => {
@@ -228,7 +257,7 @@ async fn serve(
                 Some(result) => result,
                 None => tokio::time::timeout(Duration::from_secs(1), &mut server)
                     .await
-                    .unwrap_or(Ok(())),
+                    .unwrap_or(Ok(Ok(()))),
             }
         } => result,
         () = signals.recv() => {
@@ -237,7 +266,9 @@ async fn serve(
             std::process::exit(1);
         }
     };
-    result.context("review listener failed")
+    result
+        .context("review listener task failed")?
+        .context("review listener failed")
 }
 
 async fn local_host_identity(State(identity): State<LocalHostIdentity>) -> Json<LocalHostIdentity> {

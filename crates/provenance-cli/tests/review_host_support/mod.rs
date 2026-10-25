@@ -219,7 +219,42 @@ fn host_command(root: &std::path::Path) -> Command {
     command
 }
 
-pub fn start_command(mut command: Command) -> Host {
+pub fn start_command(command: Command) -> Host {
+    spawn_command(command).started(Duration::from_secs(15))
+}
+
+/// A host process that has not printed its startup line yet.
+pub struct StartingHost {
+    host: Host,
+    line: mpsc::Receiver<String>,
+    pending: Option<String>,
+}
+
+impl StartingHost {
+    /// Reports whether the startup line has arrived, without waiting for it.
+    pub fn has_started(&mut self) -> bool {
+        if self.pending.is_none() {
+            self.pending = self.line.try_recv().ok();
+        }
+        self.pending.is_some()
+    }
+
+    pub fn started(mut self, timeout: Duration) -> Host {
+        let line = match self.pending.take() {
+            Some(line) => line,
+            None => self.line.recv_timeout(timeout).expect("host startup line"),
+        };
+        assert!(
+            !line.is_empty(),
+            "review host must start and publish its configuration"
+        );
+        self.host.config = serde_json::from_str(&line).unwrap();
+        self.host
+    }
+}
+
+/// Starts the host process and returns before its startup line arrives.
+pub fn spawn_command(mut command: Command) -> StartingHost {
     let user_cache = tempfile::tempdir().unwrap();
     use_user_cache(&mut command, user_cache.path());
     let mut child = command.stdout(Stdio::piped()).spawn().unwrap();
@@ -230,20 +265,15 @@ pub fn start_command(mut command: Command) -> Host {
         BufReader::new(stdout).read_line(&mut line).unwrap();
         let _ = send.send(line);
     });
-    let mut host = Host {
-        child,
-        config: Value::Null,
-        user_cache,
-    };
-    let line = receive
-        .recv_timeout(Duration::from_secs(15))
-        .expect("host startup line");
-    assert!(
-        !line.is_empty(),
-        "review host must start and publish its configuration"
-    );
-    host.config = serde_json::from_str(&line).unwrap();
-    host
+    StartingHost {
+        host: Host {
+            child,
+            config: Value::Null,
+            user_cache,
+        },
+        line: receive,
+        pending: None,
+    }
 }
 
 /// Points every platform's per-user cache at one isolated directory.
@@ -328,6 +358,16 @@ impl BrowserRecorder {
         let start = page.find("href=\"")? + "href=\"".len();
         let end = start + page[start..].find('"')?;
         Some(page[start..end].replace("&amp;", "&"))
+    }
+
+    /// Fails if the browser gets a page within the wait, so a late opener still counts.
+    pub fn expect_no_link(&self, wait: Duration) {
+        let deadline = std::time::Instant::now() + wait;
+        while std::time::Instant::now() < deadline {
+            assert_eq!(self.opened_link(), None, "the browser got a page");
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        assert_eq!(self.opened_link(), None, "the browser got a page");
     }
 
     pub fn wait_for_link(&self, timeout: Duration) -> String {
