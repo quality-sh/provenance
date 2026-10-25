@@ -192,10 +192,7 @@ fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T
         let parent = (!path.is_empty() && path != ".").then_some(path);
         let message = error.inner().to_string();
         // A missing field is named under its parent, as the list check above does.
-        let failure = match message
-            .strip_prefix("missing field `")
-            .and_then(|rest| rest.strip_suffix('`'))
-        {
+        let failure = match missing_field(&message) {
             Some(name) => OperationFailure::InvalidInput {
                 field: Some(
                     parent.map_or_else(|| name.to_owned(), |parent| format!("{parent}.{name}")),
@@ -211,6 +208,14 @@ fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T
     })
 }
 
+/// The field that a serde "missing field" error names. The
+/// `missing_field_text_is_pinned` test fails if serde changes this text.
+fn missing_field(message: &str) -> Option<&str> {
+    message
+        .strip_prefix("missing field `")
+        .and_then(|rest| rest.strip_suffix('`'))
+}
+
 fn frame_failure<O: Operation>(failure: OperationError<O::Failure>) -> FailureEnvelope {
     match failure {
         OperationError::Common(error) => FailureEnvelope::new(Some(O::NAME), error),
@@ -218,5 +223,26 @@ fn frame_failure<O: Operation>(failure: OperationError<O::Failure>) -> FailureEn
             let status = O::failure_status(&error);
             FailureEnvelope::declared(O::NAME, error, status)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::de::IntoDeserializer as _;
+
+    #[derive(Debug, serde::Deserialize)]
+    #[allow(dead_code)]
+    struct Probe {
+        actor: String,
+    }
+
+    #[test]
+    fn missing_field_text_is_pinned() {
+        let call = serde_json::json!({});
+        let error =
+            serde_path_to_error::deserialize::<_, Probe>(call.into_deserializer()).unwrap_err();
+        let message = error.inner().to_string();
+        assert_eq!(message, "missing field `actor`");
+        assert_eq!(super::missing_field(&message), Some("actor"));
     }
 }
