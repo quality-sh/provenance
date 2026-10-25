@@ -20,7 +20,10 @@ fn acknowledge(page: &Page, link: &ShowRecord) {
 #[tokio::test]
 /// Implementation aid: with no connected page the browser gets the link.
 async fn a_link_without_a_page_reaches_no_page() {
-    assert_eq!(navigation().show("req_example".to_owned(), None).await, Delivery::NoPage);
+    assert_eq!(
+        navigation().show("req_example".to_owned(), None).await,
+        Delivery::NoPage
+    );
 }
 
 #[tokio::test]
