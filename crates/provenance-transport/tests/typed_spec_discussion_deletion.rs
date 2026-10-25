@@ -49,7 +49,6 @@ fn resource_id(applied: &Value, key: &str) -> String {
 async fn assert_only_the_other_discussion_stays(
     host: &provenance_transport::StatementHost,
     other: &Value,
-    removed: &[&Value],
 ) {
     let items = |listed: &Value| listed["data"]["items"].as_array().unwrap().clone();
     let (status, listed) = call(host, "GET", PARENT, None).await;
@@ -70,9 +69,6 @@ async fn assert_only_the_other_discussion_stays(
     let messages = items(&listed);
     assert_eq!(messages.len(), 1, "{listed}");
     assert_eq!(messages[0]["thread_id"], other["thread_id"]);
-    for discussion in removed {
-        assert_ne!(discussion["thread_id"], other["thread_id"]);
-    }
 }
 
 #[tokio::test]
@@ -105,7 +101,7 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
     )
     .await;
     assert_eq!(status, 200, "{created}");
-    let on_source = start(
+    start(
         &host,
         &format!("/sources/{source}/discussions"),
         json!("spec://fx"),
@@ -145,7 +141,7 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
         assert_eq!(status, 404, "{path}: {read}");
     }
 
-    assert_only_the_other_discussion_stays(&host, &other, &[&on_source, &on_resolution]).await;
+    assert_only_the_other_discussion_stays(&host, &other).await;
 
     // Discussion reads and writes on the other records keep working.
     start(&host, PARENT, Value::Null).await;

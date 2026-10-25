@@ -1,4 +1,4 @@
-//! Typed-spec apply removes the origin that cites a deleted Discussion.
+//! Typed-spec apply removes the origins that cite a deleted Discussion.
 use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
@@ -28,9 +28,42 @@ fn spec(sources: &Value) -> Value {
     })
 }
 
+/// The bytes of each file in the Rule record directory.
+fn rule_files(repo: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
+    let directory = repo.join(".provenance/state/scopes/default/rules");
+    let mut files = std::fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| {
+            let path = entry.unwrap().path();
+            let bytes = std::fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect::<Vec<_>>();
+    files.sort();
+    files
+}
+
+fn start(repo: &Path, source: &str) -> Value {
+    let started = provenance(
+        repo,
+        &["sources", source, "discussions", "create"],
+        Some(json!({
+            "actor":"reviewer", "declared_by":"spec://fx", "role":"user", "body":"A concern."
+        })),
+    );
+    started["data"].clone()
+}
+
+fn origin(started: &Value) -> Value {
+    json!({
+        "discussion_id":started["discussion_id"], "thread_id":started["thread_id"],
+        "message_id":started["root_message_id"]
+    })
+}
+
 #[test]
-#[verifies("rule_typed_deletion_deletes_discussions", examples)]
-fn a_requirement_from_a_deleted_discussion_loses_its_origin() {
+#[verifies("rule_typed_deletion_clears_origins", examples)]
+fn only_the_origins_that_cite_a_deleted_discussion_are_removed() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path();
     let root = repo.to_str().unwrap();
@@ -39,45 +72,83 @@ fn a_requirement_from_a_deleted_discussion_loses_its_origin() {
         .args(["--path-prefix", "."])
         .assert()
         .success();
+    let kept_source = json!({"key":"kept", "name":"Kept", "kind":"policy"});
     let applied = provenance(
         repo,
         &["authoring-changes", "create"],
-        Some(spec(
-            &json!([{"key":"src", "name":"Original", "kind":"policy"}]),
-        )),
+        Some(spec(&json!([
+            {"key":"src", "name":"Original", "kind":"policy"}, kept_source
+        ]))),
     );
-    let source = applied["data"]["resources"][0]["id"].as_str().unwrap();
-    let started = provenance(
+    let id = |key: &str| {
+        applied["data"]["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|resource| resource["key"] == key)
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let deleted = start(repo, &id("src"));
+    let surviving = start(repo, &id("kept"));
+    for (requirement, started) in [("req_from_talk", &deleted), ("req_from_kept", &surviving)] {
+        let created = provenance(
+            repo,
+            &["requirements", "create"],
+            Some(json!({
+                "actor":"reviewer", "id":requirement, "statement":"The host stops.",
+                "status":"active", "depends_on":[], "supersedes":[], "origin":origin(started)
+            })),
+        );
+        assert_eq!(created["data"]["origin_thread"], started["thread_id"]);
+    }
+    provenance(
         repo,
-        &["sources", source, "discussions", "create"],
-        Some(json!({
-            "actor":"reviewer", "declared_by":"spec://fx", "role":"user", "body":"A concern."
-        })),
+        &[
+            "rules",
+            "create",
+            "--id",
+            "rule_from_kept",
+            "--requirement-id",
+            "req_from_kept",
+            "--statement",
+            "The host stops.",
+            "--origin-thread",
+            surviving["thread_id"].as_str().unwrap(),
+            "--origin-message",
+            surviving["root_message_id"].as_str().unwrap(),
+        ],
+        None,
     );
-    let started = &started["data"];
-    let created = provenance(
-        repo,
-        &["requirements", "create"],
-        Some(json!({
-            "actor":"reviewer", "id":"req_from_talk", "statement":"The host stops.",
-            "status":"active", "depends_on":[], "supersedes":[],
-            "origin":{
-                "discussion_id":started["discussion_id"], "thread_id":started["thread_id"],
-                "message_id":started["root_message_id"]
-            }
-        })),
-    );
-    assert_eq!(created["data"]["origin_thread"], started["thread_id"]);
+    let rules_before = rule_files(repo);
 
     let applied = provenance(
         repo,
         &["authoring-changes", "create"],
-        Some(spec(&json!([]))),
+        Some(spec(&json!([kept_source]))),
     );
 
     assert_eq!(applied["data"]["deleted"], 1, "{applied}");
-    let kept = provenance(repo, &["requirements", "req_from_talk", "get"], None);
-    assert_eq!(kept["data"]["origin_thread"], Value::Null, "{kept}");
-    assert_eq!(kept["data"]["origin_message"], Value::Null, "{kept}");
+    let cleared = provenance(repo, &["requirements", "req_from_talk", "get"], None);
+    assert_eq!(cleared["data"]["origin_thread"], Value::Null, "{cleared}");
+    assert_eq!(cleared["data"]["origin_message"], Value::Null, "{cleared}");
+    for path in [
+        ["requirements", "req_from_kept", "get"],
+        ["rules", "rule_from_kept", "get"],
+    ] {
+        let kept = provenance(repo, &path, None);
+        assert_eq!(
+            kept["data"]["origin_thread"], surviving["thread_id"],
+            "{kept}"
+        );
+        assert_eq!(
+            kept["data"]["origin_message"], surviving["root_message_id"],
+            "{kept}"
+        );
+    }
+    // No Rule cites the deleted Discussion, so the Rule file is not written.
+    assert_eq!(rule_files(repo), rules_before);
     provenance(repo, &["check"], None);
 }
