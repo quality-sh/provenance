@@ -122,22 +122,19 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
             output::print_json(&trace)
         }
         Command::Gaps { context, .. } => {
-            context.declared_scope()?;
-            let store = context.open_graph()?;
+            let store = scoped_store(&context)?;
             output::print_json(&cache::find_gaps(store.layout(), &context.scope_id()?)?)
         }
         Command::Prime { format, .. } => prime::handle(format),
         Command::Health { context, .. } => {
-            context.declared_scope()?;
-            let store = context.open_graph()?;
+            let store = scoped_store(&context)?;
             output::print_json(&cache::coverage_health(
                 store.layout(),
                 &context.scope_id()?,
             )?)
         }
         Command::Orphans { context, .. } => {
-            context.declared_scope()?;
-            let store = context.open_graph()?;
+            let store = scoped_store(&context)?;
             output::print_json(&cache::orphan_rules(store.layout(), &context.scope_id()?)?)
         }
         Command::Export {
@@ -153,6 +150,13 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
         } => import::handle(&context, input, dry_run),
         command => dispatch_remaining_on_thread(command, quiet),
     }
+}
+
+/// Opens the graph for a report over one scope, after the manifest confirms
+/// that the scope exists.
+fn scoped_store(context: &RepoContext) -> anyhow::Result<crate::store::Store> {
+    context.declared_scope()?;
+    context.open_graph()
 }
 
 /// Runs a synchronous command that does not use the shared repository context.

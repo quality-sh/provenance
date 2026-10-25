@@ -117,6 +117,46 @@ fn read_refusals_are_one_object_each() {
 }
 
 #[test]
+fn action_refusals_are_one_object_each() {
+    let (_directory, repo) = init();
+
+    let error = refusal(
+        &repo,
+        &[
+            "req_missing",
+            "update",
+            "--statement",
+            "The record is absent.",
+        ],
+    );
+    assert_eq!(error["error"]["kind"], "resource_not_found");
+    assert_eq!(error["error"]["message"], "record does not exist");
+
+    let output = provenance()
+        .args([
+            "req_a", "discuss", "--repo", &repo, "--body", "hello", "--format", "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let started: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let discussion = started["receipt"]["discussion_id"].as_str().unwrap();
+    let error = refusal(
+        &repo,
+        &[
+            discussion,
+            "reply",
+            "--body",
+            "again",
+            "--expected-version",
+            "99",
+        ],
+    );
+    assert!(error["error"]["kind"].is_string(), "{error}");
+    assert!(error["error"]["message"].is_string(), "{error}");
+}
+
+#[test]
 #[verifies("rule_review_refusal_names_read_command", examples)]
 fn text_mode_keeps_the_failure_and_the_scoped_hint() {
     let (_directory, repo) = init();
