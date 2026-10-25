@@ -61,15 +61,35 @@ pub fn mutate_jsonl_locked<T, R>(
 where
     T: DeserializeOwned + Serialize,
 {
+    let mut result = None;
+    mutate_jsonl_locked_if(path, lock_path, |records| {
+        result = Some(mutate(records)?);
+        Ok(true)
+    })?;
+    Ok(result.expect("the mutation ran"))
+}
+
+/// Like [`mutate_jsonl_locked`], but writes the shard only when `mutate`
+/// returns `true`. The shard is read once.
+pub fn mutate_jsonl_locked_if<T>(
+    path: &Utf8Path,
+    lock_path: &Utf8Path,
+    mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<bool>,
+) -> anyhow::Result<bool>
+where
+    T: DeserializeOwned + Serialize,
+{
     with_state_publication(path, || {
         let _lock = AdvisoryLock::acquire(lock_path)?;
         let mut loaded = read_jsonl_unlocked(path)?;
-        let result = mutate(loaded.records_mut())?;
+        if !mutate(loaded.records_mut())? {
+            return Ok(false);
+        }
         let lines = loaded.into_lines(path)?;
         guard_jsonl_lines(path, &lines)?;
         write_jsonl_lines_atomic_unlocked(path, &lines)
             .map_err(crate::write_error::publication_started)?;
-        Ok(result)
+        Ok(true)
     })
 }
 

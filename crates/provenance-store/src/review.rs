@@ -56,8 +56,6 @@ mod discussion_messages;
 mod discussion_page;
 mod discussion_reads;
 mod discussion_removal;
-#[cfg(test)]
-mod discussion_removal_tests;
 mod typed_adoption;
 #[cfg(test)]
 mod typed_adoption_tests;

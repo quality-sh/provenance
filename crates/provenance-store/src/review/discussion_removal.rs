@@ -16,14 +16,20 @@ use std::collections::BTreeSet;
 
 /// The Thread and Message that a record cites as its origin.
 trait Origin {
-    fn origin(&mut self) -> (&mut Option<StableId>, &mut Option<StableId>);
+    fn origin(&self) -> (&Option<StableId>, &Option<StableId>);
+    fn clear_origin(&mut self);
 }
 
 macro_rules! origin {
     ($($record:ty),*) => {$(
         impl Origin for $record {
-            fn origin(&mut self) -> (&mut Option<StableId>, &mut Option<StableId>) {
-                (&mut self.origin_thread, &mut self.origin_message)
+            fn origin(&self) -> (&Option<StableId>, &Option<StableId>) {
+                (&self.origin_thread, &self.origin_message)
+            }
+
+            fn clear_origin(&mut self) {
+                self.origin_thread = None;
+                self.origin_message = None;
             }
         }
     )*};
@@ -37,7 +43,7 @@ struct Removed<'a> {
 }
 
 impl Removed<'_> {
-    fn cited_by(&self, record: &mut impl Origin) -> bool {
+    fn cited_by(&self, record: &impl Origin) -> bool {
         let (thread, message) = record.origin();
         thread
             .as_ref()
@@ -95,17 +101,6 @@ impl StateStore {
                 message_paths.push(path);
             }
         }
-        // The review publication guard, `with_record_state`, allows only the
-        // Messages record file, so refuse before the first write.
-        let record_file = shards::messages_path(&self.layout, scope);
-        if let Some(path) = message_paths.iter().find(|path| **path != record_file) {
-            anyhow::bail!(
-                "cannot delete the Discussions of a deleted record: a Message of one is in {}, \
-                 which typed-spec apply cannot change",
-                path.strip_prefix(self.layout.state_dir())
-                    .unwrap_or(path.as_path())
-            );
-        }
         let mut paths = vec![discussions_path.clone(), threads_path.clone()];
         paths.extend(message_paths.iter().cloned());
         let kinds = [
@@ -144,6 +139,7 @@ impl StateStore {
 
     /// Removes the origin from each record in `path` that cites a removed
     /// Thread or Message, and leaves the file as it is if no record does.
+    #[rule("rule_typed_deletion_clears_origins")]
     fn clear_origins<T>(&self, path: &Utf8Path, removed: &Removed) -> anyhow::Result<()>
     where
         T: Origin + DeserializeOwned + Serialize,
@@ -151,20 +147,17 @@ impl StateStore {
         if !path.exists() {
             return Ok(());
         }
-        let mut rows: Vec<T> = readers::read_jsonl(self, path)?;
-        if !rows.iter_mut().any(|row| removed.cited_by(row)) {
-            return Ok(());
-        }
-        self.mutate_jsonl_records(path, |rows: &mut Vec<T>| {
+        self.mutate_jsonl_records_if(path, |rows: &mut Vec<T>| {
+            let mut cited = false;
             for row in rows.iter_mut() {
-                if removed.cited_by(row) {
-                    let (thread, message) = row.origin();
-                    *thread = None;
-                    *message = None;
+                if removed.cited_by(&*row) {
+                    row.clear_origin();
+                    cited = true;
                 }
             }
-            Ok(())
-        })
+            Ok(cited)
+        })?;
+        Ok(())
     }
 }
 
