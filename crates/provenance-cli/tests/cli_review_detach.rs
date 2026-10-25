@@ -298,17 +298,16 @@ fn concurrent_starts_share_one_host_per_repository() {
     let second = repository();
     let cache = UserCache::new();
     let roots = [first.path(), first.path(), first.path(), second.path()];
-    let children: Vec<_> = roots
-        .iter()
-        .map(|root| {
-            let mut command = detach_command(root, &cache);
-            command
-                .arg("--no-open")
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped());
-            command.spawn().unwrap()
-        })
-        .collect();
+    // Spawn every start before waiting for any, so the starts overlap.
+    let mut children = Vec::with_capacity(roots.len());
+    for root in roots {
+        let mut command = detach_command(root, &cache);
+        command
+            .arg("--no-open")
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        children.push(command.spawn().unwrap());
+    }
     let outputs: Vec<Value> = children
         .into_iter()
         .map(|child| {
