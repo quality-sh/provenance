@@ -69,6 +69,7 @@ pub fn export_scope(repo: Utf8PathBuf, scope: String) -> anyhow::Result<ScopeExp
 
 fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
     let scope_id = context.scope_id()?;
+    context.declared_scope()?;
     let store = context.open_graph()?;
     store.with_repository_publication(|| {
         let snapshot = store.snapshot(&scope_id)?;

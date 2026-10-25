@@ -190,11 +190,20 @@ fn scan_file_contents(
             in_block_comment =
                 block_comment_state(line, in_block_comment, language == Language::Rust);
         }
-        let binding = (language != Language::Rust || rust_states[idx] == RustLexicalState::Code)
-            .then(|| {
-                parse_binding_line(language, line, &lines[idx + 1..], started_in_block_comment)
-            })
-            .flatten();
+        let binding = if language != Language::Rust || rust_states[idx] == RustLexicalState::Code {
+            match parse_binding_line(language, line, &lines[idx + 1..], started_in_block_comment) {
+                Ok(binding) => binding,
+                Err(malformed) => {
+                    warnings.push(ParseWarning {
+                        line: idx + 1,
+                        message: malformed.0,
+                    });
+                    None
+                }
+            }
+        } else {
+            None
+        };
         if let Some(binding) = binding {
             let end_idx = idx + binding.extra_lines;
             let item_name = binding_item_name(language, &lines, end_idx, binding.verification);

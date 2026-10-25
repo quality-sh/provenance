@@ -122,11 +122,13 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
             output::print_json(&trace)
         }
         Command::Gaps { context, .. } => {
+            context.declared_scope()?;
             let store = context.open_graph()?;
             output::print_json(&cache::find_gaps(store.layout(), &context.scope_id()?)?)
         }
         Command::Prime { format, .. } => prime::handle(format),
         Command::Health { context, .. } => {
+            context.declared_scope()?;
             let store = context.open_graph()?;
             output::print_json(&cache::coverage_health(
                 store.layout(),
@@ -134,6 +136,7 @@ fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
             )?)
         }
         Command::Orphans { context, .. } => {
+            context.declared_scope()?;
             let store = context.open_graph()?;
             output::print_json(&cache::orphan_rules(store.layout(), &context.scope_id()?)?)
         }

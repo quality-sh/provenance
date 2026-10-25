@@ -1,0 +1,104 @@
+//! One refusal shape for `--format json`.
+//!
+//! A refusal from the local host reaches the CLI as a typed error. In text
+//! mode the error prints as before. In JSON mode the CLI prints one
+//! `{error,meta}` object and puts the recovery hint in `error.hint`.
+
+use provenance_core::protocol::failure::OperationFailure;
+use provenance_porcelain::action::ActionError;
+use provenance_porcelain::get::ReadError;
+use serde_json::{json, Map, Value};
+
+/// A refused host operation with the recovery hint the CLI adds.
+#[derive(Debug)]
+pub struct HostRefusal {
+    /// The `{error,meta}` object the host returned.
+    pub failure: Value,
+    /// Text the CLI adds so the caller knows the next command.
+    pub hint: Option<String>,
+    /// Whether the text form prints the failure object before the hint.
+    pub text_shows_failure: bool,
+}
+
+impl std::fmt::Display for HostRefusal {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.text_shows_failure {
+            formatter.write_str(&serde_json::to_string(&self.failure).unwrap_or_default())?;
+            if let Some(hint) = &self.hint {
+                write!(formatter, "; {hint}")?;
+            }
+            return Ok(());
+        }
+        formatter.write_str(self.hint.as_deref().unwrap_or("operation failed"))
+    }
+}
+
+impl std::error::Error for HostRefusal {}
+
+/// The `{error,meta}` object for an error that a JSON caller can parse, or
+/// `None` when the error is not a host refusal.
+pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
+    if let Some(refusal) = error.downcast_ref::<HostRefusal>() {
+        let mut failure = refusal.failure.clone();
+        if let Some(hint) = &refusal.hint {
+            if let Some(object) = failure.get_mut("error").and_then(Value::as_object_mut) {
+                object.insert("hint".into(), json!(hint));
+            }
+        }
+        return Some(failure);
+    }
+    if let Some(failure) = error.downcast_ref::<OperationFailure>() {
+        let mut object = match serde_json::to_value(failure) {
+            Ok(Value::Object(object)) => object,
+            _ => Map::new(),
+        };
+        object.insert("message".into(), json!(failure.to_string()));
+        return Some(json!({"error": object, "meta": {}}));
+    }
+    if let Some(read) = error.downcast_ref::<ReadError>() {
+        return Some(envelope(read_error(read), &read.to_string()));
+    }
+    if let Some(action) = error.downcast_ref::<ActionError>() {
+        return Some(envelope(action_error(action), &action.to_string()));
+    }
+    None
+}
+
+fn envelope(mut object: Map<String, Value>, message: &str) -> Value {
+    object.insert("message".into(), json!(message));
+    json!({"error": object, "meta": {}})
+}
+
+fn read_error(error: &ReadError) -> Map<String, Value> {
+    let object = match error {
+        ReadError::InvalidOptions => json!({"kind": "invalid_input", "reason": "invalid_value"}),
+        ReadError::NotFound => json!({"kind": "resource_not_found"}),
+        ReadError::AmbiguousIdentity => {
+            json!({"kind": "invalid_input", "field": "target", "reason": "invalid_value"})
+        }
+        ReadError::Operation(_) => json!({"kind": "operation_failed"}),
+    };
+    object.as_object().cloned().unwrap_or_default()
+}
+
+fn action_error(error: &ActionError) -> Map<String, Value> {
+    let object = match error {
+        ActionError::InvalidOptions => {
+            json!({"kind": "invalid_input", "reason": "invalid_value"})
+        }
+        ActionError::KindSelection => {
+            json!({"kind": "invalid_input", "field": "type", "reason": "invalid_value"})
+        }
+        ActionError::NotFound => json!({"kind": "resource_not_found"}),
+        ActionError::AmbiguousIdentity => {
+            json!({"kind": "invalid_input", "field": "target", "reason": "invalid_value"})
+        }
+        ActionError::AccessDenied => json!({"kind": "access_denied"}),
+        ActionError::Operation(_) => json!({"kind": "operation_failed"}),
+        ActionError::OperationDetail { detail, .. } => detail
+            .get("error")
+            .cloned()
+            .unwrap_or_else(|| detail.clone()),
+    };
+    object.as_object().cloned().unwrap_or_default()
+}

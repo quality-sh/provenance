@@ -74,7 +74,14 @@ fn read_body(input: &str) -> serde_json::Map<String, serde_json::Value> {
 pub async fn dispatch(args: ApiArgs) -> anyhow::Result<()> {
     let request = match request(&args) {
         Ok(request) => request,
-        Err(error) => anyhow::bail!("{}", serde_json::to_string(&error.failure)?),
+        Err(error) => {
+            return Err(crate::catalog_cli::refusal::HostRefusal {
+                failure: serde_json::to_value(&error.failure)?,
+                hint: None,
+                text_shows_failure: true,
+            }
+            .into())
+        }
     };
     provenance_cli::porcelain::dispatch_api(
         &args.common.repo,

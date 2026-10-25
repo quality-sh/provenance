@@ -46,12 +46,24 @@ pub(super) fn declared(definition: &Definition) -> anyhow::Result<Vec<Field>> {
             },
         )?;
     }
+    // A body field that a request header fills (`If-Match` -> expected_etag)
+    // has the header flag as its only CLI spelling.
+    let header_bound = definition
+        .registration
+        .controls
+        .headers
+        .iter()
+        .map(|binding| binding.field)
+        .collect::<BTreeSet<_>>();
     if let Some(request) = definition.request_schema() {
         if let Some(properties) = request
             .pointer("/properties/data/properties")
             .and_then(Value::as_object)
         {
             for (wire_field, schema) in properties {
+                if header_bound.contains(wire_field.as_str()) {
+                    continue;
+                }
                 insert(
                     &mut fields,
                     &mut names,

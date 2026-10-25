@@ -25,5 +25,19 @@ mod wiki;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let arguments = std::env::args().collect::<Vec<_>>();
-    invocation::Invocation::parse(arguments)?.dispatch().await
+    let invocation = invocation::Invocation::parse(arguments)?;
+    let json = invocation.json_output();
+    match invocation.dispatch().await {
+        Ok(()) => Ok(()),
+        Err(error) => match json
+            .then(|| catalog_cli::refusal::json_refusal(&error))
+            .flatten()
+        {
+            Some(refusal) => {
+                eprintln!("{}", serde_json::to_string(&refusal)?);
+                std::process::exit(1);
+            }
+            None => Err(error),
+        },
+    }
 }
