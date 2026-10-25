@@ -36,6 +36,8 @@ struct StartedHost {
 }
 
 impl StartedHost {
+    // The host outlives this command, so the command does not wait for it.
+    #[allow(clippy::zombie_processes)]
     fn keep(mut self) -> (u32, PathBuf) {
         let child = self.child.take().expect("a started host has its process");
         (child.id(), std::mem::take(&mut self.log))

@@ -45,7 +45,10 @@ fn init_guidance_starts_the_host_early_and_hands_the_link_over_as_text() {
         "{agents}"
     );
     assert!(
-        prose.contains("The host keeps running after the command returns."),
+        prose.contains(
+            "One host serves the repository and scope for all sessions. It keeps running after \
+             the command returns, and later sessions reuse it, so leave it running."
+        ),
         "{agents}"
     );
     assert!(

@@ -108,5 +108,5 @@ fn assert_scope(repo: &Path, expected: &str) {
         .skip(1)
         .map(|tail| tail.split_whitespace().next().unwrap())
         .collect();
-    assert_eq!(scopes, vec![expected; 11], "{agents}");
+    assert_eq!(scopes, vec![expected; 12], "{agents}");
 }
