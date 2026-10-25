@@ -30,27 +30,35 @@ it in the same change.
   `{command} review --repo . --repository-id local --scope {selected_scope} --detach --no-open`.
   The host keeps running after the command returns. Give the person the `review_url`
   it prints, as plain text in chat. The page follows records as they land.
+  When the command starts a host, it prints the process ID of the host as `pid`.
+  Keep that process ID. When the review ends, stop the host with `kill <pid>`.
 - After you create or change a record, run
-  `{command} <record-id> --review-link --format json` and give the person `review_url`
-  as plain text in chat, whether or not `opened` is true. In an app that shows web
-  pages, such as Claude Desktop or the Codex app, you can also open `review_url` in
-  the app. That is extra, never the only route. Never give the person a record ID.
+  `{command} <record-id> --scope {selected_scope} --review-link --format json` and give the
+  person `review_url` as plain text in chat, whether or not `opened` is true. In an app
+  that shows web pages, such as Claude Desktop or the Codex app, you can also run
+  `{command} <record-id> --scope {selected_scope} --review-link --no-open --format json` and
+  open `review_url` in the app. That is extra, never the only route. Never give the person
+  a record ID.
 - The page is served on the machine that runs the host. If that is not the person's
   machine, add `--no-open`, say so, and give the person the review command to run
   on their own machine.
-- Read the decision and review feedback with `{command} <record-id> --view review`.
+- Read the decision and review feedback with `{command} <record-id> --scope {selected_scope} --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.
 - Receive saved changes while you work with
-  `{command} <requirement-id> --view review --follow --format json`.
+  `{command} <requirement-id> --scope {selected_scope} --view review --follow --format json`.
   The command needs a running review host. It returns current state, not a delivery journal.
   A reset or disconnect means notification continuity is unknown.
 - A guarded update after a rejection opens a new submission unless a reviewer
   accepted that content. To end a pending review without a replacement, withdraw it.
+- A Question or Topic update needs the current etag. Read it with
+  `{command} questions <question_id> get --scope {selected_scope} --format json` or
+  `{command} topics <topic_id> get --scope {selected_scope} --format json` and pass
+  `data.edit.etag` unchanged as `--if-match`.
 - To drop a Question or Topic, archive it with its commit evidence. Archiving a
   Topic also archives its Questions. Discussion history stays readable:
-  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope {selected_scope} --stdin --format json`
-  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} topics <topic_id> update --scope {selected_scope} --stdin --format json`
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} questions <question_id> update --scope {selected_scope} --if-match <etag> --stdin --format json`
+  `printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | {command} topics <topic_id> update --scope {selected_scope} --if-match <etag> --stdin --format json`
 - Write graph state only through the Provenance CLI or SDK. Do not edit
   `.provenance/state` directly.
 - Pre-commit: `{command} check --quiet` and
@@ -163,6 +171,7 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 #[rule("rule_init_guidance_selected_scope")]
 #[rule("rule_init_review_host_guidance")]
 #[rule("rule_init_description_guidance")]
+#[rule("rule_init_guidance_background_review_host")]
 fn instructions(invocation: &Invocation, scope: &str) -> String {
     INSTRUCTIONS
         .replace("{command}", invocation.0)

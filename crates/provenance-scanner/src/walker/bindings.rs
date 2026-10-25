@@ -10,6 +10,7 @@ use std::str::FromStr;
 use super::Language;
 use crate::binding_lexer::call_arguments;
 use crate::parser::Verification;
+use crate::ParseWarning;
 
 /// A recognized binding site: the rule id, the verification method for a
 /// `verifies` site, and how many lines past the first the site consumed (a
@@ -20,26 +21,50 @@ pub(super) struct ParsedBinding {
     pub extra_lines: usize,
 }
 
+/// A `verifies` site the scanner recognized but could not read: the message
+/// names what a well-formed site needs, so the walker can warn with the file
+/// and line instead of dropping the binding with no warning.
+pub(super) struct MalformedBinding(pub String);
+
+const VERIFIES_SHAPE: &str = "expected a quoted rule id and one method word: \
+exhaustion, property, examples, conformance, construction, or proof";
+
 pub(super) fn parse_binding_line(
     language: Language,
     line: &str,
     following: &[&str],
     in_block_comment: bool,
-) -> Option<ParsedBinding> {
+) -> Result<Option<ParsedBinding>, MalformedBinding> {
     match language {
-        Language::Rust => (!in_block_comment)
-            .then(|| parse_attribute(line, following))
-            .flatten(),
+        Language::Rust => {
+            if in_block_comment {
+                return Ok(None);
+            }
+            parse_attribute(line, following)
+        }
         Language::Python => {
-            parse_python_decorator(line).map(|(rule_id, verification)| ParsedBinding {
-                rule_id,
-                verification,
-                extra_lines: 0,
-            })
+            Ok(
+                parse_python_decorator(line).map(|(rule_id, verification)| ParsedBinding {
+                    rule_id,
+                    verification,
+                    extra_lines: 0,
+                }),
+            )
         }
         Language::JavaScript | Language::TypeScript => parse_script_call(line, in_block_comment),
-        Language::Go | Language::Java => parse_rule_call(line, in_block_comment),
+        Language::Go | Language::Java => Ok(parse_rule_call(line, in_block_comment)),
     }
+}
+
+fn malformed_verifies(found: &str) -> MalformedBinding {
+    MalformedBinding(format!(
+        "malformed verifies binding `{}`: {VERIFIES_SHAPE}",
+        found.trim()
+    ))
+}
+
+fn parse_method(method: &str) -> Option<Verification> {
+    Verification::from_str(method).ok()
 }
 
 const fn one_line(rule_id: String, verification: Option<Verification>) -> ParsedBinding {
@@ -62,24 +87,45 @@ fn parse_python_decorator(line: &str) -> Option<(String, Option<Verification>)> 
     Some((quoted_literal(rest)?.0, None))
 }
 
-fn parse_script_call(line: &str, in_block_comment: bool) -> Option<ParsedBinding> {
+fn parse_script_call(
+    line: &str,
+    in_block_comment: bool,
+) -> Result<Option<ParsedBinding>, MalformedBinding> {
     if let Some(rest) = call_arguments(line, in_block_comment, "verifies") {
-        let (rule_id, after_id) = quoted_literal(rest)?;
-        let method = argument_after_comma(after_id)?;
-        return Some(one_line(
-            rule_id,
-            Some(Verification::from_str(method).ok()?),
-        ));
+        // The helper's own declaration, `function verifies(ruleId, method)`,
+        // is not a binding site. Every other call must read as one.
+        if declares_verifies(line) {
+            return Ok(None);
+        }
+        let Some((rule_id, after_id)) = quoted_literal(rest) else {
+            return Err(malformed_verifies(line));
+        };
+        let Some(method) = argument_after_comma(after_id).and_then(parse_method) else {
+            return Err(malformed_verifies(line));
+        };
+        return Ok(Some(one_line(rule_id, Some(method))));
     }
     // A Rule-options object after the id marks the SDK's typed Rule
     // declaration (`requirement.rule("key", { statement })`), which builds a
     // test graph and never binds production code. The binding helper — free
     // or through a namespace import — passes an implementation function or
     // value, so any other payload binds.
-    let rest = call_arguments(line, in_block_comment, "rule")?;
-    let (rule_id, after_id) = quoted_literal(rest)?;
-    let payload = after_id.trim_start().strip_prefix(',')?.trim_start();
-    (!payload.starts_with('{')).then(|| one_line(rule_id, None))
+    let Some(rest) = call_arguments(line, in_block_comment, "rule") else {
+        return Ok(None);
+    };
+    let Some((rule_id, after_id)) = quoted_literal(rest) else {
+        return Ok(None);
+    };
+    let Some(payload) = after_id.trim_start().strip_prefix(',') else {
+        return Ok(None);
+    };
+    Ok((!payload.trim_start().starts_with('{')).then(|| one_line(rule_id, None)))
+}
+
+fn declares_verifies(line: &str) -> bool {
+    let line = line.trim_start();
+    let line = line.strip_prefix("export ").unwrap_or(line).trim_start();
+    line.starts_with("function verifies(")
 }
 
 fn parse_rule_call(line: &str, in_block_comment: bool) -> Option<ParsedBinding> {
@@ -118,17 +164,29 @@ fn argument_after_comma(rest: &str) -> Option<&str> {
 /// Recognizes `#[rule("id")]` and `#[verifies("id", method)]` attributes,
 /// plain or `path::`-qualified, on one line or wrapped across lines the way
 /// rustfmt formats long arguments. `line` is the current line outside
-/// multiline strings; `following` holds the raw lines after it. The proc
-/// macros reject malformed arguments at compile time, so anything found in
-/// compiling code is well-formed; lines that do not match are silently
-/// skipped.
-fn parse_attribute(line: &str, following: &[&str]) -> Option<ParsedBinding> {
-    let (joined, extra_lines) = join_attribute(line, following)?;
-    parse_attribute_text(&joined).map(|(rule_id, verification)| ParsedBinding {
-        rule_id,
-        verification,
-        extra_lines,
-    })
+/// multiline strings; `following` holds the raw lines after it. A closed
+/// `verifies` attribute whose arguments do not read as an id and a method
+/// is reported as malformed; an attribute that never closes is skipped.
+fn parse_attribute(
+    line: &str,
+    following: &[&str],
+) -> Result<Option<ParsedBinding>, MalformedBinding> {
+    let Some((joined, extra_lines)) = join_attribute(line, following) else {
+        return Ok(None);
+    };
+    match parse_attribute_text(&joined) {
+        Some((rule_id, verification)) => Ok(Some(ParsedBinding {
+            rule_id,
+            verification,
+            extra_lines,
+        })),
+        None if is_verifies_attribute(&joined) => Err(malformed_verifies(&joined)),
+        None => Ok(None),
+    }
+}
+
+fn is_verifies_attribute(joined: &str) -> bool {
+    binding_attribute_name(joined).is_some_and(|name| name.ends_with("verifies"))
 }
 
 /// The attribute name a `#[` line opens with, when it is one the scanner
@@ -189,10 +247,9 @@ fn parse_attribute_text(joined: &str) -> Option<(String, Option<Verification>)> 
         return Some((string_literal(arguments.trim_start())?, None));
     }
     let (id, method) = arguments.split_once(',')?;
-    let method = method.trim();
     Some((
         string_literal(id.trim_start())?,
-        Some(Verification::from_str(method).ok()?),
+        Some(parse_method(method.trim())?),
     ))
 }
 
@@ -200,4 +257,26 @@ fn string_literal(rest: &str) -> Option<String> {
     let after_quote = rest.strip_prefix('"')?;
     let (literal, _) = after_quote.split_once('"')?;
     (!literal.is_empty()).then(|| literal.to_string())
+}
+
+/// The binding on one line, or a warning with the line number when the line
+/// opens a `verifies` site that the scanner cannot read.
+pub(super) fn parse_binding_or_warn(
+    language: Language,
+    line: &str,
+    following: &[&str],
+    in_block_comment: bool,
+    line_number: usize,
+    warnings: &mut Vec<ParseWarning>,
+) -> Option<ParsedBinding> {
+    match parse_binding_line(language, line, following, in_block_comment) {
+        Ok(binding) => binding,
+        Err(malformed) => {
+            warnings.push(ParseWarning {
+                line: line_number,
+                message: malformed.0,
+            });
+            None
+        }
+    }
 }

@@ -146,8 +146,10 @@ response `ETag` map to Store-supported precondition checks. The surface never
 advertises an unsupported guarantee.
 
 Review writes do not accept `Idempotency-Key`, and their bodies do not accept a
-request ID. The server creates the request identity. Requirement edit requests
-and versioned Discussion writes keep `If-Match`. A repeated Requirement create
+request ID. The server creates the request identity. Review record updates and
+versioned Discussion writes take their guard in `If-Match`; MCP takes it as
+`if_match`. Requirement, Topic, and Question updates require it. A body that
+carries `expected_etag` is refused with `invalid_input`. A repeated Requirement create
 with the same caller-selected Stable ID returns `already_exists` with status
 409.
 

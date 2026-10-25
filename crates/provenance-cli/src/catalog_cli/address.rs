@@ -22,12 +22,22 @@ pub(super) struct Address {
 }
 
 pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<Resolved> {
+    resolve_in(collection, supplied, None)
+}
+
+/// Resolves an address. When the caller's repository and scope are known,
+/// the unknown-address hint names them.
+pub(super) fn resolve_in(
+    collection: &str,
+    supplied: &[String],
+    context: Option<&provenance_cli::repo_context::RepoContext>,
+) -> anyhow::Result<Resolved> {
     let candidates = registrations(collection)
         .into_iter()
         .filter(|address| address.words.len() == supplied.len())
         .collect::<Vec<_>>();
-    let address =
-        select_address(candidates, supplied).ok_or_else(|| unknown(collection, supplied))?;
+    let address = select_address(candidates, supplied)
+        .ok_or_else(|| unknown(collection, supplied, context))?;
     let values = address_values(address, supplied).expect("selected address matches");
     Ok(Resolved {
         address,
@@ -37,7 +47,11 @@ pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<R
     })
 }
 
-fn unknown(collection: &str, supplied: &[String]) -> anyhow::Error {
+fn unknown(
+    collection: &str,
+    supplied: &[String],
+    context: Option<&provenance_cli::repo_context::RepoContext>,
+) -> anyhow::Error {
     let mut message = format!(
         "the catalog does not declare the {collection} command: {}",
         supplied.join(" ")
@@ -47,7 +61,7 @@ fn unknown(collection: &str, supplied: &[String]) -> anyhow::Error {
             write!(
                 message,
                 "; to read review feedback, run `{}`",
-                super::review_read_command(id)
+                super::review_read_command(id, context)
             )
             .expect("writing to a String cannot fail");
         }

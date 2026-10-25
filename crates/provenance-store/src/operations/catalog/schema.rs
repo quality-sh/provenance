@@ -160,7 +160,7 @@ impl Definition {
                 .controls
                 .headers
                 .iter()
-                .map(|binding| header(binding.name)),
+                .map(|binding| header(binding.name, binding.required)),
         );
         parameters
     }
@@ -173,7 +173,7 @@ impl Definition {
             .controls
             .headers
             .iter()
-            .map(|binding| header(binding.name))
+            .map(|binding| header(binding.name, binding.required))
             .collect::<Vec<_>>();
         let base = QueryVariant {
             selector: None,
@@ -408,11 +408,11 @@ pub(super) const fn query(name: &'static str, schema: Value) -> Parameter {
     }
 }
 #[allow(clippy::missing_const_for_fn)]
-pub(super) fn header(name: &'static str) -> Parameter {
+pub(super) fn header(name: &'static str, required: bool) -> Parameter {
     Parameter {
         name,
         location: "header",
-        required: true,
+        required,
         schema: json!({"type":"string","minLength":1}),
     }
 }

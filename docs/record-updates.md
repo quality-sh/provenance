@@ -110,7 +110,8 @@ adopt a record, change its owner, or move its declaration address.
 behavior. A later declaration application can restate the fields it owns.
 
 The Requirement PATCH is the one guarded write path. The client sends the
-current ETag in `If-Match`. The server creates the request identity. The member
+current ETag in `If-Match`. The PATCH routes of the other review records take
+the same header; Topic and Question routes require it. The server creates the request identity. The member
 read returns the ETag. The response carries the record with its edit state,
 decision state, and the new ETag. A statement change uses the statement write
 gate and raises the existing Requirement reviews for its Rules. Rule statements

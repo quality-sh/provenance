@@ -113,6 +113,8 @@ pub fn diagnostic(kind: &str, id: &str, start: usize) -> Value {
 
 pub fn error_json(output: &std::process::Output) -> Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
+    // `import` and `merge-jsonl` are not record commands: they print the
+    // refusal object after `Error: ` in every output format.
     serde_json::from_str(
         stderr
             .trim()

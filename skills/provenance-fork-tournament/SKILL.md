@@ -103,10 +103,13 @@ provenance questions <question_id> claim --scope <scope> \
     Include one exact `suggested_artifacts` entry for every competing proposal. Each
     entry's `proposal_id`, key, and type must match its proposal definition.
 
-4. **Mark the Question `blocked_on_human`** and post the Proposal IDs to a Discussion:
+4. **Mark the Question `blocked_on_human`** and post the Proposal IDs to a Discussion.
+   A Question update needs the current etag from `data.edit.etag` of the read:
 
     ```sh
+    provenance questions <question_id> get --scope <scope> --format json
     provenance questions <question_id> update --scope <scope> \
+      --if-match <etag> \
       --status blocked_on_human
 
     provenance questions <question_id> discussions create --scope <scope> \
@@ -213,10 +216,11 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
 
 ## CLI gaps and conventions (as of this writing)
 
-- **Question status and method are first-class** — use `questions <id> update --status
-  blocked_on_human` for the phase boundary, and `questions <id> update --method prototype`
-  if an existing Question has the wrong method. Keep the Discussion Message because the
-  Proposal IDs are not Question link targets.
+- **Question status and method are first-class** — use `questions <id> update --if-match
+  <etag> --status blocked_on_human` for the phase boundary, and `questions <id> update
+  --if-match <etag> --method prototype` if an existing Question has the wrong method. Every
+  Question update carries the current `data.edit.etag` from `questions <id> get`. Keep the
+  Discussion Message because the Proposal IDs are not Question link targets.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an
   assertion only when the exact proposal suggestion has positive owned evidence and no
   contested claim or blocking adjudication. `dispositions` is the sole authority for

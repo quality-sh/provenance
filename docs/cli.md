@@ -120,8 +120,12 @@ string-typed field always supplies text. Arrays and objects can also come from o
 standard input with `--stdin`, which fills only the body fields that no flag
 assigned and refuses a field that a flag already set. Path identity comes from
 the command address. Query parameters and `If-Match` controls use the flags
-that the catalog declares. The `--if-match` option for a guarded record update
-must contain `data.edit.etag` from the latest member read, unchanged.
+that the catalog declares. Every review record update takes its guard as
+`--if-match`, which must contain `data.edit.etag` from the latest member read,
+unchanged. Requirement, Topic, and Question updates require it. Source, Rule,
+Resolution, Domain, and Boundary updates accept it, and write without a check
+when it is absent. No update accepts the guard as an `--expected-etag` flag or
+as an `expected_etag` body field.
 
 `provenance api` shows at most 50 routes by default. Use `--filter <text>` to
 select routes or `--limit <number>` to increase the bound. Use `--format json`
@@ -129,6 +133,23 @@ only when you need all request and response schemas.
 
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
 records in `data.items`.
+
+With `--format json`, a catalog route, `provenance api`, a record read, search,
+or action, and a Discussion command print a refusal from the operation as one
+`{error,meta}` object. The object is the only line on standard error, it has no
+prefix, and the command exits with code 1. When the CLI knows the next command
+to run, `error.hint` names it.
+
+These errors stay text after `Error: ` and exit with code 1, also with
+`--format json`:
+
+- A graph that is not initialized, and a command that runs in a directory
+  inside an initialized repository.
+- File and I/O errors.
+- Every error from a builtin command, such as `init`, `check`, `coverage scan`,
+  `gaps`, `health`, `orphans`, and `export`.
+
+A usage error prints clap's text and exits with code 2.
 
 ## Product commands
 
