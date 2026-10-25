@@ -41,7 +41,10 @@ impl StateStore {
         let mut message_paths = Vec::new();
         for path in readers::message_shard_paths(&self.layout, scope)? {
             let messages: Vec<Message> = readers::read_jsonl(self, &path)?;
-            if messages.iter().any(|m| thread_ids.contains(m.thread_id.as_str())) {
+            if messages
+                .iter()
+                .any(|m| thread_ids.contains(m.thread_id.as_str()))
+            {
                 message_paths.push(path);
             }
         }

@@ -26,7 +26,7 @@ async fn start(
     started["data"].clone()
 }
 
-fn spec(sources: Value, requirements: Value) -> Value {
+fn spec(sources: &Value, requirements: &Value) -> Value {
     json!({"data":{
         "schema_version":2, "spec":"fx", "declared_by":"spec://fx",
         "sources":sources, "requirements":requirements
@@ -43,8 +43,8 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
         "POST",
         "/authoring-changes",
         Some(spec(
-            json!([{"key":"src", "name":"Original", "kind":"policy"}]),
-            json!([{"key":"drop", "statement":"The host stops."}]),
+            &json!([{"key":"src", "name":"Original", "kind":"policy"}]),
+            &json!([{"key":"drop", "statement":"The host stops."}]),
         )),
     )
     .await;
@@ -100,11 +100,15 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
         &host,
         "POST",
         "/authoring-changes",
-        Some(spec(json!([]), json!([]))),
+        Some(spec(&json!([]), &json!([]))),
     )
     .await;
     assert_eq!(status, 200, "{applied}");
-    assert_eq!(applied["data"]["deleted"], 2, "{applied}");
+    assert_eq!(applied["data"]["deleted"], 3, "{applied}");
+    assert_eq!(
+        applied["data"]["cascade"],
+        json!([{"id":"res_drop", "kind":"resolution", "state":"deleted"}])
+    );
     for path in [format!("/sources/{source}"), "/resolutions/res_drop".into()] {
         let (status, read) = call(&host, "GET", &path, None).await;
         assert_eq!(status, 404, "{path}: {read}");
