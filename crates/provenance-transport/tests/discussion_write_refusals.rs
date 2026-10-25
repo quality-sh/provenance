@@ -6,6 +6,8 @@ mod support {
 }
 use provenance_macros::verifies;
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use support::records::Repository;
 use support::resource_http::{call, call_with_headers, host};
 
@@ -40,6 +42,23 @@ async fn set_status(
         &[("if-match", &guard)],
     )
     .await
+}
+
+/// Each file under the state directory with its bytes.
+fn state_files(repo: &Repository) -> BTreeMap<PathBuf, Vec<u8>> {
+    fn visit(directory: &Path, files: &mut BTreeMap<PathBuf, Vec<u8>>) {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                visit(&path, files);
+            } else {
+                files.insert(path.clone(), std::fs::read(path).unwrap());
+            }
+        }
+    }
+    let mut files = BTreeMap::new();
+    visit(repo.layout.state_dir().as_std_path(), &mut files);
+    files
 }
 
 #[tokio::test]
@@ -92,10 +111,13 @@ async fn setting_the_status_a_discussion_already_has_is_a_no_op() {
     assert_eq!(status, 200, "{resolved}");
     assert_eq!(resolved["data"]["version"], 2);
 
+    let before = state_files(&repo);
     let (status, repeated) = set_status(&host, &discussion, "resolved", 2).await;
     assert_eq!(status, 200, "{repeated}");
     assert_eq!(repeated["data"]["status"], "resolved");
     assert_eq!(repeated["data"]["version"], 2);
+    // Change events come from state file changes, so no file change means no event.
+    assert_eq!(state_files(&repo), before);
 
     let (status, read) = call(&host, "GET", &discussion, None).await;
     assert_eq!(status, 200, "{read}");

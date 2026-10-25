@@ -4,9 +4,7 @@ mod support {
     pub mod records;
     pub mod resource_http;
 }
-use provenance_core::ScopeId;
 use provenance_macros::verifies;
-use provenance_store::state_store::StateStore;
 use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, call_with_headers, host};
@@ -33,28 +31,45 @@ fn spec(sources: &Value, requirements: &Value) -> Value {
     }})
 }
 
-/// Only `other` and its Thread and Message stay in the Discussion shards.
-fn assert_only_the_other_discussion_stays(repo: &Repository, other: &Value, removed: &[&Value]) {
-    let store = StateStore::new(repo.layout.clone());
-    let scope = ScopeId::new("default").unwrap();
-    let discussions = store.list_discussions(&scope).unwrap();
-    assert_eq!(discussions.len(), 1, "{discussions:?}");
-    assert_eq!(
-        discussions[0].discussion_id.as_str(),
-        other["discussion_id"].as_str().unwrap()
-    );
-    let removed_threads = removed
+/// The id that an apply result gives the declaration with `key`.
+fn resource_id(applied: &Value, key: &str) -> String {
+    applied["data"]["resources"]
+        .as_array()
+        .unwrap()
         .iter()
-        .map(|discussion| discussion["thread_id"].as_str().unwrap())
-        .collect::<Vec<_>>();
-    let threads = store.list_threads(&scope).unwrap();
-    assert_eq!(threads.len(), 1, "{threads:?}");
-    assert_eq!(threads[0].parent.node_id.as_str(), "req_shared");
-    let messages = store.list_messages(&scope).unwrap();
-    assert!(messages
-        .iter()
-        .all(|message| !removed_threads.contains(&message.thread_id.as_str())));
-    assert_eq!(messages.len(), 1, "{messages:?}");
+        .find(|resource| resource["key"] == key)
+        .unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}
+
+/// Only `other` and its Thread and Message stay, read through the public
+/// list routes.
+async fn assert_only_the_other_discussion_stays(
+    host: &provenance_transport::StatementHost,
+    other: &Value,
+    removed: &[&Value],
+) {
+    let items = |listed: &Value| listed["data"]["items"].as_array().unwrap().clone();
+    let (status, listed) = call(host, "GET", PARENT, None).await;
+    assert_eq!(status, 200, "{listed}");
+    let discussions = items(&listed);
+    assert_eq!(discussions.len(), 1, "{listed}");
+    assert_eq!(discussions[0]["discussion_id"], other["discussion_id"]);
+    let (status, listed) = call(host, "GET", "/discussion-containers", None).await;
+    assert_eq!(status, 200, "{listed}");
+    let threads = items(&listed);
+    assert_eq!(threads.len(), 1, "{listed}");
+    assert_eq!(threads[0]["id"], other["thread_id"]);
+    let (status, listed) = call(host, "GET", "/messages", None).await;
+    assert_eq!(status, 200, "{listed}");
+    let messages = items(&listed);
+    assert_eq!(messages.len(), 1, "{listed}");
+    assert_eq!(messages[0]["thread_id"], other["thread_id"]);
+    for discussion in removed {
+        assert_ne!(discussion["thread_id"], other["thread_id"]);
+    }
 }
 
 #[tokio::test]
@@ -73,18 +88,7 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
     )
     .await;
     assert_eq!(status, 200, "{applied}");
-    let id = |key: &str| {
-        applied["data"]["resources"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|resource| resource["key"] == key)
-            .unwrap()["id"]
-            .as_str()
-            .unwrap()
-            .to_owned()
-    };
-    let (source, requirement) = (id("src"), id("drop"));
+    let (source, requirement) = (resource_id(&applied, "src"), resource_id(&applied, "drop"));
     // The Resolution is deleted by cascade with its Requirement.
     let (status, created) = call(
         &host,
@@ -138,7 +142,7 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
         assert_eq!(status, 404, "{path}: {read}");
     }
 
-    assert_only_the_other_discussion_stays(&repo, &other, &[&on_source, &on_resolution]);
+    assert_only_the_other_discussion_stays(&host, &other, &[&on_source, &on_resolution]).await;
 
     // Discussion reads and writes on the other records keep working.
     start(&host, PARENT, Value::Null).await;
@@ -147,6 +151,59 @@ async fn typed_spec_apply_deletes_the_discussions_of_the_records_it_deletes() {
     assert_eq!(
         listed["data"]["items"].as_array().unwrap().len(),
         2,
+        "{listed}"
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_typed_deletion_deletes_discussions", examples)]
+async fn a_record_with_review_submissions_is_refused_and_keeps_its_discussions() {
+    let repo = Repository::new("The shared graph is readable.");
+    let host = host(&repo, true);
+    let mut applied = Value::Null;
+    // The second statement is a typed change, so apply opens a submission.
+    for statement in ["The host stops.", "The host starts."] {
+        let (status, result) = call(
+            &host,
+            "POST",
+            "/authoring-changes",
+            Some(spec(
+                &json!([]),
+                &json!([{"key":"kept", "statement":statement}]),
+            )),
+        )
+        .await;
+        assert_eq!(status, 200, "{result}");
+        applied = result;
+    }
+    let requirement = resource_id(&applied, "kept");
+    let discussions = format!("/requirements/{requirement}/discussions");
+    let started = start(&host, &discussions, json!("spec://fx")).await;
+
+    let (status, refused) = call(
+        &host,
+        "POST",
+        "/authoring-changes",
+        Some(spec(&json!([]), &json!([]))),
+    )
+    .await;
+    assert_eq!(status, 409, "{refused}");
+    assert_eq!(
+        refused["error"]["kind"], "enrolled_record_deletion_conflict",
+        "{refused}"
+    );
+    let (status, read) = call(&host, "GET", &format!("/requirements/{requirement}"), None).await;
+    assert_eq!(status, 200, "{read}");
+    let (status, listed) = call(&host, "GET", &discussions, None).await;
+    assert_eq!(status, 200, "{listed}");
+    let items = listed["data"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "{listed}");
+    assert_eq!(items[0]["discussion_id"], started["discussion_id"]);
+    let (status, listed) = call(&host, "GET", "/messages", None).await;
+    assert_eq!(status, 200, "{listed}");
+    assert_eq!(
+        listed["data"]["items"].as_array().unwrap().len(),
+        1,
         "{listed}"
     );
 }
