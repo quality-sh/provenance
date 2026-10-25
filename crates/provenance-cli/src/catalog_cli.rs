@@ -34,7 +34,8 @@ impl Invocation {
         if matches.get_flag("help") {
             help::print_selection(&args.collection, &args.address);
         }
-        let resolved = address::resolve(&args.collection, &args.address)
+        let context = args.common.context();
+        let resolved = address::resolve_in(&args.collection, &args.address, Some(&context.repo))
             .unwrap_or_else(|error| usage_error(error));
         let (data, query, headers) = input::parse(
             resolved.address.definition,
@@ -64,7 +65,7 @@ impl Invocation {
                     .map(|id| crate::review_link::AffectedReviewRecord { kind, id })
             });
         Self {
-            context: args.common.context(),
+            context,
             format: args.common.format(),
             path: resolved.path,
             definition: resolved.address.definition,
@@ -297,7 +298,10 @@ fn failure_with_guidance(
 
 /// The `--scope` and `--repo` words that make a hinted command run against
 /// the caller's repository and scope. A default repository path stays implicit.
-fn context_options(context: &provenance_cli::repo_context::RepoContext) -> String {
+fn context_options(context: Option<&provenance_cli::repo_context::RepoContext>) -> String {
+    let Some(context) = context else {
+        return String::new();
+    };
     let mut options = format!(" --scope {}", context.scope);
     if context.repo.as_str() != "." {
         options.push_str(&format!(" --repo {}", context.repo));
@@ -307,7 +311,10 @@ fn context_options(context: &provenance_cli::repo_context::RepoContext) -> Strin
 
 /// Names the command that reads the review after a review-workflow refusal.
 #[provenance_macros::rule("rule_review_refusal_names_read_command")]
-fn review_read_command(id: &str, context: &provenance_cli::repo_context::RepoContext) -> String {
+fn review_read_command(
+    id: &str,
+    context: Option<&provenance_cli::repo_context::RepoContext>,
+) -> String {
     format!("provenance {id} --view review{}", context_options(context))
 }
 
@@ -329,8 +336,8 @@ fn actionable_failure(
                  run `{}` to see it; to withdraw it, run \
                  `provenance {collection} {id} submissions {submission} withdraw --actor <actor>{}`. \
                  For an owned record, also pass --declared-by <owner>",
-                review_read_command(id, context),
-                context_options(context)
+                review_read_command(id, Some(context)),
+                context_options(Some(context))
             );
             return HostRefusal {
                 failure: value,
@@ -349,7 +356,7 @@ fn actionable_failure(
                 | "record_edit_conflict"
                 | "unsupported_review_feedback",
             ),
-        ) => Some(format!("run `{}`", review_read_command(id, context))),
+        ) => Some(format!("run `{}`", review_read_command(id, Some(context)))),
         _ => None,
     };
     HostRefusal {
