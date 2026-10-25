@@ -57,8 +57,10 @@ test -z "$(git ls-files --others --exclude-standard)"
 cargo package --workspace --locked --allow-dirty --registry crates-io
 ```
 
-The explicit registry lets Cargo package workspace dependencies before their
-new versions exist on crates.io.
+The explicit registry selects crates.io for the package check. Keep test-only
+workspace dependencies unversioned when a version would create a package
+dependency cycle. Cargo omits unversioned path test dependencies from the
+published manifest.
 
 Generated client source stays outside Git and enters the crate archives. Cargo
 requires `--allow-dirty` for those files. The preceding checks reject changes to
