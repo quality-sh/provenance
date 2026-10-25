@@ -27,16 +27,16 @@ it in the same change.
   The host serves until you stop it. Start it in the background and send its output to a file:
   `mkdir -p .provenance/cache && {command} review --repo . --repository-id local --scope {selected_scope} --no-open > .provenance/cache/review-host.log 2>&1 &`.
   Keep the process ID that the shell prints. When the review ends, stop the host with `kill <pid>`.
-- Open the record for the person with `{command} <record-id> --review-link --scope {selected_scope}`.
+- Open the record for the person with `{command} <record-id> --scope {selected_scope} --review-link`.
   The command opens the review page in the browser of the person. If it cannot open the
   browser, it prints a link. Give the person that link. Never give the person a record ID.
 - In an app that shows web pages, such as Claude Desktop or the Codex app, run
-  `{command} <record-id> --review-link --no-open --scope {selected_scope} --format json` and open `review_url` in the app.
-- Read the decision and review feedback with `{command} <record-id> --view review --scope {selected_scope}`.
+  `{command} <record-id> --scope {selected_scope} --review-link --no-open --format json` and open `review_url` in the app.
+- Read the decision and review feedback with `{command} <record-id> --scope {selected_scope} --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.
 - Receive saved changes while you work with
-  `{command} <requirement-id> --view review --follow --scope {selected_scope} --format json`.
+  `{command} <requirement-id> --scope {selected_scope} --view review --follow --format json`.
   The command needs a running review host. It returns current state, not a delivery journal.
   A reset or disconnect means notification continuity is unknown.
 - A guarded update after a rejection opens a new submission unless a reviewer
