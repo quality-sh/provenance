@@ -377,7 +377,7 @@ fn cli_import_refuses_unapproved_resolution_links_without_replacing_state() {
         }
         provenance(&[
             "import", "--repo", repo, "--scope", "default", "--input", input.to_str().unwrap(),
-        ]).failure().code(1).stderr(contains(format!("{kind} {kind}_code_scores_health is refused: resolution res_code_scores_health must be approved")));
+        ]).failure().code(1).stderr(contains(format!("{kind} {kind}_code_scores_health cites resolution res_code_scores_health, which is proposed.")));
         let after = provenance(&[
             "export", "--repo", repo, "--scope", "default", "--format", "json",
         ])
