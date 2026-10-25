@@ -28,7 +28,7 @@ pub async fn read_discussion_list(
     policy: ReadPolicy,
     query: DiscussionListQuery,
 ) -> anyhow::Result<Stamped<DiscussionListPage>> {
-    super::discussion_reads::check_limit(query.limit)?;
+    crate::operations::reader::check_limit(query.limit)?;
     let answer = reader::answer(repo, scope, policy, move |ctx| Box::pin(list(ctx, query))).await?;
     crate::operations::queries::page::checked("discussion-list", answer)
 }
@@ -39,7 +39,7 @@ pub async fn read_discussion_conversation(
     policy: ReadPolicy,
     query: DiscussionConversationQuery,
 ) -> anyhow::Result<Stamped<DiscussionConversation>> {
-    super::discussion_reads::check_limit(query.limit)?;
+    crate::operations::reader::check_limit(query.limit)?;
     let answer = reader::answer(repo, scope, policy, move |ctx| {
         Box::pin(conversation(ctx, query))
     })

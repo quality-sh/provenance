@@ -1,10 +1,14 @@
 use super::history::{evidence_page, VersionedRecord};
 use crate::operations::read_policy::ReadPolicy;
-use crate::operations::reader::{self, Cursor, Live, Position, ReadContext, PAGE_BYTES};
+use crate::operations::reader::{
+    self, check_limit, Cursor, Live, Position, ReadContext, PAGE_BYTES,
+};
 use camino::Utf8Path;
 use provenance_core::protocol::{read_failure::ReadFailure, Stamped};
 use provenance_core::review::{EvidencePage, EvidenceQuery, ReviewHistoryPage, ReviewHistoryQuery};
 use provenance_core::{NodeType, StableId};
+use provenance_macros::rule;
+use serde_json::Value;
 
 pub async fn read_history(
     repo: &Utf8Path,
@@ -12,10 +16,7 @@ pub async fn read_history(
     policy: ReadPolicy,
     query: ReviewHistoryQuery,
 ) -> anyhow::Result<Stamped<ReviewHistoryPage>> {
-    anyhow::ensure!(
-        (1..=200).contains(&query.limit),
-        "review history limit must be between 1 and 200"
-    );
+    check_limit(query.limit)?;
     let answer = reader::answer(repo, scope, policy, move |ctx| {
         Box::pin(history(ctx, query))
     })
@@ -95,16 +96,14 @@ pub async fn read_evidence(
                 .position(|versioned| versioned.version.id == query.entry_id)
                 .ok_or(ReadFailure::ResourceNotFound)?;
             let selected = if query.before {
-                index
-                    .checked_sub(1)
-                    .ok_or_else(|| anyhow::anyhow!("this version has no Before version"))?
+                index.checked_sub(1).ok_or(ReadFailure::ResourceNotFound)?
             } else {
                 index
             };
-            let versioned = &versions[selected];
+            let value = evidence_value(&versions, selected, query.field.as_deref())?;
             evidence_page(
-                versioned.version.id.clone(),
-                &versioned.record,
+                versions[selected].version.id.clone(),
+                &value,
                 query.field,
                 query.offset,
             )
@@ -112,4 +111,29 @@ pub async fn read_evidence(
     })
     .await?;
     crate::operations::queries::page::checked("review-evidence", answer)
+}
+
+/// The value one evidence read pages: the selected record version, or one
+/// field of it. A field that no version of the record holds names no
+/// evidence. A field that the selected version does not hold is `null`.
+#[rule("rule_evidence_read_states_absent_fields")]
+fn evidence_value(
+    versions: &[VersionedRecord],
+    selected: usize,
+    field: Option<&str>,
+) -> anyhow::Result<Value> {
+    let Some(name) = field else {
+        return Ok(versions[selected].record.clone());
+    };
+    if !versions
+        .iter()
+        .any(|versioned| versioned.record.get(name).is_some())
+    {
+        return Err(ReadFailure::ResourceNotFound.into());
+    }
+    Ok(versions[selected]
+        .record
+        .get(name)
+        .cloned()
+        .unwrap_or(Value::Null))
 }
