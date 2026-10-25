@@ -69,13 +69,14 @@ fn scope_files<'a>(
     Cow::Owned(
         scanned
             .iter()
-            .filter(|file| match repo_relative(&root, &file.scan.file_path) {
-                Some(relative) => provenance_core::scope::scope_owns_path(
-                    selection.manifest,
-                    &selection.scope.id,
-                    &relative,
-                ),
-                None => keeps_outside,
+            .filter(|file| {
+                repo_relative(&root, &file.scan.file_path).map_or(keeps_outside, |relative| {
+                    provenance_core::scope::scope_owns_path(
+                        selection.manifest,
+                        &selection.scope.id,
+                        &relative,
+                    )
+                })
             })
             .cloned()
             .collect(),
