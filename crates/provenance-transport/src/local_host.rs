@@ -137,12 +137,18 @@ impl Drop for LocalHostRegistration {
 #[derive(Clone, Debug)]
 pub struct DiscoveredLocalHost {
     endpoint: url::Url,
+    repository_id: String,
     instance_nonce: String,
 }
 
 impl DiscoveredLocalHost {
     pub const fn endpoint(&self) -> &url::Url {
         &self.endpoint
+    }
+
+    /// The repository ID that the verified host serves.
+    pub fn repository_id(&self) -> &str {
+        &self.repository_id
     }
 
     /// Names the verified host instance.
@@ -163,6 +169,7 @@ pub fn discover(root: &Path, scope: &str) -> anyhow::Result<Option<DiscoveredLoc
     if record.schema_version == SCHEMA_VERSION && record.scope == scope && verified(&record) {
         return Ok(Some(DiscoveredLocalHost {
             endpoint: validate_endpoint(&record.endpoint)?,
+            repository_id: record.repository_id,
             instance_nonce: record.instance_nonce,
         }));
     }

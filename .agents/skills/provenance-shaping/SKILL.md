@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:fb7db87cdbf61808 -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:7b354b248083082b -->
 
 # Shaping
 
@@ -57,25 +57,17 @@ disagree, update the binary first, then shape.
    provenance init --path . --scope <scope> --path-prefix .
    ```
 
-2. Start or reuse the review host, and give the person its link in your first reply:
+2. Give the person the review page in your first reply. Before you write records, start or
+   reuse the review host as the Provenance section of `AGENTS.md` says, and paste the page
+   link into the chat as plain text. One host serves the repository and scope for all
+   sessions, so leave it running. Opening the page in a browser or in the app that shows
+   your chat is extra. Always give the link in chat too. A link works once and expires
+   after 120 seconds; get a new link when it has expired. The page is served on the machine
+   that runs the host. If that is not the person's machine, say so, and give the person the
+   command from `AGENTS.md` that starts the host on their own machine.
 
-   ```sh
-   provenance review --repo . --repository-id local --scope <scope> --detach --no-open
-   ```
-
-   The host keeps running after the command returns. Paste `review_url` from its output
-   into the chat as plain text. Opening it in a browser or in the app that shows your chat
-   is a bonus; the pasted link is the route that always works. The link works once, within
-   two minutes; if it has expired, run the command again for a new one. It reuses the host.
-   The page is served on the machine that runs the host. If that is not the person's
-   machine, say so and give them the command, without `--no-open`, to run on theirs.
-
-   As soon as the anchor exists, send its link, and send it again at handoff. The page
-   follows records as they land, so the person reads the tree while you shape:
-
-   ```sh
-   provenance <anchor_requirement_id> --review-link --format json
-   ```
+   As soon as the anchor exists, send its review link, and send it again at handoff. The
+   page follows records as they land, so the person reads the tree while you shape.
 
 3. Read the domain guidance, then load the low-resolution map:
 
@@ -102,7 +94,7 @@ it without the chat. Each part of a record holds one kind of content:
 
 - **Statement**: one obligation in one plain clause.
 - **Description**: how the product behaves, in the present tense: its states, what moves it
-  between them, what the person sees, and one example or edge case. Write it for a builder
+  between them, what the person sees, and one example. Write it for a builder
   who has not read the thread.
 - **Thread**: who said what. The person's words, the brief's words, and what changed go
   here, never in a description.
@@ -113,9 +105,8 @@ it without the chat. Each part of a record holds one kind of content:
 A Question is answered only when the answer covers all of it. If an answer settles part of
 a Question, land that part, leave the Question open, and narrow its text to what remains.
 
-Before you hand off, read the tree as a builder would: open the review page, or run
-`provenance requirements <anchor_requirement_id> document get --scope <scope> --format json`,
-and read every statement and description in order. Fix a description that retells history,
+Before you hand off, read the tree as a builder would: open the anchor's review page, or
+read the anchor's requirement document, and read every statement and description in order. Fix a description that retells history,
 describes another record's behaviour, or lists open items before you hand off.
 
 ## Mode 1: Chart
@@ -387,8 +378,8 @@ change the artifact's kind.
    cites only a Requirement, the installed binary is out of date; see "Check your CLI".
 
    Only an approved Resolution can produce an active Rule or answer a Question. While the
-   Resolution is `proposed`, create the Rule with `--status review`, and answer the
-   Question without `--resolution-id`, naming the Resolution in the answer text.
+   Resolution is proposed, keep the Rule in review, and answer the Question without a
+   citation of the Resolution. Name the Resolution in the answer text.
 
    ```sh
    provenance rules create --scope <scope> \

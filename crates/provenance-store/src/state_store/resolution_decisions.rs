@@ -70,6 +70,8 @@ pub(super) fn ensure_resolution_decisions(
     Ok(())
 }
 
+/// Refuses a citation of a Resolution that is not approved or does not exist, with a
+/// message that names the citing record, the Resolution and its status, and what to do.
 #[provenance_macros::rule("rule_unapproved_resolution_refusal_says_what_to_do")]
 fn ensure_approved(
     resolutions: &[Resolution],
@@ -86,10 +88,7 @@ fn ensure_approved(
     }
     let state = status.map_or_else(
         || "does not exist".to_owned(),
-        |status| {
-            let word = serde_json::to_value(status).unwrap_or_default();
-            format!("is {}", word.as_str().unwrap_or("not approved"))
-        },
+        |status| format!("is {}", status_word(&status)),
     );
     let id = id.as_str();
     let message = format!(
@@ -109,4 +108,18 @@ fn ensure_approved(
             owner.as_str()
         ),
     ))
+}
+
+/// The wire word of a Resolution status.
+const fn status_word(status: &ResolutionStatus) -> &'static str {
+    match status {
+        ResolutionStatus::Draft => "draft",
+        ResolutionStatus::Review => "review",
+        ResolutionStatus::Proposed => "proposed",
+        ResolutionStatus::Approved => "approved",
+        ResolutionStatus::Rejected => "rejected",
+        ResolutionStatus::Revised => "revised",
+        ResolutionStatus::Superseded => "superseded",
+        ResolutionStatus::Abandoned => "abandoned",
+    }
 }

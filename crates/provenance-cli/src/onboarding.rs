@@ -28,20 +28,22 @@ it in the same change.
   and Discussion records hold review state.
 - When a session starts to write records, start or reuse the review host:
   `{command} review --repo . --repository-id local --scope {selected_scope} --detach --no-open`.
-  The host keeps running after the command returns. Give the person the `review_url`
-  it prints, as plain text in chat. The page follows records as they land.
-  When the command starts a host, it prints the process ID of the host as `pid`.
-  Keep that process ID. When the review ends, stop the host with `kill <pid>`.
+  One host serves the repository and scope for all sessions. It keeps running after
+  the command returns, and later sessions reuse it, so leave it running. Give the
+  person the `review_url` it prints, as plain text in chat. The page follows records
+  as they land. A link works once and expires after 120 seconds. Run the command
+  again for a new link.
 - After you create or change a record, run
   `{command} <record-id> --scope {selected_scope} --review-link --format json` and give the
   person `review_url` as plain text in chat, whether or not `opened` is true. In an app
   that shows web pages, such as Claude Desktop or the Codex app, you can also run
   `{command} <record-id> --scope {selected_scope} --review-link --no-open --format json` and
-  open `review_url` in the app. That is extra, never the only route. Never give the person
-  a record ID.
+  open `review_url` in the app. Opening the page is extra. Always give the link in chat
+  too. Never give the person a record ID.
 - The page is served on the machine that runs the host. If that is not the person's
-  machine, add `--no-open`, say so, and give the person the review command to run
-  on their own machine.
+  machine, say so, and give the person this command to run on their own machine:
+  `{command} review --repo . --repository-id local --scope {selected_scope} --detach`.
+  It opens the page in their browser.
 - Read the decision and review feedback with `{command} <record-id> --scope {selected_scope} --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.

@@ -2,7 +2,7 @@
 name: provenance-grounded-writing
 description: Write specific, evidence-grounded statements and behaviour descriptions for requirements, rules, sources, resolutions, and boundaries — not generic capability language or meeting minutes. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:b4f65aab5075b209 -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:3db8da7ffaf75d29 -->
 
 # Grounded writing
 
@@ -70,7 +70,7 @@ you've overpacked it — a climb-test failure in a long coat. Name the decision 
 statement and put the behaviour in `--description`.
 
 A description says how the product behaves, in the present tense: its states, what moves it
-between them, what the person sees, and one example or edge case. Write it for a builder who
+between them, what the person sees, and one example. Write it for a builder who
 has not read the conversation. It does not retell the brief, does not say who confirmed
 what, and does not list what remains to be shaped. History goes on the record's thread;
 unknowns go in fog or a Question. One closing `Open:` line may name them. For other record
