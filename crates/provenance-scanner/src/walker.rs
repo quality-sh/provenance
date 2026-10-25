@@ -213,20 +213,12 @@ fn scan_file_contents(
                 rule_id: binding.rule_id,
                 verification: binding.verification,
             });
-            for consumed in lines.iter().take(end_idx + 1).skip(idx + 1) {
-                let Some(code) = code_outside_multiline_string(
-                    consumed,
-                    multiline_style(language),
-                    &mut multiline_delimiter,
-                    in_block_comment,
-                ) else {
-                    break;
-                };
-                if language != Language::Python {
-                    in_block_comment =
-                        block_comment_state(code, in_block_comment, language == Language::Rust);
-                }
-            }
+            consume_binding_lines(
+                language,
+                &lines[idx + 1..=end_idx],
+                &mut multiline_delimiter,
+                &mut in_block_comment,
+            );
             idx = end_idx + 1;
             continue;
         }
@@ -254,15 +246,7 @@ fn scan_file_contents(
                 annotation,
             });
         }
-        if language != Language::Python {
-            for consumed_line in lines.iter().take(end_idx + 1).skip(idx + 1) {
-                in_block_comment = block_comment_state(
-                    consumed_line,
-                    in_block_comment,
-                    language == Language::Rust,
-                );
-            }
-        }
+        consume_comment_lines(language, &lines[idx + 1..=end_idx], &mut in_block_comment);
         idx = end_idx + 1;
     }
     FileScan {
@@ -271,6 +255,41 @@ fn scan_file_contents(
         annotations,
         bindings,
         warnings,
+    }
+}
+
+/// Carries the lexer state across the lines a wrapped binding consumed.
+fn consume_binding_lines(
+    language: Language,
+    consumed: &[&str],
+    multiline_delimiter: &mut Option<String>,
+    in_block_comment: &mut bool,
+) {
+    for line in consumed {
+        let Some(code) = code_outside_multiline_string(
+            line,
+            multiline_style(language),
+            multiline_delimiter,
+            *in_block_comment,
+        ) else {
+            break;
+        };
+        if language != Language::Python {
+            *in_block_comment =
+                block_comment_state(code, *in_block_comment, language == Language::Rust);
+        }
+    }
+}
+
+/// Carries the block-comment state across the lines an annotation comment
+/// consumed.
+fn consume_comment_lines(language: Language, consumed: &[&str], in_block_comment: &mut bool) {
+    if language == Language::Python {
+        return;
+    }
+    for line in consumed {
+        *in_block_comment =
+            block_comment_state(line, *in_block_comment, language == Language::Rust);
     }
 }
 
