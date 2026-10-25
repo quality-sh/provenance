@@ -21,7 +21,7 @@ fn provenance(repo: &Path, args: &[&str], input: Option<Value>) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
-fn spec(sources: Value) -> Value {
+fn spec(sources: &Value) -> Value {
     json!({
         "schema_version": 2, "spec": "fx", "declared_by": "spec://fx",
         "sources": sources, "requirements": []
@@ -43,7 +43,7 @@ fn a_requirement_from_a_deleted_discussion_loses_its_origin() {
         repo,
         &["authoring-changes", "create"],
         Some(spec(
-            json!([{"key":"src", "name":"Original", "kind":"policy"}]),
+            &json!([{"key":"src", "name":"Original", "kind":"policy"}]),
         )),
     );
     let source = applied["data"]["resources"][0]["id"].as_str().unwrap();
@@ -72,7 +72,7 @@ fn a_requirement_from_a_deleted_discussion_loses_its_origin() {
     let applied = provenance(
         repo,
         &["authoring-changes", "create"],
-        Some(spec(json!([]))),
+        Some(spec(&json!([]))),
     );
 
     assert_eq!(applied["data"]["deleted"], 1, "{applied}");
