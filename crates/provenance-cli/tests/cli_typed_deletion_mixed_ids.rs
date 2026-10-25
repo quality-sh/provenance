@@ -185,7 +185,7 @@ fn a_thread_with_sequential_and_random_message_ids_is_deleted() {
             DISCUSSION,
             "reply",
             "--expected-version",
-            "1",
+            "2",
             "--body",
             "A reply.",
         ],
