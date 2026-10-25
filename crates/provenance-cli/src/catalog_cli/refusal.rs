@@ -71,11 +71,9 @@ fn envelope(mut object: Map<String, Value>, message: &str) -> Value {
 
 fn read_error(error: &ReadError) -> Map<String, Value> {
     let object = match error {
-        ReadError::InvalidOptions => json!({"kind": "invalid_input", "reason": "invalid_value"}),
+        ReadError::InvalidOptions => invalid_input(None),
         ReadError::NotFound => json!({"kind": "resource_not_found"}),
-        ReadError::AmbiguousIdentity => {
-            json!({"kind": "invalid_input", "field": "target", "reason": "invalid_value"})
-        }
+        ReadError::AmbiguousIdentity => invalid_input(Some("target")),
         ReadError::Operation(_) => json!({"kind": "operation_failed"}),
     };
     object.as_object().cloned().unwrap_or_default()
@@ -83,22 +81,24 @@ fn read_error(error: &ReadError) -> Map<String, Value> {
 
 fn action_error(error: &ActionError) -> Map<String, Value> {
     let object = match error {
-        ActionError::InvalidOptions => {
-            json!({"kind": "invalid_input", "reason": "invalid_value"})
-        }
-        ActionError::KindSelection => {
-            json!({"kind": "invalid_input", "field": "type", "reason": "invalid_value"})
-        }
-        ActionError::NotFound => json!({"kind": "resource_not_found"}),
-        ActionError::AmbiguousIdentity => {
-            json!({"kind": "invalid_input", "field": "target", "reason": "invalid_value"})
-        }
-        ActionError::AccessDenied => json!({"kind": "access_denied"}),
-        ActionError::Operation(_) => json!({"kind": "operation_failed"}),
         ActionError::OperationDetail { detail, .. } => detail
             .get("error")
             .cloned()
             .unwrap_or_else(|| detail.clone()),
+        ActionError::NotFound => json!({"kind": "resource_not_found"}),
+        ActionError::AccessDenied => json!({"kind": "access_denied"}),
+        ActionError::Operation(_) => json!({"kind": "operation_failed"}),
+        ActionError::KindSelection => invalid_input(Some("type")),
+        ActionError::AmbiguousIdentity => invalid_input(Some("target")),
+        ActionError::InvalidOptions => invalid_input(None),
     };
     object.as_object().cloned().unwrap_or_default()
+}
+
+fn invalid_input(field: Option<&str>) -> Value {
+    let mut object = json!({"kind": "invalid_input", "reason": "invalid_value"});
+    if let (Some(object), Some(field)) = (object.as_object_mut(), field) {
+        object.insert("field".into(), json!(field));
+    }
+    object
 }
