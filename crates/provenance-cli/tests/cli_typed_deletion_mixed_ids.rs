@@ -70,7 +70,7 @@ fn discussion(id: &str, thread_id: &str, source: &str, message_ids: &[&str]) -> 
         "scope_id":"default", "discussion_id":id,
         "parent":{"node_type":"source", "node_id":source},
         "thread_id":thread_id, "root_message_id":message_ids[0], "message_ids":message_ids,
-        "status":"active", "version":1, "actor":"reviewer", "outcomes":[],
+        "status":"active", "version":message_ids.len(), "actor":"reviewer", "outcomes":[],
         "disposition_id":null
     })
     .to_string()
