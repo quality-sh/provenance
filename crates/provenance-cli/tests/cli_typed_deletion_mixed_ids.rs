@@ -7,6 +7,7 @@ use std::path::Path;
 
 const DELETED: &str = "thread_source_source_legacy";
 const KEPT: &str = "thread_source_source_kept";
+const DISCUSSION: &str = "0b6c1f5e-8a4e-4c7d-9f0a-2d1e3c4b5a69";
 
 fn provenance(repo: &Path, args: &[&str], input: Option<Value>) -> Value {
     let mut command = Command::new(assert_cmd::cargo::cargo_bin!("provenance"));
@@ -64,30 +65,73 @@ fn sequential_message(created_at: u64, thread_id: &str) -> String {
     .to_string()
 }
 
-fn start(repo: &Path, source: &str) -> Value {
-    let started = provenance(
-        repo,
-        &["sources", source, "discussions", "create"],
-        Some(json!({
-            "actor":"reviewer", "declared_by":"spec://fx", "role":"user", "body":"A concern."
-        })),
-    );
-    started["data"].clone()
+fn discussion(id: &str, thread_id: &str, source: &str, message_ids: &[&str]) -> String {
+    json!({
+        "scope_id":"default", "discussion_id":id,
+        "parent":{"node_type":"source", "node_id":source},
+        "thread_id":thread_id, "root_message_id":message_ids[0], "message_ids":message_ids,
+        "status":"active", "version":1, "actor":"reviewer", "outcomes":[],
+        "disposition_id":null
+    })
+    .to_string()
 }
 
-fn cite(repo: &Path, requirement: &str, started: &Value, message_id: &str) {
-    provenance(
+fn cite(repo: &Path, requirement: &str, message_id: &str) {
+    let created = provenance(
         repo,
         &["requirements", "create"],
         Some(json!({
             "actor":"reviewer", "id":requirement, "statement":"The host stops.",
             "status":"active", "depends_on":[], "supersedes":[],
-            "origin":{
-                "discussion_id":started["discussion_id"], "thread_id":started["thread_id"],
-                "message_id":message_id
-            }
+            "origin":{"discussion_id":DISCUSSION, "thread_id":DELETED, "message_id":message_id}
         })),
     );
+    assert_eq!(created["data"]["origin_message"], message_id, "{created}");
+}
+
+fn write_sequential_state(repo: &Path) -> std::path::PathBuf {
+    let threads = repo.join(".provenance/state/scopes/default/threads");
+    std::fs::create_dir_all(&threads).unwrap();
+    std::fs::write(
+        threads.join("threads.jsonl"),
+        format!(
+            "{}\n{}\n",
+            thread(DELETED, "source_legacy"),
+            thread(KEPT, "source_kept")
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        threads.join("discussions.jsonl"),
+        format!(
+            "{}\n{}\n",
+            discussion(
+                DISCUSSION,
+                DELETED,
+                "source_legacy",
+                &["msg_000001", "msg_000002"]
+            ),
+            discussion(
+                "7d2e4f10-3b5a-4c6d-8e9f-0a1b2c3d4e5f",
+                KEPT,
+                "source_kept",
+                &["msg_000003"]
+            )
+        ),
+    )
+    .unwrap();
+    let september = threads.join("2026-09.jsonl");
+    std::fs::write(
+        &september,
+        format!(
+            "{}\n{}\n{}\n",
+            sequential_message(1, DELETED),
+            sequential_message(2, DELETED),
+            sequential_message(3, KEPT)
+        ),
+    )
+    .unwrap();
+    september
 }
 
 #[test]
@@ -117,28 +161,7 @@ fn a_thread_with_sequential_and_random_message_ids_is_deleted() {
             None,
         );
     }
-    let threads = repo.join(".provenance/state/scopes/default/threads");
-    std::fs::create_dir_all(&threads).unwrap();
-    std::fs::write(
-        threads.join("threads.jsonl"),
-        format!(
-            "{}\n{}\n",
-            thread(DELETED, "source_legacy"),
-            thread(KEPT, "source_kept")
-        ),
-    )
-    .unwrap();
-    let september = threads.join("2026-09.jsonl");
-    std::fs::write(
-        &september,
-        format!(
-            "{}\n{}\n{}\n",
-            sequential_message(1, DELETED),
-            sequential_message(2, DELETED),
-            sequential_message(3, KEPT)
-        ),
-    )
-    .unwrap();
+    let september = write_sequential_state(repo);
     git(repo, &["add", "-A"]);
     git(repo, &["commit", "-q", "-m", "Sequential Message ids"]);
     let kept = json!({"key":"kept", "id":"source_kept", "name":"Kept", "kind":"policy"});
@@ -156,12 +179,28 @@ fn a_thread_with_sequential_and_random_message_ids_is_deleted() {
             ]),
         )),
     );
-    let started = start(repo, "source_legacy");
-    assert_eq!(started["thread_id"], DELETED, "{started}");
-    let random = started["root_message_id"].as_str().unwrap().to_owned();
-    assert!(uuid::Uuid::parse_str(random.strip_prefix("msg_").unwrap()).is_ok());
-    cite(repo, "req_from_sequential", &started, "msg_000002");
-    cite(repo, "req_from_random", &started, &random);
+    let replied = provenance(
+        repo,
+        &[
+            DISCUSSION,
+            "reply",
+            "--expected-version",
+            "1",
+            "--body",
+            "A reply.",
+        ],
+        None,
+    );
+    let random = replied["receipt"]["message_ids"][2]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(
+        uuid::Uuid::parse_str(random.strip_prefix("msg_").unwrap()).is_ok(),
+        "{replied}"
+    );
+    cite(repo, "req_from_sequential", "msg_000002");
+    cite(repo, "req_from_random", &random);
 
     let applied = provenance(
         repo,
