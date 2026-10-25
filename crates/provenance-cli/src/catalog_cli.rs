@@ -14,7 +14,7 @@ mod input;
 mod input_guard;
 pub mod refusal;
 
-pub(crate) use help::required_discussion_flags;
+pub use help::required_discussion_flags;
 
 use refusal::HostRefusal;
 
@@ -302,11 +302,12 @@ fn context_options(context: Option<&provenance_cli::repo_context::RepoContext>) 
     let Some(context) = context else {
         return String::new();
     };
-    let mut options = format!(" --scope {}", context.scope);
-    if context.repo.as_str() != "." {
-        options.push_str(&format!(" --repo {}", context.repo));
-    }
-    options
+    let repo = if context.repo.as_str() == "." {
+        String::new()
+    } else {
+        format!(" --repo {}", context.repo)
+    };
+    format!(" --scope {}{repo}", context.scope)
 }
 
 /// Names the command that reads the review after a review-workflow refusal.

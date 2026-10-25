@@ -97,7 +97,7 @@ fn discussion_help(
 
 /// The flags a Discussion action needs on the command line: the required
 /// schema fields that neither the target nor a CLI default supplies.
-pub(crate) fn required_discussion_flags(
+pub fn required_discussion_flags(
     schema: &Value,
     action: provenance_porcelain::action::Action,
 ) -> BTreeSet<String> {
