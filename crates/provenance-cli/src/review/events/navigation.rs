@@ -69,8 +69,8 @@ impl Navigation {
 
     /// Shows the record in the most recently connected page and waits for its acknowledgement.
     ///
-    /// The wait has no deadline. It ends without the page when the page disconnects or when the
-    /// caller drops the request.
+    /// The wait ends without the page when the page disconnects, when a newer link reaches
+    /// the same page, or when the caller drops the request.
     #[rule("rule_review_link_reuses_connected_page")]
     pub async fn show(&self, root_id: String, focus_id: Option<String>) -> bool {
         let request_id = uuid::Uuid::new_v4().simple().to_string();
@@ -89,6 +89,8 @@ impl Navigation {
             if sender.send(link).is_err() {
                 return false;
             }
+            // The page shows only the newest link, so earlier waits on it end as not shown.
+            pages.waiting.retain(|_, (waiting, _)| *waiting != page);
             pages
                 .waiting
                 .insert(request_id.clone(), (page, acknowledge));
