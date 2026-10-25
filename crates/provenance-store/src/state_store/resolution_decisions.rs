@@ -98,15 +98,15 @@ fn ensure_approved(
          {id} in the text.",
         owner.as_str()
     );
+    // The text error carries the same message, so a command without JSON output, such as a
+    // scope import, also says what to do.
+    let text = anyhow::anyhow!("{message}");
     Err(crate::write_error::SourceFailure::wrap(
         crate::write_error::WriteFailure::ResolutionNotApproved {
             resolution_id: id.to_owned(),
             message,
         },
-        anyhow::anyhow!(
-            "{kind} {} is refused: resolution {id} must be approved",
-            owner.as_str()
-        ),
+        text,
     ))
 }
 
