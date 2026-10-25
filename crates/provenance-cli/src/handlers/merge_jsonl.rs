@@ -3,7 +3,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use provenance_store::merge::{
     changed_statement_diagnostics, merge_records, read_jsonl_rows, read_jsonl_rows_for_shard,
-    validate_merged_records, MergeOutcome, StoredRow,
+    validate_merged_records, MergeOutcome, ShardFamily, StoredRow,
 };
 use provenance_store::statement_analysis::violation_error;
 
@@ -39,7 +39,11 @@ pub(super) fn handle(
             .map(|row| row.record().clone())
             .collect::<Vec<_>>()
     };
+    let key = target_path
+        .map_or(ShardFamily::Unrecognized, ShardFamily::for_shard_path)
+        .record_key();
     let outcome = merge_records(
+        key,
         &record_values(&base_rows),
         &record_values(&our_rows),
         &record_values(&their_rows),
