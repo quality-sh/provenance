@@ -169,7 +169,7 @@ fn review_router(
             post(launch::open_session).with_state(codes.clone()),
         )
         .merge(events.router())
-        .fallback(move |request: Request| assets::serve(asset_access.clone(), request))
+        .fallback(move |request: Request| std::future::ready(assets::serve(&asset_access, request)))
         .layer(middleware::from_fn_with_state(
             (access, codes.clone(), format!("ws://{address}")),
             protect_origin,

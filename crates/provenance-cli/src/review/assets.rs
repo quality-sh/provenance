@@ -2,7 +2,6 @@ use axum::{body::Body, extract::Request, http::Method, response::Response};
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_macros::rule;
 use provenance_transport::{HostAccess, LocalAccess};
-use std::sync::Arc;
 
 include!(concat!(env!("OUT_DIR"), "/review_assets.rs"));
 
@@ -11,7 +10,7 @@ include!(concat!(env!("OUT_DIR"), "/review_assets.rs"));
 /// compile time, so the bytes handed out are the bytes the package carries.
 /// Any other request gets the same authenticated route refusals as the host API.
 #[rule("rule_cli_serves_review_assets")]
-pub(super) async fn serve(access: Arc<LocalAccess>, request: Request) -> Response {
+pub(super) fn serve(access: &LocalAccess, request: Request) -> Response {
     let path = match request.uri().path() {
         "/" => "/index.html",
         path => path,
@@ -20,7 +19,7 @@ pub(super) async fn serve(access: Arc<LocalAccess>, request: Request) -> Respons
     let Some((_, bytes)) =
         asset.filter(|_| matches!(*request.method(), Method::GET | Method::HEAD))
     else {
-        return refuse(&access, &request, asset.is_some());
+        return refuse(access, &request, asset.is_some());
     };
     let body = if request.method() == Method::HEAD {
         Body::empty()
