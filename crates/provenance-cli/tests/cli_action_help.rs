@@ -7,7 +7,7 @@ use predicates::prelude::*;
 use provenance_macros::verifies;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 mod support {
     pub mod review_paths;
@@ -30,18 +30,36 @@ fn help(repo: &str, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-/// Every file under the directory with its bytes.
-fn tree(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+#[derive(Debug, PartialEq, Eq)]
+enum TreeEntry {
+    Directory,
+    Bytes(Vec<u8>),
+    LockedFile { len: u64, modified: SystemTime },
+}
+
+/// Lists every path and reads file contents, except for the locked file.
+/// Windows prevents reads of its bytes, so compare its length and modified time.
+fn tree(root: &Path, locked_path: &Path) -> BTreeMap<PathBuf, TreeEntry> {
     let mut files = BTreeMap::new();
     let mut pending = vec![root.to_path_buf()];
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(&directory).unwrap() {
             let path = entry.unwrap().path();
             if path.is_dir() {
-                files.insert(path.clone(), Vec::new());
+                files.insert(path.clone(), TreeEntry::Directory);
                 pending.push(path);
+            } else if path == locked_path {
+                let metadata = std::fs::metadata(&path).unwrap();
+                files.insert(
+                    path,
+                    TreeEntry::LockedFile {
+                        len: metadata.len(),
+                        modified: metadata.modified().unwrap(),
+                    },
+                );
             } else {
-                files.insert(path.clone(), std::fs::read(&path).unwrap());
+                let bytes = std::fs::read(&path).unwrap();
+                files.insert(path, TreeEntry::Bytes(bytes));
             }
         }
     }
@@ -119,15 +137,16 @@ fn help_returns_at_once_while_another_process_holds_the_publication_lock() {
     let (directory, repo) = init_with_requirement();
     let locks = directory.path().join(".provenance/cache/locks");
     std::fs::create_dir_all(&locks).unwrap();
+    let lock_path = locks.join("repository.publication.lock");
     let lock = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open(locks.join("repository.publication.lock"))
+        .open(&lock_path)
         .unwrap();
     lock.lock_exclusive().unwrap();
-    let before = tree(directory.path());
+    let before = tree(directory.path(), &lock_path);
 
     provenance()
         .args(["req_a", "update", "--repo", &repo, "--help"])
@@ -137,6 +156,6 @@ fn help_returns_at_once_while_another_process_holds_the_publication_lock() {
         .stdout(predicate::str::contains("--statement"))
         .stdout(predicate::str::contains("--url").not());
 
-    assert_eq!(tree(directory.path()), before);
+    assert_eq!(tree(directory.path(), &lock_path), before);
     fs2::FileExt::unlock(&lock).unwrap();
 }

@@ -1,3 +1,4 @@
+use super::message_ids::{ensure_unique_message_ids, ShardLine};
 use super::{DispositionRecord, Message, ProvenanceLayout, ScopeId, StateStore};
 use crate::shards;
 use anyhow::Context;
@@ -387,7 +388,7 @@ pub(super) fn deserialize_closed<T: DeserializeOwned>(input: &str) -> anyhow::Re
 fn read_jsonl_shards<T: DeserializeOwned>(
     shard_paths: Vec<Utf8PathBuf>,
     shard_kind: &str,
-) -> anyhow::Result<Vec<T>> {
+) -> anyhow::Result<Vec<(T, ShardLine)>> {
     let mut records = Vec::new();
     for path in shard_paths {
         crate::test_probes::record_read(&path);
@@ -395,14 +396,20 @@ fn read_jsonl_shards<T: DeserializeOwned>(
             .with_context(|| format!("failed to read {shard_kind} shard {}", path.as_str()))?;
         for (index, line) in contents.lines().enumerate() {
             let value = parse_line(&path, index + 1, line)?;
-            records.push(record_from_line(
-                &path,
-                index + 1,
-                line,
-                value,
-                Fields::Open,
-                NO_NESTED_RECORDS,
-            )?);
+            records.push((
+                record_from_line(
+                    &path,
+                    index + 1,
+                    line,
+                    value,
+                    Fields::Open,
+                    NO_NESTED_RECORDS,
+                )?,
+                ShardLine {
+                    path: path.clone(),
+                    line: index + 1,
+                },
+            ));
         }
     }
     Ok(records)
@@ -422,7 +429,9 @@ pub(super) fn read_message_shards_unlocked(
     layout: &ProvenanceLayout,
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
-    read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
+    let rows = read_jsonl_shards(message_shard_paths(layout, scope)?, "message")?;
+    ensure_unique_message_ids(&rows)?;
+    Ok(rows.into_iter().map(|(message, _)| message).collect())
 }
 
 /// Every month shard of the scope's messages, sorted. All message reads
