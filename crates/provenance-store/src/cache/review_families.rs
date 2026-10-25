@@ -128,7 +128,12 @@ impl<'a> ReviewFamilyIndex<'a> {
         }
     }
 
-    pub(crate) fn get(&mut self, kind: NodeType, id: &StableId) -> anyhow::Result<&ReviewRecord> {
+    /// The wanted record with `id`, or `None` when its family does not hold it.
+    pub(crate) fn find(
+        &mut self,
+        kind: NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<Option<&ReviewRecord>> {
         let family = match self.families.entry(kind.rank()) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
@@ -147,9 +152,7 @@ impl<'a> ReviewFamilyIndex<'a> {
                 entry.insert(indexed)
             }
         };
-        family
-            .get(id.as_str())
-            .ok_or_else(|| ReadFailure::ResourceNotFound.into())
+        Ok(family.get(id.as_str()))
     }
 }
 

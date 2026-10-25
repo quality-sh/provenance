@@ -33,17 +33,23 @@ impl DocumentReviewState {
     }
 }
 
-/// A record that no review accepted and whose latest decision rejected it is
-/// a rejected new record. A rejected change to an accepted record is not.
+/// A record that no review accepted and whose latest review decision rejected
+/// it is a rejected new record. A rejected change to an accepted record is
+/// not. Only decisions on review submissions count: a decision on a
+/// proposal of another type that names the record, such as a candidate
+/// answer to a Question, decides nothing about the record.
 #[rule("rule_review_document_hides_rejected_new_records")]
-fn rejected_before_acceptance(state: &RequirementDecisionState) -> bool {
+fn rejected_before_acceptance(state: &RequirementDecisionState, facts: &CycleFacts) -> bool {
+    let reviews = state
+        .decisions
+        .iter()
+        .filter(|decision| facts.is_submission(&decision.disposition.proposal_id))
+        .collect::<Vec<_>>();
     state.pending.is_none()
-        && state
-            .decisions
+        && reviews
             .last()
             .is_some_and(|decision| decision.disposition.decision == DispositionDecision::Rejected)
-        && !state
-            .decisions
+        && !reviews
             .iter()
             .any(|decision| decision.disposition.decision == DispositionDecision::Accepted)
 }
@@ -60,19 +66,19 @@ impl StateStore {
         self.with_repository_publication(|| {
             let facts = CycleFacts::validated(self, scope)?;
             let mut families = ReviewFamilyIndex::new(self, scope, records);
-            let states = records
-                .iter()
-                .map(|(kind, id)| {
-                    let record = families.get(*kind, id)?;
-                    Self::record_decision_state_from_parts(record, &facts)
-                })
-                .collect::<anyhow::Result<Vec<_>>>()?;
+            let mut states = Vec::new();
+            for (kind, id) in records {
+                // A reference to a record that no longer exists has no review state.
+                if let Some(record) = families.find(*kind, id)? {
+                    states.push(Self::record_decision_state_from_parts(record, &facts)?);
+                }
+            }
             let digest = crate::canonical_digest::digest(
                 &crate::canonical_digest::canonical_bytes(&states)?,
             );
             let rejected_new = states
                 .iter()
-                .filter(|state| rejected_before_acceptance(state))
+                .filter(|state| rejected_before_acceptance(state, &facts))
                 .map(|state| (state.record_kind, state.record_id.clone()))
                 .collect();
             let records = states

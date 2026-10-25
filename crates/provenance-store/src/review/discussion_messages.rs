@@ -16,7 +16,7 @@ pub async fn read_discussion_messages(
     policy: ReadPolicy,
     query: DiscussionMessagesQuery,
 ) -> anyhow::Result<Stamped<DiscussionMessagesPage>> {
-    super::discussion_reads::check_limit(query.limit)?;
+    crate::operations::reader::check_limit(query.limit)?;
     let answer = reader::answer(repo, scope, policy, move |ctx| {
         Box::pin(messages(ctx, query, None))
     })

@@ -41,6 +41,21 @@ impl LocalHostFixture {
         Self::serve(listener, endpoint, body, Some(registration))
     }
 
+    /// Serves the identity of a prepared registration that the caller announces later.
+    pub fn start_unannounced(
+        root: &Path,
+        scope: &str,
+        repository_id: &str,
+    ) -> (Self, LocalHostRegistration) {
+        let (listener, endpoint) = listener();
+        let registration =
+            LocalHostRegistration::prepare(root, scope, &endpoint, repository_id).unwrap();
+        let body = serde_json::to_value(registration.identity())
+            .unwrap()
+            .to_string();
+        (Self::serve(listener, endpoint, body, None), registration)
+    }
+
     pub fn identity(&self) -> LocalHostIdentity {
         self.registration.as_ref().unwrap().identity()
     }

@@ -22,6 +22,9 @@ impl From<OperationFailure> for ReadError {
 }
 impl ReadError {
     pub(super) fn status(&self) -> u16 {
+        if let Some(error) = self.common() {
+            return error.status_code();
+        }
         match self.safe() {
             ReadFailure::ResourceNotFound => 404,
             ReadFailure::ReadFailed => 500,
@@ -29,6 +32,11 @@ impl ReadError {
             ReadFailure::FileUnavailable | ReadFailure::GitUnavailable => 503,
             _ => 409,
         }
+    }
+    /// A common refusal that a read handler raised itself, such as an input
+    /// refusal; it keeps its own kind and status.
+    fn common(&self) -> Option<&OperationFailure> {
+        self.0.downcast_ref::<OperationFailure>()
     }
     /// The closed failure for the native error. An error of no known kind
     /// reads as `ReadFailed`.
@@ -95,7 +103,10 @@ fn moved_unit(unit: &crate::operations::reader::MovedUnit) -> MovedUnit {
 }
 impl serde::Serialize for ReadError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.safe().serialize(serializer)
+        match self.common() {
+            Some(error) => error.serialize(serializer),
+            None => self.safe().serialize(serializer),
+        }
     }
 }
 #[cfg(feature = "schema")]

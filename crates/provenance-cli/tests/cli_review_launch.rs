@@ -150,3 +150,49 @@ fn no_route_returns_the_launch_key() {
         assert!(!body.contains(&launch_key));
     }
 }
+
+#[test]
+#[verifies("rule_review_link_printed_when_not_opened", examples)]
+fn a_missing_launch_key_prints_the_plain_link() {
+    let repo = repository();
+    create_requirement(repo.path());
+    let host = start(repo.path());
+    let plain = format!(
+        "{}/?root=req_launch",
+        host.config["endpoint"].as_str().unwrap()
+    );
+    // Another per-user cache, as an agent sandbox has, holds no launch key for this host.
+    let other_cache = tempfile::tempdir().unwrap();
+    let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"));
+    command
+        .env("HOME", other_cache.path())
+        .env("XDG_CACHE_HOME", other_cache.path().join("cache"))
+        .env("LOCALAPPDATA", other_cache.path().join("cache"))
+        .env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            "http://127.0.0.1:9/unavailable",
+        )
+        .args([
+            "req_launch",
+            "--review-link",
+            "--no-open",
+            "--repo",
+            repo.path().to_str().unwrap(),
+        ]);
+
+    let output = command.output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), plain);
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("warning: the review link cannot sign the page in"));
+
+    let output = command.args(["--format", "json"]).output().unwrap();
+    assert!(output.status.success());
+    let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(value["review_url"], plain);
+    assert_eq!(value["opened"], false);
+}

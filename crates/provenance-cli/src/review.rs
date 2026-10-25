@@ -147,7 +147,8 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     serve(server, stop, host, events, signals).await
 }
 
-/// The host routes plus the review page's identity, configuration, launch, and event routes.
+/// The host routes plus the review page's identity, configuration, launch, event, and
+/// asset routes.
 fn review_router(
     host: &StatementHost,
     identity: &LocalHostIdentity,
@@ -157,6 +158,7 @@ fn review_router(
     access: Arc<LocalAccess>,
     address: std::net::SocketAddr,
 ) -> axum::Router {
+    let asset_access = access.clone();
     host.router()
         .route(
             IDENTITY_ROUTE,
@@ -175,7 +177,9 @@ fn review_router(
             post(launch::open_session).with_state(codes.clone()),
         )
         .merge(events.router())
-        .fallback(assets::serve)
+        .fallback(move |request: Request| {
+            std::future::ready(assets::serve(&asset_access, &request))
+        })
         .layer(middleware::from_fn_with_state(
             (access, codes.clone(), format!("ws://{address}")),
             protect_origin,

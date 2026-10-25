@@ -12,6 +12,9 @@ use std::{
     time::Duration,
 };
 
+/// How long a check that no browser opened waits for an opener the CLI started.
+const OPENER_WAIT: Duration = Duration::from_secs(2);
+
 fn create(root: &Path, args: &[&str]) {
     let output = Command::new(assert_cmd::cargo::cargo_bin("provenance"))
         .args(args)
@@ -80,6 +83,24 @@ fn finish(child: Child) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 
+/// Waits for the CLI until a deadline, stops a command that does not return, and returns
+/// its JSON output and stderr.
+fn finish_within(mut child: Child, timeout: Duration) -> (Value, String) {
+    let deadline = std::time::Instant::now() + timeout;
+    while child.try_wait().unwrap().is_none() {
+        if std::time::Instant::now() >= deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("the review link command did not return within {timeout:?}");
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    let output = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(output.status.success(), "{stderr}");
+    (serde_json::from_slice(&output.stdout).unwrap(), stderr)
+}
+
 fn connected(host: &Host) -> Socket {
     let mut page = Socket::connect(host);
     assert_eq!(page.frame()["type"], "ready");
@@ -110,7 +131,7 @@ fn a_review_link_shows_its_record_in_the_connected_page() {
     let output = finish(child);
     assert_eq!(output["opened"], true);
     assert_eq!(output["review_url"], record_page(&host));
-    assert!(browser.opened_link().is_none());
+    browser.expect_no_link(OPENER_WAIT);
 }
 
 #[test]
@@ -132,7 +153,7 @@ fn the_newest_page_shows_the_link_and_only_it_can_acknowledge() {
     newer.send(&json!({"type": "ack", "requestId": link["requestId"]}));
 
     assert_eq!(finish(child)["opened"], true);
-    assert!(browser.opened_link().is_none());
+    browser.expect_no_link(OPENER_WAIT);
 }
 
 #[test]
@@ -166,7 +187,7 @@ fn no_open_prints_the_link_without_moving_the_connected_page() {
         .as_str()
         .unwrap()
         .starts_with(&format!("{}#launch=", record_page(&host))));
-    assert!(browser.opened_link().is_none());
+    browser.expect_no_link(OPENER_WAIT);
     page.quiet();
 }
 
@@ -209,7 +230,7 @@ fn a_cancelled_review_link_does_not_block_the_next_one() {
     assert_ne!(second["requestId"], first["requestId"]);
     page.send(&json!({"type": "ack", "requestId": second["requestId"]}));
     assert_eq!(finish(child)["opened"], true);
-    assert!(browser.opened_link().is_none());
+    browser.expect_no_link(OPENER_WAIT);
 }
 
 #[test]
@@ -223,5 +244,55 @@ fn navigation_requires_the_launch_key() {
         panic!("navigation without the launch key must be refused");
     };
     assert_eq!(status, 401);
+    page.quiet();
+}
+
+#[test]
+#[verifies("rule_review_commands_open_the_browser", examples)]
+fn a_page_that_does_not_acknowledge_the_link_keeps_the_browser_closed() {
+    let (repo, host) = running_review();
+    let mut page = connected(&host);
+    let browser = BrowserRecorder::install();
+    let child = review_link(&host, repo.path(), &browser, &[]);
+    assert_eq!(page.frame()["type"], "show-record");
+    // The page stays connected and does not answer.
+
+    let (output, stderr) = finish_within(child, Duration::from_secs(20));
+    assert_eq!(output["opened"], false);
+    assert_eq!(output["review_url"], record_page(&host));
+    assert!(
+        stderr.contains("a connected review page got the link, so no browser opens")
+            && stderr.contains("open the printed URL if the page does not show it"),
+        "{stderr}"
+    );
+    browser.expect_no_link(OPENER_WAIT);
+    page.quiet();
+}
+
+#[test]
+#[verifies("rule_review_commands_open_the_browser", examples)]
+fn a_replaced_link_reports_not_shown_and_no_browser_opens() {
+    let (repo, host) = running_review();
+    let mut page = connected(&host);
+    let browser = BrowserRecorder::install();
+    let replaced = review_link(&host, repo.path(), &browser, &[]);
+    let first = page.frame();
+    assert_eq!(first["type"], "show-record");
+    let newest = review_link(&host, repo.path(), &browser, &[]);
+    let second = page.frame();
+    assert_ne!(second["requestId"], first["requestId"]);
+
+    // The replaced command returns before any acknowledgement and does not use the browser.
+    let (output, stderr) = finish_within(replaced, Duration::from_secs(3));
+    assert_eq!(output["opened"], false);
+    assert_eq!(output["review_url"], record_page(&host));
+    assert!(
+        stderr.contains("a newer review link replaced this link"),
+        "{stderr}"
+    );
+
+    page.send(&json!({"type": "ack", "requestId": second["requestId"]}));
+    assert_eq!(finish(newest)["opened"], true);
+    browser.expect_no_link(OPENER_WAIT);
     page.quiet();
 }

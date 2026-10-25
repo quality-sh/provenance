@@ -2,6 +2,10 @@
 # Bound process concurrency even when the runner receives extra CPUs.
 test-threads = 8
 
+[profile.ci.junit]
+# target/nextest/ci/junit.xml; CI uploads it for TAG, the test aggregator.
+path = "junit.xml"
+
 [test-groups.cargo]
 max-threads = 1
 
