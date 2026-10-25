@@ -28,9 +28,18 @@ Check repository state before you retry a write. Closing stdin does not stop
 this interactive host. Native CLI and Rust calls still use their direct
 operation paths.
 
+Each operation request has a deadline of three seconds from the time the host
+reads its headers. The wait for a free request slot and the full body upload
+share this deadline. When no slot is free before the deadline, the host answers
+503 `host_busy`. A body that is not complete at the deadline gets 400
+`invalid_input` with the reason `incomplete`. A slow connection or a long slot
+wait on a busy host can cause this refusal. A retry can then succeed. When the
+host stops during a body read, it answers 503 `unavailable_needs`.
+
 ## Local caller and repository access
 
-Startup writes one JSON line to stdout with `endpoint`, `bearer`, `repositoryId`,
+The host serves requests first. Then it publishes its registry record and writes
+one JSON line to stdout with `endpoint`, `bearer`, `repositoryId`,
 `scope`, `instanceNonce`, and `url`. The URL is `http://127.0.0.1:PORT/`; it
 contains no credential. Treat the JSON output as a credential. Each process
 generates a new token and a non-secret host-instance nonce. The token is not
@@ -45,7 +54,9 @@ access checks, publication locks, and disposition actor grants still apply.
 Record actor and role fields do not authenticate a caller.
 
 While the host runs, it publishes its credential-free location through the
-[local host discovery protocol](local-host.md). The bearer token is never in
+[local host discovery protocol](local-host.md). If another live host already
+owns the repository and scope, the new host does not publish a record. It prints
+an error and exits with a failure code, after it has served for a short time. The bearer token is never in
 the registry. CLI commands ask the host layer for the verified endpoint before
 they add a review link. If no verified host is running, these writes explain
 how to start one.
@@ -61,7 +72,10 @@ Requirement document that contains the record. The command gets a launch code
 from the running host and opens the record in the browser of the person. It
 prints the link without the code. With `--format json` the output is
 `{"review_url": "...", "opened": true}`. When the command does not open the
-browser, it prints the launch link and `"opened": false`. If no host is
+browser, it prints the launch link and `"opened": false`. If the host cannot
+issue a launch code, for example because this user cache has no launch key for
+the host, the command prints a warning on stderr. It then prints the link
+without a code and `"opened": false`, and exits 0. If no host is
 running, the command explains how to start one instead of returning a URL.
 
 When a review page is connected to the host, the command shows the record in
@@ -210,7 +224,12 @@ The CLI's production dependency `provenance-transport` is included in the Cargo
 release order before the CLI. It uses the shared workspace release version.
 
 The asset entry is `/index.html`, also served at `/`. Relative local dependencies
-retain their paths. Missing assets return 404; no repository file is served.
+retain their paths. No repository file is served. Only `GET` and `HEAD` requests
+for a bundle asset do not need a credential. Every other request, for example a
+missing asset, `/favicon.ico`, or another method on an asset, must authenticate
+first. Without a valid bearer token or session cookie it gets 401. With one, an
+unknown path gets 404 `unknown_operation`, and another method on an asset gets
+405 `method_not_allowed`. Both answers use the standard failure envelope.
 `/metadata` reports the complete compatibility tuple. Resource routes use the current
 [operation contract](operation-contract.md); the host has no versioned operation path.
 The host reserves `/review-config` for authenticated runtime configuration:
@@ -420,16 +439,26 @@ recently connected page:
 ```
 
 The page shows the record and answers `{"type":"ack","requestId":"..."}`. Only
-the page that received a request can acknowledge it. The host then answers
-`{"shown": true}`. With no connected page, or when that page disconnects first,
-the host answers `{"shown": false}` and the CLI opens the browser as before. The
-wait has no deadline. When the CLI stops waiting, the host removes the request.
+the page that received a request can acknowledge it. The host waits at most five
+seconds for the acknowledgement. Its answer is `{"result": RESULT}`:
+
+| Result | Meaning | CLI |
+| --- | --- | --- |
+| `shown` | The page showed the record. | Prints the link and `"opened": true`. |
+| `waiting` | The page has the link and did not show it in five seconds. | Prints the link, `"opened": false`, and a warning. Opens no browser. |
+| `replaced` | A newer review link reached the same page first. | Prints the link, `"opened": false`, and a warning. Opens no browser. |
+| `no_page` | No page is connected, or the page disconnected before it acknowledged the link. | Opens the browser. |
+
+The CLI prints the link without a launch code when a page has the link. When the
+CLI stops waiting, the host removes the request.
 
 A record in the open document is selected at once. Another Requirement opens
 only after the person saves or cancels the open drafts in the current document.
-Until then the page shows that a review link waits, and the CLI waits. A newer
-review link replaces a waiting one, and the page acknowledges both when it
-shows the newer record.
+Until then the page shows that a review link waits. After five seconds the CLI
+returns with `waiting` and tells on stderr that the open page has the link and
+shows the record when the person is ready. The page shows only the newest
+review link. A newer link replaces a waiting one, and the wait for the replaced
+link ends at once with `replaced`. The page acknowledges only the newer link.
 
 ## Notification loss and recovery
 

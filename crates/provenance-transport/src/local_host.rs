@@ -84,6 +84,8 @@ impl LocalHostRegistration {
     }
 
     /// Publishes the prepared record. Refuses while another live host owns the slot.
+    #[rule("rule_single_local_host_per_repository_scope")]
+    #[rule("rule_local_host_registry_owner_only")]
     pub fn announce(&self) -> anyhow::Result<()> {
         let directory = self.path.parent().expect("registry file has a parent");
         secure_directory(directory)?;
@@ -100,8 +102,6 @@ impl LocalHostRegistration {
     }
 
     /// Names and publishes a host instance in one step.
-    #[rule("rule_single_local_host_per_repository_scope")]
-    #[rule("rule_local_host_registry_owner_only")]
     pub fn publish(
         root: &Path,
         scope: &str,

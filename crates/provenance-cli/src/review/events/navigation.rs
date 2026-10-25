@@ -4,8 +4,27 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use tokio::sync::{mpsc, oneshot};
+
+/// A page acknowledges a shown record at once. A page that holds the link back, for example
+/// while a draft is open, must not hold the caller.
+const ACKNOWLEDGEMENT_WAIT: Duration = Duration::from_secs(5);
+
+/// What happened to a review link that the host sent to a connected page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum Delivery {
+    /// The page showed the record and acknowledged it.
+    Shown,
+    /// The page has the link and did not show it before the wait ended.
+    Waiting,
+    /// A newer link reached the same page before this link was shown.
+    Replaced,
+    /// No connected page has the link, or the page disconnected before it acknowledged it.
+    NoPage,
+}
 
 /// Asks a connected page to show a record.
 #[derive(Clone, Debug, Serialize)]
@@ -40,7 +59,7 @@ struct Pages {
     /// Connected pages, oldest first.
     open: Vec<(u64, mpsc::UnboundedSender<ShowRecord>)>,
     /// Requests by id, with the page that must acknowledge each one.
-    waiting: HashMap<String, (u64, oneshot::Sender<()>)>,
+    waiting: HashMap<String, (u64, oneshot::Sender<Delivery>)>,
 }
 
 /// One connected page. Its review links stop when it disconnects.
@@ -67,18 +86,19 @@ impl Navigation {
         }
     }
 
-    /// Shows the record in the most recently connected page and waits for its acknowledgement.
+    /// Shows the record in the most recently connected page and waits a bounded time for its
+    /// acknowledgement.
     ///
-    /// The wait ends without the page when the page disconnects, when a newer link reaches
-    /// the same page, or when the caller drops the request.
+    /// The wait also ends when the page disconnects, when a newer link reaches the same page,
+    /// or when the caller drops the request.
     #[rule("rule_review_link_reuses_connected_page")]
-    pub async fn show(&self, root_id: String, focus_id: Option<String>) -> bool {
+    pub async fn show(&self, root_id: String, focus_id: Option<String>) -> Delivery {
         let request_id = uuid::Uuid::new_v4().simple().to_string();
         let (acknowledge, acknowledged) = oneshot::channel();
         {
             let mut pages = self.inner.lock().unwrap();
             let Some((page, sender)) = pages.open.last() else {
-                return false;
+                return Delivery::NoPage;
             };
             let page = *page;
             let link = ShowRecord {
@@ -87,10 +107,20 @@ impl Navigation {
                 focus: focus_id,
             };
             if sender.send(link).is_err() {
-                return false;
+                return Delivery::NoPage;
             }
-            // The page shows only the newest link, so earlier waits on it end as not shown.
-            pages.waiting.retain(|_, (waiting, _)| *waiting != page);
+            // The page shows only the newest link, so earlier waits on it end as replaced.
+            let replaced: Vec<String> = pages
+                .waiting
+                .iter()
+                .filter(|(_, (waiting, _))| *waiting == page)
+                .map(|(request, _)| request.clone())
+                .collect();
+            for request in replaced {
+                if let Some((_, earlier)) = pages.waiting.remove(&request) {
+                    let _ = earlier.send(Delivery::Replaced);
+                }
+            }
             pages
                 .waiting
                 .insert(request_id.clone(), (page, acknowledge));
@@ -99,7 +129,12 @@ impl Navigation {
             navigation: self,
             request_id,
         };
-        acknowledged.await.is_ok()
+        match tokio::time::timeout(ACKNOWLEDGEMENT_WAIT, acknowledged).await {
+            Ok(Ok(delivery)) => delivery,
+            // The page disconnected and dropped the request.
+            Ok(Err(_)) => Delivery::NoPage,
+            Err(_) => Delivery::Waiting,
+        }
     }
 }
 
@@ -116,7 +151,7 @@ impl Page {
             .is_some_and(|(page, _)| *page == self.id)
         {
             if let Some((_, acknowledge)) = pages.waiting.remove(&request_id) {
-                let _ = acknowledge.send(());
+                let _ = acknowledge.send(Delivery::Shown);
             }
         }
     }

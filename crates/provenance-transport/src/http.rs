@@ -123,10 +123,11 @@ async fn invoke_admitted(host: StatementHost, request: Request) -> Response {
     }
 }
 
-/// Reads the body while the request deadline lasts, so a stalled upload cannot hold its slot.
+/// Reads the body until the request deadline, so a stalled upload cannot hold its slot.
 ///
-/// Stopping wins over a body read, as before. A body that is not complete at the deadline
-/// gets `invalid_input` with the reason `incomplete`.
+/// The slot wait and the full upload share the three-second deadline. When the host stops,
+/// the read ends with `unavailable_needs`. A body that is not complete at the deadline gets
+/// `invalid_input` with the reason `incomplete`.
 #[rule("rule_host_body_read_bound")]
 async fn read_body(host: &StatementHost, request: Request) -> Result<Bytes, Response> {
     let deadline = crate::admission::deadline();
