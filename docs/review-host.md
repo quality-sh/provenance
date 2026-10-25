@@ -46,9 +46,10 @@ caller's job when the job allows breakaway. A job that does not allow breakaway 
 the host, and the host stops when that job closes.
 
 One host serves the repository and scope for all callers. If a verified host already
-serves them, the command reuses it and starts nothing. A reuse refuses when
+serves them, the command reuses it and starts nothing. A reuse is refused when
 `--repository-id` differs from the running host, or when `--port` is not zero and
-differs from its port. The refusal names the values of the running host. Concurrent
+differs from its port. The refusal names the values of the running host and points
+to this page, which says how to stop it. Concurrent
 starts for one repository and scope wait for each other, so only one host starts. A
 record left by a host that stopped is removed, and a new host starts.
 
@@ -64,6 +65,9 @@ host through launch links and the discovery registry as before.
 The detached host does not open a browser. Because later sessions reuse the host, an
 agent leaves it running. A person stops it with `kill PID` on Unix or
 `taskkill /PID PID` on Windows; Ctrl-C in the starting shell does not reach it.
+A reuse prints no `pid`. To find the PID of a running host, find the process that
+listens on the port of its `endpoint`, for example with `lsof -i :PORT` on Unix or
+`netstat -ano | findstr :PORT` on Windows.
 If the host stops before it publishes its location, the command fails and prints
 the log. If the host does not publish its location within 20 seconds, or the command
 fails after the host starts, the command stops the host before it exits.

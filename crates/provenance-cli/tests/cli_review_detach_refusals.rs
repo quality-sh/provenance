@@ -20,7 +20,7 @@ use std::{
 
 #[test]
 /// A host that does not publish its location within the start limit is stopped.
-#[verifies("rule_review_detach_outlives_caller", examples)]
+#[verifies("rule_review_detach_failed_start_leaves_no_host", examples)]
 fn a_host_that_does_not_publish_in_time_is_stopped() {
     let repo = repository();
     let cache = UserCache::isolated();
@@ -40,6 +40,11 @@ fn a_host_that_does_not_publish_in_time_is_stopped() {
     let mut command = detach_command(repo.path(), &cache);
     command.arg("--no-open");
     let output = waits::output(&mut command);
+    // A host that published by mistake is stopped when the test ends.
+    let _stop = serde_json::from_slice::<Value>(&output.stdout)
+        .ok()
+        .and_then(|started| started["pid"].as_u64())
+        .map(|pid| Detached(u32::try_from(pid).unwrap()));
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -54,6 +59,28 @@ fn a_host_that_does_not_publish_in_time_is_stopped() {
         !registry(repo.path()).exists(),
         "the host still runs and published its location"
     );
+}
+
+#[test]
+/// A directory with no graph is refused before the command takes the start lock or starts
+/// a host.
+#[verifies("rule_review_detach_failed_start_leaves_no_host", examples)]
+fn a_directory_without_a_graph_is_refused_before_a_host_starts() {
+    let directory = tempfile::tempdir().unwrap();
+    let cache = UserCache::isolated();
+
+    let mut command = detach_command(directory.path(), &cache);
+    command.arg("--no-open");
+    let output = waits::output(&mut command);
+    let _stop = serde_json::from_slice::<Value>(&output.stdout)
+        .ok()
+        .and_then(|started| started["pid"].as_u64())
+        .map(|pid| Detached(u32::try_from(pid).unwrap()));
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(cache.host_files(), Vec::<std::path::PathBuf>::new());
+    assert!(!registry(directory.path()).exists());
 }
 
 #[test]
@@ -81,6 +108,7 @@ fn a_reuse_with_other_host_values_is_refused() {
         assert!(!output.status.success(), "{repository_id} {port}");
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(stderr.contains(&named), "{stderr}");
+        assert!(stderr.contains("docs/review-host.md"), "{stderr}");
         assert!(output.stdout.is_empty(), "{repository_id} {port}");
     }
 

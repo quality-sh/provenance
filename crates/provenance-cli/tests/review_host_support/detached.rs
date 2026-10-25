@@ -26,8 +26,21 @@ impl UserCache {
         Self(tempfile::tempdir().unwrap())
     }
 
+    /// The files of detached hosts in the cache: start locks and logs.
+    pub fn host_files(&self) -> Vec<PathBuf> {
+        let directory = self.caches().join("provenance").join("review-host");
+        std::fs::read_dir(directory).map_or_else(
+            |_| Vec::new(),
+            |entries| entries.map(|entry| entry.unwrap().path()).collect(),
+        )
+    }
+
+    fn caches(&self) -> PathBuf {
+        self.0.path().join("Library").join("Caches")
+    }
+
     pub fn apply(&self, command: &mut Command) {
-        let caches = self.0.path().join("Library").join("Caches");
+        let caches = self.caches();
         command
             .env("HOME", self.0.path())
             .env("XDG_CACHE_HOME", &caches)

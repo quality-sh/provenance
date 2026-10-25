@@ -48,7 +48,17 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
         "{shaping}"
     );
     assert!(
-        prose.contains("read the tree as a builder would"),
+        prose.contains(
+            "read the tree as a builder would: open the anchor's review page, or read the \
+             anchor's requirement document with the command in the Provenance section of \
+             `AGENTS.md`,"
+        ),
+        "{shaping}"
+    );
+    assert!(
+        prose.contains(
+            "While the Resolution is proposed, keep the Rule in review with `--status review`,"
+        ),
         "{shaping}"
     );
 

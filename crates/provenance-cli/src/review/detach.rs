@@ -30,6 +30,7 @@ struct Location {
 
 /// A host that this command started. Dropping it stops the host, so a failure after the
 /// start leaves no host running; `keep` hands the host over to the person.
+#[rule("rule_review_detach_failed_start_leaves_no_host")]
 struct StartedHost {
     child: Option<Child>,
     log: PathBuf,
@@ -109,7 +110,8 @@ fn ensure_same_host(host: &DiscoveredLocalHost, options: &super::Options) -> any
         host.repository_id() == options.repository_id
             && (options.port == 0 || options.port == port),
         "a review host already serves this repository and scope with --repository-id {} on \
-         --port {port}. Run the command again with these values to reuse it.",
+         --port {port}. Run the command again with these values to reuse it, or stop that \
+         host as docs/review-host.md in the Provenance repository says.",
         host.repository_id()
     );
     Ok(())

@@ -105,8 +105,10 @@ A Question is answered only when the answer covers all of it. If an answer settl
 a Question, land that part, leave the Question open, and narrow its text to what remains.
 
 Before you hand off, read the tree as a builder would: open the anchor's review page, or
-read the anchor's requirement document, and read every statement and description in order. Fix a description that retells history,
-describes another record's behaviour, or lists open items before you hand off.
+read the anchor's requirement document with the command in the Provenance section of
+`AGENTS.md`, and read every statement and description in order. Fix a description that
+retells history, describes another record's behaviour, or lists open items before you hand
+off.
 
 ## Mode 1: Chart
 
@@ -377,8 +379,8 @@ change the artifact's kind.
    cites only a Requirement, the installed binary is out of date; see "Check your CLI".
 
    Only an approved Resolution can produce an active Rule or answer a Question. While the
-   Resolution is proposed, keep the Rule in review, and answer the Question without a
-   citation of the Resolution. Name the Resolution in the answer text.
+   Resolution is proposed, keep the Rule in review with `--status review`, and answer the
+   Question without a citation of the Resolution. Name the Resolution in the answer text.
 
    ```sh
    provenance rules create --scope <scope> \

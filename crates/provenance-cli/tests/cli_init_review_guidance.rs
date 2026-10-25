@@ -97,4 +97,12 @@ fn init_guidance_says_what_a_description_holds() {
         prose.contains("History goes on the record's thread. Unknowns go in fog or a Question."),
         "{agents}"
     );
+    assert!(
+        prose.contains(
+            "Before you hand off, read a Requirement and every record under it in order, as a \
+             builder would: `provenance requirements <requirement-id> document get --scope \
+             default`."
+        ),
+        "{agents}"
+    );
 }

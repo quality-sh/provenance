@@ -144,7 +144,7 @@ fn a_detached_host_outlives_the_command_and_is_reused() {
 
 #[test]
 /// A host that cannot start is reported with its own error, not as a timeout.
-#[verifies("rule_review_detach_outlives_caller", examples)]
+#[verifies("rule_review_detach_failed_start_leaves_no_host", examples)]
 fn a_detached_host_that_cannot_bind_reports_the_cause() {
     let repo = repository();
     let cache = UserCache::isolated();

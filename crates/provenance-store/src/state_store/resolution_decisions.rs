@@ -110,16 +110,10 @@ fn ensure_approved(
     ))
 }
 
-/// The wire word of a Resolution status.
-const fn status_word(status: &ResolutionStatus) -> &'static str {
-    match status {
-        ResolutionStatus::Draft => "draft",
-        ResolutionStatus::Review => "review",
-        ResolutionStatus::Proposed => "proposed",
-        ResolutionStatus::Approved => "approved",
-        ResolutionStatus::Rejected => "rejected",
-        ResolutionStatus::Revised => "revised",
-        ResolutionStatus::Superseded => "superseded",
-        ResolutionStatus::Abandoned => "abandoned",
+/// The wire word of a Resolution status, read from its serde name.
+fn status_word(status: &ResolutionStatus) -> String {
+    match serde_json::to_value(status) {
+        Ok(serde_json::Value::String(word)) => word,
+        _ => format!("{status:?}"),
     }
 }
