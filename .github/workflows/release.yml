@@ -57,7 +57,7 @@ jobs:
             (( SECONDS < deadline )) || { echo "::error::timed out waiting for CI."; exit 1; }
             sleep 30
           done
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
       # The release version check reads full Cargo metadata for the Rust
@@ -115,7 +115,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-socket-firewall
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
@@ -269,7 +269,7 @@ jobs:
       - name: Restore composed review assets
         shell: bash
         run: tar -xzf target/review-artifact/review-composed.tar.gz
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           # Cargo generates the archive checksum. Keep this version fixed so
           # a later rerun can compare the same bytes with crates.io.
