@@ -13,7 +13,6 @@ use std::fmt::Write as _;
 mod schema;
 
 #[provenance_macros::rule("rule_create_help_accepted_fields")]
-#[provenance_macros::rule("rule_action_help_lists_record_type_fields")]
 pub(super) fn target(
     mut command: clap::Command,
     action: Option<crate::invocation::grammar::TargetVerb>,

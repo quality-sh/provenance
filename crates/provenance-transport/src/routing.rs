@@ -185,7 +185,6 @@ pub fn invalid(field: Option<&str>) -> ErasedFailure {
 
 /// A required control that the request did not carry reports `required`,
 /// so a caller can tell an absent header from a malformed one.
-#[provenance_macros::rule("rule_missing_if_match_is_required")]
 pub fn missing(field: &str) -> ErasedFailure {
     ErasedFailure::new(
         None,

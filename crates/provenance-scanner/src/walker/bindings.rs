@@ -92,10 +92,13 @@ fn parse_script_call(
     in_block_comment: bool,
 ) -> Result<Option<ParsedBinding>, MalformedBinding> {
     if let Some(rest) = call_arguments(line, in_block_comment, "verifies") {
-        // Only a quoted Rule id makes a binding site. The helper's own
-        // declaration, `function verifies(ruleId, method)`, is not one.
-        let Some((rule_id, after_id)) = quoted_literal(rest) else {
+        // The helper's own declaration, `function verifies(ruleId, method)`,
+        // is not a binding site. Every other call must read as one.
+        if declares_verifies(line) {
             return Ok(None);
+        }
+        let Some((rule_id, after_id)) = quoted_literal(rest) else {
+            return Err(malformed_verifies(line));
         };
         let Some(method) = argument_after_comma(after_id).and_then(parse_method) else {
             return Err(malformed_verifies(line));
@@ -117,6 +120,12 @@ fn parse_script_call(
         return Ok(None);
     };
     Ok((!payload.trim_start().starts_with('{')).then(|| one_line(rule_id, None)))
+}
+
+fn declares_verifies(line: &str) -> bool {
+    let line = line.trim_start();
+    let line = line.strip_prefix("export ").unwrap_or(line).trim_start();
+    line.starts_with("function verifies(")
 }
 
 fn parse_rule_call(line: &str, in_block_comment: bool) -> Option<ParsedBinding> {

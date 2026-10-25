@@ -26,21 +26,13 @@ impl RepoContext {
 
     /// The manifest scope the caller selected, with the manifest. Refuses
     /// before any read when the repository is not initialized or when the
-    /// manifest does not declare the scope, so a mistyped scope never reads
-    /// as an empty one.
-    #[provenance_macros::rule("rule_coverage_refuses_undeclared_scope")]
+    /// manifest does not declare the scope.
     pub fn declared_scope(
         &self,
     ) -> anyhow::Result<(provenance_core::Scope, provenance_core::Manifest)> {
         let store = self.open_graph()?;
-        let selected = self.scope.as_str();
         provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
-            let scope = manifest
-                .scopes
-                .iter()
-                .find(|scope| scope.id.as_str() == selected)
-                .cloned()
-                .ok_or_else(|| unknown_scope(selected, &manifest))?;
+            let scope = declared_scope_in(&manifest, &self.scope)?.clone();
             Ok((scope, manifest))
         })
         .map_err(|error| initialization_hint(&self.repo, error))
@@ -71,15 +63,27 @@ impl RepoContext {
     }
 }
 
-/// The refusal for a scope the manifest does not declare.
-pub fn unknown_scope(scope: &str, manifest: &provenance_core::Manifest) -> anyhow::Error {
-    let declared = manifest
+/// The manifest scope with the selected id. A scope that the manifest does
+/// not declare is refused with the declared scopes, so a mistyped scope never
+/// reads as an empty one.
+#[provenance_macros::rule("rule_graph_report_refuses_undeclared_scope")]
+pub fn declared_scope_in<'a>(
+    manifest: &'a provenance_core::Manifest,
+    selected: &str,
+) -> anyhow::Result<&'a provenance_core::Scope> {
+    manifest
         .scopes
         .iter()
-        .map(|scope| scope.id.as_str())
-        .collect::<Vec<_>>()
-        .join(", ");
-    anyhow::anyhow!("unknown scope `{scope}`; declared scopes: {declared}")
+        .find(|scope| scope.id.as_str() == selected)
+        .ok_or_else(|| {
+            let declared = manifest
+                .scopes
+                .iter()
+                .map(|scope| scope.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            anyhow::anyhow!("unknown scope `{selected}`; declared scopes: {declared}")
+        })
 }
 
 /// A command ran inside a directory of an initialized repository instead of

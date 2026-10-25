@@ -1,5 +1,7 @@
 use crate::output;
-use crate::repo_context::{initialization_hint, is_not_initialized, unknown_scope, RepoContext};
+use crate::repo_context::{
+    declared_scope_in, initialization_hint, is_not_initialized, RepoContext,
+};
 use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
@@ -68,13 +70,7 @@ impl RepositoryCheckPort {
         let result =
             provenance_store::layout::with_initialized_graph(store.layout(), |mut manifest| {
                 if let Some(scope) = scope {
-                    if !manifest
-                        .scopes
-                        .iter()
-                        .any(|candidate| candidate.id.as_str() == scope)
-                    {
-                        return Err(unknown_scope(scope, &manifest));
-                    }
+                    declared_scope_in(&manifest, scope)?;
                     manifest
                         .scopes
                         .retain(|candidate| candidate.id.as_str() == scope);
@@ -105,13 +101,7 @@ impl RepositoryCheckPort {
         let (diagnostics, context) =
             provenance_store::layout::with_initialized_graph(store.layout(), |mut manifest| {
                 if let Some(scope) = scope {
-                    if !manifest
-                        .scopes
-                        .iter()
-                        .any(|candidate| candidate.id.as_str() == scope)
-                    {
-                        return Err(unknown_scope(scope, &manifest));
-                    }
+                    declared_scope_in(&manifest, scope)?;
                     manifest
                         .scopes
                         .retain(|candidate| candidate.id.as_str() == scope);
@@ -192,18 +182,10 @@ impl RepositoryCheckPort {
             .binding_findings;
         let (warnings, governed_finding_count) =
             provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
-                let scopes = manifest
-                    .scopes
-                    .iter()
-                    .filter(|scope| {
-                        selected_scope.is_none_or(|selected| scope.id.as_str() == selected)
-                    })
-                    .collect::<Vec<_>>();
-                if let Some(scope) = selected_scope {
-                    if scopes.is_empty() {
-                        return Err(unknown_scope(scope, &manifest));
-                    }
-                }
+                let scopes = match selected_scope {
+                    Some(selected) => vec![declared_scope_in(&manifest, selected)?],
+                    None => manifest.scopes.iter().collect(),
+                };
                 let mut warnings = Vec::new();
                 let mut governed_finding_count = 0;
                 for scope in scopes {

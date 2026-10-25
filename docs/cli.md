@@ -120,8 +120,12 @@ string-typed field always supplies text. Arrays and objects can also come from o
 standard input with `--stdin`, which fills only the body fields that no flag
 assigned and refuses a field that a flag already set. Path identity comes from
 the command address. Query parameters and `If-Match` controls use the flags
-that the catalog declares. The `--if-match` option for a guarded record update
-must contain `data.edit.etag` from the latest member read, unchanged.
+that the catalog declares. Every review record update takes its guard as
+`--if-match`, which must contain `data.edit.etag` from the latest member read,
+unchanged. Requirement, Topic, and Question updates require it. Source, Rule,
+Resolution, Domain, and Boundary updates accept it, and write without a check
+when it is absent. No update accepts the guard as an `--expected-etag` flag or
+as an `expected_etag` body field.
 
 `provenance api` shows at most 50 routes by default. Use `--filter <text>` to
 select routes or `--limit <number>` to increase the bound. Use `--format json`

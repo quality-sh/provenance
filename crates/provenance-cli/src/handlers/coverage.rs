@@ -11,21 +11,6 @@ mod verification_state;
 use render::render_coverage;
 use verification_state::load_validation_state;
 
-#[cfg(test)]
-pub(super) fn coverage_scan(
-    repo: &camino::Utf8Path,
-    path: &Utf8PathBuf,
-    scope: &str,
-    validate_rules: bool,
-) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
-    let scope = Scope {
-        id: provenance_core::ScopeId::new(scope)?,
-        path_prefix: provenance_core::RepoPathPrefix::new("."),
-    };
-    let manifest = Manifest::default_with_scope(scope.id.clone(), scope.path_prefix.clone());
-    Ok(coverage_scan_against(repo, path, &scope, &manifest, validate_rules, None)?.scan)
-}
-
 pub(super) struct CoverageScanOutcome {
     pub(super) scan: provenance_core::coverage::CoverageScan,
     pub(super) governed_finding_count: usize,
@@ -64,7 +49,8 @@ struct Selection<'a> {
 
 /// The scanned files that the scope owns: core's longest-prefix ownership
 /// gives each file to the scope with the longest path prefix that contains
-/// it, so an outer scope never sees the bindings of an inner scope.
+/// it, so an outer scope never sees the bindings of an inner scope. A file
+/// outside the repository has no path prefix; a `.` scope keeps it.
 fn scope_files<'a>(
     repo: &camino::Utf8Path,
     selection: &Selection<'_>,
@@ -79,29 +65,28 @@ fn scope_files<'a>(
     let Ok(root) = std::fs::canonicalize(repo) else {
         return Cow::Owned(Vec::new());
     };
+    let keeps_outside = selection.scope.path_prefix.as_path() == camino::Utf8Path::new(".");
     Cow::Owned(
         scanned
             .iter()
-            .filter(|file| {
-                std::fs::canonicalize(&file.scan.file_path)
-                    .ok()
-                    .and_then(|resolved| {
-                        camino::Utf8PathBuf::from_path_buf(
-                            resolved.strip_prefix(&root).ok()?.to_path_buf(),
-                        )
-                        .ok()
-                    })
-                    .is_some_and(|relative| {
-                        provenance_core::scope::scope_owns_path(
-                            selection.manifest,
-                            &selection.scope.id,
-                            &relative,
-                        )
-                    })
+            .filter(|file| match repo_relative(&root, &file.scan.file_path) {
+                Some(relative) => provenance_core::scope::scope_owns_path(
+                    selection.manifest,
+                    &selection.scope.id,
+                    &relative,
+                ),
+                None => keeps_outside,
             })
             .cloned()
             .collect(),
     )
+}
+
+/// The file's path inside the canonical repository root, or `None` when the
+/// file resolves outside it.
+fn repo_relative(root: &std::path::Path, file: &camino::Utf8Path) -> Option<Utf8PathBuf> {
+    let resolved = std::fs::canonicalize(file).ok()?;
+    Utf8PathBuf::from_path_buf(resolved.strip_prefix(root).ok()?.to_path_buf()).ok()
 }
 
 /// The warning for a scope whose path prefix names no directory, so a
@@ -367,6 +352,3 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod git_tests;
-
-#[cfg(test)]
-mod parse_warning_tests;

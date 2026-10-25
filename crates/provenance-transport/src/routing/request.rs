@@ -199,11 +199,13 @@ fn bind_headers(
     object: &mut Map<String, Value>,
 ) -> Result<(), ErasedFailure> {
     for binding in &definition.registration.controls.headers {
-        let raw = headers
-            .get(binding.name)
-            .ok_or_else(|| missing(binding.name))?
-            .to_str()
-            .map_err(|_| invalid(Some(binding.name)))?;
+        let Some(raw) = headers.get(binding.name) else {
+            if binding.required {
+                return Err(missing(binding.name));
+            }
+            continue;
+        };
+        let raw = raw.to_str().map_err(|_| invalid(Some(binding.name)))?;
         let raw = if binding.trim_quotes {
             raw.trim_matches('"')
         } else {
