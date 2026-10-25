@@ -150,9 +150,9 @@ async fn history_skips_a_shard_version_that_does_not_parse() {
     assert_eq!(versions[1].changed_fields, ["description"]);
 }
 
-/// Bob changes req_a on main. Alice changes req_a and req_h on feature, so
-/// the req_a lines conflict and the shard differs from both parents after
-/// the merge. Returns the creation and bob's commit.
+/// Bob changes `req_a` on main. Alice changes `req_a` and `req_h` on
+/// feature, so the `req_a` lines conflict and the shard differs from both
+/// parents after the merge. Returns the creation and bob's commit.
 fn conflicting_branches(temp: &tempfile::TempDir, store: &StateStore) -> (String, String) {
     for id in [
         "req_b", "req_c", "req_d", "req_e", "req_f", "req_g", "req_h",
@@ -163,13 +163,23 @@ fn conflicting_branches(temp: &tempfile::TempDir, store: &StateStore) -> (String
     git(temp, &["checkout", "-q", "-B", "main"]);
     git(temp, &["checkout", "-q", "-b", "feature"]);
     store
-        .save_requirement(save(store, json!({"statement":"The system stores records for alice."})))
+        .save_requirement(save(
+            store,
+            json!({"statement":"The system stores records for alice."}),
+        ))
         .unwrap();
-    save_record(store, "req_h", &json!({"description":"Alice describes req_h."}));
+    save_record(
+        store,
+        "req_h",
+        &json!({"description":"Alice describes req_h."}),
+    );
     commit_as(temp, "alice", "alice changes req_a and req_h");
     git(temp, &["checkout", "-q", "main"]);
     store
-        .save_requirement(save(store, json!({"statement":"The system stores records for bob."})))
+        .save_requirement(save(
+            store,
+            json!({"statement":"The system stores records for bob."}),
+        ))
         .unwrap();
     let bob = commit_as(temp, "bob", "bob changes req_a");
     (created, bob)
@@ -204,7 +214,10 @@ async fn merge_that_resolves_a_conflict_to_new_content_adds_one_version() {
         &["merge", "-q", "--no-edit", "-X", "ours", "feature"],
     );
     store
-        .save_requirement(save(&store, json!({"statement":"The system stores records for both."})))
+        .save_requirement(save(
+            &store,
+            json!({"statement":"The system stores records for both."}),
+        ))
         .unwrap();
     git_as(&temp, "merger", &["add", ".provenance/state"]);
     git_as(&temp, "merger", &["commit", "-q", "--amend", "--no-edit"]);

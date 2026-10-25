@@ -68,7 +68,11 @@ pub(super) fn file_versions(root: &Utf8Path, path: &Utf8Path) -> anyhow::Result<
         .iter()
         .map(|version| version.commit.as_str())
         .collect::<Vec<_>>();
-    let texts = read_blobs(root, &blob_names(&commits, &prefix, &relative), commits.len())?;
+    let texts = read_blobs(
+        root,
+        &blob_names(&commits, &prefix, &relative),
+        commits.len(),
+    )?;
     for (version, text) in versions.iter_mut().zip(texts) {
         version.text = text;
     }
