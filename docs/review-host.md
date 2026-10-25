@@ -56,7 +56,7 @@ Record actor and role fields do not authenticate a caller.
 While the host runs, it publishes its credential-free location through the
 [local host discovery protocol](local-host.md). If another live host already
 owns the repository and scope, the new host does not publish a record. It prints
-an error and exits with a failure code, after it has served for a short time. The bearer token is never in
+an error and exits with a failure code, after it starts serving. The bearer token is never in
 the registry. CLI commands ask the host layer for the verified endpoint before
 they add a review link. If no verified host is running, these writes explain
 how to start one.
@@ -71,8 +71,10 @@ For a non-Requirement record, the command uses graph reads to find the
 Requirement document that contains the record. The command gets a launch code
 from the running host and opens the record in the browser of the person. It
 prints the link without the code. With `--format json` the output is
-`{"review_url": "...", "opened": true}`. When the command does not open the
-browser, it prints the launch link and `"opened": false`. If the host cannot
+`{"review_url": "...", "opened": true}`. With `--no-open` the command does not
+open the browser, and prints the launch link and `"opened": false`. When a
+connected page has the link (`waiting` or `replaced`), the command prints the
+link without a code and `"opened": false`. If the host cannot
 issue a launch code, for example because this user cache has no launch key for
 the host, the command prints a warning on stderr. It then prints the link
 without a code and `"opened": false`, and exits 0. If no host is
@@ -455,10 +457,11 @@ CLI stops waiting, the host removes the request.
 A record in the open document is selected at once. Another Requirement opens
 only after the person saves or cancels the open drafts in the current document.
 Until then the page shows that a review link waits. After five seconds the CLI
-returns with `waiting` and tells on stderr that the open page has the link and
-shows the record when the person is ready. The page shows only the newest
-review link. A newer link replaces a waiting one, and the wait for the replaced
-link ends at once with `replaced`. The page acknowledges only the newer link.
+returns with `waiting`. It tells on stderr that a connected review page got the
+link, and that the person can open the printed URL if the page does not show
+it. The host cannot tell an open draft from a page that does not answer. A newer
+link replaces a waiting one, and the wait for the replaced link ends at once
+with `replaced`. The host accepts an acknowledgement only for the newer link.
 
 ## Notification loss and recovery
 

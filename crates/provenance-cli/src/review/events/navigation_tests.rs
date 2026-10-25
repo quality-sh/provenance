@@ -27,7 +27,7 @@ async fn a_link_without_a_page_reaches_no_page() {
 }
 
 #[tokio::test]
-/// Implementation aid: the newest page shows the link and only it can acknowledge.
+/// Implementation aid: the newest page gets the link and an older page cannot acknowledge it.
 async fn the_newest_page_acknowledges_the_link() {
     let navigation = navigation();
     let older = navigation.attach();
@@ -36,9 +36,8 @@ async fn the_newest_page_acknowledges_the_link() {
     let link = newer.links.recv().await.unwrap();
     assert_eq!(link.focus.as_deref(), Some("rule_example"));
     acknowledge(&older, &link);
-    acknowledge(&newer, &link);
 
-    assert_eq!(delivery.await.unwrap(), Delivery::Shown);
+    assert_eq!(delivery.await.unwrap(), Delivery::Waiting);
 }
 
 #[tokio::test]

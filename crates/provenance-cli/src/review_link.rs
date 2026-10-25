@@ -65,11 +65,11 @@ pub async fn print(
             },
             PageResult::Waiting => kept_output(
                 plain_link(host, &target),
-                "the open review page has the link and shows the record when the person is ready",
+                "a connected review page got the link, so no browser opens; open the printed URL if the page does not show it",
             ),
             PageResult::Replaced => kept_output(
                 plain_link(host, &target),
-                "a newer review link replaced this link in the open review page",
+                "a newer review link replaced this link in the open review page, so no browser opens",
             ),
             PageResult::NoPage => browser_output(host, &target, no_open),
         },
@@ -132,8 +132,8 @@ fn browser_output(host: &DiscoveredLocalHost, target: &ReviewTarget, no_open: bo
 }
 
 /// Prints the plain review link when a connected page has the link but does not show it.
-fn kept_output(plain: String, reason: &str) -> LinkOutput {
-    eprintln!("warning: {reason}, so no browser opens");
+fn kept_output(plain: String, warning: &str) -> LinkOutput {
+    eprintln!("warning: {warning}");
     LinkOutput {
         review_url: Some(plain),
         opened: Some(false),

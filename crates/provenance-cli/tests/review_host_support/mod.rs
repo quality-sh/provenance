@@ -360,6 +360,16 @@ impl BrowserRecorder {
         Some(page[start..end].replace("&amp;", "&"))
     }
 
+    /// Fails if the browser gets a page within the wait, so a late opener still counts.
+    pub fn expect_no_link(&self, wait: Duration) {
+        let deadline = std::time::Instant::now() + wait;
+        while std::time::Instant::now() < deadline {
+            assert_eq!(self.opened_link(), None, "the browser got a page");
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        assert_eq!(self.opened_link(), None, "the browser got a page");
+    }
+
     pub fn wait_for_link(&self, timeout: Duration) -> String {
         let deadline = std::time::Instant::now() + timeout;
         loop {

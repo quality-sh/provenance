@@ -8,8 +8,8 @@ use std::{
 };
 use tokio::sync::{mpsc, oneshot};
 
-/// A page acknowledges a shown record at once. A page that holds the link back, for example
-/// while a draft is open, must not hold the caller.
+/// A page acknowledges a shown record at once. A page that does not acknowledge, for example
+/// while a draft is open, must not block the caller.
 const ACKNOWLEDGEMENT_WAIT: Duration = Duration::from_secs(5);
 
 /// What happened to a review link that the host sent to a connected page.
@@ -18,7 +18,7 @@ const ACKNOWLEDGEMENT_WAIT: Duration = Duration::from_secs(5);
 pub(super) enum Delivery {
     /// The page showed the record and acknowledged it.
     Shown,
-    /// The page has the link and did not show it before the wait ended.
+    /// The page got the link and did not acknowledge it before the wait ended, for any reason.
     Waiting,
     /// A newer link reached the same page before this link was shown.
     Replaced,
