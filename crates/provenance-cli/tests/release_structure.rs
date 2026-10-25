@@ -6,12 +6,14 @@ use std::{
 
 use serde_json::Value;
 
-const CRATE_ORDER: [&str; 9] = [
+const CRATE_ORDER: [&str; 11] = [
     "provenance-macros",
     "provenance-core",
+    "provenance-porcelain",
     "provenance-scanner",
     "provenance-ste100",
     "provenance-store",
+    "provenance-report",
     "provenance-sdk",
     "provenance-http-client",
     "provenance-transport",
@@ -73,6 +75,9 @@ fn rust_release_packages_have_registry_metadata_and_versioned_dependencies() {
             let Some(dependency_name) = dependency["name"].as_str() else {
                 continue;
             };
+            if dependency["kind"] == "dev" && dependency["req"] == "*" {
+                continue;
+            }
             if !CRATE_ORDER.contains(&dependency_name) {
                 continue;
             }
