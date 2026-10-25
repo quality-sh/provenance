@@ -389,6 +389,7 @@ change the artifact's kind.
      --statement "<atomic behavioural obligation, in one clause>" \
      --description "<trigger, result, what the person sees, one example>" \
      --severity high \
+     --status review \
      --format json
    ```
 

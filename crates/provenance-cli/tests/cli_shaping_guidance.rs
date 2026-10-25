@@ -61,6 +61,10 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
         ),
         "{shaping}"
     );
+    assert!(
+        prose.contains("--severity high \\ --status review \\ --format json"),
+        "{shaping}"
+    );
 
     let writing = skill("provenance-grounded-writing");
     let prose = normalized(&writing);
