@@ -23,7 +23,7 @@ pub(super) struct ParsedBinding {
 
 /// A `verifies` site the scanner recognized but could not read: the message
 /// names what a well-formed site needs, so the walker can warn with the file
-/// and line instead of dropping the binding without a trace.
+/// and line instead of dropping the binding with no warning.
 pub(super) struct MalformedBinding(pub String);
 
 const VERIFIES_SHAPE: &str = "expected a quoted rule id and one method word: \
@@ -92,8 +92,10 @@ fn parse_script_call(
     in_block_comment: bool,
 ) -> Result<Option<ParsedBinding>, MalformedBinding> {
     if let Some(rest) = call_arguments(line, in_block_comment, "verifies") {
+        // Only a quoted Rule id makes a binding site. The helper's own
+        // declaration, `function verifies(ruleId, method)`, is not one.
         let Some((rule_id, after_id)) = quoted_literal(rest) else {
-            return Err(malformed_verifies(line));
+            return Ok(None);
         };
         let Some(method) = argument_after_comma(after_id).and_then(parse_method) else {
             return Err(malformed_verifies(line));

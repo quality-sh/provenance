@@ -219,8 +219,8 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
 - **Question status and method are first-class** — use `questions <id> update --if-match
   <etag> --status blocked_on_human` for the phase boundary, and `questions <id> update
   --if-match <etag> --method prototype` if an existing Question has the wrong method. Every
-  Question update carries the current `data.edit.etag` from `questions <id> get`. Keep the Discussion Message because the
-  Proposal IDs are not Question link targets.
+  Question update carries the current `data.edit.etag` from `questions <id> get`. Keep the
+  Discussion Message because the Proposal IDs are not Question link targets.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an
   assertion only when the exact proposal suggestion has positive owned evidence and no
   contested claim or blocking adjudication. `dispositions` is the sole authority for

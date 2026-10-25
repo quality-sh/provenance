@@ -33,10 +33,7 @@ async fn main() -> anyhow::Result<()> {
             .then(|| catalog_cli::refusal::json_refusal(&error))
             .flatten()
         {
-            Some(refusal) => {
-                eprintln!("Error: {}", serde_json::to_string(&refusal)?);
-                std::process::exit(1);
-            }
+            Some(refusal) => catalog_cli::refusal::exit_with_json(&refusal),
             None => Err(error),
         },
     }

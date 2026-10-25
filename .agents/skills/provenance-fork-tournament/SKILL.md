@@ -2,7 +2,7 @@
 name: provenance-fork-tournament
 description: Run a fork tournament when a shaping session hits a genuine design fork — mutually exclusive directions, expensive to reverse, and the human's preference unknowable without concrete artifacts to react to. Implements the `prototype` resolution method from docs/shaping.md - spawn stance-based agents producing competing artifacts as proposals (phase 1, end session), then present them for human disposal and land the decision as a Resolution (phase 2).
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:97193a6f497e5267 -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:e8f8197c8a760c8b -->
 
 # Fork tournament (`prototype`)
 
@@ -220,8 +220,8 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
 - **Question status and method are first-class** — use `questions <id> update --if-match
   <etag> --status blocked_on_human` for the phase boundary, and `questions <id> update
   --if-match <etag> --method prototype` if an existing Question has the wrong method. Every
-  Question update carries the current `data.edit.etag` from `questions <id> get`. Keep the Discussion Message because the
-  Proposal IDs are not Question link targets.
+  Question update carries the current `data.edit.etag` from `questions <id> get`. Keep the
+  Discussion Message because the Proposal IDs are not Question link targets.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an
   assertion only when the exact proposal suggestion has positive owned evidence and no
   contested claim or blocking adjudication. `dispositions` is the sole authority for

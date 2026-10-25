@@ -24,9 +24,11 @@ it in the same change.
   Git supplies record history and change evidence. Proposal, Disposition, Withdrawal,
   and Discussion records hold review state.
 - Before you ask a person to review a record, start the review host if it is not running.
-  The host serves until you stop it. Start it in the background and send its output to a file:
-  `mkdir -p .provenance/cache && {command} review --repo . --repository-id local --scope {selected_scope} --no-open > .provenance/cache/review-host.log 2>&1 &`.
-  Keep the process ID that the shell prints. When the review ends, stop the host with `kill <pid>`.
+  The host serves until you stop it. In a POSIX shell, this line starts it in the background,
+  sends its output to a file, and prints its process ID:
+  `mkdir -p .provenance/cache && nohup {command} review --repo . --repository-id local --scope {selected_scope} --no-open > .provenance/cache/review-host.log 2>&1 & echo $!`
+  Keep that process ID. Before you send a review link, wait until the log shows the startup
+  line of the host, a JSON object with `endpoint`. When the review ends, stop the host with `kill <pid>`.
 - Open the record for the person with `{command} <record-id> --scope {selected_scope} --review-link`.
   The command opens the review page in the browser of the person. If it cannot open the
   browser, it prints a link. Give the person that link. Never give the person a record ID.
@@ -159,6 +161,7 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 #[rule("rule_init_statement_claim_limit")]
 #[rule("rule_init_canonical_write_path")]
 #[rule("rule_init_guidance_selected_scope")]
+#[rule("rule_init_guidance_background_review_host")]
 fn instructions(invocation: &Invocation, scope: &str) -> String {
     INSTRUCTIONS
         .replace("{command}", invocation.0)

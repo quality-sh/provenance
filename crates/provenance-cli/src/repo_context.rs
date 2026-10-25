@@ -24,19 +24,24 @@ impl RepoContext {
         Store::open_required(&self.repo).map_err(|error| initialization_hint(&self.repo, error))
     }
 
-    /// The manifest scope the caller selected. Refuses before any read when
-    /// the repository is not initialized or when the manifest does not
-    /// declare the scope, so a mistyped scope never reads as an empty one.
-    pub fn declared_scope(&self) -> anyhow::Result<provenance_core::Scope> {
+    /// The manifest scope the caller selected, with the manifest. Refuses
+    /// before any read when the repository is not initialized or when the
+    /// manifest does not declare the scope, so a mistyped scope never reads
+    /// as an empty one.
+    #[provenance_macros::rule("rule_coverage_refuses_undeclared_scope")]
+    pub fn declared_scope(
+        &self,
+    ) -> anyhow::Result<(provenance_core::Scope, provenance_core::Manifest)> {
         let store = self.open_graph()?;
         let selected = self.scope.as_str();
         provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
-            manifest
+            let scope = manifest
                 .scopes
                 .iter()
                 .find(|scope| scope.id.as_str() == selected)
                 .cloned()
-                .ok_or_else(|| unknown_scope(selected, &manifest))
+                .ok_or_else(|| unknown_scope(selected, &manifest))?;
+            Ok((scope, manifest))
         })
         .map_err(|error| initialization_hint(&self.repo, error))
     }
@@ -110,6 +115,7 @@ pub fn is_not_initialized(error: &anyhow::Error) -> bool {
 
 /// Replaces a not-initialized refusal with the nested-repository refusal
 /// when an ancestor directory holds an initialized graph.
+#[provenance_macros::rule("rule_command_names_enclosing_repository")]
 pub fn initialization_hint(repo: &camino::Utf8Path, error: anyhow::Error) -> anyhow::Error {
     if error
         .downcast_ref::<provenance_store::layout::GraphNotInitialized>()

@@ -3,7 +3,7 @@ use crate::output::{self, ReportFormat};
 use crate::repo_context::RepoContext;
 use anyhow::Context;
 use camino::Utf8PathBuf;
-use provenance_core::Scope;
+use provenance_core::{Manifest, Scope};
 use std::borrow::Cow;
 
 mod render;
@@ -22,7 +22,8 @@ pub(super) fn coverage_scan(
         id: provenance_core::ScopeId::new(scope)?,
         path_prefix: provenance_core::RepoPathPrefix::new("."),
     };
-    Ok(coverage_scan_against(repo, path, &scope, validate_rules, None)?.scan)
+    let manifest = Manifest::default_with_scope(scope.id.clone(), scope.path_prefix.clone());
+    Ok(coverage_scan_against(repo, path, &scope, &manifest, validate_rules, None)?.scan)
 }
 
 pub(super) struct CoverageScanOutcome {
@@ -34,33 +35,48 @@ fn coverage_scan_against(
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
     scope: &Scope,
+    manifest: &Manifest,
     validate_rules: bool,
     baseline: Option<&camino::Utf8Path>,
 ) -> anyhow::Result<CoverageScanOutcome> {
     let scanned = provenance_scanner::scan_path_with_content(path)?;
-    coverage_scan_from_scanned_against(repo, path, scope, validate_rules, &scanned, baseline)
+    let selection = Selection { scope, manifest };
+    coverage_scan_from_scanned_against(repo, path, &selection, validate_rules, &scanned, baseline)
 }
 
 pub(super) fn coverage_scan_from_scanned(
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
     scope: &Scope,
+    manifest: &Manifest,
     scanned: &[provenance_scanner::FileScanWithContent],
 ) -> anyhow::Result<CoverageScanOutcome> {
-    coverage_scan_from_scanned_against(repo, path, scope, true, scanned, None)
+    let selection = Selection { scope, manifest };
+    coverage_scan_from_scanned_against(repo, path, &selection, true, scanned, None)
 }
 
-/// The scanned files that belong to the scope: those under the scope's path
-/// prefix. A prefix of `.` owns every scanned file.
+/// The selected scope and the manifest that declares it. The manifest
+/// decides which scanned files the scope owns.
+struct Selection<'a> {
+    scope: &'a Scope,
+    manifest: &'a Manifest,
+}
+
+/// The scanned files that the scope owns: core's longest-prefix ownership
+/// gives each file to the scope with the longest path prefix that contains
+/// it, so an outer scope never sees the bindings of an inner scope.
 fn scope_files<'a>(
     repo: &camino::Utf8Path,
-    scope: &Scope,
+    selection: &Selection<'_>,
     scanned: &'a [provenance_scanner::FileScanWithContent],
 ) -> Cow<'a, [provenance_scanner::FileScanWithContent]> {
-    if scope.path_prefix.as_path() == camino::Utf8Path::new(".") {
-        return Cow::Borrowed(scanned);
+    if let [only] = selection.manifest.scopes.as_slice() {
+        if only.id == selection.scope.id && only.path_prefix.as_path() == camino::Utf8Path::new(".")
+        {
+            return Cow::Borrowed(scanned);
+        }
     }
-    let Ok(root) = std::fs::canonicalize(repo.join(scope.path_prefix.as_path())) else {
+    let Ok(root) = std::fs::canonicalize(repo) else {
         return Cow::Owned(Vec::new());
     };
     Cow::Owned(
@@ -68,11 +84,44 @@ fn scope_files<'a>(
             .iter()
             .filter(|file| {
                 std::fs::canonicalize(&file.scan.file_path)
-                    .is_ok_and(|resolved| resolved.starts_with(&root))
+                    .ok()
+                    .and_then(|resolved| {
+                        camino::Utf8PathBuf::from_path_buf(
+                            resolved.strip_prefix(&root).ok()?.to_path_buf(),
+                        )
+                        .ok()
+                    })
+                    .is_some_and(|relative| {
+                        provenance_core::scope::scope_owns_path(
+                            selection.manifest,
+                            &selection.scope.id,
+                            &relative,
+                        )
+                    })
             })
             .cloned()
             .collect(),
     )
+}
+
+/// The warning for a scope whose path prefix names no directory, so a
+/// mistyped prefix does not read as a scope with no bindings.
+#[provenance_macros::rule("rule_coverage_names_missing_scope_directory")]
+fn missing_scope_directory(
+    repo: &camino::Utf8Path,
+    scope: &Scope,
+) -> Option<provenance_core::coverage::ValidationWarning> {
+    let prefix = scope.path_prefix.as_path();
+    (!repo.join(prefix).is_dir()).then(|| provenance_core::coverage::ValidationWarning {
+        rule_id: String::new(),
+        file_path: Some(prefix.to_path_buf()),
+        line: None,
+        message: format!(
+            "scope `{}` has path prefix `{prefix}`, which names no directory in the repository",
+            scope.id.as_str()
+        ),
+        binding_finding: false,
+    })
 }
 
 /// Whether the scanned path contains every file of the scope, so an active
@@ -88,12 +137,13 @@ fn scan_covers_scope(repo: &camino::Utf8Path, scope: &Scope, path: &camino::Utf8
 fn coverage_scan_from_scanned_against(
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
-    scope: &Scope,
+    selection: &Selection<'_>,
     validate_rules: bool,
     scanned: &[provenance_scanner::FileScanWithContent],
     baseline: Option<&camino::Utf8Path>,
 ) -> anyhow::Result<CoverageScanOutcome> {
-    let scanned = scope_files(repo, scope, scanned);
+    let scope = selection.scope;
+    let scanned = scope_files(repo, selection, scanned);
     let scanned = scanned.as_ref();
     let scans = scanned
         .iter()
@@ -102,6 +152,7 @@ fn coverage_scan_from_scanned_against(
     let commit = scan_commit(repo, &scans);
     let validation = load_validation_state(repo, scope.id.as_str(), &scans, validate_rules)?;
     let mut warnings = validation.warnings;
+    warnings.extend(missing_scope_directory(repo, scope));
     let mut governed_finding_count = 0;
     if validate_rules {
         let completeness = if scan_covers_scope(repo, scope, path) {
@@ -274,16 +325,23 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
             format,
             output,
         } => {
-            let scope = RepoContext::new(repo.clone(), scope).declared_scope()?;
+            let (scope, manifest) = RepoContext::new(repo.clone(), scope).declared_scope()?;
             let policy = provenance_store::settings::Settings::load(
                 &provenance_store::layout::ProvenanceLayout::new(&repo),
             )?
             .coverage
             .binding_findings;
             let outcome = if let Some(baseline) = baseline.as_deref() {
-                coverage_scan_against(&repo, &path, &scope, validate_rules, Some(baseline))?
+                coverage_scan_against(
+                    &repo,
+                    &path,
+                    &scope,
+                    &manifest,
+                    validate_rules,
+                    Some(baseline),
+                )?
             } else {
-                coverage_scan_against(&repo, &path, &scope, validate_rules, None)?
+                coverage_scan_against(&repo, &path, &scope, &manifest, validate_rules, None)?
             };
             if let Some(output_path) = output {
                 let rendered = render_coverage(format, &outcome.scan)?;

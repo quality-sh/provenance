@@ -128,9 +128,24 @@ select routes or `--limit <number>` to increase the bound. Use `--format json`
 only when you need all request and response schemas.
 
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
-records in `data.items`. With `--format json`, a refused command prints one
-`{error,meta}` object on standard error after the `Error: ` prefix and exits
-with code 1. When the CLI knows the next command to run, `error.hint` names it.
+records in `data.items`.
+
+With `--format json`, a catalog route, `provenance api`, a record read, search,
+or action, and a Discussion command print a refusal from the operation as one
+`{error,meta}` object. The object is the only line on standard error, it has no
+prefix, and the command exits with code 1. When the CLI knows the next command
+to run, `error.hint` names it.
+
+These errors stay text after `Error: ` and exit with code 1, also with
+`--format json`:
+
+- A graph that is not initialized, and a command that runs in a directory
+  inside an initialized repository.
+- File and I/O errors.
+- Every error from a builtin command, such as `init`, `check`, `coverage scan`,
+  `gaps`, `health`, `orphans`, and `export`.
+
+A usage error prints clap's text and exits with code 2.
 
 ## Product commands
 

@@ -2,7 +2,8 @@
 //!
 //! A refusal from the local host reaches the CLI as a typed error. In text
 //! mode the error prints as before. In JSON mode the CLI prints one
-//! `{error,meta}` object and puts the recovery hint in `error.hint`.
+//! `{error,meta}` object with no `Error: ` prefix and puts the recovery hint
+//! in `error.hint`.
 
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_porcelain::action::ActionError;
@@ -62,6 +63,14 @@ pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
         return Some(envelope(action_error(action), &action.to_string()));
     }
     None
+}
+
+/// Prints the refusal object as the only line on standard error, with no
+/// `Error: ` prefix, so a JSON caller can parse standard error, and exits 1.
+#[provenance_macros::rule("rule_cli_json_refusal_object")]
+pub fn exit_with_json(refusal: &Value) -> ! {
+    eprintln!("{refusal}");
+    std::process::exit(1);
 }
 
 fn envelope(mut object: Map<String, Value>, message: &str) -> Value {

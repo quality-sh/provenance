@@ -25,8 +25,8 @@ pub(super) fn resolve(collection: &str, supplied: &[String]) -> anyhow::Result<R
     resolve_in(collection, supplied, None)
 }
 
-/// Resolves an address and words the unknown-address hint for the caller's
-/// repository and scope when they are known.
+/// Resolves an address. When the caller's repository and scope are known,
+/// the unknown-address hint names them.
 pub(super) fn resolve_in(
     collection: &str,
     supplied: &[String],

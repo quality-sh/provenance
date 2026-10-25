@@ -10,6 +10,7 @@ use provenance_porcelain::get::View;
 mod api;
 mod discussion;
 pub mod grammar;
+mod help_kind;
 use grammar::{
     ApiArgs, ApiCommand, CatalogArgs, Delivery, DiscussionsArgs, DiscussionsCommand,
     DiscussionsRoute, RootWord, SearchArgs, SearchCommand, TargetArgs, TargetVerb,
@@ -130,7 +131,7 @@ impl Invocation {
                 let kind = selection
                     .get_one::<String>("record_type")
                     .and_then(|kind| NodeType::parse(kind).ok())
-                    .or_else(|| resolve_record_kind(&selection, action));
+                    .or_else(|| help_kind::resolve_record_kind(&selection, action));
                 catalog_cli::print_target_help(command, action, kind)?;
                 std::process::exit(0);
             }
@@ -299,34 +300,4 @@ impl TargetInvocation {
         )
         .await
     }
-}
-
-/// The kind of an existing target, read from the repository so that action
-/// help lists only that record type's fields. Help never fails on this
-/// read: without a repository, a record, or a runtime the kind stays unknown.
-fn resolve_record_kind(
-    selection: &clap::ArgMatches,
-    action: Option<TargetVerb>,
-) -> Option<NodeType> {
-    let Some(TargetVerb::Action(action)) = action else {
-        return None;
-    };
-    if action == Action::Create
-        || !provenance_store::operations::catalog::TargetAction::RECORD.contains(&action)
-    {
-        return None;
-    }
-    let target = selection.get_one::<String>("target")?.clone();
-    let repo = selection.get_one::<String>("repo")?;
-    let scope = selection.get_one::<String>("scope")?;
-    let handle = tokio::runtime::Handle::try_current().ok()?;
-    if handle.runtime_flavor() != tokio::runtime::RuntimeFlavor::MultiThread {
-        return None;
-    }
-    let host = RepoContext::new(repo.as_str(), scope.as_str())
-        .local_host()
-        .ok()?;
-    tokio::task::block_in_place(|| handle.block_on(host.target_route(action, &target, None)))
-        .ok()
-        .map(|route| route.kind)
 }
