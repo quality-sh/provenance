@@ -32,6 +32,10 @@ pub enum WriteFailure {
     ApprovalEvidenceRequired {
         message: String,
     },
+    ResolutionNotApproved {
+        resolution_id: String,
+        message: String,
+    },
     RequirementEditConflict {
         current_etag: String,
     },

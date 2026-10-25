@@ -76,7 +76,9 @@ fn managed_guidance_carries_the_selected_scope_on_every_review_command() {
     let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
 
     for line in [
-        "provenance <record-id> --scope app --review-link`",
+        "provenance review --repo . --repository-id local --scope app --detach --no-open`",
+        "provenance review --repo . --repository-id local --scope app --detach`",
+        "provenance <record-id> --scope app --review-link --format json`",
         "provenance <record-id> --scope app --review-link --no-open --format json`",
         "provenance <record-id> --scope app --view review`",
         "provenance <requirement-id> --scope app --view review --follow --format json`",
@@ -91,20 +93,24 @@ fn managed_guidance_carries_the_selected_scope_on_every_review_command() {
 
 #[test]
 #[verifies("rule_init_guidance_background_review_host", examples)]
-fn managed_guidance_runs_the_review_host_as_a_process_the_agent_can_stop() {
+fn managed_guidance_runs_one_shared_review_host_that_sessions_reuse() {
     let directory = tempfile::tempdir().unwrap();
     init(directory.path(), "default");
     let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
     let words = agents.split_whitespace().collect::<Vec<_>>().join(" ");
 
     for text in [
-        "start the review host",
-        "prints its process ID",
-        "Keep that process ID",
-        "stop the host",
+        "start or reuse the review host",
+        "--detach --no-open`",
+        "One host serves the repository and scope for all sessions.",
+        "It keeps running after the command returns, and later sessions reuse it, so leave it running.",
     ] {
         assert!(words.contains(text), "missing {text}\n{agents}");
     }
+    for text in ["`kill", "`pid`", "stop the host"] {
+        assert!(!words.contains(text), "{text}\n{agents}");
+    }
+    assert!(!words.contains("nohup"), "{agents}");
 }
 
 #[test]

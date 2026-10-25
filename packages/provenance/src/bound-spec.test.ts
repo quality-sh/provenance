@@ -649,8 +649,13 @@ test("an active Rule reports the store refusal for a proposed Resolution", async
 
   await assert.rejects(apply(provenance.build(parent.rules(decision))), (error: unknown) => {
     assert.ok(error instanceof OperationError);
-    assert.equal(error.failure.error.kind, "invalid_update");
-    assert.equal(error.message, "invalid_update");
+    const failure = error.failure.error;
+    assert.equal(failure.kind, "resolution_not_approved");
+    assert.equal(failure.kind === "resolution_not_approved" ? failure.resolution_id : undefined, "res_seed");
+    assert.match(
+      error.message,
+      /^resolution_not_approved: .* cites resolution res_seed, which is proposed\. /,
+    );
     return true;
   });
 });

@@ -1,4 +1,5 @@
 mod assets;
+mod detach;
 mod events;
 pub mod follow;
 pub mod launch;
@@ -39,9 +40,16 @@ pub struct Options {
     /// Do not open the review page in a browser.
     #[arg(long)]
     no_open: bool,
+    /// Reuse the running host for this repository and scope, or start one in the background
+    /// that keeps running after this command returns. Prints where the review page is served.
+    #[arg(long)]
+    detach: bool,
 }
 
 pub async fn run(options: Options) -> anyhow::Result<()> {
+    if options.detach {
+        return detach::run(&options);
+    }
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, options.port))
         .await
         .context("cannot bind review listener")?;

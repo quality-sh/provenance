@@ -206,7 +206,7 @@ async fn review_target(
 
 fn start_message(context: &RepoContext) -> String {
     format!(
-        "No review host is running. Start it with `provenance review --repo {} --repository-id local --scope {}`.",
+        "No review host is running. Start it with `provenance review --repo {} --repository-id local --scope {} --detach`.",
         context.repo, context.scope
     )
 }
@@ -214,6 +214,13 @@ fn start_message(context: &RepoContext) -> String {
 /// Adds a single-use launch code that signs the review page in when the link opens.
 #[rule("rule_review_link_opens_signed_in")]
 fn launch_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> anyhow::Result<url::Url> {
+    let mut link = url::Url::parse(&plain_link(host, target))?;
+    link.set_fragment(Some(&format!("launch={}", issue_launch_code(host)?)));
+    Ok(link)
+}
+
+/// Gets a single-use launch code from the host, with the key that only its user can read.
+pub fn issue_launch_code(host: &DiscoveredLocalHost) -> anyhow::Result<String> {
     let key = crate::review::launch::LaunchKey::read(host.instance_nonce())?;
     let mut url = host.endpoint().clone();
     url.set_path(LAUNCH_CODE_ROUTE);
@@ -230,9 +237,7 @@ fn launch_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> anyhow::Res
         .as_str()
         .filter(|code| code.len() == 64 && code.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .context("the review host sent a launch code that is not valid")?;
-    let mut link = url::Url::parse(&plain_link(host, target))?;
-    link.set_fragment(Some(&format!("launch={code}")));
-    Ok(link)
+    Ok(code.to_owned())
 }
 
 /// What a connected page did with a review link, as the host reports it.

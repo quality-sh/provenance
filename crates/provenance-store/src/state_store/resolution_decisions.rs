@@ -70,20 +70,50 @@ pub(super) fn ensure_resolution_decisions(
     Ok(())
 }
 
+/// Refuses a citation of a Resolution that is not approved or does not exist, with a
+/// message that names the citing record, the Resolution and its status, and what to do.
+#[provenance_macros::rule("rule_unapproved_resolution_refusal_says_what_to_do")]
 fn ensure_approved(
     resolutions: &[Resolution],
     id: &StableId,
     kind: &str,
     owner: &StableId,
 ) -> anyhow::Result<()> {
-    crate::write_error::ensure!(
-        InvalidUpdate,
-        resolutions.iter().any(|resolution| {
-            &resolution.id == id && resolution.status == ResolutionStatus::Approved
-        }),
-        "{kind} {} is refused: resolution {} must be approved",
-        owner.as_str(),
-        id.as_str()
+    let status = resolutions
+        .iter()
+        .find(|resolution| &resolution.id == id)
+        .map(|resolution| resolution.status.clone());
+    if status == Some(ResolutionStatus::Approved) {
+        return Ok(());
+    }
+    let state = status.map_or_else(
+        || "does not exist".to_owned(),
+        |status| format!("is {}", status_word(&status)),
     );
-    Ok(())
+    let id = id.as_str();
+    let message = format!(
+        "{kind} {} cites resolution {id}, which {state}. An answered Question or an active \
+         Rule can cite only an approved Resolution. Until a reviewer approves {id}, keep the \
+         Rule in draft or review, or leave the Question open, or remove the citation and name \
+         {id} in the text.",
+        owner.as_str()
+    );
+    // The text error carries the same message, so a command without JSON output, such as a
+    // scope import, also says what to do.
+    let text = anyhow::anyhow!("{message}");
+    Err(crate::write_error::SourceFailure::wrap(
+        crate::write_error::WriteFailure::ResolutionNotApproved {
+            resolution_id: id.to_owned(),
+            message,
+        },
+        text,
+    ))
+}
+
+/// The wire word of a Resolution status, read from its serde name.
+fn status_word(status: &ResolutionStatus) -> String {
+    match serde_json::to_value(status) {
+        Ok(serde_json::Value::String(word)) => word,
+        _ => format!("{status:?}"),
+    }
 }

@@ -36,6 +36,42 @@ share this deadline. When no slot is free before the deadline, the host answers
 wait on a busy host can cause this refusal. A retry can then succeed. When the
 host stops during a body read, it answers 503 `unavailable_needs`.
 
+## Detached host
+
+`provenance review --repo R --repository-id A --scope S --detach` starts the host as a
+background process and returns. On Unix the host leads a new session, so it has no
+controlling terminal and keeps serving after the shell or agent session that started it
+ends. On Windows the host has no console, is in a new process group, and leaves the
+caller's job when the job allows breakaway. A job that does not allow breakaway keeps
+the host, and the host stops when that job closes.
+
+One host serves the repository and scope for all callers. If a verified host already
+serves them, the command reuses it and starts nothing. A reuse is refused when
+`--repository-id` differs from the running host, or when `--port` is not zero and
+differs from its port. The refusal names the values of the running host and points
+to this page, which says how to stop it. Concurrent
+starts for one repository and scope wait for each other, so only one host starts. A
+record left by a host that stopped is removed, and a new host starts.
+
+The command prints one JSON line with `endpoint`, `url`, `review_url`, `opened`,
+`reused`, and, for a host it started, `pid` and `log`. `review_url` is the
+signed-in link to the page root, or the plain `url` when the command opened the
+page itself. `--no-open` prevents the opening, as for `--review-link`. The
+started host's startup line, with the bearer, is not kept. Its stderr goes to the
+owner-only `log` under `<user cache>/provenance/review-host/`. There is one log for
+each repository and scope, and a new start replaces it. Clients reach a detached
+host through launch links and the discovery registry as before.
+
+The detached host does not open a browser. Because later sessions reuse the host, an
+agent leaves it running. A person stops it with `kill PID` on Unix or
+`taskkill /PID PID` on Windows; Ctrl-C in the starting shell does not reach it.
+A reuse prints no `pid`. To find the PID of a running host, find the process that
+listens on the port of its `endpoint`, for example with `lsof -i :PORT` on Unix or
+`netstat -ano | findstr :PORT` on Windows.
+If the host stops before it publishes its location, the command fails and prints
+the log. If the host does not publish its location within 20 seconds, or the command
+fails after the host starts, the command stops the host before it exits.
+
 ## Local caller and repository access
 
 The host serves requests first. Then it publishes its registry record and writes
