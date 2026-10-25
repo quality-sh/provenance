@@ -2295,7 +2295,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-cli"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2343,7 +2343,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-codegen"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "jsonschema",
  "prettyplease",
@@ -2360,7 +2360,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-core"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "camino",
@@ -2378,7 +2378,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-http-client"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "jsonschema",
@@ -2393,7 +2393,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-macros"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "camino",
  "proc-macro2",
@@ -2405,7 +2405,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-porcelain"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "provenance-core",
  "provenance-macros",
@@ -2418,7 +2418,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-report"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "camino",
@@ -2433,7 +2433,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-scanner"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "camino",
@@ -2447,7 +2447,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-sdk"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "camino",
@@ -2461,7 +2461,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-ste100"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "fs2",
  "jsonschema",
@@ -2476,7 +2476,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-store"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -2510,7 +2510,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-transport"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "axum",

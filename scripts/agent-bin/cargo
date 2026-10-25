@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 
-CHECK_JOBS = {"build": "Build", "check": "Check", "clippy": "Clippy", "test": "Test"}
+CHECK_JOBS = {"build": "Build", "check": "Check", "clippy": "Clippy", "test": "Test", "package": "Command"}
 WORKFLOW = "agent-cargo.yml"
 
 
@@ -129,7 +129,7 @@ def dispatch(root, sha, repository, command_json, command_key):
     push_snapshot(root, sha, repository, f"agent-snapshot/{sha}")
     payload = json.dumps(
         {
-            "ref": "main",
+            "ref": f"agent-snapshot/{sha}",
             "inputs": {
                 "snapshot_sha": sha,
                 "command_json": command_json,

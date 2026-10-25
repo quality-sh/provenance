@@ -234,7 +234,7 @@ jobs:
           import sys
 
           args = json.loads(os.environ["CARGO_ARGS_JSON"])
-          allowed = {"build", "check", "clippy", "test"}
+          allowed = {"build", "check", "clippy", "test", "package"}
           if not isinstance(args, list) or not args or args[0] not in allowed:
               sys.exit("Unsupported Cargo command")
           if not all(isinstance(arg, str) and "\x00" not in arg for arg in args):
