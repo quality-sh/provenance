@@ -204,10 +204,10 @@ fn spawn_detached(command: &mut Command) -> std::io::Result<Child> {
         },
     };
     let flags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP;
-    match command
+    let spawned = command
         .creation_flags(flags | CREATE_BREAKAWAY_FROM_JOB)
-        .spawn()
-    {
+        .spawn();
+    match spawned {
         Err(error)
             if error
                 .raw_os_error()
@@ -216,7 +216,7 @@ fn spawn_detached(command: &mut Command) -> std::io::Result<Child> {
         {
             command.creation_flags(flags).spawn()
         }
-        spawned => spawned,
+        other => other,
     }
 }
 
