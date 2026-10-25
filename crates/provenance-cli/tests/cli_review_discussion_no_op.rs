@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 
 const PARENT: &str = "/sources/source_talk/discussions";
 
-fn send(host: &Host, method: &str, path: &str, guard: Option<&str>, body: Value) -> Value {
+fn send(host: &Host, method: &str, path: &str, guard: Option<&str>, body: &Value) -> Value {
     let mut call = request(host, method, path, true).set("Content-Type", "application/json");
     if let Some(guard) = guard {
         call = call.set("If-Match", guard);
@@ -40,19 +40,19 @@ fn a_repeated_discussion_status_sends_no_change_event() {
         "POST",
         PARENT,
         None,
-        json!({"actor":"reviewer", "declared_by":null, "role":"user", "body":"A concern."}),
+        &json!({"actor":"reviewer", "declared_by":null, "role":"user", "body":"A concern."}),
     );
     let discussion = format!(
         "{PARENT}/{}",
         started["data"]["discussion_id"].as_str().unwrap()
     );
     let status = json!({"actor":"reviewer", "declared_by":null, "status":"resolved"});
-    send(&host, "PATCH", &discussion, Some("\"1\""), status.clone());
+    send(&host, "PATCH", &discussion, Some("\"1\""), &status);
     // The marker write comes after the earlier writes, so its frame is the last of them.
     source(&host, repo.path(), "source_marker");
     frames_until(&mut socket, "source_marker");
 
-    let repeated = send(&host, "PATCH", &discussion, Some("\"2\""), status);
+    let repeated = send(&host, "PATCH", &discussion, Some("\"2\""), &status);
     assert_eq!(repeated["data"]["version"], 2);
     source(&host, repo.path(), "source_after");
 

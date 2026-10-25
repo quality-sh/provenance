@@ -56,7 +56,10 @@ async fn assert_only_the_other_discussion_stays(
     assert_eq!(status, 200, "{listed}");
     let discussions = items(&listed);
     assert_eq!(discussions.len(), 1, "{listed}");
-    assert_eq!(discussions[0]["discussion_id"], other["discussion_id"]);
+    assert_eq!(
+        discussions[0]["discussion"]["discussion_id"],
+        other["discussion_id"]
+    );
     let (status, listed) = call(host, "GET", "/discussion-containers", None).await;
     assert_eq!(status, 200, "{listed}");
     let threads = items(&listed);
@@ -198,7 +201,10 @@ async fn a_record_with_review_submissions_is_refused_and_keeps_its_discussions()
     assert_eq!(status, 200, "{listed}");
     let items = listed["data"]["items"].as_array().unwrap();
     assert_eq!(items.len(), 1, "{listed}");
-    assert_eq!(items[0]["discussion_id"], started["discussion_id"]);
+    assert_eq!(
+        items[0]["discussion"]["discussion_id"],
+        started["discussion_id"]
+    );
     let (status, listed) = call(&host, "GET", "/messages", None).await;
     assert_eq!(status, 200, "{listed}");
     assert_eq!(
