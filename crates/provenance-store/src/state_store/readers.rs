@@ -30,11 +30,7 @@ const IDEATION_LANDING_RECORD_FIELDS: &[&str] = &[
 /// reads as "line 1" for every row; the shard path and the row number are
 /// what locate the fault. The path is relative to the state directory, so the
 /// message is safe to show on the review page.
-pub(crate) fn located(
-    path: &Utf8Path,
-    line_number: usize,
-    error: &serde_json::Error,
-) -> anyhow::Error {
+pub fn located(path: &Utf8Path, line_number: usize, error: &serde_json::Error) -> anyhow::Error {
     let text = error.to_string();
     let message = text
         .rfind(" at line ")
@@ -44,11 +40,7 @@ pub(crate) fn located(
 
 /// Locates a parse error from a deserializer that returns `anyhow`: a serde
 /// error loses its in-line position, any other refusal gets the shard prefix.
-pub(crate) fn located_any(
-    path: &Utf8Path,
-    line_number: usize,
-    error: anyhow::Error,
-) -> anyhow::Error {
+fn located_any(path: &Utf8Path, line_number: usize, error: anyhow::Error) -> anyhow::Error {
     match error.downcast::<serde_json::Error>() {
         Ok(error) => located(path, line_number, &error),
         Err(error) => anyhow::anyhow!("{} line {line_number}: {error}", state_relative(path)),
@@ -67,7 +59,7 @@ fn state_relative(path: &Utf8Path) -> &Utf8Path {
         .unwrap_or(path)
 }
 
-pub(crate) fn parse_line(
+pub fn parse_line(
     path: &Utf8Path,
     line_number: usize,
     line: &str,

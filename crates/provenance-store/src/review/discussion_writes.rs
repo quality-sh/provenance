@@ -22,8 +22,8 @@ pub(super) fn check_size(input: &WriteDiscussion) -> anyhow::Result<()> {
 /// The requested status already holds: the intent is met, so the write is a
 /// no-op and the Discussion keeps its version.
 #[rule("rule_discussion_same_status_is_no_op")]
-fn unchanged_status(head: Option<&Discussion>, status: &DiscussionStatus) -> Option<Discussion> {
-    head.filter(|head| head.status == *status).cloned()
+fn unchanged_status(head: Option<&Discussion>, status: DiscussionStatus) -> Option<Discussion> {
+    head.filter(|head| head.status == status).cloned()
 }
 
 impl StateStore {
@@ -113,7 +113,7 @@ impl StateStore {
                 }
             }
             DiscussionAction::SetStatus { status, .. } => {
-                if let Some(current) = unchanged_status(head.as_ref(), status) {
+                if let Some(current) = unchanged_status(head.as_ref(), *status) {
                     return Ok(current);
                 }
             }
