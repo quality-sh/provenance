@@ -29,11 +29,11 @@ impl StateStore {
         }
         let discussion_ids = removed
             .iter()
-            .map(|discussion| discussion.discussion_id.clone())
+            .map(|discussion| discussion.discussion_id.as_str())
             .collect::<BTreeSet<_>>();
         let thread_ids = removed
             .iter()
-            .map(|discussion| discussion.thread_id.clone())
+            .map(|discussion| discussion.thread_id.as_str())
             .collect::<BTreeSet<_>>();
         let discussions_path = shards::discussions_path(&self.layout, scope);
         let threads_path = shards::threads_path(&self.layout, scope);
@@ -41,7 +41,7 @@ impl StateStore {
         let mut message_paths = Vec::new();
         for path in readers::message_shard_paths(&self.layout, scope)? {
             let messages: Vec<Message> = readers::read_jsonl(self, &path)?;
-            if messages.iter().any(|m| thread_ids.contains(&m.thread_id)) {
+            if messages.iter().any(|m| thread_ids.contains(m.thread_id.as_str())) {
                 message_paths.push(path);
             }
         }
@@ -49,17 +49,17 @@ impl StateStore {
         paths.extend(message_paths.iter().cloned());
         guard::with_writers(&paths, "*", || {
             self.mutate_jsonl_records(&discussions_path, |rows: &mut Vec<Discussion>| {
-                rows.retain(|d| !discussion_ids.contains(&d.discussion_id));
+                rows.retain(|d| !discussion_ids.contains(d.discussion_id.as_str()));
                 Ok(())
             })?;
             for path in &message_paths {
                 self.mutate_jsonl_records(path, |rows: &mut Vec<Message>| {
-                    rows.retain(|m| !thread_ids.contains(&m.thread_id));
+                    rows.retain(|m| !thread_ids.contains(m.thread_id.as_str()));
                     Ok(())
                 })?;
             }
             self.mutate_jsonl_records(&threads_path, |rows: &mut Vec<Thread>| {
-                rows.retain(|t| !thread_ids.contains(&t.id));
+                rows.retain(|t| !thread_ids.contains(t.id.as_str()));
                 Ok(())
             })
         })
