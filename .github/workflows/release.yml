@@ -27,6 +27,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Check crates.io prerequisites
+        run: bash .github/scripts/check-release-crates.sh
       - uses: ./.github/actions/setup-socket-firewall
       # Releases are cut from main, and main merges run the full platform
       # matrix. Refuse to build unless that run finished green on this exact
@@ -291,23 +293,12 @@ jobs:
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
         shell: bash
         run: |
-          for crate_name in \
-            provenance-macros \
-            provenance-core \
-            provenance-porcelain \
-            provenance-scanner \
-            provenance-ste100 \
-            provenance-store \
-            provenance-report \
-            provenance-sdk \
-            provenance-http-client \
-            provenance-transport \
-            provenance-cli
+          while IFS= read -r crate_name
           do
             bash .github/scripts/publish-cargo-if-missing.sh \
               "$crate_name" "$RELEASE_VERSION" \
               "target/package/${crate_name}-${RELEASE_VERSION}.crate"
-          done
+          done < .github/release-crates.txt
 
   publish-npm:
     if: github.event_name == 'push'
@@ -317,6 +308,7 @@ jobs:
     needs:
       - preflight
       - build
+      - publish-crates
     environment: npm
     permissions:
       contents: read

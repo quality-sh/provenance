@@ -21,19 +21,10 @@ publishing must trust `quality-sh/provenance`, the `release.yml` workflow, and
 the `npm` GitHub environment for each package. The workflow uses GitHub OIDC
 and does not store an npm registry token.
 
-The workflow publishes these Rust crates to crates.io:
-
-- `provenance-macros`
-- `provenance-core`
-- `provenance-porcelain`
-- `provenance-scanner`
-- `provenance-ste100`
-- `provenance-store`
-- `provenance-report`
-- `provenance-sdk`
-- `provenance-http-client`
-- `provenance-transport`
-- `provenance-cli`
+The workflow publishes the Rust crates in
+[the release crate list](../.github/release-crates.txt), in the listed order.
+Preflight and the registry smoke check use the same list. Preflight requires
+HTTP 200 from crates.io for each crate before a publish job can start.
 
 The `crates-io` GitHub environment protects publication. Each crate must trust
 `quality-sh/provenance`, the `release.yml` workflow, and that environment on

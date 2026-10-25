@@ -17,23 +17,12 @@ export PATH="$CARGO_HOME/bin:$PATH"
 
 crates_are_visible() {
   local crate
-  for crate in \
-    provenance-macros \
-    provenance-core \
-    provenance-porcelain \
-    provenance-scanner \
-    provenance-ste100 \
-    provenance-store \
-    provenance-report \
-    provenance-sdk \
-    provenance-http-client \
-    provenance-transport \
-    provenance-cli
+  while IFS= read -r crate
   do
     curl --fail --silent --show-error \
       --user-agent "provenance-release-smoke/$version" \
       --output /dev/null "https://crates.io/api/v1/crates/$crate/$version" || return
-  done
+  done < "$script_directory/../../release-crates.txt"
 }
 
 retry_channel "$channel" crates_are_visible

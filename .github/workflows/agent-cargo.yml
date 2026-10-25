@@ -225,6 +225,7 @@ jobs:
       - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Run requested Cargo check
         env:
+          # Limit parallel builds to keep package verification within runner memory.
           CARGO_BUILD_JOBS: 3
           CARGO_ARGS_JSON: ${{ inputs.command_json }}
         run: |

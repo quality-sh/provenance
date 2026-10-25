@@ -12,7 +12,7 @@ and SDK build and test commands prepare generated source automatically. See
 
 ## Cargo checks on maintainer hosts
 
-On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
+On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, `cargo test`, and `cargo package` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
 
 ## Code standards
 

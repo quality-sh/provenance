@@ -75,7 +75,11 @@ fn rust_release_packages_have_registry_metadata_and_versioned_dependencies() {
             let Some(dependency_name) = dependency["name"].as_str() else {
                 continue;
             };
-            if dependency["kind"] == "dev" && dependency["req"] == "*" {
+            if crate_name == "provenance-macros"
+                && dependency_name == "provenance-scanner"
+                && dependency["kind"] == "dev"
+                && dependency["req"] == "*"
+            {
                 continue;
             }
             if !CRATE_ORDER.contains(&dependency_name) {
@@ -95,13 +99,21 @@ fn release_workflow_publishes_rust_crates_in_dependency_order() {
     let workspace = workspace_root();
     let workflow = fs::read_to_string(workspace.join(".github/workflows/release.yml"))
         .expect("read release workflow");
-    let mut previous = 0;
-    for crate_name in CRATE_ORDER {
-        let offset = workflow[previous..]
-            .find(crate_name)
-            .unwrap_or_else(|| panic!("release workflow omits {crate_name}"));
-        previous += offset + crate_name.len();
-    }
+    let crates = fs::read_to_string(workspace.join(".github/release-crates.txt"))
+        .expect("read release crate list");
+    assert_eq!(crates.lines().collect::<Vec<_>>(), CRATE_ORDER);
+    let preflight = workflow.split_once("  review-assets:").unwrap().0;
+    assert!(preflight.contains("bash .github/scripts/check-release-crates.sh"));
+    let check = fs::read_to_string(workspace.join(".github/scripts/check-release-crates.sh"))
+        .expect("read release prerequisite check");
+    assert!(check.contains("release-crates.txt"));
+    assert!(workflow.contains("done < .github/release-crates.txt"));
+    let smoke = fs::read_to_string(workspace.join(".github/scripts/release-smoke/cargo-registry.sh"))
+        .expect("read registry smoke check");
+    assert!(smoke.contains("release-crates.txt"));
+    let npm = workflow.split_once("  publish-npm:").unwrap().1;
+    let needs = npm.split_once("    environment: npm").unwrap().0;
+    assert!(needs.contains("      - publish-crates"));
     assert!(workflow.contains("name: Publish Rust crates"));
     assert!(workflow.contains("environment: crates-io"));
     assert!(workflow.contains("publish-cargo-if-missing.sh"));

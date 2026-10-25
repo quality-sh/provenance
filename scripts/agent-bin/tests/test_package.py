@@ -25,6 +25,13 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(dispatch.call_args.args[3], args)
         self.assertEqual(result.call_args.args[2:4], ("package", True))
 
+    def test_bare_package_refuses_before_snapshot(self):
+        with patch.object(shim.sys, "argv", ["cargo", "package"]), \
+             patch.object(shim, "provenance_root", return_value=Path("/repo")), \
+             patch.object(shim, "snapshot", side_effect=AssertionError("snapshot selected")):
+            with self.assertRaisesRegex(RuntimeError, "cargo package --workspace --locked --allow-dirty"):
+                shim.main()
+
     def test_dispatch_uses_the_snapshot_workflow(self):
         with patch.object(shim, "push_snapshot"), \
              patch.object(shim, "command", return_value='{"workflow_run_id": 123}') as command:
