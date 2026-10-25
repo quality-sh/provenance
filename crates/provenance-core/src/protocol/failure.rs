@@ -12,6 +12,8 @@ pub enum InvalidInputReason {
     MalformedJson,
     UnknownField,
     TooLarge,
+    /// The body was not complete when the request deadline passed.
+    Incomplete,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]

@@ -3,6 +3,7 @@ use super::rows::{decode, select_columns};
 use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
 use provenance_core::model::ProjectionRow;
+use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::rule;
 use sqlx::Row;
@@ -26,6 +27,19 @@ impl ReadSnapshot {
         drop(tx);
         Ok(())
     }
+}
+
+/// Refuses a page limit outside 1..=200 with the typed input refusal that
+/// names the `limit` field.
+pub fn check_limit(limit: usize) -> anyhow::Result<()> {
+    if (1..=200).contains(&limit) {
+        return Ok(());
+    }
+    Err(OperationFailure::InvalidInput {
+        field: Some("limit".to_owned()),
+        reason: InvalidInputReason::InvalidValue,
+    }
+    .into())
 }
 
 pub fn page_error(error: anyhow::Error) -> anyhow::Error {
