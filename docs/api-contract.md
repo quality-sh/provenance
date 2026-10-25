@@ -78,6 +78,10 @@ Subresources have parent-owned addresses:
 Actions are POSTs on a resource path with one declared action name:
 
 - Topics: `claim`, `release`, `close`. Questions: `claim`, `release`, `answer`.
+  `claim` and `release` name their actor. A claim is held by one actor: a
+  claim or release by another actor returns `claim_conflict` with the holder
+  and status 409, and a repeated claim by the holder returns the unchanged
+  record.
 - Record review: `POST /{collection}/{id}/submit`, and
   `POST /{collection}/{id}/submissions/{proposal_id}/decide|withdraw`, for each
   graph record kind.
@@ -154,7 +158,8 @@ with the same caller-selected Stable ID returns `already_exists` with status
 A repeated Discussion start after a lost response creates a new Discussion. A
 repeated Discussion reply or status change uses the old `If-Match` value and
 returns `discussion_version_conflict` with status 409. The client reads the
-Discussion before it sends another write.
+Discussion before it sends another write. A status change to the status the
+Discussion already has returns the unchanged Discussion with status 200.
 
 A submit body does not accept `proposal_id` or `proposal_key`, and a decide
 body does not accept `disposition_id`. The server creates these identities and

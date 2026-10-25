@@ -289,7 +289,12 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
         "worker"
     );
 
-    let released = call(&client, "release", json!({"target":"topic_shared"})).await;
+    let released = call(
+        &client,
+        "release",
+        json!({"target":"topic_shared","data":{"actor":"worker"}}),
+    )
+    .await;
     assert_ne!(released.is_error, Some(true), "{released:?}");
     assert!(released.structured_content.as_ref().unwrap()["data"]["claimed_by"].is_null());
 

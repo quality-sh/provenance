@@ -199,7 +199,7 @@ impl StateStore {
         &self,
         input: &super::WriteDiscussion,
     ) -> anyhow::Result<()> {
-        anyhow::ensure!(!input.actor.trim().is_empty(), "invalid Discussion actor");
+        crate::write_error::ensure_actor(&input.actor)?;
         crate::write_error::ensure!(
             ResourceNotFound,
             self.manifest()?

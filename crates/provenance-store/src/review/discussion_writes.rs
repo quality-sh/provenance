@@ -106,10 +106,11 @@ impl StateStore {
                 }
             }
             DiscussionAction::SetStatus { status, .. } => {
-                anyhow::ensure!(
-                    head.as_ref().unwrap().status != *status,
-                    "Discussion already has this status"
-                );
+                // The requested status already holds: the intent is met, so
+                // the write is a no-op and the Discussion keeps its version.
+                if let Some(current) = head.as_ref().filter(|head| head.status == *status) {
+                    return Ok(current.clone());
+                }
             }
         }
         with_record_state(&self.layout, |layout| {
