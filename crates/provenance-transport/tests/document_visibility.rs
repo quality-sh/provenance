@@ -245,22 +245,18 @@ async fn legacy_review_acceptance_keeps_a_record_after_a_rejected_change() {
             "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_reviewed"}
         }),
     );
+    // Creation opened the bound submission of the current revision.
     let submitted = store
-        .submit_record_review(
-            serde_json::from_value(json!({
-                "scope_id":"default","actor":"author","record_kind":"requirement",
-                "record_id":"req_reviewed","declared_by":null,"title":"Review again",
-                "summary":"Review the changed record.","source_ids":[],
-                "evidence_references":[],"builds_on":[],"expected_revision":null,"revises":null
-            }))
-            .unwrap(),
-        )
-        .unwrap();
+        .requirement_decision_state(&scope(), &sid("req_reviewed"))
+        .unwrap()
+        .pending
+        .unwrap()
+        .proposal_id;
     store
         .decide_record_review(
             serde_json::from_value(json!({
                 "scope_id":"default","actor":{"identity_type":"human","id":"reviewer"},
-                "proposal_id":submitted.id,"decision":"rejected","rationale":"Not this change.",
+                "proposal_id":submitted,"decision":"rejected","rationale":"Not this change.",
                 "canonical_artifact":null,"declared_by":null,"feedback":null
             }))
             .unwrap(),
