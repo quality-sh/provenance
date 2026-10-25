@@ -55,6 +55,8 @@ pub fn create_requirement(
             id,
             "--statement",
             statement,
+            "--format",
+            "json",
         ])
         .output()
         .unwrap()
@@ -79,15 +81,8 @@ pub fn write_reference(repo: &Path, dictionary: &DictionaryImport) {
 
 pub fn error_json(output: &Output) -> serde_json::Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
-    serde_json::from_str::<serde_json::Value>(
-        // JSON mode prints the object bare; text mode prints it after `Error: `.
-        stderr
-            .trim()
-            .strip_prefix("Error: ")
-            .unwrap_or_else(|| stderr.trim()),
-    )
-    .unwrap()["error"]
-        .clone()
+    // A JSON-mode record command prints the refusal object bare.
+    serde_json::from_str::<serde_json::Value>(stderr.trim_end()).unwrap()["error"].clone()
 }
 
 /// The synthetic Issue 9 PDF. The builder makes every word, so no dictionary

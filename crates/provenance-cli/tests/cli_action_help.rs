@@ -49,7 +49,7 @@ fn tree(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 }
 
 #[test]
-#[verifies("rule_action_help_lists_record_type_fields", examples)]
+#[verifies("rule_create_help_accepted_fields", examples)]
 fn update_help_lists_only_the_fields_of_the_existing_record_type() {
     let (_directory, repo) = init_with_requirement();
 
@@ -62,7 +62,7 @@ fn update_help_lists_only_the_fields_of_the_existing_record_type() {
 }
 
 #[test]
-#[verifies("rule_action_help_lists_record_type_fields", examples)]
+#[verifies("rule_create_help_accepted_fields", examples)]
 fn header_bound_body_fields_stay_out_of_help_and_are_usage_errors() {
     let (_directory, repo) = init_with_requirement();
 
@@ -87,7 +87,7 @@ fn header_bound_body_fields_stay_out_of_help_and_are_usage_errors() {
 }
 
 #[test]
-#[verifies("rule_action_help_lists_record_type_fields", examples)]
+#[verifies("rule_create_help_accepted_fields", examples)]
 fn reply_help_marks_expected_version_required_and_its_absence_is_a_usage_error() {
     let (_directory, repo) = init_with_requirement();
     let started = json_output(provenance().args([

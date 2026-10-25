@@ -19,7 +19,7 @@ fn scan(name: &str, source: &str) -> provenance_scanner::FileScan {
 fn script_verifies_calls_without_a_method_warn_with_the_line() {
     let scan = scan(
         "bindings.js",
-        "verifies(\"rule_pw\");\nverifies(\"rule_pw\", bogus_method);\nverifies(\"rule_pw\", examples);\nrule(\"rule_pw\", impl);\n",
+        "verifies(\"rule_pw\");\nverifies(\"rule_pw\", bogus_method);\nverifies(\"rule_pw\", examples);\nrule(\"rule_pw\", impl);\nverifies(RULE_ID, 'examples');\n",
     );
 
     let lines = scan
@@ -27,15 +27,19 @@ fn script_verifies_calls_without_a_method_warn_with_the_line() {
         .iter()
         .map(|warning| warning.line)
         .collect::<Vec<_>>();
-    assert_eq!(lines, vec![1, 2], "{:?}", scan.warnings);
+    assert_eq!(lines, vec![1, 2, 5], "{:?}", scan.warnings);
     for warning in &scan.warnings {
         assert!(
             warning.message.contains("malformed verifies binding"),
             "{warning:?}"
         );
-        assert!(warning.message.contains("rule_pw"), "{warning:?}");
         assert!(warning.message.contains("examples"), "{warning:?}");
     }
+    assert!(
+        scan.warnings[2].message.contains("RULE_ID"),
+        "{:?}",
+        scan.warnings
+    );
     assert_eq!(scan.bindings.len(), 2);
     assert_eq!(scan.bindings[0].line, 3);
 }
@@ -63,7 +67,7 @@ fn well_formed_sites_and_other_calls_warn_about_nothing() {
     let scan = scan(
         "clean.ts",
         "verifies('rule_pw', 'examples');\nconst verified = verifiesSomething(x);\nrule(\"rule_pw\", { statement: \"x\" });\n\
-         export function verifies(\n  _ruleId: string,\n  _method: VerificationMethod,\n): void {}\n",
+         function verifies(ruleId, method) {}\nexport function verifies(\n  _ruleId: string,\n  _method: VerificationMethod,\n): void {}\n",
     );
 
     assert!(scan.warnings.is_empty(), "{:?}", scan.warnings);

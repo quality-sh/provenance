@@ -138,6 +138,47 @@ fn a_nested_scope_owns_its_files_and_the_outer_scope_does_not() {
     assert_each_scope_sees_only_its_own_bindings(directory.path(), &["outer", "inner"]);
 }
 
+// Implementation aid: a scan path outside the repository keeps its files in a `.` scope.
+#[test]
+fn a_root_scope_keeps_scanned_files_outside_the_repository() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path();
+    init(repo, "root", ".");
+    init(repo, "app", "app");
+    std::fs::create_dir_all(repo.join("app")).unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    std::fs::write(
+        outside.path().join("lib.rs"),
+        "#[rule(\"rule_root\")]\nfn implemented() {}\n",
+    )
+    .unwrap();
+
+    for (scope, files) in [("root", 1), ("app", 0)] {
+        let output = provenance()
+            .args([
+                "coverage",
+                "scan",
+                "--repo",
+                repo.to_str().unwrap(),
+                "--path",
+                outside.path().to_str().unwrap(),
+                "--scope",
+                scope,
+                "--format",
+                "json",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{scope}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["files_scanned"], files, "{scope}: {report}");
+    }
+}
+
 #[test]
 #[verifies("rule_coverage_names_missing_scope_directory", examples)]
 fn a_scope_whose_directory_is_absent_gets_a_warning_that_names_it() {
@@ -158,7 +199,7 @@ fn a_scope_whose_directory_is_absent_gets_a_warning_that_names_it() {
 }
 
 #[test]
-#[verifies("rule_coverage_refuses_undeclared_scope", examples)]
+#[verifies("rule_graph_report_refuses_undeclared_scope", examples)]
 fn coverage_scan_refuses_a_scope_the_manifest_does_not_declare() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path();
@@ -176,7 +217,7 @@ fn coverage_scan_refuses_a_scope_the_manifest_does_not_declare() {
 }
 
 #[test]
-#[verifies("rule_coverage_refuses_undeclared_scope", examples)]
+#[verifies("rule_graph_report_refuses_undeclared_scope", examples)]
 fn scope_reports_refuse_a_scope_the_manifest_does_not_declare() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path();

@@ -156,8 +156,8 @@ fn text_mode_keeps_the_failure_and_the_scoped_hint() {
         .stderr(predicate::str::contains("Error: unknown scope"));
 }
 
+// Implementation aid: an error outside the operation, such as a missing graph, stays text.
 #[test]
-#[verifies("rule_cli_json_refusal_object", examples)]
 fn a_missing_graph_stays_a_text_error_in_json_mode() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();

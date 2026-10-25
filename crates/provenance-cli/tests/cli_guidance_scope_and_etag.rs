@@ -91,20 +91,19 @@ fn managed_guidance_carries_the_selected_scope_on_every_review_command() {
 
 #[test]
 #[verifies("rule_init_guidance_background_review_host", examples)]
-fn managed_guidance_starts_the_review_host_in_the_background() {
+fn managed_guidance_runs_the_review_host_as_a_process_the_agent_can_stop() {
     let directory = tempfile::tempdir().unwrap();
     init(directory.path(), "default");
     let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
+    let words = agents.split_whitespace().collect::<Vec<_>>().join(" ");
 
     for text in [
-        "In a POSIX shell",
-        "`mkdir -p .provenance/cache && nohup provenance review --repo . --repository-id local \
-         --scope default --no-open > .provenance/cache/review-host.log 2>&1 & echo $!`",
-        "wait until the log shows the startup",
-        "a JSON object with `endpoint`",
-        "stop the host with `kill <pid>`",
+        "start the review host",
+        "prints its process ID",
+        "Keep that process ID",
+        "stop the host",
     ] {
-        assert!(agents.contains(text), "missing {text}\n{agents}");
+        assert!(words.contains(text), "missing {text}\n{agents}");
     }
 }
 

@@ -113,12 +113,13 @@ pub fn diagnostic(kind: &str, id: &str, start: usize) -> Value {
 
 pub fn error_json(output: &std::process::Output) -> Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
+    // `import` and `merge-jsonl` are not record commands: they print the
+    // refusal object after `Error: ` in every output format.
     serde_json::from_str(
-        // JSON mode prints the object bare; text mode prints it after `Error: `.
         stderr
             .trim()
             .strip_prefix("Error: ")
-            .unwrap_or_else(|| stderr.trim()),
+            .expect("CLI failure contains one machine-readable JSON object"),
     )
     .unwrap()
 }
