@@ -21,7 +21,24 @@ impl RepoContext {
     }
 
     pub fn open_graph(&self) -> anyhow::Result<Store> {
-        Store::open_required(&self.repo)
+        Store::open_required(&self.repo).map_err(|error| initialization_hint(&self.repo, error))
+    }
+
+    /// The manifest scope the caller selected. Refuses before any read when
+    /// the repository is not initialized or when the manifest does not
+    /// declare the scope, so a mistyped scope never reads as an empty one.
+    pub fn declared_scope(&self) -> anyhow::Result<provenance_core::Scope> {
+        let store = self.open_graph()?;
+        let selected = self.scope.as_str();
+        provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
+            manifest
+                .scopes
+                .iter()
+                .find(|scope| scope.id.as_str() == selected)
+                .cloned()
+                .ok_or_else(|| unknown_scope(selected, &manifest))
+        })
+        .map_err(|error| initialization_hint(&self.repo, error))
     }
 
     pub fn open_store(&self) -> Store {
@@ -47,4 +64,79 @@ impl RepoContext {
             std::sync::Arc::new(access),
         ))
     }
+}
+
+/// The refusal for a scope the manifest does not declare.
+pub fn unknown_scope(scope: &str, manifest: &provenance_core::Manifest) -> anyhow::Error {
+    let declared = manifest
+        .scopes
+        .iter()
+        .map(|scope| scope.id.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    anyhow::anyhow!("unknown scope `{scope}`; declared scopes: {declared}")
+}
+
+/// A command ran inside a directory of an initialized repository instead of
+/// at its root. `provenance init` here would nest a second graph, so the
+/// refusal names the root to pass as `--repo`.
+#[derive(Debug)]
+pub struct NestedRepository {
+    pub here: Utf8PathBuf,
+    pub root: Utf8PathBuf,
+}
+
+impl std::fmt::Display for NestedRepository {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "Provenance graph is not initialized in {}; the enclosing repository {} is \
+             initialized; run the command with --repo {}",
+            self.here, self.root, self.root
+        )
+    }
+}
+
+impl std::error::Error for NestedRepository {}
+
+/// Whether an error says the graph is not initialized, with or without the
+/// enclosing-repository hint.
+pub fn is_not_initialized(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<provenance_store::layout::GraphNotInitialized>()
+        .is_some()
+        || error.downcast_ref::<NestedRepository>().is_some()
+}
+
+/// Replaces a not-initialized refusal with the nested-repository refusal
+/// when an ancestor directory holds an initialized graph.
+pub fn initialization_hint(repo: &camino::Utf8Path, error: anyhow::Error) -> anyhow::Error {
+    if error
+        .downcast_ref::<provenance_store::layout::GraphNotInitialized>()
+        .is_none()
+    {
+        return error;
+    }
+    let Some(root) = enclosing_repository(repo) else {
+        return error;
+    };
+    NestedRepository {
+        here: repo.to_path_buf(),
+        root,
+    }
+    .into()
+}
+
+fn enclosing_repository(repo: &camino::Utf8Path) -> Option<Utf8PathBuf> {
+    let here = std::fs::canonicalize(repo.as_std_path()).ok()?;
+    let here = Utf8PathBuf::from_path_buf(here).ok()?;
+    here.ancestors()
+        .skip(1)
+        .find(|ancestor| {
+            ancestor
+                .join(".provenance/state/manifest.json")
+                .as_std_path()
+                .is_file()
+        })
+        .map(camino::Utf8Path::to_path_buf)
 }

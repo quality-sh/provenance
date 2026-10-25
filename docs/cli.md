@@ -128,7 +128,9 @@ select routes or `--limit <number>` to increase the bound. Use `--format json`
 only when you need all request and response schemas.
 
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
-records in `data.items`.
+records in `data.items`. With `--format json`, a refused command prints one
+`{error,meta}` object on standard error and exits with code 1. When the CLI
+knows the next command to run, `error.hint` names it.
 
 ## Product commands
 

@@ -1,4 +1,4 @@
-use super::{invalid, malformed_json};
+use super::{invalid, malformed_json, missing};
 use axum::http::HeaderMap;
 use provenance_core::protocol::failure::ErasedFailure;
 use provenance_store::operations::catalog::{
@@ -201,7 +201,7 @@ fn bind_headers(
     for binding in &definition.registration.controls.headers {
         let raw = headers
             .get(binding.name)
-            .ok_or_else(|| invalid(Some(binding.name)))?
+            .ok_or_else(|| missing(binding.name))?
             .to_str()
             .map_err(|_| invalid(Some(binding.name)))?;
         let raw = if binding.trim_quotes {

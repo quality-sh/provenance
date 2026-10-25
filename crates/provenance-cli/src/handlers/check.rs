@@ -1,5 +1,5 @@
 use crate::output;
-use crate::repo_context::RepoContext;
+use crate::repo_context::{initialization_hint, is_not_initialized, RepoContext};
 use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
@@ -74,14 +74,13 @@ impl RepositoryCheckPort {
                     anyhow::ensure!(!manifest.scopes.is_empty(), "scope {scope} does not exist");
                 }
                 validate_locked(&store, &manifest, scope.is_none())
-            });
+            })
+            .map_err(|error| initialization_hint(&self.context.repo, error));
         let findings = match result {
             Ok(()) => Vec::new(),
             Err(error)
                 if error.downcast_ref::<std::io::Error>().is_some()
-                    || error
-                        .downcast_ref::<provenance_store::layout::GraphNotInitialized>()
-                        .is_some() =>
+                    || is_not_initialized(&error) =>
             {
                 return Err(format!("{error:#}"));
             }
@@ -122,7 +121,7 @@ impl RepositoryCheckPort {
                     .map(|diagnostics| (diagnostics, None))
                 }
             })
-            .map_err(|error| format!("{error:#}"))?;
+            .map_err(|error| format!("{:#}", initialization_hint(&self.context.repo, error)))?;
         let findings = diagnostics
             .into_iter()
             .map(|diagnostic| {
@@ -197,7 +196,7 @@ impl RepositoryCheckPort {
                     let outcome = super::coverage::coverage_scan_from_scanned(
                         &self.context.repo,
                         &self.context.repo,
-                        scope.id.as_str(),
+                        &scope,
                         scanned,
                     )?;
                     governed_finding_count += outcome.governed_finding_count;

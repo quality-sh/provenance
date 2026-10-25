@@ -1,7 +1,10 @@
 use crate::cli::workspace::CoverageCommand;
 use crate::output::{self, ReportFormat};
+use crate::repo_context::RepoContext;
 use anyhow::Context;
 use camino::Utf8PathBuf;
+use provenance_core::Scope;
+use std::borrow::Cow;
 
 mod render;
 mod verification_state;
@@ -15,7 +18,11 @@ pub(super) fn coverage_scan(
     scope: &str,
     validate_rules: bool,
 ) -> anyhow::Result<provenance_core::coverage::CoverageScan> {
-    Ok(coverage_scan_against(repo, path, scope, validate_rules, None)?.scan)
+    let scope = Scope {
+        id: provenance_core::ScopeId::new(scope)?,
+        path_prefix: provenance_core::RepoPathPrefix::new("."),
+    };
+    Ok(coverage_scan_against(repo, path, &scope, validate_rules, None)?.scan)
 }
 
 pub(super) struct CoverageScanOutcome {
@@ -26,7 +33,7 @@ pub(super) struct CoverageScanOutcome {
 fn coverage_scan_against(
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
-    scope: &str,
+    scope: &Scope,
     validate_rules: bool,
     baseline: Option<&camino::Utf8Path>,
 ) -> anyhow::Result<CoverageScanOutcome> {
@@ -37,30 +44,68 @@ fn coverage_scan_against(
 pub(super) fn coverage_scan_from_scanned(
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
-    scope: &str,
+    scope: &Scope,
     scanned: &[provenance_scanner::FileScanWithContent],
 ) -> anyhow::Result<CoverageScanOutcome> {
     coverage_scan_from_scanned_against(repo, path, scope, true, scanned, None)
 }
 
+/// The scanned files that belong to the scope: those under the scope's path
+/// prefix. A prefix of `.` owns every scanned file.
+fn scope_files<'a>(
+    repo: &camino::Utf8Path,
+    scope: &Scope,
+    scanned: &'a [provenance_scanner::FileScanWithContent],
+) -> Cow<'a, [provenance_scanner::FileScanWithContent]> {
+    if scope.path_prefix.as_path() == camino::Utf8Path::new(".") {
+        return Cow::Borrowed(scanned);
+    }
+    let Ok(root) = std::fs::canonicalize(repo.join(scope.path_prefix.as_path())) else {
+        return Cow::Owned(Vec::new());
+    };
+    Cow::Owned(
+        scanned
+            .iter()
+            .filter(|file| {
+                std::fs::canonicalize(&file.scan.file_path)
+                    .is_ok_and(|resolved| resolved.starts_with(&root))
+            })
+            .cloned()
+            .collect(),
+    )
+}
+
+/// Whether the scanned path contains every file of the scope, so an active
+/// Rule with no binding in the scan is unimplemented rather than unseen.
+fn scan_covers_scope(repo: &camino::Utf8Path, scope: &Scope, path: &camino::Utf8Path) -> bool {
+    let root = std::fs::canonicalize(repo.join(scope.path_prefix.as_path()));
+    let path = std::fs::canonicalize(path);
+    match (root, path) {
+        (Ok(root), Ok(path)) => root.starts_with(path),
+        _ => false,
+    }
+}
+
 fn coverage_scan_from_scanned_against(
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
-    scope: &str,
+    scope: &Scope,
     validate_rules: bool,
     scanned: &[provenance_scanner::FileScanWithContent],
     baseline: Option<&camino::Utf8Path>,
 ) -> anyhow::Result<CoverageScanOutcome> {
+    let scanned = scope_files(repo, scope, scanned);
+    let scanned = scanned.as_ref();
     let scans = scanned
         .iter()
         .map(|file| file.scan.clone())
         .collect::<Vec<_>>();
     let commit = scan_commit(repo, &scans);
-    let validation = load_validation_state(repo, scope, &scans, validate_rules)?;
+    let validation = load_validation_state(repo, scope.id.as_str(), &scans, validate_rules)?;
     let mut warnings = validation.warnings;
     let mut governed_finding_count = 0;
     if validate_rules {
-        let completeness = if provenance_scanner::scan_covers_repository(repo, path) {
+        let completeness = if scan_covers_scope(repo, scope, path) {
             provenance_scanner::RuleEvidenceCompleteness::Complete
         } else {
             provenance_scanner::RuleEvidenceCompleteness::Incomplete
@@ -230,6 +275,7 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
             format,
             output,
         } => {
+            let scope = RepoContext::new(repo.clone(), scope).declared_scope()?;
             let policy = provenance_store::settings::Settings::load(
                 &provenance_store::layout::ProvenanceLayout::new(&repo),
             )?

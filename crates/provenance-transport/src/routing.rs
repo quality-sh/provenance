@@ -183,6 +183,18 @@ pub fn invalid(field: Option<&str>) -> ErasedFailure {
     )
 }
 
+/// A required control that the request did not carry reports `required`,
+/// so a caller can tell an absent header from a malformed one.
+pub fn missing(field: &str) -> ErasedFailure {
+    ErasedFailure::new(
+        None,
+        OperationFailure::InvalidInput {
+            field: Some(field.to_owned()),
+            reason: InvalidInputReason::Required,
+        },
+    )
+}
+
 /// A request body that failed JSON parsing reports `malformed_json`, not
 /// `invalid_value`; the envelope has not been inspected yet.
 pub fn malformed_json() -> ErasedFailure {

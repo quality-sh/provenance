@@ -42,15 +42,61 @@ pub async fn dispatch_get(
     let host = RepoContext::new(repo, scope).local_host()?;
     let service = host.porcelain().get();
     let outcome = service.get(input).await?;
-    println!("{}", render_get(&outcome, format)?);
+    let edit = if outcome.view() == provenance_porcelain::get::View::Record {
+        edit_state(&host, &outcome).await
+    } else {
+        None
+    };
+    println!("{}", render_get(&outcome, edit.as_ref(), format)?);
     Ok(())
 }
 
+/// The `edit` state of the record, read from its member route so that a
+/// record read shows the etag that the next guarded update needs.
+async fn edit_state(
+    host: &provenance_transport::StatementHost,
+    outcome: &GetOutcome,
+) -> Option<serde_json::Value> {
+    use provenance_store::operations::catalog::{target_definitions, TargetAction};
+    let kind = outcome.record.node_type();
+    let (_, definition) =
+        target_definitions(TargetAction::Update).find(|(registered, _)| *registered == kind)?;
+    let path = definition
+        .path
+        .replace("{id}", outcome.record.id().as_str());
+    let value = host
+        .invoke_resource(
+            axum::http::Method::GET,
+            &path,
+            serde_json::json!({}),
+            std::collections::BTreeMap::new(),
+            axum::http::HeaderMap::new(),
+        )
+        .await
+        .ok()?;
+    value.get("data")?.get("edit").cloned()
+}
+
 /// Renders the selected record as readable text or structured JSON.
-fn render_get(outcome: &GetOutcome, format: Option<OutputFormat>) -> serde_json::Result<String> {
+fn render_get(
+    outcome: &GetOutcome,
+    edit: Option<&serde_json::Value>,
+    format: Option<OutputFormat>,
+) -> serde_json::Result<String> {
     if format == Some(OutputFormat::Json) {
-        serde_json::to_string_pretty(outcome)
+        let mut value = serde_json::to_value(outcome)?;
+        if let (Some(object), Some(edit)) = (value.as_object_mut(), edit) {
+            object.insert("edit".into(), edit.clone());
+        }
+        serde_json::to_string_pretty(&value)
     } else {
-        render_get_readable(outcome)
+        let mut text = render_get_readable(outcome)?;
+        if let Some(etag) = edit
+            .and_then(|edit| edit.get("etag"))
+            .and_then(|etag| etag.as_str())
+        {
+            text.push_str(&format!("\n\netag: {etag}"));
+        }
+        Ok(text)
     }
 }

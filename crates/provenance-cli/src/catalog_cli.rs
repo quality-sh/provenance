@@ -12,9 +12,15 @@ pub mod fields;
 mod help;
 mod input;
 mod input_guard;
+pub mod refusal;
+
+pub(crate) use help::required_discussion_flags;
+
+use refusal::HostRefusal;
 
 pub struct Invocation {
     context: GlobalContext,
+    format: Option<provenance_cli::porcelain::OutputFormat>,
     path: String,
     definition: &'static Definition,
     data: Value,
@@ -59,6 +65,7 @@ impl Invocation {
             });
         Self {
             context: args.common.context(),
+            format: args.common.format(),
             path: resolved.path,
             definition: resolved.address.definition,
             data,
@@ -66,6 +73,13 @@ impl Invocation {
             headers,
             affected_review_record,
         }
+    }
+
+    pub const fn json_output(&self) -> bool {
+        matches!(
+            self.format,
+            Some(provenance_cli::porcelain::OutputFormat::Json)
+        )
     }
 }
 
@@ -141,6 +155,7 @@ pub fn print_target_help(
 pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
     let Invocation {
         context,
+        format: _,
         path,
         definition,
         data,
@@ -186,7 +201,14 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
             crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
             crate::output::print_json(&value)?;
         }
-        Err(failure) => return Err(failure_with_guidance(&failure, &path, record_id(&path))),
+        Err(failure) => {
+            return Err(failure_with_guidance(
+                &failure,
+                &path,
+                record_id(&path),
+                &context.repo,
+            ))
+        }
     }
     Ok(())
 }
@@ -228,7 +250,14 @@ pub async fn dispatch_target(
     }
     let mut value = match host.invoke_target(&route, data, headers).await {
         Ok(value) => value,
-        Err(failure) => return Err(failure_with_guidance(&failure, &route.path, Some(&target))),
+        Err(failure) => {
+            return Err(failure_with_guidance(
+                &failure,
+                &route.path,
+                Some(&target),
+                &context.repo,
+            ))
+        }
     };
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
@@ -256,20 +285,37 @@ fn failure_with_guidance(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     path: &str,
     target: Option<&str>,
+    context: &provenance_cli::repo_context::RepoContext,
 ) -> anyhow::Error {
-    actionable_failure(failure, target, path.trim_matches('/').split('/').next())
+    actionable_failure(
+        failure,
+        target,
+        path.trim_matches('/').split('/').next(),
+        context,
+    )
+}
+
+/// The `--scope` and `--repo` words that make a hinted command run against
+/// the caller's repository and scope. A default repository path stays implicit.
+fn context_options(context: &provenance_cli::repo_context::RepoContext) -> String {
+    let mut options = format!(" --scope {}", context.scope);
+    if context.repo.as_str() != "." {
+        options.push_str(&format!(" --repo {}", context.repo));
+    }
+    options
 }
 
 /// Names the command that reads the review after a review-workflow refusal.
 #[provenance_macros::rule("rule_review_refusal_names_read_command")]
-fn review_read_command(id: &str) -> String {
-    format!("provenance {id} --view review")
+fn review_read_command(id: &str, context: &provenance_cli::repo_context::RepoContext) -> String {
+    format!("provenance {id} --view review{}", context_options(context))
 }
 
 fn actionable_failure(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     record_id: Option<&str>,
     collection: Option<&str>,
+    context: &provenance_cli::repo_context::RepoContext,
 ) -> anyhow::Error {
     let value = serde_json::to_value(failure).unwrap_or_default();
     let error = &value["error"];
@@ -278,28 +324,40 @@ fn actionable_failure(
         if let (Some(id), Some(submission), Some(collection)) =
             (record_id, error["current_submission"].as_str(), collection)
         {
-            return anyhow::anyhow!(
+            let hint = format!(
                 "record {id} already has pending submission {submission}; \
                  run `{}` to see it; to withdraw it, run \
-                 `provenance {collection} {id} submissions {submission} withdraw --actor <actor>`. \
+                 `provenance {collection} {id} submissions {submission} withdraw --actor <actor>{}`. \
                  For an owned record, also pass --declared-by <owner>",
-                review_read_command(id)
+                review_read_command(id, context),
+                context_options(context)
             );
+            return HostRefusal {
+                failure: value,
+                hint: Some(hint),
+                text_shows_failure: false,
+            }
+            .into();
         }
     }
-    let message = serde_json::to_string(failure).unwrap_or_else(|_| "operation failed".into());
-    if let (Some(id), Some(kind)) = (record_id, kind) {
-        if matches!(
-            kind,
-            "review_submission_conflict"
+    let hint = match (record_id, kind) {
+        (
+            Some(id),
+            Some(
+                "review_submission_conflict"
                 | "requirement_edit_conflict"
                 | "record_edit_conflict"
-                | "unsupported_review_feedback"
-        ) {
-            return anyhow::anyhow!("{message}; run `{}`", review_read_command(id));
-        }
+                | "unsupported_review_feedback",
+            ),
+        ) => Some(format!("run `{}`", review_read_command(id, context))),
+        _ => None,
+    };
+    HostRefusal {
+        failure: value,
+        hint,
+        text_shows_failure: true,
     }
-    anyhow::anyhow!(message)
+    .into()
 }
 
 const COMMON: &[&str] = &[
