@@ -187,7 +187,7 @@ fn a_detached_start_and_reuse_open_the_page_when_a_browser_is_available() {
 
     let second_browser = BrowserRecorder::install();
     let reused = detach(repo.path(), &cache, |command| {
-        second_browser.configure(command)
+        second_browser.configure(command);
     });
     assert_eq!(reused["reused"], Value::Bool(true));
     assert_eq!(reused["opened"], Value::Bool(true));
