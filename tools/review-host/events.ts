@@ -1,3 +1,4 @@
+import { BROWSER_RESET_REASONS } from './session.ts';
 import type { ChangedRecord, ReviewChange, RereadReason } from './session.ts';
 
 /** The WebSocket parts that the event client uses. */
@@ -71,16 +72,10 @@ export function parseFrame(text: unknown): Frame | undefined {
     case 'ready':
       return { type: 'ready', epoch, sequence };
     case 'reset':
-      switch (value.reason) {
-        case 'ready':
-        case 'sequence-gap':
-        case 'file-events-lost':
-        case 'observation-recovered':
-        case 'subscriber-loss':
-          return { type: 'reset', epoch, sequence, reason: value.reason };
-        default:
-          return undefined;
+      for (const reason of BROWSER_RESET_REASONS) {
+        if (value.reason === reason) return { type: 'reset', epoch, sequence, reason };
       }
+      return undefined;
     case 'changed': {
       const records = changedRecords(value.scopes);
       return records && { type: 'changed', epoch, sequence, records };
