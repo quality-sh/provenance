@@ -1,5 +1,6 @@
 #![allow(dead_code, clippy::duplicated_attributes)]
 
+pub mod detached;
 pub mod resolution;
 pub mod waits;
 

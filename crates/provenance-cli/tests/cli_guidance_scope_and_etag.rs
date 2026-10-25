@@ -77,6 +77,7 @@ fn managed_guidance_carries_the_selected_scope_on_every_review_command() {
 
     for line in [
         "provenance review --repo . --repository-id local --scope app --detach --no-open`",
+        "provenance review --repo . --repository-id local --scope app --detach`",
         "provenance <record-id> --scope app --review-link --format json`",
         "provenance <record-id> --scope app --review-link --no-open --format json`",
         "provenance <record-id> --scope app --view review`",
@@ -92,7 +93,7 @@ fn managed_guidance_carries_the_selected_scope_on_every_review_command() {
 
 #[test]
 #[verifies("rule_init_guidance_background_review_host", examples)]
-fn managed_guidance_runs_the_review_host_as_a_process_the_agent_can_stop() {
+fn managed_guidance_runs_one_shared_review_host_that_sessions_reuse() {
     let directory = tempfile::tempdir().unwrap();
     init(directory.path(), "default");
     let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
@@ -101,11 +102,13 @@ fn managed_guidance_runs_the_review_host_as_a_process_the_agent_can_stop() {
     for text in [
         "start or reuse the review host",
         "--detach --no-open`",
-        "it prints the process ID of the host as `pid`",
-        "Keep that process ID",
-        "stop the host with `kill <pid>`",
+        "One host serves the repository and scope for all sessions.",
+        "It keeps running after the command returns, and later sessions reuse it, so leave it running.",
     ] {
         assert!(words.contains(text), "missing {text}\n{agents}");
+    }
+    for text in ["`kill", "`pid`", "stop the host"] {
+        assert!(!words.contains(text), "{text}\n{agents}");
     }
     assert!(!words.contains("nohup"), "{agents}");
 }

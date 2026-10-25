@@ -1,5 +1,7 @@
 //! A Rule or Question answer that cites a Resolution that is not approved is refused with a
 //! message that says what to do, and the routes it names succeed.
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
 #[path = "shaping_support/fixtures.rs"]
 mod fixtures;
 #[path = "shaping_support/provenance.rs"]
@@ -131,4 +133,81 @@ fn an_answer_citing_a_proposed_resolution_is_told_what_to_do() {
         ))
         .stderr(contains(NEXT_STEP));
     answer(&[]).success();
+}
+
+#[test]
+#[verifies("rule_unapproved_resolution_refusal_says_what_to_do", examples)]
+fn a_citation_of_a_missing_resolution_is_told_what_to_do() {
+    let dir = setup();
+    let repo = dir.path().to_str().unwrap();
+    provenance(&[
+        "rules",
+        "create",
+        "--repo",
+        repo,
+        "--scope",
+        "default",
+        "--id",
+        "rule_robot_rusts",
+        "--requirement-id",
+        "req_overtime",
+        "--resolution-id",
+        "res_not_written",
+        "--statement",
+        "The robot rusts after a long time without a proven task.",
+        "--severity",
+        "high",
+    ])
+    .failure()
+    .code(1)
+    .stderr(contains(r#""kind":"resolution_not_approved""#))
+    .stderr(contains(r#""resolution_id":"res_not_written""#))
+    .stderr(contains(
+        "rule rule_robot_rusts cites resolution res_not_written, which does not exist.",
+    ));
+}
+
+#[test]
+#[verifies("rule_unapproved_resolution_refusal_says_what_to_do", examples)]
+fn an_import_with_an_active_rule_citing_a_proposed_resolution_is_told_what_to_do() {
+    let dir = setup();
+    let repo = dir.path().to_str().unwrap();
+    rule(repo, Some("review")).success();
+    export_fixture_support::make_default_scope_portable(dir.path());
+    let export = dir.path().join("scope.json");
+    provenance(&[
+        "export",
+        "--repo",
+        repo,
+        "--scope",
+        "default",
+        "--format",
+        "json",
+        "--output",
+        export.to_str().unwrap(),
+    ])
+    .success();
+    let mut scope: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&export).unwrap()).unwrap();
+    for rule in scope["rules"].as_array_mut().unwrap() {
+        rule["status"] = serde_json::json!("active");
+    }
+    std::fs::write(&export, serde_json::to_vec(&scope).unwrap()).unwrap();
+
+    provenance(&[
+        "import",
+        "--repo",
+        repo,
+        "--scope",
+        "default",
+        "--input",
+        export.to_str().unwrap(),
+    ])
+    .failure()
+    .code(1)
+    .stderr(contains(r#""kind":"resolution_not_approved""#))
+    .stderr(contains(
+        "rule rule_robot_rusts cites resolution res_rust_with_neglect, which is proposed.",
+    ))
+    .stderr(contains(NEXT_STEP));
 }

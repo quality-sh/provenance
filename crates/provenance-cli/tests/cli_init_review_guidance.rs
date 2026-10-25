@@ -55,11 +55,20 @@ fn init_guidance_starts_the_host_early_and_hands_the_link_over_as_text() {
         "{agents}"
     );
     assert!(
-        prose.contains("That is extra, never the only route."),
+        prose.contains("Opening the page is extra. Always give the link in chat too."),
         "{agents}"
     );
     assert!(
-        prose.contains("The page is served on the machine that runs the host."),
+        prose.contains("A link works once and expires after 120 seconds."),
+        "{agents}"
+    );
+    assert!(
+        prose.contains(
+            "The page is served on the machine that runs the host. If that is not the \
+             person's machine, say so, and give the person this command to run on their own \
+             machine: `provenance review --repo . --repository-id local --scope default \
+             --detach`. It opens the page in their browser."
+        ),
         "{agents}"
     );
     assert!(

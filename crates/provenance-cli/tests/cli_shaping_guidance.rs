@@ -32,7 +32,7 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
     assert!(
         prose.contains(
             "how the product behaves, in the present tense: its states, what moves it between \
-             them, what the person sees, and one example or edge case."
+             them, what the person sees, and one example."
         ),
         "{shaping}"
     );
@@ -65,6 +65,10 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
         ),
         "{writing}"
     );
+    assert!(
+        prose.contains("what the person sees, and one example. Write it for a builder"),
+        "{writing}"
+    );
     assert!(prose.contains("Description as minutes — bad:"), "{writing}");
     assert!(prose.contains("Description as spec — good:"), "{writing}");
     assert!(!prose.contains("where being fuller is fine"), "{writing}");
@@ -93,38 +97,29 @@ fn shaping_guidance_answers_a_question_only_when_the_answer_covers_it() {
     );
 }
 
-/// The review host starts with the session, and the link reaches the person as text.
+/// The review host starts with the session, and the link reaches the person as text. The
+/// skill says this in product words and leaves the commands to the `AGENTS.md` section.
 #[test]
 #[verifies("rule_shaping_skill_gives_review_link_first", examples)]
 fn shaping_guidance_puts_the_review_link_in_the_first_reply() {
     let shaping = skill("provenance-shaping");
     let prose = normalized(&shaping);
-    assert!(
-        shaping.contains(
-            "provenance review --repo . --repository-id local --scope <scope> --detach --no-open"
-        ),
-        "{shaping}"
-    );
-    assert!(
-        prose.contains(
-            "Start or reuse the review host, and give the person its link in your first reply:"
-        ),
-        "{shaping}"
-    );
-    assert!(
-        prose.contains("Paste `review_url` from its output into the chat as plain text."),
-        "{shaping}"
-    );
-    assert!(
-        prose.contains("the pasted link is the route that always works."),
-        "{shaping}"
-    );
-    assert!(
-        prose.contains("The page is served on the machine that runs the host."),
-        "{shaping}"
-    );
-    assert!(
-        prose.contains("paste the anchor's review link again."),
-        "{shaping}"
-    );
+    for text in [
+        "Give the person the review page in your first reply.",
+        "start or reuse the review host as the Provenance section of `AGENTS.md` says, and \
+         paste the page link into the chat as plain text.",
+        "One host serves the repository and scope for all sessions, so leave it running.",
+        "Opening the page in a browser or in the app that shows your chat is extra. Always \
+         give the link in chat too.",
+        "A link works once and expires after 120 seconds;",
+        "The page is served on the machine that runs the host. If that is not the person's \
+         machine, say so, and give the person the command from `AGENTS.md` that starts the \
+         host on their own machine.",
+        "paste the anchor's review link again.",
+    ] {
+        assert!(prose.contains(text), "missing {text}\n{shaping}");
+    }
+    for command in ["--detach", "--review-link", "document get"] {
+        assert!(!shaping.contains(command), "{command}\n{shaping}");
+    }
 }
