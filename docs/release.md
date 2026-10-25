@@ -25,9 +25,11 @@ The workflow publishes these Rust crates to crates.io:
 
 - `provenance-macros`
 - `provenance-core`
+- `provenance-porcelain`
 - `provenance-scanner`
 - `provenance-ste100`
 - `provenance-store`
+- `provenance-report`
 - `provenance-sdk`
 - `provenance-http-client`
 - `provenance-transport`

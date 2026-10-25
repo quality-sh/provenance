@@ -20,9 +20,11 @@ crates_are_visible() {
   for crate in \
     provenance-macros \
     provenance-core \
+    provenance-porcelain \
     provenance-scanner \
     provenance-ste100 \
     provenance-store \
+    provenance-report \
     provenance-sdk \
     provenance-http-client \
     provenance-transport \
