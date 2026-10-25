@@ -3,41 +3,17 @@
 //! Topic or Question update carries the etag that the guidance tells the
 //! agent to read first.
 
-use assert_cmd::Command;
 use predicates::prelude::*;
 use provenance_macros::verifies;
-use serde_json::Value;
 use std::path::Path;
 
-fn provenance() -> Command {
-    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+mod support {
+    pub mod review_paths;
 }
+use support::review_paths::{init_scope, json_output as json, provenance};
 
 fn init(repo: &Path, scope: &str) {
-    provenance()
-        .args([
-            "init",
-            "--path",
-            repo.to_str().unwrap(),
-            "--scope",
-            scope,
-            "--path-prefix",
-            ".",
-            "--disposition-actor-id",
-            "reviewer",
-        ])
-        .assert()
-        .success();
-}
-
-fn json(command: &mut Command) -> Value {
-    let output = command.output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
+    init_scope(repo, scope, ".");
 }
 
 /// A requirement, a topic under it, and one question under the topic.
@@ -114,20 +90,26 @@ fn managed_guidance_carries_the_selected_scope_on_every_review_command() {
 }
 
 #[test]
+#[verifies("rule_init_guidance_background_review_host", examples)]
 fn managed_guidance_starts_the_review_host_in_the_background() {
     let directory = tempfile::tempdir().unwrap();
     init(directory.path(), "default");
     let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
 
-    assert!(agents.contains(
-        "provenance review --repo . --repository-id local --scope default --no-open \
-         > .provenance/cache/review-host.log 2>&1 &`"
-    ));
-    assert!(agents.contains("stop the host with `kill <pid>`"));
-    assert!(!agents.contains("--no-open`."), "{agents}");
+    for text in [
+        "In a POSIX shell",
+        "`mkdir -p .provenance/cache && nohup provenance review --repo . --repository-id local \
+         --scope default --no-open > .provenance/cache/review-host.log 2>&1 & echo $!`",
+        "wait until the log shows the startup",
+        "a JSON object with `endpoint`",
+        "stop the host with `kill <pid>`",
+    ] {
+        assert!(agents.contains(text), "missing {text}\n{agents}");
+    }
 }
 
 #[test]
+#[verifies("rule_init_guidance_selected_scope", examples)]
 fn the_documented_archive_commands_run_as_written() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
@@ -167,6 +149,7 @@ fn the_documented_archive_commands_run_as_written() {
 }
 
 #[test]
+#[verifies("rule_missing_if_match_is_required", examples)]
 fn a_question_update_without_the_header_reports_it_as_required() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
@@ -192,6 +175,7 @@ fn a_question_update_without_the_header_reports_it_as_required() {
 }
 
 #[test]
+#[verifies("rule_porcelain_get_returns_record", examples)]
 fn a_record_read_shows_the_edit_etag() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
@@ -209,6 +193,7 @@ fn a_record_read_shows_the_edit_etag() {
     }
 }
 
+// Implementation aid: keeps the bundled skill's Question update in step with the If-Match guard.
 #[test]
 fn the_fork_tournament_skill_passes_the_question_etag() {
     let directory = tempfile::tempdir().unwrap();
@@ -219,8 +204,11 @@ fn the_fork_tournament_skill_passes_the_question_etag() {
             .join(".agents/skills/provenance-fork-tournament/SKILL.md"),
     )
     .unwrap();
+    let words = skill.split_whitespace().collect::<Vec<_>>().join(" ");
 
-    assert!(skill.contains("provenance questions <question_id> get --scope <scope> --format json"));
-    assert!(skill.contains("--if-match <etag> \\\n      --status blocked_on_human"));
-    assert!(!skill.contains("update --scope <scope> \\\n      --status blocked_on_human"));
+    assert!(words.contains("provenance questions <question_id> get --scope <scope> --format json"));
+    assert!(
+        words.contains("update --scope <scope> \\ --if-match <etag> \\ --status blocked_on_human")
+    );
+    assert!(!words.contains("update --scope <scope> \\ --status blocked_on_human"));
 }

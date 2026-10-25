@@ -2,6 +2,7 @@
 //! its file and line instead of dropped.
 
 use camino::Utf8PathBuf;
+use provenance_macros::verifies;
 use provenance_scanner::scan_path_with_content;
 
 fn scan(name: &str, source: &str) -> provenance_scanner::FileScan {
@@ -14,6 +15,7 @@ fn scan(name: &str, source: &str) -> provenance_scanner::FileScan {
 }
 
 #[test]
+#[verifies("rule_verification_method_words", examples)]
 fn script_verifies_calls_without_a_method_warn_with_the_line() {
     let scan = scan(
         "bindings.js",
@@ -39,6 +41,7 @@ fn script_verifies_calls_without_a_method_warn_with_the_line() {
 }
 
 #[test]
+#[verifies("rule_verification_method_words", examples)]
 fn rust_verifies_attributes_without_a_method_warn_with_the_line() {
     let scan = scan(
         "lib.rs",
@@ -55,10 +58,12 @@ fn rust_verifies_attributes_without_a_method_warn_with_the_line() {
 }
 
 #[test]
+#[verifies("rule_verification_method_words", examples)]
 fn well_formed_sites_and_other_calls_warn_about_nothing() {
     let scan = scan(
         "clean.ts",
-        "verifies('rule_pw', 'examples');\nconst verified = verifiesSomething(x);\nrule(\"rule_pw\", { statement: \"x\" });\n",
+        "verifies('rule_pw', 'examples');\nconst verified = verifiesSomething(x);\nrule(\"rule_pw\", { statement: \"x\" });\n\
+         export function verifies(\n  _ruleId: string,\n  _method: VerificationMethod,\n): void {}\n",
     );
 
     assert!(scan.warnings.is_empty(), "{:?}", scan.warnings);

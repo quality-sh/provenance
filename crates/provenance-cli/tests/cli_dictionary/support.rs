@@ -80,10 +80,11 @@ pub fn write_reference(repo: &Path, dictionary: &DictionaryImport) {
 pub fn error_json(output: &Output) -> serde_json::Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
     serde_json::from_str::<serde_json::Value>(
+        // JSON mode prints the object bare; text mode prints it after `Error: `.
         stderr
             .trim()
             .strip_prefix("Error: ")
-            .expect("CLI failure contains one machine-readable JSON object"),
+            .unwrap_or_else(|| stderr.trim()),
     )
     .unwrap()["error"]
         .clone()

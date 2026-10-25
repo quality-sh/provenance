@@ -78,8 +78,7 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
     );
     assert!(!refused.status.success());
     let diagnostic = String::from_utf8(refused.stderr).unwrap();
-    let error: Value =
-        serde_json::from_str(diagnostic.trim().strip_prefix("Error: ").unwrap()).unwrap();
+    let error: Value = serde_json::from_str(json_refusal(&diagnostic)).unwrap();
     assert_eq!(
         error["error"]["kind"], "approval_evidence_required",
         "{error}"
@@ -177,8 +176,7 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
         );
         assert!(!refused.status.success());
         let diagnostic = String::from_utf8(refused.stderr).unwrap();
-        let error: Value =
-            serde_json::from_str(diagnostic.trim().strip_prefix("Error: ").unwrap()).unwrap();
+        let error: Value = serde_json::from_str(json_refusal(&diagnostic)).unwrap();
         assert_eq!(
             error["error"]["kind"], "approval_evidence_required",
             "{error}"
@@ -208,4 +206,10 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
     let after = success(&run(repo, &["proposals", "proposal_review", "get"], None));
     eprintln!("After direct approval read: {after}");
     assert_eq!(after["data"]["promotion_state"], "accepted", "{after}");
+}
+
+/// The refusal object: JSON mode prints it bare, text mode after `Error: `.
+fn json_refusal(diagnostic: &str) -> &str {
+    let diagnostic = diagnostic.trim();
+    diagnostic.strip_prefix("Error: ").unwrap_or(diagnostic)
 }
