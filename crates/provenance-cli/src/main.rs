@@ -29,12 +29,11 @@ async fn main() -> anyhow::Result<()> {
     let json = invocation.json_output();
     match invocation.dispatch().await {
         Ok(()) => Ok(()),
-        Err(error) => match json
+        Err(error) => json
             .then(|| catalog_cli::refusal::json_refusal(&error))
             .flatten()
-        {
-            Some(refusal) => catalog_cli::refusal::exit_with_json(&refusal),
-            None => Err(error),
-        },
+            .map_or(Err(error), |refusal| {
+                catalog_cli::refusal::exit_with_json(&refusal)
+            }),
     }
 }
