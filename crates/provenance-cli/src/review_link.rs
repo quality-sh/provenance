@@ -55,17 +55,24 @@ pub async fn print(
     .await?
     .ok_or_else(|| anyhow::anyhow!("record {record_id} is not in a Requirement review document"))?;
     let output = match &target.host {
+        Some(host) if no_open => browser_output(host, &target, no_open),
         // A connected page shows the record, so its drafts and position stay.
-        Some(host) if !no_open && shown_in_connected_page(host, &target).await => LinkOutput {
-            review_url: Some(plain_link(host, &target)),
-            opened: Some(true),
-            message: None,
+        Some(host) => match connected_page(host, &target).await {
+            PageResult::Shown => LinkOutput {
+                review_url: Some(plain_link(host, &target)),
+                opened: Some(true),
+                message: None,
+            },
+            PageResult::Waiting => kept_output(
+                plain_link(host, &target),
+                "a connected review page got the link, so no browser opens; open the printed URL if the page does not show it",
+            ),
+            PageResult::Replaced => kept_output(
+                plain_link(host, &target),
+                "a newer review link replaced this link in the open review page, so no browser opens",
+            ),
+            PageResult::NoPage => browser_output(host, &target, no_open),
         },
-        Some(host) => opened_output(
-            launch_link(host, &target)?,
-            plain_link(host, &target),
-            no_open,
-        ),
         None => LinkOutput {
             review_url: None,
             opened: None,
@@ -116,6 +123,24 @@ async fn try_annotate_write(
     Ok(())
 }
 
+/// Opens the record in a new browser page, signed in when the host issues a launch code.
+fn browser_output(host: &DiscoveredLocalHost, target: &ReviewTarget, no_open: bool) -> LinkOutput {
+    match launch_link(host, target) {
+        Ok(launch) => opened_output(launch, plain_link(host, target), no_open),
+        Err(error) => signed_out_output(plain_link(host, target), &error),
+    }
+}
+
+/// Prints the plain review link when a connected page has the link but does not show it.
+fn kept_output(plain: String, warning: &str) -> LinkOutput {
+    eprintln!("warning: {warning}");
+    LinkOutput {
+        review_url: Some(plain),
+        opened: Some(false),
+        message: None,
+    }
+}
+
 /// Opens the launch link, or puts it in the output for the caller when the CLI cannot open it.
 #[rule("rule_review_link_printed_when_not_opened")]
 fn opened_output(launch: url::Url, plain: String, no_open: bool) -> LinkOutput {
@@ -130,6 +155,18 @@ fn opened_output(launch: url::Url, plain: String, no_open: bool) -> LinkOutput {
             opened: Some(false),
             message: None,
         },
+    }
+}
+
+/// Prints the plain review link when the host cannot sign the page in through this CLI.
+fn signed_out_output(plain: String, error: &anyhow::Error) -> LinkOutput {
+    eprintln!(
+        "warning: the review link cannot sign the page in, so open it and sign in: {error:#}"
+    );
+    LinkOutput {
+        review_url: Some(plain),
+        opened: Some(false),
+        message: None,
     }
 }
 
@@ -155,19 +192,8 @@ async fn review_target(
     )
     .await?
     .result;
-    let [root] = roots.as_slice() else {
-        if roots.is_empty() {
-            return Ok(None);
-        }
-        anyhow::bail!(
-            "record {} appears in multiple Requirement review documents: {}",
-            record.id,
-            roots
-                .iter()
-                .map(StableId::as_str)
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+    let Some(root) = roots.first() else {
+        return Ok(None);
     };
     let host =
         provenance_transport::local_host::discover(context.repo.as_std_path(), &context.scope)?;
@@ -209,11 +235,25 @@ fn launch_link(host: &DiscoveredLocalHost, target: &ReviewTarget) -> anyhow::Res
     Ok(link)
 }
 
-/// Asks the host to show the record in a connected page and waits, without a deadline, for the
-/// page to acknowledge it. Any other outcome uses the browser.
-async fn shown_in_connected_page(host: &DiscoveredLocalHost, target: &ReviewTarget) -> bool {
+/// What a connected page did with a review link, as the host reports it.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum PageResult {
+    Shown,
+    Waiting,
+    Replaced,
+    NoPage,
+}
+
+// The host ends its wait for the page after five seconds; this limit covers a host that does
+// not answer.
+const NAVIGATION_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Asks the host to show the record in a connected page. Only a link that no page received
+/// uses the browser.
+async fn connected_page(host: &DiscoveredLocalHost, target: &ReviewTarget) -> PageResult {
     let Ok(key) = crate::review::launch::LaunchKey::read(host.instance_nonce()) else {
-        return false;
+        return PageResult::NoPage;
     };
     let mut url = host.endpoint().clone();
     url.set_path("/review-navigation");
@@ -225,6 +265,7 @@ async fn shown_in_connected_page(host: &DiscoveredLocalHost, target: &ReviewTarg
     tokio::task::spawn_blocking(move || {
         ureq::AgentBuilder::new()
             .redirects(0)
+            .timeout(NAVIGATION_TIMEOUT)
             .build()
             .post(url.as_str())
             .set("Content-Type", "application/json")
@@ -232,10 +273,11 @@ async fn shown_in_connected_page(host: &DiscoveredLocalHost, target: &ReviewTarg
             .ok()
             .and_then(|response| response.into_string().ok())
             .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-            .is_some_and(|reply| reply["shown"] == Value::Bool(true))
+            .and_then(|reply| serde_json::from_value(reply["result"].clone()).ok())
+            .unwrap_or(PageResult::NoPage)
     })
     .await
-    .unwrap_or(false)
+    .unwrap_or(PageResult::NoPage)
 }
 
 /// Puts the review document and optional focused record into the review URL.

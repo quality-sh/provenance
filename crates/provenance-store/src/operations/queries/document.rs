@@ -42,7 +42,10 @@ pub async fn read_document_answer(
     })
 }
 
-/// Finds each Requirement whose canonical review document contains one record.
+/// Returns at most one document: nearest, then deepest, then lowest Requirement ID.
+///
+/// A Requirement selects its own document. Other graph records must be members,
+/// except Sources and Domains, which the document stores as references.
 pub async fn containing_review_documents(
     repo: Option<Utf8PathBuf>,
     scope: &ScopeId,

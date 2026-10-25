@@ -1,13 +1,14 @@
 use axum::{body::Body, http::Request};
+use provenance_transport::fixture::{FixtureAccess, Target};
 use provenance_transport::StatementHost;
 use serde_json::Value;
 use tower::ServiceExt as _;
 
 use super::records::Repository;
 
-pub fn host(repo: &Repository, writable: bool) -> StatementHost {
-    use provenance_transport::fixture::{FixtureAccess, Target};
-    let access = FixtureAccess::new(
+/// Fixture access to the `default` scope of the repository named `selected`.
+pub fn access(repo: &Repository) -> FixtureAccess {
+    FixtureAccess::new(
         vec![Target {
             id: "selected".into(),
             root: repo.dir.path().to_path_buf(),
@@ -16,7 +17,11 @@ pub fn host(repo: &Repository, writable: bool) -> StatementHost {
         "fixture-secret",
         "fixture.test",
     )
-    .unwrap();
+    .unwrap()
+}
+
+pub fn host(repo: &Repository, writable: bool) -> StatementHost {
+    let access = access(repo);
     StatementHost::with_fixture_access(if writable {
         access.allow_writes()
     } else {

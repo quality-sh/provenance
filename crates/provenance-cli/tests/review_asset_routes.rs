@@ -57,6 +57,8 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
             }
         }
     }
+    // Paths outside the bundle answer like the host API: authentication, then classification.
+    let bearer = format!("Bearer {}", host.bearer());
     for path in [
         "/%2e%2e/Cargo.toml",
         "/.provenance/manifest.json",
@@ -64,6 +66,11 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
     ] {
         assert_eq!(
             request(endpoint, "GET", path, &[], &[]).status(),
+            401,
+            "{path}"
+        );
+        assert_eq!(
+            request(endpoint, "GET", path, &[("Authorization", &bearer)], &[]).status(),
             404,
             "{path}"
         );

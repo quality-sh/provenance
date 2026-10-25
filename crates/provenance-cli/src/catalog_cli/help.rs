@@ -12,6 +12,113 @@ use std::fmt::Write as _;
 
 mod schema;
 
+#[provenance_macros::rule("rule_create_help_accepted_fields")]
+pub(super) fn target(
+    mut command: clap::Command,
+    action: Option<crate::invocation::grammar::TargetVerb>,
+    kind: Option<provenance_core::NodeType>,
+) -> anyhow::Result<()> {
+    use crate::invocation::grammar::TargetVerb;
+    use provenance_store::operations::catalog;
+
+    if let Some(TargetVerb::Action(action)) = action {
+        if catalog::TargetAction::RECORD.contains(&action) {
+            let needs_type = action == catalog::TargetAction::Create && kind.is_none();
+            let mut allowed = super::COMMON
+                .iter()
+                .copied()
+                .chain(["stdin", "help"])
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>();
+            if action == catalog::TargetAction::Create {
+                allowed.insert("record_type".into());
+            }
+            for (_, definition) in catalog::target_definitions(action).filter(|(registered, _)| {
+                !needs_type && kind.is_none_or(|kind| *registered == kind)
+            }) {
+                allowed.extend(fields::accepted_flags(&fields::declared(definition)?));
+            }
+            allowed.remove("id");
+            allowed.remove("id-json");
+            command = command.mut_args(|arg| {
+                let hidden = !allowed.contains(arg.get_id().as_str());
+                arg.hide(hidden)
+            });
+            if needs_type {
+                command = command.after_help(
+                    "Select a record type to see its accepted fields:\n  provenance <id> create --type <kind> --help",
+                );
+            }
+        } else if provenance_porcelain::action::Action::DISCUSSION.contains(&action) {
+            command = discussion_help(command, action);
+        }
+    }
+    println!("{}", command.render_help());
+    Ok(())
+}
+
+/// Discussion action help lists the typed input fields of that action and
+/// marks the ones the action cannot run without.
+fn discussion_help(
+    command: clap::Command,
+    action: provenance_porcelain::action::Action,
+) -> clap::Command {
+    let schema = provenance_porcelain::discussion::input_schema(action);
+    let bound = [
+        provenance_porcelain::discussion::target_field(action),
+        "parent",
+        "discussion_id",
+    ];
+    let properties = schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .map(|properties| {
+            properties
+                .keys()
+                .filter(|field| !bound.contains(&field.as_str()))
+                .map(|field| fields::cli_name(field))
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let required = required_discussion_flags(&schema, action);
+    let mut allowed = super::COMMON
+        .iter()
+        .copied()
+        .chain(["stdin", "help"])
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    allowed.extend(properties);
+    command.mut_args(|arg| {
+        let name = arg.get_id().as_str().to_owned();
+        let hidden = !allowed.contains(&name);
+        arg.hide(hidden).required(required.contains(&name))
+    })
+}
+
+/// The flags a Discussion action needs on the command line: the required
+/// schema fields that neither the target nor a CLI default supplies.
+pub fn required_discussion_flags(
+    schema: &Value,
+    action: provenance_porcelain::action::Action,
+) -> BTreeSet<String> {
+    let supplied = [
+        provenance_porcelain::discussion::target_field(action),
+        "parent",
+        "discussion_id",
+        "actor",
+        "role",
+    ];
+    schema
+        .get("required")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|field| !supplied.contains(field))
+        .map(fields::cli_name)
+        .collect()
+}
+
 /// Render the help block that lists every registered operation.
 pub(super) fn collection(collection: &str) -> String {
     let mut registrations = address::registrations(collection);

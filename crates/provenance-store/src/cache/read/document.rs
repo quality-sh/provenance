@@ -1,9 +1,11 @@
 //! Root-related key selection. Payload reads use the same bounded snapshot.
 use crate::operations::reader::{Position, ReadSnapshot};
+use provenance_core::model::relations::RelationSource;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use sqlx::Row;
+use std::collections::BTreeSet;
 
 // The recursive term follows only active refinement children. Production
 // and references are separate sets, so a cross-link cannot widen the branch.
@@ -111,38 +113,75 @@ fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
 }
 
 impl ReadSnapshot {
-    /// Returns each Requirement whose canonical document contains the record.
+    /// Returns the nearest member document, then prefers depth and Requirement ID.
+    /// Sources and Domains remain eligible as document references.
+    #[rule("rule_review_document_choice")]
     pub(crate) async fn containing_document_roots(
         &self,
         kind: NodeType,
         id: &StableId,
     ) -> anyhow::Result<Vec<StableId>> {
         self.attest("requirements");
-        let mut tx = self.connection().await;
-        let root_ids: Vec<String> = sqlx::query_scalar(
-            "SELECT id FROM requirements WHERE scope_id = ? ORDER BY id LIMIT 4097",
-        )
-        .bind(self.scope().as_str())
-        .fetch_all(&mut **tx)
-        .await?;
-        drop(tx);
-        if root_ids.len() > 4096 {
-            return Err(ReadFailure::PageBudgetExceeded.into());
-        }
-        let mut roots = Vec::new();
-        for root in root_ids {
-            let contains = self
-                .document_keys(&root, &Position::default(), 8193, false, &[])
-                .await?
-                .iter()
-                .any(|(entry_kind, key)| {
-                    key.stage < 2 && entry_kind == kind.as_str() && key.id == id.as_str()
-                });
-            if contains {
-                roots.push(StableId::new(root)?);
+        let mut frontier = vec![(kind, id.clone())];
+        let mut seen = BTreeSet::from([(kind.rank(), id.as_str().to_owned())]);
+        while !frontier.is_empty() {
+            let mut layer = Vec::new();
+            for (candidate_kind, root) in &frontier {
+                if *candidate_kind != NodeType::Requirement {
+                    continue;
+                }
+                let contains = self
+                    .document_keys(root.as_str(), &Position::default(), 8193, false, &[])
+                    .await?
+                    .iter()
+                    .any(|(entry_kind, key)| {
+                        let eligible = key.stage == 0
+                            || (key.stage == 1
+                                && matches!(kind, NodeType::Source | NodeType::Domain));
+                        eligible && entry_kind == kind.as_str() && key.id == id.as_str()
+                    });
+                if contains {
+                    let mut tx = self.connection().await;
+                    let depth: i64 = sqlx::query_scalar(
+                        "WITH RECURSIVE ancestors(id) AS (
+                         SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2
+                         AND refines IS NOT NULL UNION
+                         SELECT r.refines FROM ancestors a JOIN requirements r
+                         ON r.scope_id = ?1 AND r.id = a.id WHERE r.refines IS NOT NULL)
+                         SELECT COUNT(*) FROM ancestors",
+                    )
+                    .bind(self.scope().as_str())
+                    .bind(root.as_str())
+                    .fetch_one(&mut **tx)
+                    .await?;
+                    drop(tx);
+                    layer.push((std::cmp::Reverse(depth), root.clone()));
+                }
             }
+            layer.sort_by(|(depth_a, id_a), (depth_b, id_b)| {
+                depth_a
+                    .cmp(depth_b)
+                    .then_with(|| id_a.as_str().cmp(id_b.as_str()))
+            });
+            if let Some((_, root)) = layer.into_iter().next() {
+                return Ok(vec![root]);
+            }
+            let front = super::front::SqlFront::hop(&self.relations(), &frontier).await?;
+            let mut next = Vec::new();
+            for (kind, id) in &frontier {
+                for (_, endpoint) in front
+                    .outgoing(*kind, id)
+                    .into_iter()
+                    .chain(front.incoming(*kind, id))
+                {
+                    if seen.insert((endpoint.node_type.rank(), endpoint.id.as_str().to_owned())) {
+                        next.push((endpoint.node_type, endpoint.id));
+                    }
+                }
+            }
+            frontier = next;
         }
-        Ok(roots)
+        Ok(Vec::new())
     }
 
     /// Selects members from the root branch and leaves ancestors in references.

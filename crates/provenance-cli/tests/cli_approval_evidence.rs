@@ -78,8 +78,7 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
     );
     assert!(!refused.status.success());
     let diagnostic = String::from_utf8(refused.stderr).unwrap();
-    let error: Value =
-        serde_json::from_str(diagnostic.trim().strip_prefix("Error: ").unwrap()).unwrap();
+    let error: Value = serde_json::from_str(diagnostic.trim_end()).unwrap();
     assert_eq!(
         error["error"]["kind"], "approval_evidence_required",
         "{error}"
@@ -177,8 +176,7 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
         );
         assert!(!refused.status.success());
         let diagnostic = String::from_utf8(refused.stderr).unwrap();
-        let error: Value =
-            serde_json::from_str(diagnostic.trim().strip_prefix("Error: ").unwrap()).unwrap();
+        let error: Value = serde_json::from_str(diagnostic.trim_end()).unwrap();
         assert_eq!(
             error["error"]["kind"], "approval_evidence_required",
             "{error}"

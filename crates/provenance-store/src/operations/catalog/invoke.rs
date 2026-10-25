@@ -151,17 +151,69 @@ pub(super) fn invoke_resolved<O: Operation>(
     })
 }
 
+#[provenance_macros::rule("rule_submit_refusal_names_missing_lists")]
 fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T, FailureEnvelope> {
+    #[cfg(feature = "schema")]
+    {
+        let schema = super::schema::schema::<O::Request>(schemars::generate::Contract::Deserialize);
+        let missing = schema["required"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .filter(|field| {
+                schema["properties"][*field]["type"] == "array"
+                    && call["request"].get(*field).is_none()
+            })
+            .collect::<Vec<_>>();
+        if let Some(first) = missing.first() {
+            let guidance = missing
+                .iter()
+                .map(|field| {
+                    format!(
+                        "{field}: supply --{} '[]' or JSON \"{field}\": []",
+                        super::schema::json_flag(field)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(FailureEnvelope::declared(
+                O::NAME,
+                serde_json::json!({
+                    "kind":"invalid_input", "field":format!("request.{first}"), "reason":"required",
+                    "missing_fields":missing, "message":format!("Required list fields are missing: {guidance}")
+                }),
+                400,
+            ));
+        }
+    }
     serde_path_to_error::deserialize(call.into_deserializer()).map_err(|error| {
         let path = error.path().to_string();
-        FailureEnvelope::new(
-            Some(O::NAME),
-            OperationFailure::InvalidInput {
-                field: (!path.is_empty() && path != ".").then_some(path),
+        let parent = (!path.is_empty() && path != ".").then_some(path);
+        let message = error.inner().to_string();
+        // A missing field is named under its parent, as the list check above does.
+        let failure = match missing_field(&message) {
+            Some(name) => OperationFailure::InvalidInput {
+                field: Some(
+                    parent.map_or_else(|| name.to_owned(), |parent| format!("{parent}.{name}")),
+                ),
+                reason: InvalidInputReason::Required,
+            },
+            None => OperationFailure::InvalidInput {
+                field: parent,
                 reason: InvalidInputReason::InvalidValue,
             },
-        )
+        };
+        FailureEnvelope::new(Some(O::NAME), failure)
     })
+}
+
+/// The field that a serde "missing field" error names. The
+/// `missing_field_text_is_pinned` test fails if serde changes this text.
+fn missing_field(message: &str) -> Option<&str> {
+    message
+        .strip_prefix("missing field `")
+        .and_then(|rest| rest.strip_suffix('`'))
 }
 
 fn frame_failure<O: Operation>(failure: OperationError<O::Failure>) -> FailureEnvelope {
@@ -171,5 +223,26 @@ fn frame_failure<O: Operation>(failure: OperationError<O::Failure>) -> FailureEn
             let status = O::failure_status(&error);
             FailureEnvelope::declared(O::NAME, error, status)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::de::IntoDeserializer as _;
+
+    #[derive(Debug, serde::Deserialize)]
+    #[allow(dead_code)]
+    struct Probe {
+        actor: String,
+    }
+
+    #[test]
+    fn missing_field_text_is_pinned() {
+        let call = serde_json::json!({});
+        let error =
+            serde_path_to_error::deserialize::<_, Probe>(call.into_deserializer()).unwrap_err();
+        let message = error.inner().to_string();
+        assert_eq!(message, "missing field `actor`");
+        assert_eq!(super::missing_field(&message), Some("actor"));
     }
 }

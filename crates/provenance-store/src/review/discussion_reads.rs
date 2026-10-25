@@ -62,7 +62,7 @@ pub async fn read_discussions(
     policy: ReadPolicy,
     query: DiscussionQuery,
 ) -> anyhow::Result<Stamped<DiscussionPage>> {
-    check_limit(query.limit)?;
+    reader::check_limit(query.limit)?;
     let answer =
         reader::answer(repo, scope, policy, move |ctx| Box::pin(groups(ctx, query))).await?;
     crate::operations::queries::page::checked("review-discussions", answer)
@@ -79,14 +79,6 @@ pub async fn read_discussion(
         Box::pin(group(ctx, parent, discussion_id))
     })
     .await
-}
-
-pub(super) fn check_limit(limit: usize) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        (1..=200).contains(&limit),
-        "Discussion page limit must be between 1 and 200"
-    );
-    Ok(())
 }
 
 pub(super) async fn check_parent(ctx: &ReadContext, parent: &ThreadParent) -> anyhow::Result<()> {

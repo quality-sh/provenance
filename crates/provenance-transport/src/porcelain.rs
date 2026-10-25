@@ -217,7 +217,7 @@ pub(crate) async fn call_search(
 fn search_error(error: &provenance_porcelain::search::SearchError) -> CallToolResult {
     use provenance_porcelain::search::SearchError;
     let detail = match error {
-        SearchError::InvalidOptions => serde_json::json!({
+        SearchError::InvalidOptions { .. } => serde_json::json!({
             "kind":"invalid_input", "field":null, "reason":"invalid_value"
         }),
         SearchError::AccessDenied => serde_json::json!({"kind":"access_denied"}),

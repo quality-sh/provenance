@@ -162,6 +162,9 @@ async fn public_query_wire_includes_final_catch_up_failure_metadata() {
     let (status, _, healthy) = call(&host, path).await;
     assert_eq!(status, 200, "{healthy}");
 
+    assert_eq!(healthy["data"]["items"].as_array().unwrap().len(), 1);
+    let stored_id = healthy["data"]["items"][0]["id"].as_str().unwrap();
+
     orphan_rules(&repo);
     let (status, bytes, value) = call(&host, path).await;
     assert_eq!(status, 200, "{value}");
@@ -171,7 +174,7 @@ async fn public_query_wire_includes_final_catch_up_failure_metadata() {
     );
     assert_eq!(value["meta"]["freshness_cause"], "catch_up_failed");
     assert_eq!(value["meta"]["stamp"]["policy"], "catch_up_failed");
-    assert!(value["data"]["items"].is_array());
+    assert_eq!(value["data"]["items"][0]["id"], stored_id);
     assert!(value.get("protocol_version").is_none());
     assert!(value.get("operation").is_none());
     assert!(bytes.len() <= QUERY_RESPONSE_BYTES);

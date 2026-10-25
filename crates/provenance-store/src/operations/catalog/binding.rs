@@ -148,6 +148,9 @@ pub struct HeaderBinding {
     pub field: &'static str,
     pub trim_quotes: bool,
     pub numeric: bool,
+    /// A required header that the request omits fails with reason `required`;
+    /// an optional one leaves its body field unset.
+    pub required: bool,
 }
 
 #[derive(Clone, Default)]

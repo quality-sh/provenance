@@ -98,8 +98,9 @@ pub async fn catch_up_with_guard(
     }
     for unit in &live {
         let Unit::Scope(scope) = unit else { continue };
-        let digests = reader.hash(unit)?;
-        if stored_units.get(&unit.name()) == Some(&digests) {
+        let stored = stored_units.get(&unit.name());
+        let digests = reader.hash(unit, stored)?;
+        if stored == Some(&digests) {
             continue;
         }
         let (records, digests) = reader.scope(scope, digests)?;

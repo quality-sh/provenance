@@ -8,13 +8,18 @@ use std::process::Stdio;
 /// One commit that changed a record file, with the file text at that commit.
 pub(super) struct FileVersion {
     pub(super) commit: String,
+    /// The nearest listed commits on each parent line, in parent order. The
+    /// file text at each is the file text at the matching parent. A root
+    /// commit, or a commit at the edge of a shallow clone, has none.
+    pub(super) parents: Vec<String>,
     pub(super) author: String,
     pub(super) committed_at: i64,
     /// `None` when the commit removed the file.
     pub(super) text: Option<String>,
 }
 
-/// Lists the commits reachable from `HEAD` that changed `path`, oldest first.
+/// Lists the commits reachable from `HEAD` that changed `path`, parents before
+/// children.
 ///
 /// A directory outside Git, Git that cannot run, or a repository with no
 /// commit gives no versions. A shallow clone gives the commits it holds.
@@ -23,8 +28,16 @@ pub(super) fn file_versions(root: &Utf8Path, path: &Utf8Path) -> anyhow::Result<
         return Ok(Vec::new());
     };
     let relative = path.strip_prefix(root)?.as_str().replace('\\', "/");
+    // `--parents` names each parent as the nearest commit that changed the file.
     let output = command(root)
-        .args(["log", "--reverse", "--format=%H%x1f%an%x1f%ct", "--"])
+        .args([
+            "log",
+            "--reverse",
+            "--topo-order",
+            "--parents",
+            "--format=%H%x1f%P%x1f%an%x1f%ct",
+            "--",
+        ])
         .arg(&relative)
         .output()?;
     anyhow::ensure!(
@@ -32,37 +45,51 @@ pub(super) fn file_versions(root: &Utf8Path, path: &Utf8Path) -> anyhow::Result<
         "git log failed: {}",
         String::from_utf8_lossy(&output.stderr).trim()
     );
-    let mut commits = Vec::new();
+    let mut versions = Vec::new();
     for line in String::from_utf8(output.stdout)?.lines() {
         let mut parts = line.split('\u{1f}');
-        let (Some(commit), Some(author), Some(time)) = (parts.next(), parts.next(), parts.next())
+        let (Some(commit), Some(parents), Some(author), Some(time)) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
         else {
             anyhow::bail!("git log returned an unreadable commit line");
         };
-        commits.push((commit.to_owned(), author.to_owned(), time.parse::<i64>()?));
+        versions.push(FileVersion {
+            commit: commit.to_owned(),
+            parents: parents.split_whitespace().map(str::to_owned).collect(),
+            author: author.to_owned(),
+            committed_at: time.parse()?,
+            text: None,
+        });
     }
-    if commits.is_empty() {
-        return Ok(Vec::new());
+    if versions.is_empty() {
+        return Ok(versions);
     }
+    let commits = versions
+        .iter()
+        .map(|version| version.commit.as_str())
+        .collect::<Vec<_>>();
+    let texts = read_blobs(
+        root,
+        &blob_names(&commits, &prefix, &relative),
+        commits.len(),
+    )?;
+    for (version, text) in versions.iter_mut().zip(texts) {
+        version.text = text;
+    }
+    Ok(versions)
+}
+
+/// The `git cat-file --batch` input that names the file at each revision.
+fn blob_names(revisions: &[&str], prefix: &str, relative: &str) -> String {
     let mut names = String::new();
-    for (commit, _, _) in &commits {
-        names.push_str(commit);
+    for revision in revisions {
+        names.push_str(revision);
         names.push(':');
-        names.push_str(&prefix);
-        names.push_str(&relative);
+        names.push_str(prefix);
+        names.push_str(relative);
         names.push('\n');
     }
-    let texts = read_blobs(root, &names, commits.len())?;
-    Ok(commits
-        .into_iter()
-        .zip(texts)
-        .map(|((commit, author, committed_at), text)| FileVersion {
-            commit,
-            author,
-            committed_at,
-            text,
-        })
-        .collect())
+    names
 }
 
 /// The path of `root` inside its work tree, or `None` when `root` is not in
@@ -144,13 +171,9 @@ pub(super) fn file_at_commits(
     let prefix = repository_prefix(root)
         .ok_or_else(|| anyhow::anyhow!("record history repository is unavailable"))?;
     let relative = path.strip_prefix(root)?.as_str().replace('\\', "/");
-    let mut names = String::new();
-    for commit in commits {
-        names.push_str(commit);
-        names.push(':');
-        names.push_str(&prefix);
-        names.push_str(&relative);
-        names.push('\n');
-    }
-    read_blobs(root, &names, commits.len())
+    read_blobs(
+        root,
+        &blob_names(commits, &prefix, &relative),
+        commits.len(),
+    )
 }

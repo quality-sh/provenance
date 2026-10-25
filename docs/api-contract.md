@@ -78,6 +78,10 @@ Subresources have parent-owned addresses:
 Actions are POSTs on a resource path with one declared action name:
 
 - Topics: `claim`, `release`, `close`. Questions: `claim`, `release`, `answer`.
+  `claim` and `release` name their actor. A claim is held by one actor: a
+  claim or release by another actor returns `claim_conflict` with the holder
+  and status 409, and a repeated claim by the holder returns the unchanged
+  record.
 - Record review: `POST /{collection}/{id}/submit`, and
   `POST /{collection}/{id}/submissions/{proposal_id}/decide|withdraw`, for each
   graph record kind.
@@ -105,8 +109,10 @@ dispatch, and no weaker authoring ownership checks.
 Typed-spec apply (`POST /authoring-changes`) records an occurrence for each
 changed enrolled record and refuses to delete an enrolled record. It continues
 to replace un-enrolled graph state without journal entries because those
-records have not entered review. Full-scope import still requires separate
-lossless support for review history.
+records have not entered review. When apply deletes a record, also by cascade,
+it deletes the Discussions of that record, active or resolved, with their
+Threads and Messages, in the same publication. Git keeps their history.
+Full-scope import still requires separate lossless support for review history.
 
 Receipts stay internal. A write returns success or an error. The client does not
 replay a write, and no client-side uncertain-write ledger exists. The journal
@@ -146,15 +152,18 @@ response `ETag` map to Store-supported precondition checks. The surface never
 advertises an unsupported guarantee.
 
 Review writes do not accept `Idempotency-Key`, and their bodies do not accept a
-request ID. The server creates the request identity. Requirement edit requests
-and versioned Discussion writes keep `If-Match`. A repeated Requirement create
+request ID. The server creates the request identity. Review record updates and
+versioned Discussion writes take their guard in `If-Match`; MCP takes it as
+`if_match`. Requirement, Topic, and Question updates require it. A body that
+carries `expected_etag` is refused with `invalid_input`. A repeated Requirement create
 with the same caller-selected Stable ID returns `already_exists` with status
 409.
 
 A repeated Discussion start after a lost response creates a new Discussion. A
 repeated Discussion reply or status change uses the old `If-Match` value and
 returns `discussion_version_conflict` with status 409. The client reads the
-Discussion before it sends another write.
+Discussion before it sends another write. A status change to the status the
+Discussion already has returns the unchanged Discussion with status 200.
 
 A submit body does not accept `proposal_id` or `proposal_key`, and a decide
 body does not accept `disposition_id`. The server creates these identities and

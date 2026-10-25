@@ -12,9 +12,15 @@ pub mod fields;
 mod help;
 mod input;
 mod input_guard;
+pub mod refusal;
+
+pub use help::required_discussion_flags;
+
+use refusal::HostRefusal;
 
 pub struct Invocation {
     context: GlobalContext,
+    format: Option<provenance_cli::porcelain::OutputFormat>,
     path: String,
     definition: &'static Definition,
     data: Value,
@@ -28,7 +34,8 @@ impl Invocation {
         if matches.get_flag("help") {
             help::print_selection(&args.collection, &args.address);
         }
-        let resolved = address::resolve(&args.collection, &args.address)
+        let context = args.common.context();
+        let resolved = address::resolve_in(&args.collection, &args.address, Some(&context.repo))
             .unwrap_or_else(|error| usage_error(error));
         let (data, query, headers) = input::parse(
             resolved.address.definition,
@@ -58,7 +65,8 @@ impl Invocation {
                     .map(|id| crate::review_link::AffectedReviewRecord { kind, id })
             });
         Self {
-            context: args.common.context(),
+            context,
+            format: args.common.format(),
             path: resolved.path,
             definition: resolved.address.definition,
             data,
@@ -66,6 +74,13 @@ impl Invocation {
             headers,
             affected_review_record,
         }
+    }
+
+    pub const fn json_output(&self) -> bool {
+        matches!(
+            self.format,
+            Some(provenance_cli::porcelain::OutputFormat::Json)
+        )
     }
 }
 
@@ -84,7 +99,7 @@ pub fn command(collection: &str) -> anyhow::Result<Command> {
     );
     let mut help = help::collection(collection);
     help.push_str(
-        "\n\nFor a bounded view across related record kinds, run:\n  provenance <id> get --view children --depth <N>",
+        "\n\nFor a bounded view across related record kinds, run:\n  provenance <id> --view children --depth N",
     );
     if collection == "questions" {
         help.push_str(help::question_guidance());
@@ -106,19 +121,19 @@ pub fn target_command() -> anyhow::Result<Command> {
     let command = fields::augment_with_overrides(
         grammar::target_command(),
         definitions,
-        &[
-            "repo",
-            "scope",
-            "format",
-            "quiet",
-            "type",
-            "view",
-            "depth",
-            "kind",
-            "limit",
-            "review_link",
-            "stdin",
-        ],
+        &COMMON
+            .iter()
+            .copied()
+            .chain([
+                "type",
+                "view",
+                "depth",
+                "kind",
+                "limit",
+                "review_link",
+                "stdin",
+            ])
+            .collect::<Vec<_>>(),
         &[],
     )?;
     fields::augment_schemas(
@@ -129,10 +144,19 @@ pub fn target_command() -> anyhow::Result<Command> {
     )
 }
 
+pub fn print_target_help(
+    command: Command,
+    action: Option<grammar::TargetVerb>,
+    kind: Option<provenance_core::NodeType>,
+) -> anyhow::Result<()> {
+    help::target(command, action, kind)
+}
+
 /// Dispatch one catalog request through the local in-process host.
 pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
     let Invocation {
         context,
+        format: _,
         path,
         definition,
         data,
@@ -178,7 +202,14 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
             crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
             crate::output::print_json(&value)?;
         }
-        Err(failure) => return Err(actionable_failure(&failure, record_id(&path))),
+        Err(failure) => {
+            return Err(failure_with_guidance(
+                &failure,
+                &path,
+                record_id(&path),
+                &context.repo,
+            ))
+        }
     }
     Ok(())
 }
@@ -218,10 +249,17 @@ pub async fn dispatch_target(
             "target actions do not accept query options"
         ));
     }
-    let mut value = host
-        .invoke_target(&route, data, headers)
-        .await
-        .map_err(|failure| actionable_failure(&failure, Some(&target)))?;
+    let mut value = match host.invoke_target(&route, data, headers).await {
+        Ok(value) => value,
+        Err(failure) => {
+            return Err(failure_with_guidance(
+                &failure,
+                &route.path,
+                Some(&target),
+                &context.repo,
+            ))
+        }
+    };
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
             kind,
@@ -244,56 +282,106 @@ fn record_id(path: &str) -> Option<&str> {
     path.trim_matches('/').split('/').nth(1)
 }
 
+fn failure_with_guidance(
+    failure: &provenance_core::protocol::failure::ErasedFailure,
+    path: &str,
+    target: Option<&str>,
+    context: &provenance_cli::repo_context::RepoContext,
+) -> anyhow::Error {
+    actionable_failure(
+        failure,
+        target,
+        path.trim_matches('/').split('/').next(),
+        context,
+    )
+}
+
+/// The `--scope` and `--repo` words that make a hinted command run against
+/// the caller's repository and scope. A default repository path stays implicit.
+fn context_options(context: Option<&provenance_cli::repo_context::RepoContext>) -> String {
+    let Some(context) = context else {
+        return String::new();
+    };
+    let repo = if context.repo.as_str() == "." {
+        String::new()
+    } else {
+        format!(" --repo {}", context.repo)
+    };
+    format!(" --scope {}{repo}", context.scope)
+}
+
 /// Names the command that reads the review after a review-workflow refusal.
 #[provenance_macros::rule("rule_review_refusal_names_read_command")]
-fn review_read_command(id: &str) -> String {
-    format!("provenance {id} get --view review")
+fn review_read_command(
+    id: &str,
+    context: Option<&provenance_cli::repo_context::RepoContext>,
+) -> String {
+    format!("provenance {id} --view review{}", context_options(context))
 }
 
 fn actionable_failure(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     record_id: Option<&str>,
+    collection: Option<&str>,
+    context: &provenance_cli::repo_context::RepoContext,
 ) -> anyhow::Error {
     let value = serde_json::to_value(failure).unwrap_or_default();
     let error = &value["error"];
     let kind = error["kind"].as_str();
     if kind == Some("review_submission_conflict") {
-        if let (Some(id), Some(submission)) = (record_id, error["current_submission"].as_str()) {
-            return anyhow::anyhow!(
+        if let (Some(id), Some(submission), Some(collection)) =
+            (record_id, error["current_submission"].as_str(), collection)
+        {
+            let hint = format!(
                 "record {id} already has pending submission {submission}; \
-                 run `{}` to see it",
-                review_read_command(id)
+                 run `{}` to see it; to withdraw it, run \
+                 `provenance {collection} {id} submissions {submission} withdraw --actor <actor>{}`. \
+                 For an owned record, also pass --declared-by <owner>",
+                review_read_command(id, Some(context)),
+                context_options(Some(context))
             );
+            return HostRefusal {
+                failure: value,
+                hint: Some(hint),
+                text_shows_failure: false,
+            }
+            .into();
         }
     }
-    let message = serde_json::to_string(failure).unwrap_or_else(|_| "operation failed".into());
-    if let (Some(id), Some(kind)) = (record_id, kind) {
-        if matches!(
-            kind,
-            "review_submission_conflict"
+    let hint = match (record_id, kind) {
+        (
+            Some(id),
+            Some(
+                "review_submission_conflict"
                 | "requirement_edit_conflict"
                 | "record_edit_conflict"
-                | "unsupported_review_feedback"
-        ) {
-            return anyhow::anyhow!("{message}; run `{}`", review_read_command(id));
-        }
+                | "unsupported_review_feedback",
+            ),
+        ) => Some(format!("run `{}`", review_read_command(id, Some(context)))),
+        _ => None,
+    };
+    HostRefusal {
+        failure: value,
+        hint,
+        text_shows_failure: true,
     }
-    anyhow::anyhow!(message)
+    .into()
 }
 
+const COMMON: &[&str] = &[
+    "repo",
+    "scope",
+    "format",
+    "quiet",
+    "target",
+    "action",
+    "collection",
+    "address",
+    "command",
+    "discussion_id",
+];
+
 pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
-    const COMMON: &[&str] = &[
-        "repo",
-        "scope",
-        "format",
-        "quiet",
-        "target",
-        "action",
-        "collection",
-        "address",
-        "command",
-        "discussion_id",
-    ];
     for id in matches.ids() {
         let name = id.as_str();
         if matches.value_source(name) != Some(ValueSource::CommandLine) {

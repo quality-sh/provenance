@@ -36,6 +36,7 @@ mod tests {
             (OperationFailure::AccessDenied, 403),
             (OperationFailure::UnknownTarget, 404),
             (OperationFailure::UnavailableNeeds, 503),
+            (OperationFailure::HostBusy, 503),
             (OperationFailure::Internal, 500),
         ] {
             assert_eq!(

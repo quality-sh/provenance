@@ -245,3 +245,8 @@ does not assign those Messages to an inferred root.
 
 An immutable record of a Requirement creation or edit, with its origin and
 After evidence. An edit also has Before evidence; creation has none.
+
+## Busy host
+
+A host that has no free request slot. This condition is separate from missing
+execution context or needs.

@@ -18,7 +18,7 @@ struct ReviewStateSchema {
     decision: provenance_core::review::RequirementDecisionState,
 }
 
-fn reviewed_resource_schema<T: schemars::JsonSchema>() -> Value {
+fn reviewed_resource_schema<T: schemars::JsonSchema + 'static>() -> Value {
     let mut record = schema::type_schema::<T>(Contract::Serialize);
     let mut state = schema::type_schema::<ReviewStateSchema>(Contract::Serialize);
     for field in ["properties", "$defs"] {
@@ -90,7 +90,7 @@ fn backed<O: Operation>(
     }
 }
 
-fn read<T: schemars::JsonSchema, O: Operation>(
+fn read<T: schemars::JsonSchema + 'static, O: Operation>(
     name: &'static str,
     operation_id: &'static str,
     path: &'static str,
@@ -157,14 +157,28 @@ impl Definition {
         self
     }
 
-    fn header(mut self, name: &'static str, field: &'static str, trim_quotes: bool) -> Self {
+    fn header(mut self, name: &'static str, field: &'static str, required: bool) -> Self {
         self.registration.controls.headers.push(HeaderBinding {
             name,
             field,
-            trim_quotes,
+            trim_quotes: true,
             numeric: false,
+            required,
         });
         self
+    }
+
+    /// Every review-kind update takes its edit guard as `If-Match`.
+    /// Requirement, Topic and Question updates require it; the other kinds
+    /// accept it when sent.
+    #[provenance_macros::rule("rule_review_update_guard_header")]
+    #[provenance_macros::rule("rule_missing_if_match_is_required")]
+    fn review_update_guard(self, kind: NodeType) -> Self {
+        let required = matches!(
+            kind,
+            NodeType::Requirement | NodeType::Topic | NodeType::Question
+        );
+        self.header("If-Match", "expected_etag", required)
     }
 
     fn numeric_header(mut self, name: &'static str, field: &'static str) -> Self {
@@ -173,6 +187,7 @@ impl Definition {
             field,
             trim_quotes: true,
             numeric: true,
+            required: true,
         });
         self
     }
@@ -244,7 +259,7 @@ impl Definition {
         self
     }
 
-    fn reviewed_result<T: schemars::JsonSchema>(mut self) -> Self {
+    fn reviewed_result<T: schemars::JsonSchema + 'static>(mut self) -> Self {
         self.registration.response.adapter = ResponseAdapter::Result;
         let payload = reviewed_resource_schema::<T>();
         self.registration.response.schema =

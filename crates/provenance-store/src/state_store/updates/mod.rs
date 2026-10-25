@@ -17,7 +17,7 @@ fn invalid(message: &str) -> anyhow::Error {
 fn owner_matches(saved: Option<&str>, supplied: Option<&str>) -> anyhow::Result<()> {
     if saved != supplied {
         return Err(SourceFailure::wrap(
-            WriteFailure::RecordOwnershipConflict,
+            WriteFailure::record_ownership_conflict(saved),
             anyhow::anyhow!(
                 "declared_by must match the existing owner; omit it for a manual record"
             ),

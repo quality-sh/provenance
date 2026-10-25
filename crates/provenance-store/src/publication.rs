@@ -156,6 +156,22 @@ impl crate::state_store::StateStore {
             crate::jsonl::mutate_jsonl_locked(path, &lock_path, mutate)
         })
     }
+
+    /// Like [`Self::mutate_jsonl_records`], but writes the shard only when
+    /// `mutate` returns `true`.
+    pub(crate) fn mutate_jsonl_records_if<T>(
+        &self,
+        path: &Utf8Path,
+        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<bool>,
+    ) -> anyhow::Result<bool>
+    where
+        T: DeserializeOwned + Serialize,
+    {
+        self.with_repository_publication(|| {
+            let lock_path = self.layout.state_shard_lock_path(path)?;
+            crate::jsonl::mutate_jsonl_locked_if(path, &lock_path, mutate)
+        })
+    }
 }
 
 #[cfg(all(test, unix))]

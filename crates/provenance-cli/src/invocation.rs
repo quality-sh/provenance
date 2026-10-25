@@ -10,6 +10,7 @@ use provenance_porcelain::get::View;
 mod api;
 mod discussion;
 pub mod grammar;
+mod help_kind;
 use grammar::{
     ApiArgs, ApiCommand, CatalogArgs, Delivery, DiscussionsArgs, DiscussionsCommand,
     DiscussionsRoute, RootWord, SearchArgs, SearchCommand, TargetArgs, TargetVerb,
@@ -107,11 +108,35 @@ impl Invocation {
         Self::parse_target(arguments)
     }
 
+    #[provenance_macros::rule("rule_record_help_exits_before_validation")]
     fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
         let command = catalog_cli::target_command()?;
-        let matches = command
-            .try_get_matches_from(arguments)
-            .unwrap_or_else(|error| error.exit());
+        let help_command = command.clone().mut_arg("record_type", |arg| {
+            arg.value_parser(clap::builder::StringValueParser::new())
+        });
+        let matches = match help_command.clone().try_get_matches_from(arguments.clone()) {
+            Ok(_) => command
+                .try_get_matches_from(arguments)
+                .unwrap_or_else(|error| error.exit()),
+            Err(error) if error.kind() == clap::error::ErrorKind::DisplayHelp => {
+                let selection = help_command
+                    .disable_help_flag(true)
+                    .ignore_errors(true)
+                    .get_matches_from(
+                        arguments
+                            .into_iter()
+                            .filter(|arg| arg != "--help" && arg != "-h"),
+                    );
+                let action = selection.get_one::<TargetVerb>("action").copied();
+                let kind = selection
+                    .get_one::<String>("record_type")
+                    .and_then(|kind| NodeType::parse(kind).ok())
+                    .or_else(|| help_kind::resolve_record_kind(&selection, action));
+                catalog_cli::print_target_help(command, action, kind)?;
+                std::process::exit(0);
+            }
+            Err(error) => error.exit(),
+        };
         let args = TargetArgs::from_matches(&matches);
         if let Some(TargetVerb::Action(action)) = args.action {
             if Action::DISCUSSION.contains(&action) {
@@ -164,6 +189,22 @@ impl Invocation {
             kind,
             matches,
         }))
+    }
+
+    /// Whether the caller asked for JSON, so a refusal prints as one
+    /// `{error,meta}` object instead of text.
+    pub fn json_output(&self) -> bool {
+        let format = match self {
+            Self::Builtin(_) => None,
+            Self::Api(args) => args.common.format(),
+            Self::Catalog(invocation) => return invocation.json_output(),
+            Self::Get(invocation) => invocation.format,
+            Self::Search(args) => args.common.format(),
+            Self::DiscussionRoot(args, _) => args.common.format(),
+            Self::DiscussionTarget(args, _, _) => args.common.format(),
+            Self::Target(invocation) => invocation.format,
+        };
+        format == Some(porcelain::OutputFormat::Json)
     }
 
     pub async fn dispatch(self) -> anyhow::Result<()> {

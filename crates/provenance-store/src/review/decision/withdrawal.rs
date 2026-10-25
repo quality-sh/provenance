@@ -39,10 +39,7 @@ impl StateStore {
         addressed: Option<(NodeType, StableId)>,
         input: WithdrawRecordReview,
     ) -> anyhow::Result<CycleEntry> {
-        anyhow::ensure!(
-            !input.actor.trim().is_empty(),
-            "invalid review request identity"
-        );
+        crate::write_error::ensure_actor(&input.actor)?;
         if let Some(reason) = &input.reason {
             anyhow::ensure!(
                 !reason.trim().is_empty(),

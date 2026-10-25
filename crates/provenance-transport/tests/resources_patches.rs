@@ -1,10 +1,12 @@
 #![cfg(feature = "test-fixture")]
 mod support {
+    pub mod mcp;
     pub mod records;
     pub mod resource_http;
 }
 
 use axum::{body::Body, http::Request};
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, host};
@@ -100,18 +102,20 @@ async fn requirement_patch_binds_receipt_and_precondition_headers() {
 }
 
 #[tokio::test]
+#[verifies("rule_review_update_guard_header", examples)]
 async fn source_patch_refuses_the_second_client_with_a_stale_etag() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo, true);
     let etag = source_etag(&repo);
+    let patch = |name: &str| Some(json!({"data":{"name":name}}));
 
     let (first_status, first) = support::resource_http::call_with_headers(
         &host,
         "PATCH",
         "/sources/source_shared",
-        Some(json!({"data":{"expected_etag":etag.clone(),"name":"Source B"}})),
-        &[],
+        patch("Source B"),
+        &[("if-match", &etag)],
     )
     .await;
     assert_eq!(first_status, 200, "{first}");
@@ -120,12 +124,55 @@ async fn source_patch_refuses_the_second_client_with_a_stale_etag() {
         &host,
         "PATCH",
         "/sources/source_shared",
-        Some(json!({"data":{"expected_etag":etag,"name":"Source C"}})),
-        &[],
+        patch("Source C"),
+        &[("if-match", &etag)],
     )
     .await;
     assert_eq!(second_status, 409, "{second}");
+    assert_eq!(second["error"]["kind"], "record_edit_conflict", "{second}");
     let (read_status, source) = call(&host, "GET", "/sources/source_shared", None).await;
     assert_eq!(read_status, 200, "{source}");
     assert_eq!(source["data"]["name"], "Source B");
+}
+
+#[tokio::test]
+#[verifies("rule_review_update_guard_header", examples)]
+async fn source_patch_refuses_the_guard_in_the_body() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let host = host(&repo, true);
+    let etag = source_etag(&repo);
+
+    let (status, refused) = call(
+        &host,
+        "PATCH",
+        "/sources/source_shared",
+        Some(json!({"data":{"expected_etag":etag,"name":"Source B"}})),
+    )
+    .await;
+    assert_eq!(status, 400, "{refused}");
+    assert_eq!(refused["error"]["kind"], "invalid_input", "{refused}");
+    let (_, source) = call(&host, "GET", "/sources/source_shared", None).await;
+    assert_ne!(source["data"]["name"], "Source B");
+}
+
+#[tokio::test]
+#[verifies("rule_review_update_guard_header", examples)]
+async fn mcp_source_update_takes_the_guard_as_if_match() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let etag = source_etag(&repo);
+    let session = support::mcp::Session::start(host(&repo, true)).await;
+    let update =
+        |name: &str| json!({"target":"source_shared","if_match":etag,"data":{"name":name}});
+
+    let current = support::mcp::call(&session.client, "update", update("Source B")).await;
+    assert_ne!(current.is_error, Some(true), "{current:?}");
+    let stale = support::mcp::call(&session.client, "update", update("Source C")).await;
+    assert_eq!(stale.is_error, Some(true), "{stale:?}");
+    assert!(
+        format!("{stale:?}").contains("record_edit_conflict"),
+        "{stale:?}"
+    );
+    session.close().await;
 }

@@ -97,6 +97,8 @@ fn rule_preflight_matches_the_typed_write_for_the_trial_statement() {
             "review",
             "--severity",
             "high",
+            "--format",
+            "json",
         ])
         .output()
         .unwrap();

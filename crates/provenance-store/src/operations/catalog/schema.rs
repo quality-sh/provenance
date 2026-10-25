@@ -95,12 +95,12 @@ pub(super) struct RawDefinition {
 
 /// Return the canonical request schema for one registered operation type.
 pub fn operation_request_schema<O: Operation>() -> Value {
-    raw_definition::<O>().request_schema
+    derive_schema::<O::Request>(Contract::Deserialize)
 }
 
 /// Return the canonical success schema for one registered operation type.
 pub fn operation_success_schema<O: Operation>() -> Value {
-    raw_definition::<O>().success_schema
+    derive_schema::<O::Success>(Contract::Serialize)
 }
 
 impl Definition {
@@ -160,7 +160,7 @@ impl Definition {
                 .controls
                 .headers
                 .iter()
-                .map(|binding| header(binding.name)),
+                .map(|binding| header(binding.name, binding.required)),
         );
         parameters
     }
@@ -173,7 +173,7 @@ impl Definition {
             .controls
             .headers
             .iter()
-            .map(|binding| header(binding.name))
+            .map(|binding| header(binding.name, binding.required))
             .collect::<Vec<_>>();
         let base = QueryVariant {
             selector: None,
@@ -294,7 +294,33 @@ fn merge_variants(variants: Vec<Value>) -> Value {
     schema
 }
 
-fn schema<T: JsonSchema>(contract: Contract) -> Value {
+// Keeps one schema for each type and contract.
+// Derivation is pure, so a stored schema is always correct.
+pub(super) fn schema<T: JsonSchema + 'static>(contract: Contract) -> Value {
+    type Key = (std::any::TypeId, bool);
+    static SCHEMAS: std::sync::LazyLock<std::sync::Mutex<std::collections::BTreeMap<Key, Value>>> =
+        std::sync::LazyLock::new(Default::default);
+    let key = (
+        std::any::TypeId::of::<T>(),
+        matches!(contract, Contract::Serialize),
+    );
+    let cached = SCHEMAS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&key)
+        .cloned();
+    if let Some(schema) = cached {
+        return schema;
+    }
+    let schema = derive_schema::<T>(contract);
+    SCHEMAS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(key, schema.clone());
+    schema
+}
+
+fn derive_schema<T: JsonSchema>(contract: Contract) -> Value {
     serde_json::to_value(
         SchemaSettings::draft2020_12()
             .with(|settings| settings.contract = contract)
@@ -357,7 +383,7 @@ pub fn definitions() -> &'static [Definition] {
     DEFINITIONS.get_or_init(super::routes::definitions)
 }
 
-pub(super) fn type_schema<T: JsonSchema>(contract: Contract) -> Value {
+pub(super) fn type_schema<T: JsonSchema + 'static>(contract: Contract) -> Value {
     schema::<T>(contract)
 }
 
@@ -382,11 +408,21 @@ pub(super) const fn query(name: &'static str, schema: Value) -> Parameter {
     }
 }
 #[allow(clippy::missing_const_for_fn)]
-pub(super) fn header(name: &'static str) -> Parameter {
+pub(super) fn header(name: &'static str, required: bool) -> Parameter {
     Parameter {
         name,
         location: "header",
-        required: true,
+        required,
         schema: json!({"type":"string","minLength":1}),
     }
+}
+
+/// The CLI flag that carries one whole JSON body value.
+pub fn json_flag(wire_field: &str) -> String {
+    format!("{}-json", cli_name(wire_field))
+}
+
+/// Convert a wire field name to its CLI spelling.
+pub fn cli_name(name: &str) -> String {
+    name.to_ascii_lowercase().replace('_', "-")
 }

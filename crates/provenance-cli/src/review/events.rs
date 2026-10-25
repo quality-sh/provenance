@@ -185,16 +185,16 @@ struct NavigationRequest {
     focus_id: Option<String>,
 }
 
-/// Lets the launch key holder show a record in a connected page; the reply waits for its
-/// acknowledgement, a disconnect or the caller's cancellation.
+/// Lets the launch key holder show a record in a connected page; the reply tells what the
+/// page did with the link in the bounded wait.
 async fn navigate(State(state): State<RouteState>, body: axum::body::Bytes) -> Response {
     match serde_json::from_slice::<NavigationRequest>(&body) {
         Ok(request) if state.codes.holds_key(&request.launch_key) => {
-            let shown = state
+            let result = state
                 .navigation
                 .show(request.root_id, request.focus_id)
                 .await;
-            Json(serde_json::json!({ "shown": shown })).into_response()
+            Json(serde_json::json!({ "result": result })).into_response()
         }
         _ => super::refusal(OperationFailure::Unauthenticated),
     }
