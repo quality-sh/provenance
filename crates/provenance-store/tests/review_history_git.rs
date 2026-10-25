@@ -112,7 +112,13 @@ async fn merged_history_lists_only_the_commits_that_changed_the_record() {
         &json!({"description":"Bob describes req_h."}),
     );
     commit_as(&temp, "bob", "bob describes req_h");
-    git_as(&temp, "merger", &["merge", "-q", "--no-edit", "feature"]);
+    // Both saves appended a submission to the proposal shard, so that shard
+    // conflicts and keeps main's lines. The record shard merges cleanly.
+    git_as(
+        &temp,
+        "merger",
+        &["merge", "-q", "--no-edit", "-X", "ours", "feature"],
+    );
 
     let versions = versions(&temp).await;
     let ids = versions.iter().map(|v| v.id.as_str()).collect::<Vec<_>>();
