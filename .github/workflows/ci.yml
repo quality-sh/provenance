@@ -889,6 +889,11 @@ jobs:
         env:
           GOBIN: ${{ runner.temp }}/release-tools
         run: '"$GOBIN/actionlint"'
+      - name: Test Cargo shim and release prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          python3 scripts/agent-bin/tests/test_package.py
+          python3 .github/scripts/test_release_crates.py
       - name: Test release smoke helpers
         if: runner.os == 'Linux'
         shell: bash
