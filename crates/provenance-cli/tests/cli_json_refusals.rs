@@ -56,8 +56,13 @@ fn refusal(repo: &str, args: &[&str]) -> Value {
     assert_eq!(output.status.code(), Some(1), "{args:?}");
     assert!(output.stdout.is_empty(), "{args:?}");
     let text = String::from_utf8(output.stderr).unwrap();
-    let value: Value = serde_json::from_str(text.trim())
-        .unwrap_or_else(|error| panic!("{args:?}: {error}: {text}"));
+    let object = text
+        .trim()
+        .strip_prefix("Error: ")
+        .unwrap_or_else(|| panic!("{args:?}: {text}"));
+    let value: Value =
+        serde_json::from_str(object).unwrap_or_else(|error| panic!("{args:?}: {error}: {text}"));
+    assert_eq!(object.lines().count(), 1, "{text}");
     assert!(value["meta"].is_object(), "{text}");
     value
 }
