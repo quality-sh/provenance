@@ -48,9 +48,16 @@ enum PageFrame {
     },
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(super) struct Navigation {
     inner: Arc<Mutex<Pages>>,
+    wait: Duration,
+}
+
+impl Default for Navigation {
+    fn default() -> Self {
+        Self::waiting(ACKNOWLEDGEMENT_WAIT)
+    }
 }
 
 #[derive(Default)]
@@ -70,6 +77,14 @@ pub(super) struct Page {
 }
 
 impl Navigation {
+    /// Waits at most `wait` for each acknowledgement.
+    fn waiting(wait: Duration) -> Self {
+        Self {
+            inner: Arc::default(),
+            wait,
+        }
+    }
+
     pub fn attach(&self) -> Page {
         let (sender, links) = mpsc::unbounded_channel();
         let id = {
@@ -129,7 +144,7 @@ impl Navigation {
             navigation: self,
             request_id,
         };
-        match tokio::time::timeout(ACKNOWLEDGEMENT_WAIT, acknowledged).await {
+        match tokio::time::timeout(self.wait, acknowledged).await {
             Ok(Ok(delivery)) => delivery,
             // The page disconnected and dropped the request.
             Ok(Err(_)) => Delivery::NoPage,
@@ -182,3 +197,7 @@ impl Drop for Waiting<'_> {
             .remove(&self.request_id);
     }
 }
+
+#[cfg(test)]
+#[path = "navigation_tests.rs"]
+mod tests;
