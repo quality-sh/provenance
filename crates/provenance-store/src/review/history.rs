@@ -34,6 +34,11 @@ impl StateStore {
     /// Lists the versions of one record, oldest first: each commit that
     /// changed it in its graph record file, then the saved working copy when
     /// it differs from the record at `HEAD`.
+    ///
+    /// A commit changes the record when the record differs from the record in
+    /// at least one of its parents. A merge that carries one side's record
+    /// unchanged adds no version, and neither does a version whose shard text
+    /// does not parse.
     #[rule("rule_record_history_reads_git")]
     pub(super) fn record_versions(
         &self,
@@ -53,27 +58,28 @@ impl StateStore {
         let mut versions = Vec::new();
         let mut head = None;
         for file in git::file_versions(self.layout.root(), &path)? {
-            head = file
-                .text
-                .as_deref()
-                .map(|text| find(text, id))
-                .transpose()?
-                .flatten();
-            if let Some(record) = &head {
-                let source = Source {
-                    id: StableId::new(file.commit.clone())?,
-                    commit: Some(file.commit),
-                    author: Some(file.author),
-                    committed_at: Some(file.committed_at),
-                };
-                push_version(&mut versions, kind, source, record.clone())?;
+            head = file.text.as_deref().and_then(|text| find(text, id));
+            let Some(record) = &head else {
+                continue;
+            };
+            let in_every_parent = !file.parent_texts.is_empty()
+                && file.parent_texts.iter().all(|text| {
+                    text.as_deref()
+                        .and_then(|text| find(text, id))
+                        .is_some_and(|parent| content(&parent) == content(record))
+                });
+            if in_every_parent {
+                continue;
             }
+            let source = Source {
+                id: StableId::new(file.commit.clone())?,
+                commit: Some(file.commit),
+                author: Some(file.author),
+                committed_at: Some(file.committed_at),
+            };
+            push_version(&mut versions, kind, source, record.clone())?;
         }
-        let working = working
-            .as_deref()
-            .map(|text| find(text, id))
-            .transpose()?
-            .flatten();
+        let working = working.as_deref().and_then(|text| find(text, id));
         if let Some(record) = working {
             if head
                 .as_ref()
@@ -100,15 +106,12 @@ impl StateStore {
     }
 }
 
-/// The record with `id` in the text of one JSONL record file.
-fn find(text: &str, id: &StableId) -> anyhow::Result<Option<Value>> {
-    for line in text.lines().filter(|line| !line.trim().is_empty()) {
-        let value: Value = serde_json::from_str(line)?;
-        if value.get("id").and_then(Value::as_str) == Some(id.as_str()) {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
+/// The record with `id` in the text of one JSONL record file. A line that is
+/// not a JSON record, such as a committed conflict marker, holds no record.
+fn find(text: &str, id: &StableId) -> Option<Value> {
+    text.lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .find(|value| value.get("id").and_then(Value::as_str) == Some(id.as_str()))
 }
 
 /// The record without its schema version and record stamps.

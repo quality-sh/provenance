@@ -82,11 +82,7 @@ pub async fn read_discussion(
 }
 
 pub(super) fn check_limit(limit: usize) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        (1..=200).contains(&limit),
-        "Discussion page limit must be between 1 and 200"
-    );
-    Ok(())
+    crate::operations::reader::check_limit(limit)
 }
 
 pub(super) async fn check_parent(ctx: &ReadContext, parent: &ThreadParent) -> anyhow::Result<()> {

@@ -13,10 +13,7 @@ fn run_page(
     scope: &ScopeId,
     request: &VerificationPageRequest,
 ) -> anyhow::Result<ResourcePage<VerificationRun>> {
-    anyhow::ensure!(
-        (1..=200).contains(&request.limit),
-        "resource page limit must be between 1 and 200"
-    );
+    super::resource_pages::validate_limit(request.limit)?;
     ctx.live(Live::VerificationRuns)
         .read_runs(scope, |digest, next| {
             let selector = (&request.rule, request.limit);

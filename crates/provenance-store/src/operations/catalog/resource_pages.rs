@@ -54,12 +54,8 @@ pub struct ResourcePage<T> {
     pub next_cursor: Option<String>,
 }
 
-fn validate_limit(limit: usize) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        (1..=200).contains(&limit),
-        "resource page limit must be between 1 and 200"
-    );
-    Ok(())
+pub(super) fn validate_limit(limit: usize) -> anyhow::Result<()> {
+    crate::operations::reader::check_limit(limit)
 }
 
 async fn collect_page<T, F, Fut>(
