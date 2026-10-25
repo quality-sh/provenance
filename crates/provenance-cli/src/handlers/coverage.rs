@@ -78,12 +78,11 @@ fn scope_files<'a>(
 /// Whether the scanned path contains every file of the scope, so an active
 /// Rule with no binding in the scan is unimplemented rather than unseen.
 fn scan_covers_scope(repo: &camino::Utf8Path, scope: &Scope, path: &camino::Utf8Path) -> bool {
-    let root = std::fs::canonicalize(repo.join(scope.path_prefix.as_path()));
-    let path = std::fs::canonicalize(path);
-    match (root, path) {
-        (Ok(root), Ok(path)) => root.starts_with(path),
-        _ => false,
-    }
+    let Ok(root) = std::fs::canonicalize(repo.join(scope.path_prefix.as_path())) else {
+        // A scope whose directory does not exist has no files to miss.
+        return true;
+    };
+    std::fs::canonicalize(path).is_ok_and(|path| root.starts_with(path))
 }
 
 fn coverage_scan_from_scanned_against(

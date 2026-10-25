@@ -6,14 +6,16 @@ use crate::binding_lexer::{block_comment_state, code_outside_multiline_string, M
 use crate::parser::{annotation_marker_position, parse_annotations, Verification};
 use crate::{Annotation, ParseWarning};
 
-use bindings::parse_binding_line;
+use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
+use consumed::{consume_binding_lines, consume_comment_lines};
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
 mod bindings;
 mod bounded;
 #[cfg(test)]
 mod bounded_tests;
+mod consumed;
 mod ignore;
 mod rust_lines;
 mod script_literals;
@@ -192,7 +194,7 @@ fn scan_file_contents(
         }
         let binding = (language != Language::Rust || rust_states[idx] == RustLexicalState::Code)
             .then(|| {
-                binding_or_warning(
+                parse_binding_or_warn(
                     language,
                     line,
                     &lines[idx + 1..],
@@ -255,63 +257,6 @@ fn scan_file_contents(
         annotations,
         bindings,
         warnings,
-    }
-}
-
-/// Carries the lexer state across the lines a wrapped binding consumed.
-fn consume_binding_lines(
-    language: Language,
-    consumed: &[&str],
-    multiline_delimiter: &mut Option<String>,
-    in_block_comment: &mut bool,
-) {
-    for line in consumed {
-        let Some(code) = code_outside_multiline_string(
-            line,
-            multiline_style(language),
-            multiline_delimiter,
-            *in_block_comment,
-        ) else {
-            break;
-        };
-        if language != Language::Python {
-            *in_block_comment =
-                block_comment_state(code, *in_block_comment, language == Language::Rust);
-        }
-    }
-}
-
-/// Carries the block-comment state across the lines an annotation comment
-/// consumed.
-fn consume_comment_lines(language: Language, consumed: &[&str], in_block_comment: &mut bool) {
-    if language == Language::Python {
-        return;
-    }
-    for line in consumed {
-        *in_block_comment =
-            block_comment_state(line, *in_block_comment, language == Language::Rust);
-    }
-}
-
-/// The binding on one line, or a warning with the line number when the line
-/// opens a `verifies` site that the scanner cannot read.
-fn binding_or_warning(
-    language: Language,
-    line: &str,
-    following: &[&str],
-    in_block_comment: bool,
-    line_number: usize,
-    warnings: &mut Vec<ParseWarning>,
-) -> Option<bindings::ParsedBinding> {
-    match parse_binding_line(language, line, following, in_block_comment) {
-        Ok(binding) => binding,
-        Err(malformed) => {
-            warnings.push(ParseWarning {
-                line: line_number,
-                message: malformed.0,
-            });
-            None
-        }
     }
 }
 

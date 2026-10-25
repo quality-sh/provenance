@@ -1,6 +1,6 @@
 //! With `--format json`, every refusal prints one `{error,meta}` object on
-//! standard error, with the recovery hint in `error.hint`. Text mode keeps
-//! its wording.
+//! standard error after the `Error: ` prefix, with the recovery hint in
+//! `error.hint`. Text mode keeps its wording.
 
 use assert_cmd::Command;
 use predicates::prelude::*;

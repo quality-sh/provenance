@@ -34,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
             .flatten()
         {
             Some(refusal) => {
-                eprintln!("{}", serde_json::to_string(&refusal)?);
+                eprintln!("Error: {}", serde_json::to_string(&refusal)?);
                 std::process::exit(1);
             }
             None => Err(error),
