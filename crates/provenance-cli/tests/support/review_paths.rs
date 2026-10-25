@@ -1,3 +1,6 @@
+// Each test binary that includes this file uses only some of the helpers.
+#![allow(dead_code)]
+
 use assert_cmd::Command;
 use serde_json::Value;
 
@@ -8,21 +11,26 @@ pub fn provenance() -> Command {
 pub fn init() -> (tempfile::TempDir, String) {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
-    provenance()
-        .args([
-            "init",
-            "--path",
-            &repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-            "--disposition-actor-id",
-            "reviewer",
-        ])
-        .assert()
-        .success();
+    init_scope(directory.path(), "default", ".");
     (directory, repo)
+}
+
+/// Declares one scope in the repository. The first call creates the graph
+/// and names the reviewer.
+pub fn init_scope(repo: &std::path::Path, scope: &str, prefix: &str) {
+    let mut args = vec![
+        "init",
+        "--path",
+        repo.to_str().unwrap(),
+        "--scope",
+        scope,
+        "--path-prefix",
+        prefix,
+    ];
+    if !repo.join(".provenance").exists() {
+        args.extend(["--disposition-actor-id", "reviewer"]);
+    }
+    provenance().args(args).assert().success();
 }
 
 pub fn json_output(command: &mut Command) -> Value {

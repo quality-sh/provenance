@@ -6,14 +6,16 @@ use crate::binding_lexer::{block_comment_state, code_outside_multiline_string, M
 use crate::parser::{annotation_marker_position, parse_annotations, Verification};
 use crate::{Annotation, ParseWarning};
 
-use bindings::parse_binding_line;
+use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
+use consumed::{consume_binding_lines, consume_comment_lines};
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
 mod bindings;
 mod bounded;
 #[cfg(test)]
 mod bounded_tests;
+mod consumed;
 mod ignore;
 mod rust_lines;
 mod script_literals;
@@ -192,7 +194,14 @@ fn scan_file_contents(
         }
         let binding = (language != Language::Rust || rust_states[idx] == RustLexicalState::Code)
             .then(|| {
-                parse_binding_line(language, line, &lines[idx + 1..], started_in_block_comment)
+                parse_binding_or_warn(
+                    language,
+                    line,
+                    &lines[idx + 1..],
+                    started_in_block_comment,
+                    idx + 1,
+                    &mut warnings,
+                )
             })
             .flatten();
         if let Some(binding) = binding {
@@ -206,20 +215,12 @@ fn scan_file_contents(
                 rule_id: binding.rule_id,
                 verification: binding.verification,
             });
-            for consumed in lines.iter().take(end_idx + 1).skip(idx + 1) {
-                let Some(code) = code_outside_multiline_string(
-                    consumed,
-                    multiline_style(language),
-                    &mut multiline_delimiter,
-                    in_block_comment,
-                ) else {
-                    break;
-                };
-                if language != Language::Python {
-                    in_block_comment =
-                        block_comment_state(code, in_block_comment, language == Language::Rust);
-                }
-            }
+            consume_binding_lines(
+                language,
+                &lines[idx + 1..=end_idx],
+                &mut multiline_delimiter,
+                &mut in_block_comment,
+            );
             idx = end_idx + 1;
             continue;
         }
@@ -247,15 +248,7 @@ fn scan_file_contents(
                 annotation,
             });
         }
-        if language != Language::Python {
-            for consumed_line in lines.iter().take(end_idx + 1).skip(idx + 1) {
-                in_block_comment = block_comment_state(
-                    consumed_line,
-                    in_block_comment,
-                    language == Language::Rust,
-                );
-            }
-        }
+        consume_comment_lines(language, &lines[idx + 1..=end_idx], &mut in_block_comment);
         idx = end_idx + 1;
     }
     FileScan {

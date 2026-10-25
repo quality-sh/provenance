@@ -49,10 +49,74 @@ pub(super) fn target(
                     "Select a record type to see its accepted fields:\n  provenance <id> create --type <kind> --help",
                 );
             }
+        } else if provenance_porcelain::action::Action::DISCUSSION.contains(&action) {
+            command = discussion_help(command, action);
         }
     }
     println!("{}", command.render_help());
     Ok(())
+}
+
+/// Discussion action help lists the typed input fields of that action and
+/// marks the ones the action cannot run without.
+fn discussion_help(
+    command: clap::Command,
+    action: provenance_porcelain::action::Action,
+) -> clap::Command {
+    let schema = provenance_porcelain::discussion::input_schema(action);
+    let bound = [
+        provenance_porcelain::discussion::target_field(action),
+        "parent",
+        "discussion_id",
+    ];
+    let properties = schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .map(|properties| {
+            properties
+                .keys()
+                .filter(|field| !bound.contains(&field.as_str()))
+                .map(|field| fields::cli_name(field))
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let required = required_discussion_flags(&schema, action);
+    let mut allowed = super::COMMON
+        .iter()
+        .copied()
+        .chain(["stdin", "help"])
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    allowed.extend(properties);
+    command.mut_args(|arg| {
+        let name = arg.get_id().as_str().to_owned();
+        let hidden = !allowed.contains(&name);
+        arg.hide(hidden).required(required.contains(&name))
+    })
+}
+
+/// The flags a Discussion action needs on the command line: the required
+/// schema fields that neither the target nor a CLI default supplies.
+pub fn required_discussion_flags(
+    schema: &Value,
+    action: provenance_porcelain::action::Action,
+) -> BTreeSet<String> {
+    let supplied = [
+        provenance_porcelain::discussion::target_field(action),
+        "parent",
+        "discussion_id",
+        "actor",
+        "role",
+    ];
+    schema
+        .get("required")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|field| !supplied.contains(field))
+        .map(fields::cli_name)
+        .collect()
 }
 
 /// Render the help block that lists every registered operation.

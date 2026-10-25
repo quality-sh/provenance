@@ -10,6 +10,7 @@ use provenance_porcelain::get::View;
 mod api;
 mod discussion;
 pub mod grammar;
+mod help_kind;
 use grammar::{
     ApiArgs, ApiCommand, CatalogArgs, Delivery, DiscussionsArgs, DiscussionsCommand,
     DiscussionsRoute, RootWord, SearchArgs, SearchCommand, TargetArgs, TargetVerb,
@@ -126,13 +127,12 @@ impl Invocation {
                             .into_iter()
                             .filter(|arg| arg != "--help" && arg != "-h"),
                     );
-                catalog_cli::print_target_help(
-                    command,
-                    selection.get_one::<TargetVerb>("action").copied(),
-                    selection
-                        .get_one::<String>("record_type")
-                        .and_then(|kind| NodeType::parse(kind).ok()),
-                )?;
+                let action = selection.get_one::<TargetVerb>("action").copied();
+                let kind = selection
+                    .get_one::<String>("record_type")
+                    .and_then(|kind| NodeType::parse(kind).ok())
+                    .or_else(|| help_kind::resolve_record_kind(&selection, action));
+                catalog_cli::print_target_help(command, action, kind)?;
                 std::process::exit(0);
             }
             Err(error) => error.exit(),
@@ -189,6 +189,22 @@ impl Invocation {
             kind,
             matches,
         }))
+    }
+
+    /// Whether the caller asked for JSON, so a refusal prints as one
+    /// `{error,meta}` object instead of text.
+    pub fn json_output(&self) -> bool {
+        let format = match self {
+            Self::Builtin(_) => None,
+            Self::Api(args) => args.common.format(),
+            Self::Catalog(invocation) => return invocation.json_output(),
+            Self::Get(invocation) => invocation.format,
+            Self::Search(args) => args.common.format(),
+            Self::DiscussionRoot(args, _) => args.common.format(),
+            Self::DiscussionTarget(args, _, _) => args.common.format(),
+            Self::Target(invocation) => invocation.format,
+        };
+        format == Some(porcelain::OutputFormat::Json)
     }
 
     pub async fn dispatch(self) -> anyhow::Result<()> {

@@ -15,6 +15,9 @@ overtimeExamples();
 if (false) {
   // @ts-expect-error Rule bindings preserve the implementation parameter types.
   paysOvertime("39");
+  // The alias keeps this a type-level check: the scanner reports a literal
+  // `verifies(` call with a method word outside its vocabulary.
+  const checkMethodWord = ruleBindings.verifies;
   // @ts-expect-error Verification methods use the scanner's fixed vocabulary.
-  ruleBindings.verifies("rule_packed_consumer_overtime", "sample");
+  checkMethodWord("rule_packed_consumer_overtime", "sample");
 }
