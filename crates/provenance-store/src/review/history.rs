@@ -35,10 +35,12 @@ impl StateStore {
     /// changed it in its graph record file, then the saved working copy when
     /// it differs from the record at `HEAD`.
     ///
-    /// A commit changes the record when the record differs from the record in
-    /// at least one of its parents. A merge that carries one side's record
-    /// unchanged adds no version, and neither does a version whose shard text
-    /// does not parse.
+    /// Each version follows the version of its own parent's record. When
+    /// `HEAD` holds the record, the last commit version holds that record.
+    /// A merge that keeps one side's record unchanged adds no version and
+    /// lists only the kept side. A merge that resolves to new content adds
+    /// one, after the version of its first parent. A commit whose shard text
+    /// does not parse adds no version.
     #[rule("rule_record_history_reads_git")]
     pub(super) fn record_versions(
         &self,
@@ -55,29 +57,24 @@ impl StateStore {
             };
             Ok((text, self.list_discussions(scope)?))
         })?;
+        let files = git::file_versions(self.layout.root(), &path)?;
+        let records = files
+            .iter()
+            .map(|file| file.text.as_deref().and_then(|text| find(text, id)))
+            .collect::<Vec<_>>();
+        let head = records.last().cloned().flatten();
         let mut versions = Vec::new();
-        let mut head = None;
-        for file in git::file_versions(self.layout.root(), &path)? {
-            head = file.text.as_deref().and_then(|text| find(text, id));
-            let Some(record) = &head else {
+        for index in lineage(&files, &records) {
+            let (file, Some(record)) = (&files[index], records[index].clone()) else {
                 continue;
             };
-            let in_every_parent = !file.parent_texts.is_empty()
-                && file.parent_texts.iter().all(|text| {
-                    text.as_deref()
-                        .and_then(|text| find(text, id))
-                        .is_some_and(|parent| content(&parent) == content(record))
-                });
-            if in_every_parent {
-                continue;
-            }
             let source = Source {
                 id: StableId::new(file.commit.clone())?,
-                commit: Some(file.commit),
-                author: Some(file.author),
+                commit: Some(file.commit.clone()),
+                author: Some(file.author.clone()),
                 committed_at: Some(file.committed_at),
             };
-            push_version(&mut versions, kind, source, record.clone())?;
+            push_version(&mut versions, kind, source, record)?;
         }
         let working = working.as_deref().and_then(|text| find(text, id));
         if let Some(record) = working {
@@ -104,6 +101,39 @@ impl StateStore {
         )?;
         Ok(versions)
     }
+}
+
+/// The indexes of the commits that changed the record at `HEAD`, oldest
+/// first. The walk starts at the newest commit and steps to a parent whose
+/// record the commit kept, or else to its first parent. A commit that holds
+/// the record and kept no parent's record changed it.
+fn lineage(files: &[git::FileVersion], records: &[Option<Value>]) -> Vec<usize> {
+    let index = files
+        .iter()
+        .enumerate()
+        .map(|(index, file)| (file.commit.as_str(), index))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let mut chain = Vec::new();
+    let mut at = files.len().checked_sub(1);
+    // A parent is listed before its child, so each step goes to a lower index.
+    while let Some(current) = at {
+        let parents = files[current]
+            .parents
+            .iter()
+            .filter_map(|parent| index.get(parent.as_str()).copied())
+            .collect::<Vec<_>>();
+        let record = records[current].as_ref().map(content);
+        let kept = parents
+            .iter()
+            .copied()
+            .find(|parent| records[*parent].as_ref().map(content) == record);
+        if kept.is_none() && record.is_some() {
+            chain.push(current);
+        }
+        at = kept.or_else(|| parents.first().copied());
+    }
+    chain.reverse();
+    chain
 }
 
 /// The record with `id` in the text of one JSONL record file. A line that is

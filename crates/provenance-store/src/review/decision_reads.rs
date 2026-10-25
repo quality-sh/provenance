@@ -35,15 +35,15 @@ impl DocumentReviewState {
 
 /// A record that no review accepted and whose latest review decision rejected
 /// it is a rejected new record. A rejected change to an accepted record is
-/// not. Only decisions on review submissions count: a decision on another
-/// proposal that names the record, such as a candidate answer to a Question,
-/// decides nothing about the record.
+/// not. Only decisions on review submissions count, bound or legacy: a
+/// decision on another proposal that names the record, such as a candidate
+/// answer to a Question, decides nothing about the record.
 #[rule("rule_review_document_hides_rejected_new_records")]
-fn rejected_before_acceptance(state: &RequirementDecisionState) -> bool {
+fn rejected_before_acceptance(state: &RequirementDecisionState, facts: &CycleFacts) -> bool {
     let reviews = state
         .decisions
         .iter()
-        .filter(|decision| decision.revision.is_some())
+        .filter(|decision| facts.is_submission(&decision.disposition.proposal_id))
         .collect::<Vec<_>>();
     state.pending.is_none()
         && reviews
@@ -78,7 +78,7 @@ impl StateStore {
             );
             let rejected_new = states
                 .iter()
-                .filter(|state| rejected_before_acceptance(state))
+                .filter(|state| rejected_before_acceptance(state, &facts))
                 .map(|state| (state.record_kind, state.record_id.clone()))
                 .collect();
             let records = states

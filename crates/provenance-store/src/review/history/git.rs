@@ -2,21 +2,20 @@
 
 use crate::stale::git::command;
 use camino::Utf8Path;
-use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::process::Stdio;
 
-/// One commit that changed a record file, with the file text at that commit
-/// and at each of its parents.
+/// One commit that changed a record file, with the file text at that commit.
 pub(super) struct FileVersion {
     pub(super) commit: String,
+    /// The nearest listed commits on each parent line, in parent order. The
+    /// file text at each is the file text at the matching parent. A root
+    /// commit, or a commit at the edge of a shallow clone, has none.
+    pub(super) parents: Vec<String>,
     pub(super) author: String,
     pub(super) committed_at: i64,
     /// `None` when the commit removed the file.
     pub(super) text: Option<String>,
-    /// The file text at each parent, in parent order; `None` where the parent
-    /// has no such file. A root commit has no parents.
-    pub(super) parent_texts: Vec<Option<String>>,
 }
 
 /// Lists the commits reachable from `HEAD` that changed `path`, parents before
@@ -29,11 +28,13 @@ pub(super) fn file_versions(root: &Utf8Path, path: &Utf8Path) -> anyhow::Result<
         return Ok(Vec::new());
     };
     let relative = path.strip_prefix(root)?.as_str().replace('\\', "/");
+    // `--parents` names each parent as the nearest commit that changed the file.
     let output = command(root)
         .args([
             "log",
             "--reverse",
             "--topo-order",
+            "--parents",
             "--format=%H%x1f%P%x1f%an%x1f%ct",
             "--",
         ])
@@ -44,7 +45,7 @@ pub(super) fn file_versions(root: &Utf8Path, path: &Utf8Path) -> anyhow::Result<
         "git log failed: {}",
         String::from_utf8_lossy(&output.stderr).trim()
     );
-    let mut commits = Vec::new();
+    let mut versions = Vec::new();
     for line in String::from_utf8(output.stdout)?.lines() {
         let mut parts = line.split('\u{1f}');
         let (Some(commit), Some(parents), Some(author), Some(time)) =
@@ -52,48 +53,26 @@ pub(super) fn file_versions(root: &Utf8Path, path: &Utf8Path) -> anyhow::Result<
         else {
             anyhow::bail!("git log returned an unreadable commit line");
         };
-        let parents = parents
-            .split_whitespace()
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
-        commits.push((
-            commit.to_owned(),
-            parents,
-            author.to_owned(),
-            time.parse::<i64>()?,
-        ));
+        versions.push(FileVersion {
+            commit: commit.to_owned(),
+            parents: parents.split_whitespace().map(str::to_owned).collect(),
+            author: author.to_owned(),
+            committed_at: time.parse()?,
+            text: None,
+        });
     }
-    if commits.is_empty() {
-        return Ok(Vec::new());
+    if versions.is_empty() {
+        return Ok(versions);
     }
-    // Each distinct blob is read once: the file at every listed commit and at
-    // every parent of one.
-    let mut revisions = Vec::new();
-    let mut seen = BTreeSet::new();
-    for (commit, parents, _, _) in &commits {
-        for revision in std::iter::once(commit).chain(parents) {
-            if seen.insert(revision.as_str()) {
-                revisions.push(revision.as_str());
-            }
-        }
-    }
-    let texts = read_blobs(
-        root,
-        &blob_names(&revisions, &prefix, &relative),
-        revisions.len(),
-    )?;
-    let texts = revisions.into_iter().zip(texts).collect::<BTreeMap<_, _>>();
-    let text_at = |revision: &str| texts.get(revision).cloned().flatten();
-    Ok(commits
+    let commits = versions
         .iter()
-        .map(|(commit, parents, author, committed_at)| FileVersion {
-            text: text_at(commit),
-            parent_texts: parents.iter().map(|parent| text_at(parent)).collect(),
-            commit: commit.clone(),
-            author: author.clone(),
-            committed_at: *committed_at,
-        })
-        .collect())
+        .map(|version| version.commit.as_str())
+        .collect::<Vec<_>>();
+    let texts = read_blobs(root, &blob_names(&commits, &prefix, &relative), commits.len())?;
+    for (version, text) in versions.iter_mut().zip(texts) {
+        version.text = text;
+    }
+    Ok(versions)
 }
 
 /// The `git cat-file --batch` input that names the file at each revision.
