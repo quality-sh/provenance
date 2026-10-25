@@ -78,8 +78,11 @@ fn rust_release_packages_have_registry_metadata_and_versioned_dependencies() {
             if crate_name == "provenance-macros"
                 && dependency_name == "provenance-scanner"
                 && dependency["kind"] == "dev"
-                && dependency["req"] == "*"
             {
+                assert_eq!(
+                    dependency["req"], "*",
+                    "the macros scanner dev-dependency must stay unversioned to avoid a package cycle",
+                );
                 continue;
             }
             if !CRATE_ORDER.contains(&dependency_name) {
