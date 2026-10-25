@@ -1,0 +1,200 @@
+//! Document reads over records that other proposals name and over references
+//! that no longer resolve.
+#![cfg(feature = "test-fixture")]
+
+mod support {
+    pub mod records;
+}
+
+use axum::{body::Body, http::Request};
+use provenance_core::{
+    NodeType, QuestionStatus, RequirementStatus, ResolutionMethod, ScopeId, StableId, TopicStatus,
+};
+use provenance_macros::verifies;
+use provenance_store::state_store::{
+    CreateQuestionInput, CreateRequirementInput, CreateTopicInput, StateStore,
+};
+use provenance_transport::StatementHost;
+use serde_json::{json, Value};
+use support::records::{allow_reviewer, Repository};
+use tower::ServiceExt as _;
+
+fn host(repo: &Repository) -> StatementHost {
+    use provenance_transport::fixture::{FixtureAccess, Target};
+    let access = FixtureAccess::new(
+        vec![Target {
+            id: "selected".into(),
+            root: repo.dir.path().to_path_buf(),
+        }],
+        vec![("selected".into(), "default".into())],
+        "fixture-secret",
+        "fixture.test",
+    )
+    .unwrap();
+    StatementHost::with_fixture_access(access)
+}
+
+async fn get(host: &StatementHost, path: &str) -> (u16, Value) {
+    let request = Request::builder()
+        .method("GET")
+        .uri(path)
+        .header("host", "fixture.test")
+        .header("authorization", "Bearer fixture-secret")
+        .body(Body::empty())
+        .unwrap();
+    let response = host.router().oneshot(request).await.unwrap();
+    let status = response.status().as_u16();
+    let value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    (status, value)
+}
+
+fn sid(value: &str) -> StableId {
+    StableId::new(value).unwrap()
+}
+
+fn scope() -> ScopeId {
+    ScopeId::new("default").unwrap()
+}
+
+fn entry_ids(document: &Value) -> Vec<String> {
+    document["data"]["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| entry["node"]["id"].as_str().map(str::to_owned))
+        .collect()
+}
+
+fn requirement(id: &str, depends_on: Vec<StableId>) -> CreateRequirementInput {
+    CreateRequirementInput {
+        scope_id: scope(),
+        id: sid(id),
+        statement: "The system keeps each copy.".into(),
+        description: None,
+        status: RequirementStatus::Active,
+        domain_id: None,
+        refines: Some(sid("req_shared")),
+        depends_on,
+        supersedes: vec![],
+        spawned_by: None,
+        origin_thread: None,
+        origin_message: None,
+    }
+}
+
+#[tokio::test]
+#[verifies("rule_review_document_hides_rejected_new_records", examples)]
+async fn rejected_candidate_proposal_keeps_its_target_in_the_filtered_document() {
+    let repo = Repository::new("The shared graph is readable.");
+    allow_reviewer(&repo);
+    let store = StateStore::new(repo.layout.clone());
+    store
+        .create_topic(CreateTopicInput {
+            scope_id: scope(),
+            id: sid("topic_store"),
+            requirement_id: sid("req_shared"),
+            title: "Storage".into(),
+            status: TopicStatus::Open,
+            links: vec![],
+        })
+        .unwrap();
+    store
+        .create_question(CreateQuestionInput {
+            scope_id: scope(),
+            id: sid("question_store"),
+            topic_id: sid("topic_store"),
+            question: "Which store holds the record?".into(),
+            resolution_method: ResolutionMethod::Research,
+            status: QuestionStatus::Answered,
+            answer: Some("The local store.".into()),
+            links: vec![],
+            resolution_id: None,
+            contradicts: None,
+        })
+        .unwrap();
+    // A candidate answer names the Question; rejecting it decides nothing about the Question.
+    store
+        .create_proposal_card(
+            serde_json::from_value(json!({
+                "scope_id":"default","id":"prop_answer","proposal_key":"question/answer",
+                "proposal_type":"resolution_candidate","title":"Candidate answer",
+                "summary":"The candidate answer.","promotion_state":"proposed",
+                "traceability":{"target":{"artifact_type":"question","artifact_id":"question_store"},
+                    "source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},
+                "builds_on":[]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    store
+        .create_disposition(
+            serde_json::from_value(json!({
+                "scope_id":"default","id":"disp_answer","proposal_id":"prop_answer",
+                "decision":"rejected","rationale":"Not this answer.",
+                "actor":{"identity_type":"human","id":"reviewer"}
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let host = host(&repo);
+
+    let (status, filtered) = get(
+        &host,
+        "/requirements/req_shared/document?exclude_terminal=true",
+    )
+    .await;
+    assert_eq!(status, 200, "{filtered}");
+    assert!(
+        entry_ids(&filtered).contains(&"question_store".to_owned()),
+        "{filtered}"
+    );
+    assert_eq!(
+        filtered["data"]["review_totals"]["rejected"], 0,
+        "{filtered}"
+    );
+    let (status, all) = get(
+        &host,
+        "/requirements/req_shared/document?exclude_terminal=false",
+    )
+    .await;
+    assert_eq!(status, 200, "{all}");
+    assert_eq!(entry_ids(&all), entry_ids(&filtered));
+}
+
+#[tokio::test]
+#[verifies("rule_requirement_document_canonical_membership", examples)]
+async fn document_skips_a_reference_to_a_missing_record() {
+    let repo = Repository::new("The shared graph is readable.");
+    let store = StateStore::new(repo.layout.clone());
+    store
+        .create_requirement(requirement("req_cited", vec![]))
+        .unwrap();
+    store
+        .create_requirement(requirement("req_citing", vec![sid("req_cited")]))
+        .unwrap();
+    // The state a merge leaves: one branch removed req_cited while the other kept citing it.
+    let path = provenance_store::shards::path_for(&repo.layout, &scope(), NodeType::Requirement);
+    let kept = std::fs::read_to_string(&path)
+        .unwrap()
+        .lines()
+        .filter(|line| !line.contains("\"id\":\"req_cited\""))
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    std::fs::write(&path, kept).unwrap();
+    let host = host(&repo);
+
+    let (status, document) = get(
+        &host,
+        "/requirements/req_shared/document?exclude_terminal=true",
+    )
+    .await;
+    assert_eq!(status, 200, "{document}");
+    let ids = entry_ids(&document);
+    assert!(ids.contains(&"req_citing".to_owned()), "{document}");
+    assert!(!ids.contains(&"req_cited".to_owned()), "{document}");
+}
