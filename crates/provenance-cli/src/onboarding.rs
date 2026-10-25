@@ -45,7 +45,7 @@ it in the same change.
   `{command} review --repo . --repository-id local --scope {selected_scope} --detach`.
   It opens the page in their browser.
 - Before you hand off, read a Requirement and every record under it in order, as a
-  builder would: `{command} requirements <requirement-id> document get --scope {selected_scope}`.
+  builder would: `{command} requirements <requirement-id> document get --scope {selected_scope} --format json`.
 - Read the decision and review feedback with `{command} <record-id> --scope {selected_scope} --view review`.
   Copy `review.edit.etag` unchanged to `--if-match` on the next guarded update.
   If feedback is truncated, use the continuation commands in the review view.

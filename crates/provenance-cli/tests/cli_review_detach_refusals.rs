@@ -78,7 +78,11 @@ fn a_directory_without_a_graph_is_refused_before_a_host_starts() {
         .map(|pid| Detached(u32::try_from(pid).unwrap()));
 
     assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
+    assert!(
+        output.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
     assert_eq!(cache.host_files(), Vec::<std::path::PathBuf>::new());
     assert!(!registry(directory.path()).exists());
 }

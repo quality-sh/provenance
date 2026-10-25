@@ -101,7 +101,7 @@ fn init_guidance_says_what_a_description_holds() {
         prose.contains(
             "Before you hand off, read a Requirement and every record under it in order, as a \
              builder would: `provenance requirements <requirement-id> document get --scope \
-             default`."
+             default --format json`."
         ),
         "{agents}"
     );
