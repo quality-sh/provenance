@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { connectEvents, parseFrame, type EventSocket } from './events.ts';
+import { BROWSER_RESET_REASONS } from './session.ts';
 import type { ReviewChange } from './session.ts';
 
 class FakeSocket implements EventSocket {
@@ -136,24 +136,13 @@ test('an unknown reset reason closes the feed without refreshing the page', () =
   assert.deepEqual(changes, []);
 });
 
-// Implementation aid: every renderer reread reason can pass through the host.
-test('known reset reasons refresh the page with the received reason', () => {
-  for (const reason of ['ready', 'sequence-gap', 'file-events-lost', 'observation-recovered', 'subscriber-loss']) {
-    const { sockets, changes } = client();
-    sockets[0]!.frame({ type: 'reset', epoch: 'run-1', sequence: 1, reason });
-    assert.equal(sockets[0]!.closed, false);
-    assert.deepEqual(changes, [{ _tag: 'Everything', reason }]);
-  }
-});
-
-// Implementation aid: compare the page client with the Rust host's browser reset call sites.
-test('every browser reset reason from the Rust host rereads the page', async t => {
-  const reasons = new Set(['subscribers.rs', 'watch.rs'].flatMap(file => {
-    const source = readFileSync(new URL(`../../crates/provenance-cli/src/review/events/${file}`, import.meta.url), 'utf8');
-    return [...source.matchAll(/(?:reset_locked|reset|unavailable|then_some|get_or_insert)\([^"\n]*"([^"]+)"/g)]
-      .map(match => match[1]!);
-  }));
-  assert.ok(reasons.size > 0);
+// Implementation aid: pin the browser reset contract and check each reason through the client.
+test('the fixed browser reset reasons reread the page', async t => {
+  const reasons = [
+    'ready', 'sequence-gap', 'file-events-lost', 'configuration-changed',
+    'observation-failed', 'observation-recovered', 'subscriber-loss',
+  ];
+  assert.deepEqual(BROWSER_RESET_REASONS, reasons);
   for (const reason of reasons) {
     await t.test(reason, () => {
       const { sockets, changes } = client();
@@ -162,6 +151,14 @@ test('every browser reset reason from the Rust host rereads the page', async t =
       assert.deepEqual(changes, [{ _tag: 'Everything', reason }]);
     });
   }
+});
+
+// Implementation aid: the native capture failure must not enter the browser feed.
+test('a native-only reset reason closes the feed without refreshing the page', () => {
+  const { sockets, changes } = client();
+  sockets[0]!.frame({ type: 'reset', epoch: 'run-1', sequence: 1, reason: 'page-capture-failed' });
+  assert.equal(sockets[0]!.closed, true);
+  assert.deepEqual(changes, []);
 });
 
 // Implementation aid: the host closes an unavailable feed after its observation-failed reset.

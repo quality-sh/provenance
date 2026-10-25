@@ -17,15 +17,19 @@ export interface ChangedRecord {
   readonly id: string;
 }
 
+/** The reset reasons that the browser accepts. */
+export const BROWSER_RESET_REASONS = [
+  'ready',
+  'sequence-gap',
+  'file-events-lost',
+  'configuration-changed',
+  'observation-failed',
+  'observation-recovered',
+  'subscriber-loss',
+] as const;
+
 /** The renderer reasons for reading all saved state again. */
-export type RereadReason =
-  | 'ready'
-  | 'sequence-gap'
-  | 'file-events-lost'
-  | 'configuration-changed'
-  | 'observation-failed'
-  | 'observation-recovered'
-  | 'subscriber-loss';
+export type RereadReason = typeof BROWSER_RESET_REASONS[number];
 
 /** What the page reads again after a saved change. */
 export type ReviewChange =
