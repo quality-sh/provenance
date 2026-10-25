@@ -75,6 +75,8 @@ export function parseFrame(text: unknown): Frame | undefined {
         case 'ready':
         case 'sequence-gap':
         case 'file-events-lost':
+        case 'configuration-changed':
+        case 'observation-failed':
         case 'observation-recovered':
         case 'subscriber-loss':
           return { type: 'reset', epoch, sequence, reason: value.reason };

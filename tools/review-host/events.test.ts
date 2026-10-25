@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { connectEvents, parseFrame, type EventSocket } from './events.ts';
 import type { ReviewChange } from './session.ts';
 
@@ -143,4 +144,34 @@ test('known reset reasons refresh the page with the received reason', () => {
     assert.equal(sockets[0]!.closed, false);
     assert.deepEqual(changes, [{ _tag: 'Everything', reason }]);
   }
+});
+
+// Implementation aid: compare the page client with the Rust host's browser reset call sites.
+test('every browser reset reason from the Rust host rereads the page', async t => {
+  const reasons = new Set(['subscribers.rs', 'watch.rs'].flatMap(file => {
+    const source = readFileSync(new URL(`../../crates/provenance-cli/src/review/events/${file}`, import.meta.url), 'utf8');
+    return [...source.matchAll(/(?:reset_locked|reset|unavailable|then_some|get_or_insert)\([^"\n]*"([^"]+)"/g)]
+      .map(match => match[1]!);
+  }));
+  assert.ok(reasons.size > 0);
+  for (const reason of reasons) {
+    await t.test(reason, () => {
+      const { sockets, changes } = client();
+      sockets[0]!.frame({ type: 'reset', epoch: 'run-1', sequence: 1, reason });
+      assert.equal(sockets[0]!.closed, false);
+      assert.deepEqual(changes, [{ _tag: 'Everything', reason }]);
+    });
+  }
+});
+
+// Implementation aid: the host closes an unavailable feed after its observation-failed reset.
+test('an observation failure rereads the page and pauses after reconnect fails', () => {
+  const { sockets, changes, notices } = client();
+  sockets[0]!.frame({ type: 'ready', epoch: 'run-1', sequence: 0 });
+  sockets[0]!.frame({ type: 'reset', epoch: 'run-1', sequence: 1, reason: 'observation-failed' });
+  assert.equal(sockets[0]!.closed, false);
+  assert.deepEqual(changes.at(-1), { _tag: 'Everything', reason: 'observation-failed' });
+  sockets[0]!.drop();
+  sockets[1]!.drop();
+  assert.deepEqual(notices, ['live', 'paused']);
 });

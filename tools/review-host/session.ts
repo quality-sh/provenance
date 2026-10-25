@@ -22,6 +22,8 @@ export type RereadReason =
   | 'ready'
   | 'sequence-gap'
   | 'file-events-lost'
+  | 'configuration-changed'
+  | 'observation-failed'
   | 'observation-recovered'
   | 'subscriber-loss';
 
