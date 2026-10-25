@@ -51,7 +51,7 @@ fn create(store: &StateStore, id: &str) {
         .unwrap();
 }
 
-fn save_record(store: &StateStore, id: &str, fields: serde_json::Value) {
+fn save_record(store: &StateStore, id: &str, fields: &serde_json::Value) {
     let record = StableId::new(id).unwrap();
     let mut update = json!({"scope_id":"default", "id":id});
     update
@@ -109,7 +109,7 @@ async fn merged_history_lists_only_the_commits_that_changed_the_record() {
     save_record(
         &store,
         "req_h",
-        json!({"description":"Bob describes req_h."}),
+        &json!({"description":"Bob describes req_h."}),
     );
     commit_as(&temp, "bob", "bob describes req_h");
     git_as(&temp, "merger", &["merge", "-q", "--no-edit", "feature"]);
