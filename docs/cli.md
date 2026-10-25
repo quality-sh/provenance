@@ -90,6 +90,7 @@ printf '%s' '{"id":"source_policy","name":"Policy","source_type":"document","sup
 provenance rules search --text "time bounded" --limit 20
 provenance rules rule_shared trace --direction out --max-depth 2
 provenance topics topic_open claim --actor agent-a
+provenance topics topic_open release --actor agent-a
 provenance questions question_open answer --answer "Use the guarded path."
 ```
 

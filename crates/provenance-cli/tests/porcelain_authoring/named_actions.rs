@@ -69,6 +69,8 @@ fn target_first_topic_actions_infer_kind_and_update_claim_state() {
         "release",
         "--repo",
         &repo,
+        "--actor",
+        "worker",
         "--format",
         "json",
     ]);

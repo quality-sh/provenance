@@ -269,16 +269,19 @@ fn stale_submission_and_stale_selection_are_refused() {
 #[provenance_macros::verifies("rule_disposition_actor_allowlist", examples)]
 fn an_unauthorized_actor_cannot_accept_a_review() {
     let (_temp, store, _, proposal) = enrolled();
-    refused(
-        decide(
-            &store,
-            &proposal,
-            "accepted",
-            &reviewer("intruder"),
-            &artifact(),
-        ),
-        "allowlist",
-    );
+    let error = decide(
+        &store,
+        &proposal,
+        "accepted",
+        &reviewer("intruder"),
+        &artifact(),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("allowlist"), "{error}");
+    assert!(matches!(
+        crate::write_error::WriteError(error).safe(),
+        crate::write_error::WriteFailure::AccessDenied
+    ));
     assert_eq!(
         store.list_dispositions(&scope()).unwrap(),
         [] as [provenance_core::DispositionRecord; 0]

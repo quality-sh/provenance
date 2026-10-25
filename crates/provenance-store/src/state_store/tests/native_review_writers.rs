@@ -362,12 +362,14 @@ fn relation_and_shaping_writers_keep_the_revision_of_returned_content() {
     store
         .claim_topic(&scope, &id("topic_native"), "author")
         .unwrap();
-    store.release_topic(&scope, &id("topic_native")).unwrap();
+    store
+        .release_topic(&scope, &id("topic_native"), "author")
+        .unwrap();
     store
         .claim_question(&scope, &id("question_native"), "author")
         .unwrap();
     store
-        .release_question(&scope, &id("question_native"))
+        .release_question(&scope, &id("question_native"), "author")
         .unwrap();
     store
         .answer_question(&scope, &id("question_native"), "A is correct".into(), None)

@@ -19,6 +19,13 @@ pub(super) fn check_size(input: &WriteDiscussion) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The requested status already holds: the intent is met, so the write is a
+/// no-op and the Discussion keeps its version.
+#[rule("rule_discussion_same_status_is_no_op")]
+fn unchanged_status(head: Option<&Discussion>, status: DiscussionStatus) -> Option<Discussion> {
+    head.filter(|head| head.status == status).cloned()
+}
+
 impl StateStore {
     /// Creates a distinct Discussion root or changes one addressed Discussion.
     #[rule("rule_record_comments_have_separate_reply_threads")]
@@ -106,10 +113,9 @@ impl StateStore {
                 }
             }
             DiscussionAction::SetStatus { status, .. } => {
-                anyhow::ensure!(
-                    head.as_ref().unwrap().status != *status,
-                    "Discussion already has this status"
-                );
+                if let Some(current) = unchanged_status(head.as_ref(), *status) {
+                    return Ok(current);
+                }
             }
         }
         with_record_state(&self.layout, |layout| {

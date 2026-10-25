@@ -23,10 +23,7 @@ impl StateStore {
     #[rule("rule_revised_item_requires_new_review")]
     #[rule("rule_review_proposal_identity_server_created")]
     pub fn submit_record_review(&self, input: SubmitRecordReview) -> anyhow::Result<CycleEntry> {
-        anyhow::ensure!(
-            !input.actor.trim().is_empty(),
-            "invalid review request identity"
-        );
+        crate::write_error::ensure_actor(&input.actor)?;
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
         self.with_repository_publication(move || {

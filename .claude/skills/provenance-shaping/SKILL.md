@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:7b354b248083082b -->
+<!-- Installed by provenance 0.2.3; content hash fnv1a64:a29f1c8d1ce65f27 -->
 
 # Shaping
 
@@ -502,8 +502,8 @@ Before final response:
 
    ```sh
    provenance topics <topic_id> close --scope <scope> --format json
-   provenance topics <topic_id> release --scope <scope> --format json
-   provenance questions <question_id> release --scope <scope> --format json
+   provenance topics <topic_id> release --actor <actor> --scope <scope> --format json
+   provenance questions <question_id> release --actor <actor> --scope <scope> --format json
    ```
 
    To archive a Question or Topic, use the commit that contains the

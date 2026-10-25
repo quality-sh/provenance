@@ -28,7 +28,8 @@ impl StateStore {
             let paths = review_families::review_paths(layout, scope);
             let result = guard::with_writers(&paths, "*", || publish(&staged))?;
             let desired = review_families::review_records(&staged, scope)?;
-            let changes = self.typed_changes(scope, &desired)?;
+            let (changes, deleted) = self.typed_changes(scope, &desired)?;
+            staged.delete_record_discussions(scope, &deleted)?;
             for change in &changes {
                 staged.commit_typed_change(actor, change)?;
             }
@@ -40,10 +41,11 @@ impl StateStore {
         &self,
         scope: &ScopeId,
         desired: &[ReviewRecord],
-    ) -> anyhow::Result<Vec<TypedChange>> {
+    ) -> anyhow::Result<(Vec<TypedChange>, Vec<ReviewRecord>)> {
         let current = review_records(&self.layout, scope)?;
         let facts = CycleFacts::validated(self, scope)?;
         let mut changes = Vec::new();
+        let mut deleted = Vec::new();
         for before in &current {
             let after = desired
                 .iter()
@@ -52,6 +54,7 @@ impl StateStore {
                 if facts.has_submissions(before.kind(), before.id()) {
                     return Err(enrolled_deletion_conflict(before));
                 }
+                deleted.push(before.clone());
                 continue;
             };
             if content(before)? == content(after)? {
@@ -62,7 +65,7 @@ impl StateStore {
                 after: after.clone(),
             });
         }
-        Ok(changes)
+        Ok((changes, deleted))
     }
 
     /// Opens the review submission of a typed change to Requirement content.
