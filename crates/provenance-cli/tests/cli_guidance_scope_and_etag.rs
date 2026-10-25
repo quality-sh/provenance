@@ -100,10 +100,10 @@ fn managed_guidance_carries_the_selected_scope_on_every_review_command() {
     let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
 
     for line in [
-        "provenance <record-id> --review-link --scope app`",
-        "provenance <record-id> --review-link --no-open --scope app --format json`",
-        "provenance <record-id> --view review --scope app`",
-        "provenance <requirement-id> --view review --follow --scope app --format json`",
+        "provenance <record-id> --scope app --review-link`",
+        "provenance <record-id> --scope app --review-link --no-open --format json`",
+        "provenance <record-id> --scope app --view review`",
+        "provenance <requirement-id> --scope app --view review --follow --format json`",
         "provenance questions <question_id> get --scope app --format json`",
         "provenance topics <topic_id> get --scope app --format json`",
         "provenance questions <question_id> update --scope app --if-match <etag> --stdin --format json`",
