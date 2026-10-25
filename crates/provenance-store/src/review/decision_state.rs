@@ -171,8 +171,7 @@ impl CycleFacts {
         (cycle, proposal.as_str().to_owned())
     }
 
-    /// Whether a Proposal is a review submission, bound to a revision or a
-    /// legacy one with no binding.
+    /// Whether a Proposal is a review submission.
     pub(super) fn is_submission(&self, proposal: &StableId) -> bool {
         self.submissions
             .iter()
