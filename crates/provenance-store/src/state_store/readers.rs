@@ -16,7 +16,6 @@ enum Fields {
 }
 
 const NO_NESTED_RECORDS: &[&str] = &[];
-
 const IDEATION_LANDING_RECORD_FIELDS: &[&str] = &[
     "contributions",
     "synthesis_packets",
@@ -29,16 +28,46 @@ const IDEATION_LANDING_RECORD_FIELDS: &[&str] = &[
 ///
 /// `serde_json` reports a position inside the one line it was given, which
 /// reads as "line 1" for every row; the shard path and the row number are
-/// what locate the fault.
-pub fn located(path: &Utf8Path, line_number: usize, error: &serde_json::Error) -> anyhow::Error {
+/// what locate the fault. The path is relative to the state directory, so the
+/// message is safe to show on the review page.
+pub(crate) fn located(
+    path: &Utf8Path,
+    line_number: usize,
+    error: &serde_json::Error,
+) -> anyhow::Error {
     let text = error.to_string();
     let message = text
         .rfind(" at line ")
         .map_or(text.as_str(), |at| &text[..at]);
-    anyhow::anyhow!("{path} line {line_number}: {message}")
+    anyhow::anyhow!("{} line {line_number}: {message}", state_relative(path))
 }
 
-pub fn parse_line(
+/// Locates a parse error from a deserializer that returns `anyhow`: a serde
+/// error loses its in-line position, any other refusal gets the shard prefix.
+pub(crate) fn located_any(
+    path: &Utf8Path,
+    line_number: usize,
+    error: anyhow::Error,
+) -> anyhow::Error {
+    match error.downcast::<serde_json::Error>() {
+        Ok(error) => located(path, line_number, &error),
+        Err(error) => anyhow::anyhow!("{} line {line_number}: {error}", state_relative(path)),
+    }
+}
+
+fn state_relative(path: &Utf8Path) -> &Utf8Path {
+    let components: Vec<&str> = path.iter().collect();
+    components
+        .windows(2)
+        .rposition(|pair| pair == [".provenance", "state"])
+        .and_then(|at| {
+            let prefix: Utf8PathBuf = components[..at + 2].iter().collect();
+            path.strip_prefix(prefix).ok()
+        })
+        .unwrap_or(path)
+}
+
+pub(crate) fn parse_line(
     path: &Utf8Path,
     line_number: usize,
     line: &str,
@@ -72,7 +101,9 @@ fn record_from_line<T: DeserializeOwned>(
         }
         // The closed reader needs the untouched line: `serde_ignored` reports
         // an unknown field by walking the document as it was written.
-        Fields::Closed => deserialize_closed(line),
+        Fields::Closed => {
+            deserialize_closed(line).map_err(|error| located_any(path, line_number, error))
+        }
     }
 }
 
@@ -371,25 +402,15 @@ fn read_jsonl_shards<T: DeserializeOwned>(
         let contents = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {shard_kind} shard {}", path.as_str()))?;
         for (index, line) in contents.lines().enumerate() {
-            let context = || {
-                format!(
-                    "failed to parse {shard_kind} shard {} line {}",
-                    path.as_str(),
-                    index + 1
-                )
-            };
-            let value: serde_json::Value = serde_json::from_str(line).with_context(context)?;
-            records.push(
-                record_from_line(
-                    &path,
-                    index + 1,
-                    line,
-                    value,
-                    Fields::Open,
-                    NO_NESTED_RECORDS,
-                )
-                .with_context(context)?,
-            );
+            let value = parse_line(&path, index + 1, line)?;
+            records.push(record_from_line(
+                &path,
+                index + 1,
+                line,
+                value,
+                Fields::Open,
+                NO_NESTED_RECORDS,
+            )?);
         }
     }
     Ok(records)

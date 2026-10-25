@@ -18,6 +18,7 @@ pub enum InvalidInputReason {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum OperationFailure {
+    // WriteFailure repeats InvalidInput and AccessDenied; doc comments break the generator merge.
     #[error("invalid operation input")]
     InvalidInput {
         field: Option<String>,

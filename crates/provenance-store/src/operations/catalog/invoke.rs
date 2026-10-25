@@ -189,13 +189,25 @@ fn decode<O: Operation, T: serde::de::DeserializeOwned>(call: Value) -> Result<T
     }
     serde_path_to_error::deserialize(call.into_deserializer()).map_err(|error| {
         let path = error.path().to_string();
-        FailureEnvelope::new(
-            Some(O::NAME),
-            OperationFailure::InvalidInput {
-                field: (!path.is_empty() && path != ".").then_some(path),
+        let parent = (!path.is_empty() && path != ".").then_some(path);
+        let message = error.inner().to_string();
+        // A missing field is named under its parent, as the list check above does.
+        let failure = match message
+            .strip_prefix("missing field `")
+            .and_then(|rest| rest.strip_suffix('`'))
+        {
+            Some(name) => OperationFailure::InvalidInput {
+                field: Some(
+                    parent.map_or_else(|| name.to_owned(), |parent| format!("{parent}.{name}")),
+                ),
+                reason: InvalidInputReason::Required,
+            },
+            None => OperationFailure::InvalidInput {
+                field: parent,
                 reason: InvalidInputReason::InvalidValue,
             },
-        )
+        };
+        FailureEnvelope::new(Some(O::NAME), failure)
     })
 }
 

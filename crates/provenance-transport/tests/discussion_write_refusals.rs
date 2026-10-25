@@ -4,6 +4,7 @@ mod support {
     pub mod records;
     pub mod resource_http;
 }
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, call_with_headers, host};
@@ -42,6 +43,7 @@ async fn set_status(
 }
 
 #[tokio::test]
+#[verifies("rule_write_actor_required", examples)]
 async fn a_blank_actor_is_an_invalid_input_on_the_actor_field() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, true);
@@ -74,6 +76,7 @@ async fn a_blank_actor_is_an_invalid_input_on_the_actor_field() {
 }
 
 #[tokio::test]
+#[verifies("rule_discussion_same_status_is_no_op", examples)]
 async fn setting_the_status_a_discussion_already_has_is_a_no_op() {
     let repo = Repository::new("The shared graph is readable.");
     let host = host(&repo, true);
@@ -104,6 +107,7 @@ async fn setting_the_status_a_discussion_already_has_is_a_no_op() {
     assert_eq!(stale["error"]["kind"], "discussion_version_conflict");
 }
 
+// No Rule yet: the owner has not chosen between refuse, cascade and archive.
 #[tokio::test]
 async fn typed_spec_apply_refuses_to_delete_a_record_that_has_discussions() {
     let repo = Repository::new("The shared graph is readable.");

@@ -60,11 +60,17 @@ async fn a_claim_has_one_holder_and_only_the_holder_releases_it() {
 }
 
 #[tokio::test]
-#[verifies("rule_claim_holder_exclusive", examples)]
+#[verifies("rule_write_actor_required", examples)]
 async fn a_release_names_its_actor() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo, true);
+    let (status, refused) = act(&host, "/topics/topic_shared", "claim", "  ").await;
+    assert_eq!(status, 400, "{refused}");
+    assert_eq!(
+        refused["error"],
+        json!({"kind":"invalid_input", "field":"request.actor", "reason":"invalid_value"})
+    );
     act(&host, "/topics/topic_shared", "claim", "alice").await;
     let (status, refused) = call(
         &host,
@@ -74,7 +80,10 @@ async fn a_release_names_its_actor() {
     )
     .await;
     assert_eq!(status, 400, "{refused}");
-    assert_eq!(refused["error"]["kind"], "invalid_input");
+    assert_eq!(
+        refused["error"],
+        json!({"kind":"invalid_input", "field":"request.actor", "reason":"required"})
+    );
     let (status, read) = call(&host, "GET", "/topics/topic_shared", None).await;
     assert_eq!(status, 200, "{read}");
     assert_eq!(read["data"]["claimed_by"], "alice");

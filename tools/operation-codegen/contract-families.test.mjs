@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { hoistSharedFamilies, requestSideNames } from './contract-families.mjs';
+import { differingKey, hoistSharedFamilies, requestSideNames, schemaShapes } from './contract-families.mjs';
 
 function responseAlternatives(schema, schemas) {
   if (schema?.$ref) return responseAlternatives(schemas[schema.$ref.split('/').at(-1)], schemas);
@@ -134,4 +134,14 @@ test('operation and schema names do not use version suffixes', () => {
 
   assert.ok([0, 1].includes(result.status), result.stderr);
   assert.equal(result.stdout, '');
+});
+
+test('two failure variants that differ name the first differing key', () => {
+  const shapes = schemaShapes({});
+  const common = { type: 'object', properties: { kind: { type: 'string', const: 'access_denied' } } };
+  assert.equal(differingKey(shapes, common, structuredClone(common)), null);
+  assert.equal(differingKey(shapes, common, { ...common, description: 'Store refusal.' }), 'description');
+  const field = { type: 'object', properties: { ...common.properties, field: { type: 'string' } } };
+  const nullable = { type: 'object', properties: { ...common.properties, field: { type: ['string', 'null'] } } };
+  assert.equal(differingKey(shapes, field, nullable), 'properties.field.type');
 });

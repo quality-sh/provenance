@@ -86,9 +86,8 @@ pub(super) fn ensure_claim_holder(
 }
 
 pub(super) fn validated_actor(actor: &str) -> anyhow::Result<String> {
-    let actor = actor.trim();
-    crate::write_error::ensure!(InvalidUpdate, !actor.is_empty(), "actor must not be empty");
-    Ok(actor.to_string())
+    crate::write_error::ensure_actor(actor)?;
+    Ok(actor.trim().to_string())
 }
 
 pub(super) fn now_ms() -> anyhow::Result<i64> {

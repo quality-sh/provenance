@@ -8,11 +8,11 @@ use crate::model::ids::{SchemaVersion, ScopeId, StableId};
 #[error("accepted proposal must be asserted before disposition")]
 pub struct ApprovalEvidenceRequired;
 
-/// The disposition actor may not decide in this repository.
+/// The disposition actor cannot decide in this repository.
 ///
-/// An empty allowlist means configuration is absent, not that every possible
-/// actor was deliberately denied, so that refusal names the field and setup
-/// command rather than blaming the supplied actor id.
+/// An empty allowlist means that no configuration exists. It does not mean
+/// that the supplied actor id is refused, so that refusal names the field and
+/// the setup command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum DispositionActorRefusal {
     #[error(

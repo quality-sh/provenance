@@ -32,6 +32,7 @@ fn create_requirement(repo: &str, id: &str, statement: &str) {
         .success();
 }
 
+// Implementation aid: the error text helps a person find the bad line; no Rule states it.
 #[test]
 fn a_blank_shard_line_is_named_by_shard_and_line() {
     let dir = tempfile::tempdir().unwrap();
