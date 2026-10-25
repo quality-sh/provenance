@@ -186,6 +186,8 @@ fn a_thread_with_sequential_and_random_message_ids_is_deleted() {
             "reply",
             "--expected-version",
             "2",
+            "--declared-by",
+            "spec://fx",
             "--body",
             "A reply.",
         ],
