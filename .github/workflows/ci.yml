@@ -456,6 +456,14 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      # trybuild creates target/tests/trybuild, but not target/tests/target.
+      # rust-cache starts both cleanup calls without awaiting their errors.
+      # Remove the disposable compile-test workspaces before cache cleanup.
+      - name: Remove compile-test workspaces before cache cleanup
+        if: always()
+        shell: bash
+        run: rm -rf target/tests
+
   # Default-features lane: runs the dogfood absence tests, which assert the
   # dev-only command does not exist in feature-less builds.
   test-default-features:
