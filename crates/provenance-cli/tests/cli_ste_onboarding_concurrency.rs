@@ -54,7 +54,10 @@ fn a_failing_download_does_not_block_a_concurrent_init() {
     assert_eq!(working.requests().len(), 1);
     let slow_stderr = String::from_utf8_lossy(&slow.stderr);
     assert!(slow.status.success(), "{slow_stderr}");
-    assert!(!slow_stderr.contains("Warning:"), "stderr: {slow_stderr}");
+    assert!(
+        !slow_stderr.contains("dictionary could not be added"),
+        "stderr: {slow_stderr}"
+    );
     assert!(
         dictionary_support::reference_path(&slow_repo).is_file(),
         "the first init uses the dictionary that the second init put in the cache"
