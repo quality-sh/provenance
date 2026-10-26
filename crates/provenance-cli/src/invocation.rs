@@ -109,6 +109,7 @@ impl Invocation {
         Self::parse_target(arguments)
     }
 
+    /// Parses the target before its action, defaults to get, and handles help before validation.
     #[provenance_macros::rule("rule_record_help_exits_before_validation")]
     #[rule("rule_porcelain_cli_target_action_order")]
     #[rule("rule_porcelain_get_is_default_action")]
