@@ -176,25 +176,8 @@ fn a_deleted_test_file_leaves_its_verification_binding_gone() {
     assert_eq!(sites.len(), 1);
     assert_eq!(sites[0]["subject_id"], "rule_start");
     assert_eq!(sites[0]["state"], "gone");
-    let output = provenance()
-        .args([
-            "verification-bindings",
-            "list",
-            "--repo",
-            directory.path().to_str().unwrap(),
-            "--scope",
-            "default",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    let listed: Value = serde_json::from_slice(&output).unwrap();
-    let bindings = listed["data"]["items"].as_array().unwrap();
-    assert_eq!(bindings.len(), 1, "{listed}");
+    let bindings = listed_verification_bindings(directory.path());
+    assert_eq!(bindings.len(), 1);
     assert_eq!(bindings[0]["rule_id"], "rule_start");
     assert_eq!(bindings[0]["file"], "tests/expiry.test.ts");
 }
@@ -214,19 +197,31 @@ fn canonical_rule_changes_binding_identity_with_the_same_owner_and_key() {
         "expiry",
         "tests/expiry.test.ts",
     );
+    let first = listed_verification_bindings(directory.path());
+    assert_eq!(first.len(), 1);
+    assert_eq!(first[0]["rule_id"], "rule_start");
+
     verify(
         directory.path(),
         "rule_resume",
         "expiry",
         "tests/expiry.test.ts",
     );
+    let second = listed_verification_bindings(directory.path());
+    assert_eq!(second.len(), 1);
+    assert_ne!(first[0]["id"], second[0]["id"]);
+    assert_eq!(second[0]["rule_id"], "rule_resume");
+    assert_eq!(second[0]["key"], first[0]["key"]);
+    assert_eq!(second[0]["declared_by"], first[0]["declared_by"]);
+}
 
+fn listed_verification_bindings(repo: &Path) -> Vec<Value> {
     let output = provenance()
         .args([
             "verification-bindings",
             "list",
             "--repo",
-            directory.path().to_str().unwrap(),
+            repo.to_str().unwrap(),
             "--scope",
             "default",
             "--format",
@@ -238,17 +233,5 @@ fn canonical_rule_changes_binding_identity_with_the_same_owner_and_key() {
         .stdout
         .clone();
     let listed: Value = serde_json::from_slice(&output).unwrap();
-    let bindings = listed["data"]["items"].as_array().unwrap();
-    assert_eq!(bindings.len(), 2, "{listed}");
-    assert_ne!(bindings[0]["id"], bindings[1]["id"]);
-    let mut rules = bindings
-        .iter()
-        .map(|binding| binding["rule_id"].as_str().unwrap())
-        .collect::<Vec<_>>();
-    rules.sort_unstable();
-    assert_eq!(rules, ["rule_resume", "rule_start"]);
-    for binding in bindings {
-        assert_eq!(binding["key"], "expiry");
-        assert_eq!(binding["declared_by"], "ci://typescript");
-    }
+    listed["data"]["items"].as_array().unwrap().clone()
 }
