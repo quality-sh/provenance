@@ -45,7 +45,7 @@ impl Host {
         use_user_cache(&mut command, self.user_cache.path());
         command.env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         );
         command
     }
@@ -137,7 +137,7 @@ pub fn initialize_repository(command: &mut Command, root: &std::path::Path, acto
     // Review delivery does not depend on an external dictionary asset.
     command.env(
         "PROVENANCE_TEST_STE100_ASSET_URL",
-        "http://127.0.0.1:9/unavailable",
+        env!("PROVENANCE_TEST_STE100_ASSET_URL"),
     );
     command.args([
         "init",
