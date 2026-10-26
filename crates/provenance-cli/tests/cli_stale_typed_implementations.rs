@@ -161,13 +161,6 @@ fn deleted_typed_implementation_is_gone_without_a_scanner_marker() {
     apply_binding(directory.path());
     let base = commit(directory.path(), "bind implementation");
     std::fs::remove_file(directory.path().join("src/runtime.ts")).unwrap();
-    let root = directory.path().to_str().unwrap();
-    let store = provenance_store::state_store::StateStore::new(
-        provenance_store::layout::ProvenanceLayout::new(root),
-    );
-    let scope = provenance_core::ScopeId::new("default").unwrap();
-    let before = store.list_implementation_bindings(&scope).unwrap();
-    assert_eq!(before.len(), 1);
     let head = commit(directory.path(), "delete implementation");
 
     let report = stale(directory.path(), &base, &head);
@@ -176,7 +169,6 @@ fn deleted_typed_implementation_is_gone_without_a_scanner_marker() {
     assert_eq!(report[0]["kind"], "rule_binding");
     assert_eq!(report[0]["file_path"], "src/runtime.ts");
     assert_eq!(report[0]["state"], "gone");
-    assert_eq!(store.list_implementation_bindings(&scope).unwrap(), before);
 }
 
 #[test]

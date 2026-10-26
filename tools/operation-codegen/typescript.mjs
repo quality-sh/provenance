@@ -5,7 +5,6 @@ import { operationValidators } from './validators.mjs';
 import { typescriptSchema } from './typescript-schema.mjs';
 import { exactQuerySuccesses } from './query-successes.mjs';
 
-// @provenance rule: rule_sdk_bindings_derive_from_openapi
 export async function typescriptFiles(document, compatibility) {
   document = exactQuerySuccesses(document);
   return {

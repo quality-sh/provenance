@@ -238,6 +238,7 @@ fn verification_does_not_count_as_an_implementation() {
 }
 
 #[test]
+#[verifies("rule_no_stored_verified_status", examples)]
 fn non_active_rules_do_not_produce_absence_facts() {
     let facts = derive_rule_evidence_facts(
         &[

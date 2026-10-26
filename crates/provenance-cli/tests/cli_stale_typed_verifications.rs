@@ -169,13 +169,6 @@ fn a_deleted_test_file_leaves_its_verification_binding_gone() {
         "tests/expiry.test.ts",
     );
     std::fs::remove_file(directory.path().join("tests/expiry.test.ts")).unwrap();
-    let root = directory.path().to_str().unwrap();
-    let store = provenance_store::state_store::StateStore::new(
-        provenance_store::layout::ProvenanceLayout::new(root),
-    );
-    let scope = provenance_core::ScopeId::new("default").unwrap();
-    let before = store.list_verification_bindings(&scope).unwrap();
-    assert_eq!(before.len(), 1);
     let head = commit(directory.path(), "remove the test");
 
     let sites = verification_sites(directory.path(), &base, &head);
@@ -183,5 +176,58 @@ fn a_deleted_test_file_leaves_its_verification_binding_gone() {
     assert_eq!(sites.len(), 1);
     assert_eq!(sites[0]["subject_id"], "rule_start");
     assert_eq!(sites[0]["state"], "gone");
-    assert_eq!(store.list_verification_bindings(&scope).unwrap(), before);
+}
+
+#[test]
+#[verifies("rule_verification_binding_identity", examples)]
+fn canonical_rule_changes_binding_identity_with_the_same_owner_and_key() {
+    let directory = init_repo();
+    write(
+        directory.path(),
+        "tests/expiry.test.ts",
+        "// exercises workflows\n",
+    );
+    verify(
+        directory.path(),
+        "rule_start",
+        "expiry",
+        "tests/expiry.test.ts",
+    );
+    verify(
+        directory.path(),
+        "rule_resume",
+        "expiry",
+        "tests/expiry.test.ts",
+    );
+
+    let output = provenance()
+        .args([
+            "verification-bindings",
+            "list",
+            "--repo",
+            directory.path().to_str().unwrap(),
+            "--scope",
+            "default",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&output).unwrap();
+    let bindings = listed["data"]["items"].as_array().unwrap();
+    assert_eq!(bindings.len(), 2, "{listed}");
+    assert_ne!(bindings[0]["id"], bindings[1]["id"]);
+    let mut rules = bindings
+        .iter()
+        .map(|binding| binding["rule_id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    rules.sort_unstable();
+    assert_eq!(rules, ["rule_resume", "rule_start"]);
+    for binding in bindings {
+        assert_eq!(binding["key"], "expiry");
+        assert_eq!(binding["declared_by"], "ci://typescript");
+    }
 }

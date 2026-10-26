@@ -65,7 +65,6 @@ pub(super) fn content_digest<T: Serialize>(kind: NodeType, record: &T) -> anyhow
 /// Derives the review revision from the review content of a record, so two
 /// versions with equal review content have the same revision.
 #[rule("rule_review_revision_follows_review_content")]
-#[rule("rule_content_change_requires_new_review")]
 pub(super) fn review_revision<T: Serialize>(
     kind: NodeType,
     record: &T,

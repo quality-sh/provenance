@@ -13,7 +13,7 @@ mod schema_precision;
 mod scope_mismatch;
 
 #[tokio::test]
-#[verifies("rule_ste_sdk_statement_report", conformance)]
+#[verifies("rule_ste_sdk_statement_report", examples)]
 async fn statements_return_the_exact_data_free_analyzer_report() {
     for statement in ["Install the cover.", "Arrêt; wait.", ""] {
         let expected =
@@ -32,19 +32,36 @@ async fn statements_return_the_exact_data_free_analyzer_report() {
 #[tokio::test]
 #[verifies("rule_ste_sdk_statement_request_schema", examples)]
 async fn statement_call_is_closed_and_refuses_invalid_payloads() {
-    for value in [
-        json!({}),
-        json!({"request":{}}),
-        json!({"request":{"statement":null}}),
-        json!({"request":{"statement":9}}),
-        json!({"request":{"statement":"text", "base_revision":"x"}}),
-        json!({"request":{"statement":"text"},"context":{"repository":"/tmp"}}),
+    for (value, field, reason) in [
+        (json!({}), "request", "required"),
+        (json!({"request":{}}), "request.statement", "required"),
+        (
+            json!({"request":{"statement":null}}),
+            "request.statement",
+            "invalid_value",
+        ),
+        (
+            json!({"request":{"statement":9}}),
+            "request.statement",
+            "invalid_value",
+        ),
+        (
+            json!({"request":{"statement":"text", "base_revision":"x"}}),
+            "request.base_revision",
+            "invalid_value",
+        ),
+        (
+            json!({"request":{"statement":"text"},"context":{"repository":"/tmp"}}),
+            "context",
+            "invalid_value",
+        ),
     ] {
         let error = invoke("check-statement", SDK_PROTOCOL_VERSION, value)
             .await
             .unwrap_err();
         assert_eq!(error.error["kind"], "invalid_input");
-        assert_eq!(error.error["kind"], "invalid_input");
+        assert_eq!(error.error["reason"], reason);
+        assert_eq!(error.error["field"], field);
     }
 }
 

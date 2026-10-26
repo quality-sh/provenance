@@ -146,7 +146,6 @@ fn sort_citations(entries: &mut [SourceReference]) {
 
 /// Adds or removes named members, or replaces the list, and accepts membership no-ops.
 #[rule("rule_porcelain_relationship_membership_noop")]
-#[rule("rule_porcelain_relationship_patch_modes")]
 pub fn expand_list(target: &mut Vec<StableId>, edit: Option<&ListEdit>) {
     let Some(edit) = edit else { return };
     match edit {

@@ -43,7 +43,6 @@ const noRelations: RequirementRelations = Object.freeze({
   supersedes: Object.freeze([]),
 });
 
-// @provenance rule: rule_typed_declarations_are_immutable
 export class FluentRequirement<
   Key extends string = string,
   Rules extends readonly FluentRule[] = readonly [],
@@ -330,6 +329,7 @@ export function fluentSpec(key: string, verify: RuleVerifier): FluentSpec {
   return new FluentSpec(key, verify);
 }
 
+// @provenance rule: rule_typed_declarations_are_immutable
 function buildSpec<
   Sources extends readonly FluentSource[],
   Requirements extends readonly AnyRequirement[],
