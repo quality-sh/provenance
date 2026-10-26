@@ -147,6 +147,7 @@ fn duplicate_message_rows_name_both_lines_and_refuse_a_write() {
             )),
             "{text}"
         );
+        let path = path.components().collect::<camino::Utf8PathBuf>();
         for line in [1, 2] {
             assert!(text.contains(&format!("{path}:{line}")), "{text}");
         }
@@ -173,6 +174,7 @@ fn duplicate_message_rows_name_every_month_shard_line() {
     let text = format!("{error:#}");
     assert!(text.contains(first.id.as_str()), "{text}");
     for (path, line) in [(current, 1), (early, 2), (later, 1)] {
+        let path = path.components().collect::<camino::Utf8PathBuf>();
         assert!(text.contains(&format!("{path}:{line}")), "{text}");
     }
     assert!(!text.contains("msg_innocent"), "{text}");
