@@ -416,7 +416,6 @@ jobs:
           cat > target/test-ste100-env/Cargo.toml <<'TOML'
           [package]
           name = "test-ste100-env"
-          version = "0.0.0"
           edition = "2024"
           [workspace]
           TOML
