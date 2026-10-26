@@ -1,3 +1,4 @@
+import { offlineDictionaryUrl } from "../../../../tools/test-dictionary-url.js";
 // Bun removes the caller frame for the tail position below. Node does not.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -7,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { startFixtureHost } from "../../scripts/fixture-host.js";
 
-const offlineDictionaryUrl = Bun.TOML.parse(readFileSync(new URL("../../../../.cargo/config.toml", import.meta.url), "utf8")).env.PROVENANCE_TEST_STE100_ASSET_URL;
 
 const cli = fileURLToPath(new URL(`../../../../target/debug/provenance${process.platform === "win32" ? ".exe" : ""}`, import.meta.url));
 const sdk = new URL("../../dist/index.js", import.meta.url).href;

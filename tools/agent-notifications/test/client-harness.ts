@@ -1,3 +1,4 @@
+import { offlineDictionaryUrl } from "../../test-dictionary-url.js";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -6,7 +7,6 @@ import { createInterface } from "node:readline";
 import type { Subprocess } from "bun";
 
 export const binary = process.env.PROVENANCE_TEST_BIN ?? join(import.meta.dir, "../../../target/debug/provenance");
-const offlineDictionaryUrl = Bun.TOML.parse(readFileSync(new URL("../../../.cargo/config.toml", import.meta.url), "utf8")).env.PROVENANCE_TEST_STE100_ASSET_URL;
 
 const limit = 20000;
 export function deadline<T>(promise: Promise<T>, label: string): Promise<T> {

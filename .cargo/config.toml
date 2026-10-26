@@ -1,12 +1,10 @@
-# The test suite runs `provenance init` in many throwaway repositories. Keep
-# onboarding off the network and off the user's machine cache: the asset URL
-# uses loopback port zero, which cannot serve a dictionary. The caches use
-# ignored target/ paths,
-# so init takes its offline fallback path and no test imports a dictionary
-# unless it sets its own PROVENANCE_TEST_STE100_ASSET_URL or imports a local
-# PDF. Both cargo test and nextest apply this section to the processes they
-# spawn.
+# Tests use loopback port zero to prevent dictionary downloads. This URL
+# makes init use its offline fallback path. Cargo replaces an exported URL
+# with this value before it compiles the tests. Tests can use a different
+# URL for a child process or import a local PDF.
+# The cache directories are ignored paths inside target/.
+# Cargo test and nextest set these variables in their child processes.
 [env]
-PROVENANCE_TEST_STE100_ASSET_URL = "http://127.0.0.1:0/ASD-STE100_ISSUE9.pdf"
+PROVENANCE_TEST_STE100_ASSET_URL = { value = "http://127.0.0.1:0/ASD-STE100_ISSUE9.pdf", force = true }
 PROVENANCE_STE100_ASSET_DIR = { value = "target/test-ste100-assets", relative = true }
 PROVENANCE_STE100_INDEX_DIR = { value = "target/test-ste100-indexes", relative = true }

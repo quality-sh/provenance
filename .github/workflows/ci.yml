@@ -409,6 +409,23 @@ jobs:
         uses: taiki-e/install-action@c3ec0de9ae7f1019cea21aa96aa0a895b9552063 # v2
         with:
           tool: nextest@0.9.143
+      - name: Check the test dictionary URL override
+        shell: bash
+        run: |
+          mkdir -p target/test-ste100-env/src
+          cat > target/test-ste100-env/Cargo.toml <<'TOML'
+          [package]
+          name = "test-ste100-env"
+          version = "0.0.0"
+          edition = "2024"
+          [workspace]
+          TOML
+          cat > target/test-ste100-env/src/main.rs <<'RS'
+          fn main() {
+              assert_eq!(env!("PROVENANCE_TEST_STE100_ASSET_URL"), "http://127.0.0.1:0/ASD-STE100_ISSUE9.pdf");
+          }
+          RS
+          PROVENANCE_TEST_STE100_ASSET_URL=http://127.0.0.1:12345/exported.pdf cargo run --quiet --offline --manifest-path target/test-ste100-env/Cargo.toml
       - name: Test concurrently
         if: runner.os != 'Linux'
         run: cargo nextest run --profile ci --workspace --all-features --no-fail-fast --cargo-profile test --timings
