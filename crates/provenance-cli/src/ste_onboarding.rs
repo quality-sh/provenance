@@ -143,7 +143,7 @@ fn import_cached_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
 /// held only to read or publish the cached asset, never during a download, so
 /// a failed download does not block other inits. Each attempt first uses an
 /// asset that another init put in the cache.
-#[rule("rule_ste_dictionary_download_concurrency")]
+#[rule("rule_ste_dictionary_download_lock_scope")]
 #[rule("rule_ste_dictionary_download_retry_bound")]
 #[rule("rule_ste_dictionary_download_identity")]
 #[rule("rule_ste_dictionary_asset_fallback")]
@@ -321,7 +321,7 @@ mod tests {
     use provenance_macros::verifies;
 
     #[test]
-    #[verifies("rule_ste_dictionary_download_concurrency", examples)]
+    #[verifies("rule_ste_dictionary_download_lock_scope", examples)]
     fn a_second_publish_keeps_the_first_pdf_and_removes_its_staged_file() {
         let directory = tempfile::tempdir().unwrap();
         let cache = AssetCache {

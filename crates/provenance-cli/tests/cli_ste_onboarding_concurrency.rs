@@ -17,7 +17,7 @@ mod support;
 use support::{init_args, serial, TestServer};
 
 #[test]
-#[verifies("rule_ste_dictionary_download_concurrency", examples)]
+#[verifies("rule_ste_dictionary_download_lock_scope", examples)]
 fn a_failing_download_does_not_block_a_concurrent_init() {
     let _serial = serial();
     let failing = TestServer::held(503, b"unavailable");
