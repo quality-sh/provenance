@@ -170,7 +170,7 @@ fn a_missing_launch_key_prints_the_plain_link() {
         .env("LOCALAPPDATA", other_cache.path().join("cache"))
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .args([
             "req_launch",

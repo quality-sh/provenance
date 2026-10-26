@@ -378,7 +378,7 @@ fn cargo_init_reports_only_published_changes_then_no_change() {
         .env("PROVENANCE_STE100_INDEX_DIR", &indexes)
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .output()
         .unwrap();
@@ -404,7 +404,7 @@ fn cargo_init_reports_only_published_changes_then_no_change() {
         .env("PROVENANCE_STE100_INDEX_DIR", &indexes)
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .output()
         .unwrap();
