@@ -176,6 +176,27 @@ fn a_deleted_test_file_leaves_its_verification_binding_gone() {
     assert_eq!(sites.len(), 1);
     assert_eq!(sites[0]["subject_id"], "rule_start");
     assert_eq!(sites[0]["state"], "gone");
+    let output = provenance()
+        .args([
+            "verification-bindings",
+            "list",
+            "--repo",
+            directory.path().to_str().unwrap(),
+            "--scope",
+            "default",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&output).unwrap();
+    let bindings = listed["data"]["items"].as_array().unwrap();
+    assert_eq!(bindings.len(), 1, "{listed}");
+    assert_eq!(bindings[0]["rule_id"], "rule_start");
+    assert_eq!(bindings[0]["file"], "tests/expiry.test.ts");
 }
 
 #[test]
