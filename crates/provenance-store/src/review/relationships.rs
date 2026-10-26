@@ -146,6 +146,7 @@ fn sort_citations(entries: &mut [SourceReference]) {
 
 /// Applies list deltas without requiring the requested membership to change.
 #[rule("rule_porcelain_relationship_membership_noop")]
+#[rule("rule_porcelain_relationship_patch_modes")]
 pub fn expand_list(target: &mut Vec<StableId>, edit: Option<&ListEdit>) {
     let Some(edit) = edit else { return };
     match edit {

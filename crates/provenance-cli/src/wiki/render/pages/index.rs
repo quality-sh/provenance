@@ -11,7 +11,6 @@ use super::super::labels::counted;
 const RATIFIED_VIEWPORTS: [(u16, u16); 2] = [(1440, 900), (390, 844)];
 
 /// Decides whether homepage HTML keeps the ratified entry order at a ratified viewport.
-#[rule("rule_wiki_homepage_entry_order")]
 pub fn homepage_entry_order_is_valid(html: &str, width: u16, height: u16) -> bool {
     if !RATIFIED_VIEWPORTS.contains(&(width, height)) {
         return false;
@@ -53,6 +52,7 @@ fn traceability_summary_html(unfinished_count: usize) -> String {
 
 /// Renders homepage content with one exact unfinished-items link and no individual gap cards.
 #[rule("rule_wiki_homepage_traceability_summary")]
+#[rule("rule_wiki_homepage_entry_order")]
 fn homepage_content_html(page: &ScopeIndexPage) -> String {
     let mut main = String::new();
     push_search(

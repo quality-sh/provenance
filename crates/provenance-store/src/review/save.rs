@@ -105,6 +105,8 @@ impl StateStore {
         })
     }
 
+    /// Saves supplied Requirement fields and preserves omitted fields and relationships.
+    #[rule("rule_porcelain_update_preserves_omissions")]
     fn save_requirement_with_origin<R>(
         &self,
         mut input: SaveRequirement,

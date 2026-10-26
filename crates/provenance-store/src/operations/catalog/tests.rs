@@ -1,6 +1,7 @@
 use super::invoke;
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::SDK_PROTOCOL_VERSION;
+use provenance_macros::verifies;
 use serde_json::json;
 
 mod ideation;
@@ -12,6 +13,7 @@ mod schema_precision;
 mod scope_mismatch;
 
 #[tokio::test]
+#[verifies("rule_ste_sdk_statement_report", conformance)]
 async fn statements_return_the_exact_data_free_analyzer_report() {
     for statement in ["Install the cover.", "Arrêt; wait.", ""] {
         let expected =
@@ -28,6 +30,7 @@ async fn statements_return_the_exact_data_free_analyzer_report() {
 }
 
 #[tokio::test]
+#[verifies("rule_ste_sdk_statement_request_schema", examples)]
 async fn statement_call_is_closed_and_refuses_invalid_payloads() {
     for value in [
         json!({}),

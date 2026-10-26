@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 use std::process::Command as ProcessCommand;
@@ -149,6 +150,7 @@ fn changed_typed_implementation_is_touched_without_a_scanner_marker() {
 }
 
 #[test]
+#[verifies("rule_missing_file_goes_to_stale_gate", examples)]
 fn deleted_typed_implementation_is_gone_without_a_scanner_marker() {
     let directory = init_repo();
     write(
@@ -159,6 +161,13 @@ fn deleted_typed_implementation_is_gone_without_a_scanner_marker() {
     apply_binding(directory.path());
     let base = commit(directory.path(), "bind implementation");
     std::fs::remove_file(directory.path().join("src/runtime.ts")).unwrap();
+    let root = directory.path().to_str().unwrap();
+    let store = provenance_store::state_store::StateStore::new(
+        provenance_store::layout::ProvenanceLayout::new(root),
+    );
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    let before = store.list_implementation_bindings(&scope).unwrap();
+    assert_eq!(before.len(), 1);
     let head = commit(directory.path(), "delete implementation");
 
     let report = stale(directory.path(), &base, &head);
@@ -167,6 +176,7 @@ fn deleted_typed_implementation_is_gone_without_a_scanner_marker() {
     assert_eq!(report[0]["kind"], "rule_binding");
     assert_eq!(report[0]["file_path"], "src/runtime.ts");
     assert_eq!(report[0]["state"], "gone");
+    assert_eq!(store.list_implementation_bindings(&scope).unwrap(), before);
 }
 
 #[test]

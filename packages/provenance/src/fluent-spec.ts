@@ -43,6 +43,7 @@ const noRelations: RequirementRelations = Object.freeze({
   supersedes: Object.freeze([]),
 });
 
+// @provenance rule: rule_typed_declarations_are_immutable
 export class FluentRequirement<
   Key extends string = string,
   Rules extends readonly FluentRule[] = readonly [],

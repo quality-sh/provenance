@@ -1,4 +1,5 @@
 use provenance_core::{RequirementReview, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION};
+use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 
 use super::{readers::read_jsonl, ReconciledResource, StateStore, TypedResourceKind};
@@ -85,6 +86,7 @@ impl StateStore {
     ///
     /// The reason stays on the record. Only reviews raised before the run
     /// clear, because an earlier run cannot vouch for a later change.
+    #[rule("rule_review_cleared_by_later_run")]
     pub(crate) fn clear_requirement_reviews(
         &self,
         scope: &ScopeId,

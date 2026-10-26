@@ -6,12 +6,15 @@ mod support {
 }
 
 use axum::{body::Body, http::Request};
+use provenance_macros::verifies;
 use serde_json::Value;
 use support::records::Repository;
 use support::resource_http::{call, host};
 use tower::ServiceExt as _;
 
 #[tokio::test]
+#[verifies("rule_porcelain_search_text_optional", examples)]
+#[verifies("rule_porcelain_search_predicates_intersect", examples)]
 async fn public_collection_search_accepts_kind_only_and_combined_queries() {
     let repo = Repository::new("The shared graph is searchable.");
     let host = host(&repo, false);

@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -152,6 +153,7 @@ fn verification_sites(repo: &Path, base: &str, head: &str) -> Vec<Value> {
 }
 
 #[test]
+#[verifies("rule_missing_file_goes_to_stale_gate", examples)]
 fn a_deleted_test_file_leaves_its_verification_binding_gone() {
     let directory = init_repo();
     write(
@@ -167,6 +169,13 @@ fn a_deleted_test_file_leaves_its_verification_binding_gone() {
         "tests/expiry.test.ts",
     );
     std::fs::remove_file(directory.path().join("tests/expiry.test.ts")).unwrap();
+    let root = directory.path().to_str().unwrap();
+    let store = provenance_store::state_store::StateStore::new(
+        provenance_store::layout::ProvenanceLayout::new(root),
+    );
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    let before = store.list_verification_bindings(&scope).unwrap();
+    assert_eq!(before.len(), 1);
     let head = commit(directory.path(), "remove the test");
 
     let sites = verification_sites(directory.path(), &base, &head);
@@ -174,4 +183,5 @@ fn a_deleted_test_file_leaves_its_verification_binding_gone() {
     assert_eq!(sites.len(), 1);
     assert_eq!(sites[0]["subject_id"], "rule_start");
     assert_eq!(sites[0]["state"], "gone");
+    assert_eq!(store.list_verification_bindings(&scope).unwrap(), before);
 }
