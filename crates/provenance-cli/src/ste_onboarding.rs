@@ -191,36 +191,54 @@ struct AssetCache {
 }
 
 impl AssetCache {
-    /// Imports the cached asset, or removes it if it is not valid.
+    /// Imports the cached asset, or removes it if it is not valid. The lock is
+    /// held only to read the bytes and to remove an invalid asset, not during
+    /// the import.
     fn read(&self) -> anyhow::Result<Option<DictionaryImport>> {
-        let _lock = self.lock()?;
-        let Ok(bytes) = std::fs::read(&self.asset) else {
+        let Some(bytes) = self.read_bytes()? else {
             return Ok(None);
         };
         if let Ok(import) = import_cached_bytes(&bytes) {
             return Ok(Some(import));
         }
-        std::fs::remove_file(&self.asset).context("remove an invalid cached STE asset")?;
+        let _lock = self.lock()?;
+        // Another init can replace an invalid asset during the import.
+        if std::fs::read(&self.asset).is_ok_and(|current| current == bytes) {
+            std::fs::remove_file(&self.asset).context("remove an invalid cached STE asset")?;
+        }
         Ok(None)
+    }
+
+    fn read_bytes(&self) -> anyhow::Result<Option<Vec<u8>>> {
+        let _lock = self.lock()?;
+        Ok(std::fs::read(&self.asset).ok())
     }
 
     /// Writes the asset to a staged file without the lock, then moves it into
     /// the cache under the lock. An asset that another init put in the cache
-    /// first stays.
+    /// first stays. No staged file stays after an error.
     fn publish(&self, bytes: &[u8]) -> anyhow::Result<()> {
-        let partial = self
+        let staged = self
             .asset
             .with_extension(format!("pdf.{}.partial", std::process::id()));
-        let mut file = File::create(&partial).context("create the staged STE asset")?;
+        let result = self.publish_staged(&staged, bytes);
+        if result.is_err() {
+            let _ = std::fs::remove_file(&staged);
+        }
+        result
+    }
+
+    fn publish_staged(&self, staged: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()> {
+        let mut file = File::create(staged).context("create the staged STE asset")?;
         file.write_all(bytes)
             .context("write the staged STE asset")?;
         file.sync_all().context("sync the staged STE asset")?;
         drop(file);
         let _lock = self.lock()?;
         if self.asset.exists() {
-            return std::fs::remove_file(&partial).context("remove the staged STE asset");
+            return std::fs::remove_file(staged).context("remove the staged STE asset");
         }
-        std::fs::rename(&partial, &self.asset).context("publish the shared STE asset")
+        std::fs::rename(staged, &self.asset).context("publish the shared STE asset")
     }
 
     fn lock(&self) -> anyhow::Result<File> {
@@ -265,23 +283,17 @@ fn download(client: &ureq::Agent, url: &str) -> anyhow::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// Gives the asset URL, or no URL when the test asset URL is `off`.
+/// Gives the asset URL. A test asset URL that is not a loopback `http` URL
+/// gives no URL, so that a typing error cannot start a download from the
+/// official site.
 #[rule("rule_ste_dictionary_download_off")]
 fn asset_url() -> Option<String> {
-    if let Some(url) = std::env::var_os("PROVENANCE_TEST_STE100_ASSET_URL") {
-        let url = url.to_string_lossy();
-        if url == "off" {
-            return None;
-        }
-        if let Ok(parsed) = url::Url::parse(&url) {
-            if parsed.scheme() == "http"
-                && matches!(parsed.host_str(), Some("127.0.0.1" | "localhost"))
-            {
-                return Some(parsed.into());
-            }
-        }
-    }
-    Some(OFFICIAL_ASSET.to_owned())
+    let Some(url) = std::env::var_os("PROVENANCE_TEST_STE100_ASSET_URL") else {
+        return Some(OFFICIAL_ASSET.to_owned());
+    };
+    let parsed = url::Url::parse(url.to_str()?).ok()?;
+    (parsed.scheme() == "http" && matches!(parsed.host_str(), Some("127.0.0.1" | "localhost")))
+        .then(|| parsed.into())
 }
 
 /// Keeps downloaded source material in a machine cache, not in a distribution.
