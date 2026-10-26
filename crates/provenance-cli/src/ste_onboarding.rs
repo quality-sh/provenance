@@ -302,3 +302,30 @@ fn fallback_guidance(error: &anyhow::Error) -> String {
         "Warning: the official Issue 9 dictionary could not be added ({error:#}). Initialization continues without a dictionary. To add it later, rerun init, or run `provenance dictionary import --pdf <path>` with a local PDF file."
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use provenance_macros::verifies;
+
+    #[test]
+    #[verifies("rule_ste_dictionary_download_concurrency", examples)]
+    fn a_second_publish_keeps_the_first_pdf_and_removes_its_staged_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let cache = AssetCache {
+            lock: directory.path().join("issue-9.pdf.lock"),
+            asset: directory.path().join("ASD-STE100_ISSUE9.pdf"),
+        };
+
+        cache.publish(b"first").unwrap();
+        cache.publish(b"second").unwrap();
+
+        assert_eq!(std::fs::read(&cache.asset).unwrap(), b"first");
+        let mut names: Vec<_> = std::fs::read_dir(directory.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["ASD-STE100_ISSUE9.pdf", "issue-9.pdf.lock"]);
+    }
+}

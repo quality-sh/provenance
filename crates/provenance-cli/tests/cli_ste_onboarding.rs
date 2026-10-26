@@ -260,30 +260,49 @@ fn exhausted_download_retries_fall_back_to_a_loud_warning() {
 
 #[test]
 #[verifies("rule_ste_dictionary_download_off", examples)]
-fn the_off_asset_url_skips_the_download_and_falls_back_to_the_warning() {
+fn a_test_asset_url_that_is_not_loopback_http_skips_the_download() {
     let _serial = serial();
-    let fixture = Fixture::new();
-    // A file in place of the asset cache directory: a download cannot start
-    // without that directory, so this init cannot use the network.
-    std::fs::write(&fixture.asset_dir, b"not a directory").unwrap();
+    for value in [
+        "off",
+        "Off",
+        " off",
+        "none",
+        "",
+        "https://127.0.0.1/ASD-STE100_ISSUE9.pdf",
+        "http://192.0.2.1/ASD-STE100_ISSUE9.pdf",
+    ] {
+        let fixture = Fixture::new();
+        // A file in place of the asset cache directory: a download cannot
+        // start without that directory, so this init cannot use the network.
+        std::fs::write(&fixture.asset_dir, b"not a directory").unwrap();
 
-    let output = fixture
-        .init()
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", "off")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    assert!(output.status.success(), "init failed: {stderr}");
-    assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
-    assert!(
-        stderr.contains("Warning: the official Issue 9 dictionary could not be added (the dictionary download is off)"),
-        "stderr: {stderr}"
-    );
-    assert!(stderr.contains("rerun init"), "stderr: {stderr}");
-    assert!(stderr.contains("dictionary import"), "stderr: {stderr}");
-    assert!(!stderr.contains("asset cache"), "stderr: {stderr}");
-    assert!(!dictionary_support::reference_path(&fixture.repo).exists());
+        let output = fixture
+            .init()
+            .env("PROVENANCE_TEST_STE100_ASSET_URL", value)
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert!(output.status.success(), "{value:?}: init failed: {stderr}");
+        assert!(
+            stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"),
+            "{value:?}: stdout: {stdout}"
+        );
+        assert!(
+            stderr.contains("Warning: the official Issue 9 dictionary could not be added (the dictionary download is off)"),
+            "{value:?}: stderr: {stderr}"
+        );
+        assert!(stderr.contains("rerun init"), "{value:?}: stderr: {stderr}");
+        assert!(
+            stderr.contains("dictionary import"),
+            "{value:?}: stderr: {stderr}"
+        );
+        assert!(
+            !stderr.contains("asset cache"),
+            "{value:?}: stderr: {stderr}"
+        );
+        assert!(!dictionary_support::reference_path(&fixture.repo).exists());
+    }
 }
 
 #[test]
