@@ -50,7 +50,7 @@ fn traceability_summary_html(unfinished_count: usize) -> String {
     )
 }
 
-/// Renders homepage content with one exact unfinished-items link and no individual gap cards.
+/// Renders search before domain rows, with one exact unfinished-items link and no gap cards.
 #[rule("rule_wiki_homepage_traceability_summary")]
 #[rule("rule_wiki_homepage_entry_order")]
 fn homepage_content_html(page: &ScopeIndexPage) -> String {

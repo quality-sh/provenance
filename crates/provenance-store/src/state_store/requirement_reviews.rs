@@ -82,10 +82,7 @@ impl StateStore {
         })
     }
 
-    /// Clears the reviews a Rule's own fresh verification run answers.
-    ///
-    /// The reason stays on the record. Only reviews raised before the run
-    /// clear, because an earlier run cannot vouch for a later change.
+    /// Clears earlier reviews with the fresh run and its time, and keeps each reason.
     #[rule("rule_review_cleared_by_later_run")]
     pub(crate) fn clear_requirement_reviews(
         &self,
