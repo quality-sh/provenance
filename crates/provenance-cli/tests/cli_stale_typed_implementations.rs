@@ -169,6 +169,26 @@ fn deleted_typed_implementation_is_gone_without_a_scanner_marker() {
     assert_eq!(report[0]["kind"], "rule_binding");
     assert_eq!(report[0]["file_path"], "src/runtime.ts");
     assert_eq!(report[0]["state"], "gone");
+    let output = provenance()
+        .args([
+            "export",
+            "--repo",
+            directory.path().to_str().unwrap(),
+            "--scope",
+            "default",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let exported: Value = serde_json::from_slice(&output).unwrap();
+    let bindings = exported["implementation_bindings"].as_array().unwrap();
+    assert_eq!(bindings.len(), 1, "{exported}");
+    assert_eq!(bindings[0]["rule_id"], "rule_start");
+    assert_eq!(bindings[0]["file"], "src/runtime.ts");
 }
 
 #[test]
