@@ -1,6 +1,5 @@
-#![cfg(feature = "test-fixture")]
 mod porcelain_authoring_support;
-use porcelain_authoring_support::{initialized_repo, json_output};
+use porcelain_authoring_support::{initialized_repo, json_output, provenance};
 use provenance_macros::verifies;
 
 #[test]
@@ -77,5 +76,47 @@ fn cli_replaces_one_selected_parent_and_can_repeat_the_move() {
     assert_eq!(
         json_output(&["api", "requirements/req_child", "--repo", &repo])["data"],
         child["data"]
+    );
+    let before = json_output(&["api", "requirements/req_shared", "--repo", &repo]);
+    for new in ["req_missing", "req_child"] {
+        provenance()
+            .args([
+                "req_shared",
+                "update",
+                "--repo",
+                &repo,
+                "--actor",
+                "author",
+                "--replace-parent",
+                "req_q",
+                "--with-parent",
+                new,
+            ])
+            .assert()
+            .failure();
+        assert_eq!(
+            json_output(&["api", "requirements/req_shared", "--repo", &repo])["data"],
+            before["data"]
+        );
+    }
+    provenance()
+        .args([
+            "req_shared",
+            "update",
+            "--repo",
+            &repo,
+            "--actor",
+            "author",
+            "--replace-parent",
+            "req_missing",
+            "--with-parent",
+            "req_p",
+        ])
+        .assert()
+        .failure();
+    let retained = json_output(&["api", "requirements/req_shared", "--repo", &repo]);
+    assert_eq!(
+        retained["data"]["refines"],
+        serde_json::json!(["req_b", "req_p", "req_q"])
     );
 }
