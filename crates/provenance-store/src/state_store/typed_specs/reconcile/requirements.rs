@@ -69,7 +69,7 @@ impl DeclarationRecord for Requirement {
             status: RequirementStatus::Active,
             domain_id: None,
             source_refs,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

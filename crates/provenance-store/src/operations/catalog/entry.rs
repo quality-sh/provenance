@@ -155,7 +155,7 @@ pub(super) fn entries() -> Vec<Entry> {
         register::<super::CreateSynthesisPacket>(),
         register::<super::UpsertSynthesisPacket>(),
         // Phase 2b replaces these legacy registrations with resource routes.
-        register::<super::SetRequirementRefines>(),
+        register::<super::AddRequirementRefines>(),
         register::<super::ClearRequirementRefines>(),
         register::<super::AddRequirementDependsOn>(),
         register::<super::ClearRequirementDependsOn>(),

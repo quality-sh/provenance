@@ -120,8 +120,8 @@ pub struct Requirement {
     #[serde(default, alias = "sourceRefs", skip_serializing_if = "Vec::is_empty")]
     pub source_refs: Vec<SourceReference>,
     #[relation(target = Requirement, flow = target_upstream)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub refines: Option<StableId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub refines: Vec<StableId>,
     #[relation(target = Requirement, flow = target_downstream)]
     #[serde(default, alias = "dependsOn", skip_serializing_if = "Vec::is_empty")]
     pub depends_on: Vec<StableId>,

@@ -371,7 +371,7 @@ fn lifecycle_word(status: &impl serde::Serialize) -> String {
 
 fn requirement_relations(record: &Requirement) -> BTreeSet<RelationKey> {
     let mut relations = BTreeSet::new();
-    if let Some(target) = &record.refines {
+    for target in &record.refines {
         relations.insert(relation(
             "refines",
             RecordKind::Requirement,

@@ -15,7 +15,7 @@ const TABLE: [(NodeType, &str, NodeType, bool, bool, RelationFlow); 18] = [
     (Source, "supersedes", Source, true, false, TargetDownstream),
     (Requirement, "domain_id", Domain, false, false, None),
     (Requirement, "cites", Source, true, false, TargetUpstream),
-    (Requirement, "refines", Requirement, false, false, TargetUpstream),
+    (Requirement, "refines", Requirement, true, false, TargetUpstream),
     (Requirement, "depends_on", Requirement, true, false, TargetDownstream),
     (Requirement, "supersedes", Requirement, true, false, TargetDownstream),
     (Requirement, "spawned_by", Resolution, false, false, TargetUpstream),

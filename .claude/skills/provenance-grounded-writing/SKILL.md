@@ -2,7 +2,7 @@
 name: provenance-grounded-writing
 description: Write specific, evidence-grounded statements and behaviour descriptions for requirements, rules, sources, resolutions, and boundaries — not generic capability language or meeting minutes. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
-<!-- Installed by provenance 0.3.0; content hash fnv1a64:3db8da7ffaf75d29 -->
+<!-- Installed by provenance 0.3.0; content hash fnv1a64:638e5d3e89693fe7 -->
 
 # Grounded writing
 
@@ -91,6 +91,15 @@ hour; a failed refresh keeps the last limits and marks them stale. A stale limit
 approves and shows its age to the approver. An unavailable limit blocks approval and shows
 'Limits unavailable, try again'. Example: a limit raised at 09:10 applies by 10:10. Open:
 how old a stale limit may be before it blocks approval."
+
+## Conditional obligations
+
+A conditional Rule states when its obligation applies. Name the mode or configuration
+in the Requirement and Rule. A parent link does not select a private Rule subset.
+
+Example: "In offline mode, the client stores each unsent change until the next connection."
+A report states the tested mode. In online mode, this condition does not apply. In offline
+mode, a lost unsent change is an unmet obligation. Do not report these two states as equal.
 
 ## Good vs. bad
 
