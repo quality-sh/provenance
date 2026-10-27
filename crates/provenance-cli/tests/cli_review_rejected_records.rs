@@ -232,7 +232,12 @@ fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
     decide(&host, "res_new", "rejected");
     let before = get(&host, "/resolutions/res_new");
     let feedback = get(&host, "/resolutions/res_new/discussions");
-    assert!(feedback.to_string().contains("The result needs a clear condition."));
+    let discussion = feedback["items"][0]["discussion"]["discussion_id"]
+        .as_str()
+        .unwrap();
+    let messages_path = format!("/resolutions/res_new/discussions/{discussion}/messages");
+    let messages = get(&host, &messages_path);
+    assert!(messages.to_string().contains("The result needs a clear condition."));
 
     post(
         &host,
@@ -247,6 +252,7 @@ fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
     assert_eq!(after["decision"]["withdrawn"], json!([proposal]));
     assert!(after["decision"]["pending"].is_null());
     assert_eq!(get(&host, "/resolutions/res_new/discussions"), feedback);
+    assert_eq!(get(&host, &messages_path), messages);
     assert!(entries(&document(&host, true), "res_new").is_empty());
 }
 
