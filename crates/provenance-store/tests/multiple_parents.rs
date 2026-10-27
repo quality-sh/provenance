@@ -1,0 +1,50 @@
+#[allow(dead_code)]
+mod review_support;
+use provenance_core::StableId;
+use provenance_macros::verifies;
+use provenance_store::state_store::StateStore;
+use review_support::{fixture, scope};
+use serde_json::{json, Value};
+
+fn sid(id: &str) -> StableId { StableId::new(id).unwrap() }
+fn create(store: &StateStore, id: &str) {
+    store.create_requirement(serde_json::from_value(json!({
+        "scope_id":"default", "id":id, "statement":"The system stores records.",
+        "status":"discovery", "depends_on":[], "supersedes":[]
+    })).unwrap()).unwrap();
+}
+fn read(store: &StateStore, id: &str) -> Value {
+    serde_json::to_value(store.list_requirements(&scope()).unwrap().into_iter()
+        .find(|r| r.id == sid(id)).unwrap()).unwrap()
+}
+
+#[test]
+#[verifies("rule_requirement_accepts_multiple_parents", examples)]
+fn adding_a_second_parent_keeps_the_diamond_and_refuses_a_cycle() {
+    let (_temp, store) = fixture();
+    for id in ["req_p", "req_b", "req_child"] { create(&store, id); }
+    store.set_requirement_refines(&scope(), &sid("req_child"), sid("req_a")).unwrap();
+    let child = read(&store, "req_child");
+    store.set_requirement_refines(&scope(), &sid("req_a"), sid("req_p")).unwrap();
+    store.set_requirement_refines(&scope(), &sid("req_a"), sid("req_b")).unwrap();
+    let shared = read(&store, "req_a");
+    assert_eq!(shared["refines"], json!(["req_b", "req_p"]));
+    assert_eq!(shared["id"], "req_a");
+    assert_eq!(read(&store, "req_child"), child);
+    assert!(store.set_requirement_refines(&scope(), &sid("req_b"), sid("req_child")).is_err());
+    assert_eq!(read(&store, "req_a"), shared);
+}
+
+#[test]
+#[verifies("rule_supersession_preserves_unselected_children", examples)]
+#[verifies("rule_supersession_does_not_archive_superseded_record", examples)]
+fn supersession_changes_no_child_or_parent_status() {
+    let (_temp, store) = fixture();
+    for id in ["req_p", "req_b"] { create(&store, id); }
+    store.set_requirement_refines(&scope(), &sid("req_a"), sid("req_p")).unwrap();
+    let child = read(&store, "req_a");
+    let parent = read(&store, "req_p");
+    store.add_requirement_supersedes(&scope(), &sid("req_b"), sid("req_p")).unwrap();
+    assert_eq!(read(&store, "req_a"), child);
+    assert_eq!(read(&store, "req_p"), parent);
+}
