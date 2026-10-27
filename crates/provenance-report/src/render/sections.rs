@@ -124,13 +124,10 @@ fn statement_cell(change: &GraphChange) -> String {
         let replacements = change
             .superseded_by
             .iter()
-            .map(|id| format!("`{id}`"))
+            .map(|id| format!("'{id}'"))
             .collect::<Vec<_>>()
             .join(", ");
         return format!("[superseded by {}] {statement}", escape_cell(&replacements));
-    }
-    if change.lifecycle_before != change.lifecycle_after && change.lifecycle_before.is_some() {
-        return statement;
     }
     match change.lifecycle_after.as_deref() {
         Some(status @ ("archived" | "abandoned" | "deprecated" | "superseded")) => {

@@ -80,6 +80,22 @@ jobs:
               - "skills/**"
               - ".agents/skills/**"
               - ".claude/skills/**"
+              # Tests read these files from the repository root, so a change
+              # to them alone can break the Test job.
+              - ".provenance/state/**"
+              - "fixtures/provenance-macros/**"
+              - "tests/fixtures/pr-45-homepage-scale.json"
+              - "README.md"
+              - "LICENSE"
+              - ".github/release-crates.txt"
+              - "packages/provenance/package.json"
+              - "packages/provenance/scripts/package-engine.js"
+              - "packages/provenance/test/fixtures/packed-consumer/rule-bindings.ts.fixture"
+              - "packages/create-provenance/package.json"
+              # Format reads rustfmt.toml. Cargo sets the test environment
+              # variables from .cargo/config.toml.
+              - "rustfmt.toml"
+              - ".cargo/config.toml"
             contract:
               - *ci
               - "crates/**"
