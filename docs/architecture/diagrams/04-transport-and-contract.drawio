@@ -1,0 +1,269 @@
+<mxfile host="drawio" type="device" compressed="false">
+  <diagram id="04-transport-and-contract" name="Host and operation contract: provenance-transport, provenanc">
+    <mxGraphModel dx="1800" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="04-transport-and-contract-title" value="&lt;b&gt;Host and operation contract: provenance-transport, provenance-porcelain, operations::catalog&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=18;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1760" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="cl" value="Callers" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="55" width="270" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="cl_mcp" value='&lt;b&gt;MCP client&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;serve_mcp on a caller stream;&lt;br&gt;tests only, no CLI command&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cl">
+          <mxGeometry x="15" y="30" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="cl_rev" value='&lt;b&gt;Review host (CLI)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;host.router() plus review&lt;br&gt;routes; with_page_writes&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cl">
+          <mxGeometry x="15" y="125" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="cl_http" value='&lt;b&gt;HTTP clients (bearer)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;TS HttpClient, Effect client,&lt;br&gt;provenance-http-client,&lt;br&gt;review page renderer&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cl">
+          <mxGeometry x="15" y="230" width="240" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="cl_cli" value='&lt;b&gt;provenance-cli (in process)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;RepoContext::local_host():&lt;br&gt;invoke_resource, target_route;&lt;br&gt;porcelain get and search&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cl">
+          <mxGeometry x="15" y="350" width="240" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="cl_cgen" value='&lt;b&gt;provenance-codegen&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;export: openapi.json,&lt;br&gt;mcp.json, compatibility.json&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="35" y="790" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="tr" value="provenance-transport" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f1f8f0;strokeColor=#82b366;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="320" y="55" width="850" height="645" as="geometry" />
+        </mxCell>
+        <mxCell id="t_host" value='&lt;b&gt;StatementHost (lib.rs)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;with_access, with_page_writes, with_check_port;&lt;br&gt;router(), invoke_resource(), serve_mcp(), porcelain(), shutdown()&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="20" y="27" width="810" height="93" as="geometry" />
+        </mxCell>
+        <mxCell id="t_http" value='&lt;b&gt;http.rs: axum router&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;GET /metadata; one route&lt;br&gt;per catalog definition;&lt;br&gt;authenticate, then admit&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="20" y="150" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="t_mcp" value='&lt;b&gt;mcp.rs, mcp_surface&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;rmcp ServerHandler; one&lt;br&gt;tool per advertised&lt;br&gt;definition; admitted_call&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="235" y="150" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="t_porc" value='&lt;b&gt;porcelain/ adapters&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;implement the porcelain ports; get,&lt;br&gt;search, discussion: invoke_scoped_typed,&lt;br&gt;invoke_scope_typed (no routing, no&lt;br&gt;work pool); api and authoring:&lt;br&gt;invoke_resource&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="450" y="150" width="380" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="t_adm" value='&lt;b&gt;admission.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;8 ingress slots; one 3 s deadline covers the slot&lt;br&gt;wait and the body read; shutdown closes admission&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="20" y="290" width="415" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="t_fix" value='&lt;b&gt;fixture/, bin/&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;test-fixture feature: fixture hosts for clients&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="465" y="290" width="365" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="t_route" value='&lt;b&gt;routing/, failure.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;find the catalog route; bind repository and scope;&lt;br&gt;If-Match, ETag; typed failure to HTTP status&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="20" y="410" width="415" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="t_acc" value='&lt;b&gt;access.rs, local.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;HostAccess trait;&lt;br&gt;LocalAccess: bearer,&lt;br&gt;Host, Origin, scope&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="465" y="390" width="180" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="t_lh" value='&lt;b&gt;local_host.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;registry publish,&lt;br&gt;discover; GET&lt;br&gt;/local-host-identity&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="655" y="390" width="175" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="t_exec" value='&lt;b&gt;execution.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;invoke_backing: 8 work slots, spawn_blocking;&lt;br&gt;shutdown waits for the work&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="20" y="535" width="415" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="t_page" value='&lt;b&gt;review_page.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;PageWrites: page write under&lt;br&gt;the guard; report ReviewChanges&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+          <mxGeometry x="465" y="535" width="365" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="pc" value="provenance-porcelain" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f1f8f0;strokeColor=#82b366;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="1190" y="55" width="285" height="445" as="geometry" />
+        </mxCell>
+        <mxCell id="p_get" value='&lt;b&gt;get&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;GetPort; record views, wire&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="pc">
+          <mxGeometry x="15" y="30" width="255" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p_search" value='&lt;b&gt;search&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;SearchPort&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="pc">
+          <mxGeometry x="15" y="88" width="255" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p_check" value='&lt;b&gt;check&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;CheckPort: graph, statements&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="pc">
+          <mxGeometry x="15" y="146" width="255" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p_disc" value='&lt;b&gt;discussion&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;DiscussionPort&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="pc">
+          <mxGeometry x="15" y="204" width="255" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p_api" value='&lt;b&gt;api&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;ApiPort: public paths&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="pc">
+          <mxGeometry x="15" y="262" width="255" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p_act" value='&lt;b&gt;action&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;target-first action words&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="pc">
+          <mxGeometry x="15" y="320" width="255" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="p_guid" value='&lt;b&gt;guidance&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;prime text, MCP discovery&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="pc">
+          <mxGeometry x="15" y="378" width="255" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="cat" value="provenance-store operations::catalog" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fffbee;strokeColor=#d6b656;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="320" y="740" width="850" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="k_def" value='&lt;b&gt;definitions()&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;routes.rs, schema.rs: method,&lt;br&gt;path, operation id, mutates,&lt;br&gt;schemas, failure statuses&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cat">
+          <mxGeometry x="20" y="35" width="255" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="k_inv" value='&lt;b&gt;invoke.rs, context.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;invoke_with: untyped JSON;&lt;br&gt;invoke_authorized_native_typed:&lt;br&gt;typed; ContextResolver&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cat">
+          <mxGeometry x="295" y="35" width="265" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="k_ops" value='&lt;b&gt;Store operations&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;queries, writers, review,&lt;br&gt;authoring, verification&lt;br&gt;(diagrams 02, 03)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cat">
+          <mxGeometry x="580" y="35" width="250" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="x_reg" value='&lt;b&gt;.provenance/cache/local-hosts/&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;&amp;lt;scope&amp;gt;.json, owner-only&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1510" y="480" width="270" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="x_pub" value='&lt;b&gt;provenance-store publication&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;with_publication_guard,&lt;br&gt;review_changes snapshot&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1510" y="595" width="270" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="note" value="HTTP (http.rs): authenticate (Authorization, then Origin),&lt;br&gt;start the 3 s deadline, take an ingress slot, match the&lt;br&gt;route, refuse an operation that is not advertised, read&lt;br&gt;the body (1 MiB cap), then routing runs the operation&lt;br&gt;on the work pool. MCP takes the same ingress slot.&lt;br&gt;invoke_resource (CLI, api and authoring adapters) takes&lt;br&gt;no ingress slot. The typed porcelain calls skip routing&lt;br&gt;and the work pool." style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="1195" y="740" width="590" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend" value="Legend" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="925" width="830" height="156" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-sw-host" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="12" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-tx-host" value="Host and operation contract" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="44" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-sw-engine" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="12" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-tx-engine" value="Store: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="44" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-sw-iface" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="282" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-tx-iface" value="Interfaces: CLI and SDKs" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="314" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-sw-build" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="282" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-tx-build" value="Build, CI and generated files" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="314" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-sw-state" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="552" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-tx-state" value="Files on disk and git" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="584" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-sw-ext" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="552" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-tx-ext" value="External to this repository" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="584" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-ek-dep" value="Uses: code call or Cargo dependency" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="68" y="78" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-ek-data" value="Runtime data flow (read, write, request)" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="68" y="100" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-legend-ek-build" value="Build-time generation or packaging" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="04-transport-and-contract-legend">
+          <mxGeometry x="68" y="122" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e0" value="serve_mcp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.3125;exitDx=0;exitDy=0;entryX=0;entryY=0.3011;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="cl_mcp" target="t_host">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.8387;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="cl_rev" target="t_host">
+          <mxGeometry x="0" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="312" y="220" />
+              <mxPoint x="312" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4737;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="cl_http" target="t_http">
+          <mxGeometry x="0" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="326" y="330" />
+              <mxPoint x="326" y="290" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4211;exitDx=0;exitDy=0;entryX=0;entryY=0.4947;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="cl_cli" target="t_route">
+          <mxGeometry x="0" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="318" y="445" />
+              <mxPoint x="318" y="512" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e4" value="router()" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.1235;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="t_host" target="t_http">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e5" value="serve_mcp()" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.3889;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="t_host" target="t_mcp">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e6" value="porcelain()" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.7654;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="t_host" target="t_porc">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.241;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_http" target="t_adm">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.759;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_mcp" target="t_adm">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e9" value="admitted" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.4988;exitY=1;exitDx=0;exitDy=0;entryX=0.4988;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_adm" target="t_route">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e10" value="invoke_backing" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.4988;exitY=1;exitDx=0;exitDy=0;entryX=0.4988;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_route" target="t_exec">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e11" value="catalog::invoke_with" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.747;exitY=1;exitDx=0;exitDy=0;entryX=0.1321;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_exec" target="k_inv">
+          <mxGeometry x="-0.45" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e12" value="invoke_authorized_native_typed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.8636;exitDx=0;exitDy=0;entryX=0.566;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_porc" target="k_inv">
+          <mxGeometry x="0.85" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="765" y="300" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4545;exitDx=0;exitDy=0;entryX=0;entryY=0.4494;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="t_porc" target="pc">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4952;exitDx=0;exitDy=0;entryX=0;entryY=0.4952;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="k_inv" target="k_ops">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4952;exitDx=0;exitDy=0;entryX=0;entryY=0.4952;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="k_def" target="k_inv">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e16" value="guard, snapshots" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.4667;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_page" target="x_pub">
+          <mxGeometry x="0.55" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e17" value="publish, discover" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.65;exitDx=0;exitDy=0;entryX=0;entryY=0.4839;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_lh" target="x_reg">
+          <mxGeometry x="0.5" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-e18" value="reads" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5238;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="cl_cgen" target="k_def">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-f0" value="" style="edgeStyle=none;html=1;strokeColor=#4d4d4d;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="1013" as="sourcePoint" />
+            <mxPoint x="80" y="1013" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-f1" value="" style="edgeStyle=none;html=1;strokeColor=#1f5fbf;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="1035" as="sourcePoint" />
+            <mxPoint x="80" y="1035" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="04-transport-and-contract-f2" value="" style="edgeStyle=none;html=1;strokeColor=#b85450;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="1057" as="sourcePoint" />
+            <mxPoint x="80" y="1057" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

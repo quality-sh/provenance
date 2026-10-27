@@ -24,14 +24,18 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
         .join(".provenance/state");
     copy_tree(&shipped, &layout.state_dir());
     let store = StateStore::new(layout);
+    let existing = store.manifest().unwrap();
+    let mut actor_ids = existing.disposition_actor_ids.clone();
+    actor_ids.push("reviewer".into());
+    let manifest =
+        crate::repository_init::plan_manifest(Some(existing), None, None, actor_ids, false, None)
+            .unwrap();
+    std::fs::write(
+        store.layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
     let scope = ScopeId::new("default").unwrap();
-    let reviewer = store
-        .manifest()
-        .unwrap()
-        .disposition_actor_ids
-        .into_iter()
-        .next()
-        .expect("the shipped manifest names a reviewer");
     land_modern_swarm_records(&store, &scope);
     store
         .create_proposal_card(CreateProposalCardInput {
@@ -79,8 +83,8 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
             decision: DispositionDecision::Accepted,
             rationale: "Reviewed".into(),
             actor: DispositionActor {
-                identity_type: IdentityType::Human,
-                id: reviewer,
+                identity_type: IdentityType::Agent,
+                id: "reviewer".into(),
                 name: None,
             },
             canonical_artifact: None,
