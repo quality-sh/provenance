@@ -19,10 +19,18 @@ fn an_expired_code_is_refused() {
     let expired = codes.issue(issued_at, SystemTime::UNIX_EPOCH);
 
     assert!(codes
-        .redeem(&inside, issued_at + Duration::from_secs(24 * 60 * 60 - 1), SystemTime::UNIX_EPOCH)
+        .redeem(
+            &inside,
+            issued_at + Duration::from_secs(24 * 60 * 60 - 1),
+            SystemTime::UNIX_EPOCH
+        )
         .is_some());
     assert!(codes
-        .redeem(&expired, issued_at + Duration::from_hours(24), SystemTime::UNIX_EPOCH)
+        .redeem(
+            &expired,
+            issued_at + Duration::from_hours(24),
+            SystemTime::UNIX_EPOCH
+        )
         .is_none());
 }
 
@@ -33,16 +41,26 @@ fn a_full_store_replaces_the_oldest_live_code() {
     let codes = codes(&directory);
     let issued_at = Instant::now();
     let oldest = codes.issue(issued_at, SystemTime::UNIX_EPOCH);
-    let retained: Vec<_> = (1..64).map(|_| codes.issue(issued_at, SystemTime::UNIX_EPOCH)).collect();
+    let retained: Vec<_> = (1..64)
+        .map(|_| codes.issue(issued_at, SystemTime::UNIX_EPOCH))
+        .collect();
     let newest = codes.issue(issued_at + Duration::from_secs(1), SystemTime::UNIX_EPOCH);
     let redeemed_at = issued_at + Duration::from_secs(24 * 60 * 60 - 1);
 
-    assert!(codes.redeem(&oldest, redeemed_at, SystemTime::UNIX_EPOCH).is_none());
-    assert!(codes.redeem(&newest, redeemed_at, SystemTime::UNIX_EPOCH).is_some());
+    assert!(codes
+        .redeem(&oldest, redeemed_at, SystemTime::UNIX_EPOCH)
+        .is_none());
+    assert!(codes
+        .redeem(&newest, redeemed_at, SystemTime::UNIX_EPOCH)
+        .is_some());
     for code in retained {
-        assert!(codes.redeem(&code, redeemed_at, SystemTime::UNIX_EPOCH).is_some());
+        assert!(codes
+            .redeem(&code, redeemed_at, SystemTime::UNIX_EPOCH)
+            .is_some());
     }
-    assert!(codes.redeem(&newest, redeemed_at, SystemTime::UNIX_EPOCH).is_none());
+    assert!(codes
+        .redeem(&newest, redeemed_at, SystemTime::UNIX_EPOCH)
+        .is_none());
 }
 
 #[test]
@@ -56,7 +74,11 @@ fn wall_clock_expiry_refuses_a_code_after_suspend() {
     let expired = codes.issue(now, wall_now);
 
     assert!(codes
-        .redeem(&inside, now, wall_now + Duration::from_secs(24 * 60 * 60 - 1))
+        .redeem(
+            &inside,
+            now,
+            wall_now + Duration::from_secs(24 * 60 * 60 - 1)
+        )
         .is_some());
     assert!(codes
         .redeem(&expired, now, wall_now + Duration::from_hours(24))

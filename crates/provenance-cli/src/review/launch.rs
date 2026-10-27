@@ -127,6 +127,7 @@ struct Inner {
 struct IssuedCode {
     value: String,
     expires_at: Instant,
+    issued_at_wall: SystemTime,
 }
 
 impl LaunchCodes {
@@ -150,10 +151,15 @@ impl LaunchCodes {
     }
 
     /// Issues a code that is valid for one exchange during the code lifetime.
-    #[rule("rule_review_launch_code_lifetime")]
-    pub fn issue(&self, now: Instant, _wall_now: SystemTime) -> String {
+    pub fn issue(&self, now: Instant, wall_now: SystemTime) -> String {
         let mut live = self.inner.live.lock().expect("launch code lock");
-        live.retain(|code| code.expires_at > now);
+        live.retain(|code| {
+            code.expires_at > now
+                && wall_now
+                    .duration_since(code.issued_at_wall)
+                    .unwrap_or_default()
+                    < CODE_LIFETIME
+        });
         if live.len() >= MAX_LIVE_CODES {
             live.remove(0);
         }
@@ -161,14 +167,22 @@ impl LaunchCodes {
         live.push(IssuedCode {
             value: value.clone(),
             expires_at: now + CODE_LIFETIME,
+            issued_at_wall: wall_now,
         });
         value
     }
 
-    /// Returns the bearer for a live code and removes the code.
-    pub fn redeem(&self, code: &str, now: Instant, _wall_now: SystemTime) -> Option<String> {
+    /// Refuses a code after 24 hours on either clock and removes a code after its first use.
+    #[rule("rule_review_launch_code_lifetime")]
+    pub fn redeem(&self, code: &str, now: Instant, wall_now: SystemTime) -> Option<String> {
         let mut live = self.inner.live.lock().expect("launch code lock");
-        live.retain(|issued| issued.expires_at > now);
+        live.retain(|issued| {
+            issued.expires_at > now
+                && wall_now
+                    .duration_since(issued.issued_at_wall)
+                    .unwrap_or_default()
+                    < CODE_LIFETIME
+        });
         let mut found = None;
         for (index, issued) in live.iter().enumerate() {
             if constant_time_eq(issued.value.as_bytes(), code.as_bytes()) {
