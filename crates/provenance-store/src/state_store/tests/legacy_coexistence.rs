@@ -24,11 +24,14 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
         .join(".provenance/state");
     copy_tree(&shipped, &layout.state_dir());
     let store = StateStore::new(layout);
+    let existing = store.manifest().unwrap();
+    let mut actor_ids = existing.disposition_actor_ids.clone();
+    actor_ids.push("reviewer".into());
     let manifest = crate::repository_init::plan_manifest(
-        Some(store.manifest().unwrap()),
+        Some(existing),
         None,
         None,
-        vec!["reviewer".into()],
+        actor_ids,
         false,
         None,
     )
