@@ -104,7 +104,7 @@ fn parents_share_one_requirement_and_all_its_rules() {
 
 fn edit_parents(
     store: &StateStore,
-    relations: Value,
+    relations: &Value,
 ) -> anyhow::Result<provenance_core::review::RequirementEditState> {
     store.save_requirement(serde_json::from_value(json!({
         "actor":"author", "expected_etag":store.requirement_edit_state(&scope(), &sid("req_a"))?.etag,
@@ -126,17 +126,17 @@ fn replacement_keeps_other_parents_and_failed_second_steps_keep_the_new_parent()
         .set_requirement_refines(&scope(), &sid("req_child"), sid("req_a"))
         .unwrap();
     let child = read(&store, "req_child");
-    edit_parents(&store, json!(["req_p", "req_q"])).unwrap();
+    edit_parents(&store, &json!(["req_p", "req_q"])).unwrap();
     let before = read(&store, "req_a");
-    edit_parents(&store, json!({"add":["req_b"]})).unwrap();
-    assert!(edit_parents(&store, json!({"remove":["req_missing"]})).is_err());
+    edit_parents(&store, &json!({"add":["req_b"]})).unwrap();
+    assert!(edit_parents(&store, &json!({"remove":["req_missing"]})).is_err());
     assert_eq!(
         read(&store, "req_a")["refines"],
         json!(["req_b", "req_p", "req_q"])
     );
     for _ in 0..2 {
-        edit_parents(&store, json!({"add":["req_b"]})).unwrap();
-        edit_parents(&store, json!({"remove":["req_p"]})).unwrap();
+        edit_parents(&store, &json!({"add":["req_b"]})).unwrap();
+        edit_parents(&store, &json!({"remove":["req_p"]})).unwrap();
         assert_eq!(read(&store, "req_a")["refines"], json!(["req_b", "req_q"]));
     }
     let after = read(&store, "req_a");
@@ -144,12 +144,12 @@ fn replacement_keeps_other_parents_and_failed_second_steps_keep_the_new_parent()
         assert_eq!(after[field], before[field]);
     }
     assert_eq!(read(&store, "req_child"), child);
-    assert!(edit_parents(&store, json!({"add":["req_child"]})).is_err());
-    assert!(edit_parents(&store, json!({"add":["req_missing"]})).is_err());
+    assert!(edit_parents(&store, &json!({"add":["req_child"]})).is_err());
+    assert!(edit_parents(&store, &json!({"add":["req_missing"]})).is_err());
     assert_eq!(read(&store, "req_a"), after);
-    edit_parents(&store, json!(["req_p"])).unwrap();
-    edit_parents(&store, json!({"add":["req_b"]})).unwrap();
+    edit_parents(&store, &json!(["req_p"])).unwrap();
+    edit_parents(&store, &json!({"add":["req_b"]})).unwrap();
     assert_eq!(read(&store, "req_a")["refines"], json!(["req_b", "req_p"]));
-    edit_parents(&store, json!({"remove":["req_p"]})).unwrap();
+    edit_parents(&store, &json!({"remove":["req_p"]})).unwrap();
     assert_eq!(read(&store, "req_a")["refines"], json!(["req_b"]));
 }
