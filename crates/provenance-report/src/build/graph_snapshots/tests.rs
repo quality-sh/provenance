@@ -222,6 +222,6 @@ fn supersedes_marks_only_records_of_the_same_kind() {
             .clone()
     };
     assert_eq!(superseded_by("req_old"), ["req_new"]);
-    assert!(superseded_by("req_kept").is_empty());
-    assert!(superseded_by("req_new").is_empty());
+    assert_eq!(superseded_by("req_kept"), Vec::<String>::new());
+    assert_eq!(superseded_by("req_new"), Vec::<String>::new());
 }
