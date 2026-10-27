@@ -1,5 +1,6 @@
 use crate::state_store::readers::{ensure_supported_record_version, located, parse_line};
 use camino::Utf8Path;
+use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -24,7 +25,7 @@ impl AdvisoryLock {
             .truncate(false)
             .open(path)
             .map_err(|error| anyhow::anyhow!("open advisory lock {path}: {error}"))?;
-        provenance_core::file_lock::exclusive(&file)
+        file.lock_exclusive()
             .map_err(|error| anyhow::anyhow!("acquire advisory lock {path}: {error}"))?;
         Ok(Self { file })
     }

@@ -71,10 +71,11 @@ fn update(repo: &str, collection: &str, id: &str, guard: Option<&str>, change: &
     if let Some(etag) = guard {
         command.args(["--if-match", etag]);
     }
+    let started = std::time::Instant::now();
     let output = command.args(change).output().unwrap();
     assert!(
-        output.status.code().is_some(),
-        "CLI command did not exit normally: {command:?}; status: {:?}",
+        started.elapsed() < support::review_paths::COMMAND_TIMEOUT,
+        "CLI command timed out after 60 seconds: {command:?}; status: {:?}",
         output.status
     );
     let stream = if output.status.success() {

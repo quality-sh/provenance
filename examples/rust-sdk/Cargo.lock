@@ -1569,7 +1569,6 @@ dependencies = [
  "fs2",
  "office_oxide",
  "pdf_oxide",
- "provenance-core",
  "provenance-macros",
  "serde",
  "serde_json",

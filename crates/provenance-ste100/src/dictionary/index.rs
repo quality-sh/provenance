@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use fs2::FileExt;
 use provenance_macros::rule;
 
 use super::{digest, DictionaryImport, DictionaryImportIdentity, DICTIONARY_EXTRACTOR_VERSION};
@@ -75,7 +76,7 @@ pub fn store_dictionary_index(
         .write(true)
         .open(&lock_path)
         .map_err(|error| io_error(&lock_path, &error))?;
-    provenance_core::file_lock::exclusive(&lock).map_err(|error| io_error(&lock_path, &error))?;
+    FileExt::lock_exclusive(&lock).map_err(|error| io_error(&lock_path, &error))?;
     match load_dictionary_index(directory, &import.identity) {
         Ok(stored) if stored == *import => return Ok(path),
         Ok(_) => std::fs::remove_file(&path).map_err(|error| io_error(&path, &error))?,
