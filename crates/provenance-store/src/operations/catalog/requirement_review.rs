@@ -92,6 +92,7 @@ pub struct UpdateRequirementRequest {
     pub description: Option<String>,
     pub fog: Option<String>,
     pub status: Option<RequirementStatus>,
+    pub archived_in_commit: Option<provenance_core::ArchivedStamp>,
     pub domain_id: Option<StableId>,
     #[serde(default)]
     pub clear_fields: Vec<RequirementClearField>,
@@ -113,6 +114,7 @@ scoped_write_operation!(
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,
                 update: UpdateRequirementInput {
+                    archived_in_commit: request.archived_in_commit,
                     scope_id: scope,
                     id: request.id,
                     expected_etag: None,

@@ -24,8 +24,24 @@ pub trait GraphRecord:
         self.review_id()
     }
 
+    /// Refuses a live status after archive for each stored lifecycle record.
+    #[provenance_macros::rule("rule_archive_is_terminal_for_each_record")]
     fn validate_write(&self, previous: Option<&Self>) -> anyhow::Result<()> {
         match (self.clone().into(), previous.cloned().map(Into::into)) {
+            (ReviewRecord::Requirement(record), Some(ReviewRecord::Requirement(previous))) => {
+                record
+                    .validate_transition(&previous)
+                    .map_err(invalid_update)
+            }
+            (ReviewRecord::Requirement(record), None) => {
+                record.validate_archive().map_err(invalid_update)
+            }
+            (ReviewRecord::Resolution(record), Some(ReviewRecord::Resolution(previous))) => record
+                .validate_transition(&previous)
+                .map_err(invalid_update),
+            (ReviewRecord::Resolution(record), None) => {
+                record.validate_archive().map_err(invalid_update)
+            }
             (ReviewRecord::Rule(rule), Some(ReviewRecord::Rule(previous))) => {
                 rule.validate_transition(&previous).map_err(invalid_update)
             }
