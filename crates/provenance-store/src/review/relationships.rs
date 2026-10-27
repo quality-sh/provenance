@@ -53,6 +53,12 @@ impl RequirementRelations {
         )
     }
 
+    /// Expands edits on one Requirement. Parent addition keeps the other parents and
+    /// Rules. Supersession changes no child or prior record.
+    #[rule("rule_requirement_accepts_multiple_parents")]
+    #[rule("rule_shared_requirement_keeps_its_rules")]
+    #[rule("rule_supersession_preserves_unselected_children")]
+    #[rule("rule_supersession_does_not_archive_superseded_record")]
     pub(super) fn expand(&self, before: &Requirement) -> FinalRelations {
         let mut final_sets = FinalRelations {
             refines: before.refines.clone(),
