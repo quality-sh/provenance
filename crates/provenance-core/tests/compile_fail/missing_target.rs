@@ -5,7 +5,7 @@ use provenance_macros::Relations;
 pub struct Requirement {
     pub id: StableId,
     #[relation(flow = target_upstream)]
-    pub refines: Vec<StableId>,
+    pub refines: Option<StableId>,
 }
 
 fn main() {}
