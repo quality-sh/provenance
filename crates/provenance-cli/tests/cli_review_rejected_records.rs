@@ -237,9 +237,10 @@ fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
         .unwrap();
     let messages_path = format!("/resolutions/res_new/discussions/{discussion}/messages");
     let messages = get(&host, &messages_path);
-    assert!(messages
-        .to_string()
-        .contains("The result needs a clear condition."));
+    assert_eq!(
+        messages["items"][0]["body"],
+        "The result needs a clear condition."
+    );
 
     post(
         &host,
