@@ -48,3 +48,20 @@ fn supersession_changes_no_child_or_parent_status() {
     assert_eq!(read(&store, "req_a"), child);
     assert_eq!(read(&store, "req_p"), parent);
 }
+
+#[test]
+#[verifies("rule_shared_requirement_keeps_its_rules", examples)]
+fn parents_share_one_requirement_and_all_its_rules() {
+    let (_temp, store) = fixture();
+    for id in ["req_p", "req_b"] { create(&store, id); }
+    store.create_rule(serde_json::from_value(json!({
+        "scope_id":"default", "id":"rule_shared", "statement":"The system stores each record.",
+        "status":"draft", "severity":"high", "requirement_ids":["req_a"], "resolution_ids":[]
+    })).unwrap()).unwrap();
+    let rules = store.list_rules(&scope()).unwrap();
+    store.set_requirement_refines(&scope(), &sid("req_a"), sid("req_p")).unwrap();
+    store.set_requirement_refines(&scope(), &sid("req_a"), sid("req_b")).unwrap();
+    assert_eq!(read(&store, "req_a")["refines"], json!(["req_b", "req_p"]));
+    assert_eq!(store.list_rules(&scope()).unwrap(), rules);
+    assert_eq!(store.list_requirements(&scope()).unwrap().len(), 3);
+}
