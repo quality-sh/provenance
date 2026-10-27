@@ -72,8 +72,8 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
             decision: DispositionDecision::Accepted,
             rationale: "Reviewed".into(),
             actor: DispositionActor {
-                identity_type: IdentityType::Agent,
-                id: "codex-review-panel-gpt55-medium".into(),
+                identity_type: IdentityType::Human,
+                id: store.manifest().unwrap().disposition_actor_ids[0].clone(),
                 name: None,
             },
             canonical_artifact: None,
