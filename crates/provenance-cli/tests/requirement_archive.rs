@@ -24,9 +24,8 @@ fn listed_ids(output: &str) -> Vec<String> {
         .collect()
 }
 
-// Implementation aid: this checks archive visibility across public CLI reads.
-#[test]
-fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it() {
+/// Creates `req_current` and archives its child `req_retired`.
+fn archived_repository() -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
@@ -84,6 +83,14 @@ fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it(
             r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
         ],
     );
+    directory
+}
+
+// Implementation aid: this checks archive visibility across public CLI reads.
+#[test]
+fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it() {
+    let directory = archived_repository();
+    let repo = directory.path().to_str().unwrap();
     assert_eq!(
         listed_ids(&run(repo, &["requirements", "list", "--format", "json"])),
         ["req_current"]
