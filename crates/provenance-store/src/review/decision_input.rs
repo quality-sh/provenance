@@ -63,7 +63,7 @@ pub struct ReviewFeedback {
     pub body: String,
 }
 
-/// Withdraws a pending submission from review. The candidate, its feedback,
+/// Withdraws a pending or rejected submission from review. The candidate, its feedback,
 /// and the graph record all stay.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

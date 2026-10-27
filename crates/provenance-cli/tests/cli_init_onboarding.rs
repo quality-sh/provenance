@@ -51,6 +51,7 @@ fn init_onboarding_is_idempotent() {
     let repo = temporary.path().join("repo");
     init(&repo).success();
     let agents = read_agents(&repo);
+    assert!(agents.contains("Revise or withdraw a rejected candidate"));
     let skill = std::fs::read(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
 
     init(&repo).success();

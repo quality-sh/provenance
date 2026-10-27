@@ -54,7 +54,8 @@ it in the same change.
   The command needs a running review host. It returns current state, not a delivery journal.
   A reset or disconnect means notification continuity is unknown.
 - A guarded update after a rejection opens a new submission unless a reviewer
-  accepted that content. To end a pending review without a replacement, withdraw it.
+  accepted that content. Revise or withdraw a rejected candidate that no later
+  submission replaced. To end a pending review without a replacement, withdraw it.
 - A Question or Topic update needs the current etag. Read it with
   `{command} questions <question_id> get --scope {selected_scope} --format json` or
   `{command} topics <topic_id> get --scope {selected_scope} --format json` and pass
