@@ -72,3 +72,4 @@
 {"schema_version":2,"scope_id":"default","id":"thread_rule_rule_ste_dictionary_no_operational_download","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_no_operational_download"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_rule_rule_ste_dictionary_not_distributed","parent":{"node_type":"rule","node_id":"rule_ste_dictionary_not_distributed"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_rule_rule_typescript_verifies_helper_marker","parent":{"node_type":"rule","node_id":"rule_typescript_verifies_helper_marker"},"status":"active","created_at":1}
+{"schema_version":2,"scope_id":"default","id":"thread_rule_rule_validation_version_move_rebuilds_the_projection","parent":{"node_type":"rule","node_id":"rule_validation_version_move_rebuilds_the_projection"},"status":"active","created_at":1}
