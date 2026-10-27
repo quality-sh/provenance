@@ -24,6 +24,20 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
         .join(".provenance/state");
     copy_tree(&shipped, &layout.state_dir());
     let store = StateStore::new(layout);
+    let manifest = crate::repository_init::plan_manifest(
+        Some(store.manifest().unwrap()),
+        None,
+        None,
+        vec!["reviewer".into()],
+        false,
+        None,
+    )
+    .unwrap();
+    std::fs::write(
+        store.layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
     let scope = ScopeId::new("default").unwrap();
     land_modern_swarm_records(&store, &scope);
     store
@@ -73,7 +87,7 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
             rationale: "Reviewed".into(),
             actor: DispositionActor {
                 identity_type: IdentityType::Agent,
-                id: "codex-review-panel-gpt55-medium".into(),
+                id: "reviewer".into(),
                 name: None,
             },
             canonical_artifact: None,

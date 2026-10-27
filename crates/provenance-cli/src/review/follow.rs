@@ -41,10 +41,12 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     let mut sequence = 0;
     let mut initialized = false;
     let mut read_failure = None;
+    let interrupt = tokio::signal::ctrl_c();
+    tokio::pin!(interrupt);
     let result: anyhow::Result<()> = async {
         loop {
             let incoming = tokio::select! {
-                signal = tokio::signal::ctrl_c() => {
+                signal = &mut interrupt => {
                     signal.context("cannot install the Ctrl-C handler")?;
                     return Ok(());
                 },
@@ -72,7 +74,7 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
                 _ => None,
             };
             tokio::select! {
-                signal = tokio::signal::ctrl_c() => {
+                signal = &mut interrupt => {
                     signal.context("cannot install the Ctrl-C handler")?;
                     return Ok(());
                 },
