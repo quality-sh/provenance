@@ -85,7 +85,7 @@
         <mxCell id="08-scanner-and-coverage-legend-sw-engine" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="08-scanner-and-coverage-legend">
           <mxGeometry x="282" y="28" width="26" height="16" as="geometry" />
         </mxCell>
-        <mxCell id="08-scanner-and-coverage-legend-tx-engine" value="Engine: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="08-scanner-and-coverage-legend">
+        <mxCell id="08-scanner-and-coverage-legend-tx-engine" value="Store: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="08-scanner-and-coverage-legend">
           <mxGeometry x="314" y="26" width="230" height="20" as="geometry" />
         </mxCell>
         <mxCell id="08-scanner-and-coverage-legend-sw-found" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="08-scanner-and-coverage-legend">

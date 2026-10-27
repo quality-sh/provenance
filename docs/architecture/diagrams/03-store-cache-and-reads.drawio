@@ -49,10 +49,10 @@
         <mxCell id="cache" value="cache (SQLite projection)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fffbee;strokeColor=#d6b656;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="store">
           <mxGeometry x="500" y="320" width="490" height="370" as="geometry" />
         </mxCell>
-        <mxCell id="k_mat" value='&lt;b&gt;materialize&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;full rebuild;&lt;br&gt;VALIDATION_VERSION&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cache">
+        <mxCell id="k_mat" value='&lt;b&gt;materialize.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;full rebuild;&lt;br&gt;VALIDATION_VERSION&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cache">
           <mxGeometry x="15" y="35" width="220" height="100" as="geometry" />
         </mxCell>
-        <mxCell id="k_catch" value='&lt;b&gt;catch_up&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;hash units (each scope +&lt;br&gt;global); parse and validate&lt;br&gt;changed scopes; 3 tries&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cache">
+        <mxCell id="k_catch" value='&lt;b&gt;materialize/catch_up.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;hash each scope unit and the&lt;br&gt;global unit; per unit, parse&lt;br&gt;again (max 3) while its hash&lt;br&gt;changes (validation.rs)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cache">
           <mxGeometry x="250" y="35" width="220" height="100" as="geometry" />
         </mxCell>
         <mxCell id="k_rows" value='&lt;b&gt;rows, stamp, connection&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;family_rows, record_rows, relation_rows (derives);&lt;br&gt;revision: serial, digest, instance id; one transaction;&lt;br&gt;connection: WAL, migrations, read-only fallback&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cache">
@@ -118,7 +118,7 @@
         <mxCell id="03-store-cache-and-reads-legend-sw-engine" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="03-store-cache-and-reads-legend">
           <mxGeometry x="12" y="28" width="26" height="16" as="geometry" />
         </mxCell>
-        <mxCell id="03-store-cache-and-reads-legend-tx-engine" value="Engine: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="03-store-cache-and-reads-legend">
+        <mxCell id="03-store-cache-and-reads-legend-tx-engine" value="Store: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="03-store-cache-and-reads-legend">
           <mxGeometry x="44" y="26" width="230" height="20" as="geometry" />
         </mxCell>
         <mxCell id="03-store-cache-and-reads-legend-sw-host" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="03-store-cache-and-reads-legend">
