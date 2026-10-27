@@ -275,10 +275,13 @@ pub async fn dispatch_target(
             &route.path,
             data,
             headers,
-            old,
-            matches
-                .get_one::<String>("with_parent")
-                .expect("paired parent options"),
+            (
+                old,
+                matches
+                    .get_one::<String>("with_parent")
+                    .expect("paired parent options"),
+            ),
+            |failure| failure_with_guidance(failure, &route.path, Some(&target), &context.repo),
         )
         .await
     } else {
