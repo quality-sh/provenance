@@ -150,10 +150,10 @@ that address to the canonical ID and rejects an unapplied declaration before
 Node executes the callback. Keeping runs in the existing derived cache prevents
 every local test from dirtying Git-tracked canonical state. Declarations
 themselves remain in `.provenance/state` and therefore appear in exports,
-traceability queries, checks, graph references, and generated wiki pages like
+traceability queries, checks, graph references, and the review page like
 records created by the existing CLI.
 
-The wiki and validating coverage scan consume canonical typed bindings alongside
+The validating coverage scan consumes canonical typed bindings alongside
 scanner-discovered bindings. Runtime results remain separate and are queried
 with `verification-runs list`; durable relationships are queried with
 `verification-bindings list`. Stale analysis treats a changed typed verification
@@ -211,5 +211,5 @@ canonical model without a data migration.
 
 The next decision is how durable verification relationships and runtime
 evidence should shape CI policy. Typed bindings already join coverage, stale
-detection, wiki views, and semantic change plans. More languages are not the
+detection, and semantic change plans. More languages are not the
 next task.

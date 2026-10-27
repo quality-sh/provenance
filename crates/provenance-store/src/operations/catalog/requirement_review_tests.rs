@@ -38,7 +38,7 @@ fn create_request(_request_id: &str) -> CreateRequirementRequest {
         "description": null,
         "status": "discovery",
         "domain_id": null,
-        "refines": null,
+        "refines": [],
         "depends_on": [],
         "supersedes": [],
         "spawned_by": null,

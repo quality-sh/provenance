@@ -92,7 +92,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
     let mut child =
         serde_json::to_value(store.list_requirements(&scope).unwrap()[0].clone()).unwrap();
     child["schema_version"] = json!(2);
-    child["refines"] = json!("req_overtime");
+    child["refines"] = json!(["req_overtime"]);
     let path = crate::shards::requirements_path(&store.layout, &scope);
     for i in 0..205 {
         child["id"] = json!(format!("req_child_{i:03}"));
@@ -244,7 +244,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
             let mut child: Value = serde_json::from_str(std::fs::read_to_string(&path)?.lines().next().unwrap())?;
             child["schema_version"] = json!(2);
             child["id"] = json!("req_concurrent");
-            child["refines"] = json!("req_overtime");
+            child["refines"] = json!(["req_overtime"]);
             crate::cache::tests::fixtures::append_record(&path, &child);
             for (id, status, counter) in [("thread_one", "resolved", 1), ("thread_two", "active", 2)] {
                 crate::cache::tests::fixtures::append_record(&crate::shards::threads_path(&layout, &write_scope), &json!({
@@ -297,11 +297,11 @@ async fn document_page_requires_continuation_and_excludes_other_roots() {
     child["schema_version"] = json!(2);
     for i in 0..205 {
         child["id"] = json!(format!("req_aaa_{i:03}"));
-        child["refines"] = json!("req_overtime");
+        child["refines"] = json!(["req_overtime"]);
         crate::cache::tests::fixtures::append_record(&path, &child);
     }
     child["id"] = json!("req_outside");
-    child["refines"] = Value::Null;
+    child["refines"] = json!([]);
     crate::cache::tests::fixtures::append_record(&path, &child);
     let first = read(root_of(&dir)).await;
     assert_eq!(first["entries"][0]["node"]["id"], "req_overtime");

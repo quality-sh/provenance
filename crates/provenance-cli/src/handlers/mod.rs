@@ -21,10 +21,6 @@ mod schema;
 mod skills;
 mod swarm_backtrace;
 mod validate;
-mod wiki;
-
-#[allow(clippy::redundant_pub_crate)]
-pub(super) use export::{export_scope, ScopeExport};
 
 /// Runs one built-in command. The commands that wait on async work or on a
 /// blocking thread run here. Every other command runs on the calling thread.
@@ -75,7 +71,6 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             check::check(context, strict, base, format.is_some(), selectors).await
         }
         Command::Docs { command } => docs::handle(command).await,
-        Command::Wiki { command } => wiki::handle(command).await,
         Command::Review(options) => crate::review::run(options).await,
         Command::Materialize { repo, .. } => {
             let store = crate::store::Store::open_required(repo)?;
@@ -189,7 +184,6 @@ fn dispatch_remaining_on_thread(command: Command, quiet: bool) -> anyhow::Result
         | Command::Init { .. }
         | Command::Check { .. }
         | Command::Docs { .. }
-        | Command::Wiki { .. }
         | Command::Review(_)
         | Command::Materialize { .. }
         | Command::Graph { .. }

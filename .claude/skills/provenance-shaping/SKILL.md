@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.3.0; content hash fnv1a64:377ccf5be62db5c2 -->
+<!-- Installed by provenance 0.3.0; content hash fnv1a64:aef7498aace2b08e -->
 
 # Shaping
 
@@ -325,7 +325,7 @@ provenance requirements create --scope <scope> \
   --format json
 
 provenance requirements req_<child_slug> update --scope <scope> \
-  --relationships-json '{"refines":"<relevant_requirement_id>","spawned_by":"res_<stable_slug>"}' \
+  --relationships-json '{"refines":["<relevant_requirement_id>"],"spawned_by":"res_<stable_slug>"}' \
   --if-match <etag> \
   --format json
 ```

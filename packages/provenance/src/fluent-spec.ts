@@ -28,8 +28,8 @@ const requirementDescriptions = new WeakMap<object, string>();
 
 /** The relation fields a requirement declaration may set. */
 export interface RequirementRelations {
-  /** The key of the requirement in the same spec this one refines. */
-  readonly refines?: string;
+  /** Keys of the requirements in the same spec this one refines. */
+  readonly refines?: readonly string[];
   /** Keys of requirements in the same spec this one depends on. */
   readonly dependsOn: readonly string[];
   /** Keys of older requirements in the same spec this one replaces. */
@@ -171,9 +171,12 @@ export class FluentRequirement<
     );
   }
 
-  // Names the requirement of the same spec this one refines.
+  // Adds a parent Requirement in the same spec.
   refines(parent: AnyRequirement): FluentRequirement<Key, Rules, Sources> {
-    return this.withRelations({ ...this.relations, refines: parent.key });
+    return this.withRelations({
+      ...this.relations,
+      refines: [...new Set([...(this.relations.refines ?? []), parent.key])],
+    });
   }
 
   // Names the requirements of the same spec this one depends on.
@@ -456,7 +459,7 @@ function document(
     statement: requirement.text!,
     description: requirementDescriptions.get(requirement),
     sources: requirement.sourceDeclarations.map(({ key }) => key).sort(),
-    refines: requirement.relations.refines,
+    refines: requirement.relations.refines?.slice().sort(),
     ...listField("depends_on", requirement.relations.dependsOn),
     ...listField("supersedes", requirement.relations.supersedes),
     spawned_by: requirement.relations.spawnedBy,
@@ -528,7 +531,7 @@ function requireKey(kind: string, key: string): void {
 /** The keys a requirement's relations name in the same spec. */
 function relatedKeys(relations: RequirementRelations): string[] {
   return [
-    ...(relations.refines === undefined ? [] : [relations.refines]),
+    ...(relations.refines ?? []),
     ...relations.dependsOn,
     ...relations.supersedes,
   ];

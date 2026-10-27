@@ -76,14 +76,15 @@ Each field takes a complete array or a partial delta:
 ```
 
 The Requirement PATCH carries its relationships in one `relationships`
-object. `refines` and `spawned_by` take a record ID, or `null` to clear.
+object. `refines` takes a complete ID list or an `add`/`remove` delta. An empty list clears it.
+`spawned_by` takes a record ID, or `null` to clear.
 `depends_on` and `supersedes` take an array or a delta. `cites` takes the
 citation list or a delta with `add` citations and `remove` source IDs. This
-example adds one dependency and clears the refine target:
+example adds one dependency and removes all refinement parents:
 
 ```json
 {"data": {"actor": "agent",
-  "relationships": {"depends_on": {"add": ["req_b"]}, "refines": null}}}
+  "relationships": {"depends_on": {"add": ["req_b"]}, "refines": []}}}
 ```
 
 Before expansion, the Store validates each target that a removal delta names.
@@ -183,7 +184,7 @@ selected scope. In the native DTO, a `null` field supplies no value; it does
 not clear. A native request clears fields only through the typed
 `clear_fields` list.
 
-The relationship actions stay native: `set/clear-requirement-refines`,
+The relationship actions stay native: `add/clear-requirement-refines`,
 `add/clear-requirement-depends-on`, `add/clear-requirement-supersedes`,
 `set/clear-requirement-spawned-by`, `add/clear-rule-requirement`,
 `add/clear-rule-resolution`, `add/clear-resolution-requirement`,
