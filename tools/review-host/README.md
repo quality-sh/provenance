@@ -77,9 +77,17 @@ repository and scope access. Release validation runs this check on executables
 extracted from both native archives and npm engine packages. It does not
 publish a release during a manual run.
 
+The review write check starts a new review host for each step on one
+repository. The generated client starts, replies to and resolves Discussions,
+rejects with feedback, and revises a Requirement. Each step reads the result
+through the next host. The check also closes one write response before its body
+arrives. The client must report a connection error, send the write only once,
+and the repository must hold one result. CI runs this check on the Linux CLI.
+
 ```sh
 node --test tools/review-host/*.test.ts
 node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
+node tools/review-host/verify-review-writes.ts /absolute/provenance packages/provenance
 ```
 
 The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-13d51d69ae34/provenance-review.tar.gz)
