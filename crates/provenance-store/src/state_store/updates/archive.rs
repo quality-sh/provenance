@@ -15,7 +15,6 @@ impl StateStore {
     #[rule("rule_archive_keeps_archived_parent_links")]
     #[rule("rule_archive_cascades_without_surviving_parents")]
     #[rule("rule_archive_completes_cascade_in_one_operation")]
-    #[rule("rule_live_dependents_have_live_parents")]
     #[rule("rule_archive_does_not_create_roots")]
     pub(crate) fn archive_dependents(
         &self,
