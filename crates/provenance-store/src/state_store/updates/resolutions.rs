@@ -62,12 +62,7 @@ impl StateStore {
                     &mut record.supersedes,
                     input.supersedes.as_ref(),
                 );
-                for text in [&input.title, &input.position, &input.rationale]
-                    .into_iter()
-                    .flatten()
-                {
-                    required_text(text)?;
-                }
+                validate_resolution_text([&input.title, &input.position, &input.rationale])?;
                 set(&mut record.title, input.title);
                 set(&mut record.position, input.position);
                 set(&mut record.rationale, input.rationale);
@@ -130,4 +125,11 @@ impl StateStore {
         validate_final_relations(self, &scope, &record)?;
         Ok(record)
     }
+}
+
+fn validate_resolution_text(values: [&Option<String>; 3]) -> anyhow::Result<()> {
+    for text in values.into_iter().flatten() {
+        required_text(text)?;
+    }
+    Ok(())
 }

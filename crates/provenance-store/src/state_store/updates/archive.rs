@@ -106,37 +106,7 @@ impl StateStore {
                     Ok(())
                 },
             )?;
-            let mut topics = BTreeSet::new();
-            batch.mutate_all(
-                &shards::topics_path(&store.layout, scope),
-                |records: &mut Vec<Topic>| {
-                    for record in records
-                        .iter_mut()
-                        .filter(|r| cascade.contains(r.requirement_id.as_str()))
-                    {
-                        topics.insert(record.id.as_str().to_owned());
-                        if record.status != TopicStatus::Archived {
-                            record.status = TopicStatus::Archived;
-                            record.archived_in_commit = Some(stamp.clone());
-                            super::super::shaping_writers::clear_topic_claim_on_exit(record);
-                        }
-                    }
-                    Ok(())
-                },
-            )?;
-            batch.mutate_all(
-                &shards::questions_path(&store.layout, scope),
-                |records: &mut Vec<Question>| {
-                    for record in records.iter_mut().filter(|r| {
-                        topics.contains(r.topic_id.as_str()) && r.status != QuestionStatus::Archived
-                    }) {
-                        record.status = QuestionStatus::Archived;
-                        record.archived_in_commit = Some(stamp.clone());
-                        super::super::shaping_writers::clear_question_claim_on_exit(record);
-                    }
-                    Ok(())
-                },
-            )
+            archive_shaping(batch, scope, &cascade, stamp)
         })
     }
 }
@@ -159,4 +129,44 @@ fn no_survivors(parents: &[StableId], unavailable: &BTreeSet<String>) -> bool {
 #[rule("rule_archive_prunes_only_parent_edge")]
 fn prune(parents: &mut Vec<StableId>, cascade: &BTreeSet<String>) {
     parents.retain(|parent| !cascade.contains(parent.as_str()));
+}
+
+fn archive_shaping(
+    batch: &crate::review::NativeRecordBatch<'_>,
+    scope: &ScopeId,
+    cascade: &BTreeSet<String>,
+    stamp: &ArchivedStamp,
+) -> anyhow::Result<()> {
+    let store = batch.store();
+    let mut topics = BTreeSet::new();
+    batch.mutate_all(
+        &shards::topics_path(&store.layout, scope),
+        |records: &mut Vec<Topic>| {
+            for record in records
+                .iter_mut()
+                .filter(|r| cascade.contains(r.requirement_id.as_str()))
+            {
+                topics.insert(record.id.as_str().to_owned());
+                if record.status != TopicStatus::Archived {
+                    record.status = TopicStatus::Archived;
+                    record.archived_in_commit = Some(stamp.clone());
+                    super::super::shaping_writers::clear_topic_claim_on_exit(record);
+                }
+            }
+            Ok(())
+        },
+    )?;
+    batch.mutate_all(
+        &shards::questions_path(&store.layout, scope),
+        |records: &mut Vec<Question>| {
+            for record in records.iter_mut().filter(|r| {
+                topics.contains(r.topic_id.as_str()) && r.status != QuestionStatus::Archived
+            }) {
+                record.status = QuestionStatus::Archived;
+                record.archived_in_commit = Some(stamp.clone());
+                super::super::shaping_writers::clear_question_claim_on_exit(record);
+            }
+            Ok(())
+        },
+    )
 }
