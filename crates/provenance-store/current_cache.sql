@@ -16,7 +16,7 @@ CREATE INDEX idx_sources_commit_pin ON sources(scope_id, commit_pin);
 CREATE TABLE requirements (
     schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
     declared_by TEXT, declaration_address TEXT, statement TEXT NOT NULL,
-    description TEXT, fog TEXT, status TEXT NOT NULL, domain_id TEXT,
+    description TEXT, fog TEXT, status TEXT NOT NULL, archived_in_commit TEXT, domain_id TEXT,
     source_refs TEXT NOT NULL, refines TEXT, depends_on TEXT NOT NULL,
     supersedes TEXT NOT NULL, spawned_by TEXT, origin_thread TEXT,
     origin_message TEXT, search_text TEXT NOT NULL, created TEXT, updated TEXT,
@@ -26,7 +26,7 @@ CREATE TABLE requirements (
 CREATE TABLE resolutions (
     schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
     title TEXT NOT NULL, position TEXT NOT NULL, rationale TEXT NOT NULL,
-    status TEXT NOT NULL, context TEXT, enforcement TEXT, confidence REAL,
+    status TEXT NOT NULL, archived_in_commit TEXT, context TEXT, enforcement TEXT, confidence REAL,
     inputs TEXT NOT NULL, made_by TEXT, approved_by TEXT, approved_at INTEGER,
     requirement_ids TEXT NOT NULL, supersedes TEXT NOT NULL, review_on TEXT,
     origin_thread TEXT, origin_message TEXT, search_text TEXT NOT NULL,

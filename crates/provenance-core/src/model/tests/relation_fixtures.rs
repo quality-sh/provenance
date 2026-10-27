@@ -44,6 +44,7 @@ created: None, updated: None,
 
 pub(super) fn requirement(id: &str, domain_id: Option<&str>, cites: &[&str]) -> Requirement {
     Requirement {
+archived_in_commit: None,
 created: None, updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
@@ -154,6 +155,7 @@ pub(super) struct Fixture {
 
 pub(super) fn resolution(id: &str, requirements: &[&str], supersedes: &[&str]) -> Resolution {
     Resolution {
+archived_in_commit: None,
 created: None, updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
