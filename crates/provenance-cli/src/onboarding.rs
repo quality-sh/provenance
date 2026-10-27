@@ -31,7 +31,7 @@ it in the same change.
   One host serves the repository and scope for all sessions. It keeps running after
   the command returns, and later sessions reuse it, so leave it running. Give the
   person the `review_url` it prints, as plain text in chat. The page follows records
-  as they land. A link works once and expires after 120 seconds. Run the command
+  as they land. A link works once and expires after 24 hours. Run the command
   again for a new link.
 - After you create or change a record, run
   `{command} <record-id> --scope {selected_scope} --review-link --format json` and give the

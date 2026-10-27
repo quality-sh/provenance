@@ -61,7 +61,7 @@ disagree, update the binary first, then shape.
    link into the chat as plain text. One host serves the repository and scope for all
    sessions, so leave it running. Opening the page in a browser or in the app that shows
    your chat is extra. Always give the link in chat too. A link works once and expires
-   after 120 seconds; get a new link when it has expired. The page is served on the machine
+   after 24 hours; get a new link when it has expired. The page is served on the machine
    that runs the host. If that is not the person's machine, say so, and give the person the
    command from `AGENTS.md` that starts the host on their own machine.
 

@@ -165,8 +165,11 @@ Removal of the selected scope therefore does not disable `info`.
 A launch link has the form
 `http://127.0.0.1:PORT/?root=REQUIREMENT_ID&focus=RECORD_ID#launch=CODE`. The
 code is in the URL fragment, so the browser does not send it in a request line
-or a Referer header. A code works one time and expires after 120 seconds. Only
-the host that issued it accepts it.
+or a Referer header. A code works one time and expires after 24 hours. Only
+the host that issued it accepts it. The host keeps at most 64 live codes.
+When it issues a code at this limit, it removes the oldest live code.
+A host restart clears all codes. If the host starts on a different port,
+the old link cannot reach it. Get a new link from the running host.
 
 At startup the host writes a launch key to
 `<user cache>/provenance/review-launch/<instance nonce>.key`. The user cache is
@@ -228,7 +231,7 @@ The browser does not get the launch link as an argument, because other users
 can read process arguments. The CLI writes an owner-only redirect page to the
 temporary directory and gives the browser the path of that page. The page sends
 the browser to the launch link. The page stays in the temporary directory; its
-code works one time and expires after 120 seconds.
+code works one time and expires after 24 hours.
 
 ## Browser integration contract
 

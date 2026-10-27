@@ -9,6 +9,7 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::OperationFailure;
+use provenance_macros::rule;
 use provenance_transport::constant_time_eq;
 use serde::Deserialize;
 use serde_json::json;
@@ -21,7 +22,7 @@ use std::{
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
 
-const CODE_LIFETIME: Duration = Duration::from_secs(120);
+const CODE_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
 const MAX_LIVE_CODES: usize = 64;
 
 /// The secret that a local CLI sends to get a launch code. Only the per-user cache holds it.
@@ -149,6 +150,7 @@ impl LaunchCodes {
     }
 
     /// Issues a code that is valid for one exchange during the code lifetime.
+    #[rule("rule_review_launch_code_lifetime")]
     pub fn issue(&self, now: Instant) -> String {
         let mut live = self.inner.live.lock().expect("launch code lock");
         live.retain(|code| code.expires_at > now);
