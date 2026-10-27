@@ -7,5 +7,6 @@ mod record_updates {
     mod relationships;
     mod resolutions;
     mod sources;
+    mod spec_owned_edits;
     mod support;
 }
