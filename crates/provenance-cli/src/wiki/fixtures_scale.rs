@@ -70,8 +70,9 @@ pub fn pr_45_scale_state() -> ScopeExport {
             "source_id": format!("source_{:02}", number % fixture.counts.sources),
             "clause": format!("Section {}", number / fixture.counts.sources + 1),
         })] };
-        let refines = (number >= domain_names.len())
-            .then(|| json!(format!("req_{:03}", number % domain_names.len())));
+        let refines = if number >= domain_names.len() {
+            vec![format!("req_{:03}", number % domain_names.len())]
+        } else { Vec::new() };
         json!({
             "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope, "id": format!("req_{number:03}"),
             "statement": format!("{} capability {number:03} shall preserve traceable policy intent across implementation and review.", domain_names[domain]),

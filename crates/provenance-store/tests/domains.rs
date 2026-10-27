@@ -51,7 +51,7 @@ fn seed_domains_and_rule(store: &StateStore, scope: &ScopeId) {
             description: None,
             status: RequirementStatus::Discovery,
             domain_id: Some(StableId::new("domain_payroll").unwrap()),
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

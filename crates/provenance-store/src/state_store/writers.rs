@@ -98,7 +98,7 @@ impl StateStore {
         if let Some(domain_id) = &domain_id {
             self.ensure_node_exists(&scope_id, NodeType::Domain, domain_id, "--domain-id")?;
         }
-        if let Some(parent) = &refines {
+        for parent in &refines {
             self.ensure_node_exists(&scope_id, NodeType::Requirement, parent, "--refines")?;
         }
         for dependency in &depends_on {

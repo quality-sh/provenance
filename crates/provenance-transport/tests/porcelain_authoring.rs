@@ -128,7 +128,7 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
                 "actor":"agent",
                 "statement":"The MCP action submits the target Requirement.",
                 "status":"active",
-                "refines":"req_shared",
+                "refines":["req_shared"],
                 "depends_on":[],
                 "supersedes":[]
             }
@@ -142,7 +142,7 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
     );
     assert_eq!(
         requirement.structured_content.as_ref().unwrap()["data"]["refines"],
-        "req_shared"
+        json!(["req_shared"])
     );
     let created_submission = requirement.structured_content.as_ref().unwrap()["data"]["decision"]
         ["pending"]["proposal_id"]

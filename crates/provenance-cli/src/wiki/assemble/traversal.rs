@@ -9,7 +9,7 @@ impl<'a> Assembler<'a> {
     /// The requirement this one refines, as its `refines` field names it.
     pub(super) fn parent_id_of(&self, requirement_id: &StableId) -> Option<&'a StableId> {
         self.find_requirement(requirement_id)
-            .and_then(|requirement| requirement.refines.as_ref())
+            .and_then(|requirement| requirement.refines.first())
     }
 
     pub(super) fn parent_of(&self, requirement_id: &StableId) -> Option<&'a Requirement> {
@@ -22,7 +22,7 @@ impl<'a> Assembler<'a> {
         self.state
             .requirements
             .iter()
-            .filter(|child| child.refines.as_ref() == Some(requirement_id))
+            .filter(|child| child.refines.contains(requirement_id))
             .collect()
     }
 
@@ -74,26 +74,37 @@ impl<'a> Assembler<'a> {
 
     /// The other requirements refining the same parent, in record order.
     pub(super) fn sibling_requirements(&self, requirement_id: &StableId) -> Vec<PageLink> {
-        let Some(parent_id) = self.parent_id_of(requirement_id) else {
+        let Some(requirement) = self.find_requirement(requirement_id) else {
             return Vec::new();
         };
-        self.children_of(parent_id)
-            .into_iter()
-            .filter(|candidate| candidate.id != *requirement_id)
+        self.state
+            .requirements
+            .iter()
+            .filter(|candidate| {
+                candidate.id != *requirement_id
+                    && candidate
+                        .refines
+                        .iter()
+                        .any(|parent| requirement.refines.contains(parent))
+            })
             .map(requirement_link)
             .collect()
     }
 
     pub(super) fn lineage(&self, requirement: &'a Requirement) -> Vec<LineageEntry> {
-        let mut chain = vec![requirement];
-        let mut visited: BTreeSet<&str> = BTreeSet::from([requirement.id.as_str()]);
-        let mut current = requirement;
-        while let Some(parent) = self.parent_of(&current.id) {
-            if !visited.insert(parent.id.as_str()) {
-                break;
+        let mut chain = Vec::new();
+        let mut visited = BTreeSet::new();
+        let mut pending = vec![requirement];
+        while let Some(current) = pending.pop() {
+            if !visited.insert(current.id.as_str()) {
+                continue;
             }
-            chain.push(parent);
-            current = parent;
+            chain.push(current);
+            for id in current.refines.iter().rev() {
+                if let Some(parent) = self.find_requirement(id) {
+                    pending.push(parent);
+                }
+            }
         }
         chain.reverse();
         let last = chain.len() - 1;

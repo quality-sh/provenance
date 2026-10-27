@@ -136,6 +136,9 @@ impl StateStore {
         )
     }
 
+    /// Adds one parent without changing the other parents or Rule records.
+    #[provenance_macros::rule("rule_requirement_accepts_multiple_parents")]
+    #[provenance_macros::rule("rule_shared_requirement_keeps_its_rules")]
     pub fn set_requirement_refines(
         &self,
         scope_id: &ScopeId,
@@ -145,7 +148,7 @@ impl StateStore {
         self.save_record(
             empty_update(scope_id, requirement),
             Some(RequirementRelations {
-                refines: Some(SingleEdit::Set(target)),
+                refines: Some(add_delta(vec![target])),
                 ..RequirementRelations::default()
             }),
         )
@@ -159,7 +162,7 @@ impl StateStore {
         self.save_record(
             empty_update(scope_id, requirement),
             Some(RequirementRelations {
-                refines: Some(SingleEdit::Clear),
+                refines: Some(ListEdit::Set(Vec::new())),
                 ..RequirementRelations::default()
             }),
         )
@@ -195,6 +198,9 @@ impl StateStore {
         )
     }
 
+    /// Records supersession without changing children or the prior record.
+    #[provenance_macros::rule("rule_supersession_preserves_unselected_children")]
+    #[provenance_macros::rule("rule_supersession_does_not_archive_superseded_record")]
     pub fn add_requirement_supersedes(
         &self,
         scope_id: &ScopeId,
@@ -348,7 +354,7 @@ impl StateStore {
             return Ok(None);
         };
         let mut wanted = serde_json::to_value(input)?;
-        for field in ["depends_on", "supersedes"] {
+        for field in ["refines", "depends_on", "supersedes"] {
             if let Some(serde_json::Value::Array(ids)) = wanted.get_mut(field) {
                 ids.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
                 ids.dedup();
