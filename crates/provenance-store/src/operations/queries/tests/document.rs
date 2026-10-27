@@ -11,6 +11,10 @@ use std::sync::Arc;
 
 struct Target(camino::Utf8PathBuf);
 impl ContextResolver for Target {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,
@@ -29,7 +33,7 @@ impl ContextResolver for Target {
 async fn read(root: camino::Utf8PathBuf) -> Value {
     catalog::invoke_with("read-document", provenance_core::SDK_PROTOCOL_VERSION,
         json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_overtime"}}),
-        Arc::new(Target(root))).await.expect("complete document operation")
+        catalog::Direct(Arc::new(Target(root)))).await.expect("complete document operation")
 }
 
 fn collections(mut page: Value) -> Value {
@@ -66,7 +70,7 @@ async fn complete(root: camino::Utf8PathBuf) -> Value {
     while all["next_cursor"].is_string() {
         let next = catalog::invoke_with("read-document", provenance_core::SDK_PROTOCOL_VERSION,
             json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime","cursor":all["next_cursor"]}}),
-            Arc::new(Target(root.clone()))).await.unwrap();
+            catalog::Direct(Arc::new(Target(root.clone())))).await.unwrap();
         for field in ["serial", "digest", "instance_id", "derivation"] {
             assert_eq!(next["stamp"][field], stamp[field]);
         }
@@ -123,7 +127,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
         "read-document",
         provenance_core::SDK_PROTOCOL_VERSION,
         json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime"}}),
-        Arc::new(Target(root_of(&dir))),
+        catalog::Direct(Arc::new(Target(root_of(&dir)))),
     )
     .await
     .unwrap_err();
@@ -171,7 +175,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
     let failed = catalog::invoke_with(
         "read-document", provenance_core::SDK_PROTOCOL_VERSION,
         json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_new"}}),
-        Arc::new(Target(root_of(&dir))),
+        catalog::Direct(Arc::new(Target(root_of(&dir)))),
     ).await.unwrap_err();
     assert_eq!(failed.error, json!({"kind":"document_catch_up_failed"}));
 
@@ -317,7 +321,7 @@ async fn search_returns_a_revision_bound_cursor() {
     }
     let first = catalog::invoke_with("search", provenance_core::SDK_PROTOCOL_VERSION,
         json!({"context":{"repository":"test","scope":"default"},"request":{"text":"req_","limit":200}}),
-        Arc::new(Target(root_of(&dir)))).await.unwrap();
+        catalog::Direct(Arc::new(Target(root_of(&dir))))).await.unwrap();
     assert_eq!(first["nodes"].as_array().unwrap().len(), 200);
     assert!(first["next_cursor"].is_string());
 }

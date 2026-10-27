@@ -61,11 +61,14 @@ impl GetPort for HostGetPort {
         Box::pin(async move {
             let response = self
                 .host
-                .invoke_scoped_typed::<catalog::ResolveRecord>(ResolveRecordQuery {
-                    protocol_version: Some(SDK_PROTOCOL_VERSION),
-                    id: id.to_owned(),
-                    allowed_node_types: self.permitted_node_types(),
-                })
+                .invoke::<catalog::ResolveRecord>(
+                    ResolveRecordQuery {
+                        protocol_version: Some(SDK_PROTOCOL_VERSION),
+                        id: id.to_owned(),
+                        allowed_node_types: self.permitted_node_types(),
+                    },
+                    crate::Invocation::native(),
+                )
                 .await
                 .map_err(|error| operation_error(&error))?;
             let (result, metadata) = response_parts(response);
@@ -80,19 +83,22 @@ impl GetPort for HostGetPort {
         Box::pin(async move {
             let response = self
                 .host
-                .invoke_scoped_typed::<catalog::Trace>(TraceQuery {
-                    protocol_version: Some(SDK_PROTOCOL_VERSION),
-                    id: request.target,
-                    node_type: Some(request.kind),
-                    direction: if request.view == View::Children {
-                        Direction::In
-                    } else {
-                        Direction::Out
+                .invoke::<catalog::Trace>(
+                    TraceQuery {
+                        protocol_version: Some(SDK_PROTOCOL_VERSION),
+                        id: request.target,
+                        node_type: Some(request.kind),
+                        direction: if request.view == View::Children {
+                            Direction::In
+                        } else {
+                            Direction::Out
+                        },
+                        relations: Vec::new(),
+                        max_depth: request.max_depth,
+                        limit: request.limit,
                     },
-                    relations: Vec::new(),
-                    max_depth: request.max_depth,
-                    limit: request.limit,
-                })
+                    crate::Invocation::native(),
+                )
                 .await
                 .map_err(|error| operation_error(&error))?;
             let (mut result, mut metadata) = response_parts(response);
@@ -131,12 +137,15 @@ impl GetPort for HostGetPort {
             }
             let response = self
                 .host
-                .invoke_scoped_typed::<catalog::Impact>(ImpactQuery {
-                    protocol_version: Some(SDK_PROTOCOL_VERSION),
-                    id: record.id().as_str().to_owned(),
-                    node_type: Some(record.node_type()),
-                    limit,
-                })
+                .invoke::<catalog::Impact>(
+                    ImpactQuery {
+                        protocol_version: Some(SDK_PROTOCOL_VERSION),
+                        id: record.id().as_str().to_owned(),
+                        node_type: Some(record.node_type()),
+                        limit,
+                    },
+                    crate::Invocation::native(),
+                )
                 .await
                 .map_err(|error| operation_error(&error))?;
             let (result, mut metadata) = response_parts(response);
@@ -169,11 +178,12 @@ impl GetPort for HostGetPort {
             let id = record.id().clone();
             let resource = self
                 .host
-                .invoke_scoped_typed::<catalog::GetReviewedResource>(
+                .invoke::<catalog::GetReviewedResource>(
                     catalog::ReviewedResourceRequest {
                         record_kind: kind,
                         id: id.clone(),
                     },
+                    crate::Invocation::native(),
                 )
                 .await
                 .map_err(|error| operation_error(&error))?;
@@ -230,16 +240,19 @@ async fn load_review_discussions(
     limit: usize,
 ) -> Result<ReviewDiscussions, ReadError> {
     let listed = host
-        .invoke_scoped_typed::<catalog::ListDiscussions>(DiscussionListQuery {
-            parent: Some(provenance_core::ThreadParent {
-                node_type: kind,
-                node_id: id.clone(),
-            }),
-            allowed_parent_kinds: vec![kind],
-            status: DiscussionStatusFilter::All,
-            limit,
-            cursor: None,
-        })
+        .invoke::<catalog::ListDiscussions>(
+            DiscussionListQuery {
+                parent: Some(provenance_core::ThreadParent {
+                    node_type: kind,
+                    node_id: id.clone(),
+                }),
+                allowed_parent_kinds: vec![kind],
+                status: DiscussionStatusFilter::All,
+                limit,
+                cursor: None,
+            },
+            crate::Invocation::native(),
+        )
         .await
         .map_err(|error| operation_error(&error))?;
     let mut follow_up_commands = Vec::new();
@@ -252,13 +265,14 @@ async fn load_review_discussions(
     let mut conversations = Vec::with_capacity(listed.result.entries.len());
     for summary in &listed.result.entries {
         let conversation = host
-            .invoke_scoped_typed::<catalog::GetDiscussionConversation>(
+            .invoke::<catalog::GetDiscussionConversation>(
                 DiscussionConversationQuery {
                     discussion_id: summary.discussion_id.clone(),
                     allowed_parent_kinds: vec![kind],
                     limit,
                     cursor: None,
                 },
+                crate::Invocation::native(),
             )
             .await
             .map_err(|error| operation_error(&error))?;

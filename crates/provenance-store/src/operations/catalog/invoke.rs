@@ -1,8 +1,10 @@
 #![allow(clippy::result_large_err)]
+//! Contract code: this module later leaves the store as one unit with entry, invoke, routes
+//! and schema. Add no store state here.
 
 use super::{
     entry::{entries, DataFreeCall, RepositoryCall},
-    Operation, OperationFuture, PreparedContext,
+    Invoke, Operation, OperationFuture, PreparedContext,
 };
 use provenance_core::{
     protocol::failure::{
@@ -29,52 +31,62 @@ pub async fn invoke_typed<O: Operation>(
         .map_err(OperationError::Handler)
 }
 
-/// Authorize one typed call before it crosses the operation boundary.
+/// Authorize one typed call before it crosses the operation boundary: the identity check
+/// first, then repository preparation.
 pub async fn invoke_authorized_typed<O: Operation>(
     resolver: std::sync::Arc<dyn super::ContextResolver>,
     selected: super::RequestedContext,
     request: O::Request,
 ) -> Result<O::Success, OperationError<O::Failure>> {
-    let context = authorized_context::<O>(&resolver, selected, &request)?;
-    invoke_typed::<O>(context, request).await
-}
-
-/// Authorize one native typed call without applying public wire response limits.
-pub async fn invoke_authorized_native_typed<O: Operation>(
-    resolver: std::sync::Arc<dyn super::ContextResolver>,
-    selected: super::RequestedContext,
-    request: O::Request,
-) -> Result<O::Success, OperationError<O::Failure>> {
-    let context = authorized_context::<O>(&resolver, selected, &request)?.into_native();
-    invoke_typed::<O>(context, request).await
-}
-
-fn authorized_context<O: Operation>(
-    resolver: &std::sync::Arc<dyn super::ContextResolver>,
-    selected: super::RequestedContext,
-    request: &O::Request,
-) -> Result<PreparedContext, OperationError<O::Failure>> {
-    O::validate_external(request).map_err(OperationError::Common)?;
+    O::validate_external(&request).map_err(OperationError::Common)?;
     resolver
-        .prepare(O::NAME, selected, O::needs(request))
-        .map_err(OperationError::Common)
+        .authorize(O::NAME, &selected)
+        .map_err(OperationError::Common)?;
+    let context = resolver
+        .prepare(O::NAME, selected, O::needs(&request))
+        .map_err(OperationError::Common)?;
+    invoke_typed::<O>(context, request).await
 }
 
+/// Tests only: runs on the caller's thread with no admission or tracking.
+#[cfg(any(test, feature = "test-fixture"))]
+#[derive(Clone)]
+pub struct Direct(pub std::sync::Arc<dyn super::ContextResolver>);
+
+#[cfg(any(test, feature = "test-fixture"))]
+impl Invoke for Direct {
+    fn invoke<O: Operation>(
+        self,
+        selected: Option<super::RequestedContext>,
+        request: O::Request,
+    ) -> OperationFuture<O::Success, OperationError<O::Failure>> {
+        Box::pin(async move {
+            let Some(selected) = selected else {
+                O::validate_external(&request).map_err(OperationError::Common)?;
+                return invoke_typed::<O>(PreparedContext::data_free(), request).await;
+            };
+            invoke_authorized_typed::<O>(self.0, selected, request).await
+        })
+    }
+}
+
+/// Tests only: the data-free entry with no repositories.
+#[cfg(test)]
 pub async fn invoke(operation: &str, version: u32, call: Value) -> Result<Value, FailureEnvelope> {
     invoke_with(
         operation,
         version,
         call,
-        std::sync::Arc::new(super::context::NoRepositories),
+        Direct(std::sync::Arc::new(super::context::NoRepositories)),
     )
     .await
 }
 
-pub async fn invoke_with(
+pub async fn invoke_with<H: Invoke>(
     operation: &str,
     version: u32,
     call: Value,
-    resolver: std::sync::Arc<dyn super::ContextResolver>,
+    host: H,
 ) -> Result<Value, FailureEnvelope> {
     if version != SDK_PROTOCOL_VERSION {
         return Err(FailureEnvelope::new(
@@ -85,21 +97,24 @@ pub async fn invoke_with(
             },
         ));
     }
-    let entry = entries()
+    let entry = entries::<H>()
         .into_iter()
         .find(|entry| entry.name == operation)
         .ok_or_else(|| FailureEnvelope::new(None, OperationFailure::UnknownOperation))?;
-    (entry.invoke)(call, resolver).await
+    (entry.invoke)(call, host).await
 }
 
 #[cfg(test)]
 pub(super) fn invoke_erased<O: Operation>(call: Value) -> OperationFuture<Value, FailureEnvelope> {
-    invoke_resolved::<O>(call, std::sync::Arc::new(super::context::NoRepositories))
+    invoke_resolved::<O, Direct>(
+        call,
+        Direct(std::sync::Arc::new(super::context::NoRepositories)),
+    )
 }
 
-pub(super) fn invoke_resolved<O: Operation>(
+pub(super) fn invoke_resolved<O: Operation, H: Invoke>(
     call: Value,
-    resolver: std::sync::Arc<dyn super::ContextResolver>,
+    host: H,
 ) -> OperationFuture<Value, FailureEnvelope> {
     Box::pin(async move {
         let (selected, request) = match O::CONTEXT {
@@ -138,14 +153,10 @@ pub(super) fn invoke_resolved<O: Operation>(
                 (None, call.request)
             }
         };
-        let success = match selected {
-            Some(context) => invoke_authorized_typed::<O>(resolver, context, request).await,
-            None => match O::validate_external(&request) {
-                Ok(()) => invoke_typed::<O>(PreparedContext::data_free(), request).await,
-                Err(error) => Err(OperationError::Common(error)),
-            },
-        }
-        .map_err(frame_failure::<O>)?;
+        let success = host
+            .invoke::<O>(selected, request)
+            .await
+            .map_err(frame_failure::<O>)?;
         serde_json::to_value(success)
             .map_err(|_| FailureEnvelope::new(Some(O::NAME), OperationFailure::Internal))
     })

@@ -4,6 +4,7 @@ use provenance_core::SDK_PROTOCOL_VERSION;
 use provenance_macros::verifies;
 use serde_json::json;
 
+mod authorize_order;
 mod ideation;
 mod review_identity;
 #[cfg(feature = "schema")]

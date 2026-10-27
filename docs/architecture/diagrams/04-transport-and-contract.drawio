@@ -55,7 +55,7 @@
         <mxCell id="t_lh" value='&lt;b&gt;local_host.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;registry publish,&lt;br&gt;discover; GET&lt;br&gt;/local-host-identity&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
           <mxGeometry x="655" y="390" width="175" height="100" as="geometry" />
         </mxCell>
-        <mxCell id="t_exec" value='&lt;b&gt;execution.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;invoke_backing: 8 work slots, spawn_blocking;&lt;br&gt;shutdown waits for the work&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
+        <mxCell id="t_exec" value='&lt;b&gt;execution.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;invoke: 8 work slots, spawn_blocking;&lt;br&gt;shutdown waits for the work&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
           <mxGeometry x="20" y="535" width="415" height="80" as="geometry" />
         </mxCell>
         <mxCell id="t_page" value='&lt;b&gt;review_page.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;PageWrites: page write under&lt;br&gt;the guard; report ReviewChanges&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="tr">
@@ -206,7 +206,7 @@
           <mxGeometry x="0" relative="1" as="geometry">
           </mxGeometry>
         </mxCell>
-        <mxCell id="04-transport-and-contract-e10" value="invoke_backing" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.4988;exitY=1;exitDx=0;exitDy=0;entryX=0.4988;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_route" target="t_exec">
+        <mxCell id="04-transport-and-contract-e10" value="invoke" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.4988;exitY=1;exitDx=0;exitDy=0;entryX=0.4988;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_route" target="t_exec">
           <mxGeometry x="0" relative="1" as="geometry">
           </mxGeometry>
         </mxCell>
