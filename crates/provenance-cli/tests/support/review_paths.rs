@@ -5,7 +5,9 @@ use assert_cmd::Command;
 use serde_json::Value;
 
 pub fn provenance() -> Command {
-    Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin!("provenance"));
+    command.timeout(std::time::Duration::from_secs(60));
+    command
 }
 
 pub fn init() -> (tempfile::TempDir, String) {
