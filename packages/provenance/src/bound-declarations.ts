@@ -343,7 +343,9 @@ export class BoundRequirement<SpecKey extends string, Key extends string> {
     const state = requirementState(this);
     const parentState = requirementState(parent);
     assertContext("Requirement", parentState, state.context);
-    return this.copy({ refines: [...new Set([...(state.refines ?? []), parentState.key])] });
+    return this.copy({
+      refines: [...new Set([...(state.refines ?? []), parentState.key])],
+    });
   }
 
   // Names the requirements of the same spec this one depends on.
