@@ -7,19 +7,20 @@ use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::{
     records::Repository,
-    resource_http::{call, host},
+    resource_http::{call, call_with_headers, host},
 };
 
 async fn patch(host: &provenance_transport::StatementHost, relations: Value) -> (u16, Value) {
     let (_, before) = call(host, "GET", "/requirements/req_shared", None).await;
-    call(
+    call_with_headers(
         host,
         "PATCH",
         "/requirements/req_shared",
         Some(json!({"data":{
-            "actor":"author", "expected_etag":before["data"]["edit"]["etag"],
+            "actor":"author",
             "relationships":relations
         }})),
+        &[("If-Match", before["data"]["edit"]["etag"].as_str().unwrap())],
     )
     .await
 }
