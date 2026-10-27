@@ -230,7 +230,7 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             description: None,
             status: provenance_core::RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

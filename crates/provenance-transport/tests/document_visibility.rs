@@ -43,7 +43,7 @@ fn requirement(id: &str, depends_on: Vec<StableId>) -> CreateRequirementInput {
         description: None,
         status: RequirementStatus::Active,
         domain_id: None,
-        refines: Some(sid("req_shared")),
+        refines: vec![sid("req_shared")],
         depends_on,
         supersedes: vec![],
         spawned_by: None,

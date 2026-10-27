@@ -64,7 +64,7 @@ export interface RequirementDeclaration<
       | RuleDeclaration<SpecKey, string, Key>
     )[]
   ): RequirementDeclaration<SpecKey, Key>;
-  /** Names the requirement of the same spec this one refines. */
+  /** Adds a parent Requirement in the same spec. */
   refines(parent: RequirementDeclaration<SpecKey, any>): RequirementDeclaration<SpecKey, Key>;
   /** Names the requirements of the same spec this one depends on. */
   dependsOn(

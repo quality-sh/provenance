@@ -91,7 +91,7 @@ fn append_large_children(
     let path = crate::shards::requirements_path(&store.layout, scope);
     let mut record = json!(store.list_requirements(scope).unwrap()[0]);
     record["description"] = json!("x".repeat(LARGE_FIELD_BYTES));
-    record["refines"] = json!("req_overtime");
+    record["refines"] = json!(["req_overtime"]);
     for index in 0..count {
         record["id"] = json!(format!("req_large_{index:03}"));
         crate::cache::tests::fixtures::append_record(&path, &record);
