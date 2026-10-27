@@ -1,0 +1,179 @@
+<mxfile host="drawio" type="device" compressed="false">
+  <diagram id="10-ste100" name="provenance-ste100: statement checks and the project STE100 d">
+    <mxGraphModel dx="1550" dy="920" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1550" pageHeight="920" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="10-ste100-title" value="&lt;b&gt;provenance-ste100: statement checks and the project STE100 dictionary&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=18;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1510" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="c_check" value='&lt;b&gt;provenance check --statements&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;statements changed from&lt;br&gt;a base or between commits&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="90" width="300" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cat" value='&lt;b&gt;POST /statement-checks&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;catalog statement.rs; the CLI&lt;br&gt;statement check runs the same&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="180" width="300" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="c_write" value='&lt;b&gt;Requirement and Rule writes&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;statement_policy refuses a direct&lt;br&gt;write with violations; typed apply&lt;br&gt;attaches findings to declarations&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="270" width="300" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="c_dict" value='&lt;b&gt;provenance dictionary&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;import --pdf, status&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="400" width="300" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="c_init" value='&lt;b&gt;provenance init --ste-pdf&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;ste_onboarding: the same import&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="495" width="300" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="st" value="provenance-store" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fffbee;strokeColor=#d6b656;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="370" y="55" width="390" height="545" as="geometry" />
+        </mxCell>
+        <mxCell id="s_san" value='&lt;b&gt;statement_analysis.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;check_statement: with or&lt;br&gt;without a dictionary;&lt;br&gt;check_project_statement:&lt;br&gt;loads the project dictionary;&lt;br&gt;analyze_changed_statements;&lt;br&gt;StatementDiagnostic: kind,&lt;br&gt;id, field, rule, span&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="st">
+          <mxGeometry x="15" y="35" width="360" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="s_dref" value='&lt;b&gt;dictionary_reference.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;resolve_project_dictionary:&lt;br&gt;NoReference, Loaded, Unavailable;&lt;br&gt;set_project_dictionary: store the&lt;br&gt;index, write the reference;&lt;br&gt;index_directory&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="st">
+          <mxGeometry x="15" y="295" width="360" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="ste" value="provenance-ste100" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ecf8f9;strokeColor=#0e8088;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="810" y="55" width="390" height="545" as="geometry" />
+        </mxCell>
+        <mxCell id="t_chk" value='&lt;b&gt;checks (lib.rs)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;check_descriptive: 8.1 semicolon,&lt;br&gt;4.2 contracted verb, 6.3 sentence&lt;br&gt;over 25 words, 6.6 paragraph over&lt;br&gt;six sentences;&lt;br&gt;with a dictionary: 1.1 word not&lt;br&gt;approved (vocabulary.rs);&lt;br&gt;protected_spans skips quotations&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="ste">
+          <mxGeometry x="15" y="35" width="360" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="t_dic" value='&lt;b&gt;dictionary/&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;import_dictionary: PDF text through&lt;br&gt;pdf_oxide, office_oxide; parse,&lt;br&gt;layout; digest gives the identity;&lt;br&gt;index.rs: store and load the&lt;br&gt;index under a file lock&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="ste">
+          <mxGeometry x="15" y="295" width="360" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="b_cg" value='&lt;b&gt;provenance-codegen&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;schema feature: JSON Schema&lt;br&gt;of Report (ReportOutput)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="90" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="f_pdf" value='&lt;b&gt;ASD-STE100 Issue 9 PDF&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;supplied by the user;&lt;br&gt;from the ASD request page&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="360" width="280" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="f_idx" value='&lt;b&gt;Machine index directory&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;PROVENANCE_STE100_INDEX_DIR, or&lt;br&gt;&amp;lt;data dir&amp;gt;/provenance/&lt;br&gt;ste100-dictionary&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="470" width="280" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="f_ref" value='&lt;b&gt;.provenance/state/dictionary.json&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;tracked: the dictionary identity only&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="385" y="640" width="360" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="note" value="A missing reference means checks run without&lt;br&gt;Rule 1.1. A reference whose index cannot load&lt;br&gt;is Unavailable: writes go on without it, and&lt;br&gt;a strict check can fail on it." style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="810" y="640" width="420" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend" value="Legend" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="745" width="830" height="156" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-sw-analysis" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="12" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-tx-analysis" value="Analysis: scanner, STE100, report" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="44" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-sw-engine" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="12" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-tx-engine" value="Engine: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="44" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-sw-iface" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="282" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-tx-iface" value="Interfaces: CLI and SDKs" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="314" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-sw-state" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="282" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-tx-state" value="Files on disk and git" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="314" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-sw-build" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="552" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-tx-build" value="Build-time tools and generated files" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="584" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-sw-ext" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="552" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-tx-ext" value="External to this repository" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="584" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-ek-dep" value="Uses: code call or Cargo dependency" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="68" y="78" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-ek-data" value="Runtime data flow (read, write, request)" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="68" y="100" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-legend-ek-build" value="Build-time generation or packaging" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="10-ste100-legend">
+          <mxGeometry x="68" y="122" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="10-ste100-e0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4933;exitDx=0;exitDy=0;entryX=0;entryY=0.1542;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="c_check" target="s_san">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4933;exitDx=0;exitDy=0;entryX=0;entryY=0.5292;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="c_cat" target="s_san">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.3158;exitDx=0;exitDy=0;entryX=0;entryY=0.875;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="c_write" target="s_san">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4933;exitDx=0;exitDy=0;entryX=0;entryY=0.3955;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="c_dict" target="s_dref">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4933;exitDx=0;exitDy=0;entryX=0;entryY=0.8273;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="c_init" target="s_dref">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e5" value="check text" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="s_san" target="t_chk">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="s_san" target="s_dref">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e7" value="index" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="s_dref" target="t_dic">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="t_chk" target="t_dic">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e9" value="bytes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.4933;exitDx=0;exitDy=0;entryX=1;entryY=0.2136;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="f_pdf" target="t_dic">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="t_dic" target="f_idx">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e11" value="reference" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="s_dref" target="f_ref">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.1667;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="b_cg" target="t_chk">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-f0" value="" style="edgeStyle=none;html=1;strokeColor=#4d4d4d;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="833" as="sourcePoint" />
+            <mxPoint x="80" y="833" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-f1" value="" style="edgeStyle=none;html=1;strokeColor=#1f5fbf;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="855" as="sourcePoint" />
+            <mxPoint x="80" y="855" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10-ste100-f2" value="" style="edgeStyle=none;html=1;strokeColor=#b85450;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="877" as="sourcePoint" />
+            <mxPoint x="80" y="877" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

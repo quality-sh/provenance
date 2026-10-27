@@ -1,0 +1,219 @@
+<mxfile host="drawio" type="device" compressed="false">
+  <diagram id="06-agent-surfaces" name="Agent surfaces: init guidance, skills, prime, and review not">
+    <mxGraphModel dx="1720" dy="1060" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1720" pageHeight="1060" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="06-agent-surfaces-title" value="&lt;b&gt;Agent surfaces: init guidance, skills, prime, and review notices&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=18;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1680" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="a_dev" value='&lt;b&gt;Developer&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;runs provenance init, or&lt;br&gt;create-provenance (diagram 12)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="90" width="235" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="a_guid" value='&lt;b&gt;provenance-porcelain&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;guidance: domain text;&lt;br&gt;also feeds MCP tool&lt;br&gt;discovery (transport)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="200" width="235" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="a_agent" value='&lt;b&gt;Coding agent&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;reads the AGENTS.md section&lt;br&gt;and the installed skills;&lt;br&gt;runs provenance commands;&lt;br&gt;receives review notices&lt;br&gt;as data, not instructions&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="360" width="235" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="cli" value="provenance-cli: agent-facing parts" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f2f7fe;strokeColor=#6c8ebf;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="290" y="55" width="610" height="505" as="geometry" />
+        </mxCell>
+        <mxCell id="c_init" value='&lt;b&gt;init (handlers/repo.rs)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;plans every write first:&lt;br&gt;manifest (repository_init),&lt;br&gt;AGENTS.md section, .gitignore,&lt;br&gt;skills, STE dictionary&lt;br&gt;(--ste-pdf); then applies&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cli">
+          <mxGeometry x="15" y="35" width="280" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="c_prime" value='&lt;b&gt;prime&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;prints the guidance text&lt;br&gt;(Markdown or JSON)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cli">
+          <mxGeometry x="15" y="210" width="280" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="c_warn" value='&lt;b&gt;warn_if_skills_missing&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;catalog commands for questions,&lt;br&gt;contributions, synthesis-packets,&lt;br&gt;proposals&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cli">
+          <mxGeometry x="15" y="295" width="280" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="c_follow" value='&lt;b&gt;review/follow.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;&amp;lt;ID&amp;gt; get --view review&lt;br&gt;--follow --format json:&lt;br&gt;one JSON state frame per change&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cli">
+          <mxGeometry x="15" y="405" width="280" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="c_onb" value='&lt;b&gt;onboarding.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;"## Provenance" section;&lt;br&gt;command per channel: provenance,&lt;br&gt;or npx, pnpm, yarn, bun, deno, nub;&lt;br&gt;legacy_cleanup removes old text&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cli">
+          <mxGeometry x="315" y="35" width="280" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="c_sk" value='&lt;b&gt;skills.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;4 SKILL.md files built in&lt;br&gt;(include_str!); list, show,&lt;br&gt;install [--global --copy --force]&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cli">
+          <mxGeometry x="315" y="165" width="280" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="c_dog" value='&lt;b&gt;dogfood (dev feature)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;note, report&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cli">
+          <mxGeometry x="315" y="295" width="280" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="files" value="Repository and user files" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff7ee;strokeColor=#d79b00;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="950" y="55" width="340" height="390" as="geometry" />
+        </mxCell>
+        <mxCell id="f_git" value='&lt;b&gt;.gitignore, manifest.json&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;.provenance/state/manifest.json&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="files">
+          <mxGeometry x="15" y="30" width="310" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="f_agents" value='&lt;b&gt;AGENTS.md&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;managed "## Provenance" section&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="files">
+          <mxGeometry x="15" y="103" width="310" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="f_sk" value='&lt;b&gt;.agents/skills/&amp;lt;name&amp;gt;/SKILL.md&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;canonical copy&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="files">
+          <mxGeometry x="15" y="177" width="310" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="f_cl" value='&lt;b&gt;.claude/skills/&amp;lt;name&amp;gt;&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;relative link to .agents/skills/&amp;lt;name&amp;gt;&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="files">
+          <mxGeometry x="15" y="250" width="310" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="f_dog" value='&lt;b&gt;~/.provenance/dogfood/&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;local notes&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="files">
+          <mxGeometry x="15" y="325" width="310" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="f_src" value='&lt;b&gt;Skill sources&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;crates/provenance-cli/skills/ (built in);&lt;br&gt;top-level skills/ holds the same&lt;br&gt;four files (identical git blobs)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="965" y="480" width="310" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="notif" value="tools/agent-notifications (Bun, TypeScript)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f7f2f9;strokeColor=#9673a6;verticalAlign=top;align=right;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="290" y="600" width="610" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="n_stream" value='&lt;b&gt;stream.ts: FollowStream&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;spawns provenance &amp;lt;root&amp;gt; get&lt;br&gt;--view review --follow&lt;br&gt;--format json; checks each&lt;br&gt;frame (output.schema.json);&lt;br&gt;envelope.ts marks record&lt;br&gt;content as data&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="notif">
+          <mxGeometry x="15" y="35" width="280" height="175" as="geometry" />
+        </mxCell>
+        <mxCell id="n_codex" value='&lt;b&gt;codex.ts&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Codex App Server over WebSocket:&lt;br&gt;thread/read, thread/queue/add&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="notif">
+          <mxGeometry x="315" y="35" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="n_claude" value='&lt;b&gt;claude.ts&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;MCP server on stdio:&lt;br&gt;notifications/claude/channel&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="notif">
+          <mxGeometry x="315" y="130" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="x_host" value='&lt;b&gt;Agent session host&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Codex App Server (ws://localhost,&lt;br&gt;optional PROVENANCE_CODEX_TOKEN);&lt;br&gt;Claude Code session with&lt;br&gt;the channel enabled&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="640" width="300" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend" value="Legend" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="895" width="830" height="134" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-sw-agent" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="12" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-tx-agent" value="People, agents, agent-facing files" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="44" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-sw-iface" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="12" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-tx-iface" value="Interfaces: CLI and SDKs" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="44" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-sw-host" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="282" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-tx-host" value="Host and operation contract" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="314" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-sw-state" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="282" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-tx-state" value="Files on disk and git" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="314" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-sw-build" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="552" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-tx-build" value="Build-time tools and generated files" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="584" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-sw-ext" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="552" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-tx-ext" value="External to this repository" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="584" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-ek-dep" value="Uses: code call or Cargo dependency" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="68" y="78" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-legend-ek-data" value="Runtime data flow (read, write, request)" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="06-agent-surfaces-legend">
+          <mxGeometry x="68" y="100" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="a_dev" target="c_init">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.3667;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="c_init" target="c_onb">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.9333;exitDx=0;exitDy=0;entryX=0;entryY=0.0909;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="c_init" target="c_sk">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e3" value="writes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.9107;exitY=0;exitDx=0;exitDy=0;entryX=0.8548;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="c_init" target="f_git">
+          <mxGeometry x="0" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="560" y="42" />
+              <mxPoint x="1230" y="42" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.8636;exitDx=0;exitDy=0;entryX=0;entryY=0.4909;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="c_onb" target="f_agents">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.3636;exitDx=0;exitDy=0;entryX=0;entryY=0.5091;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="c_sk" target="f_sk">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.8909;exitDx=0;exitDy=0;entryX=0;entryY=0.2364;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="c_sk" target="f_cl">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.7692;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="c_dog" target="f_dog">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.0882;exitDx=0;exitDy=0;entryX=0;entryY=0.7692;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="a_agent" target="c_prime">
+          <mxGeometry x="0" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="275" y="375" />
+              <mxPoint x="275" y="315" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.2615;exitDx=0;exitDy=0;entryX=1;entryY=0.8632;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="c_prime" target="a_guid">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e10" value="runs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.2941;exitDx=0;exitDy=0;entryX=0;entryY=0.7059;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="a_agent" target="c_warn">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e11" value="spawns" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="n_stream" target="c_follow">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.2286;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="n_codex" target="n_stream">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.7714;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="n_claude" target="n_stream">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e14" value="queue a message" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.2059;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="n_codex" target="x_host">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e15" value="channel notice" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.7647;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="n_claude" target="x_host">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-e16" value="delivers the notice to the agent" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.4979;entryY=1;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="x_host" target="a_agent">
+          <mxGeometry x="0" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1170" y="865" />
+              <mxPoint x="137" y="865" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-f0" value="" style="edgeStyle=none;html=1;strokeColor=#4d4d4d;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="983" as="sourcePoint" />
+            <mxPoint x="80" y="983" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="06-agent-surfaces-f1" value="" style="edgeStyle=none;html=1;strokeColor=#1f5fbf;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="1005" as="sourcePoint" />
+            <mxPoint x="80" y="1005" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
