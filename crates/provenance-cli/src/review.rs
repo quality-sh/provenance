@@ -224,7 +224,7 @@ fn open_review_page(
     let mut link = url::Url::parse(&format!("{endpoint}/"))?;
     link.set_fragment(Some(&format!(
         "launch={}",
-        codes.issue(std::time::Instant::now())
+        codes.issue(std::time::Instant::now(), std::time::SystemTime::now())
     )));
     // A browser program can stay open, so the host does not wait for it before it serves.
     tokio::task::spawn_blocking(move || {

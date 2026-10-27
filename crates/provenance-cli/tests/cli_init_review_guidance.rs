@@ -78,7 +78,7 @@ fn init_guidance_starts_the_host_early_and_hands_the_link_over_as_text() {
         "{agents}"
     );
     assert!(
-        prose.contains("A link works once and expires after 120 seconds."),
+        prose.contains("A link works once and expires after 24 hours."),
         "{agents}"
     );
     assert!(
