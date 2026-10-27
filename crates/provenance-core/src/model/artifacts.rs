@@ -82,6 +82,10 @@ pub struct SourceReference {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
+    {"properties":{"status":{"enum":["active","discovery","refinement","resolved"]},"archived_in_commit":{"type":"null"}},"required":["status"]},
+    {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}
+]))))]
 #[table("requirements")]
 pub struct Requirement {
     pub schema_version: SchemaVersion,
@@ -106,6 +110,9 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fog: Option<String>,
     pub status: RequirementStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub archived_in_commit: Option<super::ArchivedStamp>,
     #[relation(target = Domain, flow = none)]
     #[serde(default, alias = "domainId", skip_serializing_if = "Option::is_none")]
     pub domain_id: Option<StableId>,
@@ -178,6 +185,10 @@ impl TryFrom<ResolutionInputFields> for ResolutionInput {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize, Relations, ProjectionRow)]
+#[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
+    {"properties":{"status":{"enum":["draft","review","proposed","approved","rejected","revised","superseded","abandoned"]},"archived_in_commit":{"type":"null"}},"required":["status"]},
+    {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}
+]))))]
 #[table("resolutions")]
 pub struct Resolution {
     pub schema_version: SchemaVersion,
@@ -193,6 +204,9 @@ pub struct Resolution {
     pub position: String,
     pub rationale: String,
     pub status: ResolutionStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub archived_in_commit: Option<super::ArchivedStamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

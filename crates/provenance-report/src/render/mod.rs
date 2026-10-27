@@ -69,6 +69,8 @@ pub fn normalize(envelope: &ReportEnvelope) -> ReportEnvelope {
     let mut sorted = envelope.clone();
     sorted.graph_changes.sort_by(order::compare_graph_changes);
     for change in &mut sorted.graph_changes {
+        change.superseded_by.sort();
+        change.superseded_by.dedup();
         change.relations_added.sort_by(order::compare_relations);
         change.relations_removed.sort_by(order::compare_relations);
     }

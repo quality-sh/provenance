@@ -26,6 +26,7 @@ pub(super) fn requirement(
     source_refs: Vec<SourceReference>,
 ) -> Requirement {
     Requirement {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -51,6 +52,7 @@ pub(super) fn requirement(
 
 pub(super) fn resolution(id: &str, title: &str, inputs: Vec<ResolutionInput>) -> Resolution {
     Resolution {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
