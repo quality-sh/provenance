@@ -431,7 +431,7 @@ fn withdrawal_does_not_remove_or_retire_the_graph_record() {
 }
 
 #[test]
-/// This flow withdraws one submission, rejects the next, and refuses another withdrawal.
+/// Implementation aid: withdrawal permits a new cycle, whose acceptance prevents withdrawal.
 fn withdrawal_allows_a_fresh_review_cycle() {
     let (_temp, store, _, proposal_1) = enrolled();
     withdraw(&store, &proposal_1).unwrap();
@@ -439,9 +439,9 @@ fn withdrawal_allows_a_fresh_review_cycle() {
     decide(
         &store,
         &proposal_2,
-        "rejected",
+        "accepted",
         &reviewer("reviewer"),
-        &json!({}),
+        &artifact(),
     )
     .unwrap();
     refused(

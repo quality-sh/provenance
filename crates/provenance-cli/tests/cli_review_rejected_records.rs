@@ -237,7 +237,9 @@ fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
         .unwrap();
     let messages_path = format!("/resolutions/res_new/discussions/{discussion}/messages");
     let messages = get(&host, &messages_path);
-    assert!(messages.to_string().contains("The result needs a clear condition."));
+    assert!(messages
+        .to_string()
+        .contains("The result needs a clear condition."));
 
     post(
         &host,
@@ -247,7 +249,10 @@ fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
     );
 
     let after = get(&host, "/resolutions/res_new");
-    assert_eq!(after["decision"]["decisions"], before["decision"]["decisions"]);
+    assert_eq!(
+        after["decision"]["decisions"],
+        before["decision"]["decisions"]
+    );
     assert_eq!(outcomes("res_new", &host), ["rejected"]);
     assert_eq!(after["decision"]["withdrawn"], json!([proposal]));
     assert!(after["decision"]["pending"].is_null());
@@ -266,10 +271,18 @@ fn accepted_candidate_cannot_be_withdrawn() {
     let before = get(&host, "/resolutions/res_new");
 
     let result = response(
-        request(&host, "POST", &format!("/resolutions/res_new/submissions/{proposal}/withdraw"), true)
-            .set("Content-Type", "application/json")
-            .send_string(&json!({"data":{"actor":"shaping_agent",
-                "declared_by":"shaping_agent", "reason":"Withdraw the candidate."}}).to_string()),
+        request(
+            &host,
+            "POST",
+            &format!("/resolutions/res_new/submissions/{proposal}/withdraw"),
+            true,
+        )
+        .set("Content-Type", "application/json")
+        .send_string(
+            &json!({"data":{"actor":"shaping_agent",
+                "declared_by":"shaping_agent", "reason":"Withdraw the candidate."}})
+            .to_string(),
+        ),
     );
 
     assert_eq!(result.status(), 409);
