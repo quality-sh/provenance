@@ -118,13 +118,6 @@ impl StatementHost {
     pub(crate) fn advertises(&self, operation: &str) -> bool {
         self.access.advertises(operation)
     }
-    pub(crate) fn bound_call(
-        &self,
-        kind: provenance_store::operations::catalog::ContextKind,
-        request: &Value,
-    ) -> Result<Value, FailureEnvelope> {
-        routing::context(self.access.bound_identity(), kind, request)
-    }
     pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
         self.access.bound_identity()
     }
@@ -193,38 +186,5 @@ impl StatementHost {
         self.ingress.close();
         self.stopping.cancel();
         self.execution.shutdown().await;
-    }
-
-    async fn invoke_backing(
-        &self,
-        public_name: &str,
-        backing: &str,
-        call: Value,
-        page_write: bool,
-    ) -> Result<Value, FailureEnvelope> {
-        let page_writes = page_write.then(|| self.page_writes.clone()).flatten();
-        let runtime = tokio::runtime::Handle::current();
-        let access: Arc<dyn provenance_store::operations::catalog::ContextResolver> =
-            self.access.clone();
-        let backing = backing.to_owned();
-        self.execution
-            .run(move || {
-                let work = || {
-                    runtime.block_on(provenance_store::operations::catalog::invoke_with(
-                        &backing,
-                        provenance_core::SDK_PROTOCOL_VERSION,
-                        call,
-                        access,
-                    ))
-                };
-                match page_writes {
-                    Some(page) => page
-                        .run(work)
-                        .map_err(|_| FailureEnvelope::new(None, OperationFailure::Internal))?,
-                    None => work(),
-                }
-            })
-            .await
-            .map_err(|failure| FailureEnvelope::new(Some(public_name), failure))?
     }
 }

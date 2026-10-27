@@ -117,7 +117,7 @@ pub(super) async fn operation_read(
         operation,
         SDK_PROTOCOL_VERSION,
         wire_call(request),
-        Arc::new(Target(root.to_path_buf())),
+        catalog::Direct(Arc::new(Target(root.to_path_buf()))),
     )
     .await
     .map_err(|failure| failure.error["kind"].as_str().unwrap_or("").to_string())
@@ -412,7 +412,7 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
         "get-resolution",
         SDK_PROTOCOL_VERSION,
         wire_call(json!({"id": "res_base"})),
-        Arc::new(Target(root)),
+        catalog::Direct(Arc::new(Target(root))),
     )
     .await
     .unwrap();

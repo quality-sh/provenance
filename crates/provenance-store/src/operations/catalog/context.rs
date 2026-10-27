@@ -150,7 +150,10 @@ pub trait ContextResolver: Send + Sync {
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure>;
 }
+/// Tests only: a resolver with no repositories.
+#[cfg(test)]
 pub(super) struct NoRepositories;
+#[cfg(test)]
 impl ContextResolver for NoRepositories {
     fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
         Err(OperationFailure::UnavailableNeeds)

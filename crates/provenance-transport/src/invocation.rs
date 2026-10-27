@@ -37,7 +37,6 @@ impl Invocation {
     }
 
     /// The routing adapter only: the decoded wire context, external framing.
-    #[allow(dead_code)]
     pub(crate) const fn wire(selected: Option<RequestedContext>, page_write: bool) -> Self {
         Self {
             selected,
@@ -59,7 +58,8 @@ impl StatementHost {
         request: O::Request,
         options: Invocation,
     ) -> Result<O::Success, OperationError<O::Failure>> {
-        if !self.advertises(O::NAME) {
+        // A wire call is advertised by its public route in the routing adapter.
+        if matches!(options.framing, Framing::Native) && !self.advertises(O::NAME) {
             return Err(OperationError::Common(OperationFailure::AccessDenied));
         }
         let selected = match options.selected {

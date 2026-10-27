@@ -117,7 +117,7 @@ async fn list_family(
             "context":{"repository":"test","scope":"default"},
             "request": request,
         }),
-        Arc::new(Target(root.to_owned())),
+        catalog::Direct(Arc::new(Target(root.to_owned()))),
     )
     .await
     .map_err(|error| anyhow::anyhow!(serde_json::to_string(&error).unwrap()))

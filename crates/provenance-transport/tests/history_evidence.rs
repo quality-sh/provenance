@@ -178,7 +178,7 @@ async fn native_review_reads_refuse_an_out_of_range_limit() {
                 operation,
                 provenance_core::SDK_PROTOCOL_VERSION,
                 call,
-                std::sync::Arc::new(access(&repo)),
+                provenance_store::operations::catalog::Direct(std::sync::Arc::new(access(&repo))),
             )
             .await
             .unwrap_err();

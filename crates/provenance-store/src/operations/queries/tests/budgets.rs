@@ -167,7 +167,7 @@ async fn neighbors_refuses_an_oversized_response_through_native_and_registered_c
                 "limit": 200
             }
         }),
-        Arc::new(Target(root, false)),
+        catalog::Direct(Arc::new(Target(root, false))),
     )
     .await
     .unwrap_err();
@@ -284,7 +284,7 @@ async fn get_rule_member(root: camino::Utf8PathBuf) -> serde_json::Value {
             "context": {"repository": "test", "scope": "default"},
             "request": {"id": "rule_overtime"}
         }),
-        Arc::new(Target(root, true)),
+        catalog::Direct(Arc::new(Target(root, true))),
     )
     .await
     .unwrap_or_else(|failure| {

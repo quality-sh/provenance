@@ -70,11 +70,11 @@ impl Fixture {
             operation,
             provenance_core::SDK_PROTOCOL_VERSION,
             json!({"context":{"repository":"fixture","scope":"default"},"request":request}),
-            Arc::new(Resolver(PreparedScope {
+            Direct(Arc::new(Resolver(PreparedScope {
                 root: camino::Utf8PathBuf::from_path_buf(self.dir.path().into()).unwrap(),
                 scope: self.scope.clone(),
                 requested_target: "fixture".into(),
-            })),
+            }))),
         )
         .await
         .map_err(|error| error.error)

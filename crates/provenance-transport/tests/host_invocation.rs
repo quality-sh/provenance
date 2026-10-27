@@ -22,7 +22,8 @@ use provenance_core::{
 };
 use provenance_macros::verifies;
 use provenance_store::{
-    operations::catalog::ResolveRecord, publication::with_repository_publication,
+    operations::catalog::{self, ResolveRecord},
+    publication::with_repository_publication,
 };
 use provenance_transport::{Invocation, StatementHost};
 use serde_json::json;
@@ -31,7 +32,7 @@ use support::{
     gate::{Control, Gate},
     mcp::{call, Session},
     records::Repository,
-    resource_http::access,
+    resource_http::{access, call as http_call},
 };
 use tower::ServiceExt as _;
 
@@ -202,16 +203,7 @@ fn resolve_shared() -> ResolveRecordQuery {
 async fn a_refused_identity_does_not_wait_for_a_work_slot() {
     let repo = Repository::new("The shared graph is readable.");
     let (host, mut control) = gated_host(&repo, false);
-    let mut held = Vec::new();
-    for _ in 0..8 {
-        let worker = host.clone();
-        held.push(tokio::spawn(async move {
-            worker
-                .invoke::<ResolveRecord>(resolve_shared(), Invocation::native())
-                .await
-        }));
-        control.entered().await;
-    }
+    let held = fill_work_slots(&host, &mut control).await;
 
     control.refuse_identities();
     let refused = host.invoke::<ResolveRecord>(resolve_shared(), Invocation::native());
@@ -229,5 +221,80 @@ async fn a_refused_identity_does_not_wait_for_a_work_slot() {
     for call in held {
         call.await.unwrap().unwrap();
     }
+    host.shutdown().await;
+}
+
+type Resolved = Result<
+    <ResolveRecord as catalog::Operation>::Success,
+    OperationError<<ResolveRecord as catalog::Operation>::Failure>,
+>;
+
+/// Eight typed calls held in the gate fill the work slots and take no ingress slot.
+async fn fill_work_slots(
+    host: &StatementHost,
+    control: &mut Control,
+) -> Vec<tokio::task::JoinHandle<Resolved>> {
+    let mut held = Vec::new();
+    for _ in 0..8 {
+        let worker = host.clone();
+        held.push(tokio::spawn(async move {
+            worker
+                .invoke::<ResolveRecord>(resolve_shared(), Invocation::native())
+                .await
+        }));
+        control.entered().await;
+    }
+    held
+}
+
+#[verifies("rule_host_refusal_before_slot_wait", examples)]
+#[tokio::test(start_paused = true)]
+async fn a_request_decode_refusal_does_not_wait_for_a_work_slot() {
+    let repo = Repository::new("The shared graph is readable.");
+    let (host, mut control) = gated_host(&repo, false);
+    let held = fill_work_slots(&host, &mut control).await;
+    let session = Session::start(host.clone()).await;
+    let submit = catalog::definitions()
+        .iter()
+        .find(|definition| definition.path == "/requirements/{id}/submit")
+        .expect("the review submit route is registered")
+        .name;
+
+    let started = tokio::time::Instant::now();
+    let refused = call(
+        &session.client,
+        submit,
+        json!({"id":"req_shared", "data":{
+            "actor":"agent", "declared_by":"other", "title":"Review", "summary":"Review the record."
+        }}),
+    )
+    .await;
+    assert_eq!(started.elapsed(), Duration::ZERO);
+    assert_eq!(refused.is_error, Some(true), "{refused:?}");
+    let error = &refused.structured_content.as_ref().unwrap()["error"];
+    assert_eq!(error["kind"], "invalid_input", "{error}");
+    assert_eq!(
+        error["missing_fields"],
+        json!(["source_ids", "evidence_references", "builds_on"])
+    );
+
+    // Held blocking work stops the paused clock from advancing on its own.
+    let started = tokio::time::Instant::now();
+    let waiting = http_call(&host, "GET", "/requirements/req_shared", None);
+    tokio::pin!(waiting);
+    assert!(poll!(&mut waiting).is_pending());
+    tokio::time::advance(Duration::from_millis(2999)).await;
+    assert!(poll!(&mut waiting).is_pending());
+    tokio::time::advance(Duration::from_millis(1)).await;
+    let (status, body) = waiting.await;
+    assert_eq!(started.elapsed(), Duration::from_secs(3));
+    assert_eq!(status, 503, "{body}");
+    assert_eq!(body["error"]["kind"], "host_busy");
+
+    control.open();
+    for call in held {
+        call.await.unwrap().unwrap();
+    }
+    session.close().await;
     host.shutdown().await;
 }
