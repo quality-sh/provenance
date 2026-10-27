@@ -4,6 +4,7 @@ mod support {
     pub mod resource_http;
 }
 
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, host};
@@ -30,6 +31,7 @@ async fn create_contribution(host: &provenance_transport::StatementHost) {
 }
 
 #[tokio::test]
+#[verifies("rule_porcelain_update_preserves_omissions", examples)]
 async fn patch_omission_preserves_and_registered_null_clears() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();

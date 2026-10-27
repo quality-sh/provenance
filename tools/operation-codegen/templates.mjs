@@ -147,6 +147,7 @@ export const COMPATIBILITY = ${JSON.stringify(compatibility)} as const;
 export const PROTOCOL_VERSION = COMPATIBILITY.wire;
 export type OperationFailure = ${failureTypes.map(name => `components['schemas']['${name}']`).join(' | ')};
 ${queryTypes.join('\n')}
+// @provenance rule: rule_generated_sdk_operations_use_http
 export class HttpClient {
   private constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch) {}
   static async connectWithBearer(baseUrl: string, bearer: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal; repository?: string; scope?: string } = {}): Promise<HttpClient> {
@@ -159,6 +160,7 @@ export class HttpClient {
     };
     return HttpClient.connect(baseUrl, authenticated, options);
   }
+  // @provenance rule: rule_sdk_protocol_handshake
   static async connect(baseUrl: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal; repository?: string; scope?: string } = {}): Promise<HttpClient> {
     const validate = await import('./validators/metadata.mjs');
     const url = new URL(baseUrl);
