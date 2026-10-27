@@ -25,6 +25,7 @@ jobs:
   # so jobs whose inputs are untouched can skip without renaming anything.
   # Main pushes and manual runs execute every job; filters only narrow PRs.
   changes:
+    timeout-minutes: 10
     name: Detect changes
     runs-on: ubuntu-24.04
     outputs:
@@ -110,6 +111,7 @@ jobs:
           fi
 
   generate-operations:
+    timeout-minutes: 20
     name: Generate operation clients
     needs: changes
     # Policy-only pull requests skip the rust, sdk, and contract jobs, but
@@ -160,6 +162,8 @@ jobs:
     # trigger keeps the artifact present.
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     uses: ./.github/workflows/review-assets.yml
+    with:
+      timeout-minutes: 20
 
   # One build per OS. Every job that only needs to drive the CLI downloads
   # this artifact instead of compiling the workspace itself; cargo test and
@@ -167,6 +171,7 @@ jobs:
   # the linux-only consumers do not wait on the platform builds; the packed
   # matrix needs both.
   build-cli-linux:
+    timeout-minutes: 30
     name: Build provenance-cli (linux)
     needs: [changes, review-assets]
     # rule-coverage can run for a policy-only change and downloads this
@@ -219,6 +224,7 @@ jobs:
           retention-days: 30
 
   agent-notifications:
+    timeout-minutes: 15
     name: Agent notification adapters
     needs: [build-cli-linux]
     if: needs.build-cli-linux.result == 'success'
@@ -242,6 +248,7 @@ jobs:
         run: npm test --prefix tools/agent-notifications
 
   build-cli-platforms:
+    timeout-minutes: 45
     name: Build provenance-cli (${{ matrix.target }})
     needs: [changes, review-assets]
     if: github.event_name != 'pull_request'
@@ -310,6 +317,7 @@ jobs:
           retention-days: 30
 
   fmt:
+    timeout-minutes: 15
     name: Format
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
@@ -330,6 +338,7 @@ jobs:
       - run: cargo fmt --all -- --check
 
   clippy:
+    timeout-minutes: 45
     name: Clippy
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
@@ -370,6 +379,7 @@ jobs:
           retention-days: 30
 
   test:
+    timeout-minutes: 120
     name: Test (${{ matrix.os }})
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
@@ -483,6 +493,7 @@ jobs:
   # Default-features lane: runs the dogfood absence tests, which assert the
   # dev-only command does not exist in feature-less builds.
   test-default-features:
+    timeout-minutes: 45
     name: Default-features CLI test
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
@@ -513,6 +524,7 @@ jobs:
           retention-days: 30
 
   crap-quality:
+    timeout-minutes: 30
     name: Rust CRAP quality gate
     needs: [changes, generate-operations, test]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
@@ -570,6 +582,7 @@ jobs:
           if-no-files-found: error
 
   rule-coverage:
+    timeout-minutes: 15
     name: Rule Coverage
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
@@ -636,6 +649,7 @@ jobs:
           if-no-files-found: warn
 
   rust-sdk:
+    timeout-minutes: 30
     name: Rust SDK example
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
@@ -675,6 +689,7 @@ jobs:
             | jq -e '.data.items | length == 1 and .[0].file == "tests/share_links.rs"'
 
   typescript-sdk:
+    timeout-minutes: 20
     name: TypeScript SDK
     needs: [changes, generate-operations, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
@@ -709,6 +724,7 @@ jobs:
       - run: npm run test:bun --prefix packages/provenance
 
   typescript-sdk-example:
+    timeout-minutes: 15
     name: TypeScript SDK example
     needs: [changes, generate-operations, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
@@ -761,6 +777,7 @@ jobs:
   # One job, six managers: each smoke is seconds long, and six matrix legs
   # cost six runners to save one check row.
   initializer:
+    timeout-minutes: 15
     name: Initializer
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.sdk == 'true'
@@ -798,6 +815,7 @@ jobs:
           done
 
   typescript-sdk-packed-install:
+    timeout-minutes: 30
     name: Packaged SDK install (${{ matrix.target }})
     needs: [changes, generate-operations, build-cli-linux, build-cli-platforms]
     if: github.event_name != 'pull_request'
@@ -848,6 +866,7 @@ jobs:
           PROVENANCE_TEST_YARN_PNP: ${{ matrix.yarn-pnp }}
 
   release-smoke-tools:
+    timeout-minutes: 15
     name: Release tools (${{ matrix.os }})
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.release == 'true'
@@ -924,6 +943,7 @@ jobs:
         run: bash .github/scripts/release-smoke/test.sh
 
   operation-contract:
+    timeout-minutes: 45
     name: Operation contract
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.contract == 'true'
@@ -980,6 +1000,7 @@ jobs:
           retention-days: 30
 
   repository-file-access:
+    timeout-minutes: 30
     name: Repository file access (${{ matrix.target }})
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
@@ -1013,6 +1034,7 @@ jobs:
   # state-only pull request. This job always runs and fails when any needed
   # job failed or was cancelled; skipped counts as success.
   ci-ok:
+    timeout-minutes: 10
     name: CI OK
     needs:
       - changes

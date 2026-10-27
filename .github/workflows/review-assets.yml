@@ -2,12 +2,18 @@ name: Compose review assets
 
 on:
   workflow_call:
+    inputs:
+      timeout-minutes:
+        type: number
+        default: 20
+        required: false
 
 permissions:
   contents: read
 
 jobs:
   compose:
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
