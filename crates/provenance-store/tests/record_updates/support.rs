@@ -49,6 +49,14 @@ impl Fixture {
     pub async fn call(&self, operation: &str, request: Value) -> Result<Value, Value> {
         struct Resolver(PreparedScope);
         impl ContextResolver for Resolver {
+            fn authorize(
+                &self,
+                _: &'static str,
+                _: &RequestedContext,
+            ) -> Result<(), OperationFailure> {
+                Ok(())
+            }
+
             fn prepare(
                 &self,
                 _: &'static str,

@@ -15,6 +15,14 @@ use porcelain_authoring_support::{initialized_repo, json_output, provenance};
 struct AdvertiseAll;
 
 impl ContextResolver for AdvertiseAll {
+    fn authorize(
+        &self,
+        _: &'static str,
+        _: &RequestedContext,
+    ) -> Result<(), provenance_core::protocol::failure::OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,

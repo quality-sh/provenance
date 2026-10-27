@@ -29,35 +29,21 @@ pub async fn invoke_typed<O: Operation>(
         .map_err(OperationError::Handler)
 }
 
-/// Authorize one typed call before it crosses the operation boundary.
+/// Authorize one typed call before it crosses the operation boundary: the identity check
+/// first, then repository preparation.
 pub async fn invoke_authorized_typed<O: Operation>(
     resolver: std::sync::Arc<dyn super::ContextResolver>,
     selected: super::RequestedContext,
     request: O::Request,
 ) -> Result<O::Success, OperationError<O::Failure>> {
-    let context = authorized_context::<O>(&resolver, selected, &request)?;
-    invoke_typed::<O>(context, request).await
-}
-
-/// Authorize one native typed call without applying public wire response limits.
-pub async fn invoke_authorized_native_typed<O: Operation>(
-    resolver: std::sync::Arc<dyn super::ContextResolver>,
-    selected: super::RequestedContext,
-    request: O::Request,
-) -> Result<O::Success, OperationError<O::Failure>> {
-    let context = authorized_context::<O>(&resolver, selected, &request)?.into_native();
-    invoke_typed::<O>(context, request).await
-}
-
-fn authorized_context<O: Operation>(
-    resolver: &std::sync::Arc<dyn super::ContextResolver>,
-    selected: super::RequestedContext,
-    request: &O::Request,
-) -> Result<PreparedContext, OperationError<O::Failure>> {
-    O::validate_external(request).map_err(OperationError::Common)?;
+    O::validate_external(&request).map_err(OperationError::Common)?;
     resolver
-        .prepare(O::NAME, selected, O::needs(request))
-        .map_err(OperationError::Common)
+        .authorize(O::NAME, &selected)
+        .map_err(OperationError::Common)?;
+    let context = resolver
+        .prepare(O::NAME, selected, O::needs(&request))
+        .map_err(OperationError::Common)?;
+    invoke_typed::<O>(context, request).await
 }
 
 pub async fn invoke(operation: &str, version: u32, call: Value) -> Result<Value, FailureEnvelope> {

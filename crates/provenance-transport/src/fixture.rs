@@ -119,8 +119,42 @@ impl FixtureAccess {
     pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
         self.grants.iter().next().cloned()
     }
+
+    /// The target map and grant check that both resolver steps apply.
+    fn check_grant(&self, target: &str, scope: Option<&str>) -> Result<(), OperationFailure> {
+        if !self.targets.contains_key(target) {
+            return Err(OperationFailure::UnknownTarget);
+        }
+        let granted = scope.map_or_else(
+            || self.grants.iter().any(|(granted, _)| granted == target),
+            |scope| {
+                self.grants
+                    .iter()
+                    .any(|(granted, granted_scope)| granted == target && granted_scope == scope)
+            },
+        );
+        if granted {
+            Ok(())
+        } else {
+            Err(OperationFailure::AccessDenied)
+        }
+    }
 }
+
 impl ContextResolver for FixtureAccess {
+    fn authorize(
+        &self,
+        _: &'static str,
+        context: &RequestedContext,
+    ) -> Result<(), OperationFailure> {
+        let (target, scope) = match context {
+            RequestedContext::Repository(context) => (&context.repository, None),
+            RequestedContext::Scope(context) => (&context.repository, Some(&context.scope)),
+            RequestedContext::Scoped(context) => (&context.repository, Some(&context.scope)),
+        };
+        self.check_grant(target, scope.map(String::as_str))
+    }
+
     fn prepare(
         &self,
         _operation: &'static str,
@@ -139,20 +173,14 @@ impl ContextResolver for FixtureAccess {
             ),
             RequestedContext::Scoped(context) => (context.repository.clone(), Some(context)),
         };
+        self.check_grant(
+            &target,
+            selected.as_ref().map(|context| context.scope.as_str()),
+        )?;
         let root = self
             .targets
             .get(&target)
             .ok_or(OperationFailure::UnknownTarget)?;
-        let granted = selected.as_ref().map_or_else(
-            || self.grants.iter().any(|(granted, _)| granted == &target),
-            |context| {
-                self.grants
-                    .contains(&(target.clone(), context.scope.clone()))
-            },
-        );
-        if !granted {
-            return Err(OperationFailure::AccessDenied);
-        }
         let Some(context) = selected else {
             return Ok(PreparedContext::for_repository(PreparedRepository {
                 root: root.to_str().ok_or(OperationFailure::Internal)?.into(),

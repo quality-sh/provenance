@@ -20,10 +20,9 @@ async fn http_ingress_and_execution_share_one_deadline() {
         let (release, wait) = std::sync::mpsc::channel::<()>();
         workers.push(tokio::spawn(async move {
             execution
-                .run("check-statement", move || {
+                .run(move || {
                     let _ = started.send(());
                     let _ = wait.recv();
-                    Ok(Value::Null)
                 })
                 .await
         }));

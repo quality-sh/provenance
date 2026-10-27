@@ -12,6 +12,10 @@ use std::sync::Arc;
 struct Resolver(PreparedScope);
 
 impl ContextResolver for Resolver {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,

@@ -34,6 +34,10 @@ const OVERSIZED_ID: &str = "source_oversized";
 struct Target(camino::Utf8PathBuf);
 
 impl ContextResolver for Target {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,

@@ -110,6 +110,21 @@ impl LocalAccess {
     pub fn disposition_actor_ids(&self) -> Result<Vec<String>, OperationFailure> {
         Ok(self.manifest()?.disposition_actor_ids)
     }
+
+    /// The bound alias and scope compare that both resolver steps apply.
+    fn check_identity(
+        &self,
+        repository: &str,
+        scope: Option<&str>,
+    ) -> Result<(), OperationFailure> {
+        if repository != self.repository {
+            return Err(OperationFailure::UnknownTarget);
+        }
+        if scope.is_some_and(|scope| scope != self.scope.as_str()) {
+            return Err(OperationFailure::AccessDenied);
+        }
+        Ok(())
+    }
 }
 
 fn single<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
@@ -167,6 +182,19 @@ impl HostAccess for LocalAccess {
 }
 
 impl ContextResolver for LocalAccess {
+    fn authorize(
+        &self,
+        _: &'static str,
+        context: &RequestedContext,
+    ) -> Result<(), OperationFailure> {
+        let (repository, scope) = match context {
+            RequestedContext::Repository(context) => (&context.repository, None),
+            RequestedContext::Scope(context) => (&context.repository, Some(&context.scope)),
+            RequestedContext::Scoped(context) => (&context.repository, Some(&context.scope)),
+        };
+        self.check_identity(repository, scope.map(String::as_str))
+    }
+
     fn prepare(
         &self,
         _operation: &'static str,
@@ -180,15 +208,7 @@ impl ContextResolver for LocalAccess {
                 (context.repository, Some(context.scope), context.freshness)
             }
         };
-        if repository != self.repository {
-            return Err(OperationFailure::UnknownTarget);
-        }
-        if scope
-            .as_deref()
-            .is_some_and(|scope| scope != self.scope.as_str())
-        {
-            return Err(OperationFailure::AccessDenied);
-        }
+        self.check_identity(&repository, scope.as_deref())?;
         let root = self.root.clone().into();
         if scope.is_none() {
             // Repository-only operations do not use the scope grant or scope storage.

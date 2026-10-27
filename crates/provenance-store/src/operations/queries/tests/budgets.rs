@@ -67,6 +67,10 @@ fn shared_response_check_counts_the_exact_serialized_query_envelope() {
 struct Target(camino::Utf8PathBuf, bool);
 
 impl ContextResolver for Target {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,

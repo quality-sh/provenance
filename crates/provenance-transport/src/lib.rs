@@ -15,6 +15,7 @@ mod failure;
 #[cfg(feature = "test-fixture")]
 pub mod fixture;
 mod http;
+mod invocation;
 mod local;
 pub mod local_host;
 mod mcp;
@@ -26,6 +27,7 @@ mod routing;
 pub use review_page::ReviewPageWrite;
 
 pub use access::HostAccess;
+pub use invocation::Invocation;
 pub use local::{constant_time_eq, LocalAccess};
 
 use execution::Execution;
@@ -127,60 +129,6 @@ impl StatementHost {
         self.access.bound_identity()
     }
 
-    pub(crate) async fn invoke_scoped_typed<O>(
-        &self,
-        request: O::Request,
-    ) -> Result<O::Success, provenance_core::protocol::failure::OperationError<O::Failure>>
-    where
-        O: provenance_store::operations::catalog::Operation,
-    {
-        use provenance_core::protocol::failure::{OperationError, OperationFailure};
-        use provenance_core::protocol::repository::RepositoryContext;
-        use provenance_store::operations::catalog::RequestedContext;
-
-        if !self.advertises(O::NAME) {
-            return Err(OperationError::Common(OperationFailure::AccessDenied));
-        }
-        let (repository, scope) = self
-            .bound_identity()
-            .ok_or(OperationError::Common(OperationFailure::UnavailableNeeds))?;
-        provenance_store::operations::catalog::invoke_authorized_native_typed::<O>(
-            self.access.clone(),
-            RequestedContext::Scoped(RepositoryContext {
-                repository,
-                scope,
-                freshness: None,
-            }),
-            request,
-        )
-        .await
-    }
-
-    pub(crate) async fn invoke_scope_typed<O>(
-        &self,
-        request: O::Request,
-    ) -> Result<O::Success, provenance_core::protocol::failure::OperationError<O::Failure>>
-    where
-        O: provenance_store::operations::catalog::Operation,
-    {
-        use provenance_core::protocol::failure::{OperationError, OperationFailure};
-        use provenance_core::protocol::repository::RepositoryScope;
-        use provenance_store::operations::catalog::RequestedContext;
-
-        if !self.advertises(O::NAME) {
-            return Err(OperationError::Common(OperationFailure::AccessDenied));
-        }
-        let (repository, scope) = self
-            .bound_identity()
-            .ok_or(OperationError::Common(OperationFailure::UnavailableNeeds))?;
-        provenance_store::operations::catalog::invoke_authorized_native_typed::<O>(
-            self.access.clone(),
-            RequestedContext::Scope(RepositoryScope { repository, scope }),
-            request,
-        )
-        .await
-    }
-
     async fn admit(&self) -> Result<OwnedSemaphorePermit, FailureEnvelope> {
         tokio::select! {
             biased;
@@ -240,6 +188,7 @@ impl StatementHost {
     }
 
     /// Close admission and wait for all operation work, including disconnected calls.
+    #[provenance_macros::rule("rule_host_shutdown_completes_started_work")]
     pub async fn shutdown(&self) {
         self.ingress.close();
         self.stopping.cancel();
@@ -259,7 +208,7 @@ impl StatementHost {
             self.access.clone();
         let backing = backing.to_owned();
         self.execution
-            .run(public_name, move || {
+            .run(move || {
                 let work = || {
                     runtime.block_on(provenance_store::operations::catalog::invoke_with(
                         &backing,
@@ -276,5 +225,6 @@ impl StatementHost {
                 }
             })
             .await
+            .map_err(|failure| FailureEnvelope::new(Some(public_name), failure))?
     }
 }

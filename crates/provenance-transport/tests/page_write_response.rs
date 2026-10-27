@@ -22,6 +22,14 @@ struct UnreadableSettings {
     settings: std::path::PathBuf,
 }
 impl ContextResolver for UnreadableSettings {
+    fn authorize(
+        &self,
+        operation: &'static str,
+        context: &RequestedContext,
+    ) -> Result<(), OperationFailure> {
+        self.access.authorize(operation, context)
+    }
+
     fn prepare(
         &self,
         operation: &'static str,

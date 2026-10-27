@@ -71,9 +71,7 @@ pub use ideation::{
     CreateAssertion, CreateDisposition, CreateProposal, ListAssertions, ListDispositions,
     ListProposals,
 };
-pub use invoke::{
-    invoke, invoke_authorized_native_typed, invoke_authorized_typed, invoke_typed, invoke_with,
-};
+pub use invoke::{invoke, invoke_authorized_typed, invoke_typed, invoke_with};
 
 #[cfg(test)]
 pub(crate) fn registered_operation_names_for_test() -> Vec<&'static str> {

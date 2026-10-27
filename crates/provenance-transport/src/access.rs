@@ -28,6 +28,10 @@ impl HostAccess for DataFreeAccess {
 }
 
 impl ContextResolver for DataFreeAccess {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Err(OperationFailure::UnavailableNeeds)
+    }
+
     fn prepare(
         &self,
         _: &'static str,
