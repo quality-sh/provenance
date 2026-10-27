@@ -324,7 +324,7 @@ provenance requirements create --scope <scope> \
   --format json
 
 provenance requirements req_<child_slug> update --scope <scope> \
-  --relationships-json '{"refines":"<relevant_requirement_id>","spawned_by":"res_<stable_slug>"}' \
+  --relationships-json '{"refines":["<relevant_requirement_id>"],"spawned_by":"res_<stable_slug>"}' \
   --if-match <etag> \
   --format json
 ```
