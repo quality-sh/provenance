@@ -15,9 +15,8 @@ const RUST_FILE_LINE_LIMIT: usize = 500;
 /// - 29 `rule_reference_verified` (`provenance-store/src/graph_reference.rs`)
 /// - 27 `rule_reads_supported_version_only` (`state_store/readers.rs`)
 /// - 26 `rule_disposition_write_gate` (`state_store/proposal_writers.rs`)
-/// - 24 `rule_wiki_reference_links` (`provenance-cli/src/wiki/links/evidence.rs`)
 /// - 21 `rule_docs_links_resolve` (`provenance-cli/src/docs.rs`)
-/// - 20 `rule_generated_outputs_ignored` (`provenance-cli/src/gitignore.rs`)
+/// - 16 `rule_generated_outputs_ignored` (`provenance-cli/src/gitignore.rs`)
 ///
 /// Shrinking one of those is the way to lower this number; nothing else needs
 /// to move.
