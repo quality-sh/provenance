@@ -324,8 +324,9 @@ This host can serve assets and existing reads before additional review writes
 exist. It adds no approval mapping or review operation. Approval into the system
 description and lifecycle changes remain separate. Discussion `created_at`
 values remain logical counters. Declaration `apply` can retire omitted owned
-declarations; it is not a field patch. The review page is the only web surface
-of the CLI; provenance-boc5.6 removed the old Wiki.
+declarations; it is not a field patch. The review page is the only browser view
+of the graph; provenance-boc5.6 removed the old Wiki. `docs serve` also serves
+pages over local HTTP, but it renders the Markdown in `docs/`, not the graph.
 
 ## Pinned renderer input
 
