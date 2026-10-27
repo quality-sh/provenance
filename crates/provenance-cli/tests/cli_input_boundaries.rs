@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::str::contains;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 fn command(repo: &str, args: &[&str]) -> Command {
@@ -52,6 +53,7 @@ fn fixture() -> tempfile::TempDir {
 }
 
 #[test]
+#[verifies("rule_cli_repeated_scalar_options", examples)]
 fn discussion_list_refuses_repeated_scalar_flags() {
     let directory = fixture();
     let repo = directory.path().to_str().unwrap();
@@ -68,15 +70,16 @@ fn discussion_list_refuses_repeated_scalar_flags() {
     )
     .assert()
     .code(2)
-    .stderr(contains("--status"));
+    .stderr(contains("--status is supplied more than once"));
     let single = output(&mut command(
         repo,
-        &["req_parent", "discussions", "--limit", "1"],
+        &["req_parent", "discussions", "--status", "active"],
     ));
-    assert_eq!(single["limit"], 1);
+    assert_eq!(single["result"]["entries"], json!([]));
 }
 
 #[test]
+#[verifies("rule_cli_repeated_scalar_options", examples)]
 fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     let directory = fixture();
     let repo = directory.path().to_str().unwrap();
@@ -95,7 +98,7 @@ fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     )
     .assert()
     .code(2)
-    .stderr(contains("--actor"));
+    .stderr(contains("--actor is supplied more than once"));
     let list = output(&mut command(repo, &["req_parent", "discussions"]));
     assert_eq!(list["result"]["entries"], json!([]));
 }
