@@ -38,6 +38,7 @@ a reader for an older format, or a migration on write. Do not bump an existing v
 field. Change a format in place; existing repositories are initialised again, not
 migrated. A review rejects a change that adds any of these. Bead provenance-u9mg
 removes the versioning that is already in the code.
+Exception: the managed skill stamp compares package release numbers to prevent downgrades.
 
 ## Technical writing
 
