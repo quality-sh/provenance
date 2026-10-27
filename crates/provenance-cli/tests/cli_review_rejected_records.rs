@@ -256,17 +256,17 @@ fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
     );
     assert_eq!(outcomes("res_new", &host), ["rejected"]);
     assert_eq!(after["decision"]["withdrawn"], json!([proposal]));
-    assert!(after["decision"]["pending"].is_null());
+    assert_eq!(before["decision"]["withdrawn"], json!([]));
     assert_eq!(get(&host, "/resolutions/res_new/discussions"), feedback);
     assert_eq!(get(&host, &messages_path), messages);
-    assert_eq!(
-        entries(&document(&host, true), "res_new"),
-        [] as [&Value; 0]
-    );
+    let all = document(&host, false);
+    let shown = entries(&all, "res_new");
+    assert_eq!(shown.len(), 1, "{all}");
+    assert_eq!(shown[0]["review"]["outcome"], "rejected");
 }
 
 #[test]
-#[verifies("rule_withdrawal_preserves_review_history", examples)]
+// Implementation aid: acceptance is terminal for withdrawal; the Rule covers rejection.
 fn accepted_candidate_cannot_be_withdrawn() {
     let repo = repository();
     let host = start(repo.path());
@@ -290,6 +290,8 @@ fn accepted_candidate_cannot_be_withdrawn() {
     );
 
     assert_eq!(result.status(), 409);
+    let body = result.into_string().unwrap();
+    assert!(body.contains("accepted"), "{body}");
     assert_eq!(get(&host, "/resolutions/res_new"), before);
 }
 

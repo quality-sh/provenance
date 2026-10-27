@@ -262,7 +262,7 @@ fn stale_submission_and_stale_selection_are_refused() {
         store.list_dispositions(&scope()).unwrap(),
         [] as [provenance_core::DispositionRecord; 0]
     );
-    refused(withdraw(&store, &proposal), "no longer current and pending");
+    refused(withdraw(&store, &proposal), "stale");
 }
 
 #[test]
@@ -435,6 +435,7 @@ fn withdrawal_does_not_remove_or_retire_the_graph_record() {
 fn withdrawal_allows_a_fresh_review_cycle() {
     let (_temp, store, _, proposal_1) = enrolled();
     withdraw(&store, &proposal_1).unwrap();
+    refused(withdraw(&store, &proposal_1), "already withdrawn");
     let proposal_2 = submit(&store, None, None).unwrap().proposal_id;
     decide(
         &store,
@@ -446,7 +447,7 @@ fn withdrawal_allows_a_fresh_review_cycle() {
     .unwrap();
     refused(
         withdraw(&store, &proposal_2),
-        "no longer current and pending",
+        "accepted",
     );
 }
 
