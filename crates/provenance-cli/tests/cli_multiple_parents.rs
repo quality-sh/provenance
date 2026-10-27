@@ -280,3 +280,58 @@ fn cli_replacement_keeps_the_declaration_owner_precondition() {
         serde_json::json!(["req_b", "req_q"])
     );
 }
+
+#[test]
+#[verifies("rule_live_dependents_have_live_parents", examples)]
+fn cli_refuses_an_archived_new_parent() {
+    let (_directory, repo) = parent_repo();
+    json_output(&[
+        "req_b",
+        "update",
+        "--if-match",
+        read(&repo, "req_b")["edit"]["etag"].as_str().unwrap(),
+        "--repo",
+        &repo,
+        "--actor",
+        "author",
+        "--status",
+        "archived",
+        "--archived-in-commit-json",
+        r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
+        "--format",
+        "json",
+    ]);
+    let before = read(&repo, "req_shared");
+    replace(&repo, "req_p", "req_b")
+        .failure()
+        .stderr(predicates::str::contains("req_b is archived"));
+    assert_eq!(read(&repo, "req_shared"), before);
+}
+
+#[test]
+#[verifies("rule_move_replaces_only_selected_parent", examples)]
+fn cli_reports_a_finished_replacement_without_a_write() {
+    let (_directory, repo) = parent_repo();
+    set_parents(&repo, "req_shared", &serde_json::json!(["req_b", "req_q"]));
+    let before = read(&repo, "req_shared");
+    replace(&repo, "req_p", "req_b")
+        .success()
+        .stderr(predicates::str::contains(
+            "req_b replaced req_p already; nothing changed",
+        ));
+    assert_eq!(read(&repo, "req_shared"), before);
+}
+
+#[test]
+#[verifies("rule_move_replaces_only_selected_parent", examples)]
+fn cli_refuses_a_missing_old_parent_when_the_new_parent_is_present() {
+    let (_directory, repo) = parent_repo();
+    set_parents(&repo, "req_shared", &serde_json::json!(["req_b", "req_q"]));
+    let before = read(&repo, "req_shared");
+    replace(&repo, "req_missing", "req_b")
+        .failure()
+        .stderr(predicates::str::contains(
+            "Requirement req_missing does not exist; nothing changed",
+        ));
+    assert_eq!(read(&repo, "req_shared"), before);
+}

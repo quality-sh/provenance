@@ -100,3 +100,4 @@ mod verification_bindings;
 mod requirement_archive;
 mod requirement_archive_children;
 mod requirement_archive_links;
+mod requirement_archive_parents;
