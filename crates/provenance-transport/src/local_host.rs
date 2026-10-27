@@ -1,7 +1,6 @@
 //! Publishes and verifies credential-free local host locations.
 
 use anyhow::Context as _;
-use fs2::FileExt as _;
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -254,7 +253,7 @@ fn lock(path: &Path) -> anyhow::Result<File> {
     let file = options.open(path)?;
     #[cfg(unix)]
     file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
-    file.lock_exclusive()?;
+    provenance_core::file_lock::exclusive(&file)?;
     Ok(file)
 }
 

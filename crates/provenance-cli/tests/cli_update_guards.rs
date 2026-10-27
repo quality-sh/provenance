@@ -72,6 +72,11 @@ fn update(repo: &str, collection: &str, id: &str, guard: Option<&str>, change: &
         command.args(["--if-match", etag]);
     }
     let output = command.args(change).output().unwrap();
+    assert!(
+        output.status.code().is_some(),
+        "CLI command did not exit normally: {command:?}; status: {:?}",
+        output.status
+    );
     let stream = if output.status.success() {
         output.stdout
     } else {

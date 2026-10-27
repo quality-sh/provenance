@@ -242,7 +242,7 @@ fn start_lock(key: &str) -> anyhow::Result<std::fs::File> {
         .write(true)
         .open(&path)
         .with_context(|| format!("cannot open the review host lock {}", path.display()))?;
-    fs2::FileExt::lock_exclusive(&file)
+    provenance_core::file_lock::exclusive(&file)
         .with_context(|| format!("cannot lock {}", path.display()))?;
     Ok(file)
 }

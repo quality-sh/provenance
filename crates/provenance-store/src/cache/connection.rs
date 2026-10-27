@@ -289,7 +289,7 @@ async fn complete(pool: SqlitePool, immutable: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Opens the close lock file and waits until this close holds it.
+/// Opens the close lock file and waits for at most ten seconds.
 ///
 /// Every attempt uses a non-blocking file lock and returns at once, so waiting
 /// for the lock never occupies a blocking worker; publication waiters can
@@ -302,11 +302,17 @@ async fn acquire_close_lock(path: &Path) -> anyhow::Result<File> {
         .truncate(false)
         .open(path)
         .with_context(|| format!("open cache close lock {}", path.display()))?;
+    let started = tokio::time::Instant::now();
     while let Err(error) = file.try_lock_exclusive() {
         if error.raw_os_error() != fs2::lock_contended_error().raw_os_error() {
             return Err(anyhow::Error::new(error)
                 .context(format!("acquire cache close lock {}", path.display())));
         }
+        anyhow::ensure!(
+            started.elapsed() < provenance_core::file_lock::WAIT_LIMIT,
+            "timed out after 10 seconds waiting for cache close lock {}",
+            path.display()
+        );
         tokio::time::sleep(CLOSE_LOCK_RETRY).await;
     }
     Ok(file)

@@ -1,7 +1,6 @@
 use crate::atomic_file::{FileRollbackJournal, FileSnapshot};
 use anyhow::Context;
 use camino::Utf8Path;
-use fs2::FileExt;
 use provenance_macros::rule;
 use provenance_ste100::DictionaryImport;
 use provenance_store::{dictionary_reference, layout::ProvenanceLayout};
@@ -249,7 +248,7 @@ impl AssetCache {
             .write(true)
             .open(&self.lock)
             .context("open the shared STE asset lock")?;
-        FileExt::lock_exclusive(&lock).context("lock the shared STE asset cache")?;
+        provenance_core::file_lock::exclusive(&lock).context("lock the shared STE asset cache")?;
         Ok(lock)
     }
 }

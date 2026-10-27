@@ -6,6 +6,7 @@ use serde_json::Value;
 
 pub fn provenance() -> Command {
     let mut command = Command::new(assert_cmd::cargo::cargo_bin!("provenance"));
+    // Implementation aid: report a stalled child instead of blocking the suite.
     command.timeout(std::time::Duration::from_secs(60));
     command
 }
@@ -39,7 +40,7 @@ pub fn json_output(command: &mut Command) -> Value {
     let output = command.output().unwrap();
     assert!(
         output.status.success(),
-        "{}",
+        "{command:?}: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     serde_json::from_slice(&output.stdout).unwrap()

@@ -18,7 +18,6 @@ use super::{
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::Utf8Path;
-use fs2::FileExt;
 use provenance_macros::rule;
 use std::fs::{File, OpenOptions};
 
@@ -39,7 +38,7 @@ impl LockedPublicationFile {
             .truncate(false)
             .open(path)
             .with_context(|| format!("open publication lock {path}"))?;
-        file.lock_exclusive()
+        provenance_core::file_lock::exclusive(&file)
             .with_context(|| format!("acquire publication lock {path}"))?;
         Ok(Self { file })
     }

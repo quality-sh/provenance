@@ -6,6 +6,7 @@ extern crate self as provenance_core;
 
 pub mod authoring;
 pub mod coverage;
+pub mod file_lock;
 pub mod model;
 pub mod protocol;
 pub mod scope;

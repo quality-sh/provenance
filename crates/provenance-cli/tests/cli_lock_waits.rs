@@ -28,12 +28,7 @@ fn hold(path: &Path) -> std::fs::File {
 fn a_held_publication_lock_refuses_a_read_within_the_command_limit() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_str().unwrap();
-    provenance()
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", "off")
-        .args(["init", "--path", repo, "--scope", "default", "--path-prefix", ".",
-            "--disposition-actor-id", "reviewer"])
-        .assert()
-        .success();
+    initialize(repo);
     let layout = provenance_store::layout::ProvenanceLayout::new(repo);
     let _held = hold(layout.publication_lock_path().as_std_path());
 
@@ -53,11 +48,60 @@ fn a_held_asset_lock_does_not_stop_initialization() {
 
     provenance()
         .env("PROVENANCE_STE100_ASSET_DIR", &assets)
-        .env("PROVENANCE_TEST_STE100_ASSET_URL", "http://127.0.0.1:9/issue.pdf")
-        .args(["init", "--path", repo.to_str().unwrap(), "--scope", "default", "--path-prefix", ".",
-            "--disposition-actor-id", "reviewer"])
+        .env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            "http://127.0.0.1:9/issue.pdf",
+        )
+        .args([
+            "init",
+            "--path",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+            "--disposition-actor-id",
+            "reviewer",
+        ])
         .assert()
         .success()
         .stderr(predicates::str::contains("timed out"));
     assert!(repo.join(".provenance/state/manifest.json").is_file());
+}
+
+fn initialize(repo: &str) {
+    provenance()
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", "off")
+        .args([
+            "init",
+            "--path",
+            repo,
+            "--scope",
+            "default",
+            "--path-prefix",
+            ".",
+            "--disposition-actor-id",
+            "reviewer",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn a_held_cache_close_lock_refuses_a_read_within_the_command_limit() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    initialize(repo);
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
+    let _held = hold(
+        layout
+            .cache_db_path()
+            .with_extension("db.close.lock")
+            .as_std_path(),
+    );
+
+    provenance()
+        .args(["requirements", "list", "--repo", repo, "--format", "json"])
+        .assert()
+        .code(1);
 }
