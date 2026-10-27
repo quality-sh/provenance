@@ -1,0 +1,211 @@
+<mxfile host="drawio" type="device" compressed="false">
+  <diagram id="11-codegen-and-clients" name="Operation contract generation: provenance-codegen, tools/ope">
+    <mxGraphModel dx="1720" dy="950" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1720" pageHeight="950" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="11-codegen-and-clients-title" value="&lt;b&gt;Operation contract generation: provenance-codegen, tools/operation-codegen, provenance-http-client&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=18;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1680" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="i_store" value='&lt;b&gt;provenance-store&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;operations::catalog::definitions();&lt;br&gt;schema feature&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="90" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="i_core" value='&lt;b&gt;provenance-core&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;protocol types; schema feature&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="195" width="280" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="i_ste" value='&lt;b&gt;provenance-ste100&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Report; schema feature&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="285" width="280" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="i_ci" value='&lt;b&gt;CI workflows&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;agent-cargo.yml: ensure-generated;&lt;br&gt;release.yml: generate.mjs&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="435" width="280" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="cg" value="provenance-codegen (Rust binary)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fdf3f2;strokeColor=#b85450;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="340" y="55" width="420" height="310" as="geometry" />
+        </mxCell>
+        <mxCell id="k_cmd" value='&lt;b&gt;command.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;export &amp;lt;dir&amp;gt;: openapi.json, mcp.json,&lt;br&gt;compatibility.json, and&lt;br&gt;fixtures.openapi.json (corpus.rs);&lt;br&gt;rust &amp;lt;openapi&amp;gt; &amp;lt;dir&amp;gt;: Rust types&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cg">
+          <mxGeometry x="15" y="35" width="390" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="k_doc" value='&lt;b&gt;documents, rust_types, unions, model_layout&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;OpenAPI and MCP documents from the catalog;&lt;br&gt;typify 0.7 Rust types; union shapes&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="cg">
+          <mxGeometry x="15" y="170" width="390" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="oc" value="tools/operation-codegen (Node)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fdf3f2;strokeColor=#b85450;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="340" y="400" width="420" height="525" as="geometry" />
+        </mxCell>
+        <mxCell id="o_ens" value='&lt;b&gt;ensure-generated.mjs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;reuses output when the receipt digests&lt;br&gt;match; else runs generate.mjs&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="oc">
+          <mxGeometry x="15" y="35" width="390" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="o_gen" value='&lt;b&gt;generate.mjs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;1 build provenance-codegen (cargo --locked)&lt;br&gt;2 export into a temporary folder&lt;br&gt;3 exactQuerySuccesses; grammar-lint&lt;br&gt;4 typescript.mjs (openapi-typescript),&lt;br&gt;   effect.mjs (@effect/openapi-generator),&lt;br&gt;   validators.mjs (Ajv standalone)&lt;br&gt;5 rust (typify), templates.mjs client, rustfmt&lt;br&gt;6 size check; write the receipt;&lt;br&gt;   --check runs twice and compares&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="oc">
+          <mxGeometry x="15" y="130" width="390" height="250" as="geometry" />
+        </mxCell>
+        <mxCell id="o_chk" value='&lt;b&gt;check-source-control&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;.mjs: refuses tracked&lt;br&gt;generated paths&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="oc">
+          <mxGeometry x="15" y="400" width="185" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="o_tc" value='&lt;b&gt;test-clients.mjs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;runs clients against&lt;br&gt;transport fixture&lt;br&gt;host binaries&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="oc">
+          <mxGeometry x="220" y="400" width="185" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="out" value="Generated output (git-ignored)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff7ee;strokeColor=#d79b00;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="830" y="500" width="400" height="385" as="geometry" />
+        </mxCell>
+        <mxCell id="u_c" value='&lt;b&gt;contracts/operations/&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;openapi.json, mcp.json, compatibility.json,&lt;br&gt;fixtures.openapi.json, .generation.json&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="out">
+          <mxGeometry x="15" y="35" width="370" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="u_ts" value='&lt;b&gt;packages/provenance/src/generated/&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;TS types and client, Effect client, validators&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="out">
+          <mxGeometry x="15" y="135" width="370" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="u_rs" value='&lt;b&gt;crates/provenance-http-client/src/generated/&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;types.rs, parameters.rs, client.rs, responses.json&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="out">
+          <mxGeometry x="15" y="220" width="370" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="u_ep" value='&lt;b&gt;packages/provenance/src/engine-packages.ts&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;written by generate-release-consumers.js&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="out">
+          <mxGeometry x="15" y="310" width="370" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="c_host" value='&lt;b&gt;provenance-transport host&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;serves the catalog routes&lt;br&gt;over HTTP (diagram 04)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1290" y="90" width="380" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="c_ts" value='&lt;b&gt;packages/provenance&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;TypeScript SDK and Effect client&lt;br&gt;(diagram 12)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1290" y="600" width="380" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="c_http" value='&lt;b&gt;provenance-http-client&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;lib.rs includes the generated files;&lt;br&gt;runtime.rs: bounded response decoding,&lt;br&gt;schema checks; reqwest with rustls&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1290" y="715" width="380" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend" value="Legend" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="560" width="290" height="288" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-sw-build" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="12" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-tx-build" value="Build-time tools and generated files" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="44" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-sw-state" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="12" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-tx-state" value="Files on disk and git" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="44" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-sw-engine" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="12" y="72" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-tx-engine" value="Engine: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="44" y="70" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-sw-found" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="12" y="94" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-tx-found" value="Foundation: core model, macros" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="44" y="92" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-sw-analysis" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="12" y="116" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-tx-analysis" value="Analysis: scanner, STE100, report" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="44" y="114" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-sw-iface" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="12" y="138" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-tx-iface" value="Interfaces: CLI and SDKs" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="44" y="136" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-sw-host" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="12" y="160" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-tx-host" value="Host and operation contract" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="44" y="158" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-sw-ext" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="12" y="182" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-tx-ext" value="External to this repository" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="44" y="180" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-ek-dep" value="Uses: code call or Cargo dependency" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="68" y="210" width="210" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-ek-data" value="Runtime data flow (read, write, request)" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="68" y="232" width="210" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-legend-ek-build" value="Build-time generation or packaging" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="11-codegen-and-clients-legend">
+          <mxGeometry x="68" y="254" width="210" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.2419;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="i_store" target="cg">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4923;exitDx=0;exitDy=0;entryX=0;entryY=0.5548;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="i_core" target="cg">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4923;exitDx=0;exitDy=0;entryX=0;entryY=0.8452;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="i_ste" target="cg">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4625;exitDx=0;exitDy=0;entryX=0;entryY=0.4933;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="i_ci" target="o_ens">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="o_ens" target="o_gen">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e5" value="runs" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.072;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="o_gen" target="cg">
+          <mxGeometry x="0" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="795" y="548" />
+              <mxPoint x="795" y="210" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.24;exitDx=0;exitDy=0;entryX=0;entryY=0.6471;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="o_gen" target="u_c">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.56;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="o_gen" target="u_ts">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.908;exitDx=0;exitDy=0;entryX=0;entryY=0.4933;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="o_gen" target="u_rs">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.2143;exitDx=0;exitDy=0;entryX=0;entryY=0.5882;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="u_ts" target="c_ts">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4933;exitDx=0;exitDy=0;entryX=0;entryY=0.4;entryDx=0;entryDy=0;strokeColor=#b85450;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1" source="u_rs" target="c_http">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e11" value="HTTP + bearer" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="c_ts" target="c_host">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5048;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="c_http" target="c_host">
+          <mxGeometry x="0" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1695" y="768" />
+              <mxPoint x="1695" y="135" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-f0" value="" style="edgeStyle=none;html=1;strokeColor=#4d4d4d;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="780" as="sourcePoint" />
+            <mxPoint x="80" y="780" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-f1" value="" style="edgeStyle=none;html=1;strokeColor=#1f5fbf;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="802" as="sourcePoint" />
+            <mxPoint x="80" y="802" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="11-codegen-and-clients-f2" value="" style="edgeStyle=none;html=1;strokeColor=#b85450;strokeWidth=1.5;dashed=1;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="824" as="sourcePoint" />
+            <mxPoint x="80" y="824" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
