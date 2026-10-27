@@ -70,12 +70,12 @@ fn discussion_list_refuses_repeated_scalar_flags() {
     )
     .assert()
     .code(2)
-    .stderr(contains("--status"));
+    .stderr(contains("cannot be used multiple times"));
     let single = output(&mut command(
         repo,
-        &["req_parent", "discussions", "--limit", "1"],
+        &["req_parent", "discussions", "--status", "active"],
     ));
-    assert_eq!(single["limit"], 1);
+    assert_eq!(single["result"]["entries"], json!([]));
 }
 
 #[test]
@@ -98,7 +98,7 @@ fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     )
     .assert()
     .code(2)
-    .stderr(contains("--actor"));
+    .stderr(contains("cannot be used multiple times"));
     let list = output(&mut command(repo, &["req_parent", "discussions"]));
     assert_eq!(list["result"]["entries"], json!([]));
 }

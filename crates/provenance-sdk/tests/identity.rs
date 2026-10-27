@@ -112,14 +112,23 @@ fn mixed_case_keys_keep_distinct_stable_identities() {
     assert_eq!(again.unchanged, 2);
 }
 
-#[test]
+#[tokio::test]
 #[verifies("rule_exact_unowned_requirement_adoption", examples)]
-fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
+async fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
     let (_dir, root) = repository();
     let scope = ScopeId::new("default").unwrap();
     let store = StateStore::new(ProvenanceLayout::new(root.clone()));
-    store
-        .create_requirement(CreateRequirementInput {
+    use operations::catalog::{
+        invoke_typed, CreateRequirementNative, PreparedContext, PreparedScope,
+    };
+    let context = PreparedContext::for_scope(PreparedScope {
+        root: root.clone(),
+        scope: scope.clone(),
+        requested_target: "selected".into(),
+    });
+    invoke_typed::<CreateRequirementNative>(
+        context,
+        CreateRequirementInput {
             scope_id: scope.clone(),
             id: StableId::new("req_existing").unwrap(),
             statement: "The canonical Requirement keeps its identity".to_string(),
@@ -132,8 +141,10 @@ fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
             spawned_by: None,
             origin_thread: None,
             origin_message: None,
-        })
-        .unwrap();
+        },
+    )
+    .await
+    .unwrap();
     let document = spec("migration")
         .requirements([requirement("canonical")
             .adopt_unowned("req_existing")
@@ -150,8 +161,26 @@ fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
         ),
         (0, 0)
     );
+    let mut fields = preview.reconciliation.resources[0]
+        .changes
+        .iter()
+        .map(|change| change.field.as_str())
+        .collect::<Vec<_>>();
+    fields.sort_unstable();
+    assert_eq!(fields, ["address", "declared_by"]);
     let applied = operations::apply(Some(root.clone()), &scope, document.clone()).unwrap();
     assert_eq!(applied.resources[0].id.as_str(), "req_existing");
+    let after = store.list_requirements(&scope).unwrap().remove(0);
+    assert_eq!(after.declared_by.as_deref(), Some("spec://rust/migration"));
+    assert_eq!(
+        after.declaration_address.as_ref().unwrap().segments(),
+        ["migration", "requirement", "canonical"]
+    );
+    assert_eq!(after.id.as_str(), "req_existing");
+    assert_eq!(
+        after.statement,
+        "The canonical Requirement keeps its identity"
+    );
     let replay = operations::plan(Some(root), &scope, document).unwrap();
     assert_eq!(replay.reconciliation.unchanged, 1);
 }
