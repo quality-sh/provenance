@@ -10,9 +10,11 @@ use crate::{
     state_store::{read_budget, RequirementReviewInput, StateStore},
 };
 use provenance_core::{Boundary, Domain, NodeType, Requirement};
+use provenance_macros::rule;
 
 impl StateStore {
-    /// Mutates a Requirement only within the guarded save path.
+    /// Writes one review per produced Rule when the Requirement statement changes.
+    #[rule("rule_review_record_per_rule")]
     pub(crate) fn apply_requirement_update(
         &self,
         input: UpdateRequirementInput,

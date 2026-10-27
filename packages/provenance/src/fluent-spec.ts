@@ -329,6 +329,7 @@ export function fluentSpec(key: string, verify: RuleVerifier): FluentSpec {
   return new FluentSpec(key, verify);
 }
 
+// @provenance rule: rule_typed_declarations_are_immutable
 function buildSpec<
   Sources extends readonly FluentSource[],
   Requirements extends readonly AnyRequirement[],

@@ -45,6 +45,7 @@ export async function send(fetcher: typeof fetch, url: string | URL, init: Reque
   catch (cause) { throw new ConnectionError(cause); }
 }
 
+// @provenance rule: rule_sdk_read_interruption_releases_resources
 export async function readJson(response: Response, _operation: string, _mutates: boolean, signal?: AbortSignal): Promise<unknown> {
   const malformed = (cause?: unknown) => new MalformedResponseError(cause);
   const reader = response.body?.getReader();

@@ -159,7 +159,6 @@ fn commit(repo: &Repository) -> String {
 
 #[tokio::test]
 #[verifies("rule_record_history_reads_git", examples)]
-#[verifies("rule_change_view_has_before_and_after_states", examples)]
 async fn rejected_text_return_uses_previous_git_version_for_evidence() {
     let repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&repo);

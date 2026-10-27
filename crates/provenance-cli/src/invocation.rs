@@ -4,6 +4,7 @@ use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
+use provenance_macros::rule;
 use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::get::View;
 
@@ -53,6 +54,8 @@ pub struct TargetInvocation {
 }
 
 impl Invocation {
+    /// Uses get for an omitted action after excluding reserved command words.
+    #[rule("rule_porcelain_get_is_default_action")]
     pub fn parse(arguments: Vec<String>) -> anyhow::Result<Self> {
         let Some(word) = grammar::command_word(&arguments) else {
             return Ok(Self::Builtin(
@@ -108,7 +111,9 @@ impl Invocation {
         Self::parse_target(arguments)
     }
 
+    /// Parses the target before its action, defaults to get, and handles help before validation.
     #[provenance_macros::rule("rule_record_help_exits_before_validation")]
+    #[rule("rule_porcelain_cli_target_action_order")]
     fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
         let command = catalog_cli::target_command()?;
         let help_command = command.clone().mut_arg("record_type", |arg| {

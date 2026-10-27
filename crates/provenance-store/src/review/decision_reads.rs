@@ -102,7 +102,6 @@ impl StateStore {
     /// Reads the decision state of one Requirement: the submission still
     /// waiting, the acceptance that matches current content, every terminal
     /// decision, and every withdrawal.
-    #[rule("rule_content_change_requires_new_review")]
     pub fn requirement_decision_state(
         &self,
         scope: &ScopeId,

@@ -1,4 +1,5 @@
 use provenance_core::coverage::{AnchorState, AnchoredSite, CoverageScan, ValidationWarning};
+use provenance_macros::rule;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub fn reconcile(
@@ -101,17 +102,8 @@ fn lexical_normalize(path: &camino::Utf8Path) -> camino::Utf8PathBuf {
     normalized
 }
 
-/// Resolve every baseline anchor against the current scan.
-///
-/// Four passes, strongest claim first. A baseline site is pinned to an exact
-/// file and line, then moved within its file when it is the only unresolved
-/// holder of its anchor there, then relocated across files when exactly one
-/// baseline site and one current site share the anchor. What that leaves is
-/// either gone (no current site holds the anchor) or ambiguous, and ambiguity
-/// is said out loud in a warning instead of guessed at or absorbed.
-///
-/// Current sites whose anchor no baseline site holds are `new`: the scan has
-/// nothing to compare them against and claims nothing.
+/// Resolves baseline anchors before it assigns each evidence site a state.
+#[rule("rule_anchor_resolved_before_state")]
 fn reconcile_sites<S: AnchoredSite>(
     baseline: &[S],
     current: &[S],
