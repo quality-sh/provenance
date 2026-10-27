@@ -132,3 +132,70 @@ fn cli_refusals_preserve_parents_and_a_failed_removal_keeps_the_addition() {
         serde_json::json!(["req_b", "req_p", "req_q"])
     );
 }
+
+#[test]
+#[verifies("rule_move_replaces_only_selected_parent", examples)]
+fn cli_replacement_keeps_the_declaration_owner_precondition() {
+    let (_directory, repo) = parent_repo();
+    let store = provenance_store::state_store::StateStore::new(
+        provenance_store::layout::ProvenanceLayout::new(repo.clone()),
+    );
+    store
+        .apply_typed_spec(
+            &provenance_core::ScopeId::new("default").unwrap(),
+            serde_json::from_value(serde_json::json!({
+                "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+                "spec":"parent_owner", "declared_by":"spec://parent-owner",
+                "adopt_unowned":[{"kind":"requirement", "id":"req_shared"}],
+                "requirements":[{"key":"shared", "id":"req_shared",
+                    "statement":"The system stores records."}]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    let before = json_output(&["api", "requirements/req_shared", "--repo", &repo]);
+    for owner in [None, Some("spec://another-owner")] {
+        let mut command = provenance();
+        command.args([
+            "req_shared",
+            "update",
+            "--repo",
+            &repo,
+            "--actor",
+            "author",
+            "--replace-parent",
+            "req_p",
+            "--with-parent",
+            "req_b",
+        ]);
+        if let Some(owner) = owner {
+            command.args(["--declared-by", owner]);
+        }
+        command.assert().failure();
+        assert_eq!(
+            json_output(&["api", "requirements/req_shared", "--repo", &repo])["data"],
+            before["data"]
+        );
+    }
+    let moved = json_output(&[
+        "req_shared",
+        "update",
+        "--repo",
+        &repo,
+        "--actor",
+        "author",
+        "--declared-by",
+        "spec://parent-owner",
+        "--replace-parent",
+        "req_p",
+        "--with-parent",
+        "req_b",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(moved["data"]["declared_by"], "spec://parent-owner");
+    assert_eq!(
+        moved["data"]["refines"],
+        serde_json::json!(["req_b", "req_q"])
+    );
+}
