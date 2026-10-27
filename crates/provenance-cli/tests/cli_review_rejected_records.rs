@@ -221,3 +221,51 @@ fn rejected_change_keeps_the_record_once_with_its_current_content() {
     assert_eq!(shown[0]["node"]["position"], record["position"]);
     assert_eq!(outcomes("res_changed", &host), ["accepted", "rejected"]);
 }
+
+#[test]
+#[verifies("rule_withdrawal_preserves_review_history", examples)]
+#[verifies("rule_rejected_item_returns_to_agent", examples)]
+fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
+    let repo = repository();
+    let host = start(repo.path());
+    let proposal = pending(&host, "res_new");
+    decide(&host, "res_new", "rejected");
+    let before = get(&host, "/resolutions/res_new");
+    let feedback = get(&host, "/resolutions/res_new/discussions");
+    assert!(feedback.to_string().contains("The result needs a clear condition."));
+
+    post(
+        &host,
+        &format!("/resolutions/res_new/submissions/{proposal}/withdraw"),
+        &json!({"actor":"shaping_agent", "declared_by":"shaping_agent",
+            "reason":"The candidate needs a different approach."}),
+    );
+
+    let after = get(&host, "/resolutions/res_new");
+    assert_eq!(after["decision"]["decisions"], before["decision"]["decisions"]);
+    assert_eq!(outcomes("res_new", &host), ["rejected"]);
+    assert_eq!(after["decision"]["withdrawn"], json!([proposal]));
+    assert!(after["decision"]["pending"].is_null());
+    assert_eq!(get(&host, "/resolutions/res_new/discussions"), feedback);
+    assert!(entries(&document(&host, true), "res_new").is_empty());
+}
+
+#[test]
+#[verifies("rule_withdrawal_preserves_review_history", examples)]
+fn accepted_candidate_cannot_be_withdrawn() {
+    let repo = repository();
+    let host = start(repo.path());
+    let proposal = pending(&host, "res_new");
+    decide(&host, "res_new", "accepted");
+    let before = get(&host, "/resolutions/res_new");
+
+    let result = response(
+        request(&host, "POST", &format!("/resolutions/res_new/submissions/{proposal}/withdraw"), true)
+            .set("Content-Type", "application/json")
+            .send_string(&json!({"data":{"actor":"shaping_agent",
+                "declared_by":"shaping_agent", "reason":"Withdraw the candidate."}}).to_string()),
+    );
+
+    assert_eq!(result.status(), 409);
+    assert_eq!(get(&host, "/resolutions/res_new"), before);
+}
