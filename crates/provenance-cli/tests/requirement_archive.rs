@@ -14,6 +14,16 @@ fn run(repo: &str, args: &[&str]) -> String {
     String::from_utf8(result.stdout).unwrap()
 }
 
+fn listed_ids(output: &str) -> Vec<String> {
+    let listed: serde_json::Value = serde_json::from_str(output).unwrap();
+    listed["data"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["id"].as_str().unwrap().to_owned())
+        .collect()
+}
+
 // Implementation aid: this checks archive visibility across public CLI reads.
 #[test]
 fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it() {
@@ -74,20 +84,24 @@ fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it(
             r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
         ],
     );
-    let current = run(repo, &["requirements", "list", "--format", "json"]);
-    assert!(!current.contains("req_retired"), "{current}");
-    assert!(run(
-        repo,
-        &[
-            "requirements",
-            "list",
-            "--exclude-terminal",
-            "false",
-            "--format",
-            "json"
-        ]
-    )
-    .contains("req_retired"));
+    assert_eq!(
+        listed_ids(&run(repo, &["requirements", "list", "--format", "json"])),
+        ["req_current"]
+    );
+    assert_eq!(
+        listed_ids(&run(
+            repo,
+            &[
+                "requirements",
+                "list",
+                "--exclude-terminal",
+                "false",
+                "--format",
+                "json"
+            ]
+        )),
+        ["req_current", "req_retired"]
+    );
     let document = run(
         repo,
         &["req_current", "--view", "review", "--format", "json"],
@@ -105,5 +119,14 @@ fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it(
         ]
     )
     .contains("req_retired"));
-    assert!(run(repo, &["req_retired", "--format", "json"]).contains("archived"));
+    let archived: serde_json::Value = serde_json::from_str(&run(
+        repo,
+        &["api", "requirements/req_retired", "--format", "json"],
+    ))
+    .unwrap();
+    assert_eq!(archived["data"]["status"], "archived");
+    assert_eq!(
+        archived["data"]["archived_in_commit"]["commit"],
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    );
 }
