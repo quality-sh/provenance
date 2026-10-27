@@ -26,7 +26,7 @@ mod review_page;
 mod routing;
 pub use review_page::ReviewPageWrite;
 
-pub use access::HostAccess;
+pub use access::{HostAccess, HttpCredential, OpenCredential};
 pub use invocation::Invocation;
 pub use local::{constant_time_eq, LocalAccess};
 
@@ -44,6 +44,7 @@ pub struct StatementHost {
     execution: Execution,
     page_writes: Option<review_page::PageWrites>,
     access: Arc<dyn access::HostAccess>,
+    credential: Option<Arc<dyn access::HttpCredential>>,
     check_port: Option<Arc<dyn provenance_porcelain::check::CheckPort>>,
     ingress: Arc<Semaphore>,
     stopping: CancellationToken,
@@ -55,6 +56,7 @@ impl Default for StatementHost {
             execution: Execution::default(),
             page_writes: None,
             access: Arc::new(access::DataFreeAccess),
+            credential: Some(Arc::new(access::OpenCredential)),
             check_port: None,
             ingress: Arc::new(Semaphore::new(8)),
             stopping: CancellationToken::new(),
@@ -68,12 +70,20 @@ impl StatementHost {
         porcelain::HostPorcelain::new(self)
     }
 
-    /// Use an explicit caller and repository access policy.
+    /// Bind a repository. The host has no credential policy until `with_credential` names
+    /// one, so its router refuses every request.
     pub fn with_access(access: Arc<dyn HostAccess>) -> Self {
         Self {
             access,
+            credential: None,
             ..Self::default()
         }
+    }
+    /// The transport policy an HTTP request must satisfy.
+    #[must_use]
+    pub fn with_credential(mut self, credential: Arc<dyn HttpCredential>) -> Self {
+        self.credential = Some(credential);
+        self
     }
     /// Observes only changes from HTTP requests marked by the owning review page host.
     #[must_use]
@@ -100,19 +110,25 @@ impl StatementHost {
     pub(crate) fn check_port(&self) -> Option<&Arc<dyn provenance_porcelain::check::CheckPort>> {
         self.check_port.as_ref()
     }
+    /// The fixture principal is both the repository binding and the HTTP credential.
     #[cfg(feature = "test-fixture")]
     pub fn with_fixture_access(access: fixture::FixtureAccess) -> Self {
+        let access = Arc::new(access);
         Self {
-            access: Arc::new(access),
+            access: access.clone(),
+            credential: Some(access),
             ..Self::default()
         }
     }
+    /// A host without a credential policy refuses every HTTP request.
     pub(crate) fn authenticate(
         &self,
         headers: &axum::http::HeaderMap,
     ) -> Result<(), FailureEnvelope> {
-        self.access
-            .authenticate(headers)
+        self.credential
+            .as_ref()
+            .ok_or(OperationFailure::Unauthenticated)
+            .and_then(|credential| credential.authenticate(headers))
             .map_err(|error| FailureEnvelope::new(None, error))
     }
     pub(crate) fn advertises(&self, operation: &str) -> bool {

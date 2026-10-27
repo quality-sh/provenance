@@ -98,10 +98,13 @@ impl FixtureAccess {
             .is_some_and(provenance_store::operations::catalog::Definition::mutates);
         !self.denied_operations.contains(operation) && (self.writes || !mutates)
     }
-    pub(crate) fn authenticate(
-        &self,
-        headers: &axum::http::HeaderMap,
-    ) -> Result<(), OperationFailure> {
+    pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
+        self.grants.iter().next().cloned()
+    }
+}
+
+impl crate::HttpCredential for FixtureAccess {
+    fn authenticate(&self, headers: &axum::http::HeaderMap) -> Result<(), OperationFailure> {
         let credential = headers
             .get("authorization")
             .and_then(|header| header.to_str().ok());
@@ -116,10 +119,9 @@ impl FixtureAccess {
         }
         Ok(())
     }
-    pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
-        self.grants.iter().next().cloned()
-    }
+}
 
+impl FixtureAccess {
     /// The target map and grant check that both resolver steps apply.
     fn check_grant(&self, target: &str, scope: Option<&str>) -> Result<(), OperationFailure> {
         if !self.targets.contains_key(target) {

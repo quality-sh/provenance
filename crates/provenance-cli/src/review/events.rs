@@ -17,7 +17,7 @@ use axum::{
 };
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_store::layout::ProvenanceLayout;
-use provenance_transport::{HostAccess, LocalAccess};
+use provenance_transport::{HttpCredential, LocalAccess};
 use std::sync::Arc;
 use subscribers::{Subscribers, Subscription};
 use tokio::sync::{watch as stop_watch, Mutex};

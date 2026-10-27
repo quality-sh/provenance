@@ -1,6 +1,5 @@
 mod porcelain_authoring_support;
 
-use axum::http::HeaderMap;
 use provenance_macros::verifies;
 use provenance_store::operations::catalog::{
     ContextResolver, ExecutionNeeds, PreparedContext, RequestedContext,
@@ -34,13 +33,6 @@ impl ContextResolver for AdvertiseAll {
 }
 
 impl HostAccess for AdvertiseAll {
-    fn authenticate(
-        &self,
-        _: &HeaderMap,
-    ) -> Result<(), provenance_core::protocol::failure::OperationFailure> {
-        Ok(())
-    }
-
     fn advertises(&self, _: &str) -> bool {
         true
     }

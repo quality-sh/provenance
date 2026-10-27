@@ -14,12 +14,13 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
+use provenance_store::operations::LocalRepository;
 use provenance_transport::{
     local_host::{
         LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE, LAUNCH_CODE_ROUTE,
         LAUNCH_SESSION_ROUTE,
     },
-    HostAccess, LocalAccess, StatementHost,
+    HttpCredential, LocalAccess, StatementHost,
 };
 use serde_json::{json, Value};
 use std::{future::IntoFuture, io::Write, path::PathBuf, sync::Arc, time::Duration};
@@ -59,18 +60,18 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         uuid::Uuid::new_v4().simple(),
         uuid::Uuid::new_v4().simple()
     );
-    let (canonical_repo, access) = repository_access(&options, &token, address)?;
-    if access.disposition_actor_ids()?.is_empty() {
+    let (canonical_repo, repository, access) = repository_access(&options, &token, address)?;
+    if repository.disposition_actor_ids()?.is_empty() {
         eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
     }
-    let host = StatementHost::with_access(access.clone()).with_check_port(Arc::new(
-        crate::handlers::check::RepositoryCheckPort::new(
+    let host = StatementHost::with_access(repository.clone())
+        .with_credential(access.clone())
+        .with_check_port(Arc::new(crate::handlers::check::RepositoryCheckPort::new(
             camino::Utf8PathBuf::from_path_buf(canonical_repo.clone())
                 .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
             false,
             None,
-        ),
-    ));
+        )));
     let endpoint = format!("http://{address}");
     // Discovery treats a registered host that does not answer as stale, so the record is
     // announced only after the listener serves.
@@ -103,7 +104,8 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         "sdkVersion": env!("CARGO_PKG_VERSION"),
     });
     let review_configuration = ReviewConfiguration {
-        access: access.clone(),
+        credential: access.clone(),
+        repository,
         value: config,
     };
     let page_events = events.clone();
@@ -186,11 +188,12 @@ fn review_router(
         ))
 }
 
+/// The repository binding and the caller credential, built separately.
 fn repository_access(
     options: &Options,
     token: &str,
     address: std::net::SocketAddr,
-) -> anyhow::Result<(PathBuf, Arc<LocalAccess>)> {
+) -> anyhow::Result<(PathBuf, Arc<LocalRepository>, Arc<LocalAccess>)> {
     let canonical_repo = options
         .repo
         .canonicalize()
@@ -199,17 +202,14 @@ fn repository_access(
             reason: provenance_core::protocol::failure::InvalidInputReason::InvalidValue,
         })
         .context("cannot configure review repository access")?;
-    let access = Arc::new(
-        LocalAccess::new(
-            &canonical_repo,
-            &options.repository_id,
-            &options.scope,
-            token,
-            address,
-        )
-        .context("cannot configure review repository access")?,
+    let repository = Arc::new(
+        LocalRepository::new(&canonical_repo, &options.repository_id, &options.scope)
+            .context("cannot configure review repository access")?,
     );
-    Ok((canonical_repo, access))
+    let access = Arc::new(
+        LocalAccess::new(token, address).context("cannot configure review repository access")?,
+    );
+    Ok((canonical_repo, repository, access))
 }
 
 /// Opens the review page signed in, or tells the person which link to open.
@@ -313,7 +313,8 @@ impl ShutdownSignals {
 
 #[derive(Clone)]
 struct ReviewConfiguration {
-    access: Arc<LocalAccess>,
+    credential: Arc<LocalAccess>,
+    repository: Arc<LocalRepository>,
     value: Value,
 }
 
@@ -321,10 +322,10 @@ async fn configuration(
     State(mut config): State<ReviewConfiguration>,
     request: Request,
 ) -> Response {
-    if let Err(error) = config.access.authenticate(request.headers()) {
+    if let Err(error) = config.credential.authenticate(request.headers()) {
         return refusal(error);
     }
-    let actor_ids = match config.access.disposition_actor_ids() {
+    let actor_ids = match config.repository.disposition_actor_ids() {
         Ok(actor_ids) => actor_ids,
         Err(error) => return refusal(error),
     };

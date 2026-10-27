@@ -1,6 +1,5 @@
 #![allow(clippy::literal_string_with_formatting_args)]
-//! Contract code: this module later leaves the store as one unit with entry, invoke, routes
-//! and schema. Add no store state here.
+//! Contract code: leaves the store with entry, invoke and schema as one unit. No store state here.
 
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},

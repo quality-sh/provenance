@@ -67,7 +67,9 @@ impl HeldLock {
 
 fn gated_host(repo: &Repository, open: bool) -> (StatementHost, Control) {
     let (gate, control) = Gate::new(access(repo).allow_writes(), open);
-    (StatementHost::with_access(Arc::new(gate)), control)
+    let host = StatementHost::with_access(Arc::new(gate))
+        .with_credential(Arc::new(access(repo).allow_writes()));
+    (host, control)
 }
 
 fn discuss() -> serde_json::Value {
@@ -297,4 +299,123 @@ async fn a_request_decode_refusal_does_not_wait_for_a_work_slot() {
     }
     session.close().await;
     host.shutdown().await;
+}
+
+/// A check port for builder-order tests; the MCP `check` tool is not exercised here.
+struct NoCheck;
+
+impl provenance_porcelain::check::CheckPort for NoCheck {
+    fn run<'a>(
+        &'a self,
+        _: provenance_porcelain::check::Category,
+        _: Option<&'a str>,
+    ) -> provenance_porcelain::check::PortFuture<'a> {
+        Box::pin(async { Err("no check port".to_owned()) })
+    }
+}
+
+async fn metadata(host: &StatementHost, bearer: bool) -> u16 {
+    let mut request = Request::builder()
+        .method("GET")
+        .uri("/metadata")
+        .header("host", "fixture.test");
+    if bearer {
+        request = request.header("authorization", "Bearer fixture-secret");
+    }
+    host.router()
+        .oneshot(request.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+        .status()
+        .as_u16()
+}
+
+async fn requirement_without_bearer(host: &StatementHost) -> (u16, serde_json::Value) {
+    let request = Request::builder()
+        .method("GET")
+        .uri("/requirements/req_shared")
+        .header("host", "fixture.test")
+        .body(Body::empty())
+        .unwrap();
+    let response = host.router().oneshot(request).await.unwrap();
+    let status = response.status().as_u16();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+#[verifies("rule_credential_check_only_on_http", examples)]
+#[tokio::test]
+async fn only_http_presents_a_credential() {
+    let repo = Repository::new("The shared graph is readable.");
+    let host = StatementHost::with_fixture_access(access(&repo));
+    let session = Session::start(host.clone()).await;
+    let read = call(&session.client, "get", json!({"target":"req_shared"})).await;
+    assert_ne!(read.is_error, Some(true), "{read:?}");
+    assert_eq!(
+        read.structured_content.as_ref().unwrap()["record"]["id"],
+        "req_shared"
+    );
+    session.close().await;
+
+    let (status, body) = requirement_without_bearer(&host).await;
+    assert_eq!(status, 401, "{body}");
+    assert_eq!(body["error"]["kind"], "unauthenticated");
+    host.shutdown().await;
+}
+
+#[tokio::test]
+async fn the_default_host_permits_data_free_calls_only() {
+    let host = StatementHost::default();
+    assert_eq!(statement_check(&host).await, 200);
+
+    let (status, body) = requirement_without_bearer(&host).await;
+    assert_eq!(status, 403, "{body}");
+    assert_eq!(body["error"]["kind"], "access_denied");
+
+    let refused = host
+        .invoke::<ResolveRecord>(resolve_shared(), Invocation::native())
+        .await;
+    assert!(matches!(
+        refused,
+        Err(OperationError::Common(OperationFailure::AccessDenied))
+    ));
+    host.shutdown().await;
+}
+
+#[verifies("rule_bound_router_requires_credential_policy", examples)]
+#[tokio::test]
+async fn the_router_stays_closed_until_a_credential_policy_is_set_in_every_builder_order() {
+    let repo = Repository::new("The shared graph is readable.");
+    let binding = || -> Arc<dyn provenance_transport::HostAccess> { Arc::new(access(&repo)) };
+    let credential =
+        || -> Arc<dyn provenance_transport::HttpCredential> { Arc::new(access(&repo)) };
+    let page_writes =
+        |host: StatementHost| host.with_page_writes(repo.layout.clone(), Arc::new(|_| {}));
+    let check_port = |host: StatementHost| host.with_check_port(Arc::new(NoCheck));
+
+    let closed = [
+        StatementHost::with_access(binding()),
+        page_writes(StatementHost::with_access(binding())),
+        check_port(StatementHost::with_access(binding())),
+        check_port(page_writes(StatementHost::with_access(binding()))),
+    ];
+    for host in &closed {
+        assert_eq!(metadata(host, true).await, 401);
+        assert_eq!(metadata(host, false).await, 401);
+    }
+
+    let open = [
+        StatementHost::with_access(binding()).with_credential(credential()),
+        page_writes(StatementHost::with_access(binding()).with_credential(credential())),
+        check_port(StatementHost::with_access(binding())).with_credential(credential()),
+        page_writes(check_port(StatementHost::with_access(binding())))
+            .with_credential(credential()),
+        StatementHost::with_fixture_access(access(&repo)),
+    ];
+    for host in &open {
+        assert_eq!(metadata(host, true).await, 200);
+        assert_eq!(metadata(host, false).await, 401);
+    }
 }

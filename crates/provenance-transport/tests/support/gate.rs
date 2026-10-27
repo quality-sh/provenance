@@ -102,10 +102,6 @@ impl ContextResolver for Gate {
 }
 
 impl HostAccess for Gate {
-    fn authenticate(&self, headers: &axum::http::HeaderMap) -> Result<(), OperationFailure> {
-        self.access.authenticate(headers)
-    }
-
     fn advertises(&self, operation: &str) -> bool {
         self.access.advertises(operation)
     }

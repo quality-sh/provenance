@@ -42,9 +42,6 @@ impl ContextResolver for UnreadableSettings {
     }
 }
 impl HostAccess for UnreadableSettings {
-    fn authenticate(&self, headers: &axum::http::HeaderMap) -> Result<(), OperationFailure> {
-        self.access.authenticate(headers)
-    }
     fn advertises(&self, operation: &str) -> bool {
         self.access.advertises(operation)
     }
@@ -79,6 +76,7 @@ fn a_saved_page_write_succeeds_when_the_snapshot_fails() {
                 access,
                 settings: repo.dir.path().join(".provenance/settings.json"),
             }))
+            .with_credential(Arc::new(support::resource_http::access(&repo)))
             .with_page_writes(
                 repo.layout.clone(),
                 Arc::new(move |changes| seen.lock().unwrap().push(changes)),
