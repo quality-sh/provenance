@@ -292,3 +292,60 @@ fn accepted_candidate_cannot_be_withdrawn() {
     assert_eq!(result.status(), 409);
     assert_eq!(get(&host, "/resolutions/res_new"), before);
 }
+
+// Implementation aid: the withdrawal guard must not act on a replaced submission.
+#[test]
+fn replaced_rejected_candidate_cannot_be_withdrawn() {
+    for accepted in [false, true] {
+        for revises in [false, true] {
+            let repo = repository();
+            let host = start(repo.path());
+            let proposal = pending(&host, "res_new");
+            decide(&host, "res_new", "rejected");
+            post(
+                &host,
+                "/resolutions/res_new/submit",
+                &json!({
+                    "actor":"shaping_agent", "declared_by":"shaping_agent",
+                    "title":"Keep the result", "summary":"The system stores each result.",
+                    "source_ids":[], "evidence_references":[], "builds_on":[],
+                    "revises": if revises { Some(&proposal) } else { None }
+                }),
+            );
+            if accepted {
+                decide(&host, "res_new", "accepted");
+            }
+            let before = state_files(&repo.path().join(".provenance/state"));
+            let record = get(&host, "/resolutions/res_new");
+            let result = response(
+                request(
+                    &host, "POST",
+                    &format!("/resolutions/res_new/submissions/{proposal}/withdraw"), true,
+                )
+                .set("Content-Type", "application/json")
+                .send_string(&json!({"data":{
+                    "actor":"shaping_agent", "declared_by":"shaping_agent",
+                    "reason":"Withdraw the candidate."
+                }}).to_string()),
+            );
+            assert_eq!(result.status(), 409, "accepted={accepted}, revises={revises}");
+            let body = result.into_string().unwrap();
+            assert!(body.contains("replaced by a later submission"), "{body}");
+            assert_eq!(get(&host, "/resolutions/res_new"), record);
+            assert_eq!(state_files(&repo.path().join(".provenance/state")), before);
+        }
+    }
+}
+
+fn state_files(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut files = std::collections::BTreeMap::new();
+    for entry in std::fs::read_dir(root).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            files.extend(state_files(&path));
+        } else {
+            files.insert(path.clone(), std::fs::read(path).unwrap());
+        }
+    }
+    files
+}
