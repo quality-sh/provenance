@@ -22,7 +22,7 @@ fn an_expired_code_is_refused() {
         .redeem(&inside, issued_at + Duration::from_secs(24 * 60 * 60 - 1))
         .is_some());
     assert!(codes
-        .redeem(&expired, issued_at + Duration::from_secs(24 * 60 * 60))
+        .redeem(&expired, issued_at + Duration::from_hours(24))
         .is_none());
 }
 

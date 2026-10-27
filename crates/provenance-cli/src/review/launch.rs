@@ -22,7 +22,7 @@ use std::{
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
 
-const CODE_LIFETIME: Duration = Duration::from_secs(24 * 60 * 60);
+const CODE_LIFETIME: Duration = Duration::from_hours(24);
 const MAX_LIVE_CODES: usize = 64;
 
 /// The secret that a local CLI sends to get a launch code. Only the per-user cache holds it.
