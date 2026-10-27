@@ -259,7 +259,10 @@ fn rejected_candidate_can_be_withdrawn_with_feedback_and_history_intact() {
     assert!(after["decision"]["pending"].is_null());
     assert_eq!(get(&host, "/resolutions/res_new/discussions"), feedback);
     assert_eq!(get(&host, &messages_path), messages);
-    assert!(entries(&document(&host, true), "res_new").is_empty());
+    assert_eq!(
+        entries(&document(&host, true), "res_new"),
+        [] as [&Value; 0]
+    );
 }
 
 #[test]
