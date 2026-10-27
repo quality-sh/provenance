@@ -24,7 +24,13 @@ impl StateStore {
     pub fn validate_graph_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
         let sources = self.list_sources(scope)?;
         let requirements = self.list_requirements(scope)?;
+        for requirement in &requirements {
+            requirement.validate_archive()?;
+        }
         let resolutions = self.list_resolutions(scope)?;
+        for resolution in &resolutions {
+            resolution.validate_archive()?;
+        }
         let rules = self.list_rules(scope)?;
         for rule in &rules {
             rule.validate_archive()?;
