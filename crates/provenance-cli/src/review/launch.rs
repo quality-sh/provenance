@@ -16,7 +16,7 @@ use serde_json::json;
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 #[cfg(unix)]
@@ -151,7 +151,7 @@ impl LaunchCodes {
 
     /// Issues a code that is valid for one exchange during the code lifetime.
     #[rule("rule_review_launch_code_lifetime")]
-    pub fn issue(&self, now: Instant) -> String {
+    pub fn issue(&self, now: Instant, _wall_now: SystemTime) -> String {
         let mut live = self.inner.live.lock().expect("launch code lock");
         live.retain(|code| code.expires_at > now);
         if live.len() >= MAX_LIVE_CODES {
@@ -166,7 +166,7 @@ impl LaunchCodes {
     }
 
     /// Returns the bearer for a live code and removes the code.
-    pub fn redeem(&self, code: &str, now: Instant) -> Option<String> {
+    pub fn redeem(&self, code: &str, now: Instant, _wall_now: SystemTime) -> Option<String> {
         let mut live = self.inner.live.lock().expect("launch code lock");
         live.retain(|issued| issued.expires_at > now);
         let mut found = None;
@@ -234,7 +234,7 @@ struct SessionRequest {
 pub(super) async fn issue_code(State(codes): State<LaunchCodes>, body: Bytes) -> Response {
     match serde_json::from_slice::<CodeRequest>(&body) {
         Ok(request) if codes.holds_key(&request.launch_key) => {
-            Json(json!({ "code": codes.issue(Instant::now()) })).into_response()
+            Json(json!({ "code": codes.issue(Instant::now(), SystemTime::now()) })).into_response()
         }
         _ => super::refusal(OperationFailure::Unauthenticated),
     }
@@ -243,7 +243,7 @@ pub(super) async fn issue_code(State(codes): State<LaunchCodes>, body: Bytes) ->
 pub(super) async fn open_session(State(codes): State<LaunchCodes>, body: Bytes) -> Response {
     let bearer = serde_json::from_slice::<SessionRequest>(&body)
         .ok()
-        .and_then(|request| codes.redeem(&request.code, Instant::now()));
+        .and_then(|request| codes.redeem(&request.code, Instant::now(), SystemTime::now()));
     bearer.map_or_else(
         || super::refusal(OperationFailure::Unauthenticated),
         |bearer| {
