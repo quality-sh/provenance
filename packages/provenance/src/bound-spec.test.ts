@@ -37,7 +37,7 @@ interface WrittenRecord {
   status?: string;
   requirement_ids?: string[];
   resolution_ids?: string[];
-  refines?: string;
+  refines?: string[];
   depends_on?: string[];
   supersedes?: string[];
   spawned_by?: string;
@@ -612,7 +612,7 @@ test("relation fields on spec-bound declarations reach the written records", asy
   const child = readRecords(repo, "requirements/req.jsonl").find(
     ({ id }) => id === idOf("requirement", "child"),
   );
-  assert.equal(child?.refines, idOf("requirement", "parent"));
+  assert.deepEqual(child?.refines, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.depends_on, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.supersedes, [idOf("requirement", "retired")]);
   assert.equal(child?.spawned_by, "res_seed");

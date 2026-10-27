@@ -331,13 +331,17 @@ fn effective_requirement_domains(
     let parents = state
         .requirements
         .iter()
-        .filter_map(|requirement| {
-            requirement
-                .refines
-                .as_ref()
-                .map(|parent| (requirement.id.as_str(), parent.as_str()))
+        .map(|requirement| {
+            (
+                requirement.id.as_str(),
+                requirement
+                    .refines
+                    .iter()
+                    .map(|id| id.as_str())
+                    .collect::<Vec<_>>(),
+            )
         })
-        .collect::<BTreeMap<&str, &str>>();
+        .collect::<BTreeMap<_, _>>();
 
     requirements
         .iter()
@@ -354,8 +358,8 @@ fn effective_requirement_domains(
                         domains.insert(domain_id.to_string());
                     }
                 }
-                if let Some(parent_id) = parents.get(id) {
-                    pending.push(parent_id);
+                if let Some(parent_ids) = parents.get(id) {
+                    pending.extend(parent_ids.iter().copied());
                 }
             }
             (requirement.id.to_string(), domains)

@@ -6,7 +6,7 @@ use provenance_macros::rule;
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct FinalRelations {
-    pub refines: Option<StableId>,
+    pub refines: Vec<StableId>,
     pub depends_on: Vec<StableId>,
     pub supersedes: Vec<StableId>,
     pub spawned_by: Option<StableId>,
@@ -27,6 +27,7 @@ impl SaveRequirement {
 
 impl RequirementRelations {
     fn normalize(&mut self) {
+        sort_list(self.refines.as_mut());
         sort_list(self.depends_on.as_mut());
         sort_list(self.supersedes.as_mut());
         sort_cites(self.cites.as_mut());
@@ -44,6 +45,7 @@ impl RequirementRelations {
             records,
             owner,
             &[
+                ("refines", removal_targets(self.refines.as_ref())),
                 ("depends_on", removal_targets(self.depends_on.as_ref())),
                 ("supersedes", removal_targets(self.supersedes.as_ref())),
                 ("cites", citation_removals(self.cites.as_ref())),
@@ -59,12 +61,7 @@ impl RequirementRelations {
             spawned_by: before.spawned_by.clone(),
             cites: before.source_refs.clone(),
         };
-        if let Some(edit) = &self.refines {
-            final_sets.refines = match edit {
-                SingleEdit::Set(id) => Some(id.clone()),
-                SingleEdit::Clear => None,
-            };
-        }
+        expand_list(&mut final_sets.refines, self.refines.as_ref());
         expand_list(&mut final_sets.depends_on, self.depends_on.as_ref());
         expand_list(&mut final_sets.supersedes, self.supersedes.as_ref());
         if let Some(edit) = &self.spawned_by {

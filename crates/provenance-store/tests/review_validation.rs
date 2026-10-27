@@ -13,7 +13,7 @@ fn failed_relationship_replacement_does_not_publish_the_text_edit() {
     store.save_requirement(save(&store, json!({}))).unwrap();
     let before = store.requirement_edit_state(&scope(), &id()).unwrap();
     let mut input = save(&store, json!({"description":"must not persist"}));
-    input.relationships = Some(serde_json::from_value(json!({"refines":"req_a", "depends_on":[], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
+    input.relationships = Some(serde_json::from_value(json!({"refines":["req_a"], "depends_on":[], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
     assert!(store.save_requirement(input).is_err());
     assert_eq!(
         store.requirement_edit_state(&scope(), &id()).unwrap(),
@@ -38,7 +38,7 @@ fn relationship_sets_are_normalized_and_classified_without_lifecycle_changes() {
         .unwrap();
     let first = store.save_requirement(save(&store, json!({}))).unwrap();
     let mut input = save(&store, json!({}));
-    input.relationships = Some(serde_json::from_value(json!({"refines":null, "depends_on":["req_b","req_b"], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
+    input.relationships = Some(serde_json::from_value(json!({"refines":[], "depends_on":["req_b","req_b"], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
     let result = store.save_requirement(input).unwrap();
     assert_ne!(first.revision, result.revision);
     assert_eq!(

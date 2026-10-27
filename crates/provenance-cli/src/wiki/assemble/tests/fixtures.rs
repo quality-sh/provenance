@@ -40,7 +40,7 @@ pub(super) fn requirement(
         status,
         domain_id: Some(sid("domain_default")),
         source_refs,
-        refines: None,
+        refines: Vec::new(),
         depends_on: Vec::new(),
         supersedes: Vec::new(),
         spawned_by: None,
@@ -249,7 +249,7 @@ fn fixture_requirements() -> Vec<Requirement> {
             clause: Some("clause 10.3".to_string()),
         }],
     );
-    child.refines = Some(sid("req_root"));
+    child.refines = vec![sid("req_root")];
     let mut stuck = requirement(
         "req_stuck",
         "Rostering shall respect awards",

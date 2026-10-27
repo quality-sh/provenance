@@ -80,7 +80,7 @@ fn add_child(repo: &Repository, index: usize, description_bytes: usize) {
             description: Some("x".repeat(description_bytes)),
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: Some(StableId::new("req_shared").unwrap()),
+            refines: vec![StableId::new("req_shared").unwrap()],
             depends_on: vec![],
             supersedes: vec![],
             spawned_by: None,

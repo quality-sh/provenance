@@ -17,7 +17,7 @@ CREATE TABLE requirements (
     schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
     declared_by TEXT, declaration_address TEXT, statement TEXT NOT NULL,
     description TEXT, fog TEXT, status TEXT NOT NULL, domain_id TEXT,
-    source_refs TEXT NOT NULL, refines TEXT, depends_on TEXT NOT NULL,
+    source_refs TEXT NOT NULL, refines TEXT NOT NULL, depends_on TEXT NOT NULL,
     supersedes TEXT NOT NULL, spawned_by TEXT, origin_thread TEXT,
     origin_message TEXT, search_text TEXT NOT NULL, created TEXT, updated TEXT,
     PRIMARY KEY (scope_id, id)

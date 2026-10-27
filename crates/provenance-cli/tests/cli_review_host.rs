@@ -204,7 +204,7 @@ fn record_comment_joins_the_selected_record_thread() {
             description: None,
             status: provenance_core::RequirementStatus::Discovery,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

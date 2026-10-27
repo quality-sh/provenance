@@ -56,7 +56,7 @@ fn native_rule_creation_accepts_an_existing_rule_after_a_commit() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
