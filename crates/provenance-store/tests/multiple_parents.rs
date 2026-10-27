@@ -36,8 +36,13 @@ fn read(store: &StateStore, id: &str) -> Value {
 #[verifies("rule_requirement_accepts_multiple_parents", examples)]
 fn adding_a_second_parent_keeps_the_diamond_and_refuses_a_cycle() {
     let (_temp, store) = fixture();
-    for id in ["req_p", "req_b", "req_child"] {
+    for id in ["req_top", "req_p", "req_b", "req_child"] {
         create(&store, id);
+    }
+    for parent in ["req_p", "req_b"] {
+        store
+            .set_requirement_refines(&scope(), &sid(parent), sid("req_top"))
+            .unwrap();
     }
     store
         .set_requirement_refines(&scope(), &sid("req_child"), sid("req_a"))
@@ -52,11 +57,17 @@ fn adding_a_second_parent_keeps_the_diamond_and_refuses_a_cycle() {
     let shared = read(&store, "req_a");
     assert_eq!(shared["refines"], json!(["req_b", "req_p"]));
     assert_eq!(shared["id"], "req_a");
+    for parent in ["req_p", "req_b"] {
+        assert_eq!(read(&store, parent)["refines"], json!(["req_top"]));
+    }
+    assert!(read(&store, "req_top").get("refines").is_none());
+    let diamond = store.list_requirements(&scope()).unwrap();
+    assert_eq!(diamond.len(), 5);
     assert_eq!(read(&store, "req_child"), child);
     assert!(store
         .set_requirement_refines(&scope(), &sid("req_b"), sid("req_child"))
         .is_err());
-    assert_eq!(read(&store, "req_a"), shared);
+    assert_eq!(store.list_requirements(&scope()).unwrap(), diamond);
 }
 
 #[test]
