@@ -37,7 +37,7 @@ interface WrittenRecord {
   status?: string;
   requirement_ids?: string[];
   resolution_ids?: string[];
-  refines?: string;
+  refines?: string[];
   depends_on?: string[];
   supersedes?: string[];
   spawned_by?: string;
@@ -612,7 +612,7 @@ test("relation fields on spec-bound declarations reach the written records", asy
   const child = readRecords(repo, "requirements/req.jsonl").find(
     ({ id }) => id === idOf("requirement", "child"),
   );
-  assert.equal(child?.refines, idOf("requirement", "parent"));
+  assert.deepEqual(child?.refines, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.depends_on, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.supersedes, [idOf("requirement", "retired")]);
   assert.equal(child?.spawned_by, "res_seed");
@@ -625,6 +625,28 @@ test("relation fields on spec-bound declarations reach the written records", asy
   );
   assert.deepEqual(writtenDecision?.resolution_ids, ["res_seed"]);
   assert.equal(writtenDecision?.status, "active");
+});
+
+test("a spec-bound requirement keeps both parents it refines", async () => {
+  const repo = repository();
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-parents" });
+  const provenance = defineSpec("parents");
+  const policy = provenance.source("policy").document("docs/policy.md");
+  const access = provenance.requirement("access").statement("Access is governed").from(policy);
+  const sharing = provenance.requirement("sharing").statement("Sharing is governed").from(policy);
+  const child = provenance
+    .requirement("child")
+    .statement("Share links are governed")
+    .from(policy)
+    .refines(access)
+    .refines(sharing)
+    .refines(access);
+  const result = await apply(provenance.build(access, sharing, child));
+
+  const idOf = (key: string): string =>
+    result.resources.find((resource) => resource.kind === "requirement" && resource.key === key)!.id;
+  const written = readRecords(repo, "requirements/req.jsonl").find(({ id }) => id === idOf("child"));
+  assert.deepEqual(written?.refines, [idOf("access"), idOf("sharing")].sort());
 });
 
 test("a spec-bound relation to a requirement outside the build is refused", () => {

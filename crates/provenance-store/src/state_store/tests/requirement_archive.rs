@@ -12,7 +12,7 @@ pub(super) fn child(store: &StateStore, id: &str, parent: &str) {
         .create_requirement(
             serde_json::from_value(json!({
                 "scope_id":"default", "id":id, "statement":"The system is safe.",
-                "status":"active", "refines":parent, "depends_on":[], "supersedes":[]
+                "status":"active", "refines":[parent], "depends_on":[], "supersedes":[]
             }))
             .unwrap(),
         )
@@ -48,19 +48,33 @@ pub(super) fn assert_invalid_update(error: anyhow::Error) {
 }
 
 /// Appends one record as a merge of two branches can leave it.
+fn append(path: &camino::Utf8Path, record: &Value) {
+    let mut contents = std::fs::read_to_string(path).unwrap_or_default();
+    contents.push_str(&record.to_string());
+    contents.push('\n');
+    std::fs::write(path, contents).unwrap();
+}
+
 pub(super) fn append_rule(store: &StateStore, scope: &ScopeId, id: &str, parents: &[&str]) {
-    let path = crate::shards::rules_path(&store.layout, scope);
-    let mut contents = std::fs::read_to_string(&path).unwrap_or_default();
-    contents.push_str(
+    append(
+        &crate::shards::rules_path(&store.layout, scope),
         &json!({
             "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
             "id": id, "statement": "The system is safe.", "status": "draft",
             "severity": "medium", "requirement_ids": parents, "resolution_ids": []
-        })
-        .to_string(),
+        }),
     );
-    contents.push('\n');
-    std::fs::write(&path, contents).unwrap();
+}
+
+pub(super) fn append_requirement(store: &StateStore, scope: &ScopeId, id: &str, parents: &[&str]) {
+    append(
+        &crate::shards::requirements_path(&store.layout, scope),
+        &json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            "id": id, "statement": "The system is safe.", "status": "active",
+            "refines": parents
+        }),
+    );
 }
 
 #[test]
@@ -137,7 +151,7 @@ fn sole_parent_chain_archives_in_one_operation_and_keeps_parents() {
     for (id, parent) in [("req_child", "req_overtime"), ("req_leaf", "req_child")] {
         let value = serde_json::to_value(requirement(&store, &scope, id)).unwrap();
         assert_eq!(value["status"], "archived");
-        assert_eq!(value["refines"], parent);
+        assert_eq!(value["refines"], json!([parent]));
         assert_eq!(value["archived_in_commit"]["commit"], COMMIT);
     }
 }

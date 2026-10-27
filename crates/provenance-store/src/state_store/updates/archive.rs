@@ -24,11 +24,12 @@ impl StateStore {
     ) -> anyhow::Result<()> {
         let requirements = self.list_requirements(scope)?;
         let mut cascade = BTreeSet::from([selected.as_str().to_owned()]);
-        let archived = requirements
+        let mut unavailable = requirements
             .iter()
             .filter(|r| r.status == RequirementStatus::Archived)
             .map(|r| r.id.as_str().to_owned())
             .collect::<BTreeSet<_>>();
+        unavailable.insert(selected.as_str().to_owned());
         loop {
             let mut changed = false;
             for record in &requirements {
@@ -37,11 +38,10 @@ impl StateStore {
                 {
                     continue;
                 }
-                if record
-                    .refines
-                    .as_ref()
-                    .is_some_and(|parent| cascade.contains(parent.as_str()))
+                if affected(&record.refines, &cascade)
+                    && no_survivors(&record.refines, &unavailable)
                 {
+                    unavailable.insert(record.id.as_str().to_owned());
                     changed |= cascade.insert(record.id.as_str().to_owned());
                 }
             }
@@ -49,7 +49,6 @@ impl StateStore {
                 break;
             }
         }
-        let unavailable = archived.union(&cascade).cloned().collect::<BTreeSet<_>>();
         self.with_native_record_batch(|batch| {
             let store = batch.store();
             batch.mutate_all(
@@ -57,11 +56,13 @@ impl StateStore {
                 |records: &mut Vec<Requirement>| {
                     for record in records
                         .iter_mut()
-                        .filter(|r| cascade.contains(r.id.as_str()))
+                        .filter(|r| r.status != RequirementStatus::Archived)
                     {
-                        if record.status != RequirementStatus::Archived {
+                        if cascade.contains(record.id.as_str()) {
                             record.status = RequirementStatus::Archived;
                             record.archived_in_commit = Some(stamp.clone());
+                        } else if affected(&record.refines, &cascade) {
+                            prune(&mut record.refines, &cascade);
                         }
                     }
                     Ok(())

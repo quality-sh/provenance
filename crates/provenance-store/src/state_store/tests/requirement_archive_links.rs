@@ -38,7 +38,7 @@ fn new_requirement_cannot_refine_an_archived_requirement() {
         .create_requirement(
             serde_json::from_value(json!({
                 "scope_id":"default", "id":"req_late", "statement":"The system is safe.",
-                "status":"active", "refines":"req_old", "depends_on":[], "supersedes":[]
+                "status":"active", "refines":["req_old"], "depends_on":[], "supersedes":[]
             }))
             .unwrap(),
         )

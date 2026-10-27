@@ -12,6 +12,7 @@ pub mod fields;
 mod help;
 mod input;
 mod input_guard;
+mod parent_replacement;
 pub mod refusal;
 
 pub use help::required_discussion_flags;
@@ -119,7 +120,19 @@ pub fn target_command() -> anyhow::Result<Command> {
         .map(|(_, definition)| definition)
         .collect::<Vec<_>>();
     let command = fields::augment_with_overrides(
-        grammar::target_command(),
+        grammar::target_command()
+            .arg(
+                Arg::new("replace_parent")
+                    .long("replace-parent")
+                    .requires("with_parent")
+                    .help("Replace this Requirement parent and preserve its other parents"),
+            )
+            .arg(
+                Arg::new("with_parent")
+                    .long("with-parent")
+                    .requires("replace_parent")
+                    .help("Add this parent before the selected parent is removed"),
+            ),
         definitions,
         &COMMON
             .iter()
@@ -132,6 +145,8 @@ pub fn target_command() -> anyhow::Result<Command> {
                 "limit",
                 "review_link",
                 "stdin",
+                "replace_parent",
+                "with_parent",
             ])
             .collect::<Vec<_>>(),
         &[],
@@ -241,7 +256,7 @@ pub async fn dispatch_target(
         &matches,
         stdin,
         None,
-        &["record_type", "stdin"],
+        &["record_type", "stdin", "replace_parent", "with_parent"],
     )
     .unwrap_or_else(|error| usage_error(error));
     if !query.is_empty() {
@@ -249,16 +264,36 @@ pub async fn dispatch_target(
             "target actions do not accept query options"
         ));
     }
-    let mut value = match host.invoke_target(&route, data, headers).await {
+    let replacement = matches.get_one::<String>("replace_parent");
+    let result = if let Some(old) = replacement {
+        anyhow::ensure!(
+            action == Action::Update && route.kind == provenance_core::NodeType::Requirement,
+            "parent replacement requires a Requirement update"
+        );
+        parent_replacement::replace(
+            &host,
+            &route.path,
+            data,
+            headers,
+            (
+                old,
+                matches
+                    .get_one::<String>("with_parent")
+                    .expect("paired parent options"),
+            ),
+            |failure| failure_with_guidance(failure, &route.path, Some(&target), &context.repo),
+        )
+        .await
+    } else {
+        host.invoke_target(&route, data, headers)
+            .await
+            .map_err(|failure| {
+                failure_with_guidance(&failure, &route.path, Some(&target), &context.repo)
+            })
+    };
+    let mut value = match result {
         Ok(value) => value,
-        Err(failure) => {
-            return Err(failure_with_guidance(
-                &failure,
-                &route.path,
-                Some(&target),
-                &context.repo,
-            ))
-        }
+        Err(failure) => return Err(failure),
     };
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
