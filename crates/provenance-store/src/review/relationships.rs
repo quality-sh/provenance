@@ -144,7 +144,7 @@ fn sort_citations(entries: &mut [SourceReference]) {
     });
 }
 
-/// Applies list deltas without requiring the requested membership to change.
+/// Adds or removes named members, or replaces the list, and accepts membership no-ops.
 #[rule("rule_porcelain_relationship_membership_noop")]
 pub fn expand_list(target: &mut Vec<StableId>, edit: Option<&ListEdit>) {
     let Some(edit) = edit else { return };

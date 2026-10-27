@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use provenance_store::operations::catalog;
 
 fn help(arguments: &[&str]) -> String {
@@ -110,6 +111,7 @@ fn operation_help_is_specific_to_the_selected_registration() {
 }
 
 #[test]
+#[verifies("rule_create_help_accepted_fields", examples)]
 fn addressed_update_help_excludes_other_operations_inputs() {
     let output = help(&["requirements", "req_example", "update", "--help"]);
 
@@ -155,6 +157,7 @@ fn addressed_query_help_shows_only_the_selected_query() {
 }
 
 #[test]
+#[verifies("rule_create_help_accepted_fields", examples)]
 fn addressed_create_help_excludes_update_only_controls() {
     let create = help(&["requirements", "create", "--help"]);
 

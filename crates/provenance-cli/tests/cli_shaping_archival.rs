@@ -1,4 +1,6 @@
 use assert_cmd::Command;
+use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
+use provenance_macros::verifies;
 use serde_json::Value;
 
 fn run(repo: &str, args: &[&str]) -> Value {
@@ -106,6 +108,7 @@ fn initialized_records() -> tempfile::TempDir {
 }
 
 #[test]
+#[verifies("rule_porcelain_archive_uses_lifecycle", examples)]
 fn archiving_a_question_keeps_its_topic_and_discussion_history() {
     let directory = initialized_records();
     let repo = directory.path().to_str().unwrap();
@@ -129,6 +132,7 @@ fn archiving_a_question_keeps_its_topic_and_discussion_history() {
 }
 
 #[test]
+#[verifies("rule_porcelain_archive_uses_lifecycle", examples)]
 fn archiving_a_topic_archives_all_of_its_questions_in_one_update() {
     let directory = initialized_records();
     let repo = directory.path().to_str().unwrap();
@@ -145,20 +149,37 @@ fn archiving_a_topic_archives_all_of_its_questions_in_one_update() {
 }
 
 #[test]
+#[verifies("rule_missing_if_match_is_required", examples)]
 fn topic_and_question_updates_require_the_current_etag() {
     let directory = initialized_records();
     let repo = directory.path().to_str().unwrap();
-    for (family, id) in [("topics", "topic_archive"), ("questions", "question_one")] {
-        Command::cargo_bin("provenance")
+    for (family, id, field) in [
+        ("topics", "topic_archive", "title"),
+        ("questions", "question_one", "question"),
+    ] {
+        let before = run(repo, &[family, id, "get"]);
+        let output = Command::cargo_bin("provenance")
             .unwrap()
             .args([
                 family, id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format",
                 "json",
             ])
-            .write_stdin(r#"{"title":"No unguarded update"}"#)
+            .write_stdin(serde_json::json!({field: "No unguarded update"}).to_string())
             .assert()
             .failure()
-            .stderr(predicates::str::contains("If-Match"));
+            .get_output()
+            .stderr
+            .clone();
+        let envelope: Value = serde_json::from_slice(&output).unwrap();
+        let failure: OperationFailure = serde_json::from_value(envelope["error"].clone()).unwrap();
+        assert_eq!(
+            failure,
+            OperationFailure::InvalidInput {
+                field: Some("If-Match".into()),
+                reason: InvalidInputReason::Required,
+            }
+        );
+        assert_eq!(run(repo, &[family, id, "get"])["data"], before["data"]);
     }
     assert_eq!(
         run(repo, &["topics", "topic_archive", "get"])["data"]["status"],

@@ -1,4 +1,5 @@
 //! CLI-owned bindings for shared Porcelain capabilities.
+use provenance_macros::rule;
 
 use crate::repo_context::RepoContext;
 use provenance_porcelain::check::{Category, CheckInput};
@@ -79,6 +80,7 @@ async fn edit_state(
 }
 
 /// Renders the selected record as readable text or structured JSON.
+#[rule("rule_porcelain_cli_readable_json")]
 fn render_get(
     outcome: &GetOutcome,
     edit: Option<&serde_json::Value>,

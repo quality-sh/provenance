@@ -6,12 +6,15 @@ mod support {
 }
 
 use axum::{body::Body, http::Request};
+use provenance_macros::verifies;
 use serde_json::Value;
 use support::records::Repository;
 use support::resource_http::{call, host};
 use tower::ServiceExt as _;
 
 #[tokio::test]
+#[verifies("rule_porcelain_search_text_optional", examples)]
+#[verifies("rule_porcelain_search_predicates_intersect", examples)]
 async fn public_collection_search_accepts_kind_only_and_combined_queries() {
     let repo = Repository::new("The shared graph is searchable.");
     let host = host(&repo, false);
@@ -21,6 +24,17 @@ async fn public_collection_search_accepts_kind_only_and_combined_queries() {
     assert_eq!(kind_only["data"]["items"].as_array().unwrap().len(), 1);
     assert_eq!(kind_only["data"]["items"][0]["node_type"], "rule");
     assert!(!kind_only["meta"]["has_more"].as_bool().unwrap());
+
+    let (status, live) = call(
+        &host,
+        "GET",
+        "/rules?query=search&text=shared&exclude_terminal=true",
+        None,
+    )
+    .await;
+    assert_eq!(status, 200, "{live}");
+    assert_eq!(live["data"]["items"].as_array().unwrap().len(), 1);
+    assert_eq!(live["data"]["items"][0]["id"], "rule_shared");
 
     let (status, combined) = call(&host, "GET", "/rules?query=search&text=absent", None).await;
     assert_eq!(status, 200, "{combined}");

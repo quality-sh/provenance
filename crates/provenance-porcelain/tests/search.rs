@@ -2,6 +2,7 @@ use provenance_core::protocol::{
     GraphNode, QueryResponse, SearchQuery, SearchResult, Stamp, StampPolicy,
 };
 use provenance_core::NodeType;
+use provenance_macros::verifies;
 use provenance_porcelain::search::{render_readable, PortFuture, SearchError, SearchPort};
 use provenance_porcelain::Porcelain;
 use std::sync::{Arc, Mutex};
@@ -116,6 +117,7 @@ async fn search_refuses_a_request_without_text_or_kinds_before_the_port() {
 }
 
 #[test]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
 fn readable_search_renders_an_empty_bounded_page() {
     let page = response(Vec::new(), 50, false, None, None);
 
@@ -126,6 +128,8 @@ fn readable_search_renders_an_empty_bounded_page() {
 }
 
 #[test]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
+#[verifies("rule_search_readable_lifecycle", examples)]
 fn readable_search_renders_records_continuation_and_freshness() {
     let page = response(
         vec![
