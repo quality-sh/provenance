@@ -2,10 +2,12 @@
 #[allow(dead_code)]
 #[path = "support/records.rs"]
 mod records;
+use provenance_macros::verifies;
 use records::Repository;
 use serde_json::json;
 
 #[test]
+#[verifies("rule_verification_file_access_before_publication", examples)]
 fn native_verification_checks_relative_and_absolute_files_before_publication() {
     let repo = Repository::new("The evidence is readable.");
     let outside = tempfile::tempdir().unwrap();
@@ -46,6 +48,7 @@ fn native_verification_checks_relative_and_absolute_files_before_publication() {
 }
 
 #[test]
+#[verifies("rule_verification_file_access_before_publication", examples)]
 fn missing_native_verification_file_refuses_before_any_run_is_written() {
     let repo = Repository::new("The evidence is readable.");
     let scope = provenance_core::ScopeId::new("default").unwrap();

@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::str::contains;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 fn command(repo: &str, args: &[&str]) -> Command {
@@ -52,6 +53,7 @@ fn fixture() -> tempfile::TempDir {
 }
 
 #[test]
+#[verifies("rule_cli_repeated_scalar_options", examples)]
 fn discussion_list_refuses_repeated_scalar_flags() {
     let directory = fixture();
     let repo = directory.path().to_str().unwrap();
@@ -77,6 +79,7 @@ fn discussion_list_refuses_repeated_scalar_flags() {
 }
 
 #[test]
+#[verifies("rule_cli_repeated_scalar_options", examples)]
 fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     let directory = fixture();
     let repo = directory.path().to_str().unwrap();

@@ -3,6 +3,7 @@
 //! through kernel-authored documents.
 
 use provenance_core::{Manifest, RepoPathPrefix, RequirementStatus, ScopeId, StableId};
+use provenance_macros::verifies;
 use provenance_sdk::{operations, requirement, rule, spec, RequirementBuilder};
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::state_store::{CreateRequirementInput, StateStore, TypedResourceKind};
@@ -53,6 +54,7 @@ fn rule_resource(
 }
 
 #[test]
+#[verifies("rule_typed_rule_membership_keeps_identity", examples)]
 fn a_rule_migrates_from_local_to_shared_and_keeps_its_id() {
     let (_dir, root) = repository();
     let local = apply(
@@ -111,6 +113,7 @@ fn mixed_case_keys_keep_distinct_stable_identities() {
 }
 
 #[test]
+#[verifies("rule_exact_unowned_requirement_adoption", examples)]
 fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
     let (_dir, root) = repository();
     let scope = ScopeId::new("default").unwrap();
