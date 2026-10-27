@@ -25,6 +25,13 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
     copy_tree(&shipped, &layout.state_dir());
     let store = StateStore::new(layout);
     let scope = ScopeId::new("default").unwrap();
+    let reviewer = store
+        .manifest()
+        .unwrap()
+        .disposition_actor_ids
+        .into_iter()
+        .next()
+        .expect("the shipped manifest names a reviewer");
     land_modern_swarm_records(&store, &scope);
     store
         .create_proposal_card(CreateProposalCardInput {
@@ -72,8 +79,8 @@ fn modern_lifecycle_coexists_with_frozen_shipped_records() {
             decision: DispositionDecision::Accepted,
             rationale: "Reviewed".into(),
             actor: DispositionActor {
-                identity_type: IdentityType::Agent,
-                id: "codex-review-panel-gpt55-medium".into(),
+                identity_type: IdentityType::Human,
+                id: reviewer,
                 name: None,
             },
             canonical_artifact: None,

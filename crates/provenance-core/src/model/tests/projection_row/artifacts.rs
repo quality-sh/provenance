@@ -66,7 +66,10 @@ fn bare_source() -> Source {
 
 fn filled_requirement() -> Requirement {
     Requirement {
-        archived_in_commit: None,
+        archived_in_commit: Some(crate::ArchivedStamp {
+            commit: "a".repeat(40),
+            at: None,
+        }),
         created: Some(stamp()),
         updated: Some(stamp()),
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -78,7 +81,7 @@ fn filled_requirement() -> Requirement {
         statement: "Overtime is paid".into(),
         description: Some("After the threshold".into()),
         fog: Some("Which threshold".into()),
-        status: RequirementStatus::Active,
+        status: RequirementStatus::Archived,
         domain_id: Some(sid("domain_payroll")),
         source_refs: vec![
             SourceReference {
@@ -127,7 +130,10 @@ fn bare_requirement() -> Requirement {
 
 fn resolution(confidence: Option<f64>) -> Resolution {
     Resolution {
-        archived_in_commit: None,
+        archived_in_commit: Some(crate::ArchivedStamp {
+            commit: "a".repeat(40),
+            at: None,
+        }),
         created: Some(stamp()),
         updated: Some(stamp()),
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -136,7 +142,7 @@ fn resolution(confidence: Option<f64>) -> Resolution {
         title: "Overtime threshold".into(),
         position: "Use the award threshold".into(),
         rationale: "The award says so".into(),
-        status: ResolutionStatus::Approved,
+        status: ResolutionStatus::Archived,
         context: Some("Payroll review".into()),
         enforcement: Some("A rule".into()),
         confidence,
