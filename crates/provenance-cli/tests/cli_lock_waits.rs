@@ -105,3 +105,75 @@ fn a_held_cache_close_lock_refuses_a_read_within_the_command_limit() {
         .assert()
         .code(1);
 }
+
+#[test]
+fn a_held_topic_shard_lock_refuses_the_update_and_keeps_the_title() {
+    use serde_json::json;
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_str().unwrap();
+    initialize(repo);
+    for (collection, body) in [
+        (
+            "requirements",
+            json!({"id":"req_guard", "statement":"The system stores records."}),
+        ),
+        (
+            "topics",
+            json!({"id":"topic_guard", "requirement_id":"req_guard", "title":"Guard"}),
+        ),
+    ] {
+        provenance()
+            .args([collection, "create", "--repo", repo, "--stdin"])
+            .write_stdin(body.to_string())
+            .assert()
+            .success();
+    }
+    let before = read_topic(repo);
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    let path = provenance_store::shards::topics_path(&layout, &scope);
+    let lock_path = layout.state_shard_lock_path(&path).unwrap();
+    let held = hold(lock_path.as_std_path());
+
+    let refused = provenance()
+        .args([
+            "topics",
+            "topic_guard",
+            "update",
+            "--repo",
+            repo,
+            "--format",
+            "json",
+            "--if-match",
+            before["data"]["edit"]["etag"].as_str().unwrap(),
+            "--title",
+            "Changed",
+        ])
+        .assert()
+        .code(1);
+    let refusal: serde_json::Value = serde_json::from_slice(&refused.get_output().stderr).unwrap();
+    assert_eq!(refusal["error"]["kind"], "write_failed");
+    drop(held);
+    let after = read_topic(repo);
+    assert_eq!(after["data"]["title"], "Guard");
+    assert_eq!(
+        after["data"]["edit"]["etag"],
+        before["data"]["edit"]["etag"]
+    );
+}
+
+fn read_topic(repo: &str) -> serde_json::Value {
+    let read = provenance()
+        .args([
+            "topics",
+            "topic_guard",
+            "get",
+            "--repo",
+            repo,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success();
+    serde_json::from_slice(&read.get_output().stdout).unwrap()
+}

@@ -2467,6 +2467,7 @@ dependencies = [
  "jsonschema",
  "office_oxide",
  "pdf_oxide",
+ "provenance-core",
  "provenance-macros",
  "schemars 1.2.2",
  "serde",

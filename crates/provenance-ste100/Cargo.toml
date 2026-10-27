@@ -22,6 +22,7 @@ fs2.workspace = true
 # Raise the ceiling only with a pdf_oxide release that builds with the newer DocumentIR.
 office_oxide = { version = ">=0.1.15, <0.1.16", default-features = false }
 pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy-crypto"] }
+provenance-core.workspace = true
 provenance-macros.workspace = true
 serde.workspace = true
 serde_json.workspace = true
