@@ -61,7 +61,7 @@ fn resolution(store: &StateStore, scope: &ScopeId, id: &str) -> Resolution {
 }
 
 /// Removes the fields a pruned link is allowed to change.
-fn without_link_fields(record: impl serde::Serialize) -> Value {
+fn without_link_fields(record: &impl serde::Serialize) -> Value {
     let mut value = serde_json::to_value(record).unwrap();
     for key in ["updated", "requirement_ids"] {
         value.as_object_mut().unwrap().remove(key);
@@ -103,7 +103,7 @@ fn rule_with_a_surviving_parent_loses_only_the_archived_link() {
         after.requirement_ids,
         [requirement(&store, &scope, "req_right").id]
     );
-    assert_eq!(without_link_fields(after), without_link_fields(before));
+    assert_eq!(without_link_fields(&after), without_link_fields(&before));
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn resolution_with_a_surviving_parent_loses_only_the_archived_link() {
         after.requirement_ids,
         [requirement(&store, &scope, "req_right").id]
     );
-    assert_eq!(without_link_fields(after), without_link_fields(before));
+    assert_eq!(without_link_fields(&after), without_link_fields(&before));
 }
 
 #[test]
