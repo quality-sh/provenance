@@ -116,11 +116,10 @@ pub(super) fn graph_changes_section(envelope: &ReportEnvelope, out: &mut String)
 #[rule("rule_branch_report_head_lifecycle")]
 fn statement_cell(change: &GraphChange) -> String {
     let text = change.statement.as_deref().unwrap_or("");
-    let statement = if let Some(before) = change.statement_before.as_deref() {
-        format!("{} → {}", escape_cell(before), escape_cell(text))
-    } else {
-        escape_cell(text)
-    };
+    let statement = change.statement_before.as_deref().map_or_else(
+        || escape_cell(text),
+        |before| format!("{} → {}", escape_cell(before), escape_cell(text)),
+    );
     if !change.superseded_by.is_empty() {
         let replacements = change
             .superseded_by
