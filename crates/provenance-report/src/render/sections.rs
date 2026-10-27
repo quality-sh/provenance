@@ -121,6 +121,9 @@ fn statement_cell(change: &GraphChange) -> String {
 
 fn details_cell(change: &GraphChange) -> String {
     let mut parts = Vec::new();
+    if let Some(after) = change.lifecycle_after.as_deref() {
+        parts.push(format!("status at head: {after}"));
+    }
     if let Some(before) = change.lifecycle_before.as_deref() {
         let after = change.lifecycle_after.as_deref().unwrap_or(before);
         parts.push(format!("status: {before} → {after}"));
