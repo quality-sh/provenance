@@ -84,7 +84,6 @@ async fn observed(repo: &Repository, proposal: &str, receipt: &Value) -> (Value,
 }
 
 #[tokio::test]
-#[verifies("rule_http_hosts_call_shared_operations", examples)]
 #[verifies("rule_native_entry_points_call_shared_operations", examples)]
 async fn one_review_decision_has_one_result_through_http_mcp_and_the_native_store() {
     let path = |proposal: &str| format!("requirements/req_shared/submissions/{proposal}/decide");

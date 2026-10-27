@@ -103,7 +103,6 @@ async function twoDiscussionsKeepTheirRepliesAndStatus(): Promise<void> {
 
 // @provenance verification: examples
 // @provenance rule: rule_revised_item_requires_new_review
-// @provenance rule: rule_porcelain_review_returns_current_state
 async function revisionAfterRejectionKeepsFeedbackAndWaitsForDecision(): Promise<void> {
   const id = 'req_reviewed';
   const first = await withHost(async client => (await createRequirement(client, id)).decision.pending.proposal_id);
@@ -158,7 +157,8 @@ async function lostWriteResponseIsReportedAndNotResent(): Promise<void> {
     if (init?.method === 'POST' && url.pathname === target) {
       sent.push(url.pathname);
       const response = await globalThis.fetch(input, init);
-      // The host has written the Discussion; close the connection before the body arrives.
+      // The host has written the Discussion and sent the headers; fail the fetch so the
+      // client never sees the response.
       await response.body?.cancel();
       throw new TypeError('The connection closed before the response arrived.');
     }

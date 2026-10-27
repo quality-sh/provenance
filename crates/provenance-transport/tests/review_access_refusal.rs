@@ -33,7 +33,8 @@ async fn review_writes_without_write_access_are_denied_and_change_nothing() {
         .unwrap()
         .to_owned();
     let reader = host(&repo, false);
-    let (_, before) = call(&reader, "GET", "/requirements/req_shared", None).await;
+    let (status, before) = call(&reader, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 200, "{before}");
 
     let submissions = format!("/requirements/req_shared/submissions/{proposal}");
     for (path, data) in [
@@ -62,7 +63,8 @@ async fn review_writes_without_write_access_are_denied_and_change_nothing() {
         assert_eq!(refused["error"], json!({"kind":"access_denied"}), "{path}");
     }
 
-    let (_, after) = call(&reader, "GET", "/requirements/req_shared", None).await;
+    let (status, after) = call(&reader, "GET", "/requirements/req_shared", None).await;
+    assert_eq!(status, 200, "{after}");
     assert_eq!(after, before);
     let (status, discussions) =
         call(&reader, "GET", "/requirements/req_shared/discussions", None).await;
