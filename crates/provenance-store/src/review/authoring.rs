@@ -321,6 +321,7 @@ const fn remove_delta(remove: Vec<StableId>) -> ListEdit {
 
 fn empty_update(scope_id: &ScopeId, id: &StableId) -> UpdateRequirementInput {
     UpdateRequirementInput {
+        archived_in_commit: None,
         scope_id: scope_id.clone(),
         id: id.clone(),
         expected_etag: None,
