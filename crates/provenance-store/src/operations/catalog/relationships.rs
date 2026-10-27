@@ -4,11 +4,11 @@ use super::{
     ExecutionNeed,
 };
 native_action!(
-    SetRequirementRefines,
-    "set-requirement-refines",
+    AddRequirementRefines,
+    "add-requirement-refines",
     ReferenceActionInput,
     provenance_core::Requirement,
-    |store, input| store.set_requirement_refines(&input.scope_id, &input.id, input.target_id)
+    |store, input| store.add_requirement_refines(&input.scope_id, &input.id, input.target_id)
 );
 native_action!(
     ClearRequirementRefines,

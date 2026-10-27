@@ -137,7 +137,7 @@ impl StateStore {
     }
 
     /// Adds one parent without changing the other parents or Rule records.
-    pub fn set_requirement_refines(
+    pub fn add_requirement_refines(
         &self,
         scope_id: &ScopeId,
         requirement: &StableId,
@@ -197,6 +197,8 @@ impl StateStore {
     }
 
     /// Records supersession without changing children or the prior record.
+    #[provenance_macros::rule("rule_supersession_preserves_unselected_children")]
+    #[provenance_macros::rule("rule_supersession_does_not_archive_superseded_record")]
     pub fn add_requirement_supersedes(
         &self,
         scope_id: &ScopeId,

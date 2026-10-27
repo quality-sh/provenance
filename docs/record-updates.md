@@ -184,7 +184,7 @@ selected scope. In the native DTO, a `null` field supplies no value; it does
 not clear. A native request clears fields only through the typed
 `clear_fields` list.
 
-The relationship actions stay native: `set/clear-requirement-refines`,
+The relationship actions stay native: `add/clear-requirement-refines`,
 `add/clear-requirement-depends-on`, `add/clear-requirement-supersedes`,
 `set/clear-requirement-spawned-by`, `add/clear-rule-requirement`,
 `add/clear-rule-resolution`, `add/clear-resolution-requirement`,
