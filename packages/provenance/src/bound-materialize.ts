@@ -147,7 +147,7 @@ function compileDocument(
       statement: state.text!,
       description: state.description,
       sources: state.sources.map((source) => sourceState(source).key).sort(),
-      refines: state.refines,
+      refines: state.refines?.slice().sort(),
       ...listField("depends_on", state.dependsOn),
       ...listField("supersedes", state.supersedes),
       spawned_by: state.spawnedBy,

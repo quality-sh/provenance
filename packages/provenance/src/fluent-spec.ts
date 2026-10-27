@@ -173,7 +173,10 @@ export class FluentRequirement<
 
   // Adds a parent Requirement in the same spec.
   refines(parent: AnyRequirement): FluentRequirement<Key, Rules, Sources> {
-    return this.withRelations({ ...this.relations, refines: [...new Set([...(this.relations.refines ?? []), parent.key])] });
+    return this.withRelations({
+      ...this.relations,
+      refines: [...new Set([...(this.relations.refines ?? []), parent.key])],
+    });
   }
 
   // Names the requirements of the same spec this one depends on.
@@ -456,7 +459,7 @@ function document(
     statement: requirement.text!,
     description: requirementDescriptions.get(requirement),
     sources: requirement.sourceDeclarations.map(({ key }) => key).sort(),
-    refines: requirement.relations.refines,
+    refines: requirement.relations.refines?.slice().sort(),
     ...listField("depends_on", requirement.relations.dependsOn),
     ...listField("supersedes", requirement.relations.supersedes),
     spawned_by: requirement.relations.spawnedBy,
