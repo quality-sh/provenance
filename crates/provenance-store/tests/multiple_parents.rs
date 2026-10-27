@@ -168,7 +168,7 @@ fn replacement_keeps_other_parents_and_failed_second_steps_keep_the_new_parent()
 fn save_with(
     store: &StateStore,
     etag: &str,
-    edit: Value,
+    edit: &Value,
 ) -> anyhow::Result<provenance_core::review::RequirementEditState> {
     let mut input = json!({
         "actor":"author", "expected_etag":etag,
@@ -195,16 +195,16 @@ fn a_refused_second_step_keeps_the_sole_parent_and_the_new_parent() {
     let added = save_with(
         &store,
         &current.etag,
-        json!({"relationships":{"refines":{"add":["req_b"]}}}),
+        &json!({"relationships":{"refines":{"add":["req_b"]}}}),
     )
     .unwrap();
     let concurrent = json!({"update":{"scope_id":"default", "id":"req_a",
         "description":"A concurrent edit."}});
-    save_with(&store, &added.etag, concurrent).unwrap();
+    save_with(&store, &added.etag, &concurrent).unwrap();
     assert!(save_with(
         &store,
         &added.etag,
-        json!({"relationships":{"refines":{"remove":["req_p"]}}}),
+        &json!({"relationships":{"refines":{"remove":["req_p"]}}}),
     )
     .is_err());
     assert_eq!(read(&store, "req_a")["refines"], json!(["req_b", "req_p"]));

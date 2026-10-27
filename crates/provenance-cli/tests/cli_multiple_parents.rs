@@ -105,7 +105,7 @@ fn read(repo: &str, id: &str) -> serde_json::Value {
     json_output(&["api", &format!("requirements/{id}"), "--repo", repo])["data"].clone()
 }
 
-fn set_parents(repo: &str, id: &str, parents: serde_json::Value) {
+fn set_parents(repo: &str, id: &str, parents: &serde_json::Value) {
     json_output(&[
         id,
         "update",
@@ -155,7 +155,7 @@ fn cli_refuses_an_old_parent_that_is_not_a_parent_before_any_write() {
 fn cli_replaces_a_sole_parent() {
     let (_directory, repo) = parent_repo();
     let descendant = read(&repo, "req_child");
-    set_parents(&repo, "req_shared", serde_json::json!(["req_p"]));
+    set_parents(&repo, "req_shared", &serde_json::json!(["req_p"]));
     replace(&repo, "req_p", "req_b").success();
     let moved = read(&repo, "req_shared");
     assert_eq!(moved["refines"], serde_json::json!(["req_b"]));
@@ -167,9 +167,9 @@ fn cli_replaces_a_sole_parent() {
 #[verifies("rule_supersede_swaps_selected_child_parent", examples)]
 fn cli_finishes_a_sole_parent_replacement_after_a_failed_second_step() {
     let (_directory, repo) = parent_repo();
-    set_parents(&repo, "req_shared", serde_json::json!(["req_p"]));
+    set_parents(&repo, "req_shared", &serde_json::json!(["req_p"]));
     // A failed removal leaves the added parent next to the sole old parent.
-    set_parents(&repo, "req_shared", serde_json::json!({"add":["req_b"]}));
+    set_parents(&repo, "req_shared", &serde_json::json!({"add":["req_b"]}));
     assert_eq!(
         read(&repo, "req_shared")["refines"],
         serde_json::json!(["req_b", "req_p"])
@@ -189,7 +189,7 @@ fn cli_refused_replacement_names_the_review_read_command() {
         .as_str()
         .unwrap()
         .to_owned();
-    set_parents(&repo, "req_shared", serde_json::json!(["req_p"]));
+    set_parents(&repo, "req_shared", &serde_json::json!(["req_p"]));
     let before = read(&repo, "req_shared");
     provenance()
         .args([
