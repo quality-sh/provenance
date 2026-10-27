@@ -48,7 +48,7 @@ async fn verification_refuses_a_symlink_outside_the_repository_before_publicatio
             )
             .unwrap_err(),
         );
-        assert_eq!(error.safe(), WriteFailure::FileAccessDenied);
+        assert!(matches!(error.safe(), WriteFailure::FileAccessDenied));
         assert_eq!(error.status(), 403);
         assert!(!repo.layout.verification_runs_path(&scope).exists());
     }
