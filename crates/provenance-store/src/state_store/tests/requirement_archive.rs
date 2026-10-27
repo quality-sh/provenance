@@ -37,7 +37,7 @@ fn child(store: &crate::state_store::StateStore, id: &str, parent: &str) {
     store
         .create_requirement(
             serde_json::from_value(json!({
-                "scope_id":"default", "id":id, "statement":"The service keeps a record.",
+                "scope_id":"default", "id":id, "statement":"The system is safe.",
                 "status":"active", "refines":parent, "depends_on":[], "supersedes":[]
             }))
             .unwrap(),
@@ -108,7 +108,7 @@ fn diamond_archives_only_when_both_owning_parents_enter_cascade() {
             vec!["req_left", "req_overtime"]
         };
         store.create_rule(serde_json::from_value(json!({
-            "scope_id":"default", "id":"rule_shared", "statement":"The service keeps a record.",
+            "scope_id":"default", "id":"rule_shared", "statement":"The system is safe.",
             "status":"active", "severity":"medium", "requirement_ids":parents, "resolution_ids":[]
         })).unwrap()).unwrap();
         let before = store.list_rules(&scope).unwrap().pop().unwrap();

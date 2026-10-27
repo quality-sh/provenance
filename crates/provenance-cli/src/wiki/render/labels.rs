@@ -124,6 +124,7 @@ pub(in crate::wiki::render) const fn requirement_status_word(
         RequirementStatus::Discovery => "discovery",
         RequirementStatus::Refinement => "refinement",
         RequirementStatus::Resolved => "resolved",
+        RequirementStatus::Archived => "archived",
     }
 }
 
@@ -139,6 +140,7 @@ pub(in crate::wiki::render) const fn resolution_status_word(
         ResolutionStatus::Revised => "revised",
         ResolutionStatus::Superseded => "superseded",
         ResolutionStatus::Abandoned => "abandoned",
+        ResolutionStatus::Archived => "archived",
     }
 }
 
@@ -277,7 +279,8 @@ mod tests {
             RequirementStatus::Active => Some(RequirementStatus::Discovery),
             RequirementStatus::Discovery => Some(RequirementStatus::Refinement),
             RequirementStatus::Refinement => Some(RequirementStatus::Resolved),
-            RequirementStatus::Resolved => None,
+            RequirementStatus::Resolved => Some(RequirementStatus::Archived),
+            RequirementStatus::Archived => None,
         } {
             all.push(next);
         }

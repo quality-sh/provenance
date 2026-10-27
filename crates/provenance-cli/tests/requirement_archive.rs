@@ -14,6 +14,7 @@ fn run(repo: &str, args: &[&str]) -> String {
     String::from_utf8(result.stdout).unwrap()
 }
 
+// Implementation aid: this checks archive visibility across public CLI reads.
 #[test]
 fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it() {
     let directory = tempfile::tempdir().unwrap();
@@ -38,7 +39,7 @@ fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it(
             "--id",
             "req_current",
             "--statement",
-            "The service keeps current records.",
+            "The system is safe.",
         ],
     );
     run(
@@ -49,16 +50,24 @@ fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it(
             "--id",
             "req_retired",
             "--statement",
-            "The service keeps a record.",
+            "The system is safe.",
             "--refines",
             "req_current",
         ],
     );
+    let current: serde_json::Value = serde_json::from_str(&run(
+        repo,
+        &["api", "requirements/req_retired", "--format", "json"],
+    ))
+    .unwrap();
+    let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     run(
         repo,
         &[
             "req_retired",
             "update",
+            "--if-match",
+            etag,
             "--status",
             "archived",
             "--archived-in-commit-json",
@@ -72,7 +81,8 @@ fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it(
         &[
             "requirements",
             "list",
-            "--include-terminal",
+            "--exclude-terminal",
+            "false",
             "--format",
             "json"
         ]
@@ -87,7 +97,9 @@ fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it(
         repo,
         &[
             "api",
-            "requirements/req_current/document?exclude_terminal=false",
+            "requirements/req_current/document",
+            "--query",
+            "exclude_terminal=false",
             "--format",
             "json"
         ]

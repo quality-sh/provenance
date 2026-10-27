@@ -102,6 +102,7 @@ const fn requirement_suffix(status: &RequirementStatus) -> &'static str {
         RequirementStatus::Discovery => " · discovery",
         RequirementStatus::Refinement => " · refinement",
         RequirementStatus::Resolved => " · resolved",
+        RequirementStatus::Archived => " · archived",
     }
 }
 
@@ -115,6 +116,7 @@ const fn resolution_suffix(status: &ResolutionStatus) -> &'static str {
         ResolutionStatus::Revised => " · revised",
         ResolutionStatus::Superseded => " · superseded",
         ResolutionStatus::Abandoned => " · abandoned",
+        ResolutionStatus::Archived => " · archived",
     }
 }
 
