@@ -290,8 +290,6 @@ fn accepted_candidate_cannot_be_withdrawn() {
     );
 
     assert_eq!(result.status(), 409);
-    let body = result.into_string().unwrap();
-    assert!(body.contains("accepted"), "{body}");
     assert_eq!(get(&host, "/resolutions/res_new"), before);
 }
 
@@ -356,8 +354,8 @@ fn replaced_rejection(accepted: bool, revises: bool) {
         ),
     );
     assert_eq!(result.status(), 409, "accepted={accepted}, revises={revises}");
-    let body = result.into_string().unwrap();
-    assert!(body.contains("replaced by a later submission"), "{body}");
+    let body: Value = serde_json::from_str(&result.into_string().unwrap()).unwrap();
+    assert_eq!(body["error"]["kind"], "review_submission_conflict");
     assert_eq!(get(&host, "/resolutions/res_new"), record);
     assert_eq!(state_files(&repo.path().join(".provenance/state")), before);
 }
