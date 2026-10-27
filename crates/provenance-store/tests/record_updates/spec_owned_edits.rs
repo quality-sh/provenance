@@ -1,17 +1,5 @@
-use super::support::Fixture;
+use super::support::{raw_rows, Fixture};
 use serde_json::{json, Value};
-
-fn raw_rows(fixture: &Fixture, family: &str, file: &str) -> Vec<String> {
-    let path = fixture
-        .dir
-        .path()
-        .join(format!(".provenance/state/scopes/default/{family}/{file}"));
-    std::fs::read_to_string(path)
-        .unwrap()
-        .lines()
-        .map(str::to_owned)
-        .collect()
-}
 
 fn rows_except(rows: &[String], id: &str) -> Vec<String> {
     rows.iter()
@@ -30,6 +18,12 @@ fn assert_kept(after: &[String], untouched: &[String]) {
     }
 }
 
+// The binding to rule_porcelain_update_preserves_omissions covers only the
+// edited field: the owner's description changes and the other fields of that
+// requirement stay. The other checks are guards with no rule of their own:
+// the spec's other declarations stay unchanged, every status stays active,
+// and a second apply keeps the owner's edit. No Rule states these yet, so
+// they must not be read as evidence for the bound rule.
 #[tokio::test]
 #[provenance_macros::verifies("rule_porcelain_update_preserves_omissions", examples)]
 async fn owner_edit_of_one_declaration_keeps_the_other_declarations() {
@@ -76,7 +70,8 @@ async fn owner_edit_of_one_declaration_keeps_the_other_declarations() {
         for requirement in fixture.store.list_requirements(&fixture.scope).unwrap() {
             assert_eq!(
                 serde_json::to_value(&requirement).unwrap()["status"],
-                "active"
+                "active",
+                "{stage}"
             );
         }
         let rule =
