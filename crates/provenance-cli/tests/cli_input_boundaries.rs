@@ -1,5 +1,5 @@
 use assert_cmd::Command;
-use predicates::{prelude::PredicateBooleanExt as _, str::contains};
+use predicates::str::contains;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -70,7 +70,7 @@ fn discussion_list_refuses_repeated_scalar_flags() {
     )
     .assert()
     .code(2)
-    .stderr(contains("--status").and(contains("cannot be used multiple times")));
+    .stderr(contains("--status is supplied more than once"));
     let single = output(&mut command(
         repo,
         &["req_parent", "discussions", "--status", "active"],
@@ -98,7 +98,7 @@ fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     )
     .assert()
     .code(2)
-    .stderr(contains("--actor").and(contains("cannot be used multiple times")));
+    .stderr(contains("--actor is supplied more than once"));
     let list = output(&mut command(repo, &["req_parent", "discussions"]));
     assert_eq!(list["result"]["entries"], json!([]));
 }
