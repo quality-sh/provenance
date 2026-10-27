@@ -1,6 +1,6 @@
 <mxfile host="drawio" type="device" compressed="false">
   <diagram id="05-cli-dispatch" name="provenance-cli: command parse and the two dispatch paths">
-    <mxGraphModel dx="1790" dy="1050" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1790" pageHeight="1050" math="0" shadow="0">
+    <mxGraphModel dx="1790" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1790" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -25,13 +25,13 @@
         <mxCell id="h_tgt" value='&lt;b&gt;Target&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;provenance &amp;lt;ID&amp;gt; &amp;lt;action&amp;gt;;&lt;br&gt;catalog_cli::dispatch_target;&lt;br&gt;host.target_route&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="hp">
           <mxGeometry x="280" y="35" width="245" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="h_get" value='&lt;b&gt;Get&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;provenance &amp;lt;ID&amp;gt; get;&lt;br&gt;porcelain::dispatch_get;&lt;br&gt;--follow: review::follow;&lt;br&gt;review link: review_link&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="hp">
+        <mxCell id="h_get" value='&lt;b&gt;Get&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;provenance &amp;lt;ID&amp;gt; get;&lt;br&gt;porcelain::dispatch_get;&lt;br&gt;--review-link: review_link&lt;br&gt;reads the record, then&lt;br&gt;finds the review host&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="hp">
           <mxGeometry x="15" y="165" width="250" height="110" as="geometry" />
         </mxCell>
         <mxCell id="h_srch" value='&lt;b&gt;Search, Api, Discussions&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;porcelain dispatch_search,&lt;br&gt;porcelain api;&lt;br&gt;invocation/discussion&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="hp">
           <mxGeometry x="280" y="165" width="245" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="h_rc" value='&lt;b&gt;RepoContext::local_host()&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;every path above calls it: opens the graph;&lt;br&gt;LocalAccess "native", zero bearer, 127.0.0.1:1;&lt;br&gt;StatementHost::with_access&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="hp">
+        <mxCell id="h_rc" value='&lt;b&gt;RepoContext::local_host()&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;every path above calls it (not get --follow);&lt;br&gt;opens the graph; LocalAccess "native", zero bearer,&lt;br&gt;127.0.0.1:1; StatementHost::with_access&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="hp">
           <mxGeometry x="15" y="300" width="510" height="95" as="geometry" />
         </mxCell>
         <mxCell id="t_host" value='&lt;b&gt;provenance-transport StatementHost&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;invoke_resource and porcelain ports,&lt;br&gt;no socket (diagram 04)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
@@ -82,11 +82,17 @@
         <mxCell id="r_store" value='&lt;b&gt;provenance-store&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Store::open; queries, writers, cache, catalog (diagrams 02, 03)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
           <mxGeometry x="325" y="800" width="1085" height="65" as="geometry" />
         </mxCell>
-        <mxCell id="note" value="Most built-in handlers also call&lt;br&gt;provenance-store directly (check,&lt;br&gt;coverage, report, import, init).&lt;br&gt;Only the host path goes through&lt;br&gt;the catalog, so it shares routes,&lt;br&gt;access and failures with HTTP clients." style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontColor=#1a1a1a;" vertex="1" parent="1">
-          <mxGeometry x="20" y="530" width="280" height="110" as="geometry" />
+        <mxCell id="f_follow" value='&lt;b&gt;Get with --follow&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;--view review --format json;&lt;br&gt;review::follow::run discovers&lt;br&gt;the running review host;&lt;br&gt;no in-process host&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="640" width="255" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="r_rh" value='&lt;b&gt;Running review host&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;provenance review in another&lt;br&gt;process; WebSocket at&lt;br&gt;/review-events (diagram 07)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="325" y="640" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="note" value="Most built-in handlers also call provenance-store directly&lt;br&gt;(check, coverage, report, import, init). Only the host&lt;br&gt;path goes through the catalog, so it shares routes,&lt;br&gt;access and failures with HTTP clients." style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="20" y="890" width="600" height="70" as="geometry" />
         </mxCell>
         <mxCell id="05-cli-dispatch-legend" value="Legend" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
-          <mxGeometry x="20" y="890" width="830" height="134" as="geometry" />
+          <mxGeometry x="20" y="960" width="830" height="134" as="geometry" />
         </mxCell>
         <mxCell id="05-cli-dispatch-legend-sw-iface" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="05-cli-dispatch-legend">
           <mxGeometry x="12" y="28" width="26" height="16" as="geometry" />
@@ -103,7 +109,7 @@
         <mxCell id="05-cli-dispatch-legend-sw-engine" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="05-cli-dispatch-legend">
           <mxGeometry x="282" y="28" width="26" height="16" as="geometry" />
         </mxCell>
-        <mxCell id="05-cli-dispatch-legend-tx-engine" value="Engine: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="05-cli-dispatch-legend">
+        <mxCell id="05-cli-dispatch-legend-tx-engine" value="Store: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="05-cli-dispatch-legend">
           <mxGeometry x="314" y="26" width="230" height="20" as="geometry" />
         </mxCell>
         <mxCell id="05-cli-dispatch-legend-sw-analysis" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="05-cli-dispatch-legend">
@@ -188,16 +194,24 @@
           <mxGeometry x="0" relative="1" as="geometry">
           </mxGeometry>
         </mxCell>
+        <mxCell id="05-cli-dispatch-e13" value="--follow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.498;exitY=1;exitDx=0;exitDy=0;entryX=0.498;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="e_parse" target="f_follow">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="05-cli-dispatch-e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="f_follow" target="r_rh">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
         <mxCell id="05-cli-dispatch-f0" value="" style="edgeStyle=none;html=1;strokeColor=#4d4d4d;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="32" y="978" as="sourcePoint" />
-            <mxPoint x="80" y="978" as="targetPoint" />
+            <mxPoint x="32" y="1048" as="sourcePoint" />
+            <mxPoint x="80" y="1048" as="targetPoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="05-cli-dispatch-f1" value="" style="edgeStyle=none;html=1;strokeColor=#1f5fbf;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint x="32" y="1000" as="sourcePoint" />
-            <mxPoint x="80" y="1000" as="targetPoint" />
+            <mxPoint x="32" y="1070" as="sourcePoint" />
+            <mxPoint x="80" y="1070" as="targetPoint" />
           </mxGeometry>
         </mxCell>
       </root>
