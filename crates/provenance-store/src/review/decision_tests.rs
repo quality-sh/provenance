@@ -445,10 +445,7 @@ fn withdrawal_allows_a_fresh_review_cycle() {
         &artifact(),
     )
     .unwrap();
-    refused(
-        withdraw(&store, &proposal_2),
-        "accepted",
-    );
+    refused(withdraw(&store, &proposal_2), "accepted");
 }
 
 mod bypass_tests;
