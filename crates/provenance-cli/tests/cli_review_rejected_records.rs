@@ -295,48 +295,66 @@ fn accepted_candidate_cannot_be_withdrawn() {
     assert_eq!(get(&host, "/resolutions/res_new"), before);
 }
 
-// Implementation aid: the withdrawal guard must not act on a replaced submission.
+// Implementation aid: these cases keep withdrawal from acting on a replaced submission.
 #[test]
-fn replaced_rejected_candidate_cannot_be_withdrawn() {
-    for accepted in [false, true] {
-        for revises in [false, true] {
-            let repo = repository();
-            let host = start(repo.path());
-            let proposal = pending(&host, "res_new");
-            decide(&host, "res_new", "rejected");
-            post(
-                &host,
-                "/resolutions/res_new/submit",
-                &json!({
-                    "actor":"shaping_agent", "declared_by":"shaping_agent",
-                    "title":"Keep the result", "summary":"The system stores each result.",
-                    "source_ids":[], "evidence_references":[], "builds_on":[],
-                    "revises": if revises { Some(&proposal) } else { None }
-                }),
-            );
-            if accepted {
-                decide(&host, "res_new", "accepted");
-            }
-            let before = state_files(&repo.path().join(".provenance/state"));
-            let record = get(&host, "/resolutions/res_new");
-            let result = response(
-                request(
-                    &host, "POST",
-                    &format!("/resolutions/res_new/submissions/{proposal}/withdraw"), true,
-                )
-                .set("Content-Type", "application/json")
-                .send_string(&json!({"data":{
-                    "actor":"shaping_agent", "declared_by":"shaping_agent",
-                    "reason":"Withdraw the candidate."
-                }}).to_string()),
-            );
-            assert_eq!(result.status(), 409, "accepted={accepted}, revises={revises}");
-            let body = result.into_string().unwrap();
-            assert!(body.contains("replaced by a later submission"), "{body}");
-            assert_eq!(get(&host, "/resolutions/res_new"), record);
-            assert_eq!(state_files(&repo.path().join(".provenance/state")), before);
-        }
+fn rejected_candidate_revised_by_pending_submission_cannot_be_withdrawn() {
+    replaced_rejection(false, true);
+}
+
+// Implementation aid: acceptance of the replacement must not reopen its predecessor.
+#[test]
+fn rejected_candidate_revised_by_accepted_submission_cannot_be_withdrawn() {
+    replaced_rejection(true, true);
+}
+
+// Implementation aid: a later submission replaces the predecessor without a revision link.
+#[test]
+fn rejected_candidate_replaced_by_pending_submission_cannot_be_withdrawn() {
+    replaced_rejection(false, false);
+}
+
+// Implementation aid: acceptance does not require a revision link to replace the predecessor.
+#[test]
+fn rejected_candidate_replaced_by_accepted_submission_cannot_be_withdrawn() {
+    replaced_rejection(true, false);
+}
+
+fn replaced_rejection(accepted: bool, revises: bool) {
+    let repo = repository();
+    let host = start(repo.path());
+    let proposal = pending(&host, "res_new");
+    decide(&host, "res_new", "rejected");
+    post(
+        &host,
+        "/resolutions/res_new/submit",
+        &json!({
+            "actor":"shaping_agent", "declared_by":"shaping_agent",
+            "title":"Keep the result", "summary":"The system stores each result.",
+            "source_ids":[], "evidence_references":[], "builds_on":[],
+            "revises": if revises { Some(&proposal) } else { None }
+        }),
+    );
+    if accepted {
+        decide(&host, "res_new", "accepted");
     }
+    let before = state_files(&repo.path().join(".provenance/state"));
+    let record = get(&host, "/resolutions/res_new");
+    let result = response(
+        request(
+            &host, "POST",
+            &format!("/resolutions/res_new/submissions/{proposal}/withdraw"), true,
+        )
+        .set("Content-Type", "application/json")
+        .send_string(&json!({"data":{
+            "actor":"shaping_agent", "declared_by":"shaping_agent",
+            "reason":"Withdraw the candidate."
+        }}).to_string()),
+    );
+    assert_eq!(result.status(), 409, "accepted={accepted}, revises={revises}");
+    let body = result.into_string().unwrap();
+    assert!(body.contains("replaced by a later submission"), "{body}");
+    assert_eq!(get(&host, "/resolutions/res_new"), record);
+    assert_eq!(state_files(&repo.path().join(".provenance/state")), before);
 }
 
 fn state_files(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
