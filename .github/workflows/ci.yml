@@ -92,6 +92,10 @@ jobs:
               - "packages/provenance/scripts/package-engine.js"
               - "packages/provenance/test/fixtures/packed-consumer/rule-bindings.ts.fixture"
               - "packages/create-provenance/package.json"
+              # Format reads rustfmt.toml. Cargo sets the test environment
+              # variables from .cargo/config.toml.
+              - "rustfmt.toml"
+              - ".cargo/config.toml"
             contract:
               - *ci
               - "crates/**"
