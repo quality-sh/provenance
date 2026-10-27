@@ -193,6 +193,16 @@ impl CycleFacts {
         })
     }
 
+    /// Whether a later submission or a revision link replaces this submission.
+    pub(super) fn is_replaced(&self, proposal: &ProposalCard) -> bool {
+        let target = &proposal.traceability.target;
+        self.of_record(NodeType::from(target.artifact_type), &target.artifact_id)
+            .any(|candidate| {
+                self.order_of(&candidate.id) > self.order_of(&proposal.id)
+                    || candidate.revises.as_ref() == Some(&proposal.id)
+            })
+    }
+
     /// The withdrawn submissions of one record, in submission order.
     pub(super) fn withdrawn_submissions(
         &self,

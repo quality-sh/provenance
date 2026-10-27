@@ -71,16 +71,24 @@ impl StateStore {
                 .expect("review_submission checks the binding");
             let revision = super::super::save::current_revision(&record)?
                 .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
-            if revision != binding.revision
-                || facts.is_withdrawn(&input.proposal_id)
-                || facts.dispositions().iter().any(|disposition| {
-                    disposition.proposal_id == input.proposal_id
-                        && disposition.decision == DispositionDecision::Accepted
-                })
-            {
+            let refusal = if revision != binding.revision {
+                Some("this review submission is stale")
+            } else if facts.is_withdrawn(&input.proposal_id) {
+                Some("this review submission is already withdrawn")
+            } else if facts.dispositions().iter().any(|disposition| {
+                disposition.proposal_id == input.proposal_id
+                    && disposition.decision == DispositionDecision::Accepted
+            }) {
+                Some("this review submission is accepted")
+            } else if facts.is_replaced(&proposal) {
+                Some("this review submission was replaced by a later submission")
+            } else {
+                None
+            };
+            if let Some(reason) = refusal {
                 return Err(SourceFailure::wrap(
                     facts.conflict_failure(self, &scope, kind, record_id)?,
-                    anyhow::anyhow!("this review submission is no longer current and pending"),
+                    anyhow::anyhow!(reason),
                 ));
             }
             with_record_state(&self.layout, |layout| {

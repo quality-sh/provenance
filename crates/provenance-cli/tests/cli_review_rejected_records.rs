@@ -341,14 +341,19 @@ fn replaced_rejection(accepted: bool, revises: bool) {
     let record = get(&host, "/resolutions/res_new");
     let result = response(
         request(
-            &host, "POST",
-            &format!("/resolutions/res_new/submissions/{proposal}/withdraw"), true,
+            &host,
+            "POST",
+            &format!("/resolutions/res_new/submissions/{proposal}/withdraw"),
+            true,
         )
         .set("Content-Type", "application/json")
-        .send_string(&json!({"data":{
-            "actor":"shaping_agent", "declared_by":"shaping_agent",
-            "reason":"Withdraw the candidate."
-        }}).to_string()),
+        .send_string(
+            &json!({"data":{
+                "actor":"shaping_agent", "declared_by":"shaping_agent",
+                "reason":"Withdraw the candidate."
+            }})
+            .to_string(),
+        ),
     );
     assert_eq!(result.status(), 409, "accepted={accepted}, revises={revises}");
     let body = result.into_string().unwrap();
