@@ -41,18 +41,18 @@ fn adding_a_second_parent_keeps_the_diamond_and_refuses_a_cycle() {
     }
     for parent in ["req_p", "req_b"] {
         store
-            .set_requirement_refines(&scope(), &sid(parent), sid("req_top"))
+            .add_requirement_refines(&scope(), &sid(parent), sid("req_top"))
             .unwrap();
     }
     store
-        .set_requirement_refines(&scope(), &sid("req_child"), sid("req_a"))
+        .add_requirement_refines(&scope(), &sid("req_child"), sid("req_a"))
         .unwrap();
     let child = read(&store, "req_child");
     store
-        .set_requirement_refines(&scope(), &sid("req_a"), sid("req_p"))
+        .add_requirement_refines(&scope(), &sid("req_a"), sid("req_p"))
         .unwrap();
     store
-        .set_requirement_refines(&scope(), &sid("req_a"), sid("req_b"))
+        .add_requirement_refines(&scope(), &sid("req_a"), sid("req_b"))
         .unwrap();
     let shared = read(&store, "req_a");
     assert_eq!(shared["refines"], json!(["req_b", "req_p"]));
@@ -65,7 +65,7 @@ fn adding_a_second_parent_keeps_the_diamond_and_refuses_a_cycle() {
     assert_eq!(diamond.len(), 5);
     assert_eq!(read(&store, "req_child"), child);
     assert!(store
-        .set_requirement_refines(&scope(), &sid("req_b"), sid("req_child"))
+        .add_requirement_refines(&scope(), &sid("req_b"), sid("req_child"))
         .is_err());
     assert_eq!(store.list_requirements(&scope()).unwrap(), diamond);
 }
@@ -79,7 +79,7 @@ fn supersession_changes_no_child_or_parent_status() {
         create(&store, id);
     }
     store
-        .set_requirement_refines(&scope(), &sid("req_a"), sid("req_p"))
+        .add_requirement_refines(&scope(), &sid("req_a"), sid("req_p"))
         .unwrap();
     let child = read(&store, "req_a");
     let parent = read(&store, "req_p");
@@ -103,10 +103,10 @@ fn parents_share_one_requirement_and_all_its_rules() {
     })).unwrap()).unwrap();
     let rules = store.list_rules(&scope()).unwrap();
     store
-        .set_requirement_refines(&scope(), &sid("req_a"), sid("req_p"))
+        .add_requirement_refines(&scope(), &sid("req_a"), sid("req_p"))
         .unwrap();
     store
-        .set_requirement_refines(&scope(), &sid("req_a"), sid("req_b"))
+        .add_requirement_refines(&scope(), &sid("req_a"), sid("req_b"))
         .unwrap();
     assert_eq!(read(&store, "req_a")["refines"], json!(["req_b", "req_p"]));
     assert_eq!(store.list_rules(&scope()).unwrap(), rules);
@@ -134,7 +134,7 @@ fn replacement_keeps_other_parents_and_failed_second_steps_keep_the_new_parent()
         create(&store, id);
     }
     store
-        .set_requirement_refines(&scope(), &sid("req_child"), sid("req_a"))
+        .add_requirement_refines(&scope(), &sid("req_child"), sid("req_a"))
         .unwrap();
     let child = read(&store, "req_child");
     edit_parents(&store, &json!(["req_p", "req_q"])).unwrap();
@@ -160,6 +160,53 @@ fn replacement_keeps_other_parents_and_failed_second_steps_keep_the_new_parent()
     assert_eq!(read(&store, "req_a"), after);
     edit_parents(&store, &json!(["req_p"])).unwrap();
     edit_parents(&store, &json!({"add":["req_b"]})).unwrap();
+    assert_eq!(read(&store, "req_a")["refines"], json!(["req_b", "req_p"]));
+    edit_parents(&store, &json!({"remove":["req_p"]})).unwrap();
+    assert_eq!(read(&store, "req_a")["refines"], json!(["req_b"]));
+}
+
+fn save_with(
+    store: &StateStore,
+    etag: &str,
+    edit: Value,
+) -> anyhow::Result<provenance_core::review::RequirementEditState> {
+    let mut input = json!({
+        "actor":"author", "expected_etag":etag,
+        "update":{"scope_id":"default", "id":"req_a"}
+    });
+    input
+        .as_object_mut()
+        .unwrap()
+        .extend(edit.as_object().unwrap().clone());
+    store.save_requirement(serde_json::from_value(input)?)
+}
+
+#[test]
+#[verifies("rule_supersede_swaps_selected_child_parent", examples)]
+fn a_refused_second_step_keeps_the_sole_parent_and_the_new_parent() {
+    let (_temp, store) = fixture();
+    for id in ["req_p", "req_b"] {
+        create(&store, id);
+    }
+    edit_parents(&store, &json!(["req_p"])).unwrap();
+    let current = store
+        .requirement_edit_state(&scope(), &sid("req_a"))
+        .unwrap();
+    let added = save_with(
+        &store,
+        &current.etag,
+        json!({"relationships":{"refines":{"add":["req_b"]}}}),
+    )
+    .unwrap();
+    let concurrent = json!({"update":{"scope_id":"default", "id":"req_a",
+        "description":"A concurrent edit."}});
+    save_with(&store, &added.etag, concurrent).unwrap();
+    assert!(save_with(
+        &store,
+        &added.etag,
+        json!({"relationships":{"refines":{"remove":["req_p"]}}}),
+    )
+    .is_err());
     assert_eq!(read(&store, "req_a")["refines"], json!(["req_b", "req_p"]));
     edit_parents(&store, &json!({"remove":["req_p"]})).unwrap();
     assert_eq!(read(&store, "req_a")["refines"], json!(["req_b"]));

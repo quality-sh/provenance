@@ -84,33 +84,113 @@ fn cli_replaces_one_selected_parent_and_can_repeat_the_move() {
     );
 }
 
+fn replace(repo: &str, old: &str, new: &str) -> assert_cmd::assert::Assert {
+    provenance()
+        .args([
+            "req_shared",
+            "update",
+            "--repo",
+            repo,
+            "--actor",
+            "author",
+            "--replace-parent",
+            old,
+            "--with-parent",
+            new,
+        ])
+        .assert()
+}
+
+fn read(repo: &str, id: &str) -> serde_json::Value {
+    json_output(&["api", &format!("requirements/{id}"), "--repo", repo])["data"].clone()
+}
+
+fn set_parents(repo: &str, id: &str, parents: serde_json::Value) {
+    json_output(&[
+        id,
+        "update",
+        "--if-match",
+        read(repo, id)["edit"]["etag"].as_str().unwrap(),
+        "--repo",
+        repo,
+        "--actor",
+        "author",
+        "--relationships-json",
+        &serde_json::json!({ "refines": parents }).to_string(),
+        "--format",
+        "json",
+    ]);
+}
+
 #[test]
 #[verifies("rule_move_replaces_only_selected_parent", examples)]
 #[verifies("rule_supersede_swaps_selected_child_parent", examples)]
-fn cli_refusals_preserve_parents_and_a_failed_removal_keeps_the_addition() {
+fn cli_refused_new_parents_preserve_parents() {
     let (_directory, repo) = parent_repo();
-    let before = json_output(&["api", "requirements/req_shared", "--repo", &repo]);
+    let before = read(&repo, "req_shared");
     for new in ["req_missing", "req_child"] {
-        provenance()
-            .args([
-                "req_shared",
-                "update",
-                "--repo",
-                &repo,
-                "--actor",
-                "author",
-                "--replace-parent",
-                "req_q",
-                "--with-parent",
-                new,
-            ])
-            .assert()
-            .failure();
-        assert_eq!(
-            json_output(&["api", "requirements/req_shared", "--repo", &repo])["data"],
-            before["data"]
-        );
+        replace(&repo, "req_q", new).failure();
+        assert_eq!(read(&repo, "req_shared"), before);
     }
+}
+
+#[test]
+#[verifies("rule_move_replaces_only_selected_parent", examples)]
+fn cli_refuses_an_old_parent_that_is_not_a_parent_before_any_write() {
+    let (_directory, repo) = parent_repo();
+    let before = read(&repo, "req_shared");
+    for old in ["req_missing", "req_child"] {
+        replace(&repo, old, "req_b")
+            .failure()
+            .stderr(predicates::str::contains(format!(
+                "{old} is not a parent of this Requirement"
+            )));
+        assert_eq!(read(&repo, "req_shared"), before);
+    }
+}
+
+#[test]
+#[verifies("rule_move_replaces_only_selected_parent", examples)]
+#[verifies("rule_move_preserves_identity_and_descendants", examples)]
+fn cli_replaces_a_sole_parent() {
+    let (_directory, repo) = parent_repo();
+    let descendant = read(&repo, "req_child");
+    set_parents(&repo, "req_shared", serde_json::json!(["req_p"]));
+    replace(&repo, "req_p", "req_b").success();
+    let moved = read(&repo, "req_shared");
+    assert_eq!(moved["refines"], serde_json::json!(["req_b"]));
+    assert_eq!(moved["id"], "req_shared");
+    assert_eq!(read(&repo, "req_child"), descendant);
+}
+
+#[test]
+#[verifies("rule_supersede_swaps_selected_child_parent", examples)]
+fn cli_finishes_a_sole_parent_replacement_after_a_failed_second_step() {
+    let (_directory, repo) = parent_repo();
+    set_parents(&repo, "req_shared", serde_json::json!(["req_p"]));
+    // A failed removal leaves the added parent next to the sole old parent.
+    set_parents(&repo, "req_shared", serde_json::json!({"add":["req_b"]}));
+    assert_eq!(
+        read(&repo, "req_shared")["refines"],
+        serde_json::json!(["req_b", "req_p"])
+    );
+    replace(&repo, "req_p", "req_b").success();
+    assert_eq!(
+        read(&repo, "req_shared")["refines"],
+        serde_json::json!(["req_b"])
+    );
+}
+
+#[test]
+#[verifies("rule_move_replaces_only_selected_parent", examples)]
+fn cli_refused_replacement_names_the_review_read_command() {
+    let (_directory, repo) = parent_repo();
+    let stale = read(&repo, "req_shared")["edit"]["etag"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    set_parents(&repo, "req_shared", serde_json::json!(["req_p"]));
+    let before = read(&repo, "req_shared");
     provenance()
         .args([
             "req_shared",
@@ -119,18 +199,19 @@ fn cli_refusals_preserve_parents_and_a_failed_removal_keeps_the_addition() {
             &repo,
             "--actor",
             "author",
+            "--if-match",
+            &stale,
             "--replace-parent",
-            "req_missing",
+            "req_p",
             "--with-parent",
             "req_b",
         ])
         .assert()
-        .failure();
-    let retained = json_output(&["api", "requirements/req_shared", "--repo", &repo]);
-    assert_eq!(
-        retained["data"]["refines"],
-        serde_json::json!(["req_b", "req_p", "req_q"])
-    );
+        .failure()
+        .stderr(predicates::str::contains(
+            "provenance req_shared --view review",
+        ));
+    assert_eq!(read(&repo, "req_shared"), before);
 }
 
 #[test]
