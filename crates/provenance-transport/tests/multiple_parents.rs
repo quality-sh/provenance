@@ -49,8 +49,8 @@ async fn http_adds_before_removal_and_a_failed_removal_keeps_both_parents() {
     let (status, value) = patch(&host, json!({"refines":{"add":["req_b"]}})).await;
     assert_eq!(status, 200, "{value}");
     assert_eq!(value["data"]["refines"], json!(["req_b", "req_p"]));
-    let (status, _) = patch(&host, json!({"refines":{"remove":["req_missing"]}})).await;
-    assert_eq!(status, 404);
+    let (status, refused) = patch(&host, json!({"refines":{"remove":["req_missing"]}})).await;
+    assert_eq!(status, 400, "{refused}");
     let (_, value) = call(&host, "GET", "/requirements/req_shared", None).await;
     assert_eq!(value["data"]["refines"], json!(["req_b", "req_p"]));
     let (status, value) = patch(&host, json!({"refines":{"remove":["req_p"]}})).await;
