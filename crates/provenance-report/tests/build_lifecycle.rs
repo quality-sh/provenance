@@ -50,7 +50,12 @@ fn report(shard: &str, initial: Value, final_records: &[Value]) -> String {
     report_with_base(shard, initial, final_records, false)
 }
 
-fn report_with_base(shard: &str, initial: Value, final_records: &[Value], existing: bool) -> String {
+fn report_with_base(
+    shard: &str,
+    initial: Value,
+    final_records: &[Value],
+    existing: bool,
+) -> String {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
     git(repo, &["init", "-q"]);
@@ -100,9 +105,7 @@ fn added_rule_archived_in_range_has_head_status() {
     row["archived_in_commit"] = json!({"commit": "a".repeat(40), "at": "2026-09-13T00:00:00Z"});
     let rendered = report("rules/rule.jsonl", initial, &[row]);
     assert!(
-        rendered.contains(
-            "| added | rule `rule_history` | [archived] The old rule holds. | adds"
-        ),
+        rendered.contains("| added | rule `rule_history` | [archived] The old rule holds. | adds"),
         "{rendered}"
     );
 }
@@ -151,7 +154,11 @@ fn current_added_record_has_no_lifecycle_label() {
         "statement": "The current requirement holds.", "status": "active"
     });
     let rendered = report("requirements/req.jsonl", row.clone(), &[row]);
-    assert!(rendered.contains("| added | requirement `req_current` | The current requirement holds. |  |"), "{rendered}");
+    assert!(
+        rendered
+            .contains("| added | requirement `req_current` | The current requirement holds. |  |"),
+        "{rendered}"
+    );
     assert!(!rendered.contains("status at head:"), "{rendered}");
 }
 
@@ -175,15 +182,23 @@ fn changed_status_is_not_repeated_in_a_label() {
 #[verifies("rule_branch_report_head_lifecycle", examples)]
 fn sources_and_resolutions_list_every_replacement_in_order() {
     for (shard, kind, initial) in [
-        ("sources/source.jsonl", "source", json!({
-            "schema_version": 2, "scope_id": "default", "id": "history",
-            "name": "Old source", "source_type": "policy"
-        })),
-        ("resolutions/res.jsonl", "resolution", json!({
-            "schema_version": 2, "scope_id": "default", "id": "history",
-            "title": "Old decision", "position": "Keep the old rule.",
-            "rationale": "The old rule applies.", "status": "draft", "requirement_ids": ["req_anchor"]
-        })),
+        (
+            "sources/source.jsonl",
+            "source",
+            json!({
+                "schema_version": 2, "scope_id": "default", "id": "history",
+                "name": "Old source", "source_type": "policy"
+            }),
+        ),
+        (
+            "resolutions/res.jsonl",
+            "resolution",
+            json!({
+                "schema_version": 2, "scope_id": "default", "id": "history",
+                "title": "Old decision", "position": "Keep the old rule.",
+                "rationale": "The old rule applies.", "status": "draft", "requirement_ids": ["req_anchor"]
+            }),
+        ),
     ] {
         let mut second = initial.clone();
         second["id"] = json!("replacement_b");
@@ -191,7 +206,12 @@ fn sources_and_resolutions_list_every_replacement_in_order() {
         let mut first = second.clone();
         first["id"] = json!("replacement_a");
         let rendered = report(shard, initial.clone(), &[second, initial, first]);
-        assert!(rendered.contains(&format!("| {kind} `history` | [superseded by 'replacement_a', 'replacement_b']")), "{rendered}");
+        assert!(
+            rendered.contains(&format!(
+                "| {kind} `history` | [superseded by 'replacement_a', 'replacement_b']"
+            )),
+            "{rendered}"
+        );
         assert!(!rendered.contains("status at head: current"), "{rendered}");
     }
 }
@@ -205,5 +225,8 @@ fn added_deprecated_rule_is_labelled_before_its_statement() {
         "requirement_ids": ["req_anchor"]
     });
     let rendered = report("rules/rule.jsonl", row.clone(), &[row]);
-    assert!(rendered.contains("| rule `rule_history` | [deprecated] The old rule holds."), "{rendered}");
+    assert!(
+        rendered.contains("| rule `rule_history` | [deprecated] The old rule holds."),
+        "{rendered}"
+    );
 }
