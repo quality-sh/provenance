@@ -80,7 +80,7 @@ object. `refines` takes a complete ID list or an `add`/`remove` delta. An empty 
 `spawned_by` takes a record ID, or `null` to clear.
 `depends_on` and `supersedes` take an array or a delta. `cites` takes the
 citation list or a delta with `add` citations and `remove` source IDs. This
-example adds one dependency and clears the refine target:
+example adds one dependency and removes all refinement parents:
 
 ```json
 {"data": {"actor": "agent",
