@@ -21,9 +21,10 @@ pub(super) async fn replace(
     provenance_core::StableId::new(new)?;
     anyhow::ensure!(old != new, "the old and new parents must differ");
     anyhow::ensure!(
-        data.as_object()
-            .is_some_and(|fields| fields.keys().all(|key| key == "actor")),
-        "parent replacement accepts only --actor and the parent options"
+        data.as_object().is_some_and(|fields| fields
+            .keys()
+            .all(|key| matches!(key.as_str(), "actor" | "declared_by"))),
+        "parent replacement accepts only --actor, --declared-by, and the parent options"
     );
     let read = host
         .invoke_resource(

@@ -299,7 +299,9 @@ accepts a complete list or an `add`/`remove` delta. The scalar shape is not acce
 The protocol version stays unchanged. Both generated clients use this contract.
 
 For one selected child, the CLI accepts `update --replace-parent P --with-parent B`
-with `--actor`. It reads the child guard, adds B, and uses the returned guard to remove P.
+with `--actor`. For a Requirement owned by a declaration, `--declared-by` supplies
+the existing owner precondition to both writes. The helper reads the child guard,
+adds B, and uses the returned guard to remove P.
 An explicit `--if-match` controls the first write. A failed second write can leave
 both parents. A retry preserves the other parents. Each write uses the existing
 Requirement PATCH operation. The helper changes no descendant and does not declare
