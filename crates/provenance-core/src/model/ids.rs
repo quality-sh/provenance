@@ -140,7 +140,6 @@ pub const RESERVED_RECORD_IDS: &[&str] = &[
     "validate",
     "verification-bindings",
     "verification-runs",
-    "wiki",
 ];
 
 /// Refuse a command keyword when a writer assigns a new record ID.

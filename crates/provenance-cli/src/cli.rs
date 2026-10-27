@@ -115,10 +115,6 @@ pub enum Command {
         #[command(subcommand)]
         command: dictionary::DictionaryCommand,
     },
-    Wiki {
-        #[command(subcommand)]
-        command: workspace::WikiCommand,
-    },
     /// Serve local review assets and authorized repository operations.
     Review(crate::review::Options),
     Materialize {
