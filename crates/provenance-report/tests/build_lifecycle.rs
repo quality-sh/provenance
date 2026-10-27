@@ -233,3 +233,31 @@ fn added_deprecated_rule_is_labelled_before_its_statement() {
         "{rendered}"
     );
 }
+
+#[test]
+#[verifies("rule_branch_report_head_lifecycle", examples)]
+fn rendered_replacements_are_sorted_and_deduplicated() {
+    let envelope = json!({
+        "schema_version": 1,
+        "repository": "quality-sh/provenance",
+        "scope": "default",
+        "base_commit": "a".repeat(40),
+        "head_commit": "b".repeat(40),
+        "scan": { "completeness": "complete", "baseline": "compatible", "files_scanned": 1 },
+        "graph_changes": [{
+            "kind": "requirement",
+            "change": "added",
+            "id": "req_history",
+            "statement": "The old requirement holds.",
+            "lifecycle_after": "active",
+            "superseded_by": ["req_c", "req_a", "req_c", "req_b", "req_a"]
+        }]
+    });
+    let rendered = render_envelope(&envelope.to_string(), RenderFormat::Markdown).unwrap();
+    assert!(
+        rendered.contains(
+            "| added | requirement `req_history` | [superseded by 'req_a', 'req_b', 'req_c'] The old requirement holds. |  |\n"
+        ),
+        "{rendered}"
+    );
+}

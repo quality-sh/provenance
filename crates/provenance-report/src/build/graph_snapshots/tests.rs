@@ -1,9 +1,11 @@
-use super::{read_bindings, ScopeId};
+use super::{diff_records, read_bindings, relation, RelationKey, ScopeId};
 use crate::build::read_snapshots;
-use crate::envelope::BaselineCompatibility;
+use crate::envelope::{BaselineCompatibility, RecordKind};
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_core::Requirement;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
+use std::collections::BTreeSet;
 use std::process::Command;
 
 fn git(repo: &Utf8Path, args: &[&str]) -> String {
@@ -174,4 +176,52 @@ fn historical_base_keeps_tolerant_graph_parsing() {
             );
         }
     }
+}
+
+#[test]
+#[verifies("rule_branch_report_head_lifecycle", examples)]
+fn supersedes_marks_only_records_of_the_same_kind() {
+    let requirement = |id: &str| -> Requirement {
+        serde_json::from_value(json!({
+            "schema_version": 2, "scope_id": "default", "id": id,
+            "statement": "The graph is readable.", "status": "active"
+        }))
+        .unwrap()
+    };
+    let head = [
+        requirement("req_kept"),
+        requirement("req_old"),
+        requirement("req_new"),
+    ];
+    let relations = |record: &Requirement| -> BTreeSet<RelationKey> {
+        if record.id.as_str() != "req_new" {
+            return BTreeSet::new();
+        }
+        BTreeSet::from([
+            relation("supersedes", RecordKind::Requirement, "req_old"),
+            relation("supersedes", RecordKind::Resolution, "req_kept"),
+        ])
+    };
+    let mut changes = Vec::new();
+    diff_records(
+        &[],
+        &head,
+        RecordKind::Requirement,
+        |record| record.id.as_str(),
+        |record| record.statement.clone(),
+        |_| "active".to_string(),
+        relations,
+        &mut changes,
+    );
+    let superseded_by = |id: &str| {
+        changes
+            .iter()
+            .find(|change| change.id == id)
+            .unwrap()
+            .superseded_by
+            .clone()
+    };
+    assert_eq!(superseded_by("req_old"), ["req_new"]);
+    assert!(superseded_by("req_kept").is_empty());
+    assert!(superseded_by("req_new").is_empty());
 }
