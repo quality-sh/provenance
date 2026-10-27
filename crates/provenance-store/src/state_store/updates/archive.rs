@@ -71,10 +71,7 @@ impl StateStore {
             batch.mutate_all(
                 &shards::resolutions_path(&store.layout, scope),
                 |records: &mut Vec<Resolution>| {
-                    for record in records
-                        .iter_mut()
-                        .filter(|r| r.status != ResolutionStatus::Archived)
-                    {
+                    for record in records.iter_mut().filter(|r| live_resolution(r)) {
                         if affected(&record.requirement_ids, &cascade) {
                             if no_survivors(&record.requirement_ids, &unavailable) {
                                 record.status = ResolutionStatus::Archived;
@@ -109,6 +106,14 @@ impl StateStore {
             archive_shaping(batch, scope, &cascade, stamp)
         })
     }
+}
+
+/// An ended decision keeps its status and its parent links.
+const fn live_resolution(record: &Resolution) -> bool {
+    !matches!(
+        record.status,
+        ResolutionStatus::Abandoned | ResolutionStatus::Rejected | ResolutionStatus::Archived
+    )
 }
 
 fn affected(parents: &[StableId], cascade: &BTreeSet<String>) -> bool {

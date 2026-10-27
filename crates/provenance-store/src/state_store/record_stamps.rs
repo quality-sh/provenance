@@ -171,7 +171,10 @@ impl StateStore {
             let previous = by_id.get(record.id().as_str()).copied();
             record.validate_write(previous)?;
             if previous != Some(&*record) {
-                self.validate_resolution_decision_write(&record.clone().into())?;
+                let review: ReviewRecord = record.clone().into();
+                self.validate_resolution_decision_write(&review)?;
+                let previous: Option<ReviewRecord> = previous.cloned().map(Into::into);
+                self.validate_new_requirement_links(&review, previous.as_ref())?;
             }
             if previous != Some(&*record) && stamp.is_none() {
                 stamp = Some(self.current_record_stamp()?);
