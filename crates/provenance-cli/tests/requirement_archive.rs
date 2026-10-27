@@ -36,9 +36,22 @@ fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it(
             "requirements",
             "create",
             "--id",
+            "req_current",
+            "--statement",
+            "The service keeps current records.",
+        ],
+    );
+    run(
+        repo,
+        &[
+            "requirements",
+            "create",
+            "--id",
             "req_retired",
             "--statement",
             "The service keeps a record.",
+            "--refines",
+            "req_current",
         ],
     );
     run(
@@ -52,15 +65,33 @@ fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it(
             r#"{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#,
         ],
     );
-    for args in [
-        vec!["requirements", "list", "--format", "json"],
-        vec!["review", "document", "--format", "json"],
-    ] {
-        let current = run(repo, &args);
-        assert!(!current.contains("req_retired"), "{current}");
-        let mut explicit = args;
-        explicit.push("--include-terminal");
-        assert!(run(repo, &explicit).contains("req_retired"));
-    }
+    let current = run(repo, &["requirements", "list", "--format", "json"]);
+    assert!(!current.contains("req_retired"), "{current}");
+    assert!(run(
+        repo,
+        &[
+            "requirements",
+            "list",
+            "--include-terminal",
+            "--format",
+            "json"
+        ]
+    )
+    .contains("req_retired"));
+    let document = run(
+        repo,
+        &["req_current", "--view", "review", "--format", "json"],
+    );
+    assert!(!document.contains("req_retired"), "{document}");
+    assert!(run(
+        repo,
+        &[
+            "api",
+            "requirements/req_current/document?exclude_terminal=false",
+            "--format",
+            "json"
+        ]
+    )
+    .contains("req_retired"));
     assert!(run(repo, &["req_retired", "--format", "json"]).contains("archived"));
 }
