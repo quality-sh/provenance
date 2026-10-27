@@ -4,6 +4,9 @@
 
 use provenance_core::{Manifest, RepoPathPrefix, RequirementStatus, ScopeId, StableId};
 use provenance_macros::verifies;
+use provenance_sdk::operations::catalog::{
+    invoke_typed, CreateRequirementNative, PreparedContext, PreparedScope,
+};
 use provenance_sdk::{operations, requirement, rule, spec, RequirementBuilder};
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::state_store::{CreateRequirementInput, StateStore, TypedResourceKind};
@@ -118,9 +121,6 @@ async fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
     let (_dir, root) = repository();
     let scope = ScopeId::new("default").unwrap();
     let store = StateStore::new(ProvenanceLayout::new(root.clone()));
-    use operations::catalog::{
-        invoke_typed, CreateRequirementNative, PreparedContext, PreparedScope,
-    };
     let context = PreparedContext::for_scope(PreparedScope {
         root: root.clone(),
         scope: scope.clone(),
