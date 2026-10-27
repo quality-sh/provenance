@@ -6,7 +6,7 @@ use provenance_report::{
     render_envelope, RenderFormat,
 };
 use serde_json::{json, Value};
-use std::{path::Path, process::Command};
+use std::{fmt::Write as _, path::Path, process::Command};
 
 fn git(repo: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
@@ -25,10 +25,10 @@ fn git(repo: &Path, args: &[&str]) -> String {
 fn write(repo: &Path, shard: &str, records: &[Value]) {
     let path = repo.join(format!(".provenance/state/scopes/default/{shard}"));
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let text = records
-        .iter()
-        .map(|row| format!("{row}\n"))
-        .collect::<String>();
+    let mut text = String::new();
+    for row in records {
+        writeln!(text, "{row}").unwrap();
+    }
     std::fs::write(path, text).unwrap();
 }
 
