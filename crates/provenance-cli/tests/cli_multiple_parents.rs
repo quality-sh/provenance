@@ -304,7 +304,7 @@ fn cli_refuses_an_archived_new_parent() {
     let before = read(&repo, "req_shared");
     replace(&repo, "req_p", "req_b")
         .failure()
-        .stderr(predicates::str::contains("req_b is archived"));
+        .stderr(predicates::str::contains("invalid_update"));
     assert_eq!(read(&repo, "req_shared"), before);
 }
 

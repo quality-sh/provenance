@@ -303,6 +303,9 @@ with `--actor`. For a Requirement owned by a declaration, `--declared-by` suppli
 the existing owner precondition to both writes. The helper reads the child guard,
 adds B, and uses the returned guard to remove P.
 An explicit `--if-match` controls the first write. A failed second write can leave
-both parents. A retry preserves the other parents. Each write uses the existing
+both parents. A retry preserves the other parents. If B is a parent and P is
+not, the helper makes no write: it refuses a P that does not exist, and otherwise
+reports that the replacement is already done. Because it makes no write, it does
+not check `--if-match` or `--declared-by` in that case. Each write uses the existing
 Requirement PATCH operation. The helper changes no descendant and does not declare
 supersession. A supersession declaration alone changes no child or prior status.

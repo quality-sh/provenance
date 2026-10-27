@@ -9,8 +9,10 @@ use std::collections::BTreeMap;
 /// Adds the new parent before it removes the selected old parent.
 ///
 /// The current parents select the steps: a Requirement that already has the
-/// new parent and not the old one is a finished replacement, and a
-/// Requirement that has neither parent is refused before any write.
+/// new parent and not the old one is a finished replacement if the old
+/// parent exists, and a Requirement that has neither parent is refused
+/// before any write. A finished replacement makes no write, so it does not
+/// check `--if-match` or `--declared-by`.
 #[rule("rule_move_replaces_only_selected_parent")]
 #[rule("rule_move_preserves_identity_and_descendants")]
 #[rule("rule_supersede_swaps_selected_child_parent")]
@@ -49,6 +51,23 @@ pub(super) async fn replace(
             has_new,
             "{old} is not a parent of this Requirement; nothing changed"
         );
+        let (old_path, _) = path.rsplit_once('/').expect("Requirement path has an ID");
+        host.invoke_resource(
+            Method::GET,
+            &format!("{old_path}/{old}"),
+            json!({}),
+            BTreeMap::new(),
+            HeaderMap::new(),
+        )
+        .await
+        .map_err(|failure| {
+            if failure.status_code() == 404 {
+                anyhow::anyhow!("Requirement {old} does not exist; nothing changed")
+            } else {
+                guidance(&failure)
+            }
+        })?;
+        eprintln!("{new} replaced {old} already; nothing changed");
         return Ok(read);
     }
     let mut guard = headers;

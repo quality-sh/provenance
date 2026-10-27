@@ -38,7 +38,9 @@ impl StateStore {
                 {
                     continue;
                 }
-                if affected(&record.refines, &cascade) {
+                if affected(&record.refines, &cascade)
+                    && no_survivors(&record.refines, &unavailable)
+                {
                     unavailable.insert(record.id.as_str().to_owned());
                     changed |= cascade.insert(record.id.as_str().to_owned());
                 }
@@ -59,6 +61,8 @@ impl StateStore {
                         if cascade.contains(record.id.as_str()) {
                             record.status = RequirementStatus::Archived;
                             record.archived_in_commit = Some(stamp.clone());
+                        } else if affected(&record.refines, &cascade) {
+                            prune(&mut record.refines, &cascade);
                         }
                     }
                     Ok(())

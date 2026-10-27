@@ -40,7 +40,7 @@ impl StateStore {
 
 fn requirement_parents(record: &ReviewRecord) -> Vec<StableId> {
     match record {
-        ReviewRecord::Requirement(record) => record.refines.iter().cloned().collect(),
+        ReviewRecord::Requirement(record) => record.refines.clone(),
         ReviewRecord::Rule(record) => record.requirement_ids.clone(),
         ReviewRecord::Resolution(record) => record.requirement_ids.clone(),
         ReviewRecord::Topic(record) => vec![record.requirement_id.clone()],
