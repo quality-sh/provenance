@@ -130,11 +130,8 @@
         <mxCell id="st" value="Files on disk and git" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff7ee;strokeColor=#d79b00;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
           <mxGeometry x="310" y="800" width="1102" height="150" as="geometry" />
         </mxCell>
-        <mxCell id="wiki" value='&lt;b&gt;.provenance/wiki/&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;ignored; wiki build output&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="st">
-          <mxGeometry x="12" y="30" width="206" height="52" as="geometry" />
-        </mxCell>
         <mxCell id="user" value='&lt;b&gt;Per-user data&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;STE100 index, launch key&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="st">
-          <mxGeometry x="12" y="90" width="206" height="52" as="geometry" />
+          <mxGeometry x="12" y="50" width="206" height="52" as="geometry" />
         </mxCell>
         <mxCell id="src" value='&lt;b&gt;Source files&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;code the scanner reads&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="st">
           <mxGeometry x="235" y="50" width="205" height="70" as="geometry" />
