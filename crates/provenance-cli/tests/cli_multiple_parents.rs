@@ -2,11 +2,8 @@ mod porcelain_authoring_support;
 use porcelain_authoring_support::{initialized_repo, json_output, provenance};
 use provenance_macros::verifies;
 
-#[test]
-#[verifies("rule_move_replaces_only_selected_parent", examples)]
-#[verifies("rule_move_preserves_identity_and_descendants", examples)]
-fn cli_replaces_one_selected_parent_and_can_repeat_the_move() {
-    let (_directory, repo) = initialized_repo();
+fn parent_repo() -> (tempfile::TempDir, String) {
+    let (directory, repo) = initialized_repo();
     for id in ["req_p", "req_q", "req_b", "req_shared", "req_child"] {
         json_output(&[
             id,
@@ -51,6 +48,14 @@ fn cli_replaces_one_selected_parent_and_can_repeat_the_move() {
         "--format",
         "json",
     ]);
+    (directory, repo)
+}
+
+#[test]
+#[verifies("rule_move_replaces_only_selected_parent", examples)]
+#[verifies("rule_move_preserves_identity_and_descendants", examples)]
+fn cli_replaces_one_selected_parent_and_can_repeat_the_move() {
+    let (_directory, repo) = parent_repo();
     let child = json_output(&["api", "requirements/req_child", "--repo", &repo]);
     for _ in 0..2 {
         let moved = json_output(&[
@@ -77,6 +82,13 @@ fn cli_replaces_one_selected_parent_and_can_repeat_the_move() {
         json_output(&["api", "requirements/req_child", "--repo", &repo])["data"],
         child["data"]
     );
+}
+
+#[test]
+#[verifies("rule_move_replaces_only_selected_parent", examples)]
+#[verifies("rule_supersede_swaps_selected_child_parent", examples)]
+fn cli_refusals_preserve_parents_and_a_failed_removal_keeps_the_addition() {
+    let (_directory, repo) = parent_repo();
     let before = json_output(&["api", "requirements/req_shared", "--repo", &repo]);
     for new in ["req_missing", "req_child"] {
         provenance()
@@ -110,7 +122,7 @@ fn cli_replaces_one_selected_parent_and_can_repeat_the_move() {
             "--replace-parent",
             "req_missing",
             "--with-parent",
-            "req_p",
+            "req_b",
         ])
         .assert()
         .failure();
