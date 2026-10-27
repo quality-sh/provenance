@@ -281,8 +281,9 @@ fn cli_replacement_keeps_the_declaration_owner_precondition() {
     );
 }
 
+/// Implementation aid: pins the refusal of a new link to an archived Requirement;
+/// no Rule states it yet (provenance-xqpg).
 #[test]
-#[verifies("rule_live_dependents_have_live_parents", examples)]
 fn cli_refuses_an_archived_new_parent() {
     let (_directory, repo) = parent_repo();
     json_output(&[
@@ -308,8 +309,9 @@ fn cli_refuses_an_archived_new_parent() {
     assert_eq!(read(&repo, "req_shared"), before);
 }
 
+/// Implementation aid: pins the message and exit status of a finished replacement;
+/// no Rule states them yet (provenance-xqpg).
 #[test]
-#[verifies("rule_move_replaces_only_selected_parent", examples)]
 fn cli_reports_a_finished_replacement_without_a_write() {
     let (_directory, repo) = parent_repo();
     set_parents(&repo, "req_shared", &serde_json::json!(["req_b", "req_q"]));
@@ -322,8 +324,9 @@ fn cli_reports_a_finished_replacement_without_a_write() {
     assert_eq!(read(&repo, "req_shared"), before);
 }
 
+/// Implementation aid: pins the refusal of a missing old parent; no Rule states it
+/// yet (provenance-xqpg).
 #[test]
-#[verifies("rule_move_replaces_only_selected_parent", examples)]
 fn cli_refuses_a_missing_old_parent_when_the_new_parent_is_present() {
     let (_directory, repo) = parent_repo();
     set_parents(&repo, "req_shared", &serde_json::json!(["req_b", "req_q"]));

@@ -48,19 +48,33 @@ pub(super) fn assert_invalid_update(error: anyhow::Error) {
 }
 
 /// Appends one record as a merge of two branches can leave it.
+fn append(path: &camino::Utf8Path, record: &Value) {
+    let mut contents = std::fs::read_to_string(path).unwrap_or_default();
+    contents.push_str(&record.to_string());
+    contents.push('\n');
+    std::fs::write(path, contents).unwrap();
+}
+
 pub(super) fn append_rule(store: &StateStore, scope: &ScopeId, id: &str, parents: &[&str]) {
-    let path = crate::shards::rules_path(&store.layout, scope);
-    let mut contents = std::fs::read_to_string(&path).unwrap_or_default();
-    contents.push_str(
+    append(
+        &crate::shards::rules_path(&store.layout, scope),
         &json!({
             "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
             "id": id, "statement": "The system is safe.", "status": "draft",
             "severity": "medium", "requirement_ids": parents, "resolution_ids": []
-        })
-        .to_string(),
+        }),
     );
-    contents.push('\n');
-    std::fs::write(&path, contents).unwrap();
+}
+
+pub(super) fn append_requirement(store: &StateStore, scope: &ScopeId, id: &str, parents: &[&str]) {
+    append(
+        &crate::shards::requirements_path(&store.layout, scope),
+        &json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            "id": id, "statement": "The system is safe.", "status": "active",
+            "refines": parents
+        }),
+    );
 }
 
 #[test]
