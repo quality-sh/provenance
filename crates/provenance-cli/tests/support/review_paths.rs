@@ -3,13 +3,14 @@
 
 use assert_cmd::Command;
 use serde_json::Value;
+use std::time::Duration;
 
 pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub fn provenance() -> Command {
     let mut command = Command::new(assert_cmd::cargo::cargo_bin!("provenance"));
     // Implementation aid: report a stalled child instead of blocking the suite.
-    command.timeout(std::time::Duration::from_secs(60));
+    command.timeout(COMMAND_TIMEOUT);
     command
 }
 
