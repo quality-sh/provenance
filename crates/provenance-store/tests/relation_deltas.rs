@@ -133,7 +133,7 @@ fn singleton_edits_set_and_clear() {
     assert_eq!(
         record(&store)
             .refines
-            .as_ref()
+            .first()
             .map(provenance_core::StableId::as_str),
         Some("req_b")
     );
