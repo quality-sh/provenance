@@ -51,28 +51,31 @@ fn new_requirement_cannot_refine_an_archived_requirement() {
 #[verifies("rule_live_dependents_have_live_parents", examples)]
 fn new_rule_cannot_link_an_archived_requirement() {
     let (_directory, store, scope) = archived_parent_store();
+    let before = store.list_rules(&scope).unwrap();
     let error = store
         .create_rule(serde_json::from_value(rule_input("rule_late", "req_old")).unwrap())
         .unwrap_err();
     assert_invalid_update(error);
-    assert!(store.list_rules(&scope).unwrap().is_empty());
+    assert_eq!(store.list_rules(&scope).unwrap(), before);
 }
 
 #[test]
 #[verifies("rule_live_dependents_have_live_parents", examples)]
 fn new_resolution_cannot_link_an_archived_requirement() {
     let (_directory, store, scope) = archived_parent_store();
+    let before = store.list_resolutions(&scope).unwrap();
     let error = store
         .create_resolution(serde_json::from_value(resolution_input("res_late", "req_old")).unwrap())
         .unwrap_err();
     assert_invalid_update(error);
-    assert!(store.list_resolutions(&scope).unwrap().is_empty());
+    assert_eq!(store.list_resolutions(&scope).unwrap(), before);
 }
 
 #[test]
 #[verifies("rule_live_dependents_have_live_parents", examples)]
 fn new_topic_cannot_link_an_archived_requirement() {
     let (_directory, store, scope) = archived_parent_store();
+    let before = store.list_topics(&scope).unwrap();
     let error = store
         .create_topic(
             serde_json::from_value(json!({
@@ -83,7 +86,7 @@ fn new_topic_cannot_link_an_archived_requirement() {
         )
         .unwrap_err();
     assert_invalid_update(error);
-    assert!(store.list_topics(&scope).unwrap().is_empty());
+    assert_eq!(store.list_topics(&scope).unwrap(), before);
 }
 
 #[test]
