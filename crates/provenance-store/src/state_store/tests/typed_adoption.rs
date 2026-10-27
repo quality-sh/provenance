@@ -177,6 +177,7 @@ fn explicit_id_without_adoption_keeps_the_default_conflict_and_bytes() {
 }
 
 #[test]
+#[verifies("rule_exact_unowned_requirement_adoption", examples)]
 fn exact_requirement_adoption_changes_only_owner_and_address_then_replays_unchanged() {
     let (_dir, store, scope) = initialized_store();
     create_unowned_requirement(&store, &scope, "req_existing", STATEMENT);

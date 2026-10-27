@@ -2456,6 +2456,7 @@ dependencies = [
  "provenance-store",
  "serde_json",
  "tempfile",
+ "tokio",
  "trybuild",
 ]
 
