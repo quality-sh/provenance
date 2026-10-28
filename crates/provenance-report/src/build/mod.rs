@@ -16,7 +16,7 @@ use crate::envelope::{
 };
 use crate::render;
 use anyhow::Context;
-use camino::Utf8Path;
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;
 use provenance_macros::rule;
 use provenance_store::stale::git;
@@ -72,7 +72,8 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         .coverage
         .binding_findings;
 
-    let scans = scans_at_head(input.repo, input.scan_path, &head)?;
+    let roots = ScanRoots::resolve(input.repo, input.scan_path)?;
+    let scans = scans_at_head(input.repo, &roots, &head)?;
     let files_scanned = scans.len() as u64;
     let scan_covers = provenance_scanner::scan_covers_repository(input.repo, input.scan_path);
     let (completeness, incompleteness_reason) =
@@ -87,7 +88,7 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
     let (verifications, implementations) =
         graph_snapshots::read_bindings(input.repo, &head, &scope, CommitRole::Head)?;
     let base_evidence = if graph_baseline == BaselineCompatibility::Compatible {
-        base_evidence::read(input.repo, &base, &scope)
+        base_evidence::read(input.repo, &base, &scope, |path| roots.selects(path))
     } else {
         base_evidence::BaseEvidence::default()
     };
@@ -346,26 +347,45 @@ fn evidence_site_findings(
     ))
 }
 
+/// The repository root and the scan path, both resolved. The source walker
+/// selects files from the scan path.
+struct ScanRoots {
+    repository: Utf8PathBuf,
+    walk: Utf8PathBuf,
+}
+
+impl ScanRoots {
+    fn resolve(repo: &Utf8Path, scan_path: &Utf8Path) -> anyhow::Result<Self> {
+        let repository = repo
+            .canonicalize_utf8()
+            .with_context(|| format!("resolve the repository path {repo}"))?;
+        let walk = scan_path
+            .canonicalize_utf8()
+            .with_context(|| format!("resolve the scan path {scan_path}"))?;
+        anyhow::ensure!(
+            walk.starts_with(&repository),
+            "the scan path {scan_path} is outside the repository {repo}"
+        );
+        Ok(Self { repository, walk })
+    }
+
+    /// Whether the source walker selects the repository path, also when the
+    /// path exists only at another commit.
+    fn selects(&self, path: &Utf8Path) -> bool {
+        provenance_scanner::selects_source_path(&self.walk, &self.repository.join(path))
+    }
+}
+
 /// Scan requested-head blobs only for paths selected by the source walker.
 /// Working-copy paths select the scan surface but do not supply head facts.
 fn scans_at_head(
     repo: &Utf8Path,
-    scan_path: &Utf8Path,
+    roots: &ScanRoots,
     head: &str,
 ) -> anyhow::Result<Vec<provenance_scanner::FileScan>> {
-    let root = repo
-        .canonicalize_utf8()
-        .with_context(|| format!("resolve the repository path {repo}"))?;
-    let walk_root = scan_path
-        .canonicalize_utf8()
-        .with_context(|| format!("resolve the scan path {scan_path}"))?;
-    anyhow::ensure!(
-        walk_root.starts_with(&root),
-        "the scan path {scan_path} is outside the repository {repo}"
-    );
-    let selected = provenance_scanner::source_paths(&walk_root)?
+    let selected = provenance_scanner::source_paths(&roots.walk)?
         .iter()
-        .map(|path| git_path(&root, path))
+        .map(|path| git_path(&roots.repository, path))
         .collect::<anyhow::Result<BTreeSet<_>>>()?;
     let scans = git::revision_files_at_paths(repo, head, &selected)?
         .into_iter()

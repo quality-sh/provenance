@@ -47,11 +47,20 @@ impl BaseEvidenceError {
     }
 }
 
-/// Read the base source files, scan them, and read the base binding
-/// records.
-pub(super) fn read(repo: &Utf8Path, base: &str, scope: &ScopeId) -> BaseEvidence {
+/// Read the base source files that `selects` keeps, scan them, and read the
+/// base binding records. `selects` takes a repository path; the head scan
+/// uses the same selection, so both commits cover the same files.
+pub(super) fn read(
+    repo: &Utf8Path,
+    base: &str,
+    scope: &ScopeId,
+    selects: impl Fn(&Utf8Path) -> bool,
+) -> BaseEvidence {
     let files = match git::revision_files(repo, base) {
-        Ok(files) => files,
+        Ok(files) => files
+            .into_iter()
+            .filter(|file| selects(&file.path))
+            .collect::<Vec<_>>(),
         Err(error) => return failed(BaseEvidenceError::SourceFiles(error)),
     };
     let scans = match scan(&files) {
