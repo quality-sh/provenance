@@ -37,7 +37,7 @@ fn schema_for(artifact: IdeationArtifactKind) -> Value {
 
 pub(super) fn validate_graph_reference_export(value: &Value) -> anyhow::Result<()> {
     let schema = artifacts::graph_reference::export_schema();
-    let validator = jsonschema::JSONSchema::compile(&schema).map_err(|error| {
+    let validator = jsonschema::draft7::new(&schema).map_err(|error| {
         anyhow::anyhow!("failed to compile graph reference export schema: {error}")
     })?;
     anyhow::ensure!(
