@@ -195,8 +195,8 @@ impl ContextResolver for FixtureAccess {
             reason: InvalidInputReason::InvalidValue,
         })?;
         let layout = ProvenanceLayout::new(root.to_str().ok_or(OperationFailure::Internal)?);
-        // This policy load opens no cache. It takes the publication lock only when a
-        // publication hides the manifest.
+        // This policy load first reads without the lock. Only when that read fails and a
+        // publication lock or marker exists does it read again under the publication lock.
         let manifest: Manifest = read_published_state(&layout, || {
             let bytes = std::fs::read(layout.manifest_path())?;
             Ok(serde_json::from_slice(&bytes)?)

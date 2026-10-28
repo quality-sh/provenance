@@ -79,17 +79,21 @@ pub(crate) fn with_repository_publication_checked<R>(
     recover_pending_publication(layout).and_then(|()| operation())
 }
 
-/// Runs a read without the publication lock, and runs it again under the lock if it fails.
+/// Runs a read without the publication lock. If the read fails and a publication can run,
+/// runs it again under the lock. Otherwise returns the first failure.
 ///
 /// A publication moves the live state directory to a backup before it installs the staged
 /// directory, so a read in that gap finds no state. The second read starts after the
-/// publication is complete.
+/// publication is complete. A directory with no publication lock or marker gets no writes.
 #[rule("rule_preparation_reads_published_state")]
 pub fn read_published_state<R>(
     layout: &ProvenanceLayout,
     read: impl Fn() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    read().or_else(|_| with_repository_publication(layout, read))
+    read().or_else(|error| match crate::layout::publication_can_run(layout) {
+        Ok(true) => with_repository_publication(layout, read),
+        _ => Err(error),
+    })
 }
 
 // Resolve the existing ancestor so planned-state validation creates no paths.
