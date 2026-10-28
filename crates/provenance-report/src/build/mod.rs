@@ -23,6 +23,7 @@ use provenance_store::stale::git;
 use provenance_store::{cache, layout::ProvenanceLayout, settings};
 use std::collections::BTreeSet;
 
+mod base_evidence;
 #[cfg(test)]
 mod baseline_tests;
 mod findings;
@@ -85,15 +86,14 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
     let mut baseline = graph_baseline;
     let (verifications, implementations) =
         graph_snapshots::read_bindings(input.repo, &head, &scope, CommitRole::Head)?;
-    let mut base_evidence = BaselineEvidence::default();
-    if graph_baseline == BaselineCompatibility::Compatible {
-        match read_baseline_evidence(input.repo, &base, &scope) {
-            BaselineEvidenceRead::Present(evidence) => base_evidence = evidence,
-            BaselineEvidenceRead::Incompatible(reason) => {
-                baseline = BaselineCompatibility::Incompatible;
-                baseline_reason = Some(reason);
-            }
-        }
+    let base_evidence = if graph_baseline == BaselineCompatibility::Compatible {
+        base_evidence::read(input.repo, &base, &scope)
+    } else {
+        base_evidence::BaseEvidence::default()
+    };
+    if let Some(failure) = &base_evidence.failure {
+        baseline = BaselineCompatibility::Incompatible;
+        baseline_reason = Some(failure.reason(&base));
     }
     let baseline_view = BaselineView::for_rules(
         baseline,
@@ -103,7 +103,7 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         &base_evidence.verifications,
     );
 
-    let collected = collect_findings(&FindingInput {
+    let collected = collect_findings(FindingInput {
         repo: input.repo,
         base: &base,
         head: &head,
@@ -118,6 +118,7 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         baseline_view: &baseline_view,
         binding_severity: binding_severity(configured),
         completeness,
+        base_files: base_evidence.files,
     })?;
     let mut finding_records = collected.records;
     if baseline != BaselineCompatibility::Compatible {
@@ -160,54 +161,6 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         verification_runs: Vec::new(),
     };
     Ok(render::normalize(&envelope))
-}
-
-#[derive(Default)]
-struct BaselineEvidence {
-    scans: Vec<provenance_scanner::FileScan>,
-    verifications: Vec<provenance_core::VerificationBinding>,
-    implementations: Vec<provenance_core::ImplementationBinding>,
-}
-
-enum BaselineEvidenceRead {
-    Present(BaselineEvidence),
-    Incompatible(String),
-}
-
-fn read_baseline_evidence(repo: &Utf8Path, base: &str, scope: &ScopeId) -> BaselineEvidenceRead {
-    let files = match git::revision_files(repo, base) {
-        Ok(files) => files,
-        Err(error) => {
-            return BaselineEvidenceRead::Incompatible(format!(
-                "source files at base commit {base} cannot be read: {error:#}"
-            ))
-        }
-    };
-    let scans = files
-        .into_iter()
-        .map(|file| {
-            let language = file
-                .path
-                .extension()
-                .and_then(provenance_scanner::Language::from_extension)
-                .expect("revision files contain only supported languages");
-            provenance_scanner::scan_file(&file.path, language, &file.content)
-        })
-        .collect();
-    let (verifications, implementations) =
-        match graph_snapshots::read_bindings(repo, base, scope, CommitRole::Base) {
-            Ok(bindings) => bindings,
-            Err(error) => {
-                return BaselineEvidenceRead::Incompatible(format!(
-                    "binding records at base commit {base} do not parse: {error:#}"
-                ))
-            }
-        };
-    BaselineEvidenceRead::Present(BaselineEvidence {
-        scans,
-        verifications,
-        implementations,
-    })
 }
 
 /// Read both committed snapshots. The head must parse: the report describes
@@ -257,8 +210,9 @@ fn read_snapshots(
 /// Gather every finding the layers support under the current scan and
 /// baseline facts. Absence needs a complete scan: an incomplete scan cannot
 /// clear an absence, so it never reports one. Statement and site findings
-/// need a compatible graph baseline.
-fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<CollectedFindings> {
+/// need a compatible graph baseline, and site findings also need the base
+/// source files.
+fn collect_findings(input: FindingInput<'_>) -> anyhow::Result<CollectedFindings> {
     let rules = &input.head_snapshot.rules;
     let mut finding_records = Vec::new();
     let completeness = match input.completeness {
@@ -286,13 +240,14 @@ fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<CollectedFinding
             &input.base_snapshot.rules,
             &input.head_snapshot.rules,
         ));
-        if input.completeness == Completeness::Complete {
+        if let (Completeness::Complete, Some(base_files)) = (input.completeness, input.base_files) {
             finding_records.extend(evidence_site_findings(
                 input.repo,
                 input.base,
                 input.head,
                 input.scope,
                 input.layout,
+                base_files,
                 input.implementations,
             )?);
         }
@@ -324,6 +279,8 @@ struct FindingInput<'a> {
     baseline_view: &'a BaselineView,
     binding_severity: crate::envelope::Severity,
     completeness: Completeness,
+    /// The base source files; `None` when they cannot be read.
+    base_files: Option<Vec<git::RevisionFile>>,
 }
 
 const fn binding_severity(
@@ -368,10 +325,10 @@ fn evidence_site_findings(
     head: &str,
     scope: &ScopeId,
     layout: &ProvenanceLayout,
+    base_files: Vec<git::RevisionFile>,
     head_implementations: &[provenance_core::ImplementationBinding],
 ) -> anyhow::Result<Vec<crate::envelope::Finding>> {
     let graph = cache::graph_evidence(layout, scope)?;
-    let base_files = git::revision_files(repo, base)?;
     let head_files = git::revision_files(repo, head)?;
     let changes = git::changed_files(repo, base, head)?;
     let report = provenance_store::stale::gate::report(
