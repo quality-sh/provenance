@@ -17,6 +17,14 @@ function run(command, args, cwd = checkout, extra = {}) {
   assert.equal(result.status, 0, `${command}: ${result.stdout}\n${result.stderr}`);
   return result.stdout;
 }
+// CI requires registry fetches to go through Socket Firewall. A local run uses it when it is on PATH.
+const firewall = spawnSync('sfw', ['--version'], { encoding: 'utf8' }).error ? null : 'sfw';
+assert.ok(firewall || !process.env.GITHUB_ACTIONS, 'CI registry fetches must go through Socket Firewall');
+function firewalled(command, args, cwd = checkout, extra = {}) {
+  // Cargo on Windows cannot check revocation for the firewall's TLS chain; see the CI fetch steps.
+  if (process.platform === 'win32') extra = { ...extra, CARGO_HTTP_CHECK_REVOKE: 'false' };
+  return firewall ? run(firewall, [command, ...args], cwd, extra) : run(command, args, cwd, extra);
+}
 function fixture() {
   mkdirSync(checkout);
   const files = run('git', ['ls-files', '-z'], source).split('\0').filter(Boolean);
@@ -98,7 +106,7 @@ try {
     const changes = run('git', ['status', '--porcelain', '--untracked-files=all']).trimEnd().split('\n');
     assert.deepEqual(changes.map(line => line.slice(3)).sort(), names.map(name => `skills/${name}/SKILL.md`).sort());
   } else {
-    run('npm', ['ci', '--prefix', 'tools/operation-codegen']);
+    firewalled(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['ci', '--prefix', 'tools/operation-codegen']);
     run('node', ['tools/operation-codegen/ensure-generated.mjs']);
     let expected = edit('This sentence checks the first source edit');
     let binary = build();
@@ -109,10 +117,10 @@ try {
     for (const name of names) {
       const install = mkdtempSync(join(temporary, 'external-'));
       const home = mkdtempSync(join(temporary, 'home-'));
-      run(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', 'skills@1.7.2', 'add', checkout, '--skill', name, '--agent', 'codex', '--copy', '--yes'], install, { HOME: home, USERPROFILE: home });
+      firewalled(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', 'skills@1.7.2', 'add', checkout, '--skill', name, '--agent', 'codex', '--copy', '--yes'], install, { HOME: home, USERPROFILE: home });
       assert.equal(readFileSync(join(install, '.agents/skills', name, 'SKILL.md'), 'utf8'), expected[name]);
     }
-    await import('./package.mjs').then(module => module.checkPackage({ checkout, temporary, target, cargo, expected, run, prepare, checkCli, names }));
+    await import('./package.mjs').then(module => module.checkPackage({ checkout, temporary, target, cargo, expected, run, firewalled, prepare, checkCli, names }));
   }
 } finally {
   rmSync(temporary, { recursive: true, force: true });
