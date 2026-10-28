@@ -266,6 +266,7 @@ fn direct_synthesis_create_and_replace_respect_landed_records() {
 /// Implementation aid: pins one publication snapshot across the composite ideation read.
 fn composite_ideation_list_holds_publication_lock_between_reads() {
     let (_dir, store, scope) = initialized_store();
+    let repository = crate::test_support::repository(&store.layout);
     crate::jsonl::write_jsonl_atomic(
         &crate::shards::contributions_path(&store.layout, &scope),
         &[contribution(&scope, "direct")],
@@ -274,7 +275,7 @@ fn composite_ideation_list_holds_publication_lock_between_reads() {
     let (direct_read_tx, direct_read_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let reader = {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         std::thread::spawn(move || {
             store.list_contributions_after_direct_read(&scope, || {
@@ -288,7 +289,7 @@ fn composite_ideation_list_holds_publication_lock_between_reads() {
 
     let (published_tx, published_rx) = std::sync::mpsc::channel();
     let publisher = {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         std::thread::spawn(move || {
             store

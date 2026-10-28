@@ -55,28 +55,6 @@ fn open_failure(error: OpenFailure) -> anyhow::Error {
     }
 }
 
-/// The manifest scope with the selected id. A scope that the manifest does
-/// not declare is refused with the declared scopes, so a mistyped scope never
-/// reads as an empty one.
-pub fn declared_scope_in<'a>(
-    manifest: &'a provenance_core::Manifest,
-    selected: &str,
-) -> anyhow::Result<&'a provenance_core::Scope> {
-    manifest
-        .scopes
-        .iter()
-        .find(|scope| scope.id.as_str() == selected)
-        .ok_or_else(|| {
-            let declared = manifest
-                .scopes
-                .iter()
-                .map(|scope| scope.id.as_str())
-                .collect::<Vec<_>>()
-                .join(", ");
-            anyhow::anyhow!("unknown scope `{selected}`; declared scopes: {declared}")
-        })
-}
-
 /// A command ran inside a directory of an initialized repository instead of
 /// at its root. `provenance init` here would nest a second graph, so the
 /// refusal names the root to pass as `--repo`.

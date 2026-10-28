@@ -4,7 +4,8 @@ use super::guard;
 use crate::{
     review::publication::with_record_state,
     state_store::{
-        read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, StateStore,
+        read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, RecordStamp,
+        StateStore,
     },
     write_error::{SourceFailure, WriteFailure},
 };
@@ -21,9 +22,8 @@ impl StateStore {
         write: impl FnOnce(&NativeRecordBatch<'_>) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         let stamp = self.current_record_stamp()?;
-        with_record_state(&self.layout, |layout| {
-            let staged = Self::staged(layout.clone(), stamp);
-            write(&NativeRecordBatch { store: &staged })
+        with_record_state(self, RecordStamp::resolved(stamp), |staged| {
+            write(&NativeRecordBatch { store: staged })
         })
     }
 

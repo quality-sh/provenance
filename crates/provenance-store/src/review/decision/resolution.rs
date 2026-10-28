@@ -7,7 +7,7 @@ use crate::{
         guard, new_id,
     },
     shards,
-    state_store::{CreateDispositionInput, StateStore},
+    state_store::{CreateDispositionInput, RecordStamp, StateStore},
     write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::{
@@ -67,8 +67,8 @@ impl StateStore {
                     anyhow::anyhow!("this review submission is no longer pending"),
                 ));
             }
-            with_record_state(&self.layout, |layout| {
-                Self::new(layout.clone()).commit_decision(input)
+            with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
+                staged.commit_decision(input)
             })
         })
     }

@@ -6,10 +6,8 @@ use camino::Utf8Path;
 use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};
 use provenance_store::{
     cache,
-    layout::ProvenanceLayout,
     operations::read_policy::ReadPolicy,
     review::{read_evidence, read_history},
-    state_store::StateStore,
 };
 use review_support::*;
 use serde_json::json;
@@ -34,8 +32,9 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         .unwrap()
         .file_type()
         .is_symlink());
-    let layout = ProvenanceLayout::new(&root);
-    let store = StateStore::new(layout.clone());
+    let store = provenance_store::repository::Repository::open(&root, "default")
+        .unwrap()
+        .store();
     store
         .save_requirement(save(&store, json!({"description":"saved"})))
         .unwrap();

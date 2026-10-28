@@ -130,7 +130,9 @@ fn a_unit_with_a_symbolic_link_is_refused_before_parsing() {
 #[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
 async fn a_manifest_restored_before_hashing_keeps_its_scopes() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&open(&layout)).await.unwrap();
+    // Open before the test changes the manifest: an open refuses that manifest.
+    let repository = open(&layout);
+    materialize_state(&repository).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let before = super::catch_up_behavior::dump_family_tables(pool.pool()).await;
     pool.close().await.unwrap();
@@ -143,7 +145,7 @@ async fn a_manifest_restored_before_hashing_keeps_its_scopes() {
         std::fs::write(&path, &original)?;
         Ok(())
     });
-    let result = catch_up_state(&open(&layout)).await;
+    let result = catch_up_state(&repository).await;
     test_probes::disarm("catch_up_unit_hashed");
     let report = result.unwrap();
     assert!(
@@ -162,7 +164,9 @@ async fn a_manifest_restored_before_hashing_keeps_its_scopes() {
 #[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
 async fn a_manifest_repaired_after_hashing_is_retried() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&open(&layout)).await.unwrap();
+    // Open before the test changes the manifest: an open refuses that manifest.
+    let repository = open(&layout);
+    materialize_state(&repository).await.unwrap();
     let path = layout.manifest_path();
     let original = std::fs::read(&path).unwrap();
     std::fs::write(&path, "{").unwrap();
@@ -170,7 +174,7 @@ async fn a_manifest_repaired_after_hashing_is_retried() {
         std::fs::write(&path, &original)?;
         Ok(())
     });
-    let result = catch_up_state(&open(&layout)).await;
+    let result = catch_up_state(&repository).await;
     test_probes::disarm("catch_up_global_before_parse");
     assert!(
         result.is_ok(),

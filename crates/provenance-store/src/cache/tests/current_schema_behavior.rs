@@ -4,7 +4,6 @@ use super::fixtures::{create_requirement, seeded_layout};
 use crate::cache::{catch_up_state, materialize_state, open_cache};
 use crate::current_schema::{self, Compatibility};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
-use crate::state_store::StateStore;
 use provenance_core::protocol::{GetQuery, StampPolicy, SDK_PROTOCOL_VERSION};
 use provenance_core::NodeType;
 use provenance_macros::verifies;
@@ -40,7 +39,7 @@ async fn a_compatible_cache_keeps_incremental_catch_up() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
     create_requirement(
-        &StateStore::new(layout.clone()),
+        &crate::test_support::store(&layout),
         &scope,
         "req_incremental",
         provenance_core::RequirementStatus::Active,
@@ -122,7 +121,7 @@ async fn an_interrupted_rebuild_leaves_only_the_previous_projection_readable() {
     let digest_before = schema_digest(cache.pool()).await;
     cache.close().await.unwrap();
     create_requirement(
-        &StateStore::new(layout.clone()),
+        &crate::test_support::store(&layout),
         &scope,
         "req_interrupted",
         provenance_core::RequirementStatus::Active,

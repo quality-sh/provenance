@@ -7,7 +7,7 @@ use crate::{
         guard, new_id, owner_matches,
     },
     shards,
-    state_store::StateStore,
+    state_store::{RecordStamp, StateStore},
     write_error::SourceFailure,
 };
 use provenance_core::{
@@ -91,8 +91,8 @@ impl StateStore {
                     anyhow::anyhow!(reason),
                 ));
             }
-            with_record_state(&self.layout, |layout| {
-                Self::new(layout.clone()).commit_withdrawal(input)
+            with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
+                staged.commit_withdrawal(input)
             })
         })
     }

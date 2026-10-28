@@ -13,6 +13,8 @@ pub struct TestStore {
     pub name: &'static str,
     _dir: tempfile::TempDir,
     pub root: Utf8PathBuf,
+    // Opened once, so a test may then break the lock or the cache path.
+    repository: Repository,
     pub scope: ScopeId,
     /// The first commit of a store with a git history, for the diff half
     /// of `evidence` and for `stale`.
@@ -22,10 +24,12 @@ pub struct TestStore {
 impl TestStore {
     fn new(name: &'static str, dir: tempfile::TempDir, scope: ScopeId) -> Self {
         let root = Utf8PathBuf::from_path_buf(dir.path().canonicalize().unwrap()).unwrap();
+        let repository = Repository::open(&root, scope.as_str()).unwrap();
         Self {
             name,
             _dir: dir,
             root,
+            repository,
             scope,
             base_commit: None,
         }
@@ -36,12 +40,12 @@ impl TestStore {
     }
 
     pub fn state_store(&self) -> StateStore {
-        StateStore::new(self.layout())
+        self.repository.store()
     }
 
     /// The store's repository, opened for its scope.
     pub fn repository(&self) -> Repository {
-        Repository::open(&self.root, self.scope.as_str()).unwrap()
+        self.repository.clone()
     }
 
     /// The frozen store of the pinned answers test, under two commits so the

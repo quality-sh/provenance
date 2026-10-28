@@ -144,8 +144,9 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
         ]);
         if group == "requirements" {
             use provenance_core::{ScopeId, StableId};
-            use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
-            let store = StateStore::new(ProvenanceLayout::new(repo));
+            let store = provenance_store::repository::Repository::open(repo, "default")
+                .unwrap()
+                .store();
             let etag = store
                 .requirement_edit_state(
                     &ScopeId::new("default").unwrap(),
@@ -180,7 +181,6 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
 }
 
 fn descriptive_records() -> tempfile::TempDir {
-    use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
     use serde_json::json;
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_str().unwrap();
@@ -197,7 +197,9 @@ fn descriptive_records() -> tempfile::TempDir {
         ])
         .assert()
         .success();
-    let store = StateStore::new(ProvenanceLayout::new(repo));
+    let store = provenance_store::repository::Repository::open(repo, "default")
+        .unwrap()
+        .store();
     store.create_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_one","statement":"The system saves the record.","status":"active","depends_on":[],"supersedes":[]})).unwrap()).unwrap();
     store.create_rule(serde_json::from_value(json!({"scope_id":"default","id":"rule_one","statement":"The system saves the record.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]})).unwrap()).unwrap();
     store.create_resolution(serde_json::from_value(json!({"scope_id":"default","id":"resolution_one","title":"Decision","position":"Use the saved record.","rationale":"The record is available.","status":"draft","requirement_ids":["req_one"],"supersedes":[],"inputs":[]})).unwrap()).unwrap();

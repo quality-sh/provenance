@@ -82,6 +82,7 @@ fn enrolled_canonical_state_readers_refuse_unknown_extension_fields() {
 #[test]
 fn concurrent_source_creates_preserve_all_records() {
     let (_dir, store, scope) = initialized_store();
+    let repository = crate::test_support::repository(&store.layout);
 
     for index in 0..200 {
         store
@@ -106,7 +107,7 @@ fn concurrent_source_creates_preserve_all_records() {
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(writer_count));
     let mut handles = Vec::new();
     for index in 0..writer_count {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         let barrier = barrier.clone();
         handles.push(std::thread::spawn(move || {
@@ -145,10 +146,11 @@ fn concurrent_source_creates_preserve_all_records() {
 #[test]
 fn repository_publication_cannot_overwrite_a_concurrent_writer() {
     let (_dir, store, scope) = initialized_store();
+    let repository = crate::test_support::repository(&store.layout);
     let (publication_ready_tx, publication_ready_rx) = std::sync::mpsc::channel();
     let (publish_tx, publish_rx) = std::sync::mpsc::channel();
     let publisher = {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
@@ -167,7 +169,7 @@ fn repository_publication_cannot_overwrite_a_concurrent_writer() {
 
     let (writer_done_tx, writer_done_rx) = std::sync::mpsc::channel();
     let writer = {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
@@ -205,10 +207,11 @@ fn repository_publication_cannot_overwrite_a_concurrent_writer() {
 #[test]
 fn repository_publication_excludes_an_entire_multi_shard_write() {
     let (_dir, store, scope) = seeded_source_requirement_store();
+    let repository = crate::test_support::repository(&store.layout);
     let (publication_ready_tx, publication_ready_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let publisher = {
-        let store = store.clone();
+        let store = repository.store();
         std::thread::spawn(move || {
             store
                 .with_repository_publication(|| {
@@ -223,7 +226,7 @@ fn repository_publication_excludes_an_entire_multi_shard_write() {
 
     let (writer_done_tx, writer_done_rx) = std::sync::mpsc::channel();
     let writer = {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         std::thread::spawn(move || {
             store

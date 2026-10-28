@@ -2,7 +2,7 @@ error[E0061]: this function takes 1 argument but 2 arguments were supplied
  --> tests/compile_fail/guarded_store_wrong_repository.rs:9:17
   |
 9 |     let store = StateStore::under_guard(&guard, repository_b);
-  |                 ^^^^^^^^^^^^^^^^^^^^^^^         ------------ unexpected argument #2 of type `Repository`
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^         ------------ unexpected argument #2 of type `provenance_store::repository::Repository`
   |
 note: associated function defined here
  --> src/state_store/access.rs

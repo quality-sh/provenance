@@ -8,14 +8,16 @@ use tokio::sync::Barrier;
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn many_readers_close_together() {
     let (dir, store, _scope) = seeded_store();
+    // Open once: an open inside a task would wait for the lock on a worker.
+    let repository = repository_at(&root_of(&dir));
     let n = 8;
     let barrier = Arc::new(Barrier::new(n));
     let mut tasks = Vec::new();
     for _ in 0..n {
-        let root = root_of(&dir);
+        let repository = repository.clone();
         let barrier = barrier.clone();
         tasks.push(tokio::spawn(async move {
-            answer(&repository_at(&root), ReadPolicy::default(), move |ctx| {
+            answer(&repository, ReadPolicy::default(), move |ctx| {
                 Box::pin(async move {
                     let count = ctx.snapshot().table::<Requirement>().count().await?;
                     barrier.wait().await;

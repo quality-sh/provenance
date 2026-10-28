@@ -2,7 +2,7 @@ use super::{classifier, guard};
 use crate::{
     review::publication::with_record_state,
     shards,
-    state_store::{CreateRequirementInput, StateStore},
+    state_store::{CreateRequirementInput, RecordStamp, StateStore},
 };
 use provenance_core::{
     review::RequirementEditState, threads::DiscussionOrigin, NodeType, Requirement,
@@ -78,14 +78,13 @@ impl StateStore {
             let scope = scope.clone();
             let id = input.create.id.clone();
             let stamp = self.current_record_stamp()?;
-            with_record_state(&self.layout, |layout| {
+            with_record_state(self, RecordStamp::resolved(stamp), |staged| {
                 guard::with_writer(
-                    &shards::requirements_path(layout, &scope),
+                    &shards::requirements_path(&staged.layout, &scope),
                     id.as_str(),
                     || {
-                        let staged = Self::staged(layout.clone(), stamp);
                         let created = staged.commit_creation(input)?;
-                        complete(&staged, created)
+                        complete(staged, created)
                     },
                 )
             })

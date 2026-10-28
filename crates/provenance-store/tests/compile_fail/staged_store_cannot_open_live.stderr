@@ -1,0 +1,5 @@
+error[E0599]: no method named `store` found for reference `&RepositoryIdentity` in the current scope
+ --> tests/compile_fail/staged_store_cannot_open_live.rs:6:49
+  |
+6 |         let live = staged.repository().unwrap().store();
+  |                                                 ^^^^^ method not found in `&RepositoryIdentity`

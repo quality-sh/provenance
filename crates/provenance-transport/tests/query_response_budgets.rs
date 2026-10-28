@@ -3,7 +3,7 @@
 use axum::{body::Body, http::Request};
 use provenance_core::protocol::QUERY_RESPONSE_BYTES;
 use provenance_core::{RequirementStatus, ScopeId, StableId};
-use provenance_store::state_store::{CreateRequirementInput, StateStore};
+use provenance_store::state_store::CreateRequirementInput;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
 use tower::ServiceExt as _;
@@ -75,7 +75,7 @@ fn orphan_rules(repo: &Repository) {
 }
 
 fn add_child(repo: &Repository, index: usize, description_bytes: usize) {
-    let store = StateStore::new(repo.layout.clone());
+    let store = repo.open().store();
     let scope = ScopeId::new("default").unwrap();
     store
         .create_requirement(CreateRequirementInput {

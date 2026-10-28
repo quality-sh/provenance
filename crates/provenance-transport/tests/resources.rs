@@ -5,7 +5,7 @@ mod support {
 }
 use axum::{body::Body, http::Request};
 use provenance_core::{MessageRole, NodeType, ScopeId, StableId, ThreadParent};
-use provenance_store::state_store::{PostMessageInput, StateStore};
+use provenance_store::state_store::PostMessageInput;
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use support::records::Repository;
@@ -246,7 +246,9 @@ async fn legacy_message_member_requires_the_addressed_parent() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let scope = ScopeId::new("default").unwrap();
-    let posted = StateStore::new(repo.layout.clone())
+    let posted = repo
+        .open()
+        .store()
         .post_thread_message(PostMessageInput {
             scope_id: scope,
             parent: ThreadParent {
