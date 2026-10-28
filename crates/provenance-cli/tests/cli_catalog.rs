@@ -165,7 +165,8 @@ fn bodyless_list_filters_are_query_parameters() {
                     "id": rule,
                     "statement": "The system records verification evidence.",
                     "requirement_ids": ["req_catalog"],
-                    "resolution_ids": []
+                    "resolution_ids": [],
+                    "status": "active"
                 })
                 .to_string(),
             )

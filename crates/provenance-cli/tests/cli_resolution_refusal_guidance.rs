@@ -91,7 +91,7 @@ fn rule(repo: &str, status: Option<&str>) -> assert_cmd::assert::Assert {
 fn an_active_rule_citing_a_proposed_resolution_is_told_what_to_do() {
     let dir = setup();
     let repo = dir.path().to_str().unwrap();
-    rule(repo, None)
+    rule(repo, Some("active"))
         .failure()
         .code(1)
         .stderr(contains(r#""kind":"resolution_not_approved""#))

@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.3.0; content hash fnv1a64:5574b8cea7034964 -->
+<!-- Installed by provenance 0.3.0; content hash fnv1a64:1689be72875a1eb4 -->
 
 # Shaping
 
@@ -13,9 +13,6 @@ The core discipline is **LAND-AS-YOU-GO**: every resolved decision is written to
 graph before you move on. The graph holds state between turns, not the conversation.
 
 ## Invariants
-
-Before you call code redundant or delete tests, run
-`provenance rules resolve-symbol --file <path>` on the file.
 
 1. **Land every decision as it resolves.** Never carry a resolved-but-unrecorded decision
    in conversation state.
@@ -381,6 +378,9 @@ change the artifact's kind.
    really produced the Rule. A Resolution producer is not required, and inventing one to
    satisfy the command misrecords how the obligation arose. If the CLI rejects a Rule that
    cites only a Requirement, the installed binary is out of date; see "Check your CLI".
+
+   Rule creation defaults to `draft`. Keep this default for an agent-created Rule. Pass
+   `--status active` only when a person ratifies the Rule.
 
    Only an approved Resolution can produce an active Rule or answer a Question. While the
    Resolution is proposed, keep the Rule in review with `--status review`, and answer the

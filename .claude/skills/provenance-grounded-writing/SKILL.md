@@ -2,7 +2,7 @@
 name: provenance-grounded-writing
 description: Write specific, evidence-grounded statements and behaviour descriptions for requirements, rules, sources, resolutions, and boundaries — not generic capability language or meeting minutes. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
-<!-- Installed by provenance 0.3.0; content hash fnv1a64:638e5d3e89693fe7 -->
+<!-- Installed by provenance 0.3.0; content hash fnv1a64:9815975426f6978a -->
 
 # Grounded writing
 
@@ -132,7 +132,9 @@ Rule — good: "An expense strictly above the submitting employee's delegated au
 limit needs a second approver." The statement holds no semicolon, because the write gate
 applies ASD-STE100 Issue 9. Put the behaviour at the limit in a second Rule, or in the
 description. `--source-document` and `--source-section` cite where the obligation was
-read, which here is the policy clause:
+read, which here is the policy clause. Rule creation defaults to `draft`. Keep this default
+for an agent-created Rule. When a person ratifies the Rule, pass `--status active`. This
+agent command keeps the `draft` default:
 
 ```sh
 provenance rules create --scope <scope> \
