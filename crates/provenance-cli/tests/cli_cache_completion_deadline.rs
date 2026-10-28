@@ -56,7 +56,8 @@ fn a_held_close_lock_fails_the_read_naming_the_stage() {
         output.status
     );
     assert!(!output.status.success(), "the read succeeded: {stderr}");
-    let failure: serde_json::Value = serde_json::from_str(stderr.trim())
+    let printed = stderr.trim().trim_start_matches("Error: ");
+    let failure: serde_json::Value = serde_json::from_str(printed)
         .unwrap_or_else(|error| panic!("stderr is not one failure: {error}: {stderr}"));
     assert_eq!(
         failure["error"],
