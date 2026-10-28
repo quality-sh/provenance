@@ -9,9 +9,9 @@ fn creation_contract_preserves_store_scope_and_closed_input_fields() {
         .iter()
         .find(|entry| entry.name == "create-source")
         .unwrap();
-    let validator = jsonschema::JSONSchema::options()
+    let validator = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(definition.request_schema().unwrap())
+        .build(definition.request_schema().unwrap())
         .unwrap();
     let value =
         json!({"data":{"id":"source_test","name":"Policy","source_type":"policy","supersedes":[]}});

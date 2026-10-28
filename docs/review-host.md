@@ -278,13 +278,25 @@ unknown path gets 404 `unknown_operation`, and another method on an asset gets
 The host reserves `/review-config` for authenticated runtime configuration:
 
 ```json
-{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","dispositionActorIds":["maintainer"],"compatibility":{"wire":9,"state":2,"review_journal":3,"read_derivation":3},"sdkVersion":"0.3.0"}
+{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","reviewer":{"actorId":"maintainer","allowed":true},"dispositionActorIds":["maintainer"],"compatibility":{"wire":9,"state":2,"review_journal":3,"read_derivation":3},"sdkVersion":"0.3.0"}
 ```
 
 The host reads `dispositionActorIds` from the repository manifest for each
 authenticated request. It keeps the manifest order. If the manifest has no
 configured disposition actors, this field is an empty list. The response does
 not contain the bearer credential.
+
+`reviewer` identifies the person who runs the host. The host reads it for each
+authenticated request. `reviewer.actorId` is the value of the Git configuration
+key `provenance.reviewer`, read from the repository directory. Each person sets
+this key in their own Git configuration, for example with
+`git config --global provenance.reviewer maintainer`. If the key is not set, the
+value is the Git identity: `user.email`, else `user.name`, converted to an actor
+ID as `provenance init` does. If neither gives a value, the response does not
+contain `reviewer`. `reviewer.allowed` is `true` when `actorId` is in
+`dispositionActorIds`, and `false` when it is not. The identity is the
+statement of the person. It is not proof. A disposition write from an actor
+that is not in `dispositionActorIds` gets 403 `access_denied`, as before.
 
 The generic renderer does not read credentials, fetch host configuration, or
 mount itself. Its index is an empty shell. The concrete application in

@@ -378,6 +378,9 @@ change the artifact's kind.
    satisfy the command misrecords how the obligation arose. If the CLI rejects a Rule that
    cites only a Requirement, the installed binary is out of date; see "Check your CLI".
 
+   Rule creation defaults to `draft`. Keep this default for an agent-created Rule. Pass
+   `--status active` only when a person ratifies the Rule.
+
    Only an approved Resolution can produce an active Rule or answer a Question. While the
    Resolution is proposed, keep the Rule in review with `--status review`, and answer the
    Question without a citation of the Resolution. Name the Resolution in the answer text.

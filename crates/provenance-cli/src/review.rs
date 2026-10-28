@@ -106,6 +106,8 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     let review_configuration = ReviewConfiguration {
         credential: access.clone(),
         repository,
+        path: camino::Utf8PathBuf::from_path_buf(canonical_repo.clone())
+            .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
         value: config,
     };
     let page_events = events.clone();
@@ -315,6 +317,7 @@ impl ShutdownSignals {
 struct ReviewConfiguration {
     credential: Arc<LocalAccess>,
     repository: Arc<LocalRepository>,
+    path: camino::Utf8PathBuf,
     value: Value,
 }
 
@@ -329,6 +332,15 @@ async fn configuration(
         Ok(actor_ids) => actor_ids,
         Err(error) => return refusal(error),
     };
+    let path = config.path.clone();
+    let reviewer = tokio::task::spawn_blocking(move || crate::reviewer::review_actor_id(&path))
+        .await
+        .ok()
+        .flatten();
+    if let Some(actor_id) = reviewer {
+        config.value["reviewer"] =
+            json!({ "allowed": actor_ids.contains(&actor_id), "actorId": actor_id });
+    }
     config.value["dispositionActorIds"] = json!(actor_ids);
     Json(config.value).into_response()
 }

@@ -15,7 +15,7 @@ impl EvidenceAnchor {
         let digest = Sha256::digest(line.trim().as_bytes());
         Self {
             symbol,
-            content_hash: format!("sha256:{digest:x}"),
+            content_hash: format!("sha256:{}", hex::encode(digest)),
         }
     }
 }

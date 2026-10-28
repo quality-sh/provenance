@@ -1,6 +1,6 @@
 #![cfg(feature = "test-fixture")]
 
-use jsonschema::JSONSchema;
+use jsonschema::Validator;
 use provenance_core::protocol::{GraphNode, ResponseMeta, TracedNode};
 use provenance_core::NodeType;
 use provenance_porcelain::get::{Bounds, GetInput, GetOutcome, Traversal, View, ViewResult};
@@ -38,7 +38,7 @@ fn populate(node: &mut GraphNode) {
     }
 }
 
-fn assert_canonical_record(schema: &JSONSchema, value: &Value, node: &GraphNode) {
+fn assert_canonical_record(schema: &Validator, value: &Value, node: &GraphNode) {
     let record = &value["record"];
     assert_eq!(record["id"], node.id().as_str());
     assert_eq!(record["kind"], node.node_type().as_str());
@@ -53,7 +53,7 @@ fn assert_canonical_record(schema: &JSONSchema, value: &Value, node: &GraphNode)
     );
 }
 
-fn assert_tagged_related(schema: &JSONSchema, nodes: &[GraphNode]) -> Value {
+fn assert_tagged_related(schema: &Validator, nodes: &[GraphNode]) -> Value {
     let outcome = GetOutcome {
         record: nodes[0].clone(),
         result: ViewResult::Children(Traversal {
@@ -97,14 +97,14 @@ fn assert_tagged_related(schema: &JSONSchema, nodes: &[GraphNode]) -> Value {
     value
 }
 
-fn assert_rejected_changes(schema: &JSONSchema, valid: &Value, changes: &[(&str, Value)]) {
+fn assert_rejected_changes(schema: &Validator, valid: &Value, changes: &[(&str, Value)]) {
     for (label, candidate) in changes {
         assert!(!schema.is_valid(candidate), "accepted {label}: {candidate}");
     }
     assert!(schema.is_valid(valid));
 }
 
-fn assert_invalid_record_payloads(schema: &JSONSchema, valid: &Value) {
+fn assert_invalid_record_payloads(schema: &Validator, valid: &Value) {
     let mut missing_id = valid.clone();
     missing_id["record"]["value"]
         .as_object_mut()
@@ -131,7 +131,7 @@ fn assert_invalid_record_payloads(schema: &JSONSchema, valid: &Value) {
     );
 }
 
-fn assert_invalid_related_payloads(schema: &JSONSchema, valid: &Value) {
+fn assert_invalid_related_payloads(schema: &Validator, valid: &Value) {
     let mut missing_tag = valid.clone();
     missing_tag["related"][0]["value"]
         .as_object_mut()
@@ -158,7 +158,7 @@ fn assert_invalid_related_payloads(schema: &JSONSchema, valid: &Value) {
     );
 }
 
-fn assert_invalid_metadata_and_bounds(schema: &JSONSchema, valid: &Value) {
+fn assert_invalid_metadata_and_bounds(schema: &Validator, valid: &Value) {
     let mut bad_record_metadata = valid.clone();
     bad_record_metadata["record_metadata"]["limit"] = json!("many");
     let mut bad_view_metadata = valid.clone();
@@ -195,7 +195,7 @@ async fn emitted_get_schema_accepts_each_canonical_record_and_tagged_related_kin
         emitted["$schema"],
         "https://json-schema.org/draft/2020-12/schema"
     );
-    let schema = JSONSchema::compile(&emitted).expect("emitted schema and refs resolve");
+    let schema = jsonschema::validator_for(&emitted).expect("emitted schema and refs resolve");
     let service = provenance_porcelain::Porcelain::new(
         provenance_transport::porcelain::HostGetPort::new(host),
     );

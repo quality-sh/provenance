@@ -63,7 +63,7 @@ impl Feed {
                             loop {
                                 tokio::select! {
                                     frame = frames.recv() => match frame {
-                                        Some(frame) => if socket.send(Message::Text(frame.to_string())).await.is_err() { break; },
+                                        Some(frame) => if socket.send(Message::Text(frame.to_string().into())).await.is_err() { break; },
                                         None => break,
                                     },
                                     incoming = socket.recv() => match incoming {

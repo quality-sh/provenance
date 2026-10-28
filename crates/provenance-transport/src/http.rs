@@ -39,7 +39,7 @@ fn axum_path(path: &str) -> String {
         .map(|(index, part)| {
             part.strip_prefix('{')
                 .and_then(|part| part.strip_suffix('}'))
-                .map_or_else(|| part.to_owned(), |_| format!(":p{index}"))
+                .map_or_else(|| part.to_owned(), |_| format!("{{p{index}}}"))
         })
         .collect::<Vec<_>>()
         .join("/")

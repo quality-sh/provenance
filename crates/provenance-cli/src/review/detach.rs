@@ -229,7 +229,7 @@ fn host_key(repo: &Path, scope: &str) -> String {
     let mut key = repo.as_os_str().as_encoded_bytes().to_vec();
     key.push(0);
     key.extend_from_slice(scope.as_bytes());
-    format!("{:x}", sha2::Sha256::digest(&key))
+    hex::encode(sha2::Sha256::digest(&key))
 }
 
 /// An exclusive lock on one file per repository and scope in the owner-only cache, held
@@ -271,4 +271,16 @@ fn without_reviewer(repo: &Path) -> anyhow::Result<bool> {
     provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
         Ok(manifest.disposition_actor_ids.is_empty())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    // This test has no Rule. It keeps the digest text the same when the hash library changes.
+    #[test]
+    fn host_key_is_the_lowercase_sha256_hex_of_repository_nul_scope() {
+        assert_eq!(
+            super::host_key(std::path::Path::new("/repo"), "scope"),
+            "5abb9782d062aa329b94abbae50db8aeaca5d6c48590f72d3f0dddb2fcbfca12"
+        );
+    }
 }
