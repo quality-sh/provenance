@@ -65,6 +65,8 @@ async fn archive_cascade_archives_a_resolution_and_the_question_it_answers() {
 
 /// A live answered Question outside the cascade still cannot cite a Resolution
 /// that the cascade archives, and the refusal changes no record.
+// Implementation aid: this shows that the new write order keeps the refusal.
+// No Rule states the refusal of a live citation in an archive cascade.
 #[tokio::test]
 async fn archive_cascade_still_refuses_a_live_question_that_cites_an_archived_resolution() {
     let fixture = Fixture::new();
