@@ -1,7 +1,7 @@
 use serde::Serialize;
 
-/// Every output format any command renders. Only commands with a real
-/// renderer for each variant accept the full set: `export` and `wiki build`.
+/// Every output format any command renders. Only `export` has a real
+/// renderer for each variant and accepts the full set.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum OutputFormat {
     Json,

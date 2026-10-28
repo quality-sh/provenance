@@ -12,12 +12,11 @@ use crate::{
 };
 use provenance_core::{
     review::{CycleEntry, CycleFact},
-    NodeType, StableId, Withdrawal,
+    DispositionDecision, NodeType, StableId, Withdrawal,
 };
 use provenance_macros::rule;
 
 impl StateStore {
-    #[rule("rule_withdrawal_preserves_review_history")]
     pub fn withdraw_record_review(
         &self,
         input: WithdrawRecordReview,
@@ -34,15 +33,15 @@ impl StateStore {
         self.withdraw_record_review_addressed(Some((kind, record_id.clone())), input)
     }
 
+    /// Withdraws a current pending or rejected submission and keeps its review history.
+    #[rule("rule_withdrawal_preserves_review_history")]
+    #[rule("rule_rejected_item_returns_to_agent")]
     fn withdraw_record_review_addressed(
         &self,
         addressed: Option<(NodeType, StableId)>,
         input: WithdrawRecordReview,
     ) -> anyhow::Result<CycleEntry> {
-        anyhow::ensure!(
-            !input.actor.trim().is_empty(),
-            "invalid review request identity"
-        );
+        crate::write_error::ensure_actor(&input.actor)?;
         if let Some(reason) = &input.reason {
             anyhow::ensure!(
                 !reason.trim().is_empty(),
@@ -72,13 +71,24 @@ impl StateStore {
                 .expect("review_submission checks the binding");
             let revision = super::super::save::current_revision(&record)?
                 .ok_or_else(|| anyhow::anyhow!("the submitted record has no review revision"))?;
-            if revision != binding.revision
-                || facts.is_withdrawn(&input.proposal_id)
-                || facts.is_decided(&input.proposal_id)
-            {
+            let refusal = if revision != binding.revision {
+                Some("this review submission is stale")
+            } else if facts.is_withdrawn(&input.proposal_id) {
+                Some("this review submission is already withdrawn")
+            } else if facts.dispositions().iter().any(|disposition| {
+                disposition.proposal_id == input.proposal_id
+                    && disposition.decision == DispositionDecision::Accepted
+            }) {
+                Some("this review submission is accepted")
+            } else if facts.is_replaced(&proposal) {
+                Some("this review submission was replaced by a later submission")
+            } else {
+                None
+            };
+            if let Some(reason) = refusal {
                 return Err(SourceFailure::wrap(
                     facts.conflict_failure(self, &scope, kind, record_id)?,
-                    anyhow::anyhow!("this review submission is no longer current and pending"),
+                    anyhow::anyhow!(reason),
                 ));
             }
             with_record_state(&self.layout, |layout| {

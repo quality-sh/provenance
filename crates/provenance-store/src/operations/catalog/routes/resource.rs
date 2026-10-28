@@ -188,8 +188,8 @@ macro_rules! review_resource {
             vec![schema::path("id")],
         )
         .scope("scope_id");
-        let update = if matches!($target_kind, Some(NodeType::Topic | NodeType::Question)) {
-            update.header("If-Match", "expected_etag", true)
+        let update = if let Some(kind) = $target_kind {
+            update.review_update_guard(kind)
         } else {
             update
         };

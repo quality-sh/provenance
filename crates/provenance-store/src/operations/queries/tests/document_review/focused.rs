@@ -40,7 +40,6 @@ async fn document_revision_clears_the_prior_outcome_for_each_reviewable_kind() {
 }
 
 #[tokio::test]
-#[provenance_macros::verifies("rule_record_details_load_on_open", examples)]
 async fn document_comment_count_summarizes_feedback_without_loading_comments() {
     let (dir, store, scope) = seeded_store();
     allow_reviewer(&store);

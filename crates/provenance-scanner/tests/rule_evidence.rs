@@ -161,6 +161,7 @@ fn portable_comment_implementation_satisfies_implementation() {
 }
 
 #[test]
+#[verifies("rule_no_stored_verified_status", examples)]
 fn portable_comment_verification_satisfies_only_verification() {
     let scan = scanned_comment(
         "// @provenance rule: rule_claims\n\
@@ -201,6 +202,7 @@ fn inactive_rule_with_portable_comment_marker_reports_current_binding() {
 }
 
 #[test]
+#[verifies("rule_no_stored_verified_status", examples)]
 fn scanned_and_typed_bindings_form_one_evidence_union() {
     let scanned = rule("rule_scanned", RuleStatus::Active);
     let typed = rule("rule_typed", RuleStatus::Active);
@@ -236,6 +238,7 @@ fn verification_does_not_count_as_an_implementation() {
 }
 
 #[test]
+#[verifies("rule_no_stored_verified_status", examples)]
 fn non_active_rules_do_not_produce_absence_facts() {
     let facts = derive_rule_evidence_facts(
         &[

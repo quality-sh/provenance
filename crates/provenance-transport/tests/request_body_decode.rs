@@ -6,6 +6,7 @@
 //! envelope.
 
 use axum::{body::Body, http::Request};
+use provenance_macros::verifies;
 use provenance_transport::StatementHost;
 use serde_json::Value;
 use tower::ServiceExt as _;
@@ -26,6 +27,7 @@ async fn post_raw(host: &StatementHost, path: &str, body: &str) -> (u16, Value) 
 }
 
 #[tokio::test]
+#[verifies("rule_http_request_decode_reasons", examples)]
 async fn malformed_json_body_reports_the_malformed_json_reason() {
     let host = StatementHost::default();
     let (status, failure) = post_raw(&host, "/statement-checks", r#"{"data":{"statement":"#).await;
@@ -35,6 +37,7 @@ async fn malformed_json_body_reports_the_malformed_json_reason() {
 }
 
 #[tokio::test]
+#[verifies("rule_http_request_decode_reasons", examples)]
 async fn well_formed_body_with_invalid_envelope_keeps_the_invalid_value_reason() {
     let host = StatementHost::default();
     for body in ["[1,2,3]", r#"{"no_data":true}"#] {

@@ -76,14 +76,15 @@ Each field takes a complete array or a partial delta:
 ```
 
 The Requirement PATCH carries its relationships in one `relationships`
-object. `refines` and `spawned_by` take a record ID, or `null` to clear.
+object. `refines` takes a complete ID list or an `add`/`remove` delta. An empty list clears it.
+`spawned_by` takes a record ID, or `null` to clear.
 `depends_on` and `supersedes` take an array or a delta. `cites` takes the
 citation list or a delta with `add` citations and `remove` source IDs. This
-example adds one dependency and clears the refine target:
+example adds one dependency and removes all refinement parents:
 
 ```json
 {"data": {"actor": "agent",
-  "relationships": {"depends_on": {"add": ["req_b"]}, "refines": null}}}
+  "relationships": {"depends_on": {"add": ["req_b"]}, "refines": []}}}
 ```
 
 Before expansion, the Store validates each target that a removal delta names.
@@ -109,15 +110,16 @@ adopt a record, change its owner, or move its declaration address.
 `apply-authoring` keeps its reconciliation, adoption, move, and deletion
 behavior. A later declaration application can restate the fields it owns.
 
-The Requirement PATCH is the one guarded write path. The client sends the
-current ETag in `If-Match`. The server creates the request identity. The member
-read returns the ETag. The response carries the record with its edit state,
-decision state, and the new ETag. A statement change uses the statement write
-gate and raises the existing Requirement reviews for its Rules. Rule statements
-use the same write gate. Reviews keep their before/after values and clearing
-behavior. Requirement and review publication uses more than one shard. The
-Store resolves an interrupted publication. The wire returns `write_failed` when
-it cannot return the saved result.
+Every review record PATCH takes the current ETag in `If-Match`. Requirement,
+Topic, and Question routes require it. The other routes write without it. The
+server creates the request identity. The member read returns the ETag. The
+response carries the record with its edit state, decision state, and the new
+ETag. A Requirement statement change uses the statement write gate and raises
+the existing Requirement reviews for its Rules. Rule statements use the same
+write gate. Reviews keep their before/after values and clearing behavior.
+Requirement and review publication uses more than one shard. The Store resolves
+an interrupted publication. The wire returns `write_failed` when it cannot
+return the saved result.
 
 Rule deprecation and archival use the existing `status` values. An archived
 Rule must have `archived_in_commit`; the other Rule statuses must not have it.
@@ -182,7 +184,7 @@ selected scope. In the native DTO, a `null` field supplies no value; it does
 not clear. A native request clears fields only through the typed
 `clear_fields` list.
 
-The relationship actions stay native: `set/clear-requirement-refines`,
+The relationship actions stay native: `add/clear-requirement-refines`,
 `add/clear-requirement-depends-on`, `add/clear-requirement-supersedes`,
 `set/clear-requirement-spawned-by`, `add/clear-rule-requirement`,
 `add/clear-rule-resolution`, `add/clear-resolution-requirement`,

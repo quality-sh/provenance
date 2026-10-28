@@ -59,9 +59,9 @@ native_action!(
 native_action!(
     ReleaseTopic,
     "release-topic",
-    RecordActionInput,
+    ClaimInput,
     provenance_core::Topic,
-    |store, input| store.release_topic(&input.scope_id, &input.id)
+    |store, input| store.release_topic(&input.scope_id, &input.id, &input.actor)
 );
 native_action!(
     CloseTopic,
@@ -80,9 +80,9 @@ native_action!(
 native_action!(
     ReleaseQuestion,
     "release-question",
-    RecordActionInput,
+    ClaimInput,
     provenance_core::Question,
-    |store, input| store.release_question(&input.scope_id, &input.id)
+    |store, input| store.release_question(&input.scope_id, &input.id, &input.actor)
 );
 native_action!(
     AnswerQuestion,

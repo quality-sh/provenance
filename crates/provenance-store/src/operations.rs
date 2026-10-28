@@ -20,6 +20,7 @@ use crate::state_store::{
 
 pub mod catalog;
 pub mod files;
+pub mod local_repository;
 mod plan;
 pub mod queries;
 pub mod read_policy;
@@ -28,6 +29,7 @@ mod sites;
 pub mod stamp;
 pub use crate::write_error;
 
+pub use local_repository::LocalRepository;
 pub use plan::{AffectedRule, ReviewReason, RuleEvidence, TypedSpecPlan};
 
 /// Resolves one explicit root or discovers the nearest enclosing project.

@@ -80,7 +80,14 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     let manifest_bytes = format!("{}\n", serde_json::to_string_pretty(&manifest)?).into_bytes();
     let skills = crate::skills::plan_init_at(path.as_std_path())
         .context("failed to plan the bundled Provenance skills")?;
-    let planned = PlannedFiles::plan(path, &invocation, manifest_before, manifest_bytes)?;
+    let guidance_scope = crate::onboarding::guidance_scope(path, scope.as_deref(), &manifest)?;
+    let planned = PlannedFiles::plan(
+        path,
+        &invocation,
+        &guidance_scope,
+        manifest_before,
+        manifest_bytes,
+    )?;
     super::check::validate_repository_with_manifest(path, &manifest)
         .context("the planned Provenance state is not valid")?;
     let dictionary = crate::ste_onboarding::prepare(path, ste_pdf.as_deref())?;
@@ -115,13 +122,14 @@ impl PlannedFiles {
     fn plan(
         path: &Utf8Path,
         invocation: &crate::onboarding::Invocation,
+        scope: &str,
         manifest_before: FileSnapshot,
         manifest_bytes: Vec<u8>,
     ) -> anyhow::Result<Self> {
         let agents_before = FileSnapshot::read(path.join("AGENTS.md").as_std_path())?;
         let without_legacy =
             crate::legacy_cleanup::project_agents(agents_before.bytes().unwrap_or_default());
-        let agents_bytes = crate::onboarding::project(&without_legacy, invocation)?;
+        let agents_bytes = crate::onboarding::project(&without_legacy, invocation, scope)?;
         let agents_had_section = String::from_utf8(without_legacy)
             .is_ok_and(|text| crate::onboarding::owns_section(&text));
         let gitignore_before = FileSnapshot::read(path.join(".gitignore").as_std_path())?;

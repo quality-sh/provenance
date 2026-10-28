@@ -39,14 +39,8 @@ pub(super) fn parse(
     let declared = fields::declared(definition)?;
     let request = definition.request_schema();
     let wire_fields = unique_wire_fields(&declared);
-    let mut allowed = declared
-        .iter()
-        .map(|field| field.name.clone())
-        .collect::<Vec<_>>();
+    let mut allowed = fields::accepted_flags(&declared);
     allowed.extend(extra.iter().map(|name| (*name).to_owned()));
-    for wire_field in &wire_fields {
-        allowed.push(fields::json_flag(wire_field));
-    }
     let allowed = allowed.iter().map(String::as_str).collect::<Vec<_>>();
     ensure_only_fields(matches, &allowed);
 

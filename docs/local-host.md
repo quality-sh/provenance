@@ -35,8 +35,9 @@ prevents an older process from removing a newer record.
 
 The registry directory, file, and lock file permit access only to the operating
 system owner on platforms that support these permissions. Publication uses an
-atomic file replacement. The host publishes only after it binds the listener
-and validates repository access.
+atomic file replacement. The host publishes only after it binds the listener,
+validates repository access, and serves requests. A client that finds the
+record can therefore reach the host at once.
 
 ## Endpoint and identity checks
 

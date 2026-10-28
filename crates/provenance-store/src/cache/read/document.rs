@@ -1,16 +1,21 @@
 //! Root-related key selection. Payload reads use the same bounded snapshot.
 use crate::operations::reader::{Position, ReadSnapshot};
+use provenance_core::model::relations::RelationSource;
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 use sqlx::Row;
+use std::collections::BTreeSet;
 
 // The recursive term follows only active refinement children. Production
 // and references are separate sets, so a cross-link cannot widen the branch.
 fn sets(exclude_terminal: bool) -> String {
     let decision_filter = visibility_filter(exclude_terminal, "'resolution'", "candidate.id");
-    let member_filter = visibility_filter(exclude_terminal, "candidate.kind", "candidate.id");
-    let reference_filter = visibility_filter(exclude_terminal, "candidate.kind", "candidate.id");
+    let member_filter = format!(
+        "{} AND {HIDDEN_FILTER}",
+        visibility_filter(exclude_terminal, "candidate.kind", "candidate.id")
+    );
+    let reference_filter = member_filter.clone();
     format!(
         r"
 WITH RECURSIVE
@@ -51,9 +56,11 @@ members(kind, id) AS (
  SELECT kind, id FROM member_candidates candidate WHERE {member_filter} LIMIT 4097
 ),
 ancestors(id) AS (
- SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2 AND refines IS NOT NULL
- UNION SELECT r.refines FROM ancestors a JOIN requirements r
- ON r.scope_id = ?1 AND r.id = a.id WHERE r.refines IS NOT NULL
+ SELECT target_id FROM relations WHERE scope_id = ?1 AND owner_id = ?2
+ AND owner_type = 'requirement' AND relation = 'refines'
+ UNION SELECT r.target_id FROM ancestors a JOIN relations r
+ ON r.scope_id = ?1 AND r.owner_id = a.id
+ WHERE r.owner_type = 'requirement' AND r.relation = 'refines'
  LIMIT 4097
 ),
 reference_candidates(kind, id) AS (
@@ -92,6 +99,10 @@ ordered AS (
     )
 }
 
+// ?3 holds the `kind:id` keys that the caller hides by review outcome.
+const HIDDEN_FILTER: &str = "NOT EXISTS (SELECT 1 FROM json_each(?3) hidden \
+ WHERE hidden.value = candidate.kind || ':' || candidate.id)";
+
 fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
     if exclude_terminal {
         format!(
@@ -104,41 +115,81 @@ fn visibility_filter(exclude_terminal: bool, kind: &str, id: &str) -> String {
 }
 
 impl ReadSnapshot {
-    /// Returns each Requirement whose canonical document contains the record.
+    /// Returns the nearest member document, then prefers depth and Requirement ID.
+    /// Sources and Domains remain eligible as document references.
+    #[rule("rule_review_document_choice")]
     pub(crate) async fn containing_document_roots(
         &self,
         kind: NodeType,
         id: &StableId,
     ) -> anyhow::Result<Vec<StableId>> {
         self.attest("requirements");
-        let mut tx = self.connection().await;
-        let root_ids: Vec<String> = sqlx::query_scalar(
-            "SELECT id FROM requirements WHERE scope_id = ? ORDER BY id LIMIT 4097",
-        )
-        .bind(self.scope().as_str())
-        .fetch_all(&mut **tx)
-        .await?;
-        drop(tx);
-        if root_ids.len() > 4096 {
-            return Err(ReadFailure::PageBudgetExceeded.into());
-        }
-        let mut roots = Vec::new();
-        for root in root_ids {
-            let contains = self
-                .document_keys(&root, &Position::default(), 8193, false)
-                .await?
-                .iter()
-                .any(|(entry_kind, key)| {
-                    key.stage < 2 && entry_kind == kind.as_str() && key.id == id.as_str()
-                });
-            if contains {
-                roots.push(StableId::new(root)?);
+        let mut frontier = vec![(kind, id.clone())];
+        let mut seen = BTreeSet::from([(kind.rank(), id.as_str().to_owned())]);
+        while !frontier.is_empty() {
+            let mut layer = Vec::new();
+            for (candidate_kind, root) in &frontier {
+                if *candidate_kind != NodeType::Requirement {
+                    continue;
+                }
+                let contains = self
+                    .document_keys(root.as_str(), &Position::default(), 8193, false, &[])
+                    .await?
+                    .iter()
+                    .any(|(entry_kind, key)| {
+                        let eligible = key.stage == 0
+                            || (key.stage == 1
+                                && matches!(kind, NodeType::Source | NodeType::Domain));
+                        eligible && entry_kind == kind.as_str() && key.id == id.as_str()
+                    });
+                if contains {
+                    let mut tx = self.connection().await;
+                    let depth: i64 = sqlx::query_scalar(
+                        "WITH RECURSIVE ancestors(id) AS (
+                         SELECT target_id FROM relations WHERE scope_id = ?1 AND owner_id = ?2
+                         AND owner_type = 'requirement' AND relation = 'refines' UNION
+                         SELECT r.target_id FROM ancestors a JOIN relations r
+                         ON r.scope_id = ?1 AND r.owner_id = a.id
+                         WHERE r.owner_type = 'requirement' AND r.relation = 'refines')
+                         SELECT COUNT(*) FROM ancestors",
+                    )
+                    .bind(self.scope().as_str())
+                    .bind(root.as_str())
+                    .fetch_one(&mut **tx)
+                    .await?;
+                    drop(tx);
+                    layer.push((std::cmp::Reverse(depth), root.clone()));
+                }
             }
+            layer.sort_by(|(depth_a, id_a), (depth_b, id_b)| {
+                depth_a
+                    .cmp(depth_b)
+                    .then_with(|| id_a.as_str().cmp(id_b.as_str()))
+            });
+            if let Some((_, root)) = layer.into_iter().next() {
+                return Ok(vec![root]);
+            }
+            let front = super::front::SqlFront::hop(&self.relations(), &frontier).await?;
+            let mut next = Vec::new();
+            for (kind, id) in &frontier {
+                for (_, endpoint) in front
+                    .outgoing(*kind, id)
+                    .into_iter()
+                    .chain(front.incoming(*kind, id))
+                {
+                    if seen.insert((endpoint.node_type.rank(), endpoint.id.as_str().to_owned())) {
+                        next.push((endpoint.node_type, endpoint.id));
+                    }
+                }
+            }
+            frontier = next;
         }
-        Ok(roots)
+        Ok(Vec::new())
     }
 
     /// Selects members from the root branch and leaves ancestors in references.
+    /// The `hidden` records stay out of members and references, and so do
+    /// their discussions.
     #[rule("rule_requirement_document_canonical_membership")]
     #[rule("rule_review_ancestors_are_not_descendants")]
     pub(crate) async fn document_keys(
@@ -147,6 +198,7 @@ impl ReadSnapshot {
         after: &Position,
         limit: usize,
         exclude_terminal: bool,
+        hidden: &[(NodeType, StableId)],
     ) -> anyhow::Result<Vec<(String, Position)>> {
         for family in [
             "requirements",
@@ -164,6 +216,12 @@ impl ReadSnapshot {
         }
         let mut tx = self.connection().await;
         let sets = sets(exclude_terminal);
+        let hidden = serde_json::to_string(
+            &hidden
+                .iter()
+                .map(|(kind, id)| format!("{}:{}", kind.as_str(), id.as_str()))
+                .collect::<Vec<_>>(),
+        )?;
         let overflow: i64 = sqlx::query_scalar(&format!(
             "{sets} SELECT \
             (SELECT count(*) FROM members) > 4096 OR (SELECT count(*) FROM refs) > 4096 \
@@ -172,6 +230,7 @@ impl ReadSnapshot {
         ))
         .bind(self.scope().as_str())
         .bind(root)
+        .bind(&hidden)
         .fetch_one(&mut **tx)
         .await?;
         if overflow != 0 {
@@ -179,11 +238,12 @@ impl ReadSnapshot {
         }
         let rows = sqlx::query(&format!(
             "{sets} SELECT stage, kind, CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id, counter, rank FROM ordered \
-            WHERE (stage, rank, counter, id) > (?3, ?4, ?5, ?6) \
-            ORDER BY stage, rank, counter, id LIMIT ?7"
+            WHERE (stage, rank, counter, id) > (?4, ?5, ?6, ?7) \
+            ORDER BY stage, rank, counter, id LIMIT ?8"
         ))
         .bind(self.scope().as_str())
         .bind(root)
+        .bind(&hidden)
         .bind(i64::from(after.stage))
         .bind(i64::from(after.rank))
         .bind(after.counter)

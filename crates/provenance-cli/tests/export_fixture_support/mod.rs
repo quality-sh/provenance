@@ -1,3 +1,7 @@
+mod pending_decisions;
+#[allow(unused_imports)]
+pub use pending_decisions::keep_decision_links_pending;
+
 use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -9,6 +13,15 @@ use std::path::Path;
 pub fn make_default_scope_portable(repo: impl AsRef<Path>) {
     let state = repo.as_ref().join(".provenance/state");
     remove_review_proposals(&state.join("scopes/default/ideation"));
+    for relative in [
+        "scopes/default/threads/discussions.jsonl",
+        "scopes/default/ideation/withdrawals.jsonl",
+    ] {
+        let path = state.join(relative);
+        if path.exists() {
+            std::fs::remove_file(path).unwrap();
+        }
+    }
     let review = state.join("scopes/default/review");
     if review.exists() {
         std::fs::remove_dir_all(review).unwrap();

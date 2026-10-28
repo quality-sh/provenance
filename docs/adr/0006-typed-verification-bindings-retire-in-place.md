@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Superseded by `res_replaced_verification_bindings_are_deleted` under owner ruling D2 in
+`source_owner_hygiene_rulings_20261027`.
 
 ## Context
 

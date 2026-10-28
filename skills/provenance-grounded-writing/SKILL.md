@@ -1,6 +1,6 @@
 ---
 name: provenance-grounded-writing
-description: Write specific, evidence-grounded statements for requirements, rules, sources, resolutions, and boundaries — not generic capability language. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
+description: Write specific, evidence-grounded statements and behaviour descriptions for requirements, rules, sources, resolutions, and boundaries — not generic capability language or meeting minutes. Use before calling `requirements create`, `rules create`, `sources create`, `resolutions create`, or `boundaries create`, especially for a root or mid-level requirement, a statement merging several candidates, or a resolution's position and rationale.
 ---
 
 # Grounded writing
@@ -61,23 +61,44 @@ reports rather than hiding.
 - **Climb.** Summarizing several children? Name the one decision they share, not a noun list
   joined by "and." No shared decision — narrow the parent, don't fake a summary.
 
-## Statement tight, context in the description
+## Statement tight, behaviour in the description
 
 The statement is one decision in one plain clause. If you're chaining clauses with "and" to
 fit the source, the destination, the mechanism, and the retry policy into a single sentence,
 you've overpacked it — a climb-test failure in a long coat. Name the decision in the
-statement; for requirements and rules, move the elaboration to `--description`, where being
-fuller is fine. For other record types, use their available context fields, such as a
-resolution's `--rationale` or `--context`.
+statement and put the behaviour in `--description`.
+
+A description says how the product behaves, in the present tense: its states, what moves it
+between them, what the person sees, and one example. Write it for a builder who
+has not read the conversation. It does not retell the brief, does not say who confirmed
+what, and does not list what remains to be shaped. History goes on the record's thread;
+unknowns go in fog or a Question. One closing `Open:` line may name them. For other record
+types, use their context fields, such as a resolution's `--rationale` or `--context`.
 
 Write for whoever reads it next — another agent, a developer, or a non-technical
-stakeholder signing off. Plain beats verbose. Say what's true and stop; a statement that
-reads at a glance beats an exhaustive one.
+stakeholder signing off. Plain beats verbose. Say what's true and stop.
 
 Overpacked: "Approval limits shall sync from the Finance Policy service into the local cache
 within atomic transactions and refresh via the job queue." Better — statement: "Approval
-limits are sourced from the Finance Policy service, not authored locally." description: the
-sync path, its transactionality, and the refresh mechanism.
+limits are sourced from the Finance Policy service, not authored locally."
+
+Description as minutes — bad: "The finance lead confirmed in the shaping call that limits
+come from the policy service. The original brief mentions a cache. Refresh cadence and
+failure behaviour remain to be shaped." Description as spec — good: "Approval limits come
+from the Finance Policy service. States: current, stale, unavailable. A refresh runs every
+hour; a failed refresh keeps the last limits and marks them stale. A stale limit still
+approves and shows its age to the approver. An unavailable limit blocks approval and shows
+'Limits unavailable, try again'. Example: a limit raised at 09:10 applies by 10:10. Open:
+how old a stale limit may be before it blocks approval."
+
+## Conditional obligations
+
+A conditional Rule states when its obligation applies. Name the mode or configuration
+in the Requirement and Rule. A parent link does not select a private Rule subset.
+
+Example: "In offline mode, the client stores each unsent change until the next connection."
+A report states the tested mode. In online mode, this condition does not apply. In offline
+mode, a lost unsent change is an unmet obligation. Do not report these two states as equal.
 
 ## Good vs. bad
 

@@ -1,5 +1,6 @@
-use crate::{Manifest, ScopeId};
-use camino::Utf8Path;
+use crate::{Manifest, Scope, ScopeId};
+use camino::{Utf8Component, Utf8Path};
+use provenance_macros::rule;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -49,15 +50,52 @@ pub fn resolve_scope(
     manifest
         .scopes
         .iter()
-        .filter(|scope| {
-            scope.path_prefix.as_path().as_str() == "."
-                || repo_relative_path.starts_with(scope.path_prefix.as_path())
-        })
-        .max_by_key(|scope| scope.path_prefix.as_path().as_str().len())
-        .map(|scope| scope.id.clone())
+        .filter_map(|scope| prefix_depth(scope, repo_relative_path).map(|depth| (scope, depth)))
+        .max_by_key(|(_, depth)| *depth)
+        .map(|(scope, _)| scope.id.clone())
         .ok_or_else(|| ScopeResolutionError::MissingScope {
             path: repo_relative_path.to_string(),
         })
+}
+
+/// Whether the scope owns a repository-relative path: its path prefix
+/// contains the path, and no other scope has a longer prefix that contains
+/// it. Scopes that declare the same prefix own the same paths.
+#[rule("rule_binding_scope_longest_prefix")]
+pub fn scope_owns_path(
+    manifest: &Manifest,
+    scope: &ScopeId,
+    repo_relative_path: &Utf8Path,
+) -> bool {
+    let Some(own) = manifest
+        .scopes
+        .iter()
+        .filter(|candidate| &candidate.id == scope)
+        .find_map(|candidate| prefix_depth(candidate, repo_relative_path))
+    else {
+        return false;
+    };
+    manifest
+        .scopes
+        .iter()
+        .filter_map(|candidate| prefix_depth(candidate, repo_relative_path))
+        .all(|depth| depth <= own)
+}
+
+/// The number of path components in the scope's prefix when the prefix
+/// contains the path. `.` and `./` components count as nothing, so `.` owns
+/// every path and `./app/` is the same prefix as `app`.
+fn prefix_depth(scope: &Scope, repo_relative_path: &Utf8Path) -> Option<usize> {
+    let prefix = normal_components(scope.path_prefix.as_path());
+    let path = normal_components(repo_relative_path);
+    path.starts_with(&prefix).then_some(prefix.len())
+}
+
+fn normal_components(path: &Utf8Path) -> Vec<&str> {
+    path.components()
+        .filter(|component| *component != Utf8Component::CurDir)
+        .map(|component| component.as_str())
+        .collect()
 }
 
 #[cfg(test)]
@@ -104,5 +142,36 @@ mod tests {
         )
         .unwrap();
         assert_eq!(resolved.as_str(), "api");
+    }
+
+    #[test]
+    #[provenance_macros::verifies("rule_binding_scope_longest_prefix", examples)]
+    fn the_longest_prefix_owns_a_path_and_shared_prefixes_share_it() {
+        let manifest = manifest_with_scopes(&[
+            ("root", "."),
+            ("app", "./app/"),
+            ("a", "a"),
+            ("ab", "a/b"),
+            ("twin", "a/b"),
+        ]);
+        let owners = |path: &str| {
+            manifest
+                .scopes
+                .iter()
+                .filter(|scope| scope_owns_path(&manifest, &scope.id, Utf8Path::new(path)))
+                .map(|scope| scope.id.as_str())
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(owners("src/lib.rs"), ["root"]);
+        assert_eq!(owners("app/src/lib.rs"), ["app"]);
+        assert_eq!(owners("application/lib.rs"), ["root"]);
+        assert_eq!(owners("a/lib.rs"), ["a"]);
+        assert_eq!(owners("a/b/lib.rs"), ["ab", "twin"]);
+        assert!(!scope_owns_path(
+            &manifest,
+            &ScopeId::new("missing").unwrap(),
+            Utf8Path::new("src/lib.rs")
+        ));
     }
 }

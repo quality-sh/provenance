@@ -75,6 +75,9 @@ pub(super) fn cycle_of(proposal: &ProposalCard) -> Option<u64> {
 
 /// The review state of one scope, read from its records.
 pub(super) struct CycleFacts {
+    /// Every Proposal of the scope, in stored order.
+    proposals: Vec<ProposalCard>,
+    /// The review submissions among the Proposals.
     submissions: Vec<ProposalCard>,
     dispositions: Vec<DispositionRecord>,
     withdrawals: Vec<Withdrawal>,
@@ -86,10 +89,11 @@ impl CycleFacts {
     /// feedback Discussions, and refuses a Withdrawal that names no review
     /// submission.
     pub(super) fn validated(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Self> {
-        let submissions = store
-            .list_proposal_definitions(scope)?
-            .into_iter()
+        let proposals = store.list_proposal_definitions(scope)?;
+        let submissions = proposals
+            .iter()
             .filter(|proposal| proposal.proposal_type == ProposalType::RecordRevision)
+            .cloned()
             .collect::<Vec<_>>();
         let withdrawals = store.list_withdrawals(scope)?;
         let mut withdrawn = std::collections::BTreeSet::new();
@@ -117,11 +121,22 @@ impl CycleFacts {
             })
             .collect();
         Ok(Self {
+            proposals,
             submissions,
             dispositions: store.list_dispositions(scope)?,
             withdrawals,
             feedback,
         })
+    }
+
+    /// Every Proposal of the scope, as one read of the records gave them.
+    pub(super) fn proposals(&self) -> &[ProposalCard] {
+        &self.proposals
+    }
+
+    /// Every Disposition of the scope, as one read of the records gave them.
+    pub(super) fn dispositions(&self) -> &[DispositionRecord] {
+        &self.dispositions
     }
 
     pub(super) fn is_withdrawn(&self, proposal: &StableId) -> bool {
@@ -156,6 +171,13 @@ impl CycleFacts {
         (cycle, proposal.as_str().to_owned())
     }
 
+    /// Whether a Proposal is a review submission.
+    pub(super) fn is_submission(&self, proposal: &StableId) -> bool {
+        self.submissions
+            .iter()
+            .any(|submission| submission.id == *proposal)
+    }
+
     pub(super) fn has_submissions(&self, kind: NodeType, record_id: &StableId) -> bool {
         self.of_record(kind, record_id).next().is_some()
     }
@@ -169,6 +191,16 @@ impl CycleFacts {
             NodeType::from(proposal.traceability.target.artifact_type) == kind
                 && proposal.traceability.target.artifact_id == *record_id
         })
+    }
+
+    /// Whether a later submission or a revision link replaces this submission.
+    pub(super) fn is_replaced(&self, proposal: &ProposalCard) -> bool {
+        let target = &proposal.traceability.target;
+        self.of_record(NodeType::from(target.artifact_type), &target.artifact_id)
+            .any(|candidate| {
+                self.order_of(&candidate.id) > self.order_of(&proposal.id)
+                    || candidate.revises.as_ref() == Some(&proposal.id)
+            })
     }
 
     /// The withdrawn submissions of one record, in submission order.

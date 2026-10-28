@@ -241,6 +241,18 @@ fn diff_records<'a, T>(
 ) {
     let base_by_id: BTreeMap<&str, &T> = base.iter().map(|record| (id(record), record)).collect();
     let head_ids: BTreeSet<&str> = head.iter().map(&id).collect();
+    let mut replacements: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for record in head {
+        for (relation, target_kind, target) in relations(record) {
+            if relation == "supersedes" && target_kind == kind {
+                replacements
+                    .entry(target)
+                    .or_default()
+                    .insert(id(record).to_string());
+            }
+        }
+    }
+    let first_change = changes.len();
     for record in head {
         let record_id = id(record);
         let after_statement = statement(record);
@@ -285,6 +297,12 @@ fn diff_records<'a, T>(
                 .cloned()
                 .collect(),
         ));
+    }
+    for change in &mut changes[first_change..] {
+        change.superseded_by = replacements
+            .get(&change.id)
+            .map(|ids| ids.iter().cloned().collect())
+            .unwrap_or_default();
     }
     for record in base {
         if !head_ids.contains(id(record)) {
@@ -332,6 +350,7 @@ fn change_with(
         statement_before,
         lifecycle_before,
         lifecycle_after,
+        superseded_by: Vec::new(),
         relations_added: to_changes(relations_added),
         relations_removed: to_changes(relations_removed),
     }
@@ -352,7 +371,7 @@ fn lifecycle_word(status: &impl serde::Serialize) -> String {
 
 fn requirement_relations(record: &Requirement) -> BTreeSet<RelationKey> {
     let mut relations = BTreeSet::new();
-    if let Some(target) = &record.refines {
+    for target in &record.refines {
         relations.insert(relation(
             "refines",
             RecordKind::Requirement,

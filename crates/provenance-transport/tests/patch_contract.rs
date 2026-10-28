@@ -4,6 +4,7 @@ mod support {
     pub mod resource_http;
 }
 
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, host};
@@ -30,6 +31,8 @@ async fn create_contribution(host: &provenance_transport::StatementHost) {
 }
 
 #[tokio::test]
+#[verifies("rule_public_patch_explicit_clearing", examples)]
+#[verifies("rule_porcelain_update_preserves_omissions", examples)]
 async fn patch_omission_preserves_and_registered_null_clears() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
@@ -61,6 +64,7 @@ async fn patch_omission_preserves_and_registered_null_clears() {
 }
 
 #[tokio::test]
+#[verifies("rule_public_patch_explicit_clearing", examples)]
 async fn patch_refuses_native_clear_fields_before_mutation() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
@@ -77,10 +81,12 @@ async fn patch_refuses_native_clear_fields_before_mutation() {
     .await;
     assert_eq!(status, 400, "{failure}");
     assert_eq!(failure["error"]["kind"], "invalid_input");
+    assert_eq!(failure["error"]["reason"], "invalid_value");
     assert_eq!(read(&host, path).await, before);
 }
 
 #[tokio::test]
+#[verifies("rule_public_patch_explicit_clearing", examples)]
 async fn patch_refuses_null_for_graph_and_ideation_fields_without_mutation() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
@@ -99,6 +105,7 @@ async fn patch_refuses_null_for_graph_and_ideation_fields_without_mutation() {
             call(&host, "PATCH", path, Some(json!({"data": {field: null}}))).await;
         assert_eq!(status, 400, "{path}: {failure}");
         assert_eq!(failure["error"]["kind"], "invalid_input");
+        assert_eq!(failure["error"]["reason"], "invalid_value");
         assert_eq!(read(&host, path).await, before, "{path}");
     }
 }

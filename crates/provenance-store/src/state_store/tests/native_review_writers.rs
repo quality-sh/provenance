@@ -52,7 +52,7 @@ pub(super) fn seed_native_records(
             supersedes: Vec::new(),
             position: "Use position A".into(),
             rationale: "Position A satisfies the requirement".into(),
-            status: ResolutionStatus::Proposed,
+            status: ResolutionStatus::Approved,
             context: None,
             enforcement: None,
             confidence: None,
@@ -237,7 +237,7 @@ fn source_rule_and_resolution_creators_refuse_unaddressed_origins() {
         supersedes: Vec::new(),
         position: "Use the position".into(),
         rationale: "The position satisfies the requirement".into(),
-        status: ResolutionStatus::Proposed,
+        status: ResolutionStatus::Approved,
         context: None,
         enforcement: None,
         confidence: None,
@@ -309,7 +309,7 @@ fn relation_and_shaping_writers_keep_the_revision_of_returned_content() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -362,12 +362,14 @@ fn relation_and_shaping_writers_keep_the_revision_of_returned_content() {
     store
         .claim_topic(&scope, &id("topic_native"), "author")
         .unwrap();
-    store.release_topic(&scope, &id("topic_native")).unwrap();
+    store
+        .release_topic(&scope, &id("topic_native"), "author")
+        .unwrap();
     store
         .claim_question(&scope, &id("question_native"), "author")
         .unwrap();
     store
-        .release_question(&scope, &id("question_native"))
+        .release_question(&scope, &id("question_native"), "author")
         .unwrap();
     store
         .answer_question(&scope, &id("question_native"), "A is correct".into(), None)

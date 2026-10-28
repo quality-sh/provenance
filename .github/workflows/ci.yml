@@ -25,6 +25,7 @@ jobs:
   # so jobs whose inputs are untouched can skip without renaming anything.
   # Main pushes and manual runs execute every job; filters only narrow PRs.
   changes:
+    timeout-minutes: 10
     name: Detect changes
     runs-on: ubuntu-24.04
     outputs:
@@ -36,7 +37,7 @@ jobs:
       test-matrix: ${{ steps.matrices.outputs.test }}
       file-access-matrix: ${{ steps.matrices.outputs.file_access }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
@@ -61,6 +62,7 @@ jobs:
               - ".github/scripts/**/*.sh"
               - ".github/scripts/**/*.py"
             rust:
+              - "tools/agent-notifications/**"
               - *ci
               - *release
               - ".github/scripts/crap_gate.py"
@@ -72,14 +74,29 @@ jobs:
               - "Cargo.lock"
               - ".config/nextest.toml"
               - "examples/rust-sdk/**"
-              # Skill files are Rust inputs: the sources compile into the
-              # binary with include_str!, and a test compares the installed
-              # copies against what an install writes.
+              # Skill files are Rust inputs: the build script copies the root
+              # sources into the binary, and tests install them.
               - "skills/**"
               - "tools/skills/**"
               - "tools/operation-codegen/**"
               - ".agents/skills/**"
               - ".claude/skills/**"
+              # Tests read these files from the repository root, so a change
+              # to them alone can break the Test job.
+              - ".provenance/state/**"
+              - "fixtures/provenance-macros/**"
+              - "tests/fixtures/pr-45-homepage-scale.json"
+              - "README.md"
+              - "LICENSE"
+              - ".github/release-crates.txt"
+              - "packages/provenance/package.json"
+              - "packages/provenance/scripts/package-engine.js"
+              - "packages/provenance/test/fixtures/packed-consumer/rule-bindings.ts.fixture"
+              - "packages/create-provenance/package.json"
+              # Format reads rustfmt.toml. Cargo sets the test environment
+              # variables from .cargo/config.toml.
+              - "rustfmt.toml"
+              - ".cargo/config.toml"
             contract:
               - *ci
               - "crates/**"
@@ -111,6 +128,7 @@ jobs:
           fi
 
   generate-operations:
+    timeout-minutes: 20
     name: Generate operation clients
     needs: changes
     # Policy-only pull requests skip the rust, sdk, and contract jobs, but
@@ -120,21 +138,24 @@ jobs:
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.contract == 'true' || needs.changes.outputs.policy == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: v1
           shared-key: operation-codegen
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: actions/setup-node@v7
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
-      - run: npm ci --prefix tools/operation-codegen
+      - run: sfw npm ci --prefix tools/operation-codegen
       - name: Run the grammar linter tests
         run: node --test grammar-lint.test.mjs
         working-directory: tools/operation-codegen
@@ -145,7 +166,7 @@ jobs:
         run: |
           mkdir -p target/operation-artifact
           tar -czf target/operation-artifact/operation-generated.tar.gz contracts/operations packages/provenance/src/generated crates/provenance-http-client/src/generated
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: operation-generated
           path: target/operation-artifact/operation-generated.tar.gz
@@ -159,6 +180,8 @@ jobs:
     # trigger keeps the artifact present.
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     uses: ./.github/workflows/review-assets.yml
+    with:
+      timeout-minutes: 20
 
   # One build per OS. Every job that only needs to drive the CLI downloads
   # this artifact instead of compiling the workspace itself; cargo test and
@@ -166,6 +189,7 @@ jobs:
   # the linux-only consumers do not wait on the platform builds; the packed
   # matrix needs both.
   build-cli-linux:
+    timeout-minutes: 30
     name: Build provenance-cli (linux)
     needs: [changes, review-assets]
     # rule-coverage can run for a policy-only change and downloads this
@@ -173,32 +197,37 @@ jobs:
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: v1
           shared-key: build-cli
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: review-composed
           path: target/review-artifact
       - name: Restore composed review assets
         shell: bash
         run: tar -xzf target/review-artifact/review-composed.tar.gz
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
       - run: cargo build --locked -p provenance-cli -p provenance-transport --features provenance-transport/test-fixture --bins --timings
       - name: Verify embedded review assets and SDK reads
         run: node tools/review-host/verify-native.ts target/debug/provenance crates/provenance-cli/review-assets-generated target/review-sdk
+      - name: Verify review writes through the generated client across host restarts
+        run: node tools/review-host/verify-review-writes.ts target/debug/provenance target/review-sdk
       - name: Upload the CLI and isolated test host for the consumer jobs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: |
@@ -207,14 +236,39 @@ jobs:
           retention-days: 1
       - name: Save Cargo timing reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-timings-build-cli-linux
           path: target/cargo-timings/*.html
           if-no-files-found: warn
           retention-days: 30
 
+  agent-notifications:
+    timeout-minutes: 15
+    name: Agent notification adapters
+    needs: [build-cli-linux]
+    if: needs.build-cli-linux.result == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: provenance-cli-x86_64-unknown-linux-gnu
+          path: target/debug
+      - run: chmod +x target/debug/provenance
+      - run: sfw npm ci --no-audit --no-fund --prefix tools/agent-notifications
+      - run: npm run typecheck --prefix tools/agent-notifications
+      - name: Test public client adapters
+        env:
+          PROVENANCE_TEST_BIN: ${{ github.workspace }}/target/debug/provenance
+        run: npm test --prefix tools/agent-notifications
+
   build-cli-platforms:
+    timeout-minutes: 45
     name: Build provenance-cli (${{ matrix.target }})
     needs: [changes, review-assets]
     if: github.event_name != 'pull_request'
@@ -232,32 +286,41 @@ jobs:
             binary: provenance
             fixture: existing-root-host-fixture
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: v1
           shared-key: build-cli
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: review-composed
           path: target/review-artifact
       - name: Restore composed review assets
         shell: bash
         run: tar -xzf target/review-artifact/review-composed.tar.gz
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
+      - name: Fetch crates through Socket Firewall
+        env:
+          # Cargo on Windows checks certificate revocation with schannel, and
+          # the revocation status of the firewall's intercepted TLS chain is
+          # unknown. Cargo documents http.check-revoke for a proxy that
+          # intercepts TLS. Only this firewalled fetch turns the check off.
+          CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        run: sfw cargo fetch --locked
       - run: cargo build --locked -p provenance-cli -p provenance-transport --features provenance-transport/test-fixture --bins --timings
       - name: Verify embedded review assets and SDK reads
         run: node tools/review-host/verify-native.ts target/debug/${{ matrix.binary }} crates/provenance-cli/review-assets-generated target/review-sdk
       - name: Upload the CLI and isolated test host for the consumer jobs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: provenance-cli-${{ matrix.target }}
           path: |
@@ -266,7 +329,7 @@ jobs:
           retention-days: 1
       - name: Save Cargo timing reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-timings-build-cli-${{ matrix.target }}
           path: target/cargo-timings/*.html
@@ -274,56 +337,61 @@ jobs:
           retention-days: 30
 
   fmt:
+    timeout-minutes: 15
     name: Format
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         shell: bash
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
           components: rustfmt
       - run: cargo fmt --all -- --check
 
   clippy:
+    timeout-minutes: 45
     name: Clippy
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         shell: bash
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
           components: clippy
       # Own cache key: clippy saves check-profile artifacts, and the first
       # saver owns a key, so sharing would hand build jobs a useless cache.
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: v1
           shared-key: clippy
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
       - run: cargo clippy --workspace --all-targets --all-features --timings -- -D warnings
       - name: Save Cargo timing reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-timings-clippy
           path: target/cargo-timings/*.html
@@ -331,6 +399,7 @@ jobs:
           retention-days: 30
 
   test:
+    timeout-minutes: 120
     name: Test (${{ matrix.os }})
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
@@ -339,32 +408,57 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.changes.outputs.test-matrix) }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
       - run: node tools/skills/prepare.mjs
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         shell: bash
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: v1
           shared-key: test-all-features
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Fetch crates through Socket Firewall
+        env:
+          # Cargo on Windows checks certificate revocation with schannel, and
+          # the revocation status of the firewall's intercepted TLS chain is
+          # unknown. Cargo documents http.check-revoke for a proxy that
+          # intercepts TLS. Only this firewalled fetch turns the check off.
+          CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        run: sfw cargo fetch --locked
       - name: Install nextest
         uses: taiki-e/install-action@c3ec0de9ae7f1019cea21aa96aa0a895b9552063 # v2
         with:
           tool: nextest@0.9.143
+      - name: Check the test dictionary URL override
+        shell: bash
+        run: |
+          mkdir -p target/test-ste100-env/src
+          cat > target/test-ste100-env/Cargo.toml <<'TOML'
+          [package]
+          name = "test-ste100-env"
+          edition = "2024"
+          [workspace]
+          TOML
+          cat > target/test-ste100-env/src/main.rs <<'RS'
+          fn main() {
+              assert_eq!(env!("PROVENANCE_TEST_STE100_ASSET_URL"), "http://127.0.0.1:0/ASD-STE100_ISSUE9.pdf");
+          }
+          RS
+          PROVENANCE_TEST_STE100_ASSET_URL=http://127.0.0.1:12345/exported.pdf cargo run --quiet --offline --manifest-path target/test-ste100-env/Cargo.toml
       - name: Test concurrently
         if: runner.os != 'Linux'
         run: cargo nextest run --profile ci --workspace --all-features --no-fail-fast --cargo-profile test --timings
@@ -381,10 +475,13 @@ jobs:
           NEXTEST_PROFILE: ci
         run: |
           mkdir -p target/crap
-          cargo llvm-cov nextest --workspace --all-features --no-fail-fast --lcov --output-path target/crap/lcov.info
+          # Host lifecycle tests kill instrumented children. llvm-profdata reports
+          # each corrupt profile path and merges the remaining valid profiles.
+          # Test failures still fail this command; an entirely invalid set fails too.
+          cargo llvm-cov nextest --workspace --all-features --no-fail-fast --lcov --failure-mode all --output-path target/crap/lcov.info
       - name: Save coverage for the CRAP gate
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rust-lcov
           path: target/crap/lcov.info
@@ -392,42 +489,62 @@ jobs:
           if-no-files-found: error
       - name: Test documentation
         run: cargo test --workspace --all-features --doc --no-fail-fast
+      - name: Save the test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: warn
+          retention-days: 30
       - name: Save Cargo timing reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-timings-test-${{ matrix.os }}
           path: target/cargo-timings/*.html
           if-no-files-found: warn
           retention-days: 30
 
+      # trybuild creates target/tests/trybuild, but not target/tests/target.
+      # rust-cache starts both cleanup calls without awaiting their errors.
+      # Remove the disposable compile-test workspaces before cache cleanup.
+      - name: Remove compile-test workspaces before cache cleanup
+        if: always()
+        shell: bash
+        run: rm -rf target/tests
+
   # Default-features lane: runs the dogfood absence tests, which assert the
   # dev-only command does not exist in feature-less builds.
   test-default-features:
+    timeout-minutes: 45
     name: Default-features CLI test
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
       - run: node tools/skills/prepare.mjs
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: v1
           shared-key: test-default-features
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
       - run: cargo test -p provenance-cli --no-fail-fast --timings
       - name: Save Cargo timing reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-timings-test-default-features
           path: target/cargo-timings/*.html
@@ -435,19 +552,20 @@ jobs:
           retention-days: 30
 
   crap-quality:
+    timeout-minutes: 30
     name: Rust CRAP quality gate
     needs: [changes, generate-operations, test]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
       - name: Install pinned CRAP tool
@@ -457,7 +575,7 @@ jobs:
       - name: Test the gate with native cargo-crap fixtures
         run: python3 .github/scripts/crap_gate.test.py
       - name: Read coverage from the Linux test run
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: rust-lcov
           path: target/crap
@@ -484,7 +602,7 @@ jobs:
           --exclude 'src/bin/*-fixture.rs'
       - name: Upload the exhaustive CRAP report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rust-crap-report
           path: target/crap/crap-report.json
@@ -492,13 +610,14 @@ jobs:
           if-no-files-found: error
 
   rule-coverage:
+    timeout-minutes: 15
     name: Rule Coverage
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.policy == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
@@ -550,7 +669,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload the machine-readable coverage report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: provenance-coverage-report
           path: provenance-coverage-report.json
@@ -558,16 +677,18 @@ jobs:
           if-no-files-found: warn
 
   rust-sdk:
+    timeout-minutes: 30
     name: Rust SDK example
     needs: [changes, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
@@ -577,6 +698,7 @@ jobs:
         run: |
           fixture_repo="$PWD/examples/rust-sdk"
           target/debug/provenance init --path "$fixture_repo" --scope default --path-prefix .
+          (cd examples/rust-sdk && sfw cargo fetch --locked)
           (cd examples/rust-sdk && PROVENANCE_REPO="$fixture_repo" cargo run --bin apply)
           (cd examples/rust-sdk && \
             PROVENANCE_REPO="$fixture_repo" \
@@ -595,20 +717,22 @@ jobs:
             | jq -e '.data.items | length == 1 and .[0].file == "tests/share_links.rs"'
 
   typescript-sdk:
+    timeout-minutes: 20
     name: TypeScript SDK
     needs: [changes, generate-operations, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         shell: bash
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -616,46 +740,48 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
       - run: chmod +x target/debug/provenance target/debug/existing-root-host-fixture
-      - run: npm ci --no-audit --no-fund --prefix packages/provenance
+      - run: sfw npm ci --no-audit --no-fund --prefix packages/provenance
       - run: npm test --prefix packages/provenance
       # Bun eliminates the calling frame of a tail call, so a verify call that
       # states no file only reproduces here.
       - run: npm run test:bun --prefix packages/provenance
 
   typescript-sdk-example:
+    timeout-minutes: 15
     name: TypeScript SDK example
     needs: [changes, generate-operations, build-cli-linux]
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         shell: bash
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: |
             packages/provenance/package-lock.json
             examples/typescript-sdk/package-lock.json
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
           path: target/debug
       - run: chmod +x target/debug/provenance target/debug/existing-root-host-fixture
-      - run: npm ci --no-audit --no-fund --prefix packages/provenance
+      - run: sfw npm ci --no-audit --no-fund --prefix packages/provenance
       - run: npm run build --prefix packages/provenance
-      - run: npm ci --no-audit --no-fund --prefix examples/typescript-sdk
+      - run: sfw npm ci --no-audit --no-fund --prefix examples/typescript-sdk
       - name: Run packaged fixture
         shell: bash
         run: |
@@ -679,13 +805,15 @@ jobs:
   # One job, six managers: each smoke is seconds long, and six matrix legs
   # cost six runners to save one check row.
   initializer:
+    timeout-minutes: 15
     name: Initializer
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.sdk == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
@@ -693,10 +821,10 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.14
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: 2.9.3
-      - uses: nubjs/setup-nub@47e5e7393d50f4e9544ddaf756aa277972afba2d # v0.4.0
+      - uses: nubjs/setup-nub@c7b970ec04655a2f0a111cd436cc182a3b660e7a # v0.6.0
         with:
           nub-version: 0.7.5
       - name: Enable Corepack package managers
@@ -704,7 +832,7 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.15.0 --activate
           corepack prepare yarn@4.9.2 --activate
-      - run: npm ci --no-audit --no-fund --prefix packages/create-provenance
+      - run: sfw npm ci --no-audit --no-fund --prefix packages/create-provenance
       - run: npm test --prefix packages/create-provenance
       - name: Package-manager smoke tests
         run: |
@@ -715,6 +843,7 @@ jobs:
           done
 
   typescript-sdk-packed-install:
+    timeout-minutes: 30
     name: Packaged SDK install (${{ matrix.target }})
     needs: [changes, generate-operations, build-cli-linux, build-cli-platforms]
     if: github.event_name != 'pull_request'
@@ -733,20 +862,21 @@ jobs:
             target: aarch64-apple-darwin
             yarn-pnp: false
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         shell: bash
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: packages/provenance/package-lock.json
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: provenance-cli-${{ matrix.target }}
           path: target/debug
@@ -757,13 +887,14 @@ jobs:
         run: |
           corepack enable
           corepack prepare yarn@4.9.2 --activate
-      - run: npm ci --no-audit --no-fund --prefix packages/provenance
+      - run: sfw npm ci --no-audit --no-fund --prefix packages/provenance
       - run: npm run build --prefix packages/provenance
       - run: npm run test:packed --prefix packages/provenance
         env:
           PROVENANCE_TEST_YARN_PNP: ${{ matrix.yarn-pnp }}
 
   release-smoke-tools:
+    timeout-minutes: 15
     name: Release tools (${{ matrix.os }})
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.release == 'true'
@@ -776,10 +907,10 @@ jobs:
           - macos-latest
           - windows-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
       - name: Parse release shell scripts
@@ -829,42 +960,51 @@ jobs:
         env:
           GOBIN: ${{ runner.temp }}/release-tools
         run: '"$GOBIN/actionlint"'
+      - name: Test Cargo shim and release prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          python3 scripts/agent-bin/tests/test_package.py
+          python3 .github/scripts/test_release_crates.py
       - name: Test release smoke helpers
         if: runner.os == 'Linux'
         shell: bash
         run: bash .github/scripts/release-smoke/test.sh
 
   operation-contract:
+    timeout-minutes: 45
     name: Operation contract
     needs: [changes, generate-operations]
     if: github.event_name != 'pull_request' || needs.changes.outputs.contract == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         shell: bash
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: v1
           shared-key: operation-contract
           add-job-id-key: "false"
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: actions/setup-node@v6
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 24
-      - run: npm ci --prefix tools/operation-codegen
+      - run: sfw npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/generate.mjs --check
       - run: npm test --prefix tools/operation-codegen
-      - run: npm ci --prefix packages/provenance
+      - run: sfw npm ci --prefix packages/provenance
       - run: npm run build --prefix packages/provenance
       - name: Test generated clients against isolated hosts
         shell: bash
@@ -880,7 +1020,7 @@ jobs:
       - run: git diff --exit-code
       - name: Save Cargo timing reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-timings-operation-contract
           path: target/cargo-timings/*.html
@@ -888,6 +1028,7 @@ jobs:
           retention-days: 30
 
   repository-file-access:
+    timeout-minutes: 30
     name: Repository file access (${{ matrix.target }})
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
@@ -896,17 +1037,27 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.changes.outputs.file-access-matrix) }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: repository-file-access-${{ matrix.target }}
+      - name: Fetch crates through Socket Firewall
+        env:
+          # Cargo on Windows checks certificate revocation with schannel, and
+          # the revocation status of the firewall's intercepted TLS chain is
+          # unknown. Cargo documents http.check-revoke for a proxy that
+          # intercepts TLS. Only this firewalled fetch turns the check off.
+          CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        run: sfw cargo fetch --locked
       - run: cargo test --locked -p provenance-store --target ${{ matrix.target }} operations::files
 
   skills-install:
+    timeout-minutes: 60
     name: Skill install (${{ matrix.os }})
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
@@ -916,17 +1067,23 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: skills-install
       - run: node tools/skills/prepare.mjs
+      - name: Fetch crates through Socket Firewall
+        env:
+          # See the repository file access job.
+          CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        run: sfw cargo fetch --locked
       - name: Test public skill installation and init
         run: cargo test --locked -p provenance-cli --test cli_skills --test cli_skills_copy_tree --test cli_skills_committed_copies --test cli_skills_cleanup --test cli_init_onboarding --test cli_init_summary
 
@@ -936,6 +1093,7 @@ jobs:
   # state-only pull request. This job always runs and fails when any needed
   # job failed or was cancelled; skipped counts as success.
   ci-ok:
+    timeout-minutes: 10
     name: CI OK
     needs:
       - changes
@@ -947,6 +1105,7 @@ jobs:
       - test-default-features
       - build-cli-linux
       - build-cli-platforms
+      - agent-notifications
       - crap-quality
       - rule-coverage
       - rust-sdk

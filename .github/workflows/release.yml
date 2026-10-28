@@ -24,9 +24,12 @@ jobs:
       build-matrix: ${{ steps.contract.outputs.build-matrix }}
       smoke-matrix: ${{ steps.contract.outputs.smoke-matrix }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Check crates.io prerequisites
+        run: bash .github/scripts/check-release-crates.sh
+      - uses: ./.github/actions/setup-socket-firewall
       # Releases are cut from main, and main merges run the full platform
       # matrix. Refuse to build unless that run finished green on this exact
       # commit, so a red platform leg cannot ship unnoticed.
@@ -56,10 +59,17 @@ jobs:
             (( SECONDS < deadline )) || { echo "::error::timed out waiting for CI."; exit 1; }
             sleep 30
           done
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
-      - uses: actions/setup-node@v7
+      # The release version check reads full Cargo metadata for the Rust
+      # SDK example, and generate.mjs builds the codegen crate. Fetch both
+      # lockfiles through the firewall first.
+      - name: Fetch crates through Socket Firewall
+        run: |
+          sfw cargo fetch --locked
+          sfw cargo fetch --locked --manifest-path examples/rust-sdk/Cargo.toml
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
       - name: Verify versions and load release targets
@@ -79,13 +89,13 @@ jobs:
           python3 .github/scripts/release-contract.py \
             "$version" .github/release-targets.json >> "$GITHUB_OUTPUT"
 
-      - run: npm ci --prefix tools/operation-codegen
+      - run: sfw npm ci --prefix tools/operation-codegen
       - run: node tools/operation-codegen/generate.mjs
       - name: Archive generated release source
         run: |
           mkdir -p target/operation-artifact
           tar -czf target/operation-artifact/operation-generated.tar.gz contracts/operations packages/provenance/src/generated crates/provenance-http-client/src/generated
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: operation-generated
           path: target/operation-artifact/operation-generated.tar.gz
@@ -103,26 +113,35 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.preflight.outputs.build-matrix) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
-      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: ${{ matrix.target }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: review-composed
           path: target/review-artifact
       - name: Restore composed review assets
         shell: bash
         run: tar -xzf target/review-artifact/review-composed.tar.gz
+      - name: Fetch crates through Socket Firewall
+        env:
+          # Cargo on Windows checks certificate revocation with schannel, and
+          # the revocation status of the firewall's intercepted TLS chain is
+          # unknown. Cargo documents http.check-revoke for a proxy that
+          # intercepts TLS. Only this firewalled fetch turns the check off.
+          CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        run: sfw cargo fetch --locked
       - run: cargo build --release -p provenance-cli --features scanner --target ${{ matrix.target }} --timings
       - name: The release binary must reject the development command
         shell: bash
@@ -176,7 +195,7 @@ jobs:
           node tools/review-host/verify-native.ts "$native" crates/provenance-cli/review-assets-generated target/review-sdk
           node tools/review-host/verify-native.ts "$engine" crates/provenance-cli/review-assets-generated target/review-sdk
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ${{ matrix.package }}
           path: |
@@ -186,7 +205,7 @@ jobs:
 
       - name: Save Cargo timing reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cargo-timings-release-${{ matrix.target }}
           path: target/cargo-timings/*.html
@@ -204,7 +223,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: dist
           merge-multiple: true
@@ -234,38 +253,41 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         shell: bash
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: review-composed
           path: target/review-artifact
       - name: Restore composed review assets
         shell: bash
         run: tar -xzf target/review-artifact/review-composed.tar.gz
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
         with:
           # Cargo generates the archive checksum. Keep this version fixed so
           # a later rerun can compare the same bytes with crates.io.
           toolchain: 1.98.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
       - run: node tools/skills/prepare.mjs
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
       - name: Verify packaged Rust workspace
         shell: bash
         run: |
           git diff --exit-code HEAD --
           test -z "$(git ls-files --others --exclude-standard)"
-          cargo package --workspace --locked --allow-dirty
+          cargo package --workspace --locked --allow-dirty --registry crates-io
       - name: Authenticate with crates.io
         id: crates-auth
         uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
@@ -275,21 +297,12 @@ jobs:
           RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
         shell: bash
         run: |
-          for crate_name in \
-            provenance-macros \
-            provenance-core \
-            provenance-scanner \
-            provenance-ste100 \
-            provenance-store \
-            provenance-sdk \
-            provenance-http-client \
-            provenance-transport \
-            provenance-cli
+          while IFS= read -r crate_name
           do
             bash .github/scripts/publish-cargo-if-missing.sh \
               "$crate_name" "$RELEASE_VERSION" \
               "target/package/${crate_name}-${RELEASE_VERSION}.crate"
-          done
+          done < .github/release-crates.txt
 
   publish-npm:
     if: github.event_name == 'push'
@@ -299,28 +312,30 @@ jobs:
     needs:
       - preflight
       - build
+      - publish-crates
     environment: npm
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
           path: target/operation-artifact
       - name: Restore generated operation source
         shell: bash
         run: tar -xzf target/operation-artifact/operation-generated.tar.gz
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - name: Install npm with trusted publishing support
-        run: npm install --global npm@^11.5.1
-      - uses: actions/download-artifact@v8
+        run: sfw npm install --global npm@^11.5.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           path: dist
           merge-multiple: true
@@ -336,7 +351,7 @@ jobs:
           done
       - name: Pack TypeScript SDK
         run: |
-          npm ci --prefix packages/provenance
+          sfw npm ci --prefix packages/provenance
           npm pack ./packages/provenance --pack-destination dist
       - name: Publish TypeScript SDK
         env:

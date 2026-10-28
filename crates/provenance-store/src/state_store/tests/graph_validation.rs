@@ -18,7 +18,7 @@ fn requirement(scope: &ScopeId, id: &str, refines: &str) -> serde_json::Value {
         "id": id,
         "statement": format!("{id} statement"),
         "status": "active",
-        "refines": refines,
+        "refines": [refines],
     })
 }
 

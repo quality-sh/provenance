@@ -14,6 +14,9 @@ fn shipped_legacy_export_imports_when_legacy_statements_are_already_canonical() 
     let export = dir.path().join("shipped.json");
     crate::export_fixture_support::copy_portable_state(shipped_repo(), &shipped);
     export_scope(&shipped, &export).success();
+    let mut document = serde_json::from_slice(&std::fs::read(&export).unwrap()).unwrap();
+    crate::export_fixture_support::keep_decision_links_pending(&mut document);
+    write_json(&export, &document);
     init_repo_with_actors(&fresh, &["codex-review-panel-gpt55-medium", "ben_nasraoui"]);
     seed_statement_shards(&shipped, &fresh);
     import_scope(&fresh, &export).success();

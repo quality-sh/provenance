@@ -39,7 +39,8 @@ pub struct CreateRequirementRequest {
     pub description: Option<String>,
     pub status: RequirementStatus,
     pub domain_id: Option<StableId>,
-    pub refines: Option<StableId>,
+    #[serde(default)]
+    pub refines: Vec<StableId>,
     pub depends_on: Vec<StableId>,
     pub supersedes: Vec<StableId>,
     pub spawned_by: Option<StableId>,
@@ -92,6 +93,7 @@ pub struct UpdateRequirementRequest {
     pub description: Option<String>,
     pub fog: Option<String>,
     pub status: Option<RequirementStatus>,
+    pub archived_in_commit: Option<provenance_core::ArchivedStamp>,
     pub domain_id: Option<StableId>,
     #[serde(default)]
     pub clear_fields: Vec<RequirementClearField>,
@@ -113,6 +115,7 @@ scoped_write_operation!(
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,
                 update: UpdateRequirementInput {
+                    archived_in_commit: request.archived_in_commit,
                     scope_id: scope,
                     id: request.id,
                     expected_etag: None,
@@ -157,6 +160,8 @@ pub struct DecideRecordReviewRequest {
     pub proposal_id: StableId,
     pub decision: DispositionDecision,
     pub rationale: Option<String>,
+    /// An approval requires a prior assertion. A human can instead name an
+    /// existing canonical artifact.
     pub canonical_artifact: Option<CanonicalArtifact>,
     pub feedback: Option<review::ReviewFeedback>,
     pub declared_by: Option<String>,

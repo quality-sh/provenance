@@ -280,6 +280,7 @@ async fn current_revision(host: &StatementHost) -> String {
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 async fn terminal_review_conflicts_share_the_http_envelope() {
     let stale_repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&stale_repo);
@@ -322,8 +323,9 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
             "POST",
             &path,
             Some(json!({"data":{
-                "actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
-                "rationale":"Needs work.", "canonical_artifact":null,
+                "actor":{"identity_type":"human","id":"reviewer"}, "decision":"accepted",
+                "rationale":null,
+                "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_shared"},
                 "feedback":null, "declared_by":null
             }})),
             &[]

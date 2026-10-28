@@ -1,4 +1,5 @@
-//! Assigns an outcome to the first record version that contains it.
+//! Assigns an outcome to the first record version that contains it. A
+//! committed Discussion line that does not parse holds no outcome.
 
 use super::{git, VersionedRecord};
 use camino::Utf8Path;
@@ -29,9 +30,8 @@ pub(super) fn assign(
                 .flatten()
                 .unwrap_or_default()
                 .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(serde_json::from_str::<Discussion>)
-                .collect::<Result<Vec<_>, _>>()?
+                .filter_map(|line| serde_json::from_str::<Discussion>(line).ok())
+                .collect::<Vec<_>>()
         } else {
             working.to_vec()
         };

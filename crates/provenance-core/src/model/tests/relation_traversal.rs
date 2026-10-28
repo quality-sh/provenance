@@ -193,7 +193,7 @@ fn flow_follows_each_declared_flow_and_skips_none_relations() {
 #[test]
 fn a_dangling_reference_is_still_reported_as_stored() {
     let mut records = fixture();
-    records.requirements[1].refines = Some(sid("req_vanished"));
+    records.requirements[1].refines = vec![sid("req_vanished")];
     let front = front(&records);
     let reached = flatten(related_nodes(&front, NodeType::Requirement, &sid("req_penalty")));
     assert!(reached.contains(&out("refines", NodeType::Requirement, "req_vanished")));

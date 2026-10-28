@@ -252,7 +252,7 @@ fn failed_dictionary_acquisition_keeps_init_successful_and_warns_even_when_quiet
         .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .output()
         .unwrap();
@@ -296,7 +296,7 @@ fn dictionary_warning_precedes_the_final_handoff_in_a_combined_stream() {
         )
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .stdout(output)
         .stderr(errors)
@@ -355,7 +355,7 @@ fn adding_a_dictionary_reference_on_reinit_is_reported_as_a_change() {
         .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .assert()
         .success();
