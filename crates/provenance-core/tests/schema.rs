@@ -16,9 +16,9 @@ fn schema<T: JsonSchema>(contract: Contract) -> Value {
     .unwrap()
 }
 fn valid(schema: &Value, value: &Value) -> bool {
-    jsonschema::JSONSchema::options()
+    jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(schema)
+        .build(schema)
         .unwrap()
         .is_valid(value)
 }
