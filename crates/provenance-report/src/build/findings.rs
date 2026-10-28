@@ -29,7 +29,9 @@ pub(super) struct BaselineView {
 }
 
 struct BaselineEvidence {
-    rules: BTreeSet<String>,
+    /// Rules active at the base. Missing-evidence findings apply only to
+    /// active Rules, so a Rule that was not active had no such finding.
+    active_rules: BTreeSet<String>,
     implementations: BTreeSet<String>,
     verifications: BTreeSet<String>,
     inactive_bindings: BTreeSet<String>,
@@ -64,7 +66,7 @@ impl BaselineView {
     ) -> Comparison {
         match &self.evidence {
             Some(evidence)
-                if !evidence.rules.contains(rule_id) || ids(evidence).contains(rule_id) =>
+                if !evidence.active_rules.contains(rule_id) || ids(evidence).contains(rule_id) =>
             {
                 Comparison::New
             }
@@ -115,8 +117,9 @@ impl BaselineView {
                     .collect();
                 Self {
                     evidence: Some(BaselineEvidence {
-                        rules: base_rules
+                        active_rules: base_rules
                             .iter()
+                            .filter(|rule| rule.status == provenance_core::RuleStatus::Active)
                             .map(|rule| rule.id.as_str().to_string())
                             .collect(),
                         implementations: implementation_rule_ids,
