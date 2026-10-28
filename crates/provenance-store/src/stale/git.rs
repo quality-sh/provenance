@@ -133,12 +133,25 @@ pub fn resolve_range(
 }
 
 pub fn revision_files(repo: &Utf8Path, revision: &str) -> anyhow::Result<Vec<RevisionFile>> {
-    revision_files_at_paths(repo, revision, &[])
+    read_revision_files(repo, revision, &[])
 }
 
-/// Read the revision blobs for all selected repository paths. An empty path
-/// list selects the complete tree.
+/// Read the revision blobs for the selected repository paths only. An empty
+/// path list reads no file.
 pub fn revision_files_at_paths(
+    repo: &Utf8Path,
+    revision: &str,
+    paths: &[Utf8PathBuf],
+) -> anyhow::Result<Vec<RevisionFile>> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    read_revision_files(repo, revision, paths)
+}
+
+/// Read the revision blobs under the path specs; no path spec reads the
+/// complete tree.
+fn read_revision_files(
     repo: &Utf8Path,
     revision: &str,
     paths: &[Utf8PathBuf],
