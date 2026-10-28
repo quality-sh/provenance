@@ -70,7 +70,6 @@ pub async fn served_stamped(
     policy: ReadPolicy,
 ) -> anyhow::Result<provenance_core::protocol::Stamped<Value>> {
     use super::super::{evidence, impact, records, stale, symbols, walk};
-    let scope = store.scope.clone();
     let request = request.clone();
     reader::answer(&store.repository(), policy, move |ctx| {
         Box::pin(async move {
@@ -81,7 +80,7 @@ pub async fn served_stamped(
                 Request::Trace(query) => settle(walk::trace(ctx, query).await),
                 Request::Impact(query) => settle(impact::impact(ctx, query).await),
                 Request::Evidence(query) => settle(evidence::evidence(ctx, query).await),
-                Request::Stale(query) => settle(stale::stale(ctx, &scope, query)),
+                Request::Stale(query) => settle(stale::stale(ctx, query)),
                 Request::ResolveSymbol(query) => settle(symbols::resolve(ctx, query).await),
             })
         })

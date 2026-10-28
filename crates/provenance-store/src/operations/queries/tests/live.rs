@@ -185,12 +185,10 @@ async fn a_canonical_edit_under_annotate_only_moves_stale_and_not_the_stamp() {
     let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
     let repository = store.repository();
     let stale_under = |base: String| {
-        let scope = store.scope.clone();
         reader::answer(&repository, policy, move |ctx| {
             Box::pin(async move {
                 stale::stale(
                     ctx,
-                    &scope,
                     StaleQuery {
                         protocol_version: Some(SDK_PROTOCOL_VERSION),
                         base,

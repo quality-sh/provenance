@@ -69,9 +69,10 @@ pub fn recover_before_init(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     }
 }
 
-/// Runs `validate` over the state on disk and the manifest initialization
-/// plans to write. An existing `.provenance` is validated under the
-/// publication lock, after recovery; a new repository is validated read-only.
+/// Runs `validate` over the state on disk and the planned manifest.
+///
+/// An existing `.provenance` is validated under the publication lock, after
+/// recovery; a new repository is validated read-only.
 pub fn validate_planned_manifest<R>(
     layout: &ProvenanceLayout,
     manifest: &Manifest,

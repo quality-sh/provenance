@@ -12,7 +12,7 @@ use provenance_macros::verifies;
 
 #[test]
 fn impact_reports_hop_distance_and_direction() {
-    let (_dir, layout, scope) = seeded_layout();
+    let (_dir, layout, _scope) = seeded_layout();
     let impact = analyze_impact(
         &open(&layout),
         NodeType::Source,
@@ -34,14 +34,14 @@ fn impact_reports_hop_distance_and_direction() {
 
 #[test]
 fn graph_evidence_lists_the_fixture_rule() {
-    let (_dir, layout, scope) = seeded_layout();
+    let (_dir, layout, _scope) = seeded_layout();
     let evidence = graph_evidence(&open(&layout)).unwrap();
     assert!(evidence.rule_ids.contains("rule_schads_pay_001"));
 }
 
 #[test]
 fn health_counts_rules_with_complete_traceability() {
-    let (_dir, layout, scope) = seeded_layout();
+    let (_dir, layout, _scope) = seeded_layout();
     let health = coverage_health(&open(&layout)).unwrap();
     assert_eq!(health.rules.total, 1);
     assert_eq!(health.rules.with_complete_traceability, 1);
@@ -361,7 +361,7 @@ fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
 /// the requirement cites it under.
 #[test]
 fn prime_lists_a_twice_cited_source_once() {
-    let (_dir, layout, scope) = super::fixtures::pinned_store::pinned_store_layout();
+    let (_dir, layout, _scope) = super::fixtures::pinned_store::pinned_store_layout();
     let view = get_requirement_graph(&open(&layout), &sid("req_overtime")).unwrap();
     let citations: Vec<_> = view
         .relations
