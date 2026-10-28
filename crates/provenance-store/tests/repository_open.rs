@@ -157,10 +157,13 @@ fn apply_through_the_handle_lands_in_the_selected_scope() {
             .len(),
         1
     );
-    assert!(store
-        .list_requirements(&ScopeId::new("a").unwrap())
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        store
+            .list_requirements(&ScopeId::new("a").unwrap())
+            .unwrap()
+            .len(),
+        0
+    );
 }
 
 #[test]
