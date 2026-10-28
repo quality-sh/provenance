@@ -201,6 +201,8 @@ fn an_omitted_get_action_accepts_view_options_and_global_option_positions() {
             "req_omitted_options",
             "--statement",
             "The child is returned.",
+            "--status",
+            "active",
         ])
         .assert()
         .success();

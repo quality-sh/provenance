@@ -80,6 +80,8 @@ fn create_rule(repo: &Path, id: &str) {
             "req_workflows",
             "--statement",
             "Accepted workflows start",
+            "--status",
+            "active",
         ])
         .assert()
         .success();
