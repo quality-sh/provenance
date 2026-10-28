@@ -151,14 +151,12 @@ pub(super) async fn within_deadline(
     deadline: Duration,
     stage: Arc<Mutex<Stage>>,
 ) -> anyhow::Result<()> {
-    match tokio::time::timeout(deadline, task).await {
-        Ok(joined) => joined.context("cache close task failed")?,
-        Err(_) => {
-            let stage = stage
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            anyhow::bail!("cache close did not finish within {deadline:?}: {stage}")
-        }
+    if let Ok(joined) = tokio::time::timeout(deadline, task).await {
+        return joined.context("cache close task failed")?;
     }
+    let stage = stage
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    anyhow::bail!("cache close did not finish within {deadline:?}: {stage}")
 }
