@@ -231,9 +231,8 @@ impl LaunchCodes {
         let [first, second] = offered.as_slice() else {
             return false;
         };
-        let session = match (*first, *second) {
-            (EVENT_PROTOCOL, session) | (session, EVENT_PROTOCOL) => session,
-            _ => return false,
+        let ((EVENT_PROTOCOL, session) | (session, EVENT_PROTOCOL)) = (*first, *second) else {
+            return false;
         };
         self.is_session(session)
     }
