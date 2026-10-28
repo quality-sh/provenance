@@ -114,12 +114,18 @@ fn gaps_report_a_live_requirement_whose_parents_a_merge_left_archived() {
 
     create(repo, "req_child", Some("req_parent"));
     std::fs::copy(&shard, side("theirs.jsonl")).unwrap();
-    assert!(gaps_of_kind(repo, "no_live_parent").is_empty());
+    assert_eq!(
+        gaps_of_kind(repo, "no_live_parent"),
+        [] as [(String, String); 0]
+    );
 
     std::fs::copy(side("base.jsonl"), &shard).unwrap();
     archive(repo, "req_parent");
     std::fs::copy(&shard, side("ours.jsonl")).unwrap();
-    assert!(gaps_of_kind(repo, "no_live_parent").is_empty());
+    assert_eq!(
+        gaps_of_kind(repo, "no_live_parent"),
+        [] as [(String, String); 0]
+    );
 
     let relative = shard.strip_prefix(root).unwrap().to_str().unwrap();
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))

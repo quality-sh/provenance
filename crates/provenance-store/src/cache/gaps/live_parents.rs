@@ -14,11 +14,9 @@ use provenance_core::{
     NodeType, QuestionStatus, RequirementStatus, ResolutionStatus, RuleStatus, StableId,
     TopicStatus,
 };
-use provenance_macros::rule;
 
 /// One gap per live record whose Requirement parents are all archived.
 /// A Boundary has no lifecycle status, so it is not a live dependent.
-#[rule("rule_live_dependents_have_live_parents")]
 pub(super) fn add_gaps(query: &GraphQuery<'_, '_>, gaps: &mut Vec<GapItem>) {
     let graph = query.graph;
     for record in graph.requirements {
