@@ -42,7 +42,10 @@ Set `PROVENANCE_REVIEW_ASSETS_DIR` to that output when building
 the CLI. This override takes precedence over the generated package assets.
 
 The output directory must not exist. The builder checks the host's TypeScript
-against the renderer declarations.
+against the renderer declarations. Those declarations import packages that the
+host does not install, such as `effect`. The builder ignores only that missing
+package error in the renderer `types/` files. A missing renderer declaration
+file or a wrong mount option type still fails the build.
 `host-build-info.json` records the renderer source commit, dirty state, input
 file hashes, and hashes of all served files. The builder keeps
 the renderer module unchanged and adds `host.js`, `host.css`, and the host HTML.

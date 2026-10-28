@@ -313,8 +313,10 @@ calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
 `/review-config` contains `reviewer`, the application passes it unchanged as
 the `reviewer` option. When it does not, the option is absent. The page decides
 only as `reviewer.actorId` and only when `reviewer.allowed` is `true`. In all
-other cases the page is read-only and tells why. The application refuses a
-`reviewer` that does not have a string `actorId` and a boolean `allowed`. The
+other cases the page is read-only and tells why. A `reviewer` without a string
+`actorId` and a boolean `allowed` stops the page, and the status line tells
+that the review host sent an invalid reviewer. A new review link does not
+help in that case. The
 renderer creates and owns the generated Effect client. The application passes
 the page session as `bearer`, so the renderer sends it in the Authorization
 header. The host exchanges it for the bearer before the operation routes
@@ -407,12 +409,18 @@ host and that client always agree. The renderer ships its own SDK build. Run
 `node tools/review-host/verify-renderer-reads.ts BINARY COMPOSED_ASSETS SDK_PACKAGE`
 to check the host responses against the response validators that the renderer
 bundles. The check makes a repository with a root Requirement, a child, and a
-Requirement with two parents. For each record, it reads all pages of the
-Requirement document, the Requirement, and all pages of its history. It also
-reads all pages of the Requirement list and of a Requirement search. It finds each validator from the renderer client method
-of the operation, not from a file name. A refused field names the read, the page,
-the record id, and the field path. This check does not run the document model of
-the renderer. CI runs this check on each built CLI.
+Requirement with two parents. The child has a Rule, a Resolution, and a Topic
+with a Question, so each record type of a document has a real response. For
+each Requirement, the check reads all pages of the Requirement document, the
+Requirement, and all pages of its history. It also reads all pages of the
+Requirement list and of a Requirement search. It reads the document of a
+missing root and checks that failure response too. It finds each validator from
+the renderer client method of the operation, not from a file name. A refused
+field names the read, the page, the record id, and the field path. A missing
+field shows as the path of that field. A refused response without a field error
+also fails the check. This check does not run the document model of the
+renderer, so it does not show that the page reads each document correctly.
+CI runs this check on each built CLI.
 
 The separate raw renderer check is
 `cargo test -p provenance-cli --test review_bundle -- --ignored`.
@@ -487,8 +495,9 @@ The page opens `/review-events` after it reads its configuration and before it
 mounts the review document, so a save between the two is not lost. Ready,
 reset, a new epoch, a sequence gap, and a reconnect read all active data again:
 the document, search, opened record details, discussions, and history. The page
-also reads its configuration again. When the reviewer settings changed, the
-status line asks the person to select Open / Refresh.
+also reads its configuration again. When the disposition actor list or the
+reviewer changed, the status line tells the person to save or discard the
+drafts and then reload the page.
 
 A changed frame reads the document and search again, and the details,
 discussions, and history of the changed records. Details of other records are
