@@ -1,23 +1,9 @@
+use super::test_repo::{commit, init};
 use super::{build_envelope, BuildInput};
 use crate::envelope::{Comparison, SiteRole};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId, SUPPORTED_SCHEMA_VERSION};
 use serde_json::{json, Value};
-use std::process::Command;
-
-fn git(repo: &Utf8Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .current_dir(repo)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "git {args:?} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
 
 pub(super) fn write(repo: &Utf8Path, relative: &str, contents: &str) {
     let path = repo.join(relative);
@@ -109,21 +95,10 @@ pub(super) fn remove_implementation_bindings(repo: &Utf8Path) {
 pub(super) fn repository(rule_ids: &[&str], source: &str) -> (tempfile::TempDir, Utf8PathBuf) {
     let directory = tempfile::tempdir().unwrap();
     let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
-    git(&repo, &["init", "-q"]);
-    git(&repo, &["config", "user.email", "test@example.com"]);
-    git(&repo, &["config", "user.name", "Test"]);
+    init(&repo);
     write_graph(&repo, rule_ids);
     write(&repo, "src/lib.rs", source);
     (directory, repo)
-}
-
-pub(super) fn commit(repo: &Utf8Path, message: &str) -> String {
-    git(repo, &["add", "."]);
-    git(
-        repo,
-        &["-c", "commit.gpgsign=false", "commit", "-qm", message],
-    );
-    git(repo, &["rev-parse", "HEAD"])
 }
 
 pub(super) fn envelope(repo: &Utf8Path, base: &str, head: &str) -> super::ReportEnvelope {
@@ -263,46 +238,10 @@ fn legacy_base_binding_is_evidence_for_comparison() {
 }
 
 #[test]
-fn incompatible_base_binding_makes_comparisons_uncertain() {
-    let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
-    write(
-        &repo,
-        ".provenance/state/scopes/default/implementations/binding.jsonl",
-        "{\"schema_version\":2,\"scope_id\":\"default\",\"id\":\"broken\"}\n",
-    );
-    let base = commit(&repo, "Add incompatible implementation binding");
-    remove_implementation_bindings(&repo);
-    write(&repo, "src/lib.rs", "fn after() {}\n");
-    let head = commit(&repo, "Remove incompatible binding");
-
-    let report = envelope(&repo, &base, &head);
-
-    assert_eq!(
-        report.scan.baseline,
-        super::BaselineCompatibility::Incompatible
-    );
-    assert!(report
-        .scan
-        .baseline_reason
-        .as_deref()
-        .is_some_and(|reason| reason.contains("implementations/binding.jsonl")));
-    assert_eq!(
-        comparison(&report, "active_rule_missing_implementation", "rule_anchor"),
-        "uncertain"
-    );
-    assert_eq!(
-        comparison(&report, "active_rule_missing_verification", "rule_anchor"),
-        "uncertain"
-    );
-}
-
-#[test]
 fn missing_base_makes_comparisons_uncertain() {
     let directory = tempfile::tempdir().unwrap();
     let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
-    git(&repo, &["init", "-q"]);
-    git(&repo, &["config", "user.email", "test@example.com"]);
-    git(&repo, &["config", "user.name", "Test"]);
+    init(&repo);
     write(&repo, "src/lib.rs", "fn before() {}\n");
     let base = commit(&repo, "Add source without a graph");
     write_graph(&repo, &["rule_anchor"]);

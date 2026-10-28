@@ -1,8 +1,9 @@
 //! Base evidence that is retired, unreadable or replaced keeps the report
 //! comparisons honest.
 
+use super::test_repo::commit;
 use super::tests::{
-    commit, comparison, envelope, has_finding, remove_implementation_bindings, repository, write,
+    comparison, envelope, has_finding, remove_implementation_bindings, repository, write,
     write_graph, write_graph_with_statuses, write_implementation_binding,
 };
 use crate::envelope::{BaselineCompatibility, Completeness};
@@ -47,6 +48,11 @@ fn unreadable_base_binding_keeps_graph_and_source_findings() {
     let report = envelope(&repo, &base, &head);
 
     assert_eq!(report.scan.baseline, BaselineCompatibility::Incompatible);
+    assert!(report
+        .scan
+        .baseline_reason
+        .as_deref()
+        .is_some_and(|reason| reason.contains("implementations/binding.jsonl")));
     assert!(!report.graph_changes.is_empty());
     assert_eq!(
         comparison(&report, "requirement_statement_changed", "rule_anchor"),
@@ -58,6 +64,10 @@ fn unreadable_base_binding_keeps_graph_and_source_findings() {
     );
     assert_eq!(
         comparison(&report, "active_rule_missing_implementation", "rule_anchor"),
+        "uncertain"
+    );
+    assert_eq!(
+        comparison(&report, "active_rule_missing_verification", "rule_anchor"),
         "uncertain"
     );
 }

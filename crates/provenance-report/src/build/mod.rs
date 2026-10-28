@@ -28,6 +28,8 @@ mod baseline_tests;
 mod findings;
 mod graph_snapshots;
 #[cfg(test)]
+mod test_repo;
+#[cfg(test)]
 mod tests;
 
 use findings::BaselineView;
