@@ -187,8 +187,8 @@ impl CargoProject {
         std::fs::write(
             registry.join("index/pr/ov/provenance-sdk"),
             format!(
-                "{{\"name\":\"provenance-sdk\",\"vers\":\"0.3.0\",\"deps\":[],\"cksum\":\"{:x}\",\"features\":{{}},\"yanked\":false}}\n",
-                Sha256::digest(archive)
+                "{{\"name\":\"provenance-sdk\",\"vers\":\"0.3.0\",\"deps\":[],\"cksum\":\"{}\",\"features\":{{}},\"yanked\":false}}\n",
+                hex::encode(Sha256::digest(archive))
             ),
         )
         .unwrap();

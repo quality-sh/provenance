@@ -19,7 +19,7 @@ pub(super) fn identity(source: &[u8], entries: &[DictionaryEntry]) -> Dictionary
 }
 
 pub(super) fn source_digest(source: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(source))
+    hex::encode(Sha256::digest(source))
 }
 
 pub(super) fn normalized_data_digest(entries: &[DictionaryEntry]) -> String {
@@ -36,7 +36,7 @@ pub(super) fn normalized_data_digest(entries: &[DictionaryEntry]) -> String {
         put(&mut digest, &entry.ste_example);
         put(&mut digest, entry.non_ste_example.as_deref().unwrap_or(""));
     }
-    format!("{:x}", digest.finalize())
+    hex::encode(digest.finalize())
 }
 
 fn put(digest: &mut Sha256, value: &str) {
