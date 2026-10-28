@@ -87,6 +87,7 @@ and the repository must hold one result. CI runs this check on the Linux CLI.
 ```sh
 node --test tools/review-host/*.test.ts
 node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
+node tools/review-host/verify-renderer-reads.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
 node tools/review-host/verify-review-writes.ts /absolute/provenance packages/provenance
 ```
 

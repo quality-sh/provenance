@@ -393,6 +393,18 @@ Run `node tools/review-host/verify-native.ts BINARY COMPOSED_ASSETS SDK_PACKAGE`
 to check a built executable. Release validation runs this check on executables
 extracted from each native archive and npm engine package.
 
+The native check reads through the SDK that this repository generates, so the
+host and that client always agree. The renderer ships its own SDK build. Run
+`node tools/review-host/verify-renderer-reads.ts BINARY COMPOSED_ASSETS SDK_PACKAGE`
+to check the host responses against the response validators that the renderer
+bundles. The check makes a repository with a root Requirement, a child, and a
+Requirement with two parents. For each record, it reads all pages of the
+Requirement document, the Requirement, and all pages of its history. It also
+reads all pages of the Requirement list and of a Requirement search. It finds each validator from the renderer client method
+of the operation, not from a file name. A refused field names the read, the page,
+the record id, and the field path. This check does not run the document model of
+the renderer. CI runs this check on each built CLI.
+
 The separate raw renderer check is
 `cargo test -p provenance-cli --test review_bundle -- --ignored`.
 Set `PROVENANCE_REVIEW_ARCHIVE` to a saved copy of the public archive for this
