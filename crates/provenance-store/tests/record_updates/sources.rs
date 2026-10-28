@@ -190,13 +190,7 @@ async fn a_source_update_that_removes_a_superseded_source_checks_it_in_the_stage
         )
         .await
         .unwrap_err();
-    assert_eq!(error["kind"], "missing_reference");
-    assert!(
-        error["message"]
-            .as_str()
-            .is_some_and(|message| message.contains("source source_missing does not exist")),
-        "{error}"
-    );
+    assert_eq!(error, json!({"kind":"missing_reference"}));
     let saved = fixture
         .store
         .list_sources(&fixture.scope)
