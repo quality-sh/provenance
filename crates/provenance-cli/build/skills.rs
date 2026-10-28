@@ -1,7 +1,7 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-const NAMES: [&str; 4] = [
+pub const NAMES: [&str; 4] = [
     "provenance-fork-tournament",
     "provenance-grounded-writing",
     "provenance-shaping",
@@ -31,28 +31,19 @@ pub fn generate(crate_root: &Path, output: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Cargo writes `Cargo.toml.orig` into every package archive. Only a packaged
+/// crate reads the crate-local skill copies. A workspace build reads the root
+/// sources and fails when they are missing.
 fn source_root(crate_root: &Path) -> io::Result<PathBuf> {
-    if let Some(workspace) = crate_root.parent().and_then(Path::parent) {
-        let manifest = workspace.join("Cargo.toml");
-        println!("cargo:rerun-if-changed={}", manifest.display());
-        match std::fs::read_to_string(&manifest) {
-            Ok(content)
-                if content.contains("[workspace]")
-                    && content
-                        .contains("repository = \"https://github.com/quality-sh/provenance\"") =>
-            {
-                let source = workspace.join("skills");
-                if !source.is_dir() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::NotFound,
-                        format!("workspace skill sources are missing: {}", source.display()),
-                    ));
-                }
-                return Ok(source);
-            }
-            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
-            Ok(_) | Err(_) => {}
-        }
+    if crate_root.join("Cargo.toml.orig").is_file() {
+        return Ok(crate_root.join("skills"));
     }
-    Ok(crate_root.join("skills"))
+    let source = crate_root.join("../../skills");
+    if !source.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("workspace skill sources are missing: {}", source.display()),
+        ));
+    }
+    Ok(source)
 }
