@@ -78,6 +78,8 @@ function element(document: BrowserDocument, id: string): BrowserElement {
   return found;
 }
 
+/** The reviewer that the host reports; the page decides only as this person. */
+// @provenance rule: rule_review_host_reports_reviewer
 function configReviewer(value: unknown): ConfigReviewer {
   if (typeof value !== 'object' || value === null ||
     !('actorId' in value) || typeof value.actorId !== 'string' ||
