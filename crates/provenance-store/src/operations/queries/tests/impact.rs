@@ -133,8 +133,7 @@ async fn scanned_impact_sites_name_their_items() {
     .unwrap();
 
     let answer = queries::impact(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         query("req_overtime"),
     )

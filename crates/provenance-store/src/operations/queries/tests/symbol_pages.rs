@@ -24,14 +24,10 @@ async fn pages(
 ) -> Vec<Stamped<ResolveSymbolResult>> {
     let mut pages = Vec::new();
     loop {
-        let page = queries::resolve_symbol(
-            Some(store.root.clone()),
-            &store.scope,
-            ReadPolicy::default(),
-            request.clone(),
-        )
-        .await
-        .unwrap();
+        let page =
+            queries::resolve_symbol(&store.repository(), ReadPolicy::default(), request.clone())
+                .await
+                .unwrap();
         let next = page.result.next_cursor.clone();
         assert_eq!(page.result.has_more, next.is_some());
         pages.push(page);
@@ -198,8 +194,7 @@ async fn page(
     cursor: Option<String>,
 ) -> anyhow::Result<Stamped<ResolveSymbolResult>> {
     queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         ResolveSymbolQuery {
             limit: 1,
@@ -264,8 +259,7 @@ async fn a_changed_graph_refuses_the_cursor() {
 async fn a_cursor_from_another_query_is_invalid() {
     let store = store_with_two_rules();
     let search = queries::search(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         serde_json::from_value::<SearchQuery>(json!({"text": "statement", "limit": 1})).unwrap(),
     )

@@ -144,8 +144,7 @@ async fn a_symbol_miss_keeps_the_named_files_rules_and_sites() {
     )
     .unwrap();
     let answer = queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         resolve_named("src/pay.rs", "missing"),
     )
@@ -183,8 +182,7 @@ async fn a_symbol_miss_keeps_the_named_files_rules_and_sites() {
 async fn an_exact_item_name_marks_the_symbol_match() {
     let store = store_with_rule();
     let answer = queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         resolve_named("src/pay.rs", "pay"),
     )
