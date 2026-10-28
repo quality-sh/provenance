@@ -18,10 +18,10 @@ pub(super) async fn delete_rows(
     family: ProjectionFamily,
     scope: &ScopeId,
 ) -> anyhow::Result<()> {
-    sqlx::query(&format!(
+    sqlx::query(sqlx::AssertSqlSafe(format!(
         "DELETE FROM {} WHERE scope_id = ?",
         quoted(family.family_name())
-    ))
+    )))
     .bind(scope.as_str())
     .execute(&mut **tx)
     .await?;
