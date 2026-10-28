@@ -167,6 +167,7 @@ mod tests {
         protocol::repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
         RepoPathPrefix,
     };
+    use provenance_macros::verifies;
 
     fn repository() -> (tempfile::TempDir, LocalRepository) {
         let dir = tempfile::tempdir().unwrap();
@@ -219,5 +220,52 @@ mod tests {
             freshness: None,
         });
         assert_eq!(binding.authorize("search", &bound), Ok(()));
+    }
+
+    #[test]
+    fn a_refused_bind_on_a_directory_without_state_creates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            LocalRepository::new(dir.path(), "native", "default").err(),
+            Some(OperationFailure::Internal)
+        );
+        assert!(!dir.path().join(".provenance").exists());
+    }
+
+    /// The probe starts the host call while the publication holds its lock with the live
+    /// state moved away. The call must wait for the publication and not fail.
+    #[test]
+    #[verifies("rule_preparation_reads_published_state", examples)]
+    fn preparation_in_the_publication_gap_succeeds_after_the_publication() {
+        let (dir, _) = repository();
+        let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
+        let binding = LocalRepository::new(dir.path(), "native", "default").unwrap();
+        let reader = std::rc::Rc::new(std::cell::RefCell::new(None));
+        crate::test_probes::arm("state_after_backup_rename", {
+            let reader = reader.clone();
+            let mut binding = Some(binding);
+            move || {
+                let binding = binding.take().expect("one publication");
+                let (done, finished) = std::sync::mpsc::channel();
+                reader.replace(Some(std::thread::spawn(move || {
+                    let context = RequestedContext::Scoped(RepositoryContext {
+                        repository: "native".into(),
+                        scope: "default".into(),
+                        freshness: None,
+                    });
+                    let prepared = binding.prepare("search", context, &[]).map(|_| ());
+                    let _ = done.send(());
+                    prepared
+                })));
+                // A call that does not wait ends in the gap. A call that waits ends only
+                // after the publication, so this wait times out.
+                let _ = finished.recv_timeout(std::time::Duration::from_secs(1));
+                Ok(())
+            }
+        });
+        crate::publication::with_staged_state(&layout, false, |_| Ok(())).unwrap();
+        crate::test_probes::disarm("state_after_backup_rename");
+        let reader = reader.take().expect("the publication reached the gap");
+        assert_eq!(reader.join().unwrap(), Ok(()));
     }
 }
