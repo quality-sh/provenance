@@ -1,13 +1,16 @@
 //! `resolve_symbol` ranks symbol matches first, and its cursor gives the
-//! rest of the ranked order, a Rule cut by the page budget included.
+//! rest of the ranked order, a Rule cut by the page budget included. A
+//! changed file or graph, or a cursor from another query, refuses it.
 
 use super::comparison::test_stores::TestStore;
 use super::symbols::{resolve, resolve_named, rule_ids, store_with_rule};
 use crate::cache::tests::fixtures::create_rule_of;
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
+use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_core::protocol::{
-    QueryResponse, ResolveSymbolQuery, ResolveSymbolResult, Stamped, QUERY_RESPONSE_BYTES,
+    QueryResponse, ResolveSymbolQuery, ResolveSymbolResult, SearchQuery, Stamped,
+    QUERY_RESPONSE_BYTES,
 };
 use provenance_macros::verifies;
 use serde_json::json;
@@ -166,4 +169,120 @@ async fn a_rule_cut_by_the_page_budget_continues_on_the_next_page() {
         sites, expected,
         "each page holds the next sites in order, and each site comes once"
     );
+}
+
+const TWO_RULES: &str = concat!(
+    "#[rule(\"rule_audit\")]\n",
+    "fn audit() {}\n",
+    "#[rule(\"rule_overtime\")]\n",
+    "fn pay() {}\n",
+);
+
+/// A store with two Rules bound in `src/pay.rs`, so a page of one Rule
+/// gives a cursor.
+fn store_with_two_rules() -> TestStore {
+    let store = store_with_rule();
+    create_rule_of(
+        &store.state_store(),
+        &store.scope,
+        "rule_audit",
+        "req_overtime",
+    );
+    std::fs::write(store.root.join("src/pay.rs"), TWO_RULES).unwrap();
+    store
+}
+
+async fn page(
+    store: &TestStore,
+    file: &str,
+    cursor: Option<String>,
+) -> anyhow::Result<Stamped<ResolveSymbolResult>> {
+    queries::resolve_symbol(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        ResolveSymbolQuery {
+            limit: 1,
+            cursor,
+            ..resolve(file, None)
+        },
+    )
+    .await
+}
+
+async fn first_cursor(store: &TestStore) -> String {
+    page(store, "src/pay.rs", None)
+        .await
+        .unwrap()
+        .result
+        .next_cursor
+        .expect("two Rules do not fit on a page of one")
+}
+
+fn refusal(result: anyhow::Result<Stamped<ResolveSymbolResult>>) -> ReadFailure {
+    result
+        .unwrap_err()
+        .downcast::<ReadFailure>()
+        .expect("a read refusal")
+}
+
+#[tokio::test]
+#[verifies("rule_resolve_symbol_cursor_continues_the_page", examples)]
+async fn a_changed_file_refuses_the_cursor() {
+    let store = store_with_two_rules();
+    let cursor = first_cursor(&store).await;
+    std::fs::write(
+        store.root.join("src/pay.rs"),
+        format!("{TWO_RULES}#[verifies(\"rule_overtime\", examples)]\nfn checks_pay() {{}}\n"),
+    )
+    .unwrap();
+
+    let refused = refusal(page(&store, "src/pay.rs", Some(cursor)).await);
+
+    assert_eq!(refused, ReadFailure::CursorRevisionChanged);
+}
+
+#[tokio::test]
+#[verifies("rule_resolve_symbol_cursor_continues_the_page", examples)]
+async fn a_changed_graph_refuses_the_cursor() {
+    let store = store_with_two_rules();
+    let cursor = first_cursor(&store).await;
+    create_rule_of(
+        &store.state_store(),
+        &store.scope,
+        "rule_bonus",
+        "req_overtime",
+    );
+
+    let refused = refusal(page(&store, "src/pay.rs", Some(cursor)).await);
+
+    assert_eq!(refused, ReadFailure::CursorRevisionChanged);
+}
+
+#[tokio::test]
+#[verifies("rule_resolve_symbol_cursor_continues_the_page", examples)]
+async fn a_cursor_from_another_query_is_invalid() {
+    let store = store_with_two_rules();
+    let search = queries::search(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        serde_json::from_value::<SearchQuery>(json!({"text": "statement", "limit": 1})).unwrap(),
+    )
+    .await
+    .unwrap()
+    .result
+    .next_cursor
+    .expect("two Rule statements do not fit on a page of one");
+    let other_file = first_cursor(&store).await;
+
+    for (file, cursor) in [("src/pay.rs", search), ("src/other.rs", other_file)] {
+        let refused = refusal(page(&store, file, Some(cursor)).await);
+
+        assert_eq!(
+            refused,
+            ReadFailure::CursorInvalid,
+            "a cursor sent to {file}"
+        );
+    }
 }
