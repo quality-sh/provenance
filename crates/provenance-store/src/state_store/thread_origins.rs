@@ -10,9 +10,10 @@ impl StateStore {
         let Some(id) = message else {
             return Ok(false);
         };
-        Ok(self.list_messages(scope)?.iter().any(|m| {
-            m.id == *id && m.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION
-        }))
+        Ok(self
+            .list_discussions(scope)?
+            .iter()
+            .any(|discussion| discussion.message_ids.contains(id)))
     }
 
     pub(crate) fn validate_requirement_origin(
@@ -67,7 +68,10 @@ impl StateStore {
             );
         } else {
             anyhow::ensure!(
-                container.schema_version != provenance_core::review::REVIEW_SCHEMA_VERSION,
+                !self
+                    .list_discussions(scope)?
+                    .iter()
+                    .any(|discussion| discussion.thread_id == *thread),
                 "an enrolled origin Thread requires a Discussion and Message outcome"
             );
         }

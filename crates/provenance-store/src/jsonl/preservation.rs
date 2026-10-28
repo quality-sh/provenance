@@ -127,10 +127,6 @@ impl<T> LoadedRecords<T> {
         self.raw.push(Some(raw));
     }
 
-    pub(super) fn records(&self) -> &[T] {
-        &self.records
-    }
-
     pub(super) const fn records_mut(&mut self) -> &mut Vec<T> {
         &mut self.records
     }

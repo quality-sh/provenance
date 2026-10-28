@@ -158,7 +158,7 @@ fn every_reachable_single_record_case_matches_the_decision() {
         let ours: Vec<Value> = slot_record(id, case[1]).into_iter().collect();
         let theirs: Vec<Value> = slot_record(id, case[2]).into_iter().collect();
 
-        let outcome = merge_records(&base, &ours, &theirs).unwrap();
+        let outcome = merge_records("id", &base, &ours, &theirs).unwrap();
         let clean = matches!(outcome, MergeOutcome::Clean { .. });
         let (records, conflicts) = parts(outcome);
 
@@ -326,7 +326,7 @@ fn multi_record_merge_is_the_per_record_decision_applied_independently() {
             wanted_conflicts.extend(conflict);
         }
 
-        let outcome = merge_records(&sides[0], &sides[1], &sides[2]).unwrap();
+        let outcome = merge_records("id", &sides[0], &sides[1], &sides[2]).unwrap();
         let clean = matches!(outcome, MergeOutcome::Clean { .. });
         let (records, conflicts) = parts(outcome);
 
@@ -343,9 +343,14 @@ fn multi_record_merge_is_the_per_record_decision_applied_independently() {
 #[test]
 #[verifies("rule_record_merge", examples)]
 fn merge_keeps_one_sided_additions_and_sorts_by_stable_key() {
-    let merged = merge_records(&[], &[record("rule_b", "b")], &[record("rule_a", "a")])
-        .unwrap()
-        .unwrap_clean();
+    let merged = merge_records(
+        "id",
+        &[],
+        &[record("rule_b", "b")],
+        &[record("rule_a", "a")],
+    )
+    .unwrap()
+    .unwrap_clean();
 
     assert_eq!(ids(&merged), vec!["rule_a", "rule_b"]);
 }
@@ -357,7 +362,9 @@ fn merge_collapses_identical_edits() {
     let ours = [record("rule_a", "new")];
     let theirs = [record("rule_a", "new")];
 
-    let merged = merge_records(&base, &ours, &theirs).unwrap().unwrap_clean();
+    let merged = merge_records("id", &base, &ours, &theirs)
+        .unwrap()
+        .unwrap_clean();
 
     assert_eq!(merged, vec![record("rule_a", "new")]);
 }
@@ -369,7 +376,7 @@ fn merge_reports_divergent_edits_with_the_base_pre_image() {
     let ours = [record("rule_a", "ours")];
     let theirs = [record("rule_a", "theirs")];
 
-    let conflicts = merge_records(&base, &ours, &theirs)
+    let conflicts = merge_records("id", &base, &ours, &theirs)
         .unwrap()
         .unwrap_conflicts();
 
@@ -384,7 +391,7 @@ fn merge_reports_add_add_separately_from_divergent_edits() {
     let ours = [record("rule_a", "ours")];
     let theirs = [record("rule_a", "theirs")];
 
-    let conflicts = merge_records(&[], &ours, &theirs)
+    let conflicts = merge_records("id", &[], &ours, &theirs)
         .unwrap()
         .unwrap_conflicts();
 
@@ -401,7 +408,7 @@ fn merge_reports_delete_modify_conflict() {
     let base = [record("rule_a", "old")];
     let theirs = [record("rule_a", "new")];
 
-    let conflicts = merge_records(&base, &[], &theirs)
+    let conflicts = merge_records("id", &base, &[], &theirs)
         .unwrap()
         .unwrap_conflicts();
 
@@ -409,4 +416,76 @@ fn merge_reports_delete_modify_conflict() {
     assert_eq!(conflicts[0].record_id, "rule_a");
     assert_eq!(conflicts[0].base, Some(record("rule_a", "old")));
     assert_eq!(conflicts[0].ours, None);
+}
+
+#[test]
+#[verifies("rule_discussion_merge_keys_discussion_id", examples)]
+fn discussion_additions_merge_and_divergent_replies_conflict() {
+    let discussion = |id: &str, version: u64, message: &str| {
+        serde_json::json!({
+            "discussion_id": id, "version": version, "message_ids": [message]
+        })
+    };
+    let base = discussion("discussion_x", 1, "msg_base");
+    let ours = discussion("discussion_x", 2, "msg_ours");
+    let theirs = discussion("discussion_y", 1, "msg_theirs");
+    let merged = merge_records(
+        ShardFamily::for_shard_path(camino::Utf8Path::new(
+            ".provenance/state/scopes/default/threads/discussions.jsonl",
+        ))
+        .record_key(),
+        std::slice::from_ref(&base),
+        std::slice::from_ref(&ours),
+        &[base.clone(), theirs.clone()],
+    )
+    .unwrap()
+    .unwrap_clean();
+    assert_eq!(merged, vec![ours.clone(), theirs]);
+    let conflict = merge_records(
+        ShardFamily::for_shard_path(camino::Utf8Path::new(
+            ".provenance/state/scopes/default/threads/discussions.jsonl",
+        ))
+        .record_key(),
+        &[base],
+        std::slice::from_ref(&ours),
+        &[discussion("discussion_x", 2, "msg_theirs")],
+    )
+    .unwrap()
+    .unwrap_conflicts();
+    assert_eq!(conflict.len(), 1);
+    assert_eq!(conflict[0].kind, MergeConflictKind::DivergentEdit);
+    assert_eq!(conflict[0].record_id, "discussion_x");
+}
+
+#[test]
+#[verifies("rule_discussion_merge_keys_discussion_id", examples)]
+fn only_the_scoped_discussion_shard_uses_the_discussion_key() {
+    for (path, key) in [
+        (
+            ".provenance/state/scopes/default/threads/discussions.jsonl",
+            "discussion_id",
+        ),
+        (
+            "/repo/.provenance/state/scopes/other/threads/discussions.jsonl",
+            "discussion_id",
+        ),
+        (
+            ".provenance/state/scopes/default/threads/threads.jsonl",
+            "id",
+        ),
+        (
+            ".provenance/state/scopes/default/threads/2026-10.jsonl",
+            "id",
+        ),
+        ("threads/discussions.jsonl", "id"),
+    ] {
+        assert_eq!(
+            ShardFamily::for_shard_path(camino::Utf8Path::new(path)).record_key(),
+            key
+        );
+    }
+    let duplicate = serde_json::json!({"discussion_id": "same"});
+    let error =
+        merge_records("discussion_id", &[], &[duplicate.clone(), duplicate], &[]).unwrap_err();
+    assert!(error.to_string().contains("duplicate record id same"));
 }

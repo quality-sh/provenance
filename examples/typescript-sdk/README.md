@@ -13,7 +13,6 @@ npm install
 npm test
 ../../target/debug/provenance rules list --format json
 ../../target/debug/provenance verification-runs list --format json
-../../target/debug/provenance wiki build --format json
 ```
 
 `npm test` compiles the app. Its harness starts the source-checkout HTTP fixture

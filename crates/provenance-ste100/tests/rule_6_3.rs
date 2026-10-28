@@ -43,7 +43,10 @@ fn determinate_limit_is_exactly_25_words() {
 
 #[test]
 fn exactly_25_passes_and_exactly_26_has_one_finding() {
-    assert!(check_descriptive(&sentence(25)).findings.is_empty());
+    assert_eq!(
+        check_descriptive(&sentence(25)).findings,
+        [] as [provenance_ste100::Finding; 0]
+    );
 
     let text = sentence(26);
     let report = check_descriptive(&text);
@@ -74,7 +77,7 @@ fn ordinary_colon_does_not_end_a_sentence() {
 #[test]
 fn list_like_colon_and_newline_is_not_counted_as_one_ordinary_sentence() {
     let text = format!("{}:\n  {}.", words(13), words(13));
-    assert!(rule_6_3_spans(&text).is_empty());
+    assert_eq!(rule_6_3_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
@@ -101,14 +104,17 @@ fn terminal_punctuation_and_unicode_offsets_define_sentence_spans() {
 #[test]
 fn six_short_sentences_are_not_a_sentence_length_violation() {
     let text = (0..6).map(|_| sentence(25)).collect::<Vec<_>>().join(" ");
-    assert!(rule_6_3_spans(&text).is_empty());
+    assert_eq!(rule_6_3_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
 #[verifies("rule_ste100_parenthetical_counting", examples)]
 fn parenthetical_text_counts_once_outside_and_as_a_sentence_inside() {
     let outer_passes = format!("{} ({}).", words(24), words(10));
-    assert!(rule_6_3_spans(&outer_passes).is_empty());
+    assert_eq!(
+        rule_6_3_spans(&outer_passes),
+        [] as [provenance_ste100::Span; 0]
+    );
 
     let inner = words(26);
     let text = format!("{} ({inner}).", words(2));
@@ -126,7 +132,7 @@ fn parenthetical_text_counts_once_outside_and_as_a_sentence_inside() {
 #[verifies("rule_ste100_explicit_quotation_counting", examples)]
 fn a_balanced_explicit_quotation_counts_as_one_word() {
     let text = format!("{} \"{}\".", words(24), words(8));
-    assert!(rule_6_3_spans(&text).is_empty());
+    assert_eq!(rule_6_3_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
@@ -152,8 +158,14 @@ fn mechanically_unambiguous_numbers_each_count_as_one_word() {
 fn unresolved_rule_8_6_meaning_prevents_a_strict_finding() {
     let possible_unit = format!("{} 10 widgets remain.", words(24));
     let possible_multiword_name = format!("{} Alpha Beta remain.", words(24));
-    assert!(rule_6_3_spans(&possible_unit).is_empty());
-    assert!(rule_6_3_spans(&possible_multiword_name).is_empty());
+    assert_eq!(
+        rule_6_3_spans(&possible_unit),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_3_spans(&possible_multiword_name),
+        [] as [provenance_ste100::Span; 0]
+    );
 }
 
 #[test]
@@ -161,9 +173,18 @@ fn unbalanced_parentheses_and_quotes_cannot_produce_strict_findings() {
     let unbalanced_parenthesis = format!("({}.", words(26));
     let unbalanced_quote = format!("\"{}.", words(26));
     let unbalanced_curly_quote = format!("“{}.", words(26));
-    assert!(rule_6_3_spans(&unbalanced_parenthesis).is_empty());
-    assert!(rule_6_3_spans(&unbalanced_quote).is_empty());
-    assert!(rule_6_3_spans(&unbalanced_curly_quote).is_empty());
+    assert_eq!(
+        rule_6_3_spans(&unbalanced_parenthesis),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_3_spans(&unbalanced_quote),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_3_spans(&unbalanced_curly_quote),
+        [] as [provenance_ste100::Span; 0]
+    );
 }
 
 #[test]
@@ -171,9 +192,12 @@ fn nested_parentheses_and_unclear_internal_punctuation_are_indeterminate() {
     let nested = format!("({} (note)).", words(26));
     let apostrophes = format!("{}.", vec!["operator's"; 13].join(" "));
     let slashes = format!("{}.", vec!["input/output"; 13].join(" "));
-    assert!(rule_6_3_spans(&nested).is_empty());
-    assert!(rule_6_3_spans(&apostrophes).is_empty());
-    assert!(rule_6_3_spans(&slashes).is_empty());
+    assert_eq!(rule_6_3_spans(&nested), [] as [provenance_ste100::Span; 0]);
+    assert_eq!(
+        rule_6_3_spans(&apostrophes),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(rule_6_3_spans(&slashes), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
@@ -187,45 +211,51 @@ fn curly_apostrophes_and_prime_like_marks_are_indeterminate() {
 #[test]
 fn digit_first_alphanumeric_candidates_are_indeterminate() {
     let text = format!("{}.", vec!["1A"; 13].join(" "));
-    assert!(rule_6_3_spans(&text).is_empty());
+    assert_eq!(rule_6_3_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
 fn lowercase_underscore_identifier_candidates_are_indeterminate() {
     let text = format!("{}.", vec!["pump_id"; 13].join(" "));
-    assert!(rule_6_3_spans(&text).is_empty());
+    assert_eq!(rule_6_3_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
 fn internal_colon_alphanumeric_candidates_are_indeterminate() {
     let text = format!("{}.", vec!["port:1"; 13].join(", "));
-    assert!(rule_6_3_spans(&text).is_empty());
+    assert_eq!(rule_6_3_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
 fn digit_hyphen_letter_measurement_candidates_are_indeterminate() {
     let text = format!("{}.", vec!["10-mm"; 13].join(" "));
-    assert!(rule_6_3_spans(&text).is_empty());
+    assert_eq!(rule_6_3_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
 fn unresolved_multiword_names_are_indeterminate_without_grouping_them() {
     let uppercase = format!("{}.", vec!["ALPHA BETA"; 13].join(" "));
     let lowercase_connector = format!("{} Bank of America.", words(23));
-    assert!(rule_6_3_spans(&uppercase).is_empty());
-    assert!(rule_6_3_spans(&lowercase_connector).is_empty());
+    assert_eq!(
+        rule_6_3_spans(&uppercase),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_3_spans(&lowercase_connector),
+        [] as [provenance_ste100::Span; 0]
+    );
 }
 
 #[test]
 fn balanced_curly_double_quotation_counts_as_one_word() {
     let text = format!("{} “{}”.", words(24), words(8));
-    assert!(rule_6_3_spans(&text).is_empty());
+    assert_eq!(rule_6_3_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
 fn parenthetical_text_with_internal_sentence_punctuation_is_indeterminate() {
     let text = format!("note ({}. {}).", words(13), words(13));
-    assert!(rule_6_3_spans(&text).is_empty());
+    assert_eq!(rule_6_3_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]

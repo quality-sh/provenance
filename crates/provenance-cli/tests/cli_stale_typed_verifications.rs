@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -152,6 +153,7 @@ fn verification_sites(repo: &Path, base: &str, head: &str) -> Vec<Value> {
 }
 
 #[test]
+#[verifies("rule_missing_file_goes_to_stale_gate", examples)]
 fn a_deleted_test_file_leaves_its_verification_binding_gone() {
     let directory = init_repo();
     write(
@@ -174,4 +176,62 @@ fn a_deleted_test_file_leaves_its_verification_binding_gone() {
     assert_eq!(sites.len(), 1);
     assert_eq!(sites[0]["subject_id"], "rule_start");
     assert_eq!(sites[0]["state"], "gone");
+    let bindings = listed_verification_bindings(directory.path());
+    assert_eq!(bindings.len(), 1);
+    assert_eq!(bindings[0]["rule_id"], "rule_start");
+    assert_eq!(bindings[0]["file"], "tests/expiry.test.ts");
+}
+
+#[test]
+#[verifies("rule_verification_binding_identity", examples)]
+fn canonical_rule_changes_binding_identity_with_the_same_owner_and_key() {
+    let directory = init_repo();
+    write(
+        directory.path(),
+        "tests/expiry.test.ts",
+        "// exercises workflows\n",
+    );
+    verify(
+        directory.path(),
+        "rule_start",
+        "expiry",
+        "tests/expiry.test.ts",
+    );
+    let first = listed_verification_bindings(directory.path());
+    assert_eq!(first.len(), 1);
+    assert_eq!(first[0]["rule_id"], "rule_start");
+
+    verify(
+        directory.path(),
+        "rule_resume",
+        "expiry",
+        "tests/expiry.test.ts",
+    );
+    let second = listed_verification_bindings(directory.path());
+    assert_eq!(second.len(), 1);
+    assert_ne!(first[0]["id"], second[0]["id"]);
+    assert_eq!(second[0]["rule_id"], "rule_resume");
+    assert_eq!(second[0]["key"], first[0]["key"]);
+    assert_eq!(second[0]["declared_by"], first[0]["declared_by"]);
+}
+
+fn listed_verification_bindings(repo: &Path) -> Vec<Value> {
+    let output = provenance()
+        .args([
+            "verification-bindings",
+            "list",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--scope",
+            "default",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&output).unwrap();
+    listed["data"]["items"].as_array().unwrap().clone()
 }

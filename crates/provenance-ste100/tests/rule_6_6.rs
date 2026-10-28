@@ -26,7 +26,10 @@ fn rule_6_6_spans(text: &str) -> Vec<Span> {
 #[test]
 #[verifies("rule_ste100_paragraph_sentence_limit", examples)]
 fn a_paragraph_permits_six_sentences_and_reports_seven() {
-    assert!(rule_6_6_spans(&sentence_sequence(6)).is_empty());
+    assert_eq!(
+        rule_6_6_spans(&sentence_sequence(6)),
+        [] as [provenance_ste100::Span; 0]
+    );
 
     let text = sentence_sequence(7);
     assert_eq!(
@@ -41,7 +44,7 @@ fn a_paragraph_permits_six_sentences_and_reports_seven() {
 #[test]
 fn sentence_counts_restart_at_clear_paragraph_boundaries() {
     let text = format!("{}\n\n{}", sentence_sequence(6), sentence_sequence(6));
-    assert!(rule_6_6_spans(&text).is_empty());
+    assert_eq!(rule_6_6_spans(&text), [] as [provenance_ste100::Span; 0]);
 
     let first = sentence_sequence(7);
     let second = sentence_sequence(7);
@@ -103,7 +106,7 @@ fn protected_text_does_not_define_sentence_or_paragraph_boundaries() {
         "\"Ignore. These. Marks.\n\nAlso. These.\" {}",
         sentence_sequence(6)
     );
-    assert!(rule_6_6_spans(&text).is_empty());
+    assert_eq!(rule_6_6_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]
@@ -112,9 +115,18 @@ fn indeterminate_sentence_or_paragraph_boundaries_produce_no_strict_finding() {
     let unbalanced_parenthesis = format!("({}", sentence_sequence(7));
     let unbalanced_quote = format!("\"{}", sentence_sequence(7));
 
-    assert!(rule_6_6_spans(&list_like).is_empty());
-    assert!(rule_6_6_spans(&unbalanced_parenthesis).is_empty());
-    assert!(rule_6_6_spans(&unbalanced_quote).is_empty());
+    assert_eq!(
+        rule_6_6_spans(&list_like),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_6_spans(&unbalanced_parenthesis),
+        [] as [provenance_ste100::Span; 0]
+    );
+    assert_eq!(
+        rule_6_6_spans(&unbalanced_quote),
+        [] as [provenance_ste100::Span; 0]
+    );
 }
 
 #[test]
@@ -135,7 +147,7 @@ fn parenthetical_sentence_counting_is_reused() {
 #[test]
 fn an_abbreviation_with_an_unclear_sentence_boundary_prevents_a_strict_finding() {
     let text = format!("Use the e.g. value. {}", sentence_sequence(5));
-    assert!(rule_6_6_spans(&text).is_empty());
+    assert_eq!(rule_6_6_spans(&text), [] as [provenance_ste100::Span; 0]);
 }
 
 #[test]

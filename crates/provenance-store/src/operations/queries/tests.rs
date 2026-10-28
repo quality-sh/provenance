@@ -19,12 +19,15 @@ mod dangling_targets;
 mod document;
 mod document_lifecycle;
 mod document_membership;
+mod document_review;
+mod document_roots;
 mod evidence;
 mod front_equivalence;
 mod hydration;
 mod hydration_support;
 mod identity;
 mod impact;
+mod lifecycle_visibility;
 mod limits;
 mod live;
 mod order;
@@ -72,7 +75,7 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: Some(sid("domain_payroll")),
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -135,6 +138,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
         SearchQuery {
             cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
+            exclude_terminal: false,
             text: Some("pay".into()),
             node_types: vec![NodeType::Domain, NodeType::Boundary],
             limit: 10,
@@ -196,6 +200,7 @@ async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
         SearchQuery {
             cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
+            exclude_terminal: false,
             text: Some("pay".into()),
             node_types: Vec::new(),
             limit: 10,
@@ -243,6 +248,7 @@ async fn search_answers_new_kinds_after_every_settled_kind() {
         SearchQuery {
             cursor: None,
             protocol_version: Some(SDK_PROTOCOL_VERSION),
+            exclude_terminal: false,
             text: Some("a".into()),
             node_types: vec![
                 NodeType::Source,

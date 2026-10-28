@@ -26,8 +26,9 @@ pub use ideation::contributions::{
     UnsupportedRecommendation,
 };
 pub use ideation::dispositions::{
-    disposition_requires_prior_assertion, validate_disposition_intrinsic, CanonicalArtifact,
-    DispositionActor, DispositionRecord, ExternalActionCorrelation,
+    disposition_requires_prior_assertion, validate_disposition_intrinsic, ApprovalEvidenceRequired,
+    CanonicalArtifact, DispositionActor, DispositionActorRefusal, DispositionRecord,
+    ExternalActionCorrelation,
 };
 pub use ideation::legacy_audit::is_shipped_legacy_disposition_audit;
 pub use ideation::lifecycle::{
@@ -43,6 +44,7 @@ pub use ideation::synthesis::{
     ConsensusFinding, ContestedClaim, EvidenceGap, MinorityObjection, RequiredHumanDecision,
     SuggestedArtifact, SynthesisPacket, UnsupportedSpeculation,
 };
+pub use ideation::withdrawals::Withdrawal;
 pub use ideation::{
     ArtifactChangeType, CanonicalArtifactType, ContributionStance, DispositionDecision,
     EvidenceQuality, IdeationEvidenceReference, IdeationEvidenceType, IdeationTarget,

@@ -23,23 +23,40 @@ Search uses a GET query on a graph collection. For example:
 GET /requirements?query=search&text=review&limit=50
 ```
 
+The current review hides terminal records from collection lists and searches:
+
+```text
+GET /requirements?query=search&text=review&exclude_terminal=true&limit=50
+```
+
 The assembled Requirement document uses:
 
 ```text
 GET /requirements/req_review/document?limit=50
 ```
 
-The current review can omit archived Rules and abandoned Resolutions:
+The current review can omit archived Rules and abandoned or rejected Resolutions:
 
 ```text
 GET /requirements/req_review/document?exclude_terminal=true&limit=50
 ```
 
-The default is `exclude_terminal=false`. A superseded Resolution stays visible.
-The filter evaluates each record's lifecycle independently. Thus, an active Rule
-stays visible when its only document link is an abandoned Resolution. The
-abandoned Resolution and its discussions stay hidden. The cursor binds the
-selected value.
+The API default is `exclude_terminal=false`. Set it to `true` to omit archived
+Rules and abandoned or rejected Resolutions. A superseded
+Resolution stays visible. The document filter evaluates each record's lifecycle
+independently. Thus, an active Rule stays visible when its only document link is
+an abandoned Resolution. The abandoned Resolution and its discussions stay
+hidden. Each cursor binds the selected value. The filter applies before page
+limits and `has_more` calculations.
+
+Each record entry carries `review.outcome`, `review.pending_proposal_id`, and
+`review.comment_count`. The result-level `review_totals` object counts pending,
+accepted, and rejected member records across the complete filtered document.
+It does not count reference records. Reference records keep their individual
+review state. The totals do not describe only the current page. They repeat on
+each page in a successful sequence. The document cursor also binds the live
+decision-state digest, so a changed outcome refuses the continuation instead
+of mixing totals from two review states.
 
 A successful list has this form:
 

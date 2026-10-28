@@ -362,6 +362,7 @@ fn accepted_and_deferred_dispositions_allow_no_rationale() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_rejection_requires_comment", examples)]
 fn rejected_dispositions_require_a_nonempty_rationale() {
     for rationale in [None, Some(""), Some("   ")] {
         let mut value = serde_json::json!({

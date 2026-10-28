@@ -1,16 +1,5 @@
+use super::support::records::allow_reviewer;
 use super::*;
-use provenance_core::Manifest;
-
-fn allow_reviewer(repository: &Repository) {
-    let mut manifest: Manifest =
-        serde_json::from_slice(&std::fs::read(repository.layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(
-        repository.layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-}
 
 async fn edit(session: &ApiSession, description: &str) -> (String, String) {
     let read = session
@@ -22,7 +11,7 @@ async fn edit(session: &ApiSession, description: &str) -> (String, String) {
     let saved = session
         .call(json!({
             "path":"requirements/req_shared", "method":"patch",
-            "headers":{"Idempotency-Key":format!("edit-{description}"),"If-Match":etag},
+            "headers":{"If-Match":etag},
             "body":{"actor":"agent","description":description}
         }))
         .await;

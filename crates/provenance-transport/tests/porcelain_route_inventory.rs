@@ -1,6 +1,6 @@
 use provenance_store::operations::catalog;
 
-const ROUTE_INVENTORY_FNV1A: u64 = 5_051_781_947_626_311_070;
+const ROUTE_INVENTORY_FNV1A: u64 = 11_939_930_231_785_398_772;
 
 fn add(hash: &mut u64, text: &str) {
     for byte in text.bytes() {

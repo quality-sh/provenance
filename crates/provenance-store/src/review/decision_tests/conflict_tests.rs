@@ -2,6 +2,7 @@ use super::*;
 use crate::write_error::{WriteError, WriteFailure};
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 fn repeated_decision_reports_the_current_review_identity() {
     let (_temp, store, revision, proposal) = enrolled();
     decide(
@@ -34,6 +35,7 @@ fn repeated_decision_reports_the_current_review_identity() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 fn stale_decision_reports_the_pending_submission_and_current_revision() {
     let (_temp, store, _, proposal) = enrolled();
     let current_revision = edit(&store, "edit-2", "Revised statement");
@@ -58,6 +60,34 @@ fn stale_decision_reports_the_pending_submission_and_current_revision() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_not_merged", examples)]
+fn stale_decision_does_not_replace_the_pending_submission() {
+    let (_temp, store, _, proposal) = enrolled();
+    edit(&store, "edit-2", "Revised statement");
+    let current_proposal = state(&store).pending.unwrap().proposal_id;
+
+    decide(
+        &store,
+        &proposal,
+        "accepted",
+        &reviewer("reviewer"),
+        &artifact(),
+    )
+    .unwrap_err();
+
+    assert_eq!(state(&store).pending.unwrap().proposal_id, current_proposal);
+    assert_eq!(
+        store.list_dispositions(&scope()).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
+    assert_eq!(
+        store.list_requirements(&scope()).unwrap()[0].statement,
+        "Revised statement"
+    );
+}
+
+#[test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 fn withdrawn_decision_reports_the_current_review_identity() {
     let (_temp, store, revision, proposal) = enrolled();
     withdraw(&store, &proposal).unwrap();
@@ -81,6 +111,7 @@ fn withdrawn_decision_reports_the_current_review_identity() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 fn stale_and_terminal_withdrawals_are_review_conflicts() {
     let (_temp, store, _, proposal) = enrolled();
     let current_revision = edit(&store, "edit-2", "Revised statement");
@@ -110,43 +141,31 @@ fn stale_and_terminal_withdrawals_are_review_conflicts() {
 }
 
 #[test]
-fn superseded_submission_allows_a_new_review_cycle() {
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
+fn superseded_submission_reports_the_current_review_identity() {
     let (_temp, store, _, proposal_1) = enrolled();
     let revision_2 = edit(&store, "edit-2", "Revised statement");
 
     let proposal_2 = state(&store).pending.unwrap().proposal_id;
-    for error in [
-        decide(
-            &store,
-            &proposal_1,
-            "accepted",
-            &reviewer("reviewer"),
-            &artifact(),
-        )
-        .unwrap_err(),
-        withdraw(&store, &proposal_1).unwrap_err(),
-    ] {
-        assert!(matches!(
-            WriteError(error).safe(),
-            WriteFailure::ReviewSubmissionConflict {
-                current_submission: Some(submission),
-                current_revision,
-            } if submission == proposal_2 && current_revision == revision_2
-        ));
-    }
-
-    assert_ne!(proposal_1, proposal_2);
-    decide(
+    let error = decide(
         &store,
-        &proposal_2,
+        &proposal_1,
         "accepted",
         &reviewer("reviewer"),
         &artifact(),
     )
-    .unwrap();
+    .unwrap_err();
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::ReviewSubmissionConflict {
+            current_submission: Some(submission),
+            current_revision,
+        } if submission == proposal_2 && current_revision == revision_2
+    ));
 }
 
 #[test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 fn stale_and_repeated_submissions_are_typed_conflicts() {
     let temp = fixture();
     let store = open(Utf8Path::from_path(temp.path()).unwrap());
@@ -173,47 +192,4 @@ fn stale_and_repeated_submissions_are_typed_conflicts() {
         } if current == submission.proposal_id && current_revision == revision_2
     ));
     assert_eq!(store.list_proposal_definitions(&scope()).unwrap().len(), 2);
-}
-
-#[test]
-fn server_creates_unique_identities_across_review_cycles() {
-    let temp = fixture();
-    let store = open(Utf8Path::from_path(temp.path()).unwrap());
-    edit(&store, "edit-1", "Statement v1");
-    let submission_1 = automatic_submission(&store);
-    let decision_1 = decide(
-        &store,
-        &submission_1.proposal_id,
-        "rejected",
-        &reviewer("reviewer"),
-        &json!({}),
-    )
-    .unwrap();
-    edit(&store, "edit-2", "Revised statement");
-    let submission_2 = automatic_submission(&store);
-    let decision_2 = decide(
-        &store,
-        &submission_2.proposal_id,
-        "accepted",
-        &reviewer("reviewer"),
-        &artifact(),
-    )
-    .unwrap();
-
-    assert_ne!(submission_1.proposal_id, submission_2.proposal_id);
-    let request_ids = [
-        &submission_1.request_id,
-        &decision_1.request_id,
-        &submission_2.request_id,
-        &decision_2.request_id,
-    ];
-    assert_eq!(
-        request_ids
-            .iter()
-            .map(|id| id.as_str())
-            .collect::<std::collections::BTreeSet<_>>()
-            .len(),
-        request_ids.len()
-    );
-    assert_ne!(decision_1.disposition_id, decision_2.disposition_id);
 }

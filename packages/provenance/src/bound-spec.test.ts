@@ -34,9 +34,10 @@ function repository(): string {
 /** One canonical record as the state shard holds it. */
 interface WrittenRecord {
   id: string;
+  status?: string;
   requirement_ids?: string[];
   resolution_ids?: string[];
-  refines?: string;
+  refines?: string[];
   depends_on?: string[];
   supersedes?: string[];
   spawned_by?: string;
@@ -69,14 +70,14 @@ const requirementData = (id: string, statement: string) => ({
 
 /** A requirement and a resolution the writers already hold, for the
  *  declarations that name a resolution by canonical id. */
-function seedResolution(repo: string): void {
+function seedResolution(repo: string, status = "approved"): void {
   catalogWrite(repo, ["requirements", "create"], requirementData(
     "req_seed", "The seed requirement stands",
-  ), ["--idempotency-key", "request_seed_requirement"]);
+  ));
   catalogWrite(repo, ["resolutions", "create"], {
     id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
     supersedes: [], position: "Adopt", rationale: "Seeds the relations",
-    status: "proposed", inputs: [],
+    status, inputs: [],
   });
 }
 
@@ -209,10 +210,10 @@ test("spec-bound declarations adopt exact unowned engine records", async () => {
   });
   const requirement = catalogWrite(repo, ["requirements", "create"], requirementData(
     "req_existing", "The canonical Requirement keeps its identity",
-  ), ["--idempotency-key", "request_existing_requirement"]);
+  ));
   catalogWrite(repo, ["requirements", "req_existing", "update"], {
     actor: "sdk-test", relationships: { cites: [{ source_id: "source_existing" }] },
-  }, ["--idempotency-key", "request_seed_citation", "--if-match", requirement.data.edit.etag]);
+  }, ["--if-match", requirement.data.edit.etag]);
   catalogWrite(repo, ["rules", "create"], {
     id: "rule_existing", requirement_ids: ["req_existing"], resolution_ids: [],
     statement: "The canonical Rule keeps its identity", status: "draft", severity: "high",
@@ -286,11 +287,11 @@ test("spec-bound declarations adopt an unowned external_integration Source", asy
   });
   const requirement = catalogWrite(repo, ["requirements", "create"], requirementData(
     "req_env_key_at_invocation", "The provider reads the environment value at invocation",
-  ), ["--idempotency-key", "request_external_requirement"]);
+  ));
   catalogWrite(repo, ["requirements", "req_env_key_at_invocation", "update"], {
     actor: "sdk-test",
     relationships: { cites: [{ source_id: "source_workflowd_integration_brief" }] },
-  }, ["--idempotency-key", "request_seed_external_citation", "--if-match", requirement.data.edit.etag]);
+  }, ["--if-match", requirement.data.edit.etag]);
 
   const provenance = defineSpec("noscope");
   const brief = provenance
@@ -611,7 +612,7 @@ test("relation fields on spec-bound declarations reach the written records", asy
   const child = readRecords(repo, "requirements/req.jsonl").find(
     ({ id }) => id === idOf("requirement", "child"),
   );
-  assert.equal(child?.refines, idOf("requirement", "parent"));
+  assert.deepEqual(child?.refines, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.depends_on, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.supersedes, [idOf("requirement", "retired")]);
   assert.equal(child?.spawned_by, "res_seed");
@@ -623,6 +624,29 @@ test("relation fields on spec-bound declarations reach the written records", asy
     ({ id }) => id === idOf("rule", "decision"),
   );
   assert.deepEqual(writtenDecision?.resolution_ids, ["res_seed"]);
+  assert.equal(writtenDecision?.status, "active");
+});
+
+test("a spec-bound requirement keeps both parents it refines", async () => {
+  const repo = repository();
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-parents" });
+  const provenance = defineSpec("parents");
+  const policy = provenance.source("policy").document("docs/policy.md");
+  const access = provenance.requirement("access").statement("Access is governed").from(policy);
+  const sharing = provenance.requirement("sharing").statement("Sharing is governed").from(policy);
+  const child = provenance
+    .requirement("child")
+    .statement("Share links are governed")
+    .from(policy)
+    .refines(access)
+    .refines(sharing)
+    .refines(access);
+  const result = await apply(provenance.build(access, sharing, child));
+
+  const idOf = (key: string): string =>
+    result.resources.find((resource) => resource.kind === "requirement" && resource.key === key)!.id;
+  const written = readRecords(repo, "requirements/req.jsonl").find(({ id }) => id === idOf("child"));
+  assert.deepEqual(written?.refines, [idOf("access"), idOf("sharing")].sort());
 });
 
 test("a spec-bound relation to a requirement outside the build is refused", () => {
@@ -633,4 +657,27 @@ test("a spec-bound relation to a requirement outside the build is refused", () =
     () => provenance.build(child),
     /Requirement `child` names Requirement `parent` not included in the spec/,
   );
+});
+
+// Implementation-aid test: checks the store refusal through the public SDK.
+test("an active Rule reports the store refusal for a proposed Resolution", async () => {
+  const repo = repository();
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/refused-resolution" });
+  seedResolution(repo, "proposed");
+  const provenance = defineSpec("refused-resolution");
+  const parent = provenance.requirement("parent").statement("Access is governed");
+  const decision = provenance.rule("decision")
+    .statement("Access follows the seed decision").resolutions("res_seed");
+
+  await assert.rejects(apply(provenance.build(parent.rules(decision))), (error: unknown) => {
+    assert.ok(error instanceof OperationError);
+    const failure = error.failure.error;
+    assert.equal(failure.kind, "resolution_not_approved");
+    assert.equal(failure.kind === "resolution_not_approved" ? failure.resolution_id : undefined, "res_seed");
+    assert.match(
+      error.message,
+      /^resolution_not_approved: .* cites resolution res_seed, which is proposed\. /,
+    );
+    return true;
+  });
 });

@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { OperationError } from "./client.js";
 import { COMPATIBILITY, PROTOCOL_VERSION } from "./generated/client.js";
 import { configure, defineSpec, plan } from "./index.js";
 
@@ -118,4 +119,12 @@ test("an endpoint must be configured explicitly", async () => {
       await plan(spec());
     }, /endpoint|PROVENANCE_ENDPOINT/i);
   });
+});
+
+// Implementation-aid test: checks error text without a host connection.
+test("operation errors include the supplied refusal kind and message", () => {
+  const failure = { error: { kind: "invalid_update", message: "resolution res_seed must be approved" } };
+  const error = new OperationError(400, failure);
+  assert.equal(error.message, "invalid_update: resolution res_seed must be approved");
+  assert.equal(error.failure, failure);
 });

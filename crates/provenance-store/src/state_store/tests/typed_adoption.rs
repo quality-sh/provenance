@@ -49,7 +49,10 @@ fn typed_spec_cannot_reuse_another_canonical_kind_id() {
     let error = store.apply_typed_spec(&scope, input).unwrap_err();
 
     assert!(error.to_string().contains("record ID already exists"));
-    assert!(store.list_requirements(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_requirements(&scope).unwrap(),
+        [] as [provenance_core::Requirement; 0]
+    );
 }
 
 fn target(kind: TypedDeclarationKind, id: &str) -> TypedAdoptionTarget {
@@ -99,7 +102,7 @@ fn create_unowned_requirement(store: &StateStore, scope: &ScopeId, id: &str, sta
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -174,6 +177,7 @@ fn explicit_id_without_adoption_keeps_the_default_conflict_and_bytes() {
 }
 
 #[test]
+#[verifies("rule_exact_unowned_requirement_adoption", examples)]
 fn exact_requirement_adoption_changes_only_owner_and_address_then_replays_unchanged() {
     let (_dir, store, scope) = initialized_store();
     create_unowned_requirement(&store, &scope, "req_existing", STATEMENT);
@@ -291,7 +295,10 @@ fn invalid_adoption_targets_are_rejected_before_reconciliation() {
         let (_dir, store, scope) = initialized_store();
         let error = store.plan_typed_spec(&scope, input).unwrap_err();
         assert!(error.to_string().contains(message), "{error:#}");
-        assert!(store.list_requirements(&scope).unwrap().is_empty());
+        assert_eq!(
+            store.list_requirements(&scope).unwrap(),
+            [] as [provenance_core::Requirement; 0]
+        );
     }
 }
 

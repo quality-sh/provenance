@@ -125,7 +125,10 @@ fn ignored_symlinks_are_not_entered_and_cuts_count_only_source_files() {
     let (scans, cut) = root.scan_tree(1).unwrap();
     assert_eq!(scans.len(), 1);
     assert!(!cut);
-    assert!(scans[0].bindings.is_empty());
+    assert_eq!(
+        scans[0].bindings,
+        [] as [provenance_scanner::AttributeBinding; 0]
+    );
     assert!(root.scan_tree(0).unwrap().1);
 }
 
@@ -174,7 +177,7 @@ fn unscanned_symlink_entries_are_skipped_without_following_their_targets() {
     std::os::unix::fs::symlink(outside.path(), root_path.join("skills")).unwrap();
     let root = RepositoryFiles::open(root_path).unwrap();
     let (scans, cut) = root.scan_tree(10).unwrap();
-    assert!(scans.is_empty());
+    assert_eq!(scans, [] as [provenance_scanner::FileScan; 0]);
     assert!(!cut);
     assert!(matches!(
         root.open_file(Utf8Path::new("skills/sentinel.rs")),

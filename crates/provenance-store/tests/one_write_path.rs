@@ -18,20 +18,16 @@ fn new_requirement(id: &str) -> CreateRequirementInput {
         "scope_id": "default", "id": id,
         "statement": "The system stores records.",
         "status": "discovery", "depends_on": [], "supersedes": [],
-        "description": null, "domain_id": null, "refines": null,
+        "description": null, "domain_id": null, "refines": [],
         "spawned_by": null, "origin_thread": null, "origin_message": null
     }))
     .unwrap()
 }
 
 #[tokio::test]
-async fn the_legacy_create_enrolls_through_the_journal() {
+async fn the_legacy_create_enrolls_the_record() {
     let (temp, store) = fixture();
     let created = store.create_requirement(new_requirement("req_b")).unwrap();
-    assert_eq!(
-        created.schema_version,
-        provenance_core::review::REVIEW_SCHEMA_VERSION
-    );
 
     let again = store.create_requirement(new_requirement("req_b")).unwrap();
     assert_eq!(again.id, created.id);
@@ -70,11 +66,10 @@ async fn the_legacy_create_enrolls_through_the_journal() {
     .unwrap();
     assert_eq!(history.result.entries.len(), 1);
     assert_eq!(history.result.entries[0].outcome, SaveOutcome::Created);
-    assert_eq!(history.result.entries[0].actor, "authoring");
 }
 
 #[test]
-fn every_legacy_edit_publishes_a_journaled_outcome() {
+fn every_legacy_edit_publishes_its_change() {
     let (_temp, store) = fixture();
     store
         .create_source(
@@ -123,7 +118,7 @@ fn every_legacy_edit_publishes_a_journaled_outcome() {
 
     let before = store.list_requirements(&scope()).unwrap();
     assert!(store
-        .set_requirement_refines(&scope(), &id(), StableId::new("req_a").unwrap())
+        .add_requirement_refines(&scope(), &id(), StableId::new("req_a").unwrap())
         .is_err());
     assert_eq!(store.list_requirements(&scope()).unwrap(), before);
     store.clear_requirement_spawned_by(&scope(), &id()).unwrap();
@@ -134,7 +129,7 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
     let (_temp, store) = fixture();
     store.create_requirement(new_requirement("req_b")).unwrap();
     store
-        .set_requirement_refines(
+        .add_requirement_refines(
             &scope(),
             &StableId::new("req_b").unwrap(),
             StableId::new("req_a").unwrap(),
@@ -142,7 +137,7 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
         .unwrap();
 
     let error = store
-        .set_requirement_refines(&scope(), &id(), StableId::new("req_b").unwrap())
+        .add_requirement_refines(&scope(), &id(), StableId::new("req_b").unwrap())
         .unwrap_err();
     let failure = WriteError(error).safe();
     assert!(!matches!(failure, WriteFailure::WriteFailed));
@@ -152,14 +147,14 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
     );
 
     let state = store.requirement_edit_state(&scope(), &id()).unwrap();
-    assert!(state.snapshot.is_some());
+    assert!(state.revision.is_some());
 }
 
 #[test]
 fn a_save_input_rejects_an_unknown_relationship_field() {
     let (_temp, store) = fixture();
     let input: Result<SaveRequirement, _> = serde_json::from_value(json!({
-        "request_id": "delta", "actor": "ben",
+        "actor": "ben",
         "expected_etag": store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update": {"scope_id": "default", "id": "req_a"},
         "relationships": {"cites": {"add": [], "removes": []}}

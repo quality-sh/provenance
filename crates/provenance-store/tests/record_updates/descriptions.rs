@@ -94,11 +94,13 @@ async fn invalid_requirement_edits_leave_statements_and_reviews_unchanged() {
             fixture.store.list_requirements(&fixture.scope).unwrap(),
             before
         );
-        assert!(fixture
-            .store
-            .open_requirement_reviews(&fixture.scope)
-            .unwrap()
-            .is_empty());
+        assert_eq!(
+            fixture
+                .store
+                .open_requirement_reviews(&fixture.scope)
+                .unwrap(),
+            [] as [provenance_core::RequirementReview; 0]
+        );
     }
 }
 
@@ -128,19 +130,18 @@ async fn owned_requirement_and_rule_updates_preserve_declaration_identity() {
         let after = fixture.call(operation, json!({"scope_id":"default","id":before["id"],"declared_by":"spec://fixture","description":"Changed"})).await.unwrap();
         let mut expected = before;
         expected["description"] = json!("Changed");
-        if operation == "update-requirement-native" {
-            expected["schema_version"] = json!(3);
-        }
 
         assert_eq!(after, expected);
     }
     fixture.call("apply", spec).await.unwrap();
 
-    assert!(fixture
-        .store
-        .open_requirement_reviews(&fixture.scope)
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        fixture
+            .store
+            .open_requirement_reviews(&fixture.scope)
+            .unwrap(),
+        [] as [provenance_core::RequirementReview; 0]
+    );
 }
 
 #[tokio::test]
@@ -149,9 +150,11 @@ async fn metadata_only_and_unchanged_statements_do_not_create_reviews() {
     fixture.requirement().await;
     fixture.call("create-rule", json!({"scope_id":"default","id":"rule_one","statement":"The system saves the record.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]})).await.unwrap();
     fixture.call("update-requirement-native", json!({"scope_id":"default","id":"req_one","description":"Details","statement":"The system saves the record."})).await.unwrap();
-    assert!(fixture
-        .store
-        .open_requirement_reviews(&fixture.scope)
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        fixture
+            .store
+            .open_requirement_reviews(&fixture.scope)
+            .unwrap(),
+        [] as [provenance_core::RequirementReview; 0]
+    );
 }

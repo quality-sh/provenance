@@ -10,7 +10,7 @@ fn native_and_batch_writers_refuse_review_mutation_bypasses() {
         "scope_id":"default","id":"prop-forge","proposal_key":"forge","proposal_type":"record_revision",
         "title":"T","summary":"S","traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_a"},
         "source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},"builds_on":[],
-        "promotion_state":"proposed","record_revision":{"revision":"rev","content_digest":"digest"}}
+        "promotion_state":"proposed","record_revision":{"revision":"rev"}}
     );
     refused(
         store.create_proposal_card(serde_json::from_value(card.clone()).unwrap()),

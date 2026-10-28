@@ -22,5 +22,5 @@ syn.workspace = true
 
 [dev-dependencies]
 camino.workspace = true
-provenance-scanner.workspace = true
+provenance-scanner = { path = "../provenance-scanner" }
 trybuild.workspace = true

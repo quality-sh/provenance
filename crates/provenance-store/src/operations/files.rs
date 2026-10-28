@@ -5,6 +5,8 @@ use provenance_scanner::{FileScan, Language};
 mod native;
 #[path = "files/safe_fs.rs"]
 mod safe_fs;
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+pub use safe_fs::NoReplaceUnsupported;
 pub use safe_fs::{rename_no_replace, ChildKind, Directory};
 #[cfg(any(unix, windows))]
 #[path = "files/held.rs"]

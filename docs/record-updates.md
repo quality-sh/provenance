@@ -27,8 +27,8 @@ the same writers. The Requirement PATCH uses the guarded review writer.
 | `update-rule` | `name`, `description`, `statement`, `status`, `severity`, `source_document`, `source_section`, `archived_in_commit` | `name`, `description`, `source_document`, `source_section` |
 | `update-domain` | `name`, `description`, `color` | `description`, `color` |
 | `update-boundary` | `statement`, `source_ref` | `source_ref` |
-| `update-topic` | `title`, `status`, `links` | None |
-| `update-question` | `question`, `resolution_method`, `status`, `links`, `resolution_id`, `contradicts` | `resolution_id`, `contradicts` |
+| `update-topic` | `title`, `status`, `links`, `archived_in_commit` | None |
+| `update-question` | `question`, `resolution_method`, `status`, `links`, `resolution_id`, `contradicts`, `archived_in_commit` | `resolution_id`, `contradicts` |
 
 The rows name the native operations. The PATCH route of the matching
 collection carries the same editable set. The relationship fields of Source,
@@ -76,14 +76,15 @@ Each field takes a complete array or a partial delta:
 ```
 
 The Requirement PATCH carries its relationships in one `relationships`
-object. `refines` and `spawned_by` take a record ID, or `null` to clear.
+object. `refines` takes a complete ID list or an `add`/`remove` delta. An empty list clears it.
+`spawned_by` takes a record ID, or `null` to clear.
 `depends_on` and `supersedes` take an array or a delta. `cites` takes the
 citation list or a delta with `add` citations and `remove` source IDs. This
-example adds one dependency and clears the refine target:
+example adds one dependency and removes all refinement parents:
 
 ```json
 {"data": {"actor": "agent",
-  "relationships": {"depends_on": {"add": ["req_b"]}, "refines": null}}}
+  "relationships": {"depends_on": {"add": ["req_b"]}, "refines": []}}}
 ```
 
 Before expansion, the Store validates each target that a removal delta names.
@@ -109,21 +110,26 @@ adopt a record, change its owner, or move its declaration address.
 `apply-authoring` keeps its reconciliation, adoption, move, and deletion
 behavior. A later declaration application can restate the fields it owns.
 
-The Requirement PATCH is the one guarded write path. The client sends the
-current ETag in `If-Match` and a request identity in `Idempotency-Key`. The
-member read returns the ETag. The response carries the record with its edit
-state, decision state, and the new ETag. A statement change uses the statement
-write gate and raises the existing Requirement reviews for its Rules. Rule
-statements use the same write gate. Reviews keep their before/after values and
-clearing behavior. Requirement and review publication uses more than one
-shard. The Store resolves an interrupted publication. The wire returns
-`write_failed` when it cannot return the saved result.
+Every review record PATCH takes the current ETag in `If-Match`. Requirement,
+Topic, and Question routes require it. The other routes write without it. The
+server creates the request identity. The member read returns the ETag. The
+response carries the record with its edit state, decision state, and the new
+ETag. A Requirement statement change uses the statement write gate and raises
+the existing Requirement reviews for its Rules. Rule statements use the same
+write gate. Reviews keep their before/after values and clearing behavior.
+Requirement and review publication uses more than one shard. The Store resolves
+an interrupted publication. The wire returns `write_failed` when it cannot
+return the saved result.
 
 Rule deprecation and archival use the existing `status` values. An archived
 Rule must have `archived_in_commit`; the other Rule statuses must not have it.
-Updates do not delete records or their relationships. A Topic that closes
-clears its claim. A Question status change keeps the native answer requirement
-and clears claims when the question leaves its claimable state.
+Archived Topics and Questions have the same commit evidence requirement. An
+archived status is terminal. Archiving a Topic archives all Questions in that
+Topic in the same publication. Archiving one Question does not change its
+Topic. Discussions on archived records stay readable as history. Updates do
+not delete records or their relationships. A Topic that closes clears its
+claim. A Question status change keeps the native answer requirement and clears
+claims when the question leaves its claimable state.
 
 ## Native CLI
 
@@ -133,23 +139,27 @@ objects use one JSON object on standard input with `--stdin`:
 
 ```sh
 printf '%s' '{"url":"https://example.test/policy","reference":null}' |
-  provenance --repo . --scope default sources source_policy update
+  provenance --repo . --scope default sources source_policy update --stdin
 
 printf '%s' '{"status":"approved","approved_by":"reviewer","approved_at":1234}' |
-  provenance --repo . --scope default resolutions resolution_policy update
+  provenance --repo . --scope default resolutions resolution_policy update --stdin
 ```
 
 Here `null` clears `reference`, as on the route. A body that carries `id`,
 `scope_id`, or a header fact is refused.
 
 A Requirement update sends the ETag of the last read. The CLI supplies the
-`actor` default and makes an `Idempotency-Key` when the route needs one:
+`actor` default:
 
 ```sh
+provenance req_policy get --view review
 printf '%s' '{"description":"Reviewed wording."}' |
   provenance --repo . --scope default requirements req_policy update \
-    --if-match "$etag"
+    --if-match "$etag" --stdin
 ```
+
+Copy `review.edit.etag` unchanged. A value has the form `sha256:` followed by
+64 lowercase hexadecimal characters.
 
 ## HTTP clients
 
@@ -174,7 +184,7 @@ selected scope. In the native DTO, a `null` field supplies no value; it does
 not clear. A native request clears fields only through the typed
 `clear_fields` list.
 
-The relationship actions stay native: `set/clear-requirement-refines`,
+The relationship actions stay native: `add/clear-requirement-refines`,
 `add/clear-requirement-depends-on`, `add/clear-requirement-supersedes`,
 `set/clear-requirement-spawned-by`, `add/clear-rule-requirement`,
 `add/clear-rule-resolution`, `add/clear-resolution-requirement`,

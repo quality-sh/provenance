@@ -2,8 +2,8 @@ use super::{nodes, served, ReadContext, ReadPolicy};
 use crate::operations::reader::Cursor;
 use camino::Utf8PathBuf;
 use provenance_core::protocol::{
-    read_failure::ReadFailure, DocumentEntry, ReadDocumentQuery, ReadDocumentResult, StampPolicy,
-    Stamped,
+    read_failure::ReadFailure, DocumentEntry, DocumentReviewTotals, ReadDocumentQuery,
+    ReadDocumentResult, StampPolicy, Stamped,
 };
 use provenance_core::{NodeType, ScopeId, StableId};
 use provenance_macros::rule;
@@ -42,6 +42,24 @@ pub async fn read_document_answer(
     })
 }
 
+/// Returns at most one document: nearest, then deepest, then lowest Requirement ID.
+///
+/// A Requirement selects its own document. Other graph records must be members,
+/// except Sources and Domains, which the document stores as references.
+pub async fn containing_review_documents(
+    repo: Option<Utf8PathBuf>,
+    scope: &ScopeId,
+    policy: ReadPolicy,
+    kind: NodeType,
+    id: &StableId,
+) -> anyhow::Result<Stamped<Vec<StableId>>> {
+    let id = id.clone();
+    served(repo, scope, policy, move |ctx| {
+        Box::pin(async move { ctx.snapshot().containing_document_roots(kind, &id).await })
+    })
+    .await
+}
+
 pub(super) async fn read(
     ctx: &ReadContext,
     request: ReadDocumentQuery,
@@ -52,20 +70,79 @@ pub(super) async fn read(
         .map_err(crate::operations::reader::page_error)
 }
 
+async fn review_keys(
+    ctx: &ReadContext,
+    root: &str,
+    exclude_terminal: bool,
+) -> anyhow::Result<Vec<(NodeType, StableId, bool)>> {
+    ctx.snapshot()
+        .document_keys(
+            root,
+            &crate::operations::reader::Position::default(),
+            8193,
+            exclude_terminal,
+            &[],
+        )
+        .await?
+        .into_iter()
+        .filter(|(_, key)| key.stage < 2)
+        .map(|(kind, key)| {
+            Ok((
+                NodeType::parse(&kind)?,
+                StableId::new(key.id)?,
+                key.stage == 0,
+            ))
+        })
+        .collect()
+}
+
+/// The terminal filter also hides records that review rejected as new,
+/// but never the root that the read asks for.
+fn hidden_records(
+    request: &ReadDocumentQuery,
+    rejected_new: &[(NodeType, StableId)],
+) -> Vec<(NodeType, StableId)> {
+    if !request.exclude_terminal {
+        return Vec::new();
+    }
+    rejected_new
+        .iter()
+        .filter(|(kind, id)| *kind != NodeType::Requirement || id.as_str() != request.id)
+        .cloned()
+        .collect()
+}
+
 async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<ReadDocumentResult> {
     use crate::operations::reader::PAGE_BYTES;
     request
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
-    let (cursor, mut position) = Cursor::open(
+    nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
+        .await?
+        .ok_or(ReadFailure::DocumentRootMissing)?;
+    let review_keys = review_keys(ctx, &request.id, request.exclude_terminal).await?;
+    let review_records = review_keys
+        .iter()
+        .map(|(kind, id, _)| (*kind, id.clone()))
+        .collect::<Vec<_>>();
+    let review_state = ctx
+        .live(crate::operations::reader::Live::Canonical)
+        .store()
+        .document_review_state(ctx.snapshot().scope(), &review_records)?;
+    let hidden = hidden_records(&request, &review_state.rejected_new);
+    let mut review_totals = DocumentReviewTotals::default();
+    for (kind, id, is_member) in &review_keys {
+        if *is_member && !hidden.contains(&(*kind, id.clone())) {
+            review_totals.include(&review_state.summary(*kind, id));
+        }
+    }
+    let (cursor, mut position) = Cursor::open_live(
         ctx,
         "read-document",
         &(&request.id, request.limit, request.exclude_terminal),
         request.cursor.as_deref(),
+        &review_state.digest,
     )?;
-    nodes::page_node(ctx.snapshot(), NodeType::Requirement, &request.id)
-        .await?
-        .ok_or(ReadFailure::DocumentRootMissing)?;
     let keys = ctx
         .snapshot()
         .document_keys(
@@ -73,6 +150,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             &position,
             request.limit + 1,
             request.exclude_terminal,
+            &hidden,
         )
         .await?;
     let mut entries = Vec::new();
@@ -97,10 +175,11 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             stage => nodes::page_node(ctx.snapshot(), NodeType::parse(&kind)?, &key.id)
                 .await?
                 .map(|node| {
+                    let review = review_state.summary(node.node_type(), node.id());
                     if stage == 0 {
-                        DocumentEntry::Member { node }
+                        DocumentEntry::Member { node, review }
                     } else {
-                        DocumentEntry::Reference { node }
+                        DocumentEntry::Reference { node, review }
                     }
                 }),
         };
@@ -124,6 +203,7 @@ async fn page(ctx: &ReadContext, request: ReadDocumentQuery) -> anyhow::Result<R
             None
         },
         has_more,
+        review_totals,
         entries,
     })
 }

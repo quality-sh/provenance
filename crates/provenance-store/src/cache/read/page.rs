@@ -3,6 +3,7 @@ use super::rows::{decode, select_columns};
 use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
 use provenance_core::model::ProjectionRow;
+use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::rule;
 use sqlx::Row;
@@ -28,6 +29,19 @@ impl ReadSnapshot {
     }
 }
 
+/// Refuses a page limit outside 1..=200 with the typed input refusal that
+/// names the `limit` field.
+pub fn check_limit(limit: usize) -> anyhow::Result<()> {
+    if (1..=200).contains(&limit) {
+        return Ok(());
+    }
+    Err(OperationFailure::InvalidInput {
+        field: Some("limit".to_owned()),
+        reason: InvalidInputReason::InvalidValue,
+    }
+    .into())
+}
+
 pub fn page_error(error: anyhow::Error) -> anyhow::Error {
     if error.downcast_ref::<sqlx::Error>().is_some_and(
         |error| matches!(error, sqlx::Error::Database(db) if db.code().as_deref() == Some("9")),
@@ -49,11 +63,11 @@ pub fn byte_expression(columns: &[&str]) -> String {
 /// Returns the SQL text for one keyset page of at most `LIMIT` IDs after a
 /// key, in primary-key order. An ID over 1024 bytes comes back as NULL.
 ///
-/// Bind the scope, the previous key, the filter value when `filter` is not
-/// empty, and the limit, in that order. `filter` is trusted SQL text from a
-/// fixed set of literals and never holds caller input. `ORDER BY` names the
-/// table column: a bare `id` binds to the guarded output alias, and `SQLite`
-/// then sorts every remaining row for each page.
+/// Bind the scope, the previous key, values named by `filter`, and the limit,
+/// in that order. `filter` is trusted SQL text from a fixed set of literals and
+/// never holds caller input. `ORDER BY` names the table column: a bare `id`
+/// binds to the guarded output alias, and `SQLite` then sorts every remaining
+/// row for each page.
 pub fn id_page_sql(table: &str, filter: &str) -> String {
     let table = quoted(table);
     format!(
@@ -126,8 +140,13 @@ impl<K: ProjectionRow> Table<'_, K> {
         &self,
         after: &str,
         limit: usize,
+        exclude_terminal: bool,
     ) -> anyhow::Result<Vec<String>> {
-        let sql = id_page_sql(K::TABLE, "");
+        let filter = crate::cache::projection_families::exclude_terminal_predicate(
+            K::TABLE,
+            exclude_terminal,
+        );
+        let sql = id_page_sql(K::TABLE, &filter);
         let mut tx = self.snapshot().connection().await;
         let rows = sqlx::query(&sql)
             .bind(self.snapshot().scope().as_str())

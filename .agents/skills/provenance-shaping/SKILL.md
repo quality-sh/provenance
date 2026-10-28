@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:e00fb043dfca21af -->
+<!-- Installed by provenance 0.3.0; content hash fnv1a64:aef7498aace2b08e -->
 
 # Shaping
 
@@ -18,9 +18,11 @@ graph before you move on. The graph holds state between turns, not the conversat
    in conversation state.
 2. **Do not outrun context.** Stop before the map is too large to hand off accurately.
 3. **Do not proceed past unratified decisions.** If the human has not accepted the
-   position, it is a proposal, open question, or blocked-on-human fork, not a decision.
+   position, it is a Proposal, open Question, or `blocked_on_human` fork, not a decision.
 4. **Leave the map consistent at handoff.** Claims, fog, questions, and frontier must tell
    the next session what to do without reconstructing your chat.
+5. **The tree reads as a spec.** At every handoff a developer can build from the anchor's
+   requirement tree alone. See "The tree is the spec".
 
 One question per session is **not** the invariant. Grill turns can drain a topic question
 by question; expensive methods claim one question and often stop at a phase boundary.
@@ -55,23 +57,59 @@ disagree, update the binary first, then shape.
    provenance init --path . --scope <scope> --path-prefix .
    ```
 
-2. Read the domain guidance, then load the low-resolution map:
+2. Give the person the review page in your first reply. Before you write records, start or
+   reuse the review host as the Provenance section of `AGENTS.md` says, and paste the page
+   link into the chat as plain text. One host serves the repository and scope for all
+   sessions, so leave it running. Opening the page in a browser or in the app that shows
+   your chat is extra. Always give the link in chat too. A link works once and expires
+   after 24 hours; get a new link when it has expired. The page is served on the machine
+   that runs the host. If that is not the person's machine, say so, and give the person the
+   command from `AGENTS.md` that starts the host on their own machine.
+
+   As soon as the anchor exists, send its review link, and send it again at handoff. The
+   page follows records as they land, so the person reads the tree while you shape.
+
+3. Read the domain guidance, then load the low-resolution map:
 
    ```sh
    provenance prime
    provenance rules list --scope <scope> --format json
    provenance gaps --scope <scope> --format json
    provenance graph <anchor_requirement_id> --scope <scope> --format json
-   provenance requirements fog show --scope <scope> --requirement-id <anchor_requirement_id> --format json
+   provenance requirements <anchor_requirement_id> get --scope <scope> --format json
    provenance topics list --scope <scope> --format json
    provenance questions list --scope <scope> --format json
    provenance boundaries list --scope <scope> --format json
    ```
 
-3. Treat the map as an index, not a store. Keep only gists in your working context and
+4. Treat the map as an index, not a store. Keep only gists in your working context and
    zoom into the available graph and rule views with `provenance graph <requirement_id>`
    and `provenance traceability <rule_id>`; use the shaping list commands above for their
    full records. Refer to artifacts by meaningful names plus ids; never hand off bare ids.
+
+## The tree is the spec
+
+The anchor's requirement tree is the product spec. A developer must be able to build from
+it without the chat. Each part of a record holds one kind of content:
+
+- **Statement**: one obligation in one plain clause.
+- **Description**: how the product behaves, in the present tense: its states, what moves it
+  between them, what the person sees, and one example. Write it for a builder
+  who has not read the thread.
+- **Thread**: who said what. The person's words, the brief's words, and what changed go
+  here, never in a description.
+- **Fog and Questions**: what is not decided. A description does not list open items or say
+  what remains to be shaped. Name an unknown in fog or mint a Question. A description may
+  end with one `Open:` line that names them, so a builder knows where the spec stops.
+
+A Question is answered only when the answer covers all of it. If an answer settles part of
+a Question, land that part, leave the Question open, and narrow its text to what remains.
+
+Before you hand off, read the tree as a builder would: open the anchor's review page, or
+read the anchor's requirement document with the command in the Provenance section of
+`AGENTS.md`, and read every statement and description in order. Fix a description that
+retells history, describes another record's behaviour, or lists open items before you hand
+off.
 
 ## Mode 1: Chart
 
@@ -88,19 +126,21 @@ resolve the questions you create.
    provenance requirements create --scope <scope> \
      --id req_<stable_slug> \
      --statement "<feature-sized idea as a requirement>" \
+     --description "<how the product behaves, as far as the brief says>" \
      --status discovery \
      --format json
    ```
+
+   Then send the anchor's review link (see "Start every session").
 
 2. **Attach known sources to the anchor.** Requirements with no valid source reference
    remain on the missing-source frontier, so add source references when evidence already
    exists.
 
    ```sh
-   provenance requirements source-ref add --scope <scope> \
-     --requirement-id <anchor_requirement_id> \
-     --source-id <source_id> \
-     --clause "<clause or section>" \
+   provenance requirements <anchor_requirement_id> update --scope <scope> \
+     --relationships-json '{"cites":{"add":[{"source_id":"<source_id>","clause":"<clause or section>"}]}}' \
+     --if-match <etag> \
      --format json
    ```
 
@@ -116,8 +156,7 @@ resolve the questions you create.
      --id boundary_<stable_slug> \
      --requirement-id <anchor_requirement_id> \
      --statement "<constraint on solution space>" \
-     --source-id <source_id> \
-     --source-clause "<clause or section>" \
+     --source-ref-json '{"source_id":"<source_id>","clause":"<clause or section>"}' \
      --format json
    ```
 
@@ -125,9 +164,9 @@ resolve the questions you create.
    decisions that cannot yet be stated precisely.
 
    ```sh
-   provenance requirements fog set --scope <scope> \
-     --requirement-id <anchor_requirement_id> \
-     --text "<not-yet-sharp investigations and worries>" \
+   provenance requirements <anchor_requirement_id> update --scope <scope> \
+     --fog "<not-yet-sharp investigations and worries>" \
+     --if-match <etag> \
      --format json
    ```
 
@@ -154,10 +193,9 @@ resolve the questions you create.
    rationale on the requirement thread.
 
    ```sh
-   provenance thread post --scope <scope> \
-     --parent-type requirement --parent-id <anchor_requirement_id> \
+   provenance requirements <anchor_requirement_id> discussions create --scope <scope> \
      --role assistant \
-     "CHART: appetite=<...>; boundaries=<...>; fog=<...>; first frontier=<...>" \
+     --body "CHART: appetite=<...>; boundaries=<...>; fog=<...>; first frontier=<...>" \
      --format json
    ```
 
@@ -190,13 +228,11 @@ separate question. An unimplemented Rule is an ordinary state and should remain 
 as such rather than being replaced by a vague Rule merely to close the gap.
 
 Proposals are not part of the computed graph frontier and are not a batch-review inbox.
-Claiming a topic atomically consults and returns undisposed `proposed` and `asserted`
-proposals targeting the topic, its anchor requirement, or its explicit artifact links;
-each result includes its derived state and deterministic reasons. For diff-driven work,
-run `provenance proposals surface
---scope <scope> --changed-path <repo-relative-path> --format json` (repeat the path flag).
-Review only those surfaced proposals. Use a complete list only for a deliberately bounded
-set of competing, contested, or conflicting proposals that jointly blocks the turn.
+Claiming a Topic atomically returns undisposed `proposed` and `asserted` proposals in its
+explicit territory. The CLI has no standalone proposal-surface command. For diff-driven
+work, use `provenance proposals list --scope <scope> --format json` and inspect explicit
+evidence paths. Do not infer territory from titles or graph proximity. Use a complete list
+only for a deliberately bounded set of proposals that jointly blocks the turn.
 
 Do not hand-wire a private frontier in chat. If the graph says a different thing than your
 notes, fix the graph or trust the graph.
@@ -207,10 +243,10 @@ Claim before work so concurrent sessions skip what you are touching.
 
 | Method | Claim | Command |
 |---|---|---|
-| `grill` | whole topic | `provenance topics claim --scope <scope> --id <topic_id> --actor <agent> --format json` |
-| `prototype` | single question | `provenance questions claim --scope <scope> --id <question_id> --actor <agent> --format json` |
-| `research` | single question | `provenance questions claim --scope <scope> --id <question_id> --actor <agent> --format json` |
-| `verify` | single question | `provenance questions claim --scope <scope> --id <question_id> --actor <agent> --format json` |
+| `grill` | whole topic | `provenance topics <topic_id> claim --scope <scope> --actor <agent> --format json` |
+| `prototype` | single question | `provenance questions <question_id> claim --scope <scope> --actor <agent> --format json` |
+| `research` | single question | `provenance questions <question_id> claim --scope <scope> --actor <agent> --format json` |
+| `verify` | single question | `provenance questions <question_id> claim --scope <scope> --actor <agent> --format json` |
 | `task` | single question | claim its open question if represented; there is no separate task record or task claim |
 
 If claim fails, do not work that item. Pick another frontier item or hand off that it is
@@ -227,50 +263,101 @@ For each question, use the method on the question.
 
 #### `grill`
 
-Ask one precise question at a time and offer a recommended answer. When the human accepts,
-land immediately before asking the next question.
+Ask one precise question at a time and offer a recommended answer. Record the
+answer before the next question. Select records from its meaning, not from a fixed
+sequence of commands.
 
-Do not land a rich answer as a bare answered-question. Fan out into the graph:
+1. Read the Question's Topic and its Requirement. Select the lowest Requirement
+   whose obligation the answer concerns. Read its children before selecting it.
+   If the answer concerns a different child, use that child for the discussion and
+   new records. The session anchor is a map entry point, not the default parent.
+2. Select only the records that the answer implies:
+   - An answer that supplies a fact needs only a Question answer.
+   - A broad obligation needs a Requirement.
+   - A precise atomic behavioural obligation needs a Rule under its Requirement.
+   - A choice among alternatives needs a Resolution. State the unresolved problem
+     in context, the choice in position, and the comparative reasons in rationale.
+     Put source quotations in citations or inputs, not in place of those reasons.
+3. Check each additional record for added meaning. Do not create a Requirement or
+   Rule solely to repeat a Resolution position. Identical text requires a meaning
+   check, not a mandatory rewrite. A precise obligation can correctly appear in a
+   position and a Rule when the Rule adds an independently needed obligation.
+4. Read review acceptance for the current content revision separately from lifecycle.
+   A chat answer, a lifecycle value, and `made_by` do not prove that acceptance.
+   Omit guessed authorship. Keep proposals proposed until the graph records review.
+   An active Rule with a proposed Resolution can have independent grounding in a
+   Requirement or Source; that pair of lifecycle values alone is not a defect.
+5. Write descriptions and answer the Question as "The tree is the spec" says.
+
+Record the dialogue on the selected Requirement:
 
 ```sh
-provenance thread post --scope <scope> \
-  --parent-type requirement --parent-id <anchor_requirement_id> \
+provenance requirements <relevant_requirement_id> discussions create --scope <scope> \
   --role user \
-  "Q <question_id>: <human answer>" \
-  --format json
-
-provenance resolutions create --scope <scope> \
-  --id res_<stable_slug> \
-  --title "<decision title>" \
-  --requirement-id <anchor_requirement_id> \
-  --position "<accepted position>" \
-  --rationale "<why, including rejected alternatives>" \
-  --status proposed \
-  --made-by "<human or actor>" \
-  --format json
-
-provenance requirements create --scope <scope> \
-  --id req_<spawned_slug> \
-  --statement "<spawned requirement>" \
-  --status discovery \
-  --format json
-
-provenance requirements spawned-by set --scope <scope> \
-  --requirement-id req_<spawned_slug> \
-  --target-id res_<stable_slug> \
-  --format json
-
-provenance questions answer --scope <scope> \
-  --id <question_id> \
-  --answer "<short answer gist; canonical decision is res_<stable_slug>>" \
-  --resolution-id res_<stable_slug> \
+  --body "Q <question_id>: <human answer>" \
   --format json
 ```
 
-Only create the artifacts the answer actually implies. If it only answers the question,
-`questions answer` is enough. If it implies a requirement, boundary, contradiction, or
-source gap, land that too before continuing. If it implies a Rule, land the Rule and any
-known bindings—next.
+For a choice among alternatives only:
+
+```sh
+provenance resolutions create --scope <scope> \
+  --id res_<stable_slug> \
+  --title "<decision title>" \
+  --requirement-id <relevant_requirement_id> \
+  --context "<problem that remains without this choice>" \
+  --position "<selected alternative>" \
+  --rationale "<why this alternative meets the need better than the others>" \
+  --status proposed \
+  --format json
+```
+
+Create a child Requirement only for a separate broad obligation. Its `refines`
+relationship identifies the parent. Add `spawned_by` only if a Resolution produced
+that obligation; it does not replace `refines`.
+
+```sh
+provenance requirements create --scope <scope> \
+  --id req_<child_slug> \
+  --statement "<additional broad obligation>" \
+  --description "<states, what changes them, what the person sees, one example>" \
+  --status discovery \
+  --format json
+
+provenance requirements req_<child_slug> update --scope <scope> \
+  --relationships-json '{"refines":["<relevant_requirement_id>"],"spawned_by":"res_<stable_slug>"}' \
+  --if-match <etag> \
+  --format json
+```
+
+For a direct Requirement, omit `spawned_by`. For a direct Rule, use the Rule
+commands below without `--resolution-id`. Answer the Question with references to
+records actually created. Add `--resolution-id` only for an approved Resolution (see
+"Landing a Rule and its bindings"):
+
+```sh
+provenance questions <question_id> answer --scope <scope> \
+  --answer "<answer with references to the resulting records, if any>" \
+  --format json
+```
+
+Examples:
+
+- Direct Requirement: "The owner can set the mascot appearance." Add a child
+  Requirement under appearance. No alternatives were compared, so no Resolution
+  is needed.
+- Direct Rule: "A share link expires after seven days." Add the atomic Rule under
+  link expiry. Do not invent a Resolution producer.
+- Choice with no spawned record: select a robot instead of an animal because the
+  robot can show a repair state without suggesting injury. Record the unresolved
+  visual problem, the choice, and that reason in one Resolution under appearance.
+- Choice with a separate obligation: select configurable expiry instead of a fixed
+  duration because owners need different access periods. A separate Requirement
+  says owners receive advance notice of link expiry. It refines link access and is spawned by the
+  Resolution. Do not add another Requirement that just says configurable expiry
+  was selected.
+
+Land any Boundary, contradiction, or source gap that the answer also implies.
 
 ##### Landing a Rule and its bindings
 
@@ -292,12 +379,18 @@ change the artifact's kind.
    satisfy the command misrecords how the obligation arose. If the CLI rejects a Rule that
    cites only a Requirement, the installed binary is out of date; see "Check your CLI".
 
+   Only an approved Resolution can produce an active Rule or answer a Question. While the
+   Resolution is proposed, keep the Rule in review with `--status review`, and answer the
+   Question without a citation of the Resolution. Name the Resolution in the answer text.
+
    ```sh
    provenance rules create --scope <scope> \
      --id rule_<stable_slug> \
-     --requirement-id <anchor_requirement_id> \
+     --requirement-id <relevant_requirement_id> \
      --statement "<atomic behavioural obligation, in one clause>" \
+     --description "<trigger, result, what the person sees, one example>" \
      --severity high \
+     --status review \
      --format json
    ```
 
@@ -335,7 +428,7 @@ Neither setting is a reason to write a test that asserts nothing.
 Use the `provenance-fork-tournament` skill. This is two-phase work:
 
 1. Phase 1 spawns stance-based agents and lands proposals/contributions/synthesis.
-2. Mark the question `blocked-on-human` and stop the session.
+2. Mark the Question `blocked_on_human` and stop the session.
 3. Phase 2 presents proposals, extracts reactions, lands the resolution, disposes of
    proposals with dispositions, spawns the requirements and Rules the direction actually
    implies, then continues or hands off. A tournament often settles direction above the
@@ -355,7 +448,7 @@ question, answer that actual question too rather than burying the fact in a summ
 Use adversarial refuters for claims that are expensive if wrong. Land refuter output as
 contributions and synthesis: consensus, contested claims, minority objections, evidence
 gaps, and required human decisions stay separate. If the result needs human disposal, mark
-the question `blocked-on-human` and stop.
+the Question `blocked_on_human` and stop.
 
 #### `task`
 
@@ -373,14 +466,15 @@ After each landed answer, revisit fog on the anchor requirement.
 - Do not pre-slice fog into speculative question nodes.
 
 ```sh
-provenance requirements fog set --scope <scope> \
-  --requirement-id <anchor_requirement_id> \
-  --text "<remaining fog only>" \
+provenance requirements <anchor_requirement_id> update --scope <scope> \
+  --fog "<remaining fog only>" \
+  --if-match <etag> \
   --format json
 
 # If no fog remains:
-provenance requirements fog clear --scope <scope> \
-  --requirement-id <anchor_requirement_id> \
+provenance requirements <anchor_requirement_id> update --scope <scope> \
+  --fog-json null \
+  --if-match <etag> \
   --format json
 
 provenance questions create --scope <scope> \
@@ -403,28 +497,41 @@ Stop at the first condition:
 
 Before final response:
 
-1. Clear claims you finished. These commands are alternatives, not a sequence: close a
+1. Read the tree as a builder would (see "The tree is the spec") and fix what does not
+   read as a spec.
+2. Clear claims you finished. These commands are alternatives, not a sequence: close a
    finished topic **or** release it if it remains open; answered questions clear their
    claims automatically, while unanswered questions should be released.
 
    ```sh
-   provenance topics close --scope <scope> --id <topic_id> --format json
-   provenance topics release --scope <scope> --id <topic_id> --format json
-   provenance questions release --scope <scope> --id <question_id> --format json
+   provenance topics <topic_id> close --scope <scope> --format json
+   provenance topics <topic_id> release --actor <actor> --scope <scope> --format json
+   provenance questions <question_id> release --actor <actor> --scope <scope> --format json
    ```
 
-2. Post a handoff on the requirement thread:
+   To archive a Question or Topic, use the commit that contains the
+   change. Archiving a Topic also archives all Questions in that Topic.
+   Discussions stay readable as history. Read the record first and pass its
+   current ETag to the update.
 
    ```sh
-   provenance thread post --scope <scope> \
-     --parent-type requirement --parent-id <anchor_requirement_id> \
+   printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | \
+     provenance questions <question_id> update --scope <scope> --if-match <current_etag> --stdin --format json
+   printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | \
+     provenance topics <topic_id> update --scope <scope> --if-match <current_etag> --stdin --format json
+   ```
+
+3. Post a handoff on the requirement thread:
+
+   ```sh
+   provenance requirements <anchor_requirement_id> discussions create --scope <scope> \
      --role assistant \
-     "HANDOFF: landed=<named artifacts>; remaining fog=<...>; frontier=<copy-paste commands>" \
+     --body "HANDOFF: landed=<named artifacts>; remaining fog=<...>; frontier=<copy-paste commands>" \
      --format json
    ```
 
-3. Tell the user what landed, what remains, and the next commands. Use artifact names and
-   ids together, never bare ids.
+4. Tell the user what landed, what remains, and the next commands, and paste the anchor's
+   review link again. Use artifact names and ids together, never bare ids.
 
 ## Auditing a Rule
 
@@ -483,11 +590,15 @@ against it. Do not make it `active` to clear a report.
 Before moving to the next question, verify the current answer has been handled:
 
 - thread message records the relevant dialogue;
+- each new Requirement and Rule has a description that states behaviour in the present
+  tense, with no history and no list of open items;
+- a Question marked answered is covered completely by its answer;
 - resolution records the accepted decision, if there is one;
 - each precise atomic behavioural obligation is landed as a Rule; any known primary
   implementation and evidence carry `#[rule]` and `#[verifies]` bindings, and
   `coverage scan --validate-rules` reports any remaining absence honestly;
-- spawned requirements are created and tied back with `spawned_by` or `refines`;
+- child Requirements add meaning and use `refines` for their parent; `spawned_by`
+  names only a producing Resolution;
 - boundaries/out-of-scope rejections are explicit;
 - source references and evidence are attached where they exist;
 - proposal definitions remain immutable `proposed` records; assertion lineage uses assertion

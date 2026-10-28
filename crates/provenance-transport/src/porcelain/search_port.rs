@@ -33,7 +33,7 @@ impl SearchPort for HostSearchPort {
                 }
             }
             self.host
-                .invoke_scoped_typed::<catalog::Search>(request)
+                .invoke::<catalog::Search>(request, crate::Invocation::native())
                 .await
                 .map_err(|error| operation_error(&error))
         })

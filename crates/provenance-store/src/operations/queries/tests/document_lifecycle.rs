@@ -18,7 +18,7 @@ fn add_root_requirement(store: &StateStore, scope: &ScopeId, id: &str) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -37,7 +37,7 @@ fn add_requirement(store: &StateStore, scope: &ScopeId, id: &str, parent: &str) 
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: Some(sid(parent)),
+            refines: vec![sid(parent)],
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -177,9 +177,7 @@ async fn page(
         "cursor": cursor,
         "limit": limit,
     });
-    if exclude_terminal {
-        query["exclude_terminal"] = json!(true);
-    }
+    query["exclude_terminal"] = json!(exclude_terminal);
     let result = queries::read_document(
         Some(root.to_owned()),
         &ScopeId::new("default")?,
@@ -212,7 +210,8 @@ async fn all_ids(root: &camino::Utf8Path, exclude_terminal: bool) -> Vec<String>
 }
 
 #[tokio::test]
-async fn lifecycle_filter_hides_dead_records_at_root_and_nested_levels() {
+/// Implementation aid: this checks the store's explicit terminal-record filter at both depths.
+async fn lifecycle_filter_hides_terminal_records_at_root_and_nested_levels() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
     let root = root_of(&dir);
@@ -223,7 +222,6 @@ async fn lifecycle_filter_hides_dead_records_at_root_and_nested_levels() {
         "res_abandoned_nested",
         "rule_b_archived_root",
         "rule_c_archived_nested",
-        "res_superseded",
     ] {
         assert!(unfiltered.iter().any(|found| found == id), "missing {id}");
     }
@@ -237,10 +235,27 @@ async fn lifecycle_filter_hides_dead_records_at_root_and_nested_levels() {
     ] {
         assert!(!filtered.iter().any(|found| found == id), "found {id}");
     }
-    assert!(filtered.iter().any(|id| id == "res_superseded"));
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_review_keeps_superseded_records_visible", examples)]
+async fn lifecycle_filter_keeps_superseded_records_visible() {
+    let (dir, store, scope) = seeded_store();
+    seed_lifecycle_records(&store, &scope);
+    let root = root_of(&dir);
+
+    assert!(all_ids(&root, false)
+        .await
+        .iter()
+        .any(|id| id == "res_superseded"));
+    assert!(all_ids(&root, true)
+        .await
+        .iter()
+        .any(|id| id == "res_superseded"));
+}
+
+#[tokio::test]
+#[provenance_macros::verifies("rule_cursor_binds_query_identity", examples)]
 async fn lifecycle_filter_pages_across_hidden_records_and_binds_the_cursor() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
@@ -303,6 +318,7 @@ async fn lifecycle_filter_pages_across_hidden_records_and_binds_the_cursor() {
 }
 
 #[tokio::test]
+/// Implementation aid: this checks filtered traversal when a hidden parent has visible children.
 async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children() {
     use crate::cache::tests::fixtures::append_record;
 
@@ -321,7 +337,7 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
         "rule_visible_reference",
         &["req_overtime"],
         &["res_reference_only"],
-        RuleStatus::Active,
+        RuleStatus::Draft,
     );
     add_resolution(
         &store,
@@ -336,7 +352,7 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
         "rule_visible_hidden_parent",
         &["req_outside"],
         &["res_hidden_parent"],
-        RuleStatus::Active,
+        RuleStatus::Draft,
     );
     append_record(
         &crate::shards::threads_path(&store.layout, &scope),
@@ -390,6 +406,7 @@ async fn lifecycle_filter_applies_to_each_record_without_hiding_visible_children
 }
 
 #[tokio::test]
+/// Implementation aid: this checks the internal document work-budget accounting.
 async fn terminal_decisions_do_not_consume_the_document_work_budget() {
     use crate::cache::tests::fixtures::append_record;
 

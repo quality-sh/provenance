@@ -103,8 +103,8 @@ fn incomplete_evidence_withholds_absence_facts() {
         RuleEvidenceCompleteness::Incomplete,
     );
 
-    assert!(facts.unimplemented.is_empty());
-    assert!(facts.unverified.is_empty());
+    assert_eq!(facts.unimplemented, [] as [std::string::String; 0]);
+    assert_eq!(facts.unverified, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -133,7 +133,10 @@ fn complete_evidence_reports_each_active_rule_absence() {
     );
 
     assert_eq!(implementation_only_absence.unimplemented, ["rule_claims"]);
-    assert!(implementation_only_absence.unverified.is_empty());
+    assert_eq!(
+        implementation_only_absence.unverified,
+        [] as [std::string::String; 0]
+    );
     assert_eq!(implementation_only_absence.governed_finding_count(), 0);
     assert!(!binding_findings_fail(
         BindingFindingSeverity::Error,
@@ -158,6 +161,7 @@ fn portable_comment_implementation_satisfies_implementation() {
 }
 
 #[test]
+#[verifies("rule_no_stored_verified_status", examples)]
 fn portable_comment_verification_satisfies_only_verification() {
     let scan = scanned_comment(
         "// @provenance rule: rule_claims\n\
@@ -198,6 +202,7 @@ fn inactive_rule_with_portable_comment_marker_reports_current_binding() {
 }
 
 #[test]
+#[verifies("rule_no_stored_verified_status", examples)]
 fn scanned_and_typed_bindings_form_one_evidence_union() {
     let scanned = rule("rule_scanned", RuleStatus::Active);
     let typed = rule("rule_typed", RuleStatus::Active);
@@ -229,10 +234,11 @@ fn verification_does_not_count_as_an_implementation() {
     );
 
     assert_eq!(facts.unimplemented, ["rule_claims"]);
-    assert!(facts.unverified.is_empty());
+    assert_eq!(facts.unverified, [] as [std::string::String; 0]);
 }
 
 #[test]
+#[verifies("rule_no_stored_verified_status", examples)]
 fn non_active_rules_do_not_produce_absence_facts() {
     let facts = derive_rule_evidence_facts(
         &[
@@ -245,8 +251,8 @@ fn non_active_rules_do_not_produce_absence_facts() {
         RuleEvidenceCompleteness::Complete,
     );
 
-    assert!(facts.unimplemented.is_empty());
-    assert!(facts.unverified.is_empty());
+    assert_eq!(facts.unimplemented, [] as [std::string::String; 0]);
+    assert_eq!(facts.unverified, [] as [std::string::String; 0]);
 }
 
 #[test]
