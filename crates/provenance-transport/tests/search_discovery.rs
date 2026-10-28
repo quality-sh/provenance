@@ -6,8 +6,9 @@ mod support {
 }
 
 use axum::{body::Body, http::Request};
+use provenance_core::ScopeId;
 use provenance_macros::verifies;
-use serde_json::Value;
+use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, host};
 use tower::ServiceExt as _;
@@ -69,13 +70,34 @@ async fn public_collection_search_keeps_authentication() {
     assert_eq!(failure["error"]["kind"], "unauthenticated");
 }
 
+fn object_keys(value: &Value) -> Vec<&str> {
+    let mut keys = value
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    keys.sort_unstable();
+    keys
+}
+
 #[tokio::test]
-async fn resolve_symbol_returns_matched_sites_over_http() {
+#[verifies("rule_resolve_symbol_marks_symbol_matches", examples)]
+#[verifies("rule_resolve_symbol_ranks_symbol_matches_first", examples)]
+#[verifies("rule_resolve_symbol_cursor_continues_the_page", examples)]
+async fn resolve_symbol_pages_rank_symbol_matches_first_over_http() {
     let repo = Repository::new("The shared graph is readable.");
+    repo.seed(
+        ScopeId::new("default").unwrap(),
+        "The second graph is readable.",
+        "_b",
+    );
     std::fs::write(
         repo.dir.path().join("code.rs"),
         concat!(
             "#[rule(\"rule_shared\")]\n",
+            "fn audit() {}\n",
+            "#[rule(\"rule_shared_b\")]\n",
             "fn pay() {}\n",
             "#[verifies(\"rule_shared\", examples)]\n",
             "fn checks_pay() {}\n",
@@ -84,15 +106,96 @@ async fn resolve_symbol_returns_matched_sites_over_http() {
     .unwrap();
     let host = host(&repo, false);
 
-    let path = "/rules?query=resolve-symbol&file=code.rs&symbol=pay";
-    let (status, body) = call(&host, "GET", path, None).await;
+    let path = "/rules?query=resolve-symbol&file=code.rs&symbol=pay&limit=1";
+    let (status, first) = call(&host, "GET", path, None).await;
+    assert_eq!(status, 200, "{first}");
+    assert_eq!(
+        object_keys(&first["data"]),
+        ["file", "items", "matches", "symbol"]
+    );
+    assert_eq!(first["data"]["items"].as_array().unwrap().len(), 1);
+    assert_eq!(first["data"]["items"][0]["id"], "rule_shared_b");
+    assert_eq!(
+        first["data"]["matches"],
+        json!([{
+            "rule_id": "rule_shared_b",
+            "role": "implementation",
+            "line": 3,
+            "item_name": "pay",
+            "match_kind": "symbol"
+        }])
+    );
+    assert_eq!(first["meta"]["limit"], 1);
+    assert_eq!(first["meta"]["has_more"], true);
+    let cursor = first["meta"]["next_cursor"].as_str().unwrap();
+
+    let (status, second) = call(&host, "GET", &format!("{path}&cursor={cursor}"), None).await;
+    assert_eq!(status, 200, "{second}");
+    assert_eq!(
+        object_keys(&second["data"]),
+        ["file", "items", "matches", "symbol"]
+    );
+    assert_eq!(second["data"]["items"].as_array().unwrap().len(), 1);
+    assert_eq!(second["data"]["items"][0]["id"], "rule_shared");
+    assert_eq!(
+        second["data"]["matches"],
+        json!([
+            {
+                "rule_id": "rule_shared",
+                "role": "implementation",
+                "line": 1,
+                "item_name": "audit",
+                "match_kind": "file"
+            },
+            {
+                "rule_id": "rule_shared",
+                "role": "verification",
+                "line": 5,
+                "item_name": "checks_pay",
+                "verification_method": "examples",
+                "match_kind": "file"
+            }
+        ])
+    );
+    assert_eq!(second["meta"]["has_more"], false);
+    assert!(second["meta"].get("next_cursor").is_none());
+}
+
+/// Implementation aid: this test has no Rule. It checks that the stale
+/// route keeps its commit range and summary in `data` and its page fields
+/// in `meta`.
+#[tokio::test]
+async fn stale_keeps_the_range_and_summary_in_data_over_http() {
+    let repo = Repository::new("The shared graph is readable.");
+    let base = repo.evidence();
+    let host = host(&repo, false);
+
+    let (status, body) = call(
+        &host,
+        "GET",
+        &format!("/rules?query=stale&base={base}"),
+        None,
+    )
+    .await;
 
     assert_eq!(status, 200, "{body}");
-    let matches = body["data"]["matches"].as_array().unwrap();
-    assert!(matches
-        .iter()
-        .any(|site| site["match_kind"] == "symbol" && site["item_name"] == "pay"));
-    assert!(matches
-        .iter()
-        .any(|site| site["match_kind"] == "file" && site["item_name"] == "checks_pay"));
+    assert_eq!(
+        object_keys(&body["data"]),
+        ["base", "files_changed", "head", "items", "summary"]
+    );
+    assert_eq!(body["data"]["base"], base.as_str());
+    let head = body["data"]["head"].as_str().unwrap();
+    assert_eq!(head.len(), 40);
+    assert_ne!(head, base);
+    assert_eq!(body["data"]["files_changed"], 1);
+    let summary = &body["data"]["summary"];
+    assert_eq!(
+        object_keys(summary),
+        ["gone", "moved", "total_sites", "touched", "untouched"]
+    );
+    let sites = body["data"]["items"].as_array().unwrap();
+    assert_eq!(summary["total_sites"], sites.len());
+    assert!(summary["touched"].as_u64().unwrap() >= 1);
+    assert_eq!(body["meta"]["limit"], 50);
+    assert_eq!(body["meta"]["has_more"], false);
 }
