@@ -1,5 +1,5 @@
 import { mountReview } from 'review-renderer';
-import { bootstrapReviewPage, type BrowserElement } from './bootstrap.ts';
+import { bootstrapReviewPage, EVENT_PROTOCOL, type BrowserElement } from './bootstrap.ts';
 import type { EventSocket } from './events.ts';
 
 bootstrapReviewPage({
@@ -8,8 +8,9 @@ bootstrapReviewPage({
   history,
   fetch,
   mount: (root, options) => mountReview(root as unknown as Element, options),
-  openEvents: () => {
-    const socket = new WebSocket(`ws://${location.host}/review-events`);
+  storage: localStorage,
+  openEvents: session => {
+    const socket = new WebSocket(`ws://${location.host}/review-events`, [EVENT_PROTOCOL, session]);
     const events: EventSocket = {
       onmessage: null, onclose: null,
       send: text => socket.send(text),

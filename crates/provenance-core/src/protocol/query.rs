@@ -189,6 +189,8 @@ pub struct ResolveSymbolQuery {
     pub symbol: Option<String>,
     #[serde(default)]
     pub line: Option<usize>,
+    #[serde(default)]
+    pub cursor: Option<String>,
     #[serde(default = "default_limit")]
     #[cfg_attr(feature = "schema", schemars(range(min = 1, max = super::QUERY_MAX_LIMIT)))]
     pub limit: usize,
