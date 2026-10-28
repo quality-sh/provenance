@@ -31,7 +31,7 @@ impl StateStore {
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
-        mutate: impl FnOnce(&StateStore, &mut Vec<T>) -> anyhow::Result<T>,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         self.with_native_record_batch(|batch| {

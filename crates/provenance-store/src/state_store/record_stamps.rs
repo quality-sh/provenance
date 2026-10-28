@@ -211,7 +211,7 @@ impl StateStore {
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
-        mutate: impl FnOnce(&StateStore, &mut Vec<T>) -> anyhow::Result<T>,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         if T::KIND != NodeType::Requirement && !crate::review::guard::writer_allows_path(path) {
             return self.save_native_record(path, expected_etag, mutate);

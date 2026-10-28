@@ -409,7 +409,7 @@ fn read_only_record_kinds_answer_while_another_handle_holds_the_lock() {
     let (_directory, live, _copy) = record_kind_repositories();
     let _held = guard::LockedPublicationFile::acquire(&live.publication_lock_path()).unwrap();
     let (sender, receiver) = std::sync::mpsc::channel();
-    let reader = live.clone();
+    let reader = live;
     std::thread::spawn(move || {
         let scope = provenance_core::ScopeId::new("default").unwrap();
         sender
@@ -459,7 +459,6 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
     let reader = std::rc::Rc::new(std::cell::RefCell::new(None));
     crate::test_probes::arm("state_after_backup_rename", {
         let reader = reader.clone();
-        let root = root.clone();
         move || {
             let root = root.clone();
             reader.replace(Some(std::thread::spawn(move || {
@@ -468,7 +467,7 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
             Ok(())
         }
     });
-    let mut published = manifest.clone();
+    let mut published = manifest;
     published.disposition_actor_ids = vec!["actor_after".to_owned()];
     with_staged_state(&layout, false, |staged| {
         std::fs::write(staged.manifest_path(), serde_json::to_vec(&published)?)?;
