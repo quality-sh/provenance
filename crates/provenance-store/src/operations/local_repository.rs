@@ -9,6 +9,7 @@ use crate::{
         files::read_repository_file,
         read_policy::ReadPolicy,
     },
+    publication::read_published_state,
     settings::Settings,
 };
 use provenance_core::{
@@ -92,12 +93,14 @@ impl LocalRepository {
     }
 
     fn manifest(&self) -> Result<Manifest, OperationFailure> {
-        let bytes = read_repository_file(
-            Path::new(&self.root),
-            Path::new(".provenance/state/manifest.json"),
-        )
-        .map_err(|_| OperationFailure::Internal)?;
-        serde_json::from_slice(&bytes).map_err(|_| OperationFailure::Internal)
+        read_published_state(&self.layout, || {
+            let bytes = read_repository_file(
+                Path::new(&self.root),
+                Path::new(".provenance/state/manifest.json"),
+            )?;
+            Ok(serde_json::from_slice(&bytes)?)
+        })
+        .map_err(|_| OperationFailure::Internal)
     }
 }
 

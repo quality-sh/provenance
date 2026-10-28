@@ -1,6 +1,7 @@
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_macros::rule;
 use serde::{de::DeserializeOwned, Serialize};
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -76,6 +77,19 @@ pub(crate) fn with_repository_publication_checked<R>(
     prepare_transaction_dirs(layout)?;
     source_edit_recovery::recover_pending_source_edit(layout)?;
     recover_pending_publication(layout).and_then(|()| operation())
+}
+
+/// Runs a read without the publication lock, and runs it again under the lock if it fails.
+///
+/// A publication moves the live state directory to a backup before it installs the staged
+/// directory, so a read in that gap finds no state. The second read starts after the
+/// publication is complete.
+#[rule("rule_preparation_reads_published_state")]
+pub fn read_published_state<R>(
+    layout: &ProvenanceLayout,
+    read: impl Fn() -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    read().or_else(|_| with_repository_publication(layout, read))
 }
 
 // Resolve the existing ancestor so planned-state validation creates no paths.

@@ -73,6 +73,14 @@ impl Control {
     }
 }
 
+/// A test that fails before `open` still releases the held work. Otherwise the runtime
+/// waits at drop for the blocking threads, and the test does not stop.
+impl Drop for Control {
+    fn drop(&mut self) {
+        self.open();
+    }
+}
+
 impl ContextResolver for Gate {
     fn authorize(
         &self,
