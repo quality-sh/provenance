@@ -106,7 +106,7 @@ pub(super) async fn resolve(
             .then(left.match_kind.cmp(&right.match_kind))
     });
     sites.dedup();
-    let (rules, matches, has_more) = fit_page(rules, sites, has_more)?;
+    let (rules, matches, has_more) = fit_page(rules, &sites, has_more)?;
     Ok(ResolveSymbolResult {
         file: request.file,
         symbol: request.symbol,
@@ -122,20 +122,20 @@ pub(super) async fn resolve(
 /// budget. An answer that leaves out a Rule or a site sets `has_more`.
 fn fit_page(
     rules: Vec<GraphNode>,
-    matches: Vec<ResolveSymbolMatch>,
+    matches: &[ResolveSymbolMatch],
     has_more: bool,
 ) -> anyhow::Result<(Vec<GraphNode>, Vec<ResolveSymbolMatch>, bool)> {
     let mut bytes = 0;
     let mut kept_rules = Vec::new();
     let mut kept_matches = Vec::new();
     for rule in rules {
-        let size = serde_json::to_vec(&rule)?.len();
+        let size = serde_json::to_vec(&rule)?.len() + 1;
         if bytes + size > PAGE_BYTES {
             return Ok((kept_rules, kept_matches, true));
         }
         bytes += size;
         for site in matches.iter().filter(|site| site.rule_id == *rule.id()) {
-            let size = serde_json::to_vec(site)?.len();
+            let size = serde_json::to_vec(site)?.len() + 1;
             if bytes + size > PAGE_BYTES {
                 kept_rules.push(rule);
                 return Ok((kept_rules, kept_matches, true));
