@@ -1,5 +1,6 @@
 use super::ReadError;
-use crate::cache::{CompletionStage, CompletionTimedOut};
+use crate::cache::completion::Stage;
+use crate::cache::CompletionTimedOut;
 use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::{MovedUnit as NativeMovedUnit, ReadRefusal};
 use crate::stale::git::GitRefusal;
@@ -135,7 +136,7 @@ fn a_timed_out_cache_close_names_its_stage_and_drops_the_lock_path() {
     let error = ReadError(
         anyhow::Error::new(CompletionTimedOut {
             deadline: Duration::from_secs(10),
-            stage: CompletionStage::CloseLock(lock.into()),
+            stage: Stage::CloseLock(lock.into()),
         })
         .context("close the read cache"),
     );
@@ -155,7 +156,7 @@ fn a_timed_out_cache_close_names_its_stage_and_drops_the_lock_path() {
 
     let teardown = read_error(CompletionTimedOut {
         deadline: Duration::from_secs(10),
-        stage: CompletionStage::Teardown { connections: 2 },
+        stage: Stage::Teardown { connections: 2 },
     });
     assert_eq!(
         serde_json::to_value(&teardown).unwrap(),

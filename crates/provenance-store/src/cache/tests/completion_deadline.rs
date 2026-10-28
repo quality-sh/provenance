@@ -3,7 +3,8 @@
 //! keeps the close lock and goes on.
 use super::close_cancellation::pause_physical_close;
 use super::wal_behavior::wal_files;
-use crate::cache::{open_cache, CacheConnection, CompletionStage, CompletionTimedOut};
+use crate::cache::completion::Stage;
+use crate::cache::{open_cache, CacheConnection, CompletionTimedOut};
 use crate::layout::ProvenanceLayout;
 use fs2::FileExt;
 use provenance_macros::verifies;
@@ -85,7 +86,7 @@ async fn a_paused_teardown_fails_the_close_with_the_teardown_stage() {
         .expect("the close fails with a typed timeout");
     assert_eq!(timed_out.deadline, DEADLINE);
     assert!(
-        matches!(timed_out.stage, CompletionStage::Teardown { .. }),
+        matches!(timed_out.stage, Stage::Teardown { .. }),
         "{:?}",
         timed_out.stage
     );
@@ -119,10 +120,7 @@ async fn a_held_close_lock_fails_the_close_with_the_close_lock_stage() {
     let timed_out = error
         .downcast_ref::<CompletionTimedOut>()
         .expect("the close fails with a typed timeout");
-    assert_eq!(
-        timed_out.stage,
-        CompletionStage::CloseLock(path.into_std_path_buf())
-    );
+    assert_eq!(timed_out.stage, Stage::CloseLock(path.into_std_path_buf()));
 
     FileExt::unlock(&lock).unwrap();
     late_completion_finishes(&layout, &lock).await;
