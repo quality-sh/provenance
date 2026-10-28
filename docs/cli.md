@@ -10,6 +10,21 @@ Initialize a repository before you use resource commands:
 provenance init --path . --scope default --path-prefix .
 ```
 
+On a terminal, `init` asks for the human reviewer ID. The prompt uses the Git
+email address or name as its default when one is available. In a
+non-interactive run, `init` uses that default automatically. It converts the
+default to lowercase and replaces other character groups with underscores.
+
+To replace the reviewer list after initialization, run:
+
+```sh
+provenance init --path . --disposition-actor-id reviewer-id
+```
+
+Repeat `--disposition-actor-id` to permit more than one reviewer. Use
+`--clear-disposition-actors` to remove all reviewers. If the reviewer list is
+empty, `provenance review` permits reads but not review decisions.
+
 ## Resource commands
 
 The CLI derives its resource dialect from the operation catalog. The same
@@ -26,7 +41,7 @@ The collection commands are:
 provenance <collection> list
 provenance <collection> create [scalar flags | --stdin]
 provenance <collection> search --text <text> [--limit <count>] [--cursor <cursor>]
-provenance rules stale [--base <commit>] [--head <commit>]
+provenance rules stale --base <commit> [--head <commit>]
 provenance rules resolve-symbol --file <path> [--symbol <name>] [--line <line>]
 ```
 
@@ -40,6 +55,10 @@ Rule creation defaults to `draft` in the CLI, catalog operations, and typed
 specifications. Pass `--status active` only when a person ratifies the Rule.
 Coverage reports do not produce active-Rule absence findings for a draft Rule.
 
+Collection lists and root search hide archived and other terminal records by
+default. Use `--exclude-terminal false` on a collection list or
+`--include-terminal` on root search to include them.
+
 A member uses its ID in the command address:
 
 ```text
@@ -50,6 +69,22 @@ provenance <collection> <id> neighbors [--direction in|out|both] [--limit <count
 provenance <collection> <id> impact
 ```
 
+Read the current review decision, the rejection comment, and bounded Discussion
+messages without the collection name:
+
+```sh
+provenance <record-id> get --view review
+```
+
+The result shows `review.edit.etag` and the exact `--if-match` value for the next
+guarded update. A guarded update after a rejection opens the replacement
+submission. Do not submit or withdraw manually.
+
+For one bounded view across record kinds, use the target-first read:
+
+```text
+provenance <id> get --view children --depth <count>
+```
 Examples:
 
 ```sh
@@ -59,6 +94,7 @@ printf '%s' '{"id":"source_policy","name":"Policy","source_type":"document","sup
 provenance rules search --text "time bounded" --limit 20
 provenance rules rule_shared trace --direction out --max-depth 2
 provenance topics topic_open claim --actor agent-a
+provenance topics topic_open release --actor agent-a
 provenance questions question_open answer --answer "Use the guarded path."
 ```
 
@@ -68,12 +104,12 @@ Parent-owned resources keep their parent address:
 provenance requirements req_review document get --limit 50
 provenance requirements req_review history get
 provenance requirements req_review history entry_1 evidence before get --field statement
-provenance requirements req_review submit --idempotency-key request_1 --stdin
-provenance requirements req_review submissions proposal_review decide --idempotency-key request_2 --stdin
+provenance requirements req_review submit --stdin
+provenance requirements req_review submissions proposal_review decide --stdin
 provenance sources source_policy discussions get
-provenance sources source_policy discussions create --idempotency-key request_3 --stdin
+provenance sources source_policy discussions create --stdin
 provenance sources source_policy discussions discussion_1 messages create \
-  --idempotency-key request_4 --if-match '"1"' --stdin
+  --if-match '"1"' --stdin
 provenance proposals proposal_1 assertions create --stdin
 provenance verification-runs begin-verification --stdin
 provenance verification-runs run_1 complete-verification --status passed
@@ -88,11 +124,37 @@ clears the field where the schema allows null, while a plain flag on a
 string-typed field always supplies text. Arrays and objects can also come from one JSON object on
 standard input with `--stdin`, which fills only the body fields that no flag
 assigned and refuses a field that a flag already set. Path identity comes from
-the command address. Query parameters and the `Idempotency-Key` and
-`If-Match` controls use the flags that the catalog declares.
+the command address. Query parameters and `If-Match` controls use the flags
+that the catalog declares. Every review record update takes its guard as
+`--if-match`, which must contain `data.edit.etag` from the latest member read,
+unchanged. Requirement, Topic, and Question updates require it. Source, Rule,
+Resolution, Domain, and Boundary updates accept it, and write without a check
+when it is absent. No update accepts the guard as an `--expected-etag` flag or
+as an `expected_etag` body field.
+
+`provenance api` shows at most 50 routes by default. Use `--filter <text>` to
+select routes or `--limit <number>` to increase the bound. Use `--format json`
+only when you need all request and response schemas.
 
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
 records in `data.items`.
+
+With `--format json`, a catalog route, `provenance api`, a record read, search,
+or action, and a Discussion command print a refusal from the operation as one
+`{error,meta}` object. The object is the only line on standard error, it has no
+prefix, and the command exits with code 1. When the CLI knows the next command
+to run, `error.hint` names it.
+
+These errors stay text after `Error: ` and exit with code 1, also with
+`--format json`:
+
+- A graph that is not initialized, and a command that runs in a directory
+  inside an initialized repository.
+- File and I/O errors.
+- Every error from a builtin command, such as `init`, `check`, `coverage scan`,
+  `gaps`, `health`, `orphans`, and `export`.
+
+A usage error prints clap's text and exits with code 2.
 
 ## Product commands
 
@@ -119,6 +181,39 @@ return a nonzero exit status.
 The review host binds one repository, one scope, and one credential to each
 connection. See [review-host.md](review-host.md). Import and export operate on a
 complete scope. They remain separate from resource writes.
+
+## Repairing a duplicate Message ID
+
+New Message IDs use `msg_` followed by a random UUID. An existing store can
+contain duplicate IDs from writes on separate branches. A Message read refuses
+that store and names the duplicate ID and all its shard lines:
+
+```text
+Message ID msg_000021 appears more than once: <shard>:<line>, <shard>:<line>
+```
+
+To repair the store by hand:
+
+1. Stop writes to the repository. Make a backup of `.provenance/state`.
+2. Read each named row. Use its body and Thread to identify the Discussion that
+   owns it. Two Discussions can share a Thread. Do not use the Thread alone to
+   select the owner, and do not delete either Message.
+3. Choose a fresh `msg_<uuid>` ID for one duplicate row. Replace that row's `id`
+   in the named Message shard. Keep its other fields, including `created_at`.
+4. In the same scope's `threads/discussions.jsonl`, replace the old ID in the
+   owning Discussion's `message_ids`. If this is its root Message, also replace
+   `root_message_id`. Update any `outcomes[].message_id` or graph-record
+   `origin_message` reference that belongs to the renamed Message. Keep the
+   references to the other duplicate row unchanged. If ownership is unclear,
+   use the branch history to identify it before you change a reference.
+5. Review the diff. Run `provenance check --repo <repository>`, then
+   `provenance discussions --repo <repository>` and
+   `provenance discussions <discussion-id> get --repo <repository>` for each
+   affected Discussion. Repeat the repair for any other duplicate ID that the
+   reader reports. Commit the repaired shards when the checks pass.
+
+There is no automatic repair command. The duplicate rows do not always contain
+enough information to select the owning Discussion.
 
 ## Agent guidance
 

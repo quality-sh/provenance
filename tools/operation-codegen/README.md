@@ -121,6 +121,9 @@ and compiles validators once into a shared cache. Required nullable fields are
 validated before concrete deserialization. Metadata uses the generated
 envelope and checks the supported compatibility tuple explicitly.
 
+Generated union matchers use a separate module with type-only contract imports.
+Importing a matcher does not load runtime schemas or operation validators.
+
 The TypeScript tool adapter moves reference conjunctions into allOf while keeping
 sibling constraints at their evaluation scope. This preserves tagged graph-node
 narrowing that the pinned tool otherwise drops. The authoritative OpenAPI and

@@ -6,16 +6,19 @@ use crate::binding_lexer::{block_comment_state, code_outside_multiline_string, M
 use crate::parser::{annotation_marker_position, parse_annotations, Verification};
 use crate::{Annotation, ParseWarning};
 
-use bindings::parse_binding_line;
+use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
+use consumed::{consume_binding_lines, consume_comment_lines};
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
 mod bindings;
 mod bounded;
 #[cfg(test)]
 mod bounded_tests;
+mod consumed;
 mod ignore;
 mod rust_lines;
+mod script_literals;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub enum Language {
@@ -148,10 +151,27 @@ fn is_ignored_directory(entry: &walkdir::DirEntry) -> bool {
 /// honest string, raw-string, and nested-comment tracking on top, gating both
 /// channels.
 pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> FileScan {
+    if matches!(language, Language::JavaScript | Language::TypeScript) {
+        let (lexical_content, warnings) = script_literals::mask_regex_literals(content);
+        let mut scan = scan_file_contents(file_path, language, content, &lexical_content);
+        scan.warnings.splice(0..0, warnings);
+        scan
+    } else {
+        scan_file_contents(file_path, language, content, content)
+    }
+}
+
+fn scan_file_contents(
+    file_path: &Utf8Path,
+    language: Language,
+    content: &str,
+    lexical_content: &str,
+) -> FileScan {
     let mut annotations = Vec::new();
     let mut bindings = Vec::new();
     let mut warnings = Vec::new();
-    let lines = content.lines().collect::<Vec<_>>();
+    let original_lines = content.lines().collect::<Vec<_>>();
+    let lines = lexical_content.lines().collect::<Vec<_>>();
     let rust_states = rust_line_states(language, &lines);
     let mut idx = 0;
     let mut in_block_comment = false;
@@ -174,7 +194,14 @@ pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> Fil
         }
         let binding = (language != Language::Rust || rust_states[idx] == RustLexicalState::Code)
             .then(|| {
-                parse_binding_line(language, line, &lines[idx + 1..], started_in_block_comment)
+                parse_binding_or_warn(
+                    language,
+                    line,
+                    &lines[idx + 1..],
+                    started_in_block_comment,
+                    idx + 1,
+                    &mut warnings,
+                )
             })
             .flatten();
         if let Some(binding) = binding {
@@ -183,25 +210,17 @@ pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> Fil
             bindings.push(AttributeBinding {
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
-                anchor: EvidenceAnchor::new(item_name.clone(), lines[idx]),
+                anchor: EvidenceAnchor::new(item_name.clone(), original_lines[idx]),
                 item_name,
                 rule_id: binding.rule_id,
                 verification: binding.verification,
             });
-            for consumed in lines.iter().take(end_idx + 1).skip(idx + 1) {
-                let Some(code) = code_outside_multiline_string(
-                    consumed,
-                    multiline_style(language),
-                    &mut multiline_delimiter,
-                    in_block_comment,
-                ) else {
-                    break;
-                };
-                if language != Language::Python {
-                    in_block_comment =
-                        block_comment_state(code, in_block_comment, language == Language::Rust);
-                }
-            }
+            consume_binding_lines(
+                language,
+                &lines[idx + 1..=end_idx],
+                &mut multiline_delimiter,
+                &mut in_block_comment,
+            );
             idx = end_idx + 1;
             continue;
         }
@@ -225,19 +244,11 @@ pub fn scan_file(file_path: &Utf8Path, language: Language, content: &str) -> Fil
                 file_path: file_path.to_path_buf(),
                 line: idx + 1,
                 function_name: function_name.clone(),
-                anchor: EvidenceAnchor::new(function_name.clone(), lines[idx]),
+                anchor: EvidenceAnchor::new(function_name.clone(), original_lines[idx]),
                 annotation,
             });
         }
-        if language != Language::Python {
-            for consumed_line in lines.iter().take(end_idx + 1).skip(idx + 1) {
-                in_block_comment = block_comment_state(
-                    consumed_line,
-                    in_block_comment,
-                    language == Language::Rust,
-                );
-            }
-        }
+        consume_comment_lines(language, &lines[idx + 1..=end_idx], &mut in_block_comment);
         idx = end_idx + 1;
     }
     FileScan {

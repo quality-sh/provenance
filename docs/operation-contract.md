@@ -53,6 +53,22 @@ GET /requirements/{id}/history/{entry_id}/evidence/{side}
 GET /rules/{id}/evidence
 ```
 
+Each `member` or `reference` entry in a Requirement document includes a compact
+`review` object. `review.outcome` is `pending`, `accepted`, `rejected`, or
+`null` when the current revision has no review outcome.
+`review.pending_proposal_id` identifies the current submission only when the
+outcome is `pending`. `review.comment_count` is the number of feedback comments
+attached to the current terminal decision.
+
+The document result also includes `review_totals.pending`,
+`review_totals.accepted`, and `review_totals.rejected`. These totals exclude
+`reference` entries. They count all `member` entries selected by
+`exclude_terminal` across the complete document. Thus, they do not describe
+only the current cursor page. Reference entries keep their individual `review`
+objects. Each page in one successful cursor sequence repeats the same totals. A
+review-state change refuses the continuation, so the caller must restart the
+document read.
+
 Sources, Requirements, Resolutions, Rules, Topics, and Questions own addressed
 Discussions:
 
@@ -116,9 +132,9 @@ The runtime uses the status of the typed failure variant.
 
 HTTP checks the credential, Host, Origin, admission state, and body size before
 it invokes a Store operation. The connection controls repository and scope.
-The transport binds `Idempotency-Key` and `If-Match` only where the Store
-supports receipts or preconditions. A successful supported resource response
-carries `ETag`.
+The transport binds `If-Match` only where the Store supports preconditions.
+Review writes do not bind `Idempotency-Key`; the server creates their request
+identities. A successful supported resource response carries `ETag`.
 
 A write has one terminal client result: success or a typed error. Clients do not
 keep an uncertain-write ledger and do not retry a mutation. The Store resolves

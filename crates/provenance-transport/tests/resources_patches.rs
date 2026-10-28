@@ -1,14 +1,27 @@
 #![cfg(feature = "test-fixture")]
 mod support {
+    pub mod mcp;
     pub mod records;
     pub mod resource_http;
 }
 
 use axum::{body::Body, http::Request};
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, host};
 use tower::ServiceExt as _;
+
+fn source_etag(repo: &Repository) -> String {
+    provenance_store::state_store::StateStore::new(repo.layout.clone())
+        .record_edit_state(
+            &provenance_core::ScopeId::new("default").unwrap(),
+            provenance_core::NodeType::Source,
+            &provenance_core::StableId::new("source_shared").unwrap(),
+        )
+        .unwrap()
+        .etag
+}
 
 #[tokio::test]
 async fn draft_patch_refuses_missing_resources() {
@@ -65,7 +78,6 @@ async fn requirement_patch_binds_receipt_and_precondition_headers() {
         .header("host", "fixture.test")
         .header("authorization", "Bearer fixture-secret")
         .header("content-type", "application/json")
-        .header("idempotency-key", "request_transport_edit")
         .header("if-match", etag)
         .body(Body::from(
             json!({"data":{"actor":"ben","description":"Edited through the resource route."}})
@@ -87,4 +99,80 @@ async fn requirement_patch_binds_receipt_and_precondition_headers() {
     );
     assert!(value["data"]["edit"]["etag"].is_string());
     assert!(value["data"]["decision"].is_object());
+}
+
+#[tokio::test]
+#[verifies("rule_review_update_guard_header", examples)]
+async fn source_patch_refuses_the_second_client_with_a_stale_etag() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let host = host(&repo, true);
+    let etag = source_etag(&repo);
+    let patch = |name: &str| Some(json!({"data":{"name":name}}));
+
+    let (first_status, first) = support::resource_http::call_with_headers(
+        &host,
+        "PATCH",
+        "/sources/source_shared",
+        patch("Source B"),
+        &[("if-match", &etag)],
+    )
+    .await;
+    assert_eq!(first_status, 200, "{first}");
+
+    let (second_status, second) = support::resource_http::call_with_headers(
+        &host,
+        "PATCH",
+        "/sources/source_shared",
+        patch("Source C"),
+        &[("if-match", &etag)],
+    )
+    .await;
+    assert_eq!(second_status, 409, "{second}");
+    assert_eq!(second["error"]["kind"], "record_edit_conflict", "{second}");
+    let (read_status, source) = call(&host, "GET", "/sources/source_shared", None).await;
+    assert_eq!(read_status, 200, "{source}");
+    assert_eq!(source["data"]["name"], "Source B");
+}
+
+#[tokio::test]
+#[verifies("rule_review_update_guard_header", examples)]
+async fn source_patch_refuses_the_guard_in_the_body() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let host = host(&repo, true);
+    let etag = source_etag(&repo);
+
+    let (status, refused) = call(
+        &host,
+        "PATCH",
+        "/sources/source_shared",
+        Some(json!({"data":{"expected_etag":etag,"name":"Source B"}})),
+    )
+    .await;
+    assert_eq!(status, 400, "{refused}");
+    assert_eq!(refused["error"]["kind"], "invalid_input", "{refused}");
+    let (_, source) = call(&host, "GET", "/sources/source_shared", None).await;
+    assert_ne!(source["data"]["name"], "Source B");
+}
+
+#[tokio::test]
+#[verifies("rule_review_update_guard_header", examples)]
+async fn mcp_source_update_takes_the_guard_as_if_match() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let etag = source_etag(&repo);
+    let session = support::mcp::Session::start(host(&repo, true)).await;
+    let update =
+        |name: &str| json!({"target":"source_shared","if_match":etag,"data":{"name":name}});
+
+    let current = support::mcp::call(&session.client, "update", update("Source B")).await;
+    assert_ne!(current.is_error, Some(true), "{current:?}");
+    let stale = support::mcp::call(&session.client, "update", update("Source C")).await;
+    assert_eq!(stale.is_error, Some(true), "{stale:?}");
+    assert!(
+        format!("{stale:?}").contains("record_edit_conflict"),
+        "{stale:?}"
+    );
+    session.close().await;
 }

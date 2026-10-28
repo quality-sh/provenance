@@ -1,0 +1,22 @@
+{
+  "name": "provenance-agent-notifications",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:codex": "bun test test/codex.test.ts",
+    "test:claude": "bun test test/claude.test.ts",
+    "test:claude-session": "bun test test/claude-session.test.ts",
+    "test": "bun test test/codex.test.ts test/claude.test.ts test/stream.test.ts test/framing.test.ts test/cleanup.test.ts test/configuration.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "ajv": "8.20.0"
+  },
+  "devDependencies": {
+    "bun": "1.3.14",
+    "@openai/codex": "0.159.1",
+    "@types/bun": "1.3.14",
+    "typescript": "5.9.3"
+  }
+}

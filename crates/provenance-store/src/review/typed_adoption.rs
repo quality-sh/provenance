@@ -1,261 +1,109 @@
-//! Guarded journal writes for typed-spec adoption of enrolled Requirements.
+//! Guarded typed-spec changes to enrolled graph records.
 
-use super::{classifier, guard, journal};
-use crate::{canonical_digest, publication::with_staged_state, shards, state_store::StateStore};
-use provenance_core::review::{ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION};
-use provenance_core::{Requirement, ScopeId, StableId};
+use super::{classifier, decision_state::CycleFacts, guard};
+use crate::{
+    cache::review_families, review::publication::with_record_state, state_store::StateStore,
+    write_error::SourceFailure,
+};
+use provenance_core::{review::ReviewRecord, ScopeId};
+
+struct TypedChange {
+    before: ReviewRecord,
+    after: ReviewRecord,
+}
 
 impl StateStore {
-    pub(crate) fn commit_enrollment_adoptions(
+    pub(crate) fn publish_typed_spec<R>(
         &self,
         scope: &ScopeId,
-        desired: &[Requirement],
-        owner: &str,
-    ) -> anyhow::Result<()> {
-        let current = self.list_requirements(scope)?;
-        for record in desired {
-            let Some(before) = current.iter().find(|r| r.id == record.id) else {
-                continue;
-            };
-            // An owned record stays with the guarded shard-swap refusal.
-            if before.declared_by.is_some()
-                || before.schema_version != REVIEW_SCHEMA_VERSION
-                || before == record
-            {
-                continue;
-            }
-            let intent = adoption_intent(owner, before, record)?;
-            let request_id = StableId::new(canonical_digest::sha256(
-                format!("typed-spec-adoption\u{1f}{intent}").as_bytes(),
-            ))?;
-            self.commit_adoption(before, record, owner, request_id, &intent)?;
-        }
-        Ok(())
-    }
-
-    fn commit_adoption(
-        &self,
-        before: &Requirement,
-        after: &Requirement,
         actor: &str,
-        request_id: StableId,
-        intent_digest: &str,
-    ) -> anyhow::Result<()> {
+        publish: impl FnOnce(&Self) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
         anyhow::ensure!(
             !actor.trim().is_empty(),
-            "invalid adoption request identity"
+            "invalid typed-spec review identity"
         );
-        self.with_repository_publication(|| {
-            let scope = before.scope_id.clone();
-            let path = journal::entry_path(&self.layout, &scope, &request_id);
-            if path.try_exists()? {
-                let receipt = journal::read_entry(&self.layout, &path)?;
-                anyhow::ensure!(
-                    receipt.scope_id == scope
-                        && receipt.record_id == before.id
-                        && receipt.request_id == request_id
-                        && receipt.intent_digest == intent_digest,
-                    "adoption request ID was reused with different intent"
-                );
-                return Ok(());
+        with_record_state(&self.layout, |layout| {
+            let staged = Self::new(layout.clone());
+            let paths = review_families::review_paths(layout, scope);
+            let result = guard::with_writers(&paths, "*", || publish(&staged))?;
+            let desired = review_families::review_records(&staged, scope)?;
+            let (changes, deleted) = self.typed_changes(scope, &desired)?;
+            staged.delete_record_discussions(scope, &deleted)?;
+            for change in &changes {
+                staged.commit_typed_change(actor, change)?;
             }
-            self.validated_review_entries(&scope)?;
-            let head = self.head(&before.clone().into())?;
-            with_staged_state(&self.layout, false, |layout| {
-                let staged = Self::new(layout.clone());
-                let path = shards::requirements_path(layout, &scope);
-                let id = before.id.clone();
-                guard::with_writer(&path, id.as_str(), || {
-                    staged.commit_adoption_record(
-                        before,
-                        after,
-                        actor,
-                        request_id,
-                        intent_digest,
-                        head.as_ref(),
-                    )
-                })
-            })
+            Ok(result)
         })
     }
 
-    fn commit_adoption_record(
+    fn typed_changes(
         &self,
-        before: &Requirement,
-        after: &Requirement,
-        actor: &str,
-        request_id: StableId,
-        intent_digest: &str,
-        head: Option<&ReviewEntry>,
-    ) -> anyhow::Result<()> {
-        let scope = before.scope_id.clone();
-        let id = before.id.clone();
-        let path = shards::requirements_path(&self.layout, &scope);
-        let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
-            let record = records
-                .iter_mut()
-                .find(|r| r.id == id)
-                .ok_or_else(|| anyhow::anyhow!("adopted Requirement left the scope"))?;
-            *record = after.clone();
-            record.schema_version = REVIEW_SCHEMA_VERSION;
-            crate::state_store::read_budget::ensure_within_read_budget(record)?;
-            Ok(record.clone())
-        })?;
-        self.validate_graph_scope(&scope)?;
-        let mut manifest = self.manifest()?;
-        manifest.schema_version = REVIEW_SCHEMA_VERSION;
-        std::fs::write(
-            self.layout.manifest_path(),
-            serde_json::to_vec_pretty(&manifest)?,
-        )?;
-        let kind = provenance_core::NodeType::Requirement;
-        let fields = classifier::changed_fields(kind, before, &after)?;
-        let outcome = if fields.is_empty() {
-            SaveOutcome::NoChange
-        } else if classifier::changes_revision(kind, &fields) {
-            SaveOutcome::Changed
-        } else {
-            SaveOutcome::LifecycleOnly
-        };
-        let revision = match head {
-            Some(head) if !classifier::changes_revision(kind, &fields) => head.revision.clone(),
-            _ => journal::new_id(),
-        };
-        let before_snapshot = match head {
-            Some(entry) => entry.after.clone(),
-            None => journal::snapshot(&self.layout, &before.clone().into())?,
-        };
-        let after_snapshot = if outcome == SaveOutcome::NoChange {
-            before_snapshot.clone()
-        } else {
-            journal::snapshot(&self.layout, &after.clone().into())?
-        };
-        let entry_id = journal::new_id();
-        let etag = if outcome == SaveOutcome::NoChange {
-            match head {
-                Some(head) => head.etag.clone(),
-                None => journal::etag(&after.clone().into(), None)?,
+        scope: &ScopeId,
+        desired: &[ReviewRecord],
+    ) -> anyhow::Result<(Vec<TypedChange>, Vec<ReviewRecord>)> {
+        let current = review_records(&self.layout, scope)?;
+        let facts = CycleFacts::validated(self, scope)?;
+        let mut changes = Vec::new();
+        let mut deleted = Vec::new();
+        for before in &current {
+            let after = desired
+                .iter()
+                .find(|record| record.kind() == before.kind() && record.id() == before.id());
+            let Some(after) = after else {
+                if facts.has_submissions(before.kind(), before.id()) {
+                    return Err(enrolled_deletion_conflict(before));
+                }
+                deleted.push(before.clone());
+                continue;
+            };
+            if content(before)? == content(after)? {
+                continue;
             }
-        } else {
-            journal::etag(&after.clone().into(), Some(&entry_id))?
-        };
-        let entry = ReviewEntry {
-            schema_version: REVIEW_SCHEMA_VERSION,
-            scope_id: scope.clone(),
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: id,
-            sequence: head.map_or(1, |e| e.sequence + 1),
-            id: entry_id,
-            predecessor: head.map(|e| e.id.clone()),
-            revision,
-            prior_revision: head.map(|e| e.revision.clone()),
-            before: Some(before_snapshot),
-            after: after_snapshot,
-            changed_fields: fields,
-            actor: actor.to_owned(),
-            request_id,
-            intent_digest: intent_digest.to_owned(),
-            etag,
-            outcome,
-            origin: None,
-        };
-        anyhow::ensure!(
-            serde_json::to_vec(&entry)?.len() as u64 <= journal::ENTRY_BYTES,
-            "review receipt exceeds the entry byte budget"
-        );
-        journal::write_new(
-            &journal::entry_path(&self.layout, &scope, &entry.request_id),
-            &entry,
-        )?;
-        if classifier::changes_revision(entry.record_kind, &entry.changed_fields) {
-            self.commit_automatic_submission(&after, &entry)?;
+            changes.push(TypedChange {
+                before: before.clone(),
+                after: after.clone(),
+            });
+        }
+        Ok((changes, deleted))
+    }
+
+    /// Opens the review submission of a typed change to Requirement content.
+    fn commit_typed_change(&self, actor: &str, change: &TypedChange) -> anyhow::Result<()> {
+        let kind = change.after.kind();
+        let fields = classifier::changed_fields(kind, &change.before, &change.after)?;
+        if classifier::changes_revision(kind, &fields) {
+            if let Some(requirement) = change.after.as_requirement() {
+                let revision = classifier::review_revision(kind, &change.after)?;
+                self.commit_automatic_submission(requirement, actor, &revision)?;
+            }
         }
         Ok(())
     }
 }
 
-/// Excludes record stamps so retries resolve to the same receipt.
-fn adoption_intent(
-    owner: &str,
-    before: &Requirement,
-    after: &Requirement,
-) -> anyhow::Result<String> {
-    let before = journal::record_digest(&before.clone().into())?;
-    let after = journal::record_digest(&after.clone().into())?;
-    Ok(canonical_digest::digest(
-        &canonical_digest::canonical_bytes(&("typed-spec-adoption", owner, before, after))?,
-    ))
+/// The record without its record stamps.
+fn content(record: &ReviewRecord) -> serde_json::Result<serde_json::Value> {
+    provenance_core::model::record_stamps::content_value(record)
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::{layout::ProvenanceLayout, state_store::StateStore};
-    use camino::Utf8Path;
-    use provenance_core::{RequirementStatus, ScopeId, StableId};
-    use serde_json::json;
+fn enrolled_deletion_conflict(before: &ReviewRecord) -> anyhow::Error {
+    SourceFailure::wrap(
+        crate::write_error::WriteFailure::EnrolledRecordDeletionConflict {
+            record_kind: before.kind(),
+            record_id: before.id().clone(),
+        },
+        anyhow::anyhow!(
+            "cannot delete enrolled {} {} through typed-spec apply",
+            before.kind().as_str(),
+            before.id().as_str()
+        ),
+    )
+}
 
-    fn fixture() -> (tempfile::TempDir, StateStore, ScopeId, StableId) {
-        let temp = tempfile::tempdir().unwrap();
-        let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
-        std::fs::create_dir_all(layout.state_dir()).unwrap();
-        std::fs::write(
-            layout.manifest_path(),
-            r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
-        )
-        .unwrap();
-        let store = StateStore::new(layout);
-        store
-            .create_requirement(
-                serde_json::from_value(json!({
-                    "scope_id":"default", "id":"req_a",
-                    "statement":"The system stores records.", "status":"discovery",
-                    "depends_on":[], "supersedes":[]
-                }))
-                .unwrap(),
-            )
-            .unwrap();
-        (
-            temp,
-            store,
-            ScopeId::new("default").unwrap(),
-            StableId::new("req_a").unwrap(),
-        )
-    }
-
-    fn proposal(store: &StateStore, scope: &ScopeId, id: &StableId) -> StableId {
-        store
-            .requirement_decision_state(scope, id)
-            .unwrap()
-            .pending
-            .unwrap()
-            .proposal_id
-    }
-
-    #[test]
-    fn content_adoption_opens_a_submission() {
-        let (_temp, store, scope, id) = fixture();
-        let before = proposal(&store, &scope, &id);
-        let mut desired = store.requirement(&scope, &id).unwrap();
-        desired.description = Some("Adopted content".to_owned());
-
-        store
-            .commit_enrollment_adoptions(&scope, &[desired], "spec://fixture")
-            .unwrap();
-
-        assert_ne!(proposal(&store, &scope, &id), before);
-    }
-
-    #[test]
-    fn lifecycle_only_adoption_keeps_the_submission() {
-        let (_temp, store, scope, id) = fixture();
-        let before = proposal(&store, &scope, &id);
-        let mut desired = store.requirement(&scope, &id).unwrap();
-        desired.status = RequirementStatus::Active;
-
-        store
-            .commit_enrollment_adoptions(&scope, &[desired], "spec://fixture")
-            .unwrap();
-
-        assert_eq!(proposal(&store, &scope, &id), before);
-    }
+fn review_records(
+    layout: &crate::layout::ProvenanceLayout,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<ReviewRecord>> {
+    review_families::review_records(&StateStore::new(layout.clone()), scope)
 }

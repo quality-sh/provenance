@@ -46,9 +46,8 @@ fn fixture() -> (tempfile::TempDir, StateStore) {
     (temp, store)
 }
 
-fn save(store: &StateStore, request: &str, relationships: &serde_json::Value) -> SaveRequirement {
+fn save(store: &StateStore, _request: &str, relationships: &serde_json::Value) -> SaveRequirement {
     serde_json::from_value(json!({
-        "request_id":request,
         "actor":"ben",
         "expected_etag":store.requirement_edit_state(&scope(), &requirement()).unwrap().etag,
         "update":{"scope_id":"default","id":"req_a"},
@@ -75,7 +74,7 @@ fn hold_locked_save(
     input: SaveRequirement,
     entered: mpsc::Sender<()>,
     release: mpsc::Receiver<()>,
-) -> anyhow::Result<provenance_core::review::ReviewEntry> {
+) -> anyhow::Result<provenance_core::review::RequirementEditState> {
     test_probes::arm("requirement_save_locked", move || {
         entered.send(()).unwrap();
         release.recv().unwrap();

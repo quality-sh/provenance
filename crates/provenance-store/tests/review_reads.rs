@@ -1,6 +1,6 @@
 #[allow(dead_code)]
 mod review_support;
-use provenance_core::review::{EvidenceQuery, RecordSnapshot, ReviewHistoryQuery};
+use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};
 use provenance_store::{
     operations::read_policy::ReadPolicy,
     review::{read_evidence, read_history, SaveRequirement},
@@ -8,74 +8,60 @@ use provenance_store::{
 use review_support::*;
 use serde_json::json;
 
+fn query(limit: usize, cursor: Option<String>) -> ReviewHistoryQuery {
+    ReviewHistoryQuery {
+        record_kind: provenance_core::NodeType::Requirement,
+        record_id: id(),
+        limit,
+        cursor,
+    }
+}
+
 #[tokio::test]
-async fn review_finding_cycle_rows_do_not_enter_edit_history_pages() {
+async fn history_pages_follow_versions_one_at_a_time() {
     let (temp, store) = fixture();
+    let created = commit_state(&temp, "Create");
     store
-        .save_requirement(save(
-            &store,
-            "content_edit",
-            json!({"description":"Changed"}),
-        ))
+        .save_requirement(save(&store, json!({"description":"Changed"})))
         .unwrap();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
-
-    let complete = read_history(
-        root,
-        &scope(),
-        ReadPolicy::default(),
-        ReviewHistoryQuery {
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: id(),
-            limit: 200,
-            cursor: None,
-        },
-    )
-    .await
-    .unwrap();
+    let complete = read_history(root, &scope(), ReadPolicy::default(), query(200, None))
+        .await
+        .unwrap();
     assert_eq!(complete.result.entries.len(), 2);
 
     let mut cursor = None;
-    let mut requests = Vec::new();
+    let mut versions = Vec::new();
     loop {
-        let page = read_history(
-            root,
-            &scope(),
-            ReadPolicy::default(),
-            ReviewHistoryQuery {
-                record_kind: provenance_core::NodeType::Requirement,
-                record_id: id(),
-                limit: 1,
-                cursor,
-            },
-        )
-        .await
-        .unwrap();
-        requests.extend(
+        let page = read_history(root, &scope(), ReadPolicy::default(), query(1, cursor))
+            .await
+            .unwrap();
+        versions.extend(
             page.result
                 .entries
                 .iter()
-                .map(|entry| entry.request_id.as_str().to_owned()),
+                .map(|version| version.id.as_str().to_owned()),
         );
         cursor = page.result.next_cursor;
         if cursor.is_none() {
             break;
         }
     }
-    assert_eq!(requests, ["fixture_create", "content_edit"]);
+    assert_eq!(versions, [created.as_str(), "working"]);
 }
 
 #[tokio::test]
-#[allow(clippy::too_many_lines)]
 async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
+    commit_state(&temp, "Create");
     let text = "😀\n\"é\\".repeat(25_000);
-    let first = store
-        .save_requirement(save(&store, "enroll", json!({"description":text})))
-        .unwrap();
     store
-        .save_requirement(save(&store, "next", json!({"description":"later"})))
+        .save_requirement(save(&store, json!({"description":text})))
+        .unwrap();
+    let described = commit_state(&temp, "Describe");
+    store
+        .save_requirement(save(&store, json!({"description":"later"})))
         .unwrap();
     let mut offset = 0;
     let mut bytes = String::new();
@@ -87,7 +73,7 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
             EvidenceQuery {
                 record_kind: provenance_core::NodeType::Requirement,
                 record_id: id(),
-                entry_id: first.id.clone(),
+                entry_id: provenance_core::StableId::new(described.clone()).unwrap(),
                 before: false,
                 field: None,
                 offset,
@@ -96,112 +82,62 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
         .await
         .unwrap();
         assert!(serde_json::to_vec(&page.result).unwrap().len() <= 65_536);
-        assert_eq!(page.result.snapshot, first.after);
+        assert_eq!(page.result.version.as_str(), described);
         bytes.push_str(&page.result.json_text);
         match page.result.next_offset {
             Some(next) => offset = next,
             None => break,
         }
     }
-    assert_eq!(
-        provenance_store::canonical_digest::digest(bytes.as_bytes()),
-        first.after.digest
-    );
-    let snapshot: RecordSnapshot = serde_json::from_str(&bytes).unwrap();
-    assert_eq!(
-        snapshot
-            .record
-            .as_requirement()
-            .unwrap()
-            .description
-            .as_deref(),
-        Some(text.as_str())
-    );
-    let one = read_history(
-        root,
-        &scope(),
-        ReadPolicy::default(),
-        ReviewHistoryQuery {
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: id(),
-            limit: 1,
-            cursor: None,
-        },
-    )
-    .await
-    .unwrap();
+    let record: provenance_core::Requirement = serde_json::from_str(&bytes).unwrap();
+    assert_eq!(record.description.as_deref(), Some(text.as_str()));
+    let one = read_history(root, &scope(), ReadPolicy::default(), query(1, None))
+        .await
+        .unwrap();
     assert_eq!(one.result.entries.len(), 1);
-    assert_eq!(one.result.entries[0].request_id.as_str(), "fixture_create");
     let cursor = one.result.next_cursor.unwrap();
     let two = read_history(
         root,
         &scope(),
         ReadPolicy::default(),
-        ReviewHistoryQuery {
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: id(),
-            limit: 1,
-            cursor: Some(cursor.clone()),
-        },
+        query(1, Some(cursor)),
     )
     .await
     .unwrap();
-    assert_eq!(two.result.entries[0].request_id, first.request_id);
-    assert_eq!(two.result.entries[0].id, first.id);
+    assert_eq!(two.result.entries[0].id.as_str(), described);
     let cursor = two.result.next_cursor.unwrap();
     let three = read_history(
         root,
         &scope(),
         ReadPolicy::default(),
-        ReviewHistoryQuery {
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: id(),
-            limit: 1,
-            cursor: Some(cursor.clone()),
-        },
+        query(1, Some(cursor.clone())),
     )
     .await
     .unwrap();
-    assert_eq!(three.result.entries[0].request_id.as_str(), "next");
-    assert_eq!(three.result.entries.len(), 1);
+    assert_eq!(three.result.entries[0].id.as_str(), "working");
     assert!(three.result.next_cursor.is_none());
     store
-        .save_requirement(save(&store, "noop", json!({})))
+        .save_requirement(save(&store, json!({"description":"again"})))
         .unwrap();
     assert!(read_history(
         root,
         &scope(),
         ReadPolicy::default(),
-        ReviewHistoryQuery {
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: id(),
-            limit: 1,
-            cursor: Some(cursor)
-        }
+        query(1, Some(cursor))
     )
     .await
     .is_err());
-    assert!(read_history(
-        root,
-        &scope(),
-        ReadPolicy::default(),
-        ReviewHistoryQuery {
-            record_kind: provenance_core::NodeType::Requirement,
-            record_id: id(),
-            limit: 201,
-            cursor: None
-        }
-    )
-    .await
-    .is_err());
+    assert!(
+        read_history(root, &scope(), ReadPolicy::default(), query(201, None))
+            .await
+            .is_err()
+    );
 }
 
 #[test]
-fn saves_stay_authoritative_after_reopen_and_private_to_the_actor() {
+fn saves_stay_authoritative_after_reopen() {
     let (temp, store) = fixture();
-    let first = store
-        .save_requirement(save(&store, "enroll", json!({})))
-        .unwrap();
+    let first = store.save_requirement(save(&store, json!({}))).unwrap();
     drop(store);
     let store = provenance_store::state_store::StateStore::new(
         provenance_store::layout::ProvenanceLayout::new(
@@ -209,36 +145,34 @@ fn saves_stay_authoritative_after_reopen_and_private_to_the_actor() {
         ),
     );
     let repeat: SaveRequirement =
-        serde_json::from_value(serde_json::to_value(save(&store, "enroll", json!({}))).unwrap())
-            .unwrap();
+        serde_json::from_value(serde_json::to_value(save(&store, json!({}))).unwrap()).unwrap();
     assert_eq!(store.save_requirement(repeat).unwrap(), first);
-    let mut foreign = serde_json::to_value(save(&store, "enroll", json!({}))).unwrap();
-    foreign["actor"] = json!("other");
     assert!(store
-        .save_requirement(serde_json::from_value(foreign).unwrap())
-        .is_err());
-    assert!(store
-        .save_requirement(save(&store, "missing", json!({"description":"new"})))
+        .save_requirement(save(&store, json!({"description":"new"})))
         .is_ok());
 }
 
+/// Implementation aid: pins the 8 KiB evidence page split; no Rule names
+/// paging.
 #[tokio::test]
-async fn field_evidence_preserves_long_text_without_loading_other_fields() {
+async fn evidence_pages_a_long_field_from_git() {
     let (temp, store) = fixture();
     let text = "é\n".repeat(20_000);
-    let first = store
-        .save_requirement(save(&store, "field", json!({"description":text})))
+    store
+        .save_requirement(save(&store, json!({"description":text})))
         .unwrap();
+    let described = commit_state(&temp, "Describe");
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let mut offset = 0;
     let mut encoded = String::new();
     loop {
-        let query = serde_json::from_value(json!({"requirement_id":"req_a", "entry_id":first.id,
+        let query = serde_json::from_value(json!({"requirement_id":"req_a", "entry_id":described,
             "before":false,"offset":offset,"field":"description"}))
         .unwrap();
         let page = read_evidence(root, &scope(), ReadPolicy::default(), query)
             .await
             .unwrap();
+        assert!(page.result.json_text.len() <= 8192);
         encoded.push_str(&page.result.json_text);
         match page.result.next_offset {
             Some(next) => offset = next,

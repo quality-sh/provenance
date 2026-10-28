@@ -20,7 +20,7 @@ fn requirements_list_identifies_the_selected_malformed_manifest() {
         .unwrap();
 
     assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains(manifest.to_str().unwrap()), "{stderr}");
     assert!(
@@ -52,7 +52,7 @@ fn init_identifies_the_selected_malformed_manifest() {
         .unwrap();
 
     assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains(manifest.to_str().unwrap()), "{stderr}");
     assert!(
@@ -81,7 +81,7 @@ fn init_keeps_schema_validation_wording() {
         .unwrap();
 
     assert!(!output.status.success());
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(
         stderr.contains("manifest schema_version must be"),

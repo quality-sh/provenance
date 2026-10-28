@@ -23,7 +23,8 @@ test('Effect schemas retain production wire values and reject contract violation
       await mkdir(dirname(join(directory, name)), { recursive: true });
       await writeFile(join(directory, name), source);
     }
-    await build({ entryPoints: [join(directory, 'effect-contract.ts')], outfile: join(directory, 'contract.mjs'), bundle: true, packages: 'external', format: 'esm' });
+    await writeFile(join(directory, 'effect.ts'), `export * from './effect-contract.js';\nexport * from './effect-matchers.js';\n`);
+    await build({ entryPoints: [join(directory, 'effect.ts')], outfile: join(directory, 'contract.mjs'), bundle: true, packages: 'external', format: 'esm' });
     const schemas = await import(join(directory, 'contract.mjs'));
     for (const [name, value] of Object.entries(document['x-wire-fixtures'])) {
       assert.deepEqual(Schema.decodeUnknownSync(schemas[name])(value), value, name);

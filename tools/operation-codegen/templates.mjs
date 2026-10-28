@@ -73,8 +73,11 @@ function tsRequest(path, method, op) {
 ${query.map(parameter => `    if (call[${JSON.stringify(propertyName(parameter))}] !== undefined) query.set(${JSON.stringify(parameter.name)}, ${parameter.schema.type === 'array' ? `call[${JSON.stringify(propertyName(parameter))}]!.join(',')` : `String(call[${JSON.stringify(propertyName(parameter))}])`});`).join('\n')}
     if (query.size) url.search = query.toString();` : '';
   const headers = (op.parameters ?? []).filter(parameter => parameter.in === 'header');
-  const headerCode = [`'content-type': 'application/json'`, ...headers.map(parameter =>
-    `${JSON.stringify(parameter.name)}: String(call[${JSON.stringify(propertyName(parameter))}])`)].join(', ');
+  const headerCode = [`'content-type': 'application/json'`, ...headers.map(parameter => {
+    const value = `call[${JSON.stringify(propertyName(parameter))}]`;
+    const entry = `${JSON.stringify(parameter.name)}: String(${value})`;
+    return parameter.required ? entry : `...(${value} === undefined ? {} : { ${entry} })`;
+  })].join(', ');
   const body = op.requestBody ? `, body: JSON.stringify({ data: call.data })` : '';
   return `    const url = new URL(${url});${queryCode}
     const response = await send(this.fetcher, url, {
@@ -144,6 +147,7 @@ export const COMPATIBILITY = ${JSON.stringify(compatibility)} as const;
 export const PROTOCOL_VERSION = COMPATIBILITY.wire;
 export type OperationFailure = ${failureTypes.map(name => `components['schemas']['${name}']`).join(' | ')};
 ${queryTypes.join('\n')}
+// @provenance rule: rule_generated_sdk_operations_use_http
 export class HttpClient {
   private constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch) {}
   static async connectWithBearer(baseUrl: string, bearer: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal; repository?: string; scope?: string } = {}): Promise<HttpClient> {
@@ -156,6 +160,7 @@ export class HttpClient {
     };
     return HttpClient.connect(baseUrl, authenticated, options);
   }
+  // @provenance rule: rule_sdk_protocol_handshake
   static async connect(baseUrl: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal; repository?: string; scope?: string } = {}): Promise<HttpClient> {
     const validate = await import('./validators/metadata.mjs');
     const url = new URL(baseUrl);
@@ -246,6 +251,15 @@ function rustQueryStatement(parameter, enums) {
     : `if let Some(value) = ${name} { request = request.query(&[(${JSON.stringify(parameter.name)}, ${bound})]); }`;
 }
 
+// An optional header, such as the If-Match guard of a Rule update, is sent
+// only when the caller supplies it.
+function rustHeaderStatement(parameter, enums) {
+  const name = JSON.stringify(parameter.name);
+  return parameter.required
+    ? `request = request.header(${name}, ${wireValue(parameter, enums)});`
+    : `if let Some(value) = ${propertyName(parameter)} { request = request.header(${name}, ${wireValue(parameter, enums, true)}); }`;
+}
+
 function rustUrl(path, pathParameters, enums) {
   if (pathParameters.length === 0) return `self.base_url.clone() + ${JSON.stringify(path)}`;
   const parameters = new Map(pathParameters.map(parameter => [parameter.name, parameter]));
@@ -269,9 +283,7 @@ function rustVariantRequest(path, method, op, variant, operation, enums) {
   const changesRequest = queryParameters.length > 0 || headerParameters.length > 0;
   setup += `\n                let ${changesRequest ? 'mut ' : ''}request = self.http.${method}(url);`;
   for (const parameter of queryParameters) setup += `\n                ${rustQueryStatement(parameter, enums)}`;
-  for (const parameter of headerParameters) {
-    setup += `\n                request = request.header(${JSON.stringify(parameter.name)}, ${wireValue(parameter, enums)});`;
-  }
+  for (const parameter of headerParameters) setup += `\n                ${rustHeaderStatement(parameter, enums)}`;
   return `${setup}
                 let response = request.send().await.map_err(|cause| runtime::connection("${operation}", false, cause))?;`;
 }
@@ -338,7 +350,7 @@ ${inputVariants}
 pub enum ${output} {
 ${outputs}
 }
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug)]
 pub enum ${failure} {
 ${failures}
 }
@@ -354,7 +366,7 @@ ${helpers}
 }
 function rustArgs(op, enums) {
   const args = (op.parameters ?? []).map(parameter => `${propertyName(parameter)}: ${rustType(parameter, enums)}`);
-  if (op.requestBody) args.push(`call: &${ref(op.requestBody.content['application/json'].schema)}`);
+  if (op.requestBody) args.push(`call: &crate::types::${ref(op.requestBody.content['application/json'].schema)}`);
   return args.join(', ');
 }
 function rustRequest(path, method, op, operation, enums) {
@@ -367,12 +379,30 @@ function rustRequest(path, method, op, operation, enums) {
   for (const parameter of queryParameters) {
     setup += `\n        ${rustQueryStatement(parameter, enums)}`;
   }
-  for (const parameter of headerParameters) {
-    setup += `\n        request = request.header(${JSON.stringify(parameter.name)}, ${wireValue(parameter, enums)});`;
-  }
+  for (const parameter of headerParameters) setup += `\n        ${rustHeaderStatement(parameter, enums)}`;
   if (op.requestBody) setup += `\n        request = request.json(call);`;
   return `${setup}
         let response = request.send().await.map_err(|cause| runtime::connection("${operation}", false, cause))?;`;
+}
+
+function packedLines(values, size = 8) {
+  const lines = [];
+  for (let index = 0; index < values.length; index += size) {
+    lines.push(values.slice(index, index + size).join(' '));
+  }
+  return lines.join('\n');
+}
+
+function rustOperationIndexes(methods) {
+  const files = {};
+  const paths = Object.keys(methods);
+  for (let index = 0; index < paths.length; index += 400) {
+    const part = String(index / 400).padStart(3, '0');
+    files[`operation_indexes/part_${part}.rs`] = `// Generated from OpenAPI. Do not edit.
+${paths.slice(index, index + 400).map(path => `include!("../${path}");`).join('\n')}
+`;
+  }
+  return files;
 }
 
 export function rustClientFiles(document, compatibility) {
@@ -381,13 +411,6 @@ export function rustClientFiles(document, compatibility) {
   // Metadata participates in the same declared-failure contract as every other
   // operation: a refusal is a typed MetadataFailure, never a connection loss.
   const imports = new Set(['MetadataFailure', 'MetadataSuccess']);
-  for (const { op } of routes) {
-    if (op.requestBody) imports.add(ref(op.requestBody.content['application/json'].schema));
-    if (!queryVariants(op).length) {
-      imports.add(ref(op.responses['200'].content['application/json'].schema));
-      imports.add(ref(op.responses['400'].content['application/json'].schema));
-    }
-  }
   const methods = Object.fromEntries(routes.map(({ path, method, op }) => {
     if (queryVariants(op).length) {
       const name = op.operationId.replace(/[A-Z]/g, c => '_' + c.toLowerCase());
@@ -400,13 +423,13 @@ export function rustClientFiles(document, compatibility) {
     return [`operations/${name}.rs`, `// Generated from OpenAPI. Do not edit.
 #[allow(clippy::too_many_arguments)]
 impl HttpClient {
-    pub async fn ${name}(&self, ${rustArgs(op, enums)}) -> Result<${success}, Error> {
+    pub async fn ${name}(&self, ${rustArgs(op, enums)}) -> Result<crate::types::${success}, Error> {
         ${rustRequest(path, method, op, name, enums)}
         let status = response.status();
         let value = runtime::read_json(response, "${name}", false).await?;
         if !status.is_success() {
             runtime::validate(&value, "${failure}", "${name}", false)?;
-            let failure: ${failure} = runtime::decode(value, "${name}", false)?;
+            let failure: crate::types::${failure} = runtime::decode(value, "${name}", false)?;
             return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::${variant}(Box::new(failure)) });
         }
         runtime::validate(&value, "${success}", "${name}", false)?;
@@ -415,19 +438,26 @@ impl HttpClient {
 }
 `];
   }));
-  const failures = ['    Metadata(Box<MetadataFailure>),', ...routes.map(({ op }) => {
+  const failures = packedLines(['    Metadata(Box<crate::types::MetadataFailure>),', ...routes.map(({ op }) => {
     const variant = op.operationId[0].toUpperCase() + op.operationId.slice(1);
     if (queryVariants(op).length) return `    ${variant}(Box<${variant}Failure>),`;
-    return `    ${variant}(Box<${ref(op.responses['400'].content['application/json'].schema)}>),`;
-  })].join('\n');
+    return `    ${variant}(Box<crate::types::${ref(op.responses['400'].content['application/json'].schema)}>),`;
+  })]);
+  const failureFile = `// Generated from OpenAPI. Do not edit.
+#[rustfmt::skip]
+#[derive(Debug)]
+pub enum OperationFailure {
+${failures}
+}
+`;
+  const indexes = rustOperationIndexes(methods);
   const c = compatibility;
   const connection = `// Generated from OpenAPI. Do not edit.
 use crate::types::{${[...imports].sort().join(', ')}};
 use crate::{runtime, Error};
 pub const PROTOCOL_VERSION: u32 = ${c.wire};
 pub const COMPATIBILITY: (u32, u32, u32, u32) = (${c.wire}, ${c.state}, ${c.review_journal}, ${c.read_derivation});
-#[derive(Debug, serde::Serialize)] #[serde(untagged)]
-pub enum OperationFailure { ${failures} }
+include!("operation_failures.rs");
 #[derive(Clone)] pub struct HttpClient { base_url: String, http: reqwest::Client }
 impl HttpClient {
     pub async fn connect(base_url: &str) -> Result<Self, Error> { Self::connect_with_headers(base_url, reqwest::header::HeaderMap::new(), None).await }
@@ -467,7 +497,14 @@ impl HttpClient {
         Ok(client)
     }
 }
-${['parameters.rs', ...Object.keys(methods)].map(path => `include!("${path}");`).join('\n')}
+include!("parameters.rs");
+${Object.keys(indexes).map(path => `include!("${path}");`).join('\n')}
 `;
-  return { 'client.rs': connection, 'parameters.rs': parametersModule(enums), ...methods };
+  return {
+    'client.rs': connection,
+    'operation_failures.rs': failureFile,
+    'parameters.rs': parametersModule(enums),
+    ...indexes,
+    ...methods,
+  };
 }

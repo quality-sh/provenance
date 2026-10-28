@@ -99,6 +99,8 @@ fn seed_repo() -> (tempfile::TempDir, String) {
         .args([
             "resolutions",
             "create",
+            "--status",
+            "approved",
             "--repo",
             &repo,
             "--scope",

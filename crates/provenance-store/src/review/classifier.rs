@@ -1,5 +1,6 @@
 use crate::{cache::review_families, canonical_digest};
-use provenance_core::NodeType;
+use provenance_core::{NodeType, StableId};
+use provenance_macros::rule;
 use serde::Serialize;
 
 pub(super) fn changed_fields<T: Serialize>(
@@ -59,6 +60,17 @@ pub(super) fn content_digest<T: Serialize>(kind: NodeType, record: &T) -> anyhow
     Ok(canonical_digest::digest(
         &canonical_digest::canonical_bytes(&filtered)?,
     ))
+}
+
+/// Derives the review revision from the review content of a record, so two
+/// versions with equal review content have the same revision.
+#[rule("rule_review_revision_follows_review_content")]
+pub(super) fn review_revision<T: Serialize>(
+    kind: NodeType,
+    record: &T,
+) -> anyhow::Result<StableId> {
+    let digest = content_digest(kind, record)?;
+    StableId::new(digest.trim_start_matches("sha256:"))
 }
 
 #[cfg(test)]

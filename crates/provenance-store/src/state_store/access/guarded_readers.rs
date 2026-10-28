@@ -5,12 +5,12 @@ use provenance_core::{
 
 macro_rules! guarded_reader {
     ($record:ty, list_requirements) => {};
-    ($record:ty, validated_journal_entries) => {
-        pub(crate) fn validated_journal_entries(
+    ($record:ty, validated_discussions) => {
+        pub(crate) fn validated_discussions(
             &self,
             scope: &ScopeId,
         ) -> anyhow::Result<Vec<$record>> {
-            self.store.validated_journal_entries(scope)
+            self.store.validated_discussions(scope)
         }
     };
     ($record:ty, $reader:ident) => {

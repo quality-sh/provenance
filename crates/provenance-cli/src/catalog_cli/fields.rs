@@ -17,6 +17,18 @@ pub(super) enum Source {
     },
 }
 
+/// Accepted flag names for validation and operation help.
+pub(super) fn accepted_flags(declared: &[Field]) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    for field in declared {
+        names.insert(field.name.clone());
+        if let Source::Body { wire_field, .. } = &field.source {
+            names.insert(json_flag(wire_field));
+        }
+    }
+    names
+}
+
 pub(super) fn declared(definition: &Definition) -> anyhow::Result<Vec<Field>> {
     let mut fields = Vec::new();
     let mut names = BTreeSet::new();
@@ -34,12 +46,24 @@ pub(super) fn declared(definition: &Definition) -> anyhow::Result<Vec<Field>> {
             },
         )?;
     }
+    // A body field that a request header fills (`If-Match` -> expected_etag)
+    // has the header flag as its only CLI spelling.
+    let header_bound = definition
+        .registration
+        .controls
+        .headers
+        .iter()
+        .map(|binding| binding.field)
+        .collect::<BTreeSet<_>>();
     if let Some(request) = definition.request_schema() {
         if let Some(properties) = request
             .pointer("/properties/data/properties")
             .and_then(Value::as_object)
         {
             for (wire_field, schema) in properties {
+                if header_bound.contains(wire_field.as_str()) {
+                    continue;
+                }
                 insert(
                     &mut fields,
                     &mut names,
@@ -166,11 +190,7 @@ pub(super) fn augment_with_overrides(
     Ok(command)
 }
 
-/// The `--<field>-json` flag that carries one whole JSON body value. One
-/// spelling per body wire field, so alias flags gain no JSON variant.
-pub(super) fn json_flag(wire_field: &str) -> String {
-    format!("{}-json", cli_name(wire_field))
-}
+pub(super) use provenance_store::operations::catalog::{cli_name, json_flag};
 
 fn flag(name: &str, repeated: bool) -> Arg {
     let argument = Arg::new(name.to_owned())
@@ -190,10 +210,6 @@ pub(super) fn wire_field_schema<'a>(request: &'a Value, wire_field: &str) -> Opt
         .pointer("/properties/data/properties")?
         .as_object()?
         .get(wire_field)
-}
-
-pub(super) fn cli_name(name: &str) -> String {
-    name.to_ascii_lowercase().replace('_', "-")
 }
 
 fn schema_properties(schema: &Value) -> anyhow::Result<&Map<String, Value>> {

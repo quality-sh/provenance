@@ -1,5 +1,5 @@
 use super::*;
-use provenance_core::Manifest;
+use crate::support::records::allow_reviewer;
 
 async fn enroll(host: &StatementHost) -> (String, String) {
     let (status, read, etag) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
@@ -10,10 +10,7 @@ async fn enroll(host: &StatementHost) -> (String, String) {
         "PATCH",
         "/requirements/req_shared",
         Some(json!({"data":{"actor":"agent","description":"Enrolled."}})),
-        &[
-            ("idempotency-key", "enroll_requirement"),
-            ("if-match", &etag),
-        ],
+        &[("if-match", &etag)],
     )
     .await;
     assert_eq!(status, 200, "{saved}");
@@ -53,18 +50,21 @@ async fn submit_at(host: &StatementHost, revision: &str) -> String {
         .as_str()
         .expect("submission returns its proposal identity")
         .to_owned();
-    assert_eq!(value["data"]["proposal_key"], proposal);
+    assert!(value["data"]["proposal_key"]
+        .as_str()
+        .unwrap()
+        .starts_with("review:requirement:req_shared:"));
     proposal
 }
 
-async fn edit(host: &StatementHost, key: &str, description: &str) -> (String, String) {
+async fn edit(host: &StatementHost, _key: &str, description: &str) -> (String, String) {
     let (_, _, etag) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
     let (status, saved, _) = call(
         host,
         "PATCH",
         "/requirements/req_shared",
         Some(json!({"data":{"actor":"agent","description":description}})),
-        &[("idempotency-key", key), ("if-match", &etag.unwrap())],
+        &[("if-match", &etag.unwrap())],
     )
     .await;
     assert_eq!(status, 200, "{saved}");
@@ -88,17 +88,6 @@ fn conflict(submission: Option<&str>, revision: &str) -> Value {
     },"meta":{}})
 }
 
-fn allow_reviewer(repo: &Repository) {
-    let mut manifest: Manifest =
-        serde_json::from_slice(&std::fs::read(repo.layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(
-        repo.layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-}
-
 #[tokio::test]
 async fn stale_requirement_edit_returns_the_current_etag() {
     let repo = Repository::new("The shared graph is readable.");
@@ -112,7 +101,7 @@ async fn stale_requirement_edit_returns_the_current_etag() {
         "PATCH",
         "/requirements/req_shared",
         body("Current edit."),
-        &[("idempotency-key", "edit-current"), ("if-match", &old_etag)],
+        &[("if-match", &old_etag)],
     )
     .await;
     assert_eq!(status, 200, "{current}");
@@ -121,7 +110,7 @@ async fn stale_requirement_edit_returns_the_current_etag() {
         "PATCH",
         "/requirements/req_shared",
         body("Stale edit."),
-        &[("idempotency-key", "edit-stale"), ("if-match", &old_etag)],
+        &[("if-match", &old_etag)],
     )
     .await;
     assert_eq!(status, 409, "{conflict}");
@@ -141,7 +130,6 @@ async fn review_decide_dispatches_and_reports_a_repeated_decision() {
     create(
         &host,
         "/requirements",
-        Some("create_req_other"),
         json!({"actor":"agent","id":"req_other","statement":"The other record exists.",
             "status":"active","depends_on":[],"supersedes":[]}),
     )
@@ -292,6 +280,7 @@ async fn current_revision(host: &StatementHost) -> String {
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 async fn terminal_review_conflicts_share_the_http_envelope() {
     let stale_repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&stale_repo);
@@ -334,8 +323,9 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
             "POST",
             &path,
             Some(json!({"data":{
-                "actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
-                "rationale":"Needs work.", "canonical_artifact":null,
+                "actor":{"identity_type":"human","id":"reviewer"}, "decision":"accepted",
+                "rationale":null,
+                "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_shared"},
                 "feedback":null, "declared_by":null
             }})),
             &[]

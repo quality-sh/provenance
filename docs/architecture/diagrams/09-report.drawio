@@ -1,0 +1,165 @@
+<mxfile host="drawio" type="device" compressed="false">
+  <diagram id="09-report" name="provenance-report: pull request report envelope and renderer">
+    <mxGraphModel dx="1500" dy="1010" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="1010" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="09-report-title" value="&lt;b&gt;provenance-report: pull request report envelope and renderer&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=18;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1460" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="c_build" value='&lt;b&gt;provenance report build&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;--repo, --base, --head,&lt;br&gt;--repository, --scope,&lt;br&gt;--path (scan path),&lt;br&gt;--output (envelope JSON)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="120" width="270" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="c_cat" value='&lt;b&gt;catalog.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;stable diagnostic codes;&lt;br&gt;fixed next-action prose;&lt;br&gt;no advice from graph text&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="430" width="270" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="c_render" value='&lt;b&gt;provenance report render&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;--input (envelope JSON),&lt;br&gt;--format markdown or json,&lt;br&gt;--output&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="20" y="665" width="270" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="rp" value="provenance-report (crates/provenance-report/src)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ecf8f9;strokeColor=#0e8088;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="330" y="55" width="720" height="785" as="geometry" />
+        </mxCell>
+        <mxCell id="bg" value="build_envelope (build/)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ecf8f9;strokeColor=#0e8088;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="rp">
+          <mxGeometry x="15" y="30" width="690" height="515" as="geometry" />
+        </mxCell>
+        <mxCell id="b1" value='&lt;b&gt;1 resolve the range&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;git::resolve_range: base and head to commits&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="bg">
+          <mxGeometry x="15" y="35" width="660" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="b2" value='&lt;b&gt;2 policy&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Settings::load: coverage.binding_findings sets the policy mode&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="bg">
+          <mxGeometry x="15" y="110" width="660" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="b3" value='&lt;b&gt;3 scan&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;scan_path_with_content; Complete only when the scan covers the&lt;br&gt;repository and pins to the head commit&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="bg">
+          <mxGeometry x="15" y="185" width="660" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="b4" value='&lt;b&gt;4 graph snapshots&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;one git ls-tree probe and one git show per shard file at base and&lt;br&gt;head; diff_snapshots; read_bindings at head&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="bg">
+          <mxGeometry x="15" y="270" width="660" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="b5" value='&lt;b&gt;5 findings&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;derive_rule_evidence_facts; evidence sites from&lt;br&gt;cache::graph_evidence and stale::gate::report&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="bg">
+          <mxGeometry x="15" y="360" width="660" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="b6" value='&lt;b&gt;6 ReportEnvelope (envelope.rs)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;scan facts, policy outcome, findings, graph changes; verification_runs empty&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="bg">
+          <mxGeometry x="15" y="450" width="660" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="rg" value="render_envelope (pipeline.rs, render/)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ecf8f9;strokeColor=#0e8088;verticalAlign=top;align=right;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="rp">
+          <mxGeometry x="15" y="565" width="690" height="205" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" value='&lt;b&gt;validate&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;parse JSON;&lt;br&gt;envelope.validate;&lt;br&gt;refuse duplicate&lt;br&gt;findings&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="rg">
+          <mxGeometry x="15" y="35" width="200" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="r2" value='&lt;b&gt;normalize (order.rs)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;new errors, new warnings,&lt;br&gt;changed intent, resolved,&lt;br&gt;pre-existing, uncertain;&lt;br&gt;then code, subject, site&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="rg">
+          <mxGeometry x="235" y="35" width="210" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="r3" value='&lt;b&gt;encode&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Markdown: sections.rs,&lt;br&gt;findings.rs; escape.rs&lt;br&gt;keeps untrusted text&lt;br&gt;as data; or JSON&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="rg">
+          <mxGeometry x="465" y="35" width="210" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="s_git" value='&lt;b&gt;provenance-store stale::git&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;resolve_range, revision_files, changed_files&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="120" width="380" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="s_set" value='&lt;b&gt;.provenance/settings.json&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;read through provenance-store settings&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="195" width="380" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d_scan" value='&lt;b&gt;provenance-scanner&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;diagram 08&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="270" width="380" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="d_git" value='&lt;b&gt;Git repository&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;commits; shard files at base and head&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="355" width="380" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="s_gate" value='&lt;b&gt;provenance-store cache, stale::gate&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;graph_evidence from the SQLite cache;&lt;br&gt;evidence gate over base..head&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="445" width="380" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="note" value="The builder renders nothing, uses no network and&lt;br&gt;calls no model. It never makes up a verification&lt;br&gt;run. When the scan cannot pin to head or the base&lt;br&gt;graph cannot be compared, the envelope says&lt;br&gt;incomplete or incompatible and gives the reason." style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=12;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="1100" y="560" width="380" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend" value="Legend" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="865" width="830" height="134" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-sw-analysis" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="12" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-tx-analysis" value="Analysis: scanner, STE100, report" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="44" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-sw-iface" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="12" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-tx-iface" value="Interfaces: CLI and SDKs" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="44" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-sw-engine" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="282" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-tx-engine" value="Store: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="314" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-sw-state" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="282" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-tx-state" value="Files on disk and git" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="314" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-ek-dep" value="Uses: code call or Cargo dependency" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="68" y="78" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-legend-ek-data" value="Runtime data flow (read, write, request)" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="09-report-legend">
+          <mxGeometry x="68" y="100" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="09-report-e0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.1845;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="c_build" target="bg">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.4634;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="c_render" target="rg">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e2" value="codes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.4667;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="c_cat" target="b5">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="b1" target="s_git">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="b2" target="s_set">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="b3" target="d_scan">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4933;exitDx=0;exitDy=0;entryX=0;entryY=0.4933;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="b4" target="d_git">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.4933;exitDx=0;exitDy=0;entryX=0;entryY=0.4933;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="b5" target="s_gate">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e8" value="envelope JSON" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.1515;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="b6" target="r1">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="r1" target="r2">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="r2" target="r3">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-f0" value="" style="edgeStyle=none;html=1;strokeColor=#4d4d4d;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="953" as="sourcePoint" />
+            <mxPoint x="80" y="953" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="09-report-f1" value="" style="edgeStyle=none;html=1;strokeColor=#1f5fbf;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="975" as="sourcePoint" />
+            <mxPoint x="80" y="975" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -252,7 +252,7 @@ fn failed_dictionary_acquisition_keeps_init_successful_and_warns_even_when_quiet
         .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .output()
         .unwrap();
@@ -262,7 +262,7 @@ fn failed_dictionary_acquisition_keeps_init_successful_and_warns_even_when_quiet
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     let warning = String::from_utf8(output.stderr).unwrap();
     assert!(warning.contains("Warning: the official Issue 9 dictionary could not be added"));
     assert!(warning.contains("request the official Issue 9 PDF"));
@@ -296,7 +296,7 @@ fn dictionary_warning_precedes_the_final_handoff_in_a_combined_stream() {
         )
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .stdout(output)
         .stderr(errors)
@@ -355,7 +355,7 @@ fn adding_a_dictionary_reference_on_reinit_is_reported_as_a_change() {
         .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .assert()
         .success();

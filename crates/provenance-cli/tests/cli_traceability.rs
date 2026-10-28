@@ -102,6 +102,8 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
         .args([
             "resolutions",
             "create",
+            "--status",
+            "approved",
             "--repo",
             &repo,
             "--scope",

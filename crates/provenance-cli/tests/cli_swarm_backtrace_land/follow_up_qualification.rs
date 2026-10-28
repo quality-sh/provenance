@@ -39,6 +39,7 @@ fn incoming_synthesis_requires_and_supports_asserting_an_existing_proposal() {
         .stderr(predicates::str::contains(
             "qualifying proposal prop_req_publish_requires_worker requires an assertion",
         ));
+    crate::export_fixture_support::make_default_scope_portable(&repo);
     Command::cargo_bin("provenance")
         .unwrap()
         .args([

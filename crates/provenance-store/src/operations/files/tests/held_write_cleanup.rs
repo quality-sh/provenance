@@ -37,7 +37,7 @@ fn clone_failure_cleans_up_the_created_temporary_file() {
     crate::test_probes::disarm("repository_file_clone_parent");
 
     assert!(matches!(result, Err(RepositoryFileRefusal::Write(_))));
-    assert!(artifacts(&path, ".tmp").is_empty());
+    assert_eq!(artifacts(&path, ".tmp"), [] as [camino::Utf8PathBuf; 0]);
 }
 
 #[test]

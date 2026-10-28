@@ -2,8 +2,16 @@ use super::*;
 use crate::write_error::{WriteError, WriteFailure};
 
 #[test]
-fn requirement_review_rejects_new_canonical_artifact_kinds_as_invalid_updates() {
-    for artifact_type in ["domain", "boundary", "topic", "question"] {
+fn review_approval_rejects_a_canonical_artifact_for_another_record_kind() {
+    for artifact_type in [
+        "source",
+        "resolution",
+        "rule",
+        "domain",
+        "boundary",
+        "topic",
+        "question",
+    ] {
         let (_temp, store, _, proposal) = enrolled();
         let error = decide(
             &store,
@@ -24,4 +32,27 @@ fn requirement_review_rejects_new_canonical_artifact_kinds_as_invalid_updates() 
             "{artifact_type}"
         );
     }
+}
+
+#[test]
+fn review_approval_rejects_a_canonical_artifact_for_another_record_id() {
+    let (_temp, store, _, proposal) = enrolled();
+    let error = decide(
+        &store,
+        &proposal,
+        "accepted",
+        &reviewer("reviewer"),
+        &json!({
+            "canonical_artifact": {
+                "artifact_type": "requirement",
+                "artifact_id": "req_b"
+            }
+        }),
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::InvalidUpdate
+    ));
 }

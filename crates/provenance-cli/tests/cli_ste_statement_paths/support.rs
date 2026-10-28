@@ -75,6 +75,7 @@ pub fn create_rule(repo: &Path, id: &str, statement: &str) {
 }
 
 pub fn export(repo: &Path, output: &Path) -> Value {
+    crate::export_fixture_support::make_default_scope_portable(repo);
     provenance()
         .args([
             "export",
@@ -104,7 +105,7 @@ pub fn diagnostic(kind: &str, id: &str, start: usize) -> Value {
         "field": "statement",
         "standard": "ASD-STE100",
         "issue": 9,
-        "analyzer_version": "0.2.3",
+        "analyzer_version": "0.3.0",
         "rule": "8.1",
         "disposition": "violation",
         "span": {"start": start, "end": start + 1},
@@ -114,6 +115,8 @@ pub fn diagnostic(kind: &str, id: &str, start: usize) -> Value {
 
 pub fn error_json(output: &std::process::Output) -> Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
+    // `import` and `merge-jsonl` are not record commands: they print the
+    // refusal object after `Error: ` in every output format.
     serde_json::from_str(
         stderr
             .trim()

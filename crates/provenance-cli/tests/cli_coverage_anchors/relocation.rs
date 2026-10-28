@@ -1,8 +1,10 @@
 use super::support::{annotation, binding, Fixture, ORIGINAL};
 use assert_cmd::Command;
+use provenance_macros::verifies;
 use serde_json::Value;
 
 #[test]
+#[verifies("rule_anchor_resolved_before_state", examples)]
 fn moved_binding_relocates_by_symbol_and_hash() {
     let fixture = Fixture::new(ORIGINAL);
     std::fs::write(
@@ -29,6 +31,7 @@ fn moved_binding_relocates_by_symbol_and_hash() {
 }
 
 #[test]
+#[verifies("rule_anchor_resolved_before_state", examples)]
 fn edited_binding_line_is_gone_not_relocated() {
     let fixture = Fixture::new(ORIGINAL);
     std::fs::write(

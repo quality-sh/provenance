@@ -103,6 +103,7 @@ created: None, updated: None,
 fn every_requirement_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Requirement {
+archived_in_commit: None,
 created: None, updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
@@ -116,7 +117,7 @@ created: None, updated: None,
             status: RequirementStatus::Active,
             domain_id: Some(sid("domain_payroll")),
             source_refs: vec![reference("source_award")],
-            refines: Some(sid("req_pay")),
+            refines: vec![sid("req_pay")],
             depends_on: vec![sid("req_rates")],
             supersedes: vec![sid("req_overtime_2019")],
             spawned_by: Some(sid("res_threshold")),
@@ -132,6 +133,7 @@ created: None, updated: None,
 fn every_resolution_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Resolution {
+archived_in_commit: None,
 created: None, updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
@@ -200,6 +202,7 @@ fn every_topic_reference_key_is_declared_or_allowed() {
             requirement_id: sid("req_overtime"),
             title: "Rates".into(),
             status: TopicStatus::Open,
+            archived_in_commit: None,
             claimed_by: Some("agent".into()),
             claimed_at: Some(4),
             links: vec![link()],
@@ -221,6 +224,7 @@ fn every_question_reference_key_is_declared_or_allowed() {
             question: "Which threshold?".into(),
             resolution_method: ResolutionMethod::Grill,
             status: QuestionStatus::Open,
+            archived_in_commit: None,
             claimed_by: Some("agent".into()),
             claimed_at: Some(5),
             answer: Some("Answer".into()),

@@ -61,7 +61,7 @@ fn statesman_marker_warns_once_per_comment_block() {
 fn provenance_marker_draws_no_legacy_warning() {
     let parsed = parse_annotations("@provenance rule: SCHADS-PAY-001");
 
-    assert!(parsed.warnings.is_empty());
+    assert_eq!(parsed.warnings, [] as [ParseWarning; 0]);
 }
 
 /// A block that mixes markers is warned about once, at the first legacy
@@ -124,7 +124,7 @@ fn preserves_in_range_confidence() {
     let parsed = parse_annotations("@provenance confidence: 0.75\n@provenance rule: RULE-001");
 
     assert!((parsed.annotations[0].confidence - 0.75).abs() < f64::EPSILON);
-    assert!(parsed.warnings.is_empty());
+    assert_eq!(parsed.warnings, [] as [ParseWarning; 0]);
 }
 
 /// A field after a rule belongs to that rule only. A field before the
@@ -151,7 +151,7 @@ fn a_field_after_a_rule_sets_that_rule_only() {
     assert_eq!(first.verification, Some(Verification::Property));
     assert_eq!(first.coverage, CoverageLevel::Partial);
     assert_eq!(second.description.as_deref(), Some("Shared text"));
-    assert!(second.tags.is_empty());
+    assert_eq!(second.tags, [] as [std::string::String; 0]);
     assert_eq!(second.intent, None);
     assert_eq!(second.verification, None);
     assert_eq!(second.coverage, CoverageLevel::Full);
@@ -172,7 +172,7 @@ fn unusable_directives_warn_on_their_line_and_change_nothing() {
 
     assert_eq!(parsed.annotations.len(), 1);
     assert_eq!(parsed.annotations[0].name, None);
-    assert!(parsed.annotations[0].tags.is_empty());
+    assert_eq!(parsed.annotations[0].tags, [] as [std::string::String; 0]);
     assert_eq!(parsed.annotations[0].coverage, CoverageLevel::Full);
     assert_eq!(parsed.annotations[0].verification, None);
     let warnings: Vec<(usize, &str)> = parsed
@@ -199,7 +199,7 @@ fn unusable_directives_warn_on_their_line_and_change_nothing() {
 fn directives_without_a_rule_warn_that_no_rule_was_found() {
     let parsed = parse_annotations("@provenance name: Payroll thresholds");
 
-    assert!(parsed.annotations.is_empty());
+    assert_eq!(parsed.annotations, [] as [Annotation; 0]);
     assert_eq!(
         parsed.warnings,
         vec![ParseWarning {
