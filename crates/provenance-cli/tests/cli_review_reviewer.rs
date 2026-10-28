@@ -3,6 +3,7 @@ mod review_host_support;
 
 use provenance_macros::verifies;
 use review_host_support::{
+    follow::{create, pending_proposal},
     repository_with_actors, request, response, review_command, start_command, Host,
 };
 use serde_json::{json, Value};
@@ -65,7 +66,7 @@ fn configured_reviewer_is_reported_when_two_actors_are_allowed() {
 
 #[test]
 #[verifies("rule_review_host_reports_reviewer", examples)]
-fn reviewer_not_on_the_allowlist_is_reported_and_cannot_decide() {
+fn reviewer_not_on_the_allowlist_is_reported_as_not_allowed() {
     let repo = repository_with_actors(&["maintainer"]);
     let (host, _git) = start_as(repo.path(), "[provenance]\n\treviewer = visitor\n");
 
@@ -73,8 +74,16 @@ fn reviewer_not_on_the_allowlist_is_reported_and_cannot_decide() {
         review_config(&host)["reviewer"],
         json!({"actorId": "visitor", "allowed": false})
     );
+}
 
-    let proposal = pending_proposal(&host);
+#[test]
+#[verifies("rule_disposition_actor_allowlist", examples)]
+fn host_refuses_a_decision_from_an_actor_outside_the_allowlist() {
+    let repo = repository_with_actors(&["maintainer"]);
+    create(repo.path(), "req_review", "requirement", &[]);
+    let (host, _git) = start_as(repo.path(), "[provenance]\n\treviewer = visitor\n");
+    let proposal = pending_proposal(&host, "req_review");
+
     let refused = decide(&host, &proposal, "visitor");
     assert_eq!(refused.status(), 403);
     let body: Value = serde_json::from_str(&refused.into_string().unwrap()).unwrap();
@@ -85,34 +94,39 @@ fn reviewer_not_on_the_allowlist_is_reported_and_cannot_decide() {
 
 #[test]
 #[verifies("rule_review_host_reports_reviewer", examples)]
+fn git_user_name_is_the_reviewer_when_no_email_is_set() {
+    let repo = repository_with_actors(&["jane_doe"]);
+    let (host, _git) = start_as(repo.path(), "[user]\n\tname = Jane Doe\n");
+
+    assert_eq!(
+        review_config(&host)["reviewer"],
+        json!({"actorId": "jane_doe", "allowed": true})
+    );
+}
+
+#[test]
+#[verifies("rule_review_host_reports_reviewer", examples)]
+fn configured_reviewer_is_reported_without_surrounding_whitespace() {
+    let repo = repository_with_actors(&["maintainer"]);
+    let (host, _git) = start_as(
+        repo.path(),
+        "[provenance]\n\treviewer = \"  maintainer\\t\"\n",
+    );
+
+    assert_eq!(
+        review_config(&host)["reviewer"],
+        json!({"actorId": "maintainer", "allowed": true})
+    );
+}
+
+#[test]
+#[verifies("rule_review_host_reports_reviewer", examples)]
 fn no_git_identity_reports_no_reviewer() {
     let repo = repository_with_actors(&["release-manager", "maintainer"]);
     let (host, _git) = start_as(repo.path(), "");
 
     let config = review_config(&host);
     assert!(config.get("reviewer").is_none(), "{config}");
-}
-
-/// Creates a Requirement, which opens its review submission.
-fn pending_proposal(host: &Host) -> String {
-    let created = response(
-        request(host, "POST", "/requirements", true)
-            .set("Content-Type", "application/json")
-            .send_string(
-                &json!({"data": {
-                    "actor": "agent", "id": "req_review", "statement": "The record is readable.",
-                    "status": "active", "depends_on": [], "supersedes": []
-                }})
-                .to_string(),
-            ),
-    );
-    let status = created.status();
-    let created: Value = serde_json::from_str(&created.into_string().unwrap()).unwrap();
-    assert!((200..300).contains(&status), "{created}");
-    created["data"]["decision"]["pending"]["proposal_id"]
-        .as_str()
-        .unwrap()
-        .to_owned()
 }
 
 fn decide(host: &Host, proposal: &str, actor_id: &str) -> ureq::Response {
