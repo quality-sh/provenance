@@ -25,7 +25,7 @@ pub(super) fn write(repo: &Utf8Path, relative: &str, contents: &str) {
     std::fs::write(path, contents).unwrap();
 }
 
-fn write_graph(repo: &Utf8Path, rule_ids: &[&str]) {
+pub(super) fn write_graph(repo: &Utf8Path, rule_ids: &[&str]) {
     let rules = rule_ids
         .iter()
         .map(|id| (*id, "active"))
@@ -33,7 +33,7 @@ fn write_graph(repo: &Utf8Path, rule_ids: &[&str]) {
     write_graph_with_statuses(repo, &rules);
 }
 
-fn write_graph_with_statuses(repo: &Utf8Path, rules: &[(&str, &str)]) {
+pub(super) fn write_graph_with_statuses(repo: &Utf8Path, rules: &[(&str, &str)]) {
     let scope = ScopeId::new("default").unwrap();
     let manifest = Manifest::default_with_scope(scope, RepoPathPrefix::new("."));
     write(
