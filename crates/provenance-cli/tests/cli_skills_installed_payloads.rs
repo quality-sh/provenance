@@ -22,7 +22,7 @@ fn installed_bundled_payloads_match_the_root_sources() {
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect::<Vec<_>>();
-    assert!(!names.is_empty());
+    assert_eq!(names.len(), 4, "{names:?}");
     for name in &names {
         let source =
             std::fs::read_to_string(workspace.join("skills").join(name).join("SKILL.md")).unwrap();
