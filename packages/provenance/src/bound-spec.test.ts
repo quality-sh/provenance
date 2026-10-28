@@ -11,6 +11,7 @@ import test, { after } from "node:test";
 import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import { apply, configure, defineSpec, plan } from "./index.js";
+import { verifies } from "./rules.js";
 import { startWorkflow } from "./implementation-target.test-helper.js";
 
 const engine = fileURLToPath(
@@ -659,8 +660,8 @@ test("a spec-bound relation to a requirement outside the build is refused", () =
   );
 });
 
-// Implementation-aid test: a spec Rule is draft, so the store accepts its proposed Resolution.
 test("a spec Rule that cites a proposed Resolution is written as draft", async () => {
+  verifies("rule_new_rule_defaults_to_draft", "examples");
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/proposed-resolution" });
   seedResolution(repo, "proposed");
@@ -675,4 +676,39 @@ test("a spec Rule that cites a proposed Resolution is written as draft", async (
   const written = readRecords(repo, "rules/rule.jsonl").find((record) => record.id === id);
   assert.deepEqual(written?.resolution_ids, ["res_seed"]);
   assert.equal(written?.status, "draft");
+});
+
+// Implementation-aid test: checks the store refusal through the public SDK.
+test("an active spec Rule reports the store refusal for a proposed Resolution", async () => {
+  const repo = repository();
+  const owner = "spec://typescript/refused-resolution";
+  configure({ ...await fixtureSettings(repo), owner });
+  const provenance = defineSpec("refused-resolution");
+  const parent = provenance.requirement("parent").statement("Access is governed");
+  const draft = provenance.rule("decision").statement("Access follows the seed decision");
+  const result = await apply(provenance.build(parent.rules(draft)));
+  const id = result.resources.find((resource) => resource.kind === "rule")!.id;
+  const current = JSON.parse(execFileSync(
+    engine,
+    ["rules", id, "get", "--repo", repo, "--scope", "default", "--format", "json"],
+    { encoding: "utf8" },
+  ));
+  catalogWrite(repo, ["rules", id, "update"], {
+    declared_by: owner, status: "active",
+  }, ["--if-match", current.data.edit.etag]);
+  seedResolution(repo, "proposed");
+  const decision = provenance.rule("decision")
+    .statement("Access follows the seed decision").resolutions("res_seed");
+
+  await assert.rejects(apply(provenance.build(parent.rules(decision))), (error: unknown) => {
+    assert.ok(error instanceof OperationError);
+    const failure = error.failure.error;
+    assert.equal(failure.kind, "resolution_not_approved");
+    assert.equal(failure.kind === "resolution_not_approved" ? failure.resolution_id : undefined, "res_seed");
+    assert.match(
+      error.message,
+      /^resolution_not_approved: .* cites resolution res_seed, which is proposed\. /,
+    );
+    return true;
+  });
 });
