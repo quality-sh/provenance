@@ -84,9 +84,19 @@ async fn full_ingress(host: &StatementHost) -> (Vec<oneshot::Sender<()>>, Vec<He
     (releases, reads)
 }
 
-#[verifies("rule_host_slot_queue_bound", examples)]
 #[tokio::test]
-async fn sixteen_reads_and_a_write_wait_for_ingress_slots() {
+async fn repeat_sixteen_reads_and_a_write() {
+    let started = std::time::Instant::now();
+    for round in 0..400 {
+        if round % 50 == 0 {
+            eprintln!("round {round} at {:?}", started.elapsed());
+        }
+        burst().await;
+    }
+    eprintln!("400 rounds in {:?}", started.elapsed());
+}
+
+async fn burst() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let host = host(&repo, true);
@@ -113,7 +123,11 @@ async fn sixteen_reads_and_a_write_wait_for_ingress_slots() {
     }
     let (reads, later_reads, (status, body)) = tokio::join!(reads, later_reads, write);
     for response in reads.into_iter().chain(later_reads) {
-        assert_eq!(response.status(), 200);
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(status, 200, "{}", String::from_utf8_lossy(&bytes));
     }
     assert_eq!(status, 200, "{body}");
     host.shutdown().await;
