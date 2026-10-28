@@ -394,7 +394,8 @@ fn a_read_in_the_publication_gap_reads_again_after_the_publication() {
             reader.replace(Some(std::thread::spawn(move || {
                 read_published_state(&layout, || {
                     let read = std::fs::read_to_string(layout.manifest_path());
-                    attempts.send(read.is_ok()).unwrap();
+                    // The probe waits for the first read only.
+                    let _ = attempts.send(read.is_ok());
                     Ok(read?)
                 })
             })));
