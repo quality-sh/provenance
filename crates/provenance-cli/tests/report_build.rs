@@ -383,6 +383,31 @@ fn an_uncommitted_working_tree_is_labelled_incomplete_with_a_reason() {
 
 #[test]
 #[verifies("rule_report_envelope_states_only_known_facts", examples)]
+fn a_working_tree_at_another_commit_is_labelled_incomplete_with_a_reason() {
+    let (dir, base, head) = two_commit_repo();
+    let repo = dir.path();
+    git(repo, &["checkout", "-q", "--detach", &base]);
+
+    let envelope = build_envelope(repo, &base, &head);
+    assert_eq!(envelope["scan"]["completeness"], "incomplete");
+    let reason = envelope["scan"]["incompleteness_reason"]
+        .as_str()
+        .expect("an incomplete scan must state its reason");
+    assert!(
+        reason.contains(&base) && reason.contains(&head),
+        "the reason must name the checked-out commit and the head commit: {reason}"
+    );
+    let findings = envelope["findings"].as_array().cloned().unwrap_or_default();
+    for finding in &findings {
+        assert_ne!(
+            finding["binding_presence"], "absent",
+            "a scan of another commit cannot establish absence"
+        );
+    }
+}
+
+#[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
 fn builder_output_feeds_the_renderer_and_passes_its_checks() {
     let (dir, base, head) = two_commit_repo();
     let repo = dir.path();

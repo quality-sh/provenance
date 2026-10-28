@@ -299,41 +299,68 @@ fn evidence_site_findings(
     Ok(findings::evidence_site_findings(&report))
 }
 
-/// Whether the working tree matches the head commit. Scanned source facts
-/// come from the working tree; only a clean tree pins them to head.
+/// Whether the working tree has uncommitted or untracked changes.
 fn working_tree_is_clean(repo: &Utf8Path) -> anyhow::Result<bool> {
+    let output = git_output(repo, &["status", "--porcelain", "--untracked-files=all"])?;
+    Ok(output.is_empty())
+}
+
+/// The commit the working tree has checked out.
+fn checked_out_commit(repo: &Utf8Path) -> anyhow::Result<String> {
+    Ok(git_output(repo, &["rev-parse", "--verify", "HEAD"])?
+        .trim()
+        .to_string())
+}
+
+fn git_output(repo: &Utf8Path, args: &[&str]) -> anyhow::Result<String> {
     let output = std::process::Command::new("git")
         .current_dir(repo)
-        .args(["status", "--porcelain", "--untracked-files=all"])
+        .args(args)
         .output()?;
     anyhow::ensure!(
         output.status.success(),
-        "git status failed: {}",
+        "git {} failed: {}",
+        args.join(" "),
         String::from_utf8_lossy(&output.stderr).trim()
     );
-    Ok(output.stdout.is_empty())
+    Ok(String::from_utf8(output.stdout)?)
 }
 
+/// Scanned source facts come from the working tree. Only a clean tree that
+/// has the head commit checked out pins them to head.
 fn scan_completeness(
     repo: &Utf8Path,
     scan_path: &Utf8Path,
     scan_covers: bool,
     head: &str,
 ) -> anyhow::Result<(Completeness, Option<String>)> {
-    let clean = scan_covers && working_tree_is_clean(repo)?;
-    if clean {
-        return Ok((Completeness::Complete, None));
+    if !scan_covers {
+        return Ok((
+            Completeness::Incomplete,
+            Some(format!(
+                "the scan path {scan_path} covers part of the repository tree; absence \
+                 facts are not established for the whole tree"
+            )),
+        ));
     }
-    let reason = if scan_covers {
-        format!(
-            "the working tree has uncommitted changes; scanned source facts do not \
-             pin to head commit {head}"
-        )
-    } else {
-        format!(
-            "the scan path {scan_path} covers part of the repository tree; absence \
-             facts are not established for the whole tree"
-        )
-    };
-    Ok((Completeness::Incomplete, Some(reason)))
+    let checked_out = checked_out_commit(repo)?;
+    if checked_out != head {
+        return Ok((
+            Completeness::Incomplete,
+            Some(format!(
+                "the working tree has commit {checked_out} checked out; scanned source \
+                 facts do not pin to head commit {head}"
+            )),
+        ));
+    }
+    if !working_tree_is_clean(repo)? {
+        return Ok((
+            Completeness::Incomplete,
+            Some(format!(
+                "the working tree has uncommitted changes; scanned source facts do not \
+                 pin to head commit {head}"
+            )),
+        ));
+    }
+    Ok((Completeness::Complete, None))
 }
