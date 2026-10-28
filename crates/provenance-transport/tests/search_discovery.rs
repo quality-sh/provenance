@@ -6,8 +6,9 @@ mod support {
 }
 
 use axum::{body::Body, http::Request};
-use provenance_core::ScopeId;
+use provenance_core::{RuleSeverity, RuleStatus, ScopeId, StableId};
 use provenance_macros::verifies;
+use provenance_store::state_store::{CreateRuleInput, StateStore};
 use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, host};
@@ -87,11 +88,24 @@ fn object_keys(value: &Value) -> Vec<&str> {
 #[verifies("rule_resolve_symbol_cursor_continues_the_page", examples)]
 async fn resolve_symbol_pages_rank_symbol_matches_first_over_http() {
     let repo = Repository::new("The shared graph is readable.");
-    repo.seed(
-        ScopeId::new("default").unwrap(),
-        "The second graph is readable.",
-        "_b",
-    );
+    StateStore::new(repo.layout.clone())
+        .create_rule(CreateRuleInput {
+            archived_in_commit: None,
+            scope_id: ScopeId::new("default").unwrap(),
+            id: StableId::new("rule_shared_b").unwrap(),
+            name: None,
+            description: None,
+            requirement_ids: vec![StableId::new("req_shared").unwrap()],
+            resolution_ids: vec![],
+            statement: "The second graph is readable.".into(),
+            status: RuleStatus::Active,
+            severity: RuleSeverity::High,
+            source_document: None,
+            source_section: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
     std::fs::write(
         repo.dir.path().join("code.rs"),
         concat!(
