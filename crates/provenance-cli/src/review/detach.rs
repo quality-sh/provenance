@@ -229,7 +229,7 @@ fn host_key(repo: &Path, scope: &str) -> String {
     let mut key = repo.as_os_str().as_encoded_bytes().to_vec();
     key.push(0);
     key.extend_from_slice(scope.as_bytes());
-    format!("{:x}", sha2::Sha256::digest(&key))
+    hex::encode(sha2::Sha256::digest(&key))
 }
 
 /// An exclusive lock on one file per repository and scope in the owner-only cache, held

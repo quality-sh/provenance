@@ -32,6 +32,7 @@ camino.workspace = true
 clap.workspace = true
 fs2.workspace = true
 jsonschema.workspace = true
+hex.workspace = true
 pulldown-cmark.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
