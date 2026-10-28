@@ -97,6 +97,11 @@ npx provenance prime
 The repository uses the `skills/<name>/SKILL.md` layout, so the bundled skills can also
 be installed through the skills.sh ecosystem with `npx skills add <owner/repo>`.
 
+Each bundled skill has one tracked source in `skills/`. Crate-local copies are
+package outputs. Before Cargo package or publish commands, run
+`node tools/skills/prepare.mjs`. The shared generation command also prepares
+these files. See [bundled skill preparation](tools/skills/README.md).
+
 ### Documentation
 
 - [Shaping](docs/shaping.md), the refinement method and how agent sessions run it

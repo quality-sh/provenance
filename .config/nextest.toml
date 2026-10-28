@@ -1,6 +1,9 @@
 [profile.ci]
 # Bound process concurrency even when the runner receives extra CPUs.
 test-threads = 8
+# The single-source process tests run a full nested Cargo build. The
+# Default-features CLI test job runs them once per CI run.
+default-filter = 'not binary(cli_skills_single_source)'
 
 [profile.ci.junit]
 # target/nextest/ci/junit.xml; CI uploads it for TAG, the test aggregator.
