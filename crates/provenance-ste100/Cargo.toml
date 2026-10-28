@@ -18,6 +18,7 @@ schema = ["dep:schemars"]
 [dependencies]
 schemars = { workspace = true, optional = true }
 fs2.workspace = true
+hex.workspace = true
 # Keep the DocumentIR shape that pdf_oxide supports.
 # Raise the ceiling only with a pdf_oxide release that builds with the newer DocumentIR.
 office_oxide = { version = ">=0.1.15, <0.1.16", default-features = false }
@@ -28,4 +29,4 @@ serde_json.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
-jsonschema = { workspace = true, features = ["draft202012"] }
+jsonschema.workspace = true
