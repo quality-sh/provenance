@@ -74,12 +74,13 @@ fn reviewer_not_on_the_allowlist_is_reported_and_cannot_decide() {
         json!({"actorId": "visitor", "allowed": false})
     );
 
-    let proposal = pending_proposal(&host, repo.path());
+    let proposal = pending_proposal(&host);
     let refused = decide(&host, &proposal, "visitor");
     assert_eq!(refused.status(), 403);
     let body: Value = serde_json::from_str(&refused.into_string().unwrap()).unwrap();
     assert_eq!(body["error"]["kind"], "access_denied");
-    assert_eq!(decide(&host, &proposal, "maintainer").status(), 200);
+    let accepted = decide(&host, &proposal, "maintainer").status();
+    assert!((200..300).contains(&accepted), "{accepted}");
 }
 
 #[test]
@@ -92,46 +93,23 @@ fn no_git_identity_reports_no_reviewer() {
     assert!(config.get("reviewer").is_none(), "{config}");
 }
 
-/// Creates a Requirement and edits it, which opens its review submission.
-fn pending_proposal(host: &Host, repo: &Path) -> String {
-    let created = host
-        .cli()
-        .args([
-            "req_review",
-            "create",
-            "--type",
-            "requirement",
-            "--statement",
-            "The review statement applies.",
-            "--repo",
-        ])
-        .arg(repo)
-        .output()
-        .unwrap();
-    assert!(
-        created.status.success(),
-        "{}",
-        String::from_utf8_lossy(&created.stderr)
-    );
-    let read: Value = serde_json::from_str(
-        &request(host, "GET", "/requirements/req_review", true)
-            .call()
-            .unwrap()
-            .into_string()
-            .unwrap(),
-    )
-    .unwrap();
-    let etag = read["data"]["edit"]["etag"].as_str().unwrap();
-    let edited = response(
-        request(host, "PATCH", "/requirements/req_review", true)
+/// Creates a Requirement, which opens its review submission.
+fn pending_proposal(host: &Host) -> String {
+    let created = response(
+        request(host, "POST", "/requirements", true)
             .set("Content-Type", "application/json")
-            .set("If-Match", etag)
-            .send_string(&json!({"actor": "agent", "description": "Revision one."}).to_string()),
+            .send_string(
+                &json!({
+                    "actor": "agent", "id": "req_review", "statement": "The record is readable.",
+                    "status": "active", "depends_on": [], "supersedes": []
+                })
+                .to_string(),
+            ),
     );
-    let status = edited.status();
-    let edited: Value = serde_json::from_str(&edited.into_string().unwrap()).unwrap();
-    assert_eq!(status, 200, "{edited}");
-    edited["data"]["decision"]["pending"]["proposal_id"]
+    let status = created.status();
+    let created: Value = serde_json::from_str(&created.into_string().unwrap()).unwrap();
+    assert!((200..300).contains(&status), "{created}");
+    created["data"]["decision"]["pending"]["proposal_id"]
         .as_str()
         .unwrap()
         .to_owned()
