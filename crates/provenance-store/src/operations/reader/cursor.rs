@@ -174,6 +174,7 @@ mod tests {
     use super::Signature;
     use hmac::{KeyInit as _, Mac as _};
 
+    // This test has no Rule. It keeps the cursor signature the same when the hash library changes.
     #[test]
     fn signature_is_hmac_sha256() {
         // RFC 4231, test case 2.

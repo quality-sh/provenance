@@ -69,6 +69,7 @@ const fn part_label(part: PartOfSpeech) -> &'static str {
 mod tests {
     use super::*;
 
+    // This test has no Rule. It keeps the digest text the same when the hash library changes.
     #[test]
     fn source_digest_is_the_lowercase_sha256_hex_of_the_bytes() {
         assert_eq!(
@@ -77,6 +78,7 @@ mod tests {
         );
     }
 
+    // This test has no Rule. It keeps the digest text the same when the hash library changes.
     #[test]
     fn normalized_data_digest_hashes_length_prefixed_fields() {
         let entry = DictionaryEntry {

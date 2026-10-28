@@ -202,6 +202,7 @@ fn legacy_coverage_baseline_round_trips_byte_for_byte() {
     assert_eq!(serde_json::to_string_pretty(&baseline).unwrap(), json);
 }
 
+// This test has no Rule. It keeps the digest text the same when the hash library changes.
 #[test]
 fn evidence_anchor_hashes_the_trimmed_line_as_lowercase_sha256_hex() {
     let anchor = EvidenceAnchor::new(None, "  abc\t");

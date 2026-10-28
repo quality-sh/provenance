@@ -63,6 +63,7 @@ fn frozen_digest<'a, T: Serialize + 'a>(
 
 #[cfg(test)]
 mod tests {
+    // This test has no Rule. It keeps the digest text the same when the hash library changes.
     #[test]
     fn frozen_digest_hashes_sorted_json_lines_as_lowercase_hex() {
         let records = ["b".to_owned(), "a".to_owned()];

@@ -275,6 +275,7 @@ fn without_reviewer(repo: &Path) -> anyhow::Result<bool> {
 
 #[cfg(test)]
 mod tests {
+    // This test has no Rule. It keeps the digest text the same when the hash library changes.
     #[test]
     fn host_key_is_the_lowercase_sha256_hex_of_repository_nul_scope() {
         assert_eq!(
