@@ -1,7 +1,7 @@
 //! The eight structured query operations.
 //!
 //! Every primitive is one named operation with typed parameters and a
-//! bounded answer. Each resolves its repository, reads through the reader
+//! bounded answer. Each reads the opened repository through the reader
 //! entry under the supplied policy. Every answer carries a stamp.
 
 use provenance_core::protocol::{
