@@ -74,10 +74,11 @@ jobs:
               - "Cargo.lock"
               - ".config/nextest.toml"
               - "examples/rust-sdk/**"
-              # Skill files are Rust inputs: the sources compile into the
-              # binary with include_str!, and a test compares the installed
-              # copies against what an install writes.
+              # Skill files are Rust inputs: the build script copies the root
+              # sources into the binary, and tests install them.
               - "skills/**"
+              - "tools/skills/**"
+              - "tools/operation-codegen/**"
               - ".agents/skills/**"
               - ".claude/skills/**"
               # Tests read these files from the repository root, so a change
@@ -158,6 +159,7 @@ jobs:
       - name: Run the grammar linter tests
         run: node --test grammar-lint.test.mjs
         working-directory: tools/operation-codegen
+      - run: node --test tools/skills/*.test.mjs
       - run: node tools/operation-codegen/check-source-control.mjs
       - run: node tools/operation-codegen/generate.mjs
       - name: Archive generated source for dependent jobs
@@ -408,6 +410,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - run: node tools/skills/prepare.mjs
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: operation-generated
@@ -519,6 +525,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - run: node tools/skills/prepare.mjs
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
@@ -1046,6 +1056,37 @@ jobs:
         run: sfw cargo fetch --locked
       - run: cargo test --locked -p provenance-store --target ${{ matrix.target }} operations::files
 
+  skills-install:
+    timeout-minutes: 60
+    name: Skill install (${{ matrix.os }})
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: skills-install
+      - run: node tools/skills/prepare.mjs
+      - name: Fetch crates through Socket Firewall
+        env:
+          # See the repository file access job.
+          CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
+        run: sfw cargo fetch --locked
+      - name: Test public skill installation and init
+        run: cargo test --locked -p provenance-cli --test cli_skills --test cli_skills_copy_tree --test cli_skills_build_source --test cli_skills_cleanup --test cli_init_onboarding --test cli_init_summary
+
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never
   # reports its expanded name, so requiring the jobs directly deadlocks a
@@ -1075,6 +1116,7 @@ jobs:
       - release-smoke-tools
       - operation-contract
       - repository-file-access
+      - skills-install
     if: always()
     runs-on: ubuntu-24.04
     steps:

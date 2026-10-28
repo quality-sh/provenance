@@ -9,7 +9,8 @@ repository.workspace = true
 homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
-# Composed assets are prepared before packaging and are not tracked by Git.
+# Composed assets and skills are prepared before packaging and are not tracked.
+# Run node tools/skills/prepare.mjs before Cargo collects package files.
 include = ["src/**", "skills/**", "build.rs", "build/**", "review-assets/**", "review-assets-generated/**", "tests/**", "Cargo.toml", "README.md"]
 
 [lints]
