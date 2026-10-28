@@ -61,9 +61,14 @@ impl Control {
             .expect("a preparation enters the gate");
     }
 
-    /// Lets every held and later preparation continue.
+    /// Lets every held and later preparation continue. A poisoned lock still opens, so a
+    /// drop during a panic does not panic again.
     pub fn open(&self) {
-        *self.state.open.lock().unwrap() = true;
+        *self
+            .state
+            .open
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
         self.state.opened.notify_all();
     }
 
