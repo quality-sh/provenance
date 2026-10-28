@@ -3,10 +3,12 @@ use super::super::{
     RequestedContext,
 };
 use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use provenance_core::{
     protocol::failure::OperationFailure, Manifest, RepoPathPrefix, Scope, ScopeId,
     SDK_PROTOCOL_VERSION,
 };
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -28,8 +30,9 @@ impl ContextResolver for Resolver {
 }
 
 #[tokio::test]
+#[verifies("rule_operation_scope_is_the_opened_scope", examples)]
 async fn discussion_write_scope_mismatch_keeps_its_safe_status() {
-    let directory = tempfile::tempdir().unwrap();
+    let (_directory, _layout, resolver) = review_fixture();
     let error = invoke_with(
         "write-discussion",
         SDK_PROTOCOL_VERSION,
@@ -43,17 +46,33 @@ async fn discussion_write_scope_mismatch_keeps_its_safe_status() {
                 "action": {"kind": "start", "role": "user", "body": "Concern"}
             }
         }),
-        Direct(Arc::new(Resolver(PreparedScope {
-            root: camino::Utf8PathBuf::from_path_buf(directory.path().into()).unwrap(),
-            scope: ScopeId::new("selected").unwrap(),
-            requested_target: "fixture".into(),
-        }))),
+        Direct(resolver),
     )
     .await
     .unwrap_err();
 
     assert_eq!(error.error, json!({"kind": "scope_mismatch"}));
     assert_eq!(error.status_code(), 400);
+}
+
+/// The handle refuses another declared scope before any read or write.
+#[test]
+#[verifies("rule_operation_scope_is_the_opened_scope", examples)]
+fn ensure_selected_refuses_the_other_declared_scope() {
+    let (_directory, layout, resolver) = review_fixture();
+    let repository = &resolver.0.repository;
+    assert_eq!(
+        repository.ensure_selected(&ScopeId::new("selected").unwrap()),
+        Ok(())
+    );
+    assert_eq!(
+        repository.ensure_selected(&ScopeId::new("other").unwrap()),
+        Err(crate::repository::ScopeMismatch {
+            selected: ScopeId::new("selected").unwrap(),
+            requested: ScopeId::new("other").unwrap(),
+        })
+    );
+    assert!(!layout.scopes_dir().exists());
 }
 
 fn review_fixture() -> (tempfile::TempDir, ProvenanceLayout, Arc<Resolver>) {
@@ -73,8 +92,7 @@ fn review_fixture() -> (tempfile::TempDir, ProvenanceLayout, Arc<Resolver>) {
     )
     .unwrap();
     let resolver = Arc::new(Resolver(PreparedScope {
-        root,
-        scope: selected,
+        repository: Repository::open(&root, selected.as_str()).unwrap(),
         requested_target: "fixture".into(),
     }));
     (directory, layout, resolver)

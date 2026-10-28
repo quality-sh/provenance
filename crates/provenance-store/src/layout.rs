@@ -132,13 +132,21 @@ pub fn with_initialized_graph<R>(
             Ok(())
         },
         || {
-            let manifest = match std::fs::metadata(layout.manifest_path()) {
-                Ok(metadata) if metadata.is_file() => {
-                    crate::state_store::StateStore::new(layout.clone()).manifest()?
-                }
+            let path = layout.manifest_path();
+            let manifest = match std::fs::metadata(&path) {
+                Ok(metadata) if metadata.is_file() => crate::state_store::manifest_from_bytes(
+                    &std::fs::read(&path)?,
+                )
+                .map_err(|error| {
+                    if error.is::<serde_json::Error>() {
+                        error.context(format!("failed to parse manifest {path}"))
+                    } else {
+                        error
+                    }
+                })?,
                 Ok(_) => anyhow::bail!("Provenance graph manifest is not a file"),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    if path_exists(&layout.manifest_path())? {
+                    if path_exists(&path)? {
                         anyhow::bail!("Provenance graph manifest is not a file");
                     }
                     return Err(GraphNotInitialized.into());

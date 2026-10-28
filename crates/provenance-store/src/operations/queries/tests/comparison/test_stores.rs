@@ -4,6 +4,7 @@
 
 use crate::cache::tests::fixtures;
 use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use crate::state_store::StateStore;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::ScopeId;
@@ -36,6 +37,11 @@ impl TestStore {
 
     pub fn state_store(&self) -> StateStore {
         StateStore::new(self.layout())
+    }
+
+    /// The store's repository, opened for its scope.
+    pub fn repository(&self) -> Repository {
+        Repository::open(&self.root, self.scope.as_str()).unwrap()
     }
 
     /// The frozen store of the pinned answers test, under two commits so the

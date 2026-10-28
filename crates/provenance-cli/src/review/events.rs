@@ -16,7 +16,7 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::OperationFailure;
-use provenance_store::layout::ProvenanceLayout;
+use provenance_store::repository::Repository;
 use provenance_transport::{HttpCredential, LocalAccess};
 use std::sync::Arc;
 use subscribers::{Subscribers, Subscription};
@@ -38,7 +38,7 @@ pub(super) struct ReviewEvents {
 
 impl ReviewEvents {
     pub async fn start(
-        layout: ProvenanceLayout,
+        repository: Repository,
         scope: String,
         epoch: String,
         access: Arc<LocalAccess>,
@@ -46,7 +46,7 @@ impl ReviewEvents {
     ) -> Self {
         let subscribers = Subscribers::new(epoch, scope);
         let observation =
-            tokio::task::spawn_blocking(move || watch::Observation::new(layout)).await;
+            tokio::task::spawn_blocking(move || watch::Observation::new(repository)).await;
         let observer = match observation {
             Ok(Ok(observation)) => {
                 let baseline = match observation.read(false).await {

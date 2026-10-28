@@ -1,8 +1,7 @@
 use crate::{
-    layout::ProvenanceLayout,
+    repository::Repository,
     state_store::{ReconcileState, StateStore, TypedResourceKind, TypedSpecInput, TypedSpecResult},
 };
-use camino::Utf8Path;
 use provenance_core::StableId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -48,11 +47,12 @@ impl AffectedRule {
 }
 
 pub(super) fn typed_spec(
-    repo: &Utf8Path,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     input: TypedSpecInput,
 ) -> anyhow::Result<TypedSpecPlan> {
-    let store = StateStore::new(ProvenanceLayout::new(repo.to_path_buf()));
+    let store = repository.store();
+    let scope = repository.scope();
+    let repo = repository.working_tree();
     let reconciliation = store.plan_typed_spec(scope, input)?;
     let reviews = evidence::reviews(&store, scope, &reconciliation)?;
     let mut changed_rules = affected_rule_ids(&store, scope, &reconciliation)?;

@@ -1,33 +1,31 @@
 use super::{nodes, served, ReadContext, ReadPolicy};
 use crate::operations::reader::Cursor;
-use camino::Utf8PathBuf;
+use crate::repository::Repository;
 use provenance_core::protocol::{
     read_failure::ReadFailure, DocumentEntry, DocumentReviewTotals, ReadDocumentQuery,
     ReadDocumentResult, StampPolicy, Stamped,
 };
-use provenance_core::{NodeType, ScopeId, StableId};
+use provenance_core::{NodeType, StableId};
 use provenance_macros::rule;
 
 /// A failed catch-up cannot establish a complete current document.
 #[rule("rule_review_partial_reads_remain_explicit")]
 pub async fn read_document(
-    repo: Option<Utf8PathBuf>,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     request: ReadDocumentQuery,
 ) -> anyhow::Result<Stamped<ReadDocumentResult>> {
-    read_document_answer(repo, scope, policy, request)
+    read_document_answer(repository, policy, request)
         .await
         .and_then(|answer| super::page::checked("read-document", answer))
 }
 
 pub async fn read_document_answer(
-    repo: Option<Utf8PathBuf>,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     request: ReadDocumentQuery,
 ) -> anyhow::Result<Stamped<ReadDocumentResult>> {
-    let answer = served(repo, scope, policy, move |ctx| {
+    let answer = served(repository, policy, move |ctx| {
         // Keep page errors until the freshness policy is checked.
         Box::pin(async move { Ok(read(ctx, request).await) })
     })
@@ -47,14 +45,13 @@ pub async fn read_document_answer(
 /// A Requirement selects its own document. Other graph records must be members,
 /// except Sources and Domains, which the document stores as references.
 pub async fn containing_review_documents(
-    repo: Option<Utf8PathBuf>,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     kind: NodeType,
     id: &StableId,
 ) -> anyhow::Result<Stamped<Vec<StableId>>> {
     let id = id.clone();
-    served(repo, scope, policy, move |ctx| {
+    served(repository, policy, move |ctx| {
         Box::pin(async move { ctx.snapshot().containing_document_roots(kind, &id).await })
     })
     .await

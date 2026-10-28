@@ -11,7 +11,7 @@
 use super::hydration_support::{
     append_binding, append_review, counted, evidence_query, resolve_query, OVERSIZED_BYTES,
 };
-use super::{root_of, seeded_store};
+use super::{repository_of, root_of, seeded_store};
 use crate::cache::tests::fixtures::create_rule_of;
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
@@ -50,8 +50,7 @@ async fn evidence_hydrates_only_the_served_page() {
         );
     }
     let (answer, hydrations) = counted(queries::evidence(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         evidence_query(3),
     ))
@@ -79,8 +78,7 @@ async fn an_oversized_binding_past_the_page_cannot_refuse_evidence() {
         OVERSIZED_BYTES,
     );
     let (answer, hydrations) = counted(queries::evidence(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         evidence_query(2),
     ))
@@ -109,8 +107,7 @@ async fn evidence_pages_only_the_open_reviews() {
         append_review(&store, &scope, id, cleared_at);
     }
     let answer = queries::evidence(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         evidence_query(2),
     )
@@ -149,8 +146,7 @@ async fn resolve_symbol_hydrates_only_the_rule_page() {
     append_binding(&state, &store.scope, "bind_audit", "rule_audit", "audit", 0);
 
     let (answer, hydrations) = counted(queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         resolve_query(None, 2),
     ))
@@ -168,8 +164,7 @@ async fn resolve_symbol_hydrates_only_the_rule_page() {
     assert!(hydrations <= 3, "binding rows must never decode");
 
     let (answer, hydrations) = counted(queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         resolve_query(Some("pay"), 2),
     ))

@@ -73,8 +73,9 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
         Command::Docs { command } => docs::handle(command).await,
         Command::Review(options) => crate::review::run(options).await,
         Command::Materialize { repo, .. } => {
-            let store = crate::store::Store::open_required(repo)?;
-            output::print_json(&cache::materialize_state(store.layout()).await?)
+            let repository =
+                provenance_cli::repo_context::RepoContext::new(repo, "default").open()?;
+            output::print_json(&cache::materialize_state(&repository).await?)
         }
         command => dispatch_on_thread(command, quiet),
     }

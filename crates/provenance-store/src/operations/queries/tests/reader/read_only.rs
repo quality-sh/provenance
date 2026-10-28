@@ -51,7 +51,7 @@ async fn read_only_answer(untakeable: bool) {
         return;
     }
     if untakeable {
-        let error = crate::publication::publication_guard(&store.layout())
+        let error = crate::publication::publication_guard(&store.repository())
             .await
             .err()
             .unwrap();
@@ -138,7 +138,9 @@ async fn a_half_migrated_projection_refuses_without_taking_the_lock() {
 async fn a_guard_directory_permission_failure_keeps_its_io_kind() {
     let dir = tempfile::tempdir().unwrap();
     let layout = crate::layout::ProvenanceLayout::new(dir.path().to_str().unwrap());
-    std::fs::create_dir(layout.provenance_dir()).unwrap();
+    // The open creates the cache directory; the guard must create it again under 0o555.
+    let repository = crate::cache::tests::fixtures::initialized(dir.path());
+    std::fs::remove_dir_all(layout.cache_dir()).unwrap();
     let mut restore = Restore(Vec::new());
     restore.set(layout.provenance_dir(), 0o555);
     let probe = layout.provenance_dir().join("probe");
@@ -150,7 +152,7 @@ async fn a_guard_directory_permission_failure_keeps_its_io_kind() {
         );
         return;
     }
-    let error = crate::publication::publication_guard(&layout)
+    let error = crate::publication::publication_guard(&repository)
         .await
         .err()
         .unwrap();

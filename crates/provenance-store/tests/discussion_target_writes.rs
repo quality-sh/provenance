@@ -1,5 +1,5 @@
 mod discussion_support;
-use discussion_support::{fixture, id, scope};
+use discussion_support::{fixture, id, repository, scope};
 use provenance_core::protocol::failure::OperationError;
 use provenance_core::threads::DiscussionStatus;
 use provenance_store::{
@@ -219,8 +219,7 @@ async fn catalog_operation_uses_the_target_write_path() {
         "write-target-discussion"
     ));
     let context = PreparedContext::for_scope(PreparedScope {
-        root: camino::Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap(),
-        scope: scope(),
+        repository: repository(camino::Utf8Path::from_path(temp.path()).unwrap()),
         requested_target: "selected".into(),
     });
     let receipt =
@@ -239,8 +238,7 @@ async fn catalog_scope_mismatch_is_safe_and_does_not_write() {
     let file_count = state_files();
     let requirement = store.requirement_edit_state(&scope(), &id()).unwrap();
     let context = PreparedContext::for_scope(PreparedScope {
-        root: camino::Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap(),
-        scope: scope(),
+        repository: repository(camino::Utf8Path::from_path(temp.path()).unwrap()),
         requested_target: "selected".into(),
     });
     let mut mismatched: WriteTargetDiscussionRequest = serde_json::from_value(json!({

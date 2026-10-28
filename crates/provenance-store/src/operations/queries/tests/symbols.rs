@@ -62,13 +62,15 @@ fn rule_ids(rules: &[provenance_core::protocol::GraphNode]) -> Vec<&str> {
 #[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
 async fn resolve_symbol_reads_the_named_file_only() {
     let store = store_with_rule();
-    crate::cache::catch_up_state(&store.layout()).await.unwrap();
+    crate::cache::catch_up_state(&store.repository())
+        .await
+        .unwrap();
     crate::test_probes::set_test_scan(None);
     let policy = ReadPolicy {
         freshness: FreshnessPolicy::AnnotateOnly,
         scan_limit: 0,
     };
-    let cut = reader::answer(&store.root, &store.scope, policy, |ctx| {
+    let cut = reader::answer(&store.repository(), policy, |ctx| {
         Box::pin(async move {
             impact::impact(
                 ctx,
@@ -87,7 +89,7 @@ async fn resolve_symbol_reads_the_named_file_only() {
     .unwrap();
     assert!(cut.result.scan_cut);
 
-    let answer = reader::answer(&store.root, &store.scope, policy, |ctx| {
+    let answer = reader::answer(&store.repository(), policy, |ctx| {
         Box::pin(async move { symbols::resolve(ctx, resolve("src/pay.rs", Some(1))).await })
     })
     .await
@@ -106,8 +108,7 @@ async fn resolve_symbol_on_an_unscanned_extension_answers_bindings_only() {
     std::fs::create_dir_all(note.parent().unwrap()).unwrap();
     std::fs::write(note, "#[rule(\"rule_from_prose\")]\nfn pay() {}\n").unwrap();
     let answer = queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         resolve("docs/pay.md", None),
     )
@@ -131,8 +132,7 @@ async fn resolve_symbol_on_a_missing_file_answers_bindings_only() {
     let store = store_with_rule();
     bind(&store, "bind_gone", "src/gone.rs");
     let answer = queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         resolve("src/gone.rs", None),
     )
@@ -168,8 +168,7 @@ async fn resolve_symbol_scans_only_a_repository_relative_path() {
     ] {
         for line in [None, Some(1)] {
             let Err(error) = queries::resolve_symbol(
-                Some(store.root.clone()),
-                &store.scope,
+                &store.repository(),
                 ReadPolicy::default(),
                 resolve(file, line),
             )

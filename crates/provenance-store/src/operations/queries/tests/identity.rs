@@ -1,4 +1,5 @@
-use super::{root_of, seeded_store};
+use super::{repository_of, root_of, seeded_store};
+use crate::cache::tests::fixtures::open;
 use crate::cache::{catch_up_state, open_cache};
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
@@ -18,8 +19,7 @@ async fn repository_identity_resolves_a_typed_node_from_one_snapshot() {
     let (dir, _store, scope) = seeded_store();
 
     let answer = queries::resolve_record(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         request("req_overtime", NodeType::ALL.to_vec()),
     )
@@ -39,8 +39,7 @@ async fn identity_resolution_hides_disallowed_kinds_as_missing() {
     let (dir, _store, scope) = seeded_store();
 
     let answer = queries::resolve_record(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         request("domain_payroll", vec![NodeType::Requirement]),
     )
@@ -58,7 +57,7 @@ async fn identity_resolution_hides_disallowed_kinds_as_missing() {
 async fn identity_resolution_does_not_reveal_another_bound_scope() {
     let (dir, _store, scope) = seeded_store();
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     sqlx::query("INSERT INTO record_identities (scope_id, id, node_type) VALUES (?, ?, ?)")
         .bind("other")
@@ -70,8 +69,7 @@ async fn identity_resolution_does_not_reveal_another_bound_scope() {
     pool.close().await.unwrap();
 
     let answer = queries::resolve_record(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         request("foreign_record", NodeType::ALL.to_vec()),
     )
@@ -88,7 +86,7 @@ async fn identity_resolution_does_not_reveal_another_bound_scope() {
 async fn identity_index_rejects_one_id_in_another_scope_and_kind() {
     let (dir, _store, _scope) = seeded_store();
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
 
     let error =
@@ -110,7 +108,7 @@ async fn identity_index_rejects_one_id_in_another_scope_and_kind() {
 async fn hidden_duplicate_kind_does_not_change_the_visible_resolution() {
     let (dir, _store, scope) = seeded_store();
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     // Simulate a damaged projection so the resolver's visibility rule is tested.
     sqlx::query("DROP INDEX idx_record_identities_id")
@@ -127,8 +125,7 @@ async fn hidden_duplicate_kind_does_not_change_the_visible_resolution() {
     pool.close().await.unwrap();
 
     let answer = queries::resolve_record(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         request("req_overtime", vec![NodeType::Requirement]),
     )
@@ -145,7 +142,7 @@ async fn hidden_duplicate_kind_does_not_change_the_visible_resolution() {
 async fn identity_resolver_reports_an_ambiguous_visible_index() {
     let (dir, _store, scope) = seeded_store();
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     // Simulate a damaged projection so the resolver's ambiguity rule is tested.
     sqlx::query("DROP INDEX idx_record_identities_id")

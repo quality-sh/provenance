@@ -14,7 +14,7 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
-use provenance_store::operations::LocalRepository;
+use provenance_store::{operations::LocalRepository, repository::Repository};
 use provenance_transport::{
     local_host::{
         LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE, LAUNCH_CODE_ROUTE,
@@ -60,15 +60,15 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         uuid::Uuid::new_v4().simple(),
         uuid::Uuid::new_v4().simple()
     );
-    let (canonical_repo, repository, access) = repository_access(&options, &token, address)?;
-    if repository.disposition_actor_ids()?.is_empty() {
+    let (repository, binding, access) = repository_access(&options, &token, address)?;
+    let canonical_repo = repository.working_tree().as_std_path().to_path_buf();
+    if binding.disposition_actor_ids()?.is_empty() {
         eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
     }
-    let host = StatementHost::with_access(repository.clone())
+    let host = StatementHost::with_access(binding.clone())
         .with_credential(access.clone())
         .with_check_port(Arc::new(crate::handlers::check::RepositoryCheckPort::new(
-            camino::Utf8PathBuf::from_path_buf(canonical_repo.clone())
-                .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
+            repository.working_tree().to_path_buf(),
             false,
             None,
         )));
@@ -88,10 +88,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         launch::LaunchKey::publish(&identity.instance_nonce)?,
     );
     let events = events::ReviewEvents::start(
-        provenance_store::layout::ProvenanceLayout::new(
-            camino::Utf8PathBuf::from_path_buf(canonical_repo.clone())
-                .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
-        ),
+        repository.clone(),
         options.scope.clone(),
         identity.instance_nonce.clone(),
         access.clone(),
@@ -105,15 +102,12 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     });
     let review_configuration = ReviewConfiguration {
         credential: access.clone(),
-        repository,
+        repository: binding,
         value: config,
     };
     let page_events = events.clone();
     let host = host.with_page_writes(
-        provenance_store::layout::ProvenanceLayout::new(
-            camino::Utf8PathBuf::from_path_buf(canonical_repo)
-                .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
-        ),
+        repository,
         Arc::new(move |changes| page_events.page_changed(changes)),
     );
     let router = review_router(
@@ -188,28 +182,22 @@ fn review_router(
         ))
 }
 
-/// The repository binding and the caller credential, built separately.
+/// The opened repository, its alias binding and the caller credential, built separately.
 fn repository_access(
     options: &Options,
     token: &str,
     address: std::net::SocketAddr,
-) -> anyhow::Result<(PathBuf, Arc<LocalRepository>, Arc<LocalAccess>)> {
-    let canonical_repo = options
-        .repo
-        .canonicalize()
-        .map_err(|_| OperationFailure::InvalidInput {
-            field: None,
-            reason: provenance_core::protocol::failure::InvalidInputReason::InvalidValue,
-        })
+) -> anyhow::Result<(Repository, Arc<LocalRepository>, Arc<LocalAccess>)> {
+    let repository = Repository::open(&options.repo, &options.scope)
         .context("cannot configure review repository access")?;
-    let repository = Arc::new(
-        LocalRepository::new(&canonical_repo, &options.repository_id, &options.scope)
+    let binding = Arc::new(
+        LocalRepository::bind(repository.clone(), &options.repository_id)
             .context("cannot configure review repository access")?,
     );
     let access = Arc::new(
         LocalAccess::new(token, address).context("cannot configure review repository access")?,
     );
-    Ok((canonical_repo, repository, access))
+    Ok((repository, binding, access))
 }
 
 /// Opens the review page signed in, or tells the person which link to open.

@@ -1,4 +1,5 @@
-use super::{root_of, seeded_store};
+use super::{repository_at, repository_of, root_of, seeded_store};
+use crate::cache::tests::fixtures::open;
 use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
@@ -22,8 +23,7 @@ impl ContextResolver for Target {
         _: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         Ok(PreparedContext::read(PreparedRead {
-            root: self.0.clone(),
-            scope: provenance_core::ScopeId::new("default").unwrap(),
+            repository: crate::repository::Repository::open(&self.0, "default").unwrap(),
             policy: ReadPolicy::default(),
             requested_target: "test".into(),
             external: true,
@@ -160,8 +160,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
         limit: 50,
     };
     let stale = super::super::read_document(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
         request.clone(),
     )
@@ -181,7 +180,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
 
     std::fs::write(path, saved).unwrap();
     let recovered =
-        super::super::read_document(Some(root_of(&dir)), &scope, ReadPolicy::default(), request)
+        super::super::read_document(&repository_of(&dir), ReadPolicy::default(), request)
             .await
             .unwrap();
     assert_eq!(recovered.result.root_id.as_str(), "req_new");
@@ -207,8 +206,7 @@ async fn document_valid_freshness_preserves_page_refusals() {
             ("req_overtime", Some("invalid"), ReadFailure::CursorInvalid),
         ] {
             let error = super::super::read_document(
-                Some(root_of(&dir)),
-                &scope,
+                &repository_of(&dir),
                 ReadPolicy::with_freshness(freshness),
                 ReadDocumentQuery {
                     id: id.into(),
@@ -237,7 +235,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
     let initial = complete(root.clone()).await;
     let layout = store.layout.clone();
     let write_scope = scope.clone();
-    let answer = reader::answer(&root, &scope, ReadPolicy::default(), move |ctx| {
+    let answer = reader::answer(&repository_at(&root), ReadPolicy::default(), move |ctx| {
         Box::pin(async move {
             assert_eq!(ctx.snapshot().table::<provenance_core::Requirement>().count().await?, 1);
             let path = crate::shards::requirements_path(&layout, &write_scope);
@@ -258,7 +256,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
                     "ai_metadata":{"order":"logical"}
                 }));
             }
-            crate::cache::catch_up_state(&layout).await?;
+            crate::cache::catch_up_state(&open(&layout)).await?;
             super::super::document::read(ctx, ReadDocumentQuery {
                 id: "req_overtime".into(),
                 exclude_terminal: false,

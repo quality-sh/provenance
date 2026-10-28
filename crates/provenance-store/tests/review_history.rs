@@ -25,7 +25,7 @@ async fn history_lists_commits_and_working_version() {
         limit: 10,
         cursor: None,
     };
-    let versions = read_history(root, &scope(), ReadPolicy::default(), query)
+    let versions = read_history(&repository(root), ReadPolicy::default(), query)
         .await
         .unwrap()
         .result

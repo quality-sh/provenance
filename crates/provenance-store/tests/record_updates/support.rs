@@ -92,8 +92,11 @@ impl Fixture {
             provenance_core::SDK_PROTOCOL_VERSION,
             json!({"context":{"repository":"fixture","scope":"default"},"request":request}),
             Host(Arc::new(Resolver(PreparedScope {
-                root: camino::Utf8PathBuf::from_path_buf(self.dir.path().into()).unwrap(),
-                scope: self.scope.clone(),
+                repository: provenance_store::repository::Repository::open(
+                    self.dir.path(),
+                    self.scope.as_str(),
+                )
+                .unwrap(),
                 requested_target: "fixture".into(),
             }))),
         )

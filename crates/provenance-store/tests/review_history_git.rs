@@ -78,7 +78,7 @@ async fn versions(temp: &tempfile::TempDir) -> Vec<RecordVersion> {
         limit: 50,
         cursor: None,
     };
-    read_history(root, &scope(), ReadPolicy::default(), query)
+    read_history(&repository(root), ReadPolicy::default(), query)
         .await
         .unwrap()
         .result

@@ -2,6 +2,7 @@ use crate::store::Store;
 use camino::Utf8PathBuf;
 use clap::Args;
 use provenance_core::ScopeId;
+use provenance_store::repository::{OpenFailure, Repository};
 
 #[derive(Clone, Debug, Args)]
 pub struct RepoContext {
@@ -17,6 +18,13 @@ impl RepoContext {
             repo: repo.into(),
             scope: scope.into(),
         }
+    }
+
+    /// Opens the repository once for this command: the initialized-graph gate,
+    /// the declared scope and the settings, with the nested-repository hint.
+    pub fn open(&self) -> anyhow::Result<Repository> {
+        Repository::open(&self.repo, &self.scope)
+            .map_err(|error| initialization_hint(&self.repo, open_failure(error)))
     }
 
     pub fn open_graph(&self) -> anyhow::Result<Store> {
@@ -46,14 +54,22 @@ impl RepoContext {
     }
 
     pub fn local_host(&self) -> anyhow::Result<provenance_transport::StatementHost> {
-        self.open_graph()?;
-        let root = std::fs::canonicalize(&self.repo)?;
         let repository =
-            provenance_store::operations::LocalRepository::new(&root, "native", &self.scope)
+            provenance_store::operations::LocalRepository::bind(self.open()?, "native")
                 .map_err(|failure| anyhow::anyhow!(failure))?;
         Ok(provenance_transport::StatementHost::with_access(
             std::sync::Arc::new(repository),
         ))
+    }
+}
+
+/// The open failure in the shape the command refusals downcast: a missing
+/// graph keeps its marker and a gate failure keeps its cause.
+fn open_failure(error: OpenFailure) -> anyhow::Error {
+    match error {
+        OpenFailure::NotInitialized => provenance_store::layout::GraphNotInitialized.into(),
+        OpenFailure::Io(error) => error,
+        other => other.into(),
     }
 }
 

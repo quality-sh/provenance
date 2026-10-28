@@ -65,8 +65,7 @@ fn an_unresolved_implementation_target_refuses_apply_without_writes() {
         .unwrap();
 
     let error = operations::apply(
-        Some(root.clone()),
-        &ScopeId::new("default").unwrap(),
+        &provenance_sdk::Repository::open(&root, "default").unwrap(),
         document.materialize("spec://rust"),
     )
     .unwrap_err();

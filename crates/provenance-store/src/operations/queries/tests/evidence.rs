@@ -16,15 +16,10 @@ async fn evidence_reports_which_list_was_cut() {
     let store = TestStore::pinned();
     let mut request = requests::evidence("rule_overtime_001", None);
     request.limit = 2;
-    let answer = queries::evidence(
-        Some(store.root.clone()),
-        &store.scope,
-        ReadPolicy::default(),
-        request.clone(),
-    )
-    .await
-    .unwrap()
-    .result;
+    let answer = queries::evidence(&store.repository(), ReadPolicy::default(), request.clone())
+        .await
+        .unwrap()
+        .result;
     assert_eq!(answer.implementation_bindings.len(), 2);
     assert!(!answer.implementation_bindings_has_more);
     assert_eq!(answer.verification_bindings.len(), 2);
@@ -46,8 +41,7 @@ async fn evidence_reports_which_list_was_cut() {
 async fn a_cleared_review_is_not_open() {
     let store = TestStore::pinned();
     let answer = queries::evidence(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         requests::evidence("rule_overtime_001", None),
     )

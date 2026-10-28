@@ -7,15 +7,13 @@
 use anyhow::Context as _;
 use std::str::FromStr as _;
 
-use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{
-    EngineInfo, ScopeId, StableId, SDK_PROTOCOL_VERSION, SUPPORTED_SCHEMA_VERSION,
-};
+use camino::Utf8Path;
+use provenance_core::{EngineInfo, StableId, SDK_PROTOCOL_VERSION, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::rule;
 
-use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use crate::state_store::{
-    BeginVerificationInput, CompleteVerificationInput, StateStore, TypedSpecInput, TypedSpecResult,
+    BeginVerificationInput, CompleteVerificationInput, TypedSpecInput, TypedSpecResult,
 };
 
 pub mod catalog;
@@ -32,67 +30,33 @@ pub use crate::write_error;
 pub use local_repository::LocalRepository;
 pub use plan::{AffectedRule, ReviewReason, RuleEvidence, TypedSpecPlan};
 
-/// Resolves one explicit root or discovers the nearest enclosing project.
-#[rule("rule_sdk_project_discovery")]
-pub fn discover_repository(repo: Option<Utf8PathBuf>) -> anyhow::Result<Utf8PathBuf> {
-    let cwd = Utf8PathBuf::from_path_buf(std::env::current_dir()?)
-        .map_err(|path| anyhow::anyhow!("current directory is not UTF-8: {}", path.display()))?;
-    let (start, explicit) = match repo {
-        Some(repo) => (
-            if repo.is_relative() {
-                cwd.join(repo)
-            } else {
-                repo
-            },
-            true,
-        ),
-        None => (cwd, false),
-    };
-    if explicit {
-        return canonical_repository(&start);
-    }
-    for ancestor in start.ancestors() {
-        if ancestor.join(".provenance/state/manifest.json").is_file()
-            || ancestor.join(".git").exists()
-        {
-            return canonical_repository(ancestor);
-        }
-    }
-    canonical_repository(&start)
-}
-
 /// Advertises the engine contract. The engine version is the store's own.
-pub fn engine_info(repo: Option<Utf8PathBuf>) -> anyhow::Result<EngineInfo> {
-    Ok(EngineInfo {
+pub fn engine_info(repository: &Repository) -> EngineInfo {
+    EngineInfo {
         engine_version: env!("CARGO_PKG_VERSION").to_string(),
         protocol_version: SDK_PROTOCOL_VERSION,
         state_schema_version: SUPPORTED_SCHEMA_VERSION.0,
-        repository: discover_repository(repo)?,
-    })
+        repository: repository.working_tree().to_path_buf(),
+    }
 }
 
 /// Calculates one reconciliation, its affected Rules, and their evidence,
 /// without writing.
-pub fn plan(
-    repo: Option<Utf8PathBuf>,
-    scope: &ScopeId,
-    mut input: TypedSpecInput,
-) -> anyhow::Result<TypedSpecPlan> {
-    let repo = discover_repository(repo)?;
-    normalize_implementation_context(&repo, &mut input)?;
-    plan::typed_spec(&repo, scope, input)
+pub fn plan(repository: &Repository, mut input: TypedSpecInput) -> anyhow::Result<TypedSpecPlan> {
+    normalize_implementation_context(repository.working_tree(), &mut input)?;
+    plan::typed_spec(repository, input)
 }
 
 /// Reconciles one language-owned desired-state document with canonical
 /// state.
 pub fn apply(
-    repo: Option<Utf8PathBuf>,
-    scope: &ScopeId,
+    repository: &Repository,
     mut input: TypedSpecInput,
 ) -> anyhow::Result<TypedSpecResult> {
-    let repo = discover_repository(repo)?;
-    normalize_implementation_context(&repo, &mut input)?;
-    StateStore::new(ProvenanceLayout::new(repo)).apply_typed_spec(scope, input)
+    normalize_implementation_context(repository.working_tree(), &mut input)?;
+    repository
+        .store()
+        .apply_typed_spec(repository.scope(), input)
 }
 
 /// Opens one verification run against a durable binding.
@@ -101,40 +65,39 @@ pub fn apply(
 /// the store; the word reaches a stored row only through its `Display` form
 /// at the run-row edge.
 pub fn begin_verification(
-    repo: Option<Utf8PathBuf>,
-    scope: ScopeId,
+    repository: &Repository,
     mut input: BeginVerificationInput,
 ) -> anyhow::Result<provenance_core::VerificationRun> {
-    let repo = discover_repository(repo)?;
     let method = provenance_scanner::Verification::from_str(&input.method).map_err(|error| {
         write_error::SourceFailure::wrap(
             write_error::WriteFailure::InvalidVerificationTarget,
             error,
         )
     })?;
-    normalize_verification_context(&repo, &mut input)?;
-    StateStore::new(ProvenanceLayout::new(repo)).begin_verification(scope, input, method)
+    normalize_verification_context(repository.working_tree(), &mut input)?;
+    repository
+        .store()
+        .begin_verification(repository.scope().clone(), input, method)
 }
 
 /// Completes one verification run as passed or failed.
 pub fn complete_verification(
-    repo: Option<Utf8PathBuf>,
-    scope: &ScopeId,
+    repository: &Repository,
     input: CompleteVerificationInput,
 ) -> anyhow::Result<provenance_core::VerificationRun> {
-    let repo = discover_repository(repo)?;
-    StateStore::new(ProvenanceLayout::new(repo)).complete_verification(scope, input)
+    repository
+        .store()
+        .complete_verification(repository.scope(), input)
 }
 
 /// Lists verification runs, optionally for one Rule.
 pub fn verification_runs(
-    repo: Option<Utf8PathBuf>,
-    scope: &ScopeId,
+    repository: &Repository,
     rule: Option<&StableId>,
 ) -> anyhow::Result<Vec<provenance_core::VerificationRun>> {
-    let repo = discover_repository(repo)?;
-    Ok(StateStore::new(ProvenanceLayout::new(repo))
-        .list_verification_runs(scope)?
+    Ok(repository
+        .store()
+        .list_verification_runs(repository.scope())?
         .into_iter()
         .filter(|run| rule.is_none_or(|rule| &run.rule_id == rule))
         .collect())
@@ -142,23 +105,15 @@ pub fn verification_runs(
 
 /// Lists verification bindings, optionally for one Rule.
 pub fn verification_bindings(
-    repo: Option<Utf8PathBuf>,
-    scope: &ScopeId,
+    repository: &Repository,
     rule: Option<&StableId>,
 ) -> anyhow::Result<Vec<provenance_core::VerificationBinding>> {
-    let repo = discover_repository(repo)?;
-    Ok(StateStore::new(ProvenanceLayout::new(repo))
-        .list_verification_bindings(scope)?
+    Ok(repository
+        .store()
+        .list_verification_bindings(repository.scope())?
         .into_iter()
         .filter(|binding| rule.is_none_or(|rule| &binding.rule_id == rule))
         .collect())
-}
-
-fn canonical_repository(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
-    let canonical = std::fs::canonicalize(path)
-        .map_err(|error| anyhow::anyhow!("resolve repository `{path}`: {error}"))?;
-    Utf8PathBuf::from_path_buf(canonical)
-        .map_err(|path| anyhow::anyhow!("repository is not UTF-8: {}", path.display()))
 }
 
 fn normalize_verification_context(

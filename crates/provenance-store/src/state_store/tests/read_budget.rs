@@ -45,8 +45,7 @@ impl ContextResolver for Target {
         _: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         Ok(PreparedContext::read(PreparedRead {
-            root: self.0.clone(),
-            scope: ScopeId::new("default").unwrap(),
+            repository: crate::repository::Repository::open(&self.0, "default").unwrap(),
             policy: ReadPolicy::default(),
             requested_target: "test".into(),
             external: true,

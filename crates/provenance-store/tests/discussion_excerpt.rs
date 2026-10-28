@@ -1,6 +1,6 @@
 mod discussion_support;
 
-use discussion_support::{fixture, scope, write};
+use discussion_support::{fixture, repository, scope, write};
 use provenance_core::{
     threads::{DiscussionConversationQuery, DiscussionListQuery, DiscussionStatusFilter},
     NodeType,
@@ -63,8 +63,7 @@ async fn list_excerpt_counts_characters_across_nul_and_unicode() {
         })
         .collect::<Vec<_>>();
     let page = read_discussion_list(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionListQuery {
             parent: None,
@@ -89,8 +88,7 @@ async fn list_excerpt_counts_characters_across_nul_and_unicode() {
         assert_eq!(entry.excerpt_truncated, *truncated, "{name}");
         if *name == "nul_early" {
             let conversation = read_discussion_conversation(
-                root,
-                &scope(),
+                &repository(root),
                 ReadPolicy::default(),
                 DiscussionConversationQuery {
                     discussion_id: entry.discussion_id.clone(),

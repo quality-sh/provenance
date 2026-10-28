@@ -1,5 +1,5 @@
 //! Client test host with isolated repositories; stdin EOF stops the listener.
-use provenance_core::{protocol::GetQuery, ScopeId};
+use provenance_core::protocol::GetQuery;
 use provenance_store::operations::{queries, read_policy::ReadPolicy};
 use provenance_transport::{
     fixture::{records::Repository, FixtureAccess, Target},
@@ -16,8 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let evidence_base = first.evidence();
     first.add_scope("other", "The other shared scope is selected.");
     queries::get(
-        Some(first.dir.path().to_str().unwrap().into()),
-        &ScopeId::new("default")?,
+        &first.open(),
         ReadPolicy::default(),
         GetQuery {
             protocol_version: None,
@@ -32,8 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stale = Repository::new("The old shared graph is selected.");
     let empty = Repository::new("The unmaterialized shared graph is selected.");
     queries::get(
-        Some(stale.dir.path().to_str().unwrap().into()),
-        &ScopeId::new("default")?,
+        &stale.open(),
         ReadPolicy::default(),
         GetQuery {
             protocol_version: None,

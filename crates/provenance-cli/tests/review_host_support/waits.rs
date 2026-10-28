@@ -1,5 +1,7 @@
 //! Deadlines for real host test operations.
-use provenance_store::{layout::ProvenanceLayout, publication::PublicationGuard};
+use provenance_store::{
+    layout::ProvenanceLayout, publication::PublicationGuard, repository::Repository,
+};
 use std::{
     io::Read,
     process::{Command, Output, Stdio},
@@ -10,9 +12,11 @@ use std::{
 pub const LIMIT: Duration = Duration::from_secs(60);
 
 pub async fn guard(layout: &ProvenanceLayout) -> PublicationGuard {
+    let repository =
+        Repository::open(layout.provenance_dir().parent().unwrap(), "default").unwrap();
     tokio::time::timeout(
         LIMIT,
-        provenance_store::publication::publication_guard(layout),
+        provenance_store::publication::publication_guard(&repository),
     )
     .await
     .expect("publication lock acquisition exceeded 60 seconds")

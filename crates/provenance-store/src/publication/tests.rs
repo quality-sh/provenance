@@ -344,8 +344,18 @@ fn read_only_validation_through_an_alias_does_not_publish() {
     let alias = temporary.path().join("alias");
     std::os::unix::fs::symlink(&root, &alias).unwrap();
     let layout = ProvenanceLayout::new(root.to_str().unwrap());
-    let alias = ProvenanceLayout::new(alias.to_str().unwrap());
+    let alias_path = alias;
+    let alias = ProvenanceLayout::new(alias_path.to_str().unwrap());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&provenance_core::Manifest::default_with_scope(
+            provenance_core::ScopeId::new("default").unwrap(),
+            provenance_core::RepoPathPrefix::new("."),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -353,7 +363,8 @@ fn read_only_validation_through_an_alias_does_not_publish() {
     with_read_only_validation(&layout, || {
         with_read_only_validation(&alias, || Ok(()))?;
         with_repository_publication(&alias, || Ok(()))?;
-        let _guard = runtime.block_on(publication_guard(&alias))?;
+        let repository = crate::repository::Repository::open(&alias_path, "default")?;
+        let _guard = runtime.block_on(publication_guard(&repository))?;
         assert!(!layout.publication_lock_path().exists());
         assert!(!layout.import_transactions_dir().exists());
         Ok(())

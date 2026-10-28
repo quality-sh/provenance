@@ -6,6 +6,7 @@
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
+use super::fixtures::open;
 use super::fixtures::*;
 use crate::state_store::StateStore;
 
@@ -57,13 +58,13 @@ async fn instance_id(pool: &sqlx::SqlitePool) -> String {
 #[tokio::test]
 async fn a_pass_that_changes_nothing_commits_no_revision() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let before = latest_revision(pool.pool()).await;
     let revisions_before = revision_count(pool.pool()).await;
     pool.close().await.unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert_eq!(report.rows_written, 0);
 
     let pool = open_cache(&layout).await.unwrap();
@@ -82,7 +83,7 @@ async fn a_pass_that_changes_nothing_commits_no_revision() {
 #[tokio::test]
 async fn a_writer_commit_reaches_the_projection_on_the_next_pass() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let (serial_before, _) = latest_revision(pool.pool()).await;
     pool.close().await.unwrap();
@@ -90,7 +91,7 @@ async fn a_writer_commit_reaches_the_projection_on_the_next_pass() {
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_after_stamp");
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert!(!report.rebuilt);
     assert_eq!(
         report.serial,
@@ -104,14 +105,14 @@ async fn a_writer_commit_reaches_the_projection_on_the_next_pass() {
 #[tokio::test]
 async fn two_passes_over_unchanged_state_write_nothing_twice() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_once");
-    let first = catch_up_state(&layout).await.unwrap();
+    let first = catch_up_state(&open(&layout)).await.unwrap();
     assert!(first.rows_written > 0);
 
-    let second = catch_up_state(&layout).await.unwrap();
-    let third = catch_up_state(&layout).await.unwrap();
+    let second = catch_up_state(&open(&layout)).await.unwrap();
+    let third = catch_up_state(&open(&layout)).await.unwrap();
     for report in [&second, &third] {
         assert_eq!(report.rows_written, 0, "{report:?}");
         assert_eq!(report.families_rederived, 0, "{report:?}");
@@ -126,12 +127,12 @@ async fn two_passes_over_unchanged_state_write_nothing_twice() {
 #[tokio::test]
 async fn a_crash_after_commit_leaves_consistent_state_and_the_next_pass_finds_nothing() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_before_crash");
 
     crate::test_probes::crash_at("catch_up_after_commit");
-    let error = catch_up_state(&layout).await.unwrap_err();
+    let error = catch_up_state(&open(&layout)).await.unwrap_err();
     crate::test_probes::disarm("catch_up_after_commit");
     assert!(error.to_string().contains("injected crash"), "{error}");
 
@@ -139,7 +140,7 @@ async fn a_crash_after_commit_leaves_consistent_state_and_the_next_pass_finds_no
     let (committed_serial, _) = latest_revision(pool.pool()).await;
     pool.close().await.unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert_eq!(
         report.rows_written, 0,
         "the crash lost nothing after commit"
@@ -151,7 +152,7 @@ async fn a_crash_after_commit_leaves_consistent_state_and_the_next_pass_finds_no
 #[tokio::test]
 async fn a_crash_before_commit_leaves_the_previous_stamp_readable() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let before = latest_revision(pool.pool()).await;
     pool.close().await.unwrap();
@@ -159,7 +160,7 @@ async fn a_crash_before_commit_leaves_the_previous_stamp_readable() {
     create_source(&store, &scope, "source_uncommitted");
 
     crate::test_probes::crash_at("catch_up_before_commit");
-    let error = catch_up_state(&layout).await.unwrap_err();
+    let error = catch_up_state(&open(&layout)).await.unwrap_err();
     crate::test_probes::disarm("catch_up_before_commit");
     assert!(error.to_string().contains("injected crash"), "{error}");
 
@@ -170,7 +171,7 @@ async fn a_crash_before_commit_leaves_the_previous_stamp_readable() {
         "the old stamp stands"
     );
     pool.close().await.unwrap();
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert_eq!(report.serial, before.0 + 1);
     assert_catch_up_equals_rebuild(&layout).await;
 }
@@ -178,14 +179,14 @@ async fn a_crash_before_commit_leaves_the_previous_stamp_readable() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_concurrent_rebuild_and_catch_up_yield_one_serial_progression() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_contended");
 
     let rebuild_layout = layout.clone();
     let catch_up_layout = layout.clone();
-    let rebuild = tokio::spawn(async move { materialize_state(&rebuild_layout).await });
-    let catch_up = tokio::spawn(async move { catch_up_state(&catch_up_layout).await });
+    let rebuild = tokio::spawn(async move { materialize_state(&open(&rebuild_layout)).await });
+    let catch_up = tokio::spawn(async move { catch_up_state(&open(&catch_up_layout)).await });
     rebuild.await.unwrap().unwrap();
     catch_up.await.unwrap().unwrap();
 
@@ -204,10 +205,10 @@ async fn a_concurrent_rebuild_and_catch_up_yield_one_serial_progression() {
 #[tokio::test]
 async fn total_cache_loss_restarts_the_serial_at_one_in_a_fresh_instance() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_second_serial");
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let (serial, digest) = latest_revision(pool.pool()).await;
     let first_instance = instance_id(pool.pool()).await;
@@ -216,7 +217,7 @@ async fn total_cache_loss_restarts_the_serial_at_one_in_a_fresh_instance() {
 
     std::fs::remove_dir_all(layout.cache_dir()).unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert!(report.rebuilt);
     assert_eq!(report.serial, 1, "a fresh instance starts at one");
     assert_eq!(report.digest, digest, "same canonical bytes, same digest");
@@ -227,10 +228,10 @@ async fn total_cache_loss_restarts_the_serial_at_one_in_a_fresh_instance() {
 #[tokio::test]
 async fn a_lost_database_with_canonical_state_intact_rebuilds_at_one() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let store = StateStore::new(layout.clone());
     create_source(&store, &scope, "source_survives_db_loss");
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let (serial_before_loss, _) = latest_revision(pool.pool()).await;
     pool.close().await.unwrap();
@@ -238,7 +239,7 @@ async fn a_lost_database_with_canonical_state_intact_rebuilds_at_one() {
 
     remove_database_file(&layout);
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert!(report.rebuilt);
     assert_eq!(report.serial, 1);
     assert_catch_up_equals_rebuild(&layout).await;

@@ -25,7 +25,7 @@ async fn history_pages_follow_versions_one_at_a_time() {
         .save_requirement(save(&store, json!({"description":"Changed"})))
         .unwrap();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
-    let complete = read_history(root, &scope(), ReadPolicy::default(), query(200, None))
+    let complete = read_history(&repository(root), ReadPolicy::default(), query(200, None))
         .await
         .unwrap();
     assert_eq!(complete.result.entries.len(), 2);
@@ -33,7 +33,7 @@ async fn history_pages_follow_versions_one_at_a_time() {
     let mut cursor = None;
     let mut versions = Vec::new();
     loop {
-        let page = read_history(root, &scope(), ReadPolicy::default(), query(1, cursor))
+        let page = read_history(&repository(root), ReadPolicy::default(), query(1, cursor))
             .await
             .unwrap();
         versions.extend(
@@ -67,8 +67,7 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     let mut bytes = String::new();
     loop {
         let page = read_evidence(
-            root,
-            &scope(),
+            &repository(root),
             ReadPolicy::default(),
             EvidenceQuery {
                 record_kind: provenance_core::NodeType::Requirement,
@@ -91,14 +90,13 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     }
     let record: provenance_core::Requirement = serde_json::from_str(&bytes).unwrap();
     assert_eq!(record.description.as_deref(), Some(text.as_str()));
-    let one = read_history(root, &scope(), ReadPolicy::default(), query(1, None))
+    let one = read_history(&repository(root), ReadPolicy::default(), query(1, None))
         .await
         .unwrap();
     assert_eq!(one.result.entries.len(), 1);
     let cursor = one.result.next_cursor.unwrap();
     let two = read_history(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         query(1, Some(cursor)),
     )
@@ -107,8 +105,7 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
     assert_eq!(two.result.entries[0].id.as_str(), described);
     let cursor = two.result.next_cursor.unwrap();
     let three = read_history(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         query(1, Some(cursor.clone())),
     )
@@ -120,15 +117,14 @@ async fn evidence_reassembles_exact_unicode_and_history_cursor_is_bound() {
         .save_requirement(save(&store, json!({"description":"again"})))
         .unwrap();
     assert!(read_history(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         query(1, Some(cursor))
     )
     .await
     .is_err());
     assert!(
-        read_history(root, &scope(), ReadPolicy::default(), query(201, None))
+        read_history(&repository(root), ReadPolicy::default(), query(201, None))
             .await
             .is_err()
     );
@@ -169,7 +165,7 @@ async fn evidence_pages_a_long_field_from_git() {
         let query = serde_json::from_value(json!({"requirement_id":"req_a", "entry_id":described,
             "before":false,"offset":offset,"field":"description"}))
         .unwrap();
-        let page = read_evidence(root, &scope(), ReadPolicy::default(), query)
+        let page = read_evidence(&repository(root), ReadPolicy::default(), query)
             .await
             .unwrap();
         assert!(page.result.json_text.len() <= 8192);

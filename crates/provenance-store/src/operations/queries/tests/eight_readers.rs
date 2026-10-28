@@ -1,4 +1,4 @@
-use super::{root_of, seeded_store};
+use super::{repository_at, root_of, seeded_store};
 use crate::operations::read_policy::ReadPolicy;
 use crate::operations::reader::answer;
 use provenance_core::Requirement;
@@ -16,7 +16,7 @@ async fn many_readers_close_together() {
         let scope = scope.clone();
         let barrier = barrier.clone();
         tasks.push(tokio::spawn(async move {
-            answer(&root, &scope, ReadPolicy::default(), move |ctx| {
+            answer(&repository_at(&root), ReadPolicy::default(), move |ctx| {
                 Box::pin(async move {
                     let count = ctx.snapshot().table::<Requirement>().count().await?;
                     barrier.wait().await;

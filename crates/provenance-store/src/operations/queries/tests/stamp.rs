@@ -1,5 +1,6 @@
 //! The stamp names the stored projection instance and revision.
 
+use crate::cache::tests::fixtures::open;
 use crate::cache::tests::fixtures::seeded_layout;
 use crate::cache::{materialize_state, open_cache};
 use crate::operations::stamp;
@@ -8,7 +9,7 @@ use provenance_core::protocol::StampPolicy;
 #[tokio::test]
 async fn the_stamp_carries_the_stored_instance_id() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let instance_id: String = sqlx::query_scalar("SELECT instance_id FROM projection_instance")
         .fetch_one(pool.pool())
@@ -36,7 +37,7 @@ async fn the_stamp_carries_the_stored_instance_id() {
 #[tokio::test]
 async fn an_empty_database_holds_no_revision() {
     let (_dir, layout, _scope) = seeded_layout();
-    crate::cache::materialize_empty_state(&layout)
+    crate::cache::materialize_empty_state(&open(&layout))
         .await
         .unwrap();
     let pool = open_cache(&layout).await.unwrap();

@@ -78,7 +78,7 @@ fn a_saved_page_write_succeeds_when_the_snapshot_fails() {
             }))
             .with_credential(Arc::new(support::resource_http::access(&repo)))
             .with_page_writes(
-                repo.layout.clone(),
+                repo.open(),
                 Arc::new(move |changes| seen.lock().unwrap().push(changes)),
             );
             let mut request = Request::builder()
@@ -129,7 +129,7 @@ fn saved_page_writes_report_added_changed_and_unchanged_records() {
             let notifications = Arc::new(Mutex::new(Vec::new()));
             let seen = notifications.clone();
             let host = support::resource_http::host(&repo, true).with_page_writes(
-                repo.layout.clone(),
+                repo.open(),
                 Arc::new(move |changes| seen.lock().unwrap().push(changes)),
             );
             let created = page_call(
@@ -180,7 +180,7 @@ fn saved_page_discussion_reports_its_parent_and_message() {
             let notifications = Arc::new(Mutex::new(Vec::new()));
             let seen = notifications.clone();
             let host = support::resource_http::host(&repo, true).with_page_writes(
-                repo.layout.clone(),
+                repo.open(),
                 Arc::new(move |changes| seen.lock().unwrap().push(changes)),
             );
             let created = page_call(
@@ -286,9 +286,9 @@ fn page_changes_report_removed_records_after_scope_replacement() {
                 .unwrap(),
             )
             .unwrap();
-        let before = with_publication_guard(&repo.layout, ReviewStateSnapshot::read).unwrap();
+        let before = with_publication_guard(&repo.open(), ReviewStateSnapshot::read).unwrap();
         clear();
-        let after = with_publication_guard(&repo.layout, ReviewStateSnapshot::read).unwrap();
+        let after = with_publication_guard(&repo.open(), ReviewStateSnapshot::read).unwrap();
         assert_notification(
             &Mutex::new(vec![Ok(after.page_changes_since(&before))]),
             &[("source", "source_removed")],

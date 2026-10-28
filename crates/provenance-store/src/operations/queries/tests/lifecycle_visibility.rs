@@ -1,4 +1,4 @@
-use super::{root_of, seeded_store, sid};
+use super::{repository_at, root_of, seeded_store, sid};
 use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
@@ -30,8 +30,7 @@ impl ContextResolver for Target {
         _: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         Ok(PreparedContext::read(PreparedRead {
-            root: self.0.clone(),
-            scope: ScopeId::new("default").unwrap(),
+            repository: crate::repository::Repository::open(&self.0, "default").unwrap(),
             policy: ReadPolicy::default(),
             requested_target: "test".into(),
             external: true,
@@ -192,8 +191,7 @@ fn seed_archived_shaping_records(store: &StateStore, scope: &ScopeId) {
 
 async fn search(root: &camino::Utf8Path, request: Value) -> anyhow::Result<Value> {
     let result = queries::search(
-        Some(root.to_owned()),
-        &ScopeId::new("default")?,
+        &repository_at(root),
         ReadPolicy::default(),
         serde_json::from_value(request)?,
     )
@@ -370,8 +368,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     );
 
     let unfiltered_document = queries::read_document(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::default(),
         provenance_core::protocol::ReadDocumentQuery {
             id: "req_overtime".into(),
@@ -388,8 +385,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     );
 
     let document = queries::read_document(
-        Some(root),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::default(),
         provenance_core::protocol::ReadDocumentQuery {
             id: "req_overtime".into(),

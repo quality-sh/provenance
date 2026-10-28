@@ -1,6 +1,7 @@
 //! Keyset ID pages walk the `(scope_id, id)` primary key. No page sorts
 //! the rows after its key, and consecutive pages leave no gap.
 
+use super::fixtures::open;
 use super::fixtures::{append_record, create_rule_of, seeded_layout};
 use crate::cache::read::page::id_page_sql;
 use crate::cache::read::payloads::PayloadRow;
@@ -90,7 +91,7 @@ async fn keyed_tables(pool: &SqlitePool) -> BTreeSet<String> {
 #[tokio::test]
 async fn id_pages_search_the_primary_key_without_a_sort() {
     let (_dir, layout, _scope) = seeded_layout();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
     let served: BTreeSet<String> = PAGED_TABLES
         .iter()
@@ -170,7 +171,7 @@ async fn id_pages_return_every_id_in_order() {
     threads.sort();
     assert_eq!(threads.len(), 7);
 
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
     let snapshot = ReadSnapshot::open(cache.pool(), &scope)
         .await
@@ -221,7 +222,7 @@ async fn the_window_that_reaches_an_over_long_id_refuses() {
             "req_schads_overtime",
         );
     }
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
     // The writer refuses an ID over 1024 bytes, so the test changes the
     // projected row directly. The new ID keeps the sort position of

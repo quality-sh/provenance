@@ -32,7 +32,7 @@ async fn message_pages_continue_at_the_same_limit_and_refuse_a_changed_limit() {
             .unwrap();
     }
     let query = messages_query(&latest, 2);
-    let first = read_discussion_messages(root, &scope(), ReadPolicy::default(), query.clone())
+    let first = read_discussion_messages(&repository(root), ReadPolicy::default(), query.clone())
         .await
         .unwrap();
     assert_eq!(first.result.entries.len(), 2);
@@ -42,8 +42,7 @@ async fn message_pages_continue_at_the_same_limit_and_refuse_a_changed_limit() {
         .clone()
         .expect("page one continues");
     let second = read_discussion_messages(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionMessagesQuery {
             cursor: Some(cursor.clone()),
@@ -55,8 +54,7 @@ async fn message_pages_continue_at_the_same_limit_and_refuse_a_changed_limit() {
     assert_eq!(second.result.entries.len(), 2);
     assert!(second.result.next_cursor.is_some(), "page two continues");
     let changed = read_discussion_messages(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionMessagesQuery {
             cursor: Some(cursor),
@@ -89,8 +87,7 @@ async fn an_omitted_limit_continues_a_default_limit_page() {
         "discussion_id": latest.discussion_id.as_str()
     });
     let first = read_discussion_messages(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         serde_json::from_value(json!({
             "parent": parent,
@@ -105,8 +102,7 @@ async fn an_omitted_limit_continues_a_default_limit_page() {
     assert_eq!(first.result.entries.len(), 50);
     let cursor = first.result.next_cursor.expect("page one continues");
     let second = read_discussion_messages(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         serde_json::from_value(json!({
             "parent": parent,

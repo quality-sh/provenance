@@ -14,6 +14,7 @@ pub mod layout;
 pub mod merge;
 pub mod operations;
 pub mod publication;
+pub mod repository;
 pub mod repository_init;
 pub mod review;
 pub mod review_changes;

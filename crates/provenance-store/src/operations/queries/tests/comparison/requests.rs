@@ -91,7 +91,7 @@ pub async fn for_store(store: &TestStore) -> Vec<Request> {
     for (kind, needle) in SAMPLE_NEEDLE {
         let mut query = search(needle, vec![kind]);
         query.limit = PER_KIND;
-        let answer = queries::search(Some(store.root.clone()), &store.scope, policy, query)
+        let answer = queries::search(&store.repository(), policy, query)
             .await
             .unwrap();
         sample.extend(answer.result.nodes);

@@ -4,6 +4,7 @@
 use super::super::comparison::test_stores;
 use super::get_query;
 use crate::cache::tests::fixtures::create_requirement;
+use crate::cache::tests::fixtures::open;
 use crate::cache::{catch_up_state, catch_up_with_guard, open_cache};
 use crate::operations::queries::records;
 use crate::operations::read_policy::ReadPolicy;
@@ -96,7 +97,7 @@ async fn a_canonical_write_does_not_wait_for_a_read() {
 async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     let store = test_stores::seeded_queries();
     let layout = store.layout();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let second_pool = open_cache(&layout).await.unwrap();
 
@@ -113,7 +114,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         "req_second",
         RequirementStatus::Active,
     );
-    let guard = publication_guard(&layout).await.unwrap();
+    let guard = publication_guard(&open(&layout)).await.unwrap();
     let report = catch_up_with_guard(&guard, second_pool.pool())
         .await
         .unwrap();

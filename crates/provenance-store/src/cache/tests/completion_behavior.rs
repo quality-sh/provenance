@@ -5,6 +5,7 @@
 
 use super::super::*;
 use super::fixtures;
+use super::fixtures::open;
 use super::wal_behavior::wal_files;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
@@ -61,7 +62,7 @@ async fn a_failed_first_materialization_completes_its_connection() {
     crate::test_probes::arm("prepare_current_schema_under_guard", || {
         anyhow::bail!("injected schema failure")
     });
-    let result = materialize_empty_state(&layout).await;
+    let result = materialize_empty_state(&open(&layout)).await;
     crate::test_probes::disarm("prepare_current_schema_under_guard");
     let error = result.expect_err("the injected failure must surface");
     assert!(
@@ -79,7 +80,7 @@ async fn a_failed_rebuild_materialization_completes_its_connection() {
     crate::test_probes::arm("prepare_current_schema_under_guard", || {
         anyhow::bail!("injected schema failure")
     });
-    let result = materialize_state(&layout).await;
+    let result = materialize_state(&open(&layout)).await;
     crate::test_probes::disarm("prepare_current_schema_under_guard");
     let error = result.expect_err("the injected failure must surface");
     assert!(
@@ -94,7 +95,7 @@ async fn a_failed_rebuild_materialization_completes_its_connection() {
 #[tokio::test]
 async fn a_refused_stale_read_completes_its_connection() {
     let (_dir, layout, scope) = fixtures::seeded_layout();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let path = crate::shards::requirements_path(&layout, &scope);
     std::fs::write(&path, b"not JSON\n").unwrap();
     let error = crate::operations::reader::answer(
@@ -120,7 +121,7 @@ async fn a_refused_stale_read_completes_its_connection() {
 #[tokio::test]
 async fn a_refused_schema_behind_read_completes_its_connection() {
     let (_dir, layout, scope) = fixtures::seeded_layout();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let cache = open_existing_cache(&layout).await.unwrap();
     sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
         .execute(cache.pool())

@@ -1,4 +1,5 @@
 use super::super::*;
+use super::fixtures::open;
 use super::fixtures::*;
 use super::projection_stamp_behavior::seed_integration_shards;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
@@ -59,7 +60,7 @@ pub(super) async fn assert_catch_up_equals_rebuild(layout: &crate::layout::Prove
 async fn a_missing_database_routes_to_a_full_rebuild() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert!(report.rebuilt);
     assert!(report.rows_written > 0);
     let pool = open_cache(&layout).await.unwrap();
@@ -74,7 +75,7 @@ async fn a_missing_database_routes_to_a_full_rebuild() {
 async fn a_hand_edited_shard_is_found_by_the_hash_sweep_alone() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     // Append a rule line directly, bypassing every writer.
     let path = crate::shards::rules_path(&layout, &scope);
@@ -88,7 +89,7 @@ async fn a_hand_edited_shard_is_found_by_the_hash_sweep_alone() {
     content.push('\n');
     std::fs::write(&path, content).unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert!(!report.rebuilt);
     assert!(report.families_rederived >= 1);
     let pool = open_cache(&layout).await.unwrap();
@@ -105,7 +106,7 @@ async fn a_hand_edited_shard_is_found_by_the_hash_sweep_alone() {
 async fn an_unchanged_pass_hashes_everything_and_rewrites_nothing() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let digest_before = stored_digest(pool.pool()).await;
     drop(pool);
@@ -116,7 +117,7 @@ async fn an_unchanged_pass_hashes_everything_and_rewrites_nothing() {
         counter.set(counter.get() + 1);
         Ok(())
     });
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     crate::test_probes::disarm("catch_up_unit_hashed");
     assert!(!report.rebuilt);
     // The probe counts real hash calls. The report must agree.
@@ -134,7 +135,7 @@ async fn an_unchanged_pass_hashes_everything_and_rewrites_nothing() {
 async fn a_same_size_edit_with_a_restored_mtime_is_still_caught() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     // Same byte length, different content, mtime restored. Metadata
     // comparison cannot see this edit.
@@ -153,7 +154,7 @@ async fn a_same_size_edit_with_a_restored_mtime_is_still_caught() {
     std::fs::write(&path, &edited).unwrap();
     filetime::set_file_mtime(&path, mtime).unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert!(!report.rebuilt);
     assert_eq!(report.units_hashed, 2, "one scope unit and the global unit");
     assert!(report.families_rederived >= 1, "the hash found the edit");

@@ -1,4 +1,4 @@
-use super::{root_of, seeded_store, sid};
+use super::{repository_at, root_of, seeded_store, sid};
 use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::review::{DecideRecordReview, ReviewFeedback, SubmitRecordReview};
 use crate::state_store::{
@@ -24,8 +24,7 @@ fn allow_reviewer(store: &StateStore) {
 
 async fn page(root: &camino::Utf8Path, limit: usize, exclude_terminal: bool) -> Value {
     let result = queries::read_document(
-        Some(root.to_owned()),
-        &ScopeId::new("default").unwrap(),
+        &repository_at(root),
         ReadPolicy::default(),
         ReadDocumentQuery {
             id: "req_overtime".into(),
@@ -356,8 +355,7 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     );
     let cursor = filtered["next_cursor"].as_str().unwrap();
     let next = queries::read_document(
-        Some(root),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::default(),
         ReadDocumentQuery {
             id: "req_overtime".into(),
@@ -398,8 +396,7 @@ async fn document_review_totals_exclude_a_pending_parent_reference() {
     let root = root_of(&dir);
     let read = |cursor| {
         queries::read_document(
-            Some(root.clone()),
-            &scope,
+            &repository_at(&root),
             ReadPolicy::default(),
             ReadDocumentQuery {
                 id: "req_first_release".into(),

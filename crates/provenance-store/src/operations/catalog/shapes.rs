@@ -4,11 +4,7 @@ use super::{
     failures::ReadError, ContextKind, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
     PreparedRead, WireSchema,
 };
-use crate::{
-    layout::ProvenanceLayout,
-    state_store::StateStore,
-    write_error::{SourceFailure, WriteError, WriteFailure},
-};
+use crate::{state_store::StateStore, write_error::WriteError};
 use provenance_core::{protocol::failure::OperationFailure, ScopeId};
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -124,8 +120,8 @@ impl<S: ScopedReadSpec> OperationShape<S> for ScopedRead {
     ) -> OperationFuture<S::Success, Self::Failure> {
         Box::pin(async move {
             let context = context.scope()?;
-            let store = StateStore::new(ProvenanceLayout::new(context.root));
-            S::read(&store, &context.scope, request).map_err(Into::into)
+            let store = context.repository.store();
+            S::read(&store, context.repository.scope(), request).map_err(Into::into)
         })
     }
 }
@@ -157,15 +153,11 @@ impl<S: ScopedWriteSpec> OperationShape<S> for ScopedWrite {
     ) -> OperationFuture<S::Success, Self::Failure> {
         Box::pin(async move {
             let context = context.scope()?;
-            if S::request_scope(&request).is_some_and(|scope| *scope != context.scope) {
-                return Err(SourceFailure::wrap(
-                    WriteFailure::ScopeMismatch,
-                    anyhow::anyhow!("request scope does not match selected scope"),
-                )
-                .into());
+            if let Some(scope) = S::request_scope(&request) {
+                context.repository.ensure_selected(scope)?;
             }
-            let store = StateStore::new(ProvenanceLayout::new(context.root));
-            S::write(&store, context.scope, request).map_err(Into::into)
+            let store = context.repository.store();
+            S::write(&store, context.repository.scope().clone(), request).map_err(Into::into)
         })
     }
 }
@@ -196,12 +188,8 @@ impl<S: ScopedCommandSpec> OperationShape<S> for ScopedCommand {
     ) -> OperationFuture<S::Success, Self::Failure> {
         Box::pin(async move {
             let context = context.scope()?;
-            if S::request_scope(&request).is_some_and(|scope| *scope != context.scope) {
-                return Err(SourceFailure::wrap(
-                    WriteFailure::ScopeMismatch,
-                    anyhow::anyhow!("request scope does not match selected scope"),
-                )
-                .into());
+            if let Some(scope) = S::request_scope(&request) {
+                context.repository.ensure_selected(scope)?;
             }
             S::execute(context, request).map_err(Into::into)
         })

@@ -39,10 +39,9 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     store
         .save_requirement(save(&store, json!({"description":"saved"})))
         .unwrap();
-    cache::materialize_state(&layout).await.unwrap();
+    cache::materialize_state(&repository(&root)).await.unwrap();
     let history = read_history(
-        &root,
-        &scope(),
+        &repository(&root),
         ReadPolicy::default(),
         ReviewHistoryQuery {
             record_kind: provenance_core::NodeType::Requirement,
@@ -57,8 +56,7 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     let working = history.result.entries[0].id.clone();
     assert_eq!(working.as_str(), "working");
     let page = read_evidence(
-        &root,
-        &scope(),
+        &repository(&root),
         ReadPolicy::default(),
         EvidenceQuery {
             record_kind: provenance_core::NodeType::Requirement,

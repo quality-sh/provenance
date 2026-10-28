@@ -391,8 +391,7 @@ async fn the_router_stays_closed_until_a_credential_policy_is_set_in_every_build
     let binding = || -> Arc<dyn provenance_transport::HostAccess> { Arc::new(access(&repo)) };
     let credential =
         || -> Arc<dyn provenance_transport::HttpCredential> { Arc::new(access(&repo)) };
-    let page_writes =
-        |host: StatementHost| host.with_page_writes(repo.layout.clone(), Arc::new(|_| {}));
+    let page_writes = |host: StatementHost| host.with_page_writes(repo.open(), Arc::new(|_| {}));
     let check_port = |host: StatementHost| host.with_check_port(Arc::new(NoCheck));
 
     let closed = [

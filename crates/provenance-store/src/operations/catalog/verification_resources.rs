@@ -91,10 +91,9 @@ graph_read_operation!(
         ]
     },
     |read, request| async move {
-        let scope = read.scope.clone();
-        let answer_scope = scope.clone();
-        Ok(reader::answer(&read.root, &scope, read.policy, move |ctx| {
-            Box::pin(async move { run_page(ctx, &answer_scope, &request) })
+        let scope = read.repository.scope().clone();
+        Ok(reader::answer(&read.repository, read.policy, move |ctx| {
+            Box::pin(async move { run_page(ctx, &scope, &request) })
         })
         .await?
         .into())
@@ -115,10 +114,9 @@ graph_read_operation!(
         ]
     },
     |read, request| async move {
-        let scope = read.scope.clone();
-        let answer_scope = scope.clone();
-        Ok(reader::answer(&read.root, &scope, read.policy, move |ctx| {
-            Box::pin(async move { run_member(ctx, &answer_scope, &request) })
+        let scope = read.repository.scope().clone();
+        Ok(reader::answer(&read.repository, read.policy, move |ctx| {
+            Box::pin(async move { run_member(ctx, &scope, &request) })
         })
         .await?
         .into())

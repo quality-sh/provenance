@@ -1,4 +1,5 @@
 use super::super::*;
+use super::fixtures::open;
 use super::fixtures::*;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
@@ -26,7 +27,7 @@ async fn table_exists(pool: &sqlx::SqlitePool, table: &str) -> bool {
 #[tokio::test]
 async fn current_schema_creates_the_projection_stamp_and_family_tables() {
     let (_dir, layout, _scope) = empty_layout();
-    materialize_empty_state(&layout).await.unwrap();
+    materialize_empty_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     for table in PROJECTION_TABLES {
         assert!(
@@ -106,7 +107,7 @@ pub fn seed_integration_shards(layout: &crate::layout::ProvenanceLayout, scope: 
 async fn materialization_loads_binding_and_review_families_into_their_tables() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     for (table, id) in [
         ("implementation_bindings", "bind_impl_a"),
@@ -142,7 +143,7 @@ async fn stamp(pool: &sqlx::SqlitePool) -> (i64, String, String) {
 async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
 
     let (serial, digest, instance) = stamp(pool.pool()).await;
@@ -186,12 +187,12 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
 async fn rematerialization_of_unchanged_state_keeps_digest_and_instance_and_advances_serial() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let (first_serial, first_digest, first_instance) = stamp(pool.pool()).await;
     drop(pool);
 
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let (second_serial, second_digest, second_instance) = stamp(pool.pool()).await;
 
@@ -233,8 +234,8 @@ async fn separate_databases_have_separate_instances() {
     let (_dir_b, layout_b, scope_b) = seeded_layout();
     seed_integration_shards(&layout_a, scope_a.as_str());
     seed_integration_shards(&layout_b, scope_b.as_str());
-    materialize_state(&layout_a).await.unwrap();
-    materialize_state(&layout_b).await.unwrap();
+    materialize_state(&open(&layout_a)).await.unwrap();
+    materialize_state(&open(&layout_b)).await.unwrap();
 
     let pool_a = open_cache(&layout_a).await.unwrap();
     let pool_b = open_cache(&layout_b).await.unwrap();
@@ -247,7 +248,7 @@ async fn separate_databases_have_separate_instances() {
 #[tokio::test]
 async fn empty_state_materialization_stores_no_revision_and_no_instance() {
     let (_dir, layout, _scope) = empty_layout();
-    materialize_empty_state(&layout).await.unwrap();
+    materialize_empty_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let revisions: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projection_revision")
         .fetch_one(pool.pool())
@@ -284,7 +285,7 @@ async fn record_stamps_survive_projection_without_changing_content_digests() {
             records.push(serde_json::to_string(&record).unwrap());
         }
         std::fs::write(path, records.join("\n") + "\n").unwrap();
-        materialize_state(&layout).await.unwrap();
+        materialize_state(&open(&layout)).await.unwrap();
         let pool = open_cache(&layout).await.unwrap();
         let (created, updated): (String, String) =
             sqlx::query_as(&format!("SELECT created, updated FROM {table} LIMIT 1"))

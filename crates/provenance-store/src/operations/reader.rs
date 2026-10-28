@@ -37,10 +37,9 @@ pub(crate) use crate::cache::read::page::{check_limit, page_error, PAGE_BYTES, R
 pub use crate::cache::read::{kind_of, SqlFront};
 
 use super::read_policy::ReadPolicy;
-use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::Stamped;
-use provenance_core::ScopeId;
 use provenance_macros::rule;
 use std::collections::BTreeSet;
 use std::future::Future;
@@ -88,23 +87,23 @@ fn one_line(text: &str) -> String {
 pub struct ReadContext {
     snapshot: ReadSnapshot,
     live: Mutex<BTreeSet<Live>>,
-    repo: Utf8PathBuf,
+    repository: Repository,
     scan_limit: usize,
 }
 
 impl ReadContext {
-    fn new(snapshot: ReadSnapshot, repo: &Utf8Path, scan_limit: usize) -> Self {
+    fn new(snapshot: ReadSnapshot, repository: Repository, scan_limit: usize) -> Self {
         Self {
             snapshot,
             live: Mutex::new(BTreeSet::new()),
-            repo: repo.to_path_buf(),
+            repository,
             scan_limit,
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn for_test(snapshot: ReadSnapshot, repo: &Utf8Path) -> Self {
-        Self::new(snapshot, repo, ReadPolicy::default().scan_limit)
+    pub(crate) fn for_test(snapshot: ReadSnapshot, repository: Repository) -> Self {
+        Self::new(snapshot, repository, ReadPolicy::default().scan_limit)
     }
 
     pub const fn snapshot(&self) -> &ReadSnapshot {
@@ -121,8 +120,14 @@ impl ReadContext {
         LiveHandle::new(self, what)
     }
 
+    /// The working tree of the opened repository.
     pub fn repo(&self) -> &Utf8Path {
-        &self.repo
+        self.repository.working_tree()
+    }
+
+    /// The opened repository the read runs over.
+    pub const fn repository(&self) -> &Repository {
+        &self.repository
     }
 
     /// The file count the working-tree scan stops at.
@@ -147,15 +152,10 @@ impl ReadContext {
 /// the read's one completion point: no answer or refusal leaves before it.
 #[rule("rule_query_answer_carries_a_stamp")]
 pub async fn answer<R: Send>(
-    repo: &Utf8Path,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
 ) -> anyhow::Result<Stamped<R>> {
-    let repo = super::canonical_repository(repo)?;
-    let layout = ProvenanceLayout::new(repo.clone());
-    let fresh = freshness::run(&layout, scope, policy.freshness).await?;
-    fresh
-        .complete(&layout, &repo, scope, policy.scan_limit, run)
-        .await
+    let fresh = freshness::run(repository, policy.freshness).await?;
+    fresh.complete(repository, policy.scan_limit, run).await
 }

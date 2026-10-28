@@ -1,4 +1,5 @@
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
+use super::fixtures::open;
 use super::fixtures::{rewrite_records, seeded_layout};
 use crate::cache::{catch_up_state, materialize_state, open_cache, unit_digest, Unit};
 use crate::test_probes;
@@ -8,12 +9,12 @@ use provenance_macros::verifies;
 #[verifies("rule_catch_up_hashes_canonical_state_in_place", examples)]
 async fn catch_up_reads_the_state_tree_in_place() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     rewrite_records(&crate::shards::requirements_path(&layout, &scope), |r| {
         r["statement"] = "Changed".into();
     });
     test_probes::start_recording_reads();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let reads = test_probes::take_recorded_reads();
     assert!(!reads.is_empty());
     for path in reads {
@@ -28,9 +29,9 @@ async fn catch_up_reads_the_state_tree_in_place() {
 #[verifies("rule_catch_up_validates_changed_units_only", examples)]
 async fn an_unchanged_pass_parses_no_shard_but_the_manifest() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     test_probes::start_recording_reads();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     assert_eq!(
         test_probes::take_recorded_reads(),
         std::iter::once(layout.manifest_path().to_string()).collect()
@@ -41,14 +42,14 @@ async fn an_unchanged_pass_parses_no_shard_but_the_manifest() {
 #[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
 async fn an_edit_between_hash_and_parse_is_hashed_again() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let path = crate::shards::requirements_path(&layout, &scope);
     rewrite_records(&path, |r| r["statement"] = "First edit".into());
     test_probes::arm("catch_up_before_parse", move || {
         rewrite_records(&path, |r| r["statement"] = "Second edit".into());
         Ok(())
     });
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     test_probes::disarm("catch_up_before_parse");
     let pool = open_cache(&layout).await.unwrap();
     let statement: String = sqlx::query_scalar("SELECT statement FROM requirements")
@@ -79,7 +80,7 @@ async fn a_rebuild_stores_the_digest_of_the_bytes_it_loaded() {
         rewrite_records(&path, |r| r["statement"] = "Edit during rebuild".into());
         Ok(())
     });
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     test_probes::disarm("catch_up_before_parse");
     let pool = open_cache(&layout).await.unwrap();
     let statement: String = sqlx::query_scalar("SELECT statement FROM requirements")
@@ -98,7 +99,12 @@ async fn a_rebuild_stores_the_digest_of_the_bytes_it_loaded() {
         unit_digest(&layout.state_dir(), &Unit::Scope(scope)).unwrap()
     );
     pool.close().await.unwrap();
-    assert!(!catch_up_state(&layout).await.unwrap().revision_committed);
+    assert!(
+        !catch_up_state(&open(&layout))
+            .await
+            .unwrap()
+            .revision_committed
+    );
 }
 
 #[cfg(unix)]
@@ -124,7 +130,7 @@ fn a_unit_with_a_symbolic_link_is_refused_before_parsing() {
 #[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
 async fn a_manifest_restored_before_hashing_keeps_its_scopes() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let before = super::catch_up_behavior::dump_family_tables(pool.pool()).await;
     pool.close().await.unwrap();
@@ -137,7 +143,7 @@ async fn a_manifest_restored_before_hashing_keeps_its_scopes() {
         std::fs::write(&path, &original)?;
         Ok(())
     });
-    let result = catch_up_state(&layout).await;
+    let result = catch_up_state(&open(&layout)).await;
     test_probes::disarm("catch_up_unit_hashed");
     let report = result.unwrap();
     assert!(
@@ -156,7 +162,7 @@ async fn a_manifest_restored_before_hashing_keeps_its_scopes() {
 #[verifies("rule_catch_up_stores_the_digest_of_parsed_bytes", examples)]
 async fn a_manifest_repaired_after_hashing_is_retried() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let path = layout.manifest_path();
     let original = std::fs::read(&path).unwrap();
     std::fs::write(&path, "{").unwrap();
@@ -164,7 +170,7 @@ async fn a_manifest_repaired_after_hashing_is_retried() {
         std::fs::write(&path, &original)?;
         Ok(())
     });
-    let result = catch_up_state(&layout).await;
+    let result = catch_up_state(&open(&layout)).await;
     test_probes::disarm("catch_up_global_before_parse");
     assert!(
         result.is_ok(),

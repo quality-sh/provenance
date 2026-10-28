@@ -2,6 +2,7 @@
 //! owner record, rebuilt with the owner's family.
 
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
+use super::fixtures::open;
 use super::fixtures::*;
 use crate::cache::{catch_up_state, materialize_state, open_cache};
 use crate::layout::ProvenanceLayout;
@@ -34,7 +35,7 @@ fn row(owner: (&str, &str), relation: &str, target: (&str, &str)) -> RelationRow
 #[tokio::test]
 async fn materialize_derives_one_row_per_declared_reference() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     assert_eq!(
         relation_rows(&layout).await,
@@ -77,7 +78,7 @@ async fn materialize_derives_one_row_per_declared_reference() {
 #[tokio::test]
 async fn every_owner_kind_and_the_links_derive_relation_rows() {
     let (_dir, layout, _scope) = owner_row_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let rows = relation_rows(&layout).await;
     for owner in [
         "source",
@@ -166,7 +167,7 @@ async fn every_owner_kind_and_the_links_derive_relation_rows() {
 #[tokio::test]
 async fn catch_up_rebuilds_the_rows_of_a_scope_whose_owner_family_moved() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     let rules = crate::shards::rules_path(&layout, &scope);
     let edited = std::fs::read_to_string(&rules).unwrap().replace(
@@ -176,7 +177,7 @@ async fn catch_up_rebuilds_the_rows_of_a_scope_whose_owner_family_moved() {
     assert_ne!(edited, std::fs::read_to_string(&rules).unwrap());
     std::fs::write(&rules, edited).unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert_eq!(report.families_rederived, 1, "{report:?}");
     assert!(!relation_rows(&layout)
         .await
@@ -188,7 +189,7 @@ async fn catch_up_rebuilds_the_rows_of_a_scope_whose_owner_family_moved() {
 #[tokio::test]
 async fn a_departed_scope_takes_its_rows_with_it() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     assert_ne!(
         relation_rows(&layout).await,
         [] as [(
@@ -209,7 +210,7 @@ async fn a_departed_scope_takes_its_rows_with_it() {
     )
     .unwrap();
 
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     assert_eq!(
         relation_rows(&layout).await,
         [] as [(

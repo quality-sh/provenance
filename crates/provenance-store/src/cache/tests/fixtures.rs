@@ -1,4 +1,5 @@
 use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use crate::state_store::{
     CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
     CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
@@ -13,6 +14,28 @@ pub mod pinned_store;
 
 pub fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
+}
+
+/// Opens the fixture repository under `layout` for the `default` scope.
+pub fn open(layout: &ProvenanceLayout) -> Repository {
+    Repository::open(layout.root(), "default").unwrap()
+}
+
+/// Writes a manifest that declares `default` under `root`, then opens it.
+pub fn initialized(root: &std::path::Path) -> Repository {
+    let layout =
+        ProvenanceLayout::new(camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap());
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_string(&Manifest::default_with_scope(
+            ScopeId::new("default").unwrap(),
+            RepoPathPrefix::new("."),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    open(&layout)
 }
 
 pub fn empty_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {

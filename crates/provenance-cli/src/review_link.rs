@@ -184,8 +184,7 @@ async fn review_target(
     record: &AffectedReviewRecord,
 ) -> anyhow::Result<Option<ReviewTarget>> {
     let roots = provenance_store::operations::queries::containing_review_documents(
-        Some(context.repo.clone()),
-        &context.scope_id()?,
+        &context.open()?,
         provenance_store::operations::read_policy::ReadPolicy::default(),
         record.kind,
         &StableId::new(&record.id)?,

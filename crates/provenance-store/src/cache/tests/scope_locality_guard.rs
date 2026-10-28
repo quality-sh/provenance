@@ -6,6 +6,7 @@
 //! lies inside those units.
 
 use super::super::*;
+use super::fixtures::open;
 use super::fixtures::*;
 use crate::state_store::StateStore;
 use provenance_core::ScopeId;
@@ -76,7 +77,7 @@ fn two_scope_layout() -> (
 async fn a_rebuild_reads_only_inside_the_hashed_units() {
     let (_dir, layout, first, second) = two_scope_layout();
     crate::test_probes::start_recording_reads();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let reads = crate::test_probes::take_recorded_reads();
     assert!(!reads.is_empty(), "the loaders must record their reads");
 

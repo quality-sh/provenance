@@ -33,16 +33,14 @@ macro_rules! query {
             |context, request| async move {
                 let mut answer = if context.external {
                     crate::operations::queries::$answer(
-                        Some(context.root),
-                        &context.scope,
+                        &context.repository,
                         context.policy,
                         request,
                     )
                     .await?
                 } else {
                     crate::operations::queries::$handler(
-                        Some(context.root),
-                        &context.scope,
+                        &context.repository,
                         context.policy,
                         request,
                     )
@@ -138,7 +136,7 @@ impl Operation for Info {
     ) -> OperationFuture<Self::Success, Self::Failure> {
         Box::pin(async move {
             let context = context.repository()?;
-            let info = crate::operations::engine_info(Some(context.root))?;
+            let info = crate::operations::engine_info(&context.repository);
             Ok(RepositoryInfo {
                 engine_version: info.engine_version,
                 protocol_version: info.protocol_version,

@@ -17,6 +17,11 @@ pub struct Repository {
     pub layout: ProvenanceLayout,
 }
 impl Repository {
+    /// Opens this fixture repository for the `default` scope.
+    pub fn open(&self) -> provenance_store::repository::Repository {
+        provenance_store::repository::Repository::open(self.dir.path(), "default").unwrap()
+    }
+
     pub fn new(statement: &str) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());

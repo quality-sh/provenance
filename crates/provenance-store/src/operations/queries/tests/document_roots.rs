@@ -1,4 +1,4 @@
-use super::{document_review::input, root_of, seeded_store, sid};
+use super::{document_review::input, repository_at, root_of, seeded_store, sid};
 use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::state_store::{
     AddSourceReferenceInput, CreateQuestionInput, CreateRequirementInput, CreateResolutionInput,
@@ -84,8 +84,7 @@ async fn inverse_document_read_follows_each_canonical_membership_rule() {
         (NodeType::Question, "question_policy"),
     ] {
         let roots = queries::containing_review_documents(
-            Some(root.clone()),
-            &scope,
+            &repository_at(&root),
             ReadPolicy::default(),
             kind,
             &sid(id),

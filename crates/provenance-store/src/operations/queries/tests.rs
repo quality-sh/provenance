@@ -1,6 +1,7 @@
 use super::records;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::ReadPolicy;
+use crate::repository::Repository;
 use crate::state_store::{
     CreateBoundaryInput, CreateDomainInput, CreateRequirementInput, StateStore,
 };
@@ -98,6 +99,16 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
 /// The repository root of a seeded store, for the public operations.
 fn root_of(dir: &tempfile::TempDir) -> camino::Utf8PathBuf {
     camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap()
+}
+
+/// The opened repository of a seeded store, for the public operations.
+fn repository_of(dir: &tempfile::TempDir) -> Repository {
+    Repository::open(dir.path(), "default").unwrap()
+}
+
+/// The opened repository at a root, for the public operations.
+fn repository_at(root: &camino::Utf8Path) -> Repository {
+    Repository::open(root, "default").unwrap()
 }
 
 #[tokio::test]

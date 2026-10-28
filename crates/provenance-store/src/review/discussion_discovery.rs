@@ -2,7 +2,7 @@ use crate::operations::{
     read_policy::ReadPolicy,
     reader::{self, Cursor, ReadContext, PAGE_BYTES},
 };
-use camino::Utf8Path;
+use crate::repository::Repository;
 use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
     threads::{
@@ -10,7 +10,7 @@ use provenance_core::{
         DiscussionListQuery, DiscussionMessagesQuery, DiscussionSelector, DiscussionStatusFilter,
         DiscussionSummary,
     },
-    NodeType, ScopeId, StableId, ThreadParent,
+    NodeType, StableId, ThreadParent,
 };
 use provenance_macros::rule;
 use sqlx::{QueryBuilder, Sqlite};
@@ -23,24 +23,22 @@ type DiscussionListRow = (String, String, String, String, i64, Vec<u8>, i64);
 /// Lists addressed Discussions in one scope or under one parent.
 #[rule("rule_porcelain_discussions_list_scope_or_parent")]
 pub async fn read_discussion_list(
-    repo: &Utf8Path,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     query: DiscussionListQuery,
 ) -> anyhow::Result<Stamped<DiscussionListPage>> {
     crate::operations::reader::check_limit(query.limit)?;
-    let answer = reader::answer(repo, scope, policy, move |ctx| Box::pin(list(ctx, query))).await?;
+    let answer = reader::answer(repository, policy, move |ctx| Box::pin(list(ctx, query))).await?;
     crate::operations::queries::page::checked("discussion-list", answer)
 }
 
 pub async fn read_discussion_conversation(
-    repo: &Utf8Path,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     query: DiscussionConversationQuery,
 ) -> anyhow::Result<Stamped<DiscussionConversation>> {
     crate::operations::reader::check_limit(query.limit)?;
-    let answer = reader::answer(repo, scope, policy, move |ctx| {
+    let answer = reader::answer(repository, policy, move |ctx| {
         Box::pin(conversation(ctx, query))
     })
     .await?;

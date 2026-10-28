@@ -14,6 +14,7 @@ pub mod requests;
 pub mod test_stores;
 mod timing;
 
+use crate::cache::tests::fixtures::open;
 use crate::cache::{catch_up_state, open_cache};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::reader::{self, ReadSnapshot};
@@ -71,7 +72,7 @@ pub async fn served_stamped(
     use super::super::{evidence, impact, records, stale, symbols, walk};
     let scope = store.scope.clone();
     let request = request.clone();
-    reader::answer(&store.root, &store.scope, policy, move |ctx| {
+    reader::answer(&store.repository(), policy, move |ctx| {
         Box::pin(async move {
             Ok(match request {
                 Request::Get(query) => settle(records::get(ctx, query).await),
@@ -104,11 +105,11 @@ async fn served_answer(store: &TestStore, request: &Request) -> Value {
 async fn prepare(store: &TestStore) -> (f64, f64) {
     let layout = store.layout();
     let started = Instant::now();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let rebuild_ms = timing::elapsed_ms(started);
     // The steady-state pass, which every read under `catch_up` pays.
     let started = Instant::now();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let catch_up_ms = timing::elapsed_ms(started);
     let scans = provenance_scanner::scan_path(&store.root).unwrap();
     crate::test_probes::set_test_scan(Some(scans));
@@ -123,7 +124,7 @@ async fn print_timings(store: TestStore) {
     let mut catch_up_samples = Vec::new();
     for _ in 0..timing::RUNS {
         let started = Instant::now();
-        catch_up_state(&layout).await.unwrap();
+        catch_up_state(&open(&layout)).await.unwrap();
         catch_up_samples.push(timing::elapsed_ms(started));
     }
     let catch_up_ms = timing::median(&mut catch_up_samples);
@@ -201,7 +202,7 @@ async fn projection_counts_match_canonical_over_the_repository_state() {
     let store = test_stores::repository_state();
     let state = store.state_store();
     let scope = &store.scope;
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     let snapshot = reader::ReadSnapshot::open(pool.pool(), scope)
         .await

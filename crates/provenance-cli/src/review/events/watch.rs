@@ -2,7 +2,7 @@ use super::subscribers::Subscribers;
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 use provenance_store::{
     cache::ProjectionFamily, layout::ProvenanceLayout, publication::publication_guard,
-    review_changes::ReviewStateSnapshot, state_store::StateStore,
+    repository::Repository, review_changes::ReviewStateSnapshot, state_store::StateStore,
 };
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -11,6 +11,7 @@ use std::sync::{
 use tokio::sync::{mpsc, watch, Notify};
 
 pub(super) struct Observation {
+    repository: Repository,
     layout: ProvenanceLayout,
     watcher: Arc<Mutex<RecommendedWatcher>>,
     receiver: mpsc::Receiver<notify::Result<Event>>,
@@ -25,7 +26,8 @@ struct Notice {
 }
 
 impl Observation {
-    pub fn new(layout: ProvenanceLayout) -> anyhow::Result<Self> {
+    pub fn new(repository: Repository) -> anyhow::Result<Self> {
+        let layout = repository.layout().clone();
         let (sender, receiver) = mpsc::channel(256);
         let lost = Arc::new(AtomicBool::new(false));
         let wake = Arc::new(Notify::new());
@@ -51,6 +53,7 @@ impl Observation {
         )?;
         watcher.watch(layout.state_dir().as_std_path(), RecursiveMode::Recursive)?;
         Ok(Self {
+            repository,
             layout,
             watcher: Arc::new(Mutex::new(watcher)),
             receiver,
@@ -60,7 +63,7 @@ impl Observation {
     }
 
     pub async fn read(&self, reattach: bool) -> anyhow::Result<ReviewStateSnapshot> {
-        let guard = publication_guard(&self.layout).await?;
+        let guard = publication_guard(&self.repository).await?;
         let watcher = self.watcher.clone();
         let layout = self.layout.clone();
         tokio::task::spawn_blocking(move || {

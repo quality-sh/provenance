@@ -4,8 +4,7 @@ use std::collections::BTreeSet;
 
 async fn read(root: &camino::Utf8Path, cursor: Option<String>) -> anyhow::Result<Value> {
     let answer = queries::read_document(
-        Some(root.to_owned()),
-        &ScopeId::new("default")?,
+        &repository_at(root),
         ReadPolicy::default(),
         ReadDocumentQuery {
             id: "req_overtime".into(),

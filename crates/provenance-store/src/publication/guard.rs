@@ -16,6 +16,7 @@ use super::{
     source_edit_recovery,
 };
 use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use anyhow::Context;
 use camino::Utf8Path;
 use fs2::FileExt;
@@ -57,26 +58,31 @@ impl Drop for LockedPublicationFile {
 /// restrict construction to this module.
 pub struct PublicationGuard {
     _lock: Option<LockedPublicationFile>,
-    layout: ProvenanceLayout,
+    repository: Repository,
 }
 
 impl PublicationGuard {
     /// Supplies the protected repository layout to guarded readers.
     #[rule("rule_guarded_reads_use_guard_repository")]
-    pub(crate) const fn layout(&self) -> &ProvenanceLayout {
-        &self.layout
+    pub(crate) fn layout(&self) -> &ProvenanceLayout {
+        self.repository.layout()
+    }
+
+    /// The opened repository the guard protects.
+    pub(crate) const fn repository(&self) -> &Repository {
+        &self.repository
     }
 }
 
 /// Holds one synchronous publication section and supplies its guarded read view.
 pub fn with_publication_guard<R>(
-    layout: &ProvenanceLayout,
+    repository: &Repository,
     operation: impl FnOnce(&PublicationGuard) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    super::with_repository_publication(layout, || {
+    super::with_repository_publication(repository.layout(), || {
         operation(&PublicationGuard {
             _lock: None,
-            layout: layout.clone(),
+            repository: repository.clone(),
         })
     })
 }
@@ -85,24 +91,28 @@ pub fn with_publication_guard<R>(
 ///
 /// The blocking wait runs on the blocking pool. Pending-publication recovery
 /// runs before the caller sees the guard.
-pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<PublicationGuard> {
-    let key = super::publication_lock_identity(layout)?;
+pub async fn publication_guard(repository: &Repository) -> anyhow::Result<PublicationGuard> {
+    let key = super::publication_lock_identity(repository.layout())?;
     if read_only::active(&key) {
         return Ok(PublicationGuard {
             _lock: None,
-            layout: layout.clone(),
+            repository: repository.clone(),
         });
     }
-    let layout = layout.clone();
+    let repository = repository.clone();
     tokio::task::spawn_blocking(move || {
-        prepare_publication_lock(&layout)?;
-        let lock = LockedPublicationFile::acquire(&layout.publication_lock_path())?;
-        prepare_transaction_dirs(&layout)?;
-        source_edit_recovery::recover_pending_source_edit(&layout)?;
-        recover_pending_publication(&layout)?;
+        let lock = {
+            let layout = repository.layout();
+            prepare_publication_lock(layout)?;
+            let lock = LockedPublicationFile::acquire(&layout.publication_lock_path())?;
+            prepare_transaction_dirs(layout)?;
+            source_edit_recovery::recover_pending_source_edit(layout)?;
+            recover_pending_publication(layout)?;
+            lock
+        };
         Ok(PublicationGuard {
             _lock: Some(lock),
-            layout,
+            repository,
         })
     })
     .await
@@ -111,28 +121,26 @@ pub async fn publication_guard(layout: &ProvenanceLayout) -> anyhow::Result<Publ
 
 #[cfg(test)]
 mod tests {
-    use crate::layout::ProvenanceLayout;
     use crate::publication::{
         publication_guard, with_read_only_validation, with_repository_publication,
     };
+    use crate::repository::Repository;
     use std::sync::mpsc;
     use std::time::Duration;
 
-    fn repo_layout() -> (tempfile::TempDir, ProvenanceLayout) {
+    fn repo() -> (tempfile::TempDir, Repository) {
         let dir = tempfile::tempdir().unwrap();
-        let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
-        let layout = ProvenanceLayout::new(root);
-        std::fs::create_dir_all(layout.state_dir()).unwrap();
-        (dir, layout)
+        let repository = crate::cache::tests::fixtures::initialized(dir.path());
+        (dir, repository)
     }
 
     #[tokio::test]
     async fn guard_excludes_the_synchronous_publication_path_until_dropped() {
-        let (_dir, layout) = repo_layout();
-        let guard = publication_guard(&layout).await.unwrap();
+        let (_dir, repository) = repo();
+        let guard = publication_guard(&repository).await.unwrap();
 
         let (sender, receiver) = mpsc::channel();
-        let thread_layout = layout.clone();
+        let thread_layout = repository.layout().clone();
         let waiter = std::thread::spawn(move || {
             with_repository_publication(&thread_layout, || {
                 sender.send(()).unwrap();
@@ -154,15 +162,18 @@ mod tests {
 
     #[test]
     fn read_only_validation_bypasses_the_lock() {
-        let (_dir, layout) = repo_layout();
+        let (_dir, repository) = repo();
+        let lock_path = repository.layout().publication_lock_path();
+        // The open took the lock once; the read-only section must not take it again.
+        std::fs::remove_file(&lock_path).unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
-        with_read_only_validation(&layout, || {
-            let _guard = runtime.block_on(publication_guard(&layout))?;
+        with_read_only_validation(repository.layout(), || {
+            let _guard = runtime.block_on(publication_guard(&repository))?;
             // No lock file means no lock was taken.
-            assert!(!layout.publication_lock_path().exists());
+            assert!(!lock_path.exists());
             Ok(())
         })
         .unwrap();

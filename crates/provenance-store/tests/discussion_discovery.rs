@@ -39,7 +39,7 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
     let mut query = list(None, 1);
     let mut found = Vec::new();
     loop {
-        let page = read_discussion_list(root, &scope(), ReadPolicy::default(), query.clone())
+        let page = read_discussion_list(&repository(root), ReadPolicy::default(), query.clone())
             .await
             .unwrap()
             .result;
@@ -54,7 +54,7 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
     expected.sort_by(|a, b| a.as_str().cmp(b.as_str()));
     assert_eq!(found, expected);
 
-    let first = read_discussion_list(root, &scope(), ReadPolicy::default(), list(None, 1))
+    let first = read_discussion_list(&repository(root), ReadPolicy::default(), list(None, 1))
         .await
         .unwrap()
         .result;
@@ -63,7 +63,7 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
     wrong.status = DiscussionStatusFilter::All;
     wrong.cursor = Some(cursor.clone());
     assert!(
-        read_discussion_list(root, &scope(), ReadPolicy::default(), wrong)
+        read_discussion_list(&repository(root), ReadPolicy::default(), wrong)
             .await
             .unwrap_err()
             .downcast_ref::<ReadFailure>()
@@ -72,7 +72,7 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
     let mut wrong = list(Some(a.parent.clone()), 1);
     wrong.cursor = Some(cursor.clone());
     assert!(
-        read_discussion_list(root, &scope(), ReadPolicy::default(), wrong)
+        read_discussion_list(&repository(root), ReadPolicy::default(), wrong)
             .await
             .unwrap_err()
             .downcast_ref::<ReadFailure>()
@@ -81,7 +81,7 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
 
     let mut resolved = list(None, 10);
     resolved.status = DiscussionStatusFilter::Resolved;
-    let page = read_discussion_list(root, &scope(), ReadPolicy::default(), resolved)
+    let page = read_discussion_list(&repository(root), ReadPolicy::default(), resolved)
         .await
         .unwrap()
         .result;
@@ -89,7 +89,7 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
     assert_eq!(page.entries[0].discussion_id, b.discussion_id);
     let mut all = list(None, 10);
     all.status = DiscussionStatusFilter::All;
-    let page = read_discussion_list(root, &scope(), ReadPolicy::default(), all)
+    let page = read_discussion_list(&repository(root), ReadPolicy::default(), all)
         .await
         .unwrap()
         .result;
@@ -103,7 +103,7 @@ async fn selected_pages_are_complete_and_bind_status_parent_and_revision() {
     let mut stale = list(None, 1);
     stale.cursor = Some(cursor);
     assert!(
-        read_discussion_list(root, &scope(), ReadPolicy::default(), stale)
+        read_discussion_list(&repository(root), ReadPolicy::default(), stale)
             .await
             .unwrap_err()
             .downcast_ref::<ReadFailure>()
@@ -118,7 +118,7 @@ async fn denied_kinds_and_missing_targets_have_no_rows_or_cursor() {
     let entry = start(&store, "visible");
     let mut query = list(None, 1);
     query.allowed_parent_kinds = vec![NodeType::Source];
-    let page = read_discussion_list(root, &scope(), ReadPolicy::default(), query.clone())
+    let page = read_discussion_list(&repository(root), ReadPolicy::default(), query.clone())
         .await
         .unwrap()
         .result;
@@ -126,7 +126,7 @@ async fn denied_kinds_and_missing_targets_have_no_rows_or_cursor() {
     assert!(page.next_cursor.is_none());
     query.parent = Some(entry.parent.clone());
     assert!(
-        read_discussion_list(root, &scope(), ReadPolicy::default(), query)
+        read_discussion_list(&repository(root), ReadPolicy::default(), query)
             .await
             .unwrap_err()
             .downcast_ref::<ReadFailure>()
@@ -139,7 +139,7 @@ async fn denied_kinds_and_missing_targets_have_no_rows_or_cursor() {
         cursor: None,
     };
     assert!(
-        read_discussion_conversation(root, &scope(), ReadPolicy::default(), denied)
+        read_discussion_conversation(&repository(root), ReadPolicy::default(), denied)
             .await
             .unwrap_err()
             .downcast_ref::<ReadFailure>()
@@ -152,7 +152,7 @@ async fn denied_kinds_and_missing_targets_have_no_rows_or_cursor() {
         cursor: None,
     };
     assert!(
-        read_discussion_conversation(root, &scope(), ReadPolicy::default(), missing)
+        read_discussion_conversation(&repository(root), ReadPolicy::default(), missing)
             .await
             .unwrap_err()
             .downcast_ref::<ReadFailure>()
@@ -172,14 +172,15 @@ async fn conversation_returns_head_and_ordered_bounded_messages() {
         limit: 1,
         cursor: None,
     };
-    let first = read_discussion_conversation(root, &scope(), ReadPolicy::default(), query.clone())
-        .await
-        .unwrap()
-        .result;
+    let first =
+        read_discussion_conversation(&repository(root), ReadPolicy::default(), query.clone())
+            .await
+            .unwrap()
+            .result;
     assert_eq!(first.head.version, reply.version);
     assert_eq!(first.messages.entries[0].body, "opening");
     query.cursor = first.messages.next_cursor.clone();
-    let second = read_discussion_conversation(root, &scope(), ReadPolicy::default(), query)
+    let second = read_discussion_conversation(&repository(root), ReadPolicy::default(), query)
         .await
         .unwrap()
         .result;
@@ -195,7 +196,7 @@ async fn conversation_returns_head_and_ordered_bounded_messages() {
         cursor: first.messages.next_cursor.clone(),
     };
     assert!(
-        read_discussion_conversation(root, &scope(), ReadPolicy::default(), wrong.clone())
+        read_discussion_conversation(&repository(root), ReadPolicy::default(), wrong.clone())
             .await
             .unwrap_err()
             .downcast_ref::<ReadFailure>()
@@ -203,7 +204,7 @@ async fn conversation_returns_head_and_ordered_bounded_messages() {
     );
     wrong.discussion_id = entry.discussion_id;
     assert!(
-        read_discussion_conversation(root, &scope(), ReadPolicy::default(), wrong)
+        read_discussion_conversation(&repository(root), ReadPolicy::default(), wrong)
             .await
             .unwrap_err()
             .downcast_ref::<ReadFailure>()
@@ -217,7 +218,7 @@ async fn conversation_returns_head_and_ordered_bounded_messages() {
 async fn default_list_has_truthful_parent_status_and_bounded_opening() {
     let (temp, store) = fixture();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
-    let empty = read_discussion_list(root, &scope(), ReadPolicy::default(), list(None, 10))
+    let empty = read_discussion_list(&repository(root), ReadPolicy::default(), list(None, 10))
         .await
         .unwrap()
         .result;
@@ -232,10 +233,11 @@ async fn default_list_has_truthful_parent_status_and_bounded_opening() {
             .unwrap(),
         )
         .unwrap();
-    let legacy_only = read_discussion_list(root, &scope(), ReadPolicy::default(), list(None, 10))
-        .await
-        .unwrap()
-        .result;
+    let legacy_only =
+        read_discussion_list(&repository(root), ReadPolicy::default(), list(None, 10))
+            .await
+            .unwrap()
+            .result;
     assert!(legacy_only.entries.is_empty());
     assert!(legacy_only.next_cursor.is_none());
     let body = "α".repeat(300);
@@ -250,7 +252,7 @@ async fn default_list_has_truthful_parent_status_and_bounded_opening() {
     }))
     .unwrap();
     assert_eq!(query.status, DiscussionStatusFilter::Active);
-    let page = read_discussion_list(root, &scope(), ReadPolicy::default(), query)
+    let page = read_discussion_list(&repository(root), ReadPolicy::default(), query)
         .await
         .unwrap()
         .result;
@@ -272,7 +274,7 @@ async fn page_limits_and_large_messages_are_bounded() {
             "kind":"start", "role":"user", "body":"x".repeat(60_000)
         })))
         .unwrap();
-    let page = read_discussion_list(root, &scope(), ReadPolicy::default(), list(None, 10))
+    let page = read_discussion_list(&repository(root), ReadPolicy::default(), list(None, 10))
         .await
         .unwrap()
         .result;
@@ -284,7 +286,7 @@ async fn page_limits_and_large_messages_are_bounded() {
         limit: 10,
         cursor: None,
     };
-    let read = read_discussion_conversation(root, &scope(), ReadPolicy::default(), conversation)
+    let read = read_discussion_conversation(&repository(root), ReadPolicy::default(), conversation)
         .await
         .unwrap()
         .result;
@@ -292,19 +294,19 @@ async fn page_limits_and_large_messages_are_bounded() {
     assert_eq!(read.messages.entries[0].body.len(), 60_000);
     assert!(read.messages.next_cursor.is_none());
     assert!(
-        read_discussion_list(root, &scope(), ReadPolicy::default(), list(None, 0))
+        read_discussion_list(&repository(root), ReadPolicy::default(), list(None, 0))
             .await
             .is_err()
     );
     assert!(
-        read_discussion_list(root, &scope(), ReadPolicy::default(), list(None, 201))
+        read_discussion_list(&repository(root), ReadPolicy::default(), list(None, 201))
             .await
             .is_err()
     );
     let mut oversized_cursor = list(None, 1);
     oversized_cursor.cursor = Some("x".repeat(8193));
     assert!(
-        read_discussion_list(root, &scope(), ReadPolicy::default(), oversized_cursor)
+        read_discussion_list(&repository(root), ReadPolicy::default(), oversized_cursor)
             .await
             .unwrap_err()
             .downcast_ref::<ReadFailure>()
@@ -319,8 +321,7 @@ async fn catalog_operation_applies_grants_before_paging() {
     start(&store, "two");
     let root = camino::Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap();
     let context = PreparedContext::read(PreparedRead {
-        root,
-        scope: scope(),
+        repository: repository(&root),
         policy: ReadPolicy::default(),
         requested_target: "fixture".into(),
         external: false,
@@ -351,7 +352,7 @@ async fn scope_list_includes_other_parents_and_parent_list_does_not() {
     let mut input = write(json!({"kind":"start","role":"user","body":"second"}));
     input.parent.node_id = StableId::new("req_b").unwrap();
     let b = store.write_discussion(input).unwrap();
-    let scope_page = read_discussion_list(root, &scope(), ReadPolicy::default(), list(None, 10))
+    let scope_page = read_discussion_list(&repository(root), ReadPolicy::default(), list(None, 10))
         .await
         .unwrap()
         .result;
@@ -365,8 +366,7 @@ async fn scope_list_includes_other_parents_and_parent_list_does_not() {
         .iter()
         .any(|entry| entry.discussion_id == b.discussion_id));
     let parent_page = read_discussion_list(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         list(Some(a.parent), 10),
     )
@@ -393,8 +393,7 @@ async fn concurrent_replies_do_not_split_head_from_messages() {
     });
     for _ in 0..20 {
         let result = read_discussion_conversation(
-            &root,
-            &scope(),
+            &repository(&root),
             ReadPolicy::default(),
             DiscussionConversationQuery {
                 discussion_id: discussion_id.clone(),

@@ -45,11 +45,7 @@ operation!(
     crate::operations::TypedSpecPlan,
     false,
     spec_files,
-    |context: super::PreparedScope, input| crate::operations::plan(
-        Some(context.root),
-        &context.scope,
-        input
-    ),
+    |context: super::PreparedScope, input| crate::operations::plan(&context.repository, input),
     [GraphStorage, RepositoryFiles, Dictionary]
 );
 operation!(
@@ -59,11 +55,7 @@ operation!(
     TypedSpecResult,
     true,
     spec_files,
-    |context: super::PreparedScope, input| crate::operations::apply(
-        Some(context.root),
-        &context.scope,
-        input
-    ),
+    |context: super::PreparedScope, input| crate::operations::apply(&context.repository, input),
     [GraphStorage, RepositoryFiles, Dictionary]
 );
 operation!(
@@ -74,8 +66,7 @@ operation!(
     true,
     verification_file,
     |context: super::PreparedScope, input| crate::operations::begin_verification(
-        Some(context.root),
-        context.scope,
+        &context.repository,
         input
     ),
     [GraphStorage, RepositoryFiles, Git, RunStorage]
@@ -88,8 +79,7 @@ operation!(
     true,
     |_: &CompleteVerificationInput| Ok(()),
     |context: super::PreparedScope, input| crate::operations::complete_verification(
-        Some(context.root),
-        &context.scope,
+        &context.repository,
         input
     ),
     [GraphStorage, RunStorage]

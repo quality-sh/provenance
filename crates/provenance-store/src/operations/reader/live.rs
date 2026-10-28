@@ -59,13 +59,13 @@ impl<'c> LiveHandle<'c> {
     }
 
     fn layout(&self) -> ProvenanceLayout {
-        ProvenanceLayout::new(self.context.repo().to_path_buf())
+        self.context.repository().layout().clone()
     }
 
     /// The canonical store behind the repository.
     pub fn store(&self) -> StateStore {
         self.only(Live::Canonical);
-        StateStore::new(self.layout())
+        self.context.repository().store()
     }
 
     /// The canonical graph references that name a repository path, which
@@ -107,7 +107,7 @@ impl<'c> LiveHandle<'c> {
     /// The scope's verification runs.
     pub fn runs(&self, scope: &ScopeId) -> anyhow::Result<Vec<VerificationRun>> {
         self.only(Live::VerificationRuns);
-        StateStore::new(self.layout()).read_verification_runs(
+        self.context.repository().store().read_verification_runs(
             scope,
             crate::cache::read::page::RECORD_BYTES,
             |_, next| {
@@ -130,7 +130,7 @@ impl<'c> LiveHandle<'c> {
         ) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         self.only(Live::VerificationRuns);
-        StateStore::new(self.layout()).read_verification_runs(
+        self.context.repository().store().read_verification_runs(
             scope,
             crate::cache::read::page::RESOURCE_RECORD_BYTES,
             read,

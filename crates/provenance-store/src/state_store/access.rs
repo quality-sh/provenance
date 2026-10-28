@@ -32,17 +32,17 @@ impl StateStore {
     /// Reads the repository of a held publication guard without a second lock.
     ///
     /// ```compile_fail
-    /// use provenance_store::layout::ProvenanceLayout;
     /// use provenance_store::publication::PublicationGuard;
+    /// use provenance_store::repository::Repository;
     /// use provenance_store::state_store::StateStore;
-    /// let layout = ProvenanceLayout::new("repo");
-    /// let forged = PublicationGuard { _lock: None, layout };
+    /// let repository = Repository::open("repo", "default").unwrap();
+    /// let forged = PublicationGuard { _lock: None, repository };
     /// let _ = StateStore::under_guard(&forged);
     /// ```
     pub fn under_guard(guard: &PublicationGuard) -> GuardedStore<'_> {
         GuardedStore {
             store: Self {
-                layout: guard.layout().clone(),
+                layout: guard.repository().layout().clone(),
                 access: Access::Held,
                 record_stamp: super::RecordStamp::ResolveFromRepository,
             },

@@ -23,8 +23,7 @@ fn apply(context: PreparedContext, runtime: &tokio::runtime::Handle) {
 
 fn context(repo: &Repository) -> PreparedContext {
     PreparedContext::for_scope(PreparedScope {
-        root: repo.dir.path().to_str().unwrap().into(),
-        scope: ScopeId::new("default").unwrap(),
+        repository: repo.open(),
         requested_target: "selected".into(),
     })
 }

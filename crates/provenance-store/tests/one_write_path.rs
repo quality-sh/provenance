@@ -4,7 +4,6 @@ use provenance_core::review::{ReviewHistoryQuery, SaveOutcome};
 use provenance_core::StableId;
 use provenance_store::{
     cache,
-    layout::ProvenanceLayout,
     operations::read_policy::ReadPolicy,
     review::{read_history, SaveRequirement},
     state_store::CreateRequirementInput,
@@ -49,11 +48,9 @@ async fn the_legacy_create_enrolls_the_record() {
     ));
 
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
-    let layout = ProvenanceLayout::new(root);
-    cache::materialize_state(&layout).await.unwrap();
+    cache::materialize_state(&repository(root)).await.unwrap();
     let history = read_history(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         ReviewHistoryQuery {
             record_kind: provenance_core::NodeType::Requirement,

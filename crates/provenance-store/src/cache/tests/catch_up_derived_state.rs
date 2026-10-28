@@ -7,6 +7,7 @@
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
+use super::fixtures::open;
 use super::projection_digest_sensitivity::aggregate_layout;
 use crate::state_store::StateStore;
 use provenance_core::ScopeId;
@@ -37,7 +38,7 @@ async fn effective_state(layout: &crate::layout::ProvenanceLayout) -> String {
 #[tokio::test]
 async fn a_hand_emptied_disposition_shard_moves_the_cards_effective_state() {
     let (_dir, layout, scope) = aggregate_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     assert_eq!(effective_state(&layout).await, "deferred");
 
     let dispositions = ProjectionFamily::Dispositions.shard_path(&layout, &scope);
@@ -51,7 +52,7 @@ async fn a_hand_emptied_disposition_shard_moves_the_cards_effective_state() {
 async fn a_writer_path_disposition_moves_the_cards_effective_state() {
     let (_dir, layout, scope) = aggregate_layout();
     remove_shard(&layout, ProjectionFamily::Dispositions, &scope);
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     assert_eq!(effective_state(&layout).await, "asserted");
 
     let store = StateStore::new(layout.clone());
@@ -91,7 +92,7 @@ async fn an_assertion_write_moves_the_cards_effective_state() {
     std::fs::write(&packets, format!("{silent_packet}\n")).unwrap();
     remove_shard(&layout, ProjectionFamily::AssertionRecords, &scope);
     remove_shard(&layout, ProjectionFamily::Dispositions, &scope);
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     assert_eq!(effective_state(&layout).await, "proposed");
 
     std::fs::write(&packets, qualifying_packet).unwrap();
@@ -108,7 +109,7 @@ async fn a_legacy_promotion_decision_is_refused_by_catch_up_and_by_rebuild() {
     // way and commit nothing.
     let (_dir, layout, scope) = aggregate_layout();
     remove_shard(&layout, ProjectionFamily::Dispositions, &scope);
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     assert_eq!(effective_state(&layout).await, "asserted");
     let pool = open_cache(&layout).await.unwrap();
     let serial_before: i64 = sqlx::query_scalar("SELECT MAX(serial) FROM projection_revision")
@@ -132,8 +133,14 @@ async fn a_legacy_promotion_decision_is_refused_by_catch_up_and_by_rebuild() {
     )
     .unwrap();
 
-    let catch_up_error = catch_up_state(&layout).await.unwrap_err().to_string();
-    let rebuild_error = materialize_state(&layout).await.unwrap_err().to_string();
+    let catch_up_error = catch_up_state(&open(&layout))
+        .await
+        .unwrap_err()
+        .to_string();
+    let rebuild_error = materialize_state(&open(&layout))
+        .await
+        .unwrap_err()
+        .to_string();
     assert!(
         catch_up_error.contains("frozen shipped-v1"),
         "{catch_up_error}"

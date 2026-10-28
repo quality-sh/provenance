@@ -3,12 +3,12 @@ use crate::operations::{
     read_policy::ReadPolicy,
     reader::{self, Cursor, Position, ReadContext},
 };
-use camino::Utf8Path;
+use crate::repository::Repository;
 use provenance_core::{
     model::{ColumnValue, ProjectionRow},
     protocol::{read_failure::ReadFailure, Stamped},
     threads::{Discussion, DiscussionGroup, DiscussionPage, DiscussionQuery},
-    ScopeId, StableId, ThreadParent,
+    StableId, ThreadParent,
 };
 
 /// The columns of one Discussion row, in `Discussion::COLUMNS` order.
@@ -57,25 +57,23 @@ fn discussion_from_row(row: DiscussionRow) -> anyhow::Result<Discussion> {
 }
 
 pub async fn read_discussions(
-    repo: &Utf8Path,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     query: DiscussionQuery,
 ) -> anyhow::Result<Stamped<DiscussionPage>> {
     reader::check_limit(query.limit)?;
     let answer =
-        reader::answer(repo, scope, policy, move |ctx| Box::pin(groups(ctx, query))).await?;
+        reader::answer(repository, policy, move |ctx| Box::pin(groups(ctx, query))).await?;
     crate::operations::queries::page::checked("review-discussions", answer)
 }
 
 pub async fn read_discussion(
-    repo: &Utf8Path,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     parent: ThreadParent,
     discussion_id: StableId,
 ) -> anyhow::Result<Stamped<DiscussionGroup>> {
-    reader::answer(repo, scope, policy, move |ctx| {
+    reader::answer(repository, policy, move |ctx| {
         Box::pin(group(ctx, parent, discussion_id))
     })
     .await

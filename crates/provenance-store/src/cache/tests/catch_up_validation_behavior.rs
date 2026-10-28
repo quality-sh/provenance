@@ -4,6 +4,7 @@
 
 use super::super::*;
 use super::catch_up_behavior::{assert_catch_up_equals_rebuild, dump_family_tables};
+use super::fixtures::open;
 use super::fixtures::*;
 use super::projection_digest_sensitivity::aggregate_layout;
 
@@ -17,7 +18,7 @@ async fn stored_serial(pool: &sqlx::SqlitePool) -> i64 {
 #[tokio::test]
 async fn catch_up_refuses_state_the_aggregate_validator_refuses() {
     let (_dir, layout, _scope) = aggregate_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let serial_before = stored_serial(pool.pool()).await;
     let rows_before = dump_family_tables(pool.pool()).await;
@@ -34,7 +35,10 @@ async fn catch_up_refuses_state_the_aggregate_validator_refuses() {
     )
     .unwrap();
 
-    let error = catch_up_state(&layout).await.unwrap_err().to_string();
+    let error = catch_up_state(&open(&layout))
+        .await
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("actor"), "validator error expected: {error}");
 
     let pool = open_cache(&layout).await.unwrap();
@@ -53,7 +57,7 @@ async fn catch_up_refuses_state_the_aggregate_validator_refuses() {
 #[tokio::test]
 async fn a_departed_scope_loses_its_rows_and_its_baselines() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     // The scope leaves the manifest. Its shard files remain on disk.
     let mut manifest: provenance_core::Manifest =
@@ -65,7 +69,7 @@ async fn a_departed_scope_loses_its_rows_and_its_baselines() {
     )
     .unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert!(!report.rebuilt);
     let pool = open_cache(&layout).await.unwrap();
     let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM requirements WHERE scope_id = ?")
@@ -86,7 +90,7 @@ async fn a_departed_scope_loses_its_rows_and_its_baselines() {
 #[tokio::test]
 async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     // Change the schema and its compatibility marker.
     let pool = open_cache(&layout).await.unwrap();
@@ -105,7 +109,7 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
         .unwrap();
     pool.close().await.unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert!(
         report.rebuilt,
         "an incompatible schema must force a rebuild"
@@ -117,12 +121,12 @@ async fn a_schema_move_routes_catch_up_to_a_full_rebuild() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_concurrent_rebuild_and_catch_up_serialize_on_the_guard() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     let rebuild_layout = layout.clone();
     let catch_up_layout = layout.clone();
-    let rebuild = tokio::spawn(async move { materialize_state(&rebuild_layout).await });
-    let catch_up = tokio::spawn(async move { catch_up_state(&catch_up_layout).await });
+    let rebuild = tokio::spawn(async move { materialize_state(&open(&rebuild_layout)).await });
+    let catch_up = tokio::spawn(async move { catch_up_state(&open(&catch_up_layout)).await });
     rebuild.await.unwrap().unwrap();
     catch_up.await.unwrap().unwrap();
 

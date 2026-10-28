@@ -26,8 +26,7 @@ graph_read_operation!(
     },
     |read, request| async move {
         Ok(crate::review::read_discussion(
-            &read.root,
-            &read.scope,
+            &read.repository,
             read.policy,
             request.parent,
             request.discussion_id,

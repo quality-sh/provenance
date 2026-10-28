@@ -211,7 +211,7 @@ macro_rules! page_operation {
             },
             |read, request| async move {
                 Ok(
-                    reader::answer(&read.root, &read.scope, read.policy, move |ctx| {
+                    reader::answer(&read.repository, read.policy, move |ctx| {
                         Box::pin($page(ctx, $wire, request))
                     })
                     .await?
@@ -338,7 +338,7 @@ graph_read_operation!(
     },
     |read, request| async move {
         Ok(
-            reader::answer(&read.root, &read.scope, read.policy, move |ctx| {
+            reader::answer(&read.repository, read.policy, move |ctx| {
                 Box::pin(verification_binding_page(ctx, request))
             })
             .await?

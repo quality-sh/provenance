@@ -9,7 +9,7 @@
 //! bound is proved, not inferred from a final answer.
 
 use super::hydration_support::{append_requirement, counted, neighbors_query, trace_query};
-use super::{root_of, seeded_store};
+use super::{repository_at, repository_of, root_of, seeded_store};
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;
 use provenance_core::protocol::{read_failure::ReadFailure, NeighborsResult, TraceResult};
@@ -59,8 +59,7 @@ async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
     let policy = ReadPolicy::default();
 
     let (answer, _) = counted(queries::neighbors(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         policy,
         neighbors_query("req_overtime", 200),
     ))
@@ -77,8 +76,7 @@ async fn neighbors_hydrate_only_the_served_page_over_a_wide_graph() {
 
     for limit in [1usize, 4, 29] {
         let (answer, hydrations) = counted(queries::neighbors(
-            Some(root.clone()),
-            &scope,
+            &repository_at(&root),
             policy,
             neighbors_query("req_overtime", limit),
         ))
@@ -116,8 +114,7 @@ async fn an_oversized_neighbor_past_the_page_cannot_refuse_it() {
         super::hydration_support::OVERSIZED_BYTES,
     );
     let (answer, hydrations) = counted(queries::neighbors(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         neighbors_query("req_overtime", 5),
     ))
@@ -157,8 +154,7 @@ async fn an_oversized_neighbor_in_the_page_still_refuses() {
         );
     }
     let error = queries::neighbors(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         neighbors_query("req_overtime", 50),
     )
@@ -179,8 +175,7 @@ async fn trace_hydrates_only_a_bounded_breadth_page() {
     let policy = ReadPolicy::default();
 
     let (answer, _) = counted(queries::trace(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         policy,
         trace_query("req_overtime", 1, 200),
     ))
@@ -192,8 +187,7 @@ async fn trace_hydrates_only_a_bounded_breadth_page() {
     assert!(!full.has_more);
 
     let (answer, hydrations) = counted(queries::trace(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         policy,
         trace_query("req_overtime", 1, 1),
     ))
@@ -230,8 +224,7 @@ async fn trace_folds_duplicate_paths_and_skips_missing_targets() {
         0,
     );
     let answer = queries::trace(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         trace_query("req_overtime", 2, 200),
     )
@@ -263,8 +256,7 @@ async fn trace_folds_duplicate_paths_and_skips_missing_targets() {
     assert!(!answer.has_more);
 
     let answer = queries::trace(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         trace_query("req_overtime", 2, 4),
     )
@@ -312,8 +304,7 @@ async fn trace_hydrates_no_depth_beyond_a_full_page() {
     let policy = ReadPolicy::default();
 
     let (answer, _) = counted(queries::trace(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         policy,
         trace_query("req_overtime", 2, 200),
     ))
@@ -325,8 +316,7 @@ async fn trace_hydrates_no_depth_beyond_a_full_page() {
     assert!(!full.has_more);
 
     let (answer, hydrations) = counted(queries::trace(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         policy,
         trace_query("req_overtime", 2, 4),
     ))

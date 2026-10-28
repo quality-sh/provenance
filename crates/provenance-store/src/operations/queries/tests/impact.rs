@@ -27,8 +27,7 @@ fn query(id: &str) -> ImpactQuery {
 async fn a_resolution_reaches_the_rules_that_name_it_only() {
     let store = TestStore::pinned();
     let answer = queries::impact(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         query("res_overtime"),
     )
@@ -68,7 +67,7 @@ async fn impact_under(
         freshness: FreshnessPolicy::AnnotateOnly,
         scan_limit,
     };
-    reader::answer(&store.root, &store.scope, policy, move |ctx| {
+    reader::answer(&store.repository(), policy, move |ctx| {
         Box::pin(async move { impact::impact(ctx, query("req_overtime")).await })
     })
     .await
@@ -87,7 +86,9 @@ async fn impact_says_when_the_scan_was_cut() {
         "rule_overtime",
         "req_overtime",
     );
-    crate::cache::catch_up_state(&store.layout()).await.unwrap();
+    crate::cache::catch_up_state(&store.repository())
+        .await
+        .unwrap();
     crate::test_probes::set_test_scan(None);
 
     let whole = impact_under(&store, usize::MAX).await.unwrap();

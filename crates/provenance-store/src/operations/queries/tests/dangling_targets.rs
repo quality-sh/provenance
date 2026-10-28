@@ -2,7 +2,7 @@
 //! record that is gone. Freshness annotates and never refuses, so a read
 //! over that state still answers with a stamp and no freshness error.
 
-use super::{root_of, seeded_store};
+use super::{repository_of, root_of, seeded_store};
 use crate::cache::tests::fixtures::append_record;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::ReadPolicy;
@@ -29,8 +29,7 @@ async fn a_read_over_an_old_dangling_target_still_answers() {
     );
 
     let answer = crate::operations::queries::get(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         GetQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),

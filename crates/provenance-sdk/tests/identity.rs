@@ -9,6 +9,7 @@ use provenance_sdk::operations::catalog::{
 };
 use provenance_sdk::{operations, requirement, rule, spec, RequirementBuilder};
 use provenance_store::layout::ProvenanceLayout;
+use provenance_store::repository::Repository;
 use provenance_store::state_store::{CreateRequirementInput, StateStore, TypedResourceKind};
 
 fn repository() -> (tempfile::TempDir, camino::Utf8PathBuf) {
@@ -37,8 +38,7 @@ fn apply(
         .build()
         .unwrap();
     operations::apply(
-        Some(root.clone()),
-        &ScopeId::new("default").unwrap(),
+        &Repository::open(root, "default").unwrap(),
         document.materialize("spec://rust"),
     )
     .unwrap()
@@ -121,9 +121,9 @@ async fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
     let (_dir, root) = repository();
     let scope = ScopeId::new("default").unwrap();
     let store = StateStore::new(ProvenanceLayout::new(root.clone()));
+    let repository = Repository::open(&root, "default").unwrap();
     let context = PreparedContext::for_scope(PreparedScope {
-        root: root.clone(),
-        scope: scope.clone(),
+        repository: repository.clone(),
         requested_target: "selected".into(),
     });
     invoke_typed::<CreateRequirementNative>(
@@ -153,7 +153,7 @@ async fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
         .unwrap()
         .materialize("spec://rust/migration");
 
-    let preview = operations::plan(Some(root.clone()), &scope, document.clone()).unwrap();
+    let preview = operations::plan(&repository, document.clone()).unwrap();
     assert_eq!(
         (
             preview.reconciliation.created,
@@ -168,7 +168,7 @@ async fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
         .collect::<Vec<_>>();
     fields.sort_unstable();
     assert_eq!(fields, ["address", "declared_by"]);
-    let applied = operations::apply(Some(root.clone()), &scope, document.clone()).unwrap();
+    let applied = operations::apply(&repository, document.clone()).unwrap();
     assert_eq!(applied.resources[0].id.as_str(), "req_existing");
     let after = store.list_requirements(&scope).unwrap().remove(0);
     assert_eq!(after.declared_by.as_deref(), Some("spec://rust/migration"));
@@ -181,6 +181,6 @@ async fn a_kernel_authored_requirement_adopts_one_exact_unowned_identity() {
         after.statement,
         "The canonical Requirement keeps its identity"
     );
-    let replay = operations::plan(Some(root), &scope, document).unwrap();
+    let replay = operations::plan(&repository, document).unwrap();
     assert_eq!(replay.reconciliation.unchanged, 1);
 }

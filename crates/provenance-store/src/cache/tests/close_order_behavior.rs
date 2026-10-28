@@ -6,6 +6,7 @@
 
 use super::super::*;
 use super::fixtures::empty_layout;
+use super::fixtures::open;
 use super::wal_behavior::wal_files;
 use crate::cache::CacheConnection;
 use crate::layout::ProvenanceLayout;
@@ -129,7 +130,7 @@ fn a_materialization_closes_while_every_blocking_worker_waits_for_its_guard() {
             }
             Ok(())
         });
-        let report = tokio::time::timeout(CLOSE_LIMIT, materialize_empty_state(&layout))
+        let report = tokio::time::timeout(CLOSE_LIMIT, materialize_empty_state(&open(&layout)))
             .await
             .expect(
                 "the materialization must finish while every blocking worker waits for its guard",

@@ -3,10 +3,9 @@ pub mod local_host;
 pub mod records;
 use provenance_core::{
     protocol::failure::{InvalidInputReason, OperationFailure},
-    Manifest, ScopeId,
+    ScopeId,
 };
 use provenance_store::{
-    layout::ProvenanceLayout,
     operations::{
         catalog::{
             ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, PreparedRepository,
@@ -14,7 +13,7 @@ use provenance_store::{
         },
         read_policy::ReadPolicy,
     },
-    settings::Settings,
+    repository::Repository,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -184,44 +183,38 @@ impl ContextResolver for FixtureAccess {
             .get(&target)
             .ok_or(OperationFailure::UnknownTarget)?;
         let Some(context) = selected else {
+            // A repository-only operation opens under the first scope granted on the target.
+            let scope = self
+                .grants
+                .iter()
+                .find(|(granted, _)| *granted == target)
+                .map(|(_, scope)| scope.as_str())
+                .ok_or(OperationFailure::AccessDenied)?;
             return Ok(PreparedContext::for_repository(PreparedRepository {
-                root: root.to_str().ok_or(OperationFailure::Internal)?.into(),
+                repository: Repository::open(root, scope)?,
                 requested_target: target,
             }));
         };
-        let scope = ScopeId::new(context.scope).map_err(|_| OperationFailure::InvalidInput {
+        ScopeId::new(&context.scope).map_err(|_| OperationFailure::InvalidInput {
             field: Some("context.scope".to_owned()),
             reason: InvalidInputReason::InvalidValue,
         })?;
-        let layout = ProvenanceLayout::new(root.to_str().ok_or(OperationFailure::Internal)?);
-        // This policy load does not acquire a publication lock, recover, or open a cache.
-        let bytes =
-            std::fs::read(layout.manifest_path()).map_err(|_| OperationFailure::Internal)?;
-        let manifest: Manifest =
-            serde_json::from_slice(&bytes).map_err(|_| OperationFailure::Internal)?;
-        if !manifest
-            .scopes
-            .iter()
-            .any(|candidate| candidate.id == scope)
-        {
-            return Err(OperationFailure::UnknownScope);
-        }
+        // The open runs the initialized-graph gate once per call, as a host open does.
+        let repository = Repository::open(root, &context.scope)?;
         if !needs
             .contains(&provenance_store::operations::catalog::ExecutionNeed::ProjectionMaintenance)
         {
             return Ok(PreparedContext::for_scope(
                 provenance_store::operations::catalog::PreparedScope {
-                    root: root.to_str().ok_or(OperationFailure::Internal)?.into(),
-                    scope,
+                    repository,
                     requested_target: target,
                 },
             ));
         }
-        let settings = Settings::load(&layout).map_err(|_| OperationFailure::Internal)?;
+        let policy = ReadPolicy::resolve(repository.settings(), context.freshness);
         Ok(PreparedContext::read(PreparedRead {
-            root: root.to_str().ok_or(OperationFailure::Internal)?.into(),
-            scope,
-            policy: ReadPolicy::resolve(&settings, context.freshness),
+            repository,
+            policy,
             requested_target: context.repository,
             external: true,
         }))

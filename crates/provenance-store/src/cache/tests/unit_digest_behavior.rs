@@ -2,6 +2,7 @@
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
+use super::fixtures::open;
 use super::fixtures::*;
 use super::projection_stamp_behavior::seed_integration_shards;
 use provenance_core::ScopeId;
@@ -76,7 +77,7 @@ fn the_global_unit_covers_every_canonical_file_outside_scopes() {
 async fn a_changed_scope_rewrites_only_the_families_whose_content_moved() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     let rules = crate::shards::rules_path(&layout, &scope);
     let edited = std::fs::read_to_string(&rules)
@@ -84,7 +85,7 @@ async fn a_changed_scope_rewrites_only_the_families_whose_content_moved() {
         .replace("Pay overtime", "Pay double overtime");
     std::fs::write(&rules, edited).unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
     assert_eq!(report.units_hashed, 2, "one scope unit and the global unit");
     assert_eq!(report.families_rederived, 1, "only rules moved: {report:?}");
     assert_eq!(report.rows_written, 1);

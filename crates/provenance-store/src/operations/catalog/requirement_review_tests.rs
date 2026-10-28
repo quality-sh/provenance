@@ -23,8 +23,7 @@ fn fixture() -> (tempfile::TempDir, PreparedContext, StateStore, ScopeId) {
     )
     .unwrap();
     let context = PreparedContext::for_scope(PreparedScope {
-        root,
-        scope: scope.clone(),
+        repository: crate::repository::Repository::open(&root, scope.as_str()).unwrap(),
         requested_target: "fixture".into(),
     });
     (temp, context, StateStore::new(layout), scope)
@@ -102,8 +101,8 @@ async fn create_response_failure_refuses_before_publication() {
 
     let committed = CreateRequirementResource::run(
         PreparedContext::for_scope(PreparedScope {
-            root: store.layout.root().to_owned(),
-            scope: scope.clone(),
+            repository: crate::repository::Repository::open(store.layout.root(), scope.as_str())
+                .unwrap(),
             requested_target: "fixture".into(),
         }),
         create_request("create_a"),
@@ -280,8 +279,8 @@ async fn update_response_failure_refuses_before_publication() {
 
     let committed = UpdateRequirementResource::run(
         PreparedContext::for_scope(PreparedScope {
-            root: store.layout.root().to_owned(),
-            scope: scope.clone(),
+            repository: crate::repository::Repository::open(store.layout.root(), scope.as_str())
+                .unwrap(),
             requested_target: "fixture".into(),
         }),
         update_request(&store, "update_a"),
