@@ -17,7 +17,7 @@ use axum::{
 };
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_store::layout::ProvenanceLayout;
-use provenance_transport::{HttpCredential, LocalAccess};
+use provenance_transport::LocalAccess;
 use std::sync::Arc;
 use subscribers::{Subscribers, Subscription};
 use tokio::sync::{watch as stop_watch, Mutex};
@@ -133,6 +133,11 @@ async fn upgrade(State(state): State<RouteState>, request: Request) -> Response 
         return super::refusal(OperationFailure::UnavailableNeeds);
     };
     let page = (!native).then(|| state.navigation.attach());
+    let upgrade = if native {
+        upgrade
+    } else {
+        upgrade.protocols([super::launch::EVENT_PROTOCOL])
+    };
     upgrade
         .on_upgrade(move |socket| connected(socket, subscription, page, state.subscribers))
         .into_response()
@@ -168,13 +173,11 @@ fn authenticate_browser(state: &RouteState, headers: &HeaderMap) -> Result<(), O
     {
         return Err(OperationFailure::AccessDenied);
     }
-    if headers.get_all(header::AUTHORIZATION).iter().count() > 1 {
+    // A browser cannot set Authorization on a socket; the page session comes as a subprotocol.
+    if headers.contains_key(header::AUTHORIZATION) || !state.codes.offers_session(headers) {
         return Err(OperationFailure::Unauthenticated);
     }
-    let mut authentication = headers.clone();
-    authentication.remove(header::AUTHORIZATION);
-    state.codes.authenticate_cookie(&mut authentication);
-    state.access.authenticate(&authentication)
+    state.access.check_origin(headers)
 }
 
 #[derive(serde::Deserialize)]

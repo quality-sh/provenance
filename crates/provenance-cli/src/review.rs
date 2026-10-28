@@ -359,9 +359,9 @@ async fn protect_origin(
     }
     let mut response = match access.check_origin(&headers) {
         Ok(()) => {
-            // A cross-site entry navigation serves only assets and cannot use a cookie.
+            // A cross-site entry navigation serves only assets and cannot use a page session.
             if access.check_origin(request.headers()).is_ok() {
-                let page = codes.authenticate_cookie(request.headers_mut());
+                let page = codes.authenticate_session(request.headers_mut());
                 if page && matches!(*request.method(), Method::POST | Method::PATCH) {
                     request
                         .extensions_mut()

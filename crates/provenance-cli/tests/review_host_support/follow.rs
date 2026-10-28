@@ -122,7 +122,7 @@ pub fn create(root: &Path, id: &str, kind: &str, extra: &[&str]) {
 /// Uses the authenticated page session, without native bearer credentials.
 pub fn page_request(host: &Host, method: &str, path: &str) -> ureq::Request {
     super::request(host, method, path, false)
-        .set("Cookie", &super::events::cookie(host))
+        .set("Authorization", &format!("Bearer {}", super::session(host)))
         .set("Origin", host.config["endpoint"].as_str().unwrap())
         .set("Content-Type", "application/json")
 }

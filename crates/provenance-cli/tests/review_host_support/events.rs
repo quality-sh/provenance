@@ -1,6 +1,6 @@
 //! Real WebSocket client for review event tests.
-use super::{redeem, request, waits, Host};
-use serde_json::{json, Value};
+use super::{session, waits, Host};
+use serde_json::Value;
 use std::{
     io::{Read, Write},
     net::TcpStream,
@@ -8,36 +8,20 @@ use std::{
     time::Duration,
 };
 
-pub fn cookie(host: &Host) -> String {
-    let key = std::fs::read_to_string(host.launch_key_path()).unwrap();
-    let issued = request(host, "POST", "/review-launch/code", false)
-        .send_string(&json!({"launchKey": key}).to_string())
-        .unwrap();
-    let issued: Value = serde_json::from_str(&issued.into_string().unwrap()).unwrap();
-    let session = redeem(host, issued["code"].as_str().unwrap());
-    assert_eq!(session.status(), 200);
-    session
-        .header("Set-Cookie")
-        .unwrap()
-        .split(';')
-        .next()
-        .unwrap()
-        .to_owned()
+/// The headers a browser page sends when it opens the event socket with its session.
+pub fn page_headers(host: &Host) -> String {
+    format!(
+        "Sec-WebSocket-Protocol: provenance-review, {}\r\nOrigin: {}\r\nSec-Fetch-Site: same-origin\r\n",
+        session(host),
+        host.config["endpoint"].as_str().unwrap()
+    )
 }
 
 pub struct Socket(pub TcpStream);
 
 impl Socket {
     pub fn connect(host: &Host) -> Self {
-        let (status, socket) = upgrade(
-            host,
-            "/review-events",
-            &format!(
-                "Cookie: {}\r\nOrigin: {}\r\nSec-Fetch-Site: same-origin\r\n",
-                cookie(host),
-                host.config["endpoint"].as_str().unwrap()
-            ),
-        );
+        let (status, socket) = upgrade(host, "/review-events", &page_headers(host));
         assert_eq!(status, 101, "authenticated event route must upgrade");
         socket
     }
@@ -108,6 +92,13 @@ pub fn upgrade(host: &Host, path: &str, headers: &str) -> (u16, Socket) {
 }
 
 pub fn upgrade_with_host(host: &Host, path: &str, headers: &str, authority: &str) -> (u16, Socket) {
+    let (response, socket) = upgrade_head(host, path, headers, authority);
+    let status = response.split_whitespace().nth(1).unwrap().parse().unwrap();
+    (status, socket)
+}
+
+/// Sends an upgrade request and returns the response head with the open stream.
+pub fn upgrade_head(host: &Host, path: &str, headers: &str, authority: &str) -> (String, Socket) {
     let address = host.address().parse().unwrap();
     let mut socket = TcpStream::connect_timeout(&address, waits::LIMIT).unwrap();
     socket.set_write_timeout(Some(waits::LIMIT)).unwrap();
@@ -122,9 +113,7 @@ pub fn upgrade_with_host(host: &Host, path: &str, headers: &str, authority: &str
         bytes.push(byte[0]);
         assert!(bytes.len() < 8192);
     }
-    let response = String::from_utf8(bytes).unwrap();
-    let status = response.split_whitespace().nth(1).unwrap().parse().unwrap();
-    (status, Socket(socket))
+    (String::from_utf8(bytes).unwrap(), Socket(socket))
 }
 
 pub fn source(host: &Host, root: &Path, id: &str) {
@@ -160,11 +149,7 @@ fn source_with(mut command: std::process::Command, root: &Path, id: &str) {
 
 /// Waits through public upgrade refusals while native observation recovers.
 pub fn connect_when_available(host: &Host) -> Socket {
-    let headers = format!(
-        "Cookie: {}\r\nOrigin: {}\r\nSec-Fetch-Site: same-origin\r\n",
-        cookie(host),
-        host.config["endpoint"].as_str().unwrap()
-    );
+    let headers = page_headers(host);
     let deadline = std::time::Instant::now() + Duration::from_secs(15);
     loop {
         let (status, socket) = upgrade(host, "/review-events", &headers);

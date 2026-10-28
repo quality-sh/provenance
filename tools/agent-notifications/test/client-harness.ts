@@ -98,7 +98,7 @@ export class Harness {
   rpc!: Rpc;
   endpoint!: string;
   hostEndpoint!: string;
-  cookie!: string;
+  session!: string;
   requests: any[] = [];
   requestThreads: (string | null)[] = [];
   requestListeners = new Set<() => void>();
@@ -123,7 +123,7 @@ export class Harness {
     const issued = await fetch(`${this.hostEndpoint}/review-launch/code`, { method: "POST", body: JSON.stringify({ launchKey }) }).then(response => response.json()) as any;
     const session = await fetch(`${this.hostEndpoint}/review-launch/session`, { method: "POST", body: JSON.stringify({ code: issued.code }) });
     if (!session.ok) throw new Error(`Page session refused (${session.status})`);
-    this.cookie = session.headers.get("set-cookie")!.split(";")[0];
+    this.session = ((await session.json()) as any).session;
     this.drain(host.stderr);
     if (!withCodex) return this;
     this.server = Bun.serve({ port: 0, fetch: async request => {
@@ -194,7 +194,7 @@ export class Harness {
   }
   async page(path: string, data: unknown, headers: Record<string, string> = {}) {
     const response = await fetch(`${this.hostEndpoint}${path}`, {
-      method: "POST", headers: { "Content-Type": "application/json", Cookie: this.cookie, Origin: this.hostEndpoint, ...headers },
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.session}`, Origin: this.hostEndpoint, ...headers },
       body: JSON.stringify({ data }),
     });
     const value: any = await response.json();

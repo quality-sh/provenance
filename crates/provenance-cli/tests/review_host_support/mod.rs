@@ -405,6 +405,20 @@ pub fn redeem(host: &Host, code: &str) -> ureq::Response {
     )
 }
 
+/// Signs a page in with the launch key and returns its session, as a launch link does.
+pub fn session(host: &Host) -> String {
+    let key = std::fs::read_to_string(host.launch_key_path()).unwrap();
+    let issued = response(
+        request(host, "POST", "/review-launch/code", false)
+            .send_string(&json!({"launchKey": key}).to_string()),
+    );
+    let issued: Value = serde_json::from_str(&issued.into_string().unwrap()).unwrap();
+    let session = redeem(host, issued["code"].as_str().unwrap());
+    assert_eq!(session.status(), 200);
+    let session: Value = serde_json::from_str(&session.into_string().unwrap()).unwrap();
+    session["session"].as_str().unwrap().to_owned()
+}
+
 pub fn request(host: &Host, method: &str, path: &str, auth: bool) -> ureq::Request {
     let req = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(5))
