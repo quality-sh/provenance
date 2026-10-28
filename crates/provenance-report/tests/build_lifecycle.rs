@@ -1,4 +1,5 @@
 use camino::Utf8Path;
+use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 use provenance_macros::verifies;
 use provenance_report::{
     build::{build_envelope, BuildInput},
@@ -34,6 +35,14 @@ fn report_with_base(
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
     init(repo);
+    let manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
+    std::fs::create_dir_all(repo.join(".provenance/state")).unwrap();
+    std::fs::write(
+        repo.join(".provenance/state/manifest.json"),
+        serde_json::to_string(&manifest).unwrap(),
+    )
+    .unwrap();
     write(
         repo,
         "requirements/req.jsonl",

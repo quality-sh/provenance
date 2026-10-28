@@ -14,10 +14,10 @@ impl StateStore {
         let scope = input.scope_id.clone();
         let path = shards::sources_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
-        let record = self.mutate_graph_record_with_etag(
+        let record = self.mutate_graph_record_with_store(
             &path,
             expected_etag.as_deref(),
-            |records: &mut Vec<Source>| {
+            |store, records: &mut Vec<Source>| {
                 let position = records
                     .iter()
                     .position(|record| record.id == input.id)
@@ -26,7 +26,7 @@ impl StateStore {
                     records[position].declared_by.as_deref(),
                     input.declared_by.as_deref(),
                 )?;
-                self.validate_relation_targets(
+                store.validate_relation_targets(
                     &scope,
                     records,
                     &input.id,
@@ -94,10 +94,10 @@ impl StateStore {
         let scope = input.scope_id.clone();
         let path = shards::rules_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
-        let record = self.mutate_graph_record_with_etag(
+        let record = self.mutate_graph_record_with_store(
             &path,
             expected_etag.as_deref(),
-            |records: &mut Vec<Rule>| {
+            |store, records: &mut Vec<Rule>| {
                 let position = records
                     .iter()
                     .position(|record| record.id == input.id)
@@ -106,7 +106,7 @@ impl StateStore {
                     records[position].declared_by.as_deref(),
                     input.declared_by.as_deref(),
                 )?;
-                self.validate_relation_targets(
+                store.validate_relation_targets(
                     &scope,
                     records,
                     &input.id,

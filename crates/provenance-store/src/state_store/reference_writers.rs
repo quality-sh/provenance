@@ -267,7 +267,7 @@ impl StateStore {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
         self.with_repository_publication(|| {
-            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
+            self.mutate_graph_record_with_store(&path, None, |store, records: &mut Vec<T>| {
                 let position = records
                     .iter()
                     .position(|record| RelationOwner::id(record) == owner)
@@ -282,7 +282,7 @@ impl StateStore {
                             ),
                         )
                     })?;
-                self.validate_relation_targets(
+                store.validate_relation_targets(
                     scope_id,
                     records,
                     owner,

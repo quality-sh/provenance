@@ -93,6 +93,9 @@ pub fn with_publication_guard<R>(
 /// runs before the caller sees the guard.
 pub async fn publication_guard(repository: &Repository) -> anyhow::Result<PublicationGuard> {
     let key = super::publication_lock_identity(repository.layout())?;
+    // The lock waits on the blocking pool, so a stage body that blocks on this guard would
+    // wait on its own publication. The refusal runs here, on the calling thread.
+    super::staged::refuse_during_stage(&key)?;
     if read_only::active(&key) {
         return Ok(PublicationGuard {
             _lock: None,

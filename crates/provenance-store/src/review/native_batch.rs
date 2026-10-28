@@ -31,12 +31,14 @@ impl StateStore {
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
-        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+        mutate: impl FnOnce(&StateStore, &mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         self.with_native_record_batch(|batch| {
             let staged_path = batch.store.layout.root().join(relative);
-            batch.mutate_one(&staged_path, expected_etag, mutate)
+            batch.mutate_one(&staged_path, expected_etag, |records| {
+                mutate(batch.store, records)
+            })
         })
     }
 }

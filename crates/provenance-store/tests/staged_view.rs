@@ -10,7 +10,9 @@ use provenance_macros::verifies;
 use provenance_store::cache::catch_up_state;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::operations::read_policy::{FreshnessPolicy, ReadPolicy};
-use provenance_store::publication::{with_publication_guard, LiveAccessDuringStage};
+use provenance_store::publication::{
+    publication_guard, with_publication_guard, LiveAccessDuringStage,
+};
 use provenance_store::repository::{OpenFailure, Repository};
 use provenance_store::state_store::{CreateSourceInput, ScopeShards, StateStore};
 use std::collections::BTreeMap;
@@ -262,6 +264,22 @@ fn live_access_in_the_body_refuses_and_works_again_after_the_stage() {
             );
             let guard = with_publication_guard(&repository, |_| Ok(())).unwrap_err();
             assert!(refused_during_stage(&guard), "guard: {guard:#}");
+            // The async guard would wait on this stage's own lock, so it must refuse first.
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            let waited = runtime.block_on(tokio::time::timeout(
+                Duration::from_secs(5),
+                publication_guard(&repository),
+            ));
+            let Ok(Err(async_guard)) = waited else {
+                runtime.shutdown_background();
+                panic!("the async guard did not refuse at once");
+            };
+            assert!(
+                refused_during_stage(&async_guard),
+                "async guard: {async_guard:#}"
+            );
             anyhow::bail!("refused body")
         })
         .unwrap_err();

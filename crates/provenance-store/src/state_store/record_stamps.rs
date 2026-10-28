@@ -202,10 +202,21 @@ impl StateStore {
         expected_etag: Option<&str>,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
+        self.mutate_graph_record_with_store(path, expected_etag, |_, records| mutate(records))
+    }
+
+    /// Like `mutate_graph_record_with_etag`, but the edit gets the store it runs against:
+    /// the staged copy on the native path, `self` on the guarded path.
+    pub(crate) fn mutate_graph_record_with_store<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        expected_etag: Option<&str>,
+        mutate: impl FnOnce(&StateStore, &mut Vec<T>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
         if T::KIND != NodeType::Requirement && !crate::review::guard::writer_allows_path(path) {
             return self.save_native_record(path, expected_etag, mutate);
         }
-        self.mutate_graph_record_guarded(path, mutate)
+        self.mutate_graph_record_guarded(path, |records| mutate(self, records))
             .map(|(_, record)| record)
     }
 
