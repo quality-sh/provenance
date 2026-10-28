@@ -1,8 +1,10 @@
-error: lifetime may not live long enough
- --> tests/compile_fail/staged_store_outlives_stage.rs:5:58
+error[E0521]: borrowed data escapes outside of closure
+ --> tests/compile_fail/staged_store_outlives_stage.rs:8:13
   |
-5 |     let escaped = repository.stage(false, None, |staged| Ok(staged)).unwrap();
-  |                                                  ------- ^^^^^^^^^^ returning this value requires that `'1` must outlive `'2`
-  |                                                  |     |
-  |                                                  |     return type of closure is Result<&'2 StateStore, anyhow::Error>
-  |                                                  has type `&'1 StateStore`
+5 |     let mut escaped = None;
+  |         ----------- `escaped` declared here, outside of the closure body
+6 |     repository
+7 |         .stage(false, None, |staged| {
+  |                              ------ `staged` is a reference that is only valid in the closure body
+8 |             escaped = Some(staged);
+  |             ^^^^^^^^^^^^^^^^^^^^^^ `staged` escapes the closure body here
