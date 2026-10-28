@@ -631,8 +631,13 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REPOSITORY: ${{ github.repository }}
+        # On pull_request the checkout holds the synthetic merge commit. The
+        # report scans the working tree and reads the graph at --head, so the
+        # step checks out the pull request head first: the scan and the head
+        # graph then read the same commit.
         run: |
           git fetch --no-tags origin "$HEAD_SHA"
+          git checkout --quiet --detach "$HEAD_SHA"
           REPORT_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           target/debug/provenance report build \
             --repo . \
@@ -643,9 +648,11 @@ jobs:
           target/debug/provenance report render \
             --input "$RUNNER_TEMP/provenance-report-envelope.json" \
             --format markdown >> "$GITHUB_STEP_SUMMARY"
-          jq -r '.findings[]
+          # Workflow commands need %, CR and LF escaped in the message text.
+          jq -r 'def escape: gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A");
+            .findings[]
             | select(.comparison == "new")
-            | "::warning title=Provenance report finding::\(.code): \(.subject.id)"' \
+            | "::warning title=Provenance report finding::" + ("\(.code): \(.subject.id)" | escape)' \
             "$RUNNER_TEMP/provenance-report-envelope.json"
       - name: Report Rule binding findings
         if: always()
@@ -658,14 +665,16 @@ jobs:
           governed=$(jq '[.warnings[] | select(.binding_finding)] | length' "$RUNNER_TEMP/provenance-coverage-report.json")
           # GitHub renders at most ten warning annotations per step, so the
           # stream stops there; the tail names where every finding lives.
-          jq -r '.warnings
+          # Workflow commands need %, CR and LF escaped in the message text.
+          jq -r 'def escape: gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A");
+            .warnings
             | map(select(.binding_finding))
             | .[:10][]
             | (if .file_path then
                 (if .line then "file=\(.file_path),line=\(.line),"
                  else "file=\(.file_path)," end)
                else "" end) as $location
-            | "::warning \($location)title=Rule binding finding::\(.rule_id): \(.message)"' \
+            | "::warning \($location)title=Rule binding finding::" + ("\(.rule_id): \(.message)" | escape)' \
             "$RUNNER_TEMP/provenance-coverage-report.json"
           if [ "$governed" -gt 10 ]; then
             echo "::warning title=Rule binding finding::$((governed - 10)) more Rule binding finding(s) after the first 10; the job summary and the coverage report artifact list them all"

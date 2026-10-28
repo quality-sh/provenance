@@ -183,18 +183,32 @@ fn annotations_stop_at_the_github_cap_and_name_where_the_rest_live() {
     );
 }
 
+/// One step of a job: from its `- name:` or `- uses:` line to the next step.
+fn step_block(job: &str, step_marker: &str) -> String {
+    let start = job
+        .split_once(&format!("      - {step_marker}"))
+        .unwrap_or_else(|| panic!("the job has the step {step_marker}"))
+        .1;
+    start
+        .split_once("\n      - ")
+        .map_or(start, |(step, _)| step)
+        .to_string()
+}
+
+/// An implementation-aid test, not a Rule verification: no Rule states how
+/// the CI workflow runs the report, so this test has no `#[verifies]`. It
+/// keeps the report step wired as the pull request needs it: the scan and
+/// the head graph read the same commit, and the step warns but never fails.
 #[test]
 fn pull_requests_render_the_comparison_report_without_failing_the_job() {
     let job = rule_coverage_job(&workflow());
+    let checkout = step_block(&job, "uses: actions/checkout@");
     assert!(
-        job.contains("fetch-depth: 0"),
-        "the report builder must have the pull request base commit: {job}"
+        checkout.contains("fetch-depth: 0"),
+        "the checkout must fetch the history that holds the merge base: {checkout}"
     );
 
-    let report = job
-        .split_once("Build and render the pull request report")
-        .expect("the job builds and renders a pull request report")
-        .1;
+    let report = step_block(&job, "name: Build and render the pull request report");
     assert!(
         report.contains("if: github.event_name == 'pull_request'"),
         "the comparison report must run only for pull requests: {report}"
@@ -209,40 +223,72 @@ fn pull_requests_render_the_comparison_report_without_failing_the_job() {
             && report.contains("REPOSITORY: ${{ github.repository }}"),
         "event values must enter the script through its environment: {report}"
     );
+    let script = report
+        .split_once("run: |")
+        .expect("the report step has a shell script")
+        .1;
     assert!(
-        report.contains("git fetch --no-tags origin \"$HEAD_SHA\"")
-            && report.contains("git merge-base \"$BASE_SHA\" \"$HEAD_SHA\""),
-        "the report must compare from the fetched pull request merge base: {report}"
+        !script.contains("${{"),
+        "event expressions must not be inlined in the shell script: {script}"
+    );
+    let fetch = script
+        .find("git fetch --no-tags origin \"$HEAD_SHA\"")
+        .expect("the script fetches the pull request head");
+    let checkout_head = script
+        .find("git checkout --quiet --detach \"$HEAD_SHA\"")
+        .expect("the scan must read the pull request head, not the merge commit");
+    let build = script
+        .find("report build")
+        .expect("the script builds the report");
+    assert!(
+        fetch < checkout_head && checkout_head < build,
+        "the script must check out the head before the report scans the working tree: {script}"
     );
     assert!(
-        report.contains("report build")
-            && report.contains("--base \"$REPORT_BASE\"")
-            && report.contains("--head \"$HEAD_SHA\"")
-            && report.contains("--repository \"$REPOSITORY\""),
-        "the envelope must compare the merge base with the pull request head: {report}"
+        script.contains("REPORT_BASE=$(git merge-base \"$BASE_SHA\" \"$HEAD_SHA\")")
+            && script.contains("--base \"$REPORT_BASE\"")
+            && script.contains("--head \"$HEAD_SHA\"")
+            && script.contains("--repository \"$REPOSITORY\""),
+        "the envelope must compare the merge base with the checked-out head: {script}"
     );
     assert!(
-        !report
-            .split_once("run: |")
-            .expect("the report step has a shell script")
-            .1
-            .split_once("- name: Report Rule binding findings")
-            .expect("the report script ends at the next step")
-            .0
-            .contains("${{"),
-        "event expressions must not be inlined in the shell script: {report}"
+        script.contains("--output \"$RUNNER_TEMP/provenance-report-envelope.json\""),
+        "the envelope must not dirty the repository: {script}"
     );
     assert!(
-        report.contains("$RUNNER_TEMP/provenance-report-envelope.json")
-            && report.contains("$RUNNER_TEMP/provenance-coverage-report.json"),
-        "report inputs and outputs must not dirty the repository: {report}"
+        script.contains("report render") && script.contains(">> \"$GITHUB_STEP_SUMMARY\""),
+        "the rendered report must appear in the job summary: {script}"
     );
     assert!(
-        report.contains("report render") && report.contains("GITHUB_STEP_SUMMARY"),
-        "the rendered report must appear in the job summary: {report}"
+        script.contains("select(.comparison == \"new\")") && script.contains("::warning"),
+        "each new finding must produce a workflow annotation: {script}"
+    );
+
+    let scan = step_block(
+        &job,
+        "name: Scan the whole repository for Rule binding findings",
     );
     assert!(
-        report.contains("select(.comparison == \"new\")") && report.contains("::warning"),
-        "each new finding must produce a workflow annotation: {report}"
+        scan.contains("--output \"$RUNNER_TEMP/provenance-coverage-report.json\""),
+        "the coverage scan must not dirty the repository: {scan}"
     );
+}
+
+/// An implementation-aid test, not a Rule verification: no Rule states the
+/// workflow command format. Annotation text from findings can hold `%`, CR
+/// or LF, which GitHub reads as command syntax unless they are escaped.
+#[test]
+fn annotation_text_uses_the_workflow_command_escapes() {
+    let job = rule_coverage_job(&workflow());
+    for step_marker in [
+        "name: Build and render the pull request report",
+        "name: Report Rule binding findings",
+    ] {
+        let step = step_block(&job, step_marker);
+        assert!(
+            step.contains(r#"gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")"#)
+                && step.contains("| escape)"),
+            "the annotation text must be escaped: {step}"
+        );
+    }
 }
