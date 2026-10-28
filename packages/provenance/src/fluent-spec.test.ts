@@ -595,7 +595,7 @@ test("relation fields on fluent declarations reach the written records", async (
     ({ id }) => id === idOf("rule", "decision"),
   );
   assert.deepEqual(writtenDecision?.resolution_ids, ["res_seed"]);
-  assert.equal(writtenDecision?.status, "active");
+  assert.equal(writtenDecision?.status, "draft");
 });
 
 test("a fluent requirement keeps both parents it refines", async () => {

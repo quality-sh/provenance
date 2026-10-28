@@ -265,8 +265,8 @@ fn a_draft_rule_does_not_produce_active_rule_absence_facts() {
         RuleEvidenceCompleteness::Complete,
     );
 
-    assert!(facts.unimplemented.is_empty());
-    assert!(facts.unverified.is_empty());
+    assert_eq!(facts.unimplemented, [] as [std::string::String; 0]);
+    assert_eq!(facts.unverified, [] as [std::string::String; 0]);
 }
 
 #[test]

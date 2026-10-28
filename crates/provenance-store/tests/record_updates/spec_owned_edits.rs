@@ -21,9 +21,10 @@ fn assert_kept(after: &[String], untouched: &[String]) {
 // The binding to rule_porcelain_update_preserves_omissions covers only the
 // edited field: the owner's description changes and the other fields of that
 // requirement stay. The other checks are guards with no rule of their own:
-// the spec's other declarations stay unchanged, every status stays active,
-// and a second apply keeps the owner's edit. No Rule states these yet, so
-// they must not be read as evidence for the bound rule.
+// the spec's other declarations stay unchanged, every Requirement stays
+// active, the Rule stays draft, and a second apply keeps the owner's edit. No
+// Rule states these yet, so they must not be read as evidence for the bound
+// rule.
 #[tokio::test]
 #[provenance_macros::verifies("rule_porcelain_update_preserves_omissions", examples)]
 async fn owner_edit_of_one_declaration_keeps_the_other_declarations() {
@@ -76,7 +77,7 @@ async fn owner_edit_of_one_declaration_keeps_the_other_declarations() {
         }
         let rule =
             serde_json::to_value(&fixture.store.list_rules(&fixture.scope).unwrap()[0]).unwrap();
-        assert_eq!(rule["status"], "active", "{stage}");
+        assert_eq!(rule["status"], "draft", "{stage}");
         let saved = fixture
             .store
             .list_requirements(&fixture.scope)

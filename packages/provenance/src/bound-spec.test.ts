@@ -624,7 +624,7 @@ test("relation fields on spec-bound declarations reach the written records", asy
     ({ id }) => id === idOf("rule", "decision"),
   );
   assert.deepEqual(writtenDecision?.resolution_ids, ["res_seed"]);
-  assert.equal(writtenDecision?.status, "active");
+  assert.equal(writtenDecision?.status, "draft");
 });
 
 test("a spec-bound requirement keeps both parents it refines", async () => {
@@ -659,25 +659,20 @@ test("a spec-bound relation to a requirement outside the build is refused", () =
   );
 });
 
-// Implementation-aid test: checks the store refusal through the public SDK.
-test("an active Rule reports the store refusal for a proposed Resolution", async () => {
+// Implementation-aid test: a spec Rule is draft, so the store accepts its proposed Resolution.
+test("a spec Rule that cites a proposed Resolution is written as draft", async () => {
   const repo = repository();
-  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/refused-resolution" });
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/proposed-resolution" });
   seedResolution(repo, "proposed");
-  const provenance = defineSpec("refused-resolution");
+  const provenance = defineSpec("proposed-resolution");
   const parent = provenance.requirement("parent").statement("Access is governed");
   const decision = provenance.rule("decision")
     .statement("Access follows the seed decision").resolutions("res_seed");
 
-  await assert.rejects(apply(provenance.build(parent.rules(decision))), (error: unknown) => {
-    assert.ok(error instanceof OperationError);
-    const failure = error.failure.error;
-    assert.equal(failure.kind, "resolution_not_approved");
-    assert.equal(failure.kind === "resolution_not_approved" ? failure.resolution_id : undefined, "res_seed");
-    assert.match(
-      error.message,
-      /^resolution_not_approved: .* cites resolution res_seed, which is proposed\. /,
-    );
-    return true;
-  });
+  const result = await apply(provenance.build(parent.rules(decision)));
+
+  const id = result.resources.find((resource) => resource.kind === "rule")!.id;
+  const written = readRecords(repo, "rules/rule.jsonl").find((record) => record.id === id);
+  assert.deepEqual(written?.resolution_ids, ["res_seed"]);
+  assert.equal(written?.status, "draft");
 });
