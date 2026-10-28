@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 import ts from 'typescript';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, readdir, copyFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -33,13 +33,23 @@ if (pinArg) {
 const options: ts.CompilerOptions = {
   noEmit: true, strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
   moduleResolution: ts.ModuleResolutionKind.Bundler, allowImportingTsExtensions: true,
-  // The renderer's declarations import its own dependencies, which provenance-web checks.
-  skipLibCheck: true,
   types: [], paths: {
     'review-renderer': [declarations],
   },
 };
-const diagnostics = ts.getPreEmitDiagnostics(ts.createProgram([join(root, 'main.ts')], options));
+// The renderer's declarations import its own dependencies (effect, the SDK), which the host does
+// not install and provenance-web checks. Only a missing package in those files is ignored, so a
+// missing renderer file or a wrong mount option type still fails. Bead provenance-6470 moves the
+// mount option types into a module that imports nothing; then this filter can go.
+const rendererTypes = join(renderer, 'types') + sep;
+const missingRendererDependency = (diagnostic: ts.Diagnostic) => {
+  if (diagnostic.code !== 2307 || !diagnostic.file || diagnostic.start === undefined) return false;
+  if (!resolve(diagnostic.file.fileName).startsWith(rendererTypes)) return false;
+  const specifier = diagnostic.file.text.slice(diagnostic.start + 1, diagnostic.start + (diagnostic.length ?? 0) - 1);
+  return !specifier.startsWith('.') && !specifier.startsWith('/');
+};
+const diagnostics = ts.getPreEmitDiagnostics(ts.createProgram([join(root, 'main.ts')], options))
+  .filter(diagnostic => !missingRendererDependency(diagnostic));
 if (diagnostics.length) {
   console.error(ts.formatDiagnosticsWithColorAndContext(diagnostics, {
     getCanonicalFileName: file => file, getCurrentDirectory: () => root, getNewLine: () => '\n',
