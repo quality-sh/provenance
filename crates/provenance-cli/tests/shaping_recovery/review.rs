@@ -32,7 +32,7 @@ fn prerequisite_change_changes_the_review_revision_and_history() {
         &repo,
         "questions",
         "question_b",
-        json!({"depends_on":["question_a"]}),
+        &json!({"depends_on":["question_a"]}),
     );
     let after = get(&repo, "questions", "question_b");
     assert_ne!(
@@ -48,7 +48,7 @@ fn prerequisite_change_changes_the_review_revision_and_history() {
     let working = history["data"]["items"].as_array().unwrap().last().unwrap();
     assert_eq!(working["changed_fields"], json!(["depends_on"]));
     assert_eq!(working["outcome"], "changed");
-    update(&repo, "questions", "question_b", json!({"depends_on":[]}));
+    update(&repo, "questions", "question_b", &json!({"depends_on":[]}));
     assert_eq!(
         get(&repo, "questions", "question_b")["data"]["edit"]["revision"],
         before["data"]["edit"]["revision"]
