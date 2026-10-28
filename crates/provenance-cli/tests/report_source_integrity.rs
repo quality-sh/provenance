@@ -215,6 +215,24 @@ fn partial_scan_keeps_a_valid_requested_head_site() {
 
 #[test]
 #[verifies("rule_report_envelope_states_only_known_facts", examples)]
+fn partial_scan_without_source_files_reads_no_head_site() {
+    let directory = repo_with_rule("deprecated");
+    let repo = directory.path();
+    write(repo, "src/lib.rs", source_binding(false));
+    write(repo, "notes/plan.txt", "No source code here.\n");
+    let head = commit(repo, "head with a binding outside the scan path");
+
+    let envelope = build_envelope(repo, &head, &head, Some(&repo.join("notes")));
+
+    assert_eq!(envelope["scan"]["completeness"], "incomplete");
+    assert!(
+        finding(&envelope, "inactive_rule_current_binding").is_none(),
+        "a scan path with no source files must not read sites from the whole head tree"
+    );
+}
+
+#[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
 fn committed_typed_binding_survives_an_unpinned_source_scan() {
     let directory = repo_with_rule("deprecated");
     let repo = directory.path();
