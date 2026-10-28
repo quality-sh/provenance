@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.3.0; content hash fnv1a64:aef7498aace2b08e -->
+<!-- Installed by provenance 0.3.0; content hash fnv1a64:84693f50fd53a9e0 -->
 
 # Shaping
 
@@ -239,7 +239,8 @@ notes, fix the graph or trust the graph.
 
 ### 2. Claim
 
-Claim before work so concurrent sessions skip what you are touching.
+First complete the recovery reads below and inspect their output. Then claim before
+work so concurrent sessions skip what you are touching. A claim is a graph write.
 
 | Method | Claim | Command |
 |---|---|---|
@@ -256,6 +257,70 @@ On a successful topic claim, inspect `surfaced_proposals` before resolving the f
 question. They are context that has become decision-relevant because the turn entered its
 explicit territory; do not infer further territory from titles or graph proximity. If
 lifecycle consultation fails, the topic claim is not persisted.
+
+### Recover before each turn
+
+At the start of EVERY shaping turn, read the stored Topic claim and the stored
+method of each Question that you will work on in that turn. Do this before the
+first graph write or Question work, including when the owner has already supplied
+an accepted answer. Complete these reads as a separate tool step. Inspect the
+output before any claim or write. Do not combine a recovery read and a claim or
+write in one command or tool call. A get after a claim does not count, even when
+both commands are in the same call. A read in the previous turn does not count. Repeat the reads
+after a restart, a saved handoff, or context compaction.
+
+Run these commands without output filters. Read the full JSON output. Do not pipe
+recovery reads through grep, rg, jq, sed, head, or another filter. Do not extract
+only the Question text, status, or answer: the claim and resolution_method fields
+must remain visible. If output is cut short, repeat the record read with enough
+output capacity before work. Read every selected Question, even if you will settle
+several Questions from one owner reply:
+
+```sh
+provenance topics <topic_id> get --scope <scope> --format json
+provenance questions <question_id> get --scope <scope> --format json
+```
+
+Check that the Question belongs to the selected Topic and is open. Check both claims
+against your actor and the claim required by its method. Read `resolution_method` from
+the Question. A Topic claim does not select a method for its Questions. A mixed-method
+Topic can require a different method for the next Question.
+
+If a required claim is absent, claim the item before work, then read it again. If another
+actor holds a required claim, stop work on that item. If recovery is incomplete, stop
+selection and recover the missing records. Read the bounded summary with
+`provenance <topic_id> get --scope <scope> --view children --format json`. Use its
+ready IDs only when `shaping.complete` is true. Filtered, depth-limited, truncated,
+and unchecked reads are incomplete. Read all pages of the Topic and Question
+collections when you need the map; a partial page cannot establish that work is absent.
+Do not use conversation memory as a substitute for these reads.
+
+A Question is ready only when every ID in `depends_on` names an answered Question
+in the same Topic. An archived or human-blocked prerequisite does not satisfy it.
+Closed and archived Topics have no ready Questions. Ready ID order is display
+order, not priority. Claims restrict work, not discovery. Create or replace
+`depends_on` through JSON input; an empty list clears it. Use prerequisites only
+where order affects the answer.
+
+Use the same fresh Topic read before a turn that only adds a thread note, checks
+saved decisions, or writes a handoff. Such turns do not need a Question read unless
+they work on a Question. A claim command or remembered handoff does not replace
+the required get commands.
+
+Apply the stored method to the selected Question. If the owner directly chooses
+an answer to a prototype Question before prototypes are made, record that direct
+choice and explain why it settles the Question without prototypes. Land every
+accepted owner decision before asking the next question or ending the turn. For
+each accepted decision in the owner reply, read the resulting graph records and
+check that they state that decision. Check all decisions, including several
+decisions in one reply. A thread note or a promise to write later is insufficient.
+Use the record kinds that the answer requires; do not create duplicate records.
+Do not add prerequisites that postpone an accepted decision. Preserve existing
+prerequisites and claim restrictions. If they prevent landing, report the specific
+blocker and keep the decision visible as unlanded; do not continue the interview.
+Then read the stored state again. A proposed
+answer that the human refuses remains unresolved. After a restart or compaction, recover
+accepted decisions from the graph before you continue the dialogue.
 
 ### 3. Resolve and land as you go
 
