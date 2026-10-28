@@ -243,9 +243,10 @@ fn unsupported_reference_version_is_typed_as_incomplete() {
 #[test]
 fn store_api_rejects_invalid_reference_contract() {
     let temp = committed_store();
-    let root = camino::Utf8Path::from_path(temp.path()).unwrap();
-    let references = GraphReferences::open(root).unwrap();
-    let reference = references.issue("default", None, None).unwrap();
+    let repository =
+        provenance_store::repository::Repository::open(temp.path(), "default").unwrap();
+    let references = GraphReferences::open(&repository).unwrap();
+    let reference = references.issue(None, None).unwrap();
 
     let mut unsupported = reference.clone();
     unsupported.schema_version = SUPPORTED_SCHEMA_VERSION.0 + 1;

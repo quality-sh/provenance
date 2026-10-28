@@ -10,8 +10,9 @@ use serde::{Deserialize, Serialize};
 pub use export::{graph_digest, ExactExport};
 pub use projection::GraphExport;
 
+use crate::repository::Repository;
 use git::{GitRepository, TreeSource};
-use projection::load_projection;
+use projection::{load_projection, read_projection};
 
 const STORE_PATH: &str = ".provenance/state";
 
@@ -83,7 +84,8 @@ pub struct GraphCounts {
 }
 
 pub struct GraphReferences {
-    repository: GitRepository,
+    repository: Repository,
+    git: GitRepository,
 }
 
 impl GraphReference {
@@ -151,27 +153,29 @@ impl GraphReference {
 }
 
 impl GraphReferences {
-    pub fn open(repo: &Utf8Path) -> Result<Self, GraphReferenceError> {
+    pub fn open(repository: &Repository) -> Result<Self, GraphReferenceError> {
         Ok(Self {
-            repository: GitRepository::open(repo)?,
+            git: GitRepository::open(repository.working_tree())?,
+            repository: repository.clone(),
         })
     }
 
+    /// Pins the graph of the selected scope at a commit.
     pub fn issue(
         &self,
-        scope: &str,
         revision: Option<&str>,
         correlation: Option<ExternalCorrelation>,
     ) -> Result<GraphReference, GraphReferenceError> {
         if let Some(correlation) = &correlation {
             validate_correlation(correlation)?;
         }
+        let scope = self.repository.scope().as_str();
         let implicit_head = revision.is_none();
-        let commit = self.repository.resolve_commit(revision.unwrap_or("HEAD"))?;
+        let commit = self.git.resolve_commit(revision.unwrap_or("HEAD"))?;
         let graph = self.projection(TreeSource::Commit(&commit), scope)?;
         if implicit_head {
             let index = self.projection(TreeSource::Index, scope)?;
-            let worktree = load_projection(self.repository.root(), scope)?;
+            let worktree = read_projection(&self.repository.store(), self.repository.scope())?;
             let committed_bytes = canonical_bytes(&graph)?;
             if committed_bytes != canonical_bytes(&index)?
                 || committed_bytes != canonical_bytes(&worktree)?
@@ -185,7 +189,7 @@ impl GraphReferences {
             }
         }
 
-        let repository_id = self.repository.identity(&commit)?;
+        let repository_id = self.git.identity(&commit)?;
         let graph_digest = graph_digest(&graph)?;
         let reference_id =
             reference_identity(&repository_id, STORE_PATH, scope, &commit, &graph_digest);
@@ -232,10 +236,22 @@ impl GraphReferences {
     /// and found it equal to the recorded one, so writing the recorded digest
     /// into the document writes a digest the graph beside it hashes to. That
     /// is what `ExactExport::from_json` checks again on the way in.
+    ///
+    /// The reference must name the selected scope.
     pub fn exact_export(
         &self,
         reference: &GraphReference,
     ) -> Result<ExactExport, GraphReferenceError> {
+        reference.validate()?;
+        let requested =
+            provenance_core::ScopeId::new(reference.scope_id.clone()).map_err(incomplete)?;
+        if let Err(other) = self.repository.ensure_selected(&requested) {
+            return mismatch(
+                "scope_id",
+                other.selected.as_str(),
+                other.requested.as_str(),
+            );
+        }
         Ok(ExactExport {
             schema_version: SUPPORTED_SCHEMA_VERSION.0,
             operation: "exact-export",
@@ -250,7 +266,7 @@ impl GraphReferences {
         source: TreeSource<'_>,
         scope: &str,
     ) -> Result<GraphExport, GraphReferenceError> {
-        let tree = self.repository.materialize(source)?;
+        let tree = self.git.materialize(source)?;
         load_projection(
             Utf8Path::from_path(tree.path()).ok_or_else(|| GraphReferenceError::Incomplete {
                 detail: "temporary Git tree path is not UTF-8".into(),
@@ -294,11 +310,11 @@ impl GraphReferences {
         reference: &GraphReference,
     ) -> Result<GraphExport, GraphReferenceError> {
         reference.validate()?;
-        let commit = self.repository.resolve_commit(&reference.commit)?;
+        let commit = self.git.resolve_commit(&reference.commit)?;
         if commit != reference.commit {
             return mismatch("commit", &reference.commit, &commit);
         }
-        let repository_id = self.repository.identity(&commit)?;
+        let repository_id = self.git.identity(&commit)?;
         if repository_id != reference.repository_id {
             return mismatch("repository_id", &reference.repository_id, &repository_id);
         }

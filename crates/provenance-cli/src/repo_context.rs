@@ -1,4 +1,3 @@
-use crate::store::Store;
 use camino::Utf8PathBuf;
 use clap::Args;
 use provenance_core::{protocol::failure::OperationFailure, ScopeId};
@@ -25,28 +24,6 @@ impl RepoContext {
     pub fn open(&self) -> anyhow::Result<Repository> {
         Repository::open(&self.repo, &self.scope)
             .map_err(|error| initialization_hint(&self.repo, open_failure(error)))
-    }
-
-    pub fn open_graph(&self) -> anyhow::Result<Store> {
-        Store::open_required(&self.repo).map_err(|error| initialization_hint(&self.repo, error))
-    }
-
-    /// The manifest scope the caller selected, with the manifest. Refuses
-    /// before any read when the repository is not initialized or when the
-    /// manifest does not declare the scope.
-    pub fn declared_scope(
-        &self,
-    ) -> anyhow::Result<(provenance_core::Scope, provenance_core::Manifest)> {
-        let store = self.open_graph()?;
-        provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
-            let scope = declared_scope_in(&manifest, &self.scope)?.clone();
-            Ok((scope, manifest))
-        })
-        .map_err(|error| initialization_hint(&self.repo, error))
-    }
-
-    pub fn open_store(&self) -> Store {
-        Store::open(&self.repo)
     }
 
     pub fn scope_id(&self) -> anyhow::Result<ScopeId> {

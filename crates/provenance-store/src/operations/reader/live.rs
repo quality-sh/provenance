@@ -7,7 +7,6 @@
 
 use super::ReadContext;
 use crate::cache::{self, GraphEvidence};
-use crate::layout::ProvenanceLayout;
 use crate::stale::{gate, git};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
@@ -58,10 +57,6 @@ impl<'c> LiveHandle<'c> {
         );
     }
 
-    fn layout(&self) -> ProvenanceLayout {
-        self.context.repository().layout().clone()
-    }
-
     /// The canonical store behind the repository.
     pub fn store(&self) -> StateStore {
         self.only(Live::Canonical);
@@ -70,9 +65,9 @@ impl<'c> LiveHandle<'c> {
 
     /// The canonical graph references that name a repository path, which
     /// the diff half is read against.
-    pub fn graph_evidence(&self, scope: &ScopeId) -> anyhow::Result<GraphEvidence> {
+    pub fn graph_evidence(&self) -> anyhow::Result<GraphEvidence> {
         self.only(Live::Canonical);
-        cache::graph_evidence(&self.layout(), scope)
+        cache::graph_evidence(self.context.repository())
     }
 
     /// A scan of the working tree, stopped at the policy's file count; the

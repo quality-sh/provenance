@@ -107,11 +107,13 @@ fn committed_store_with_a_record(name: &str) -> tempfile::TempDir {
 }
 
 fn references(temp: &tempfile::TempDir) -> GraphReferences {
-    GraphReferences::open(camino::Utf8Path::from_path(temp.path()).unwrap()).unwrap()
+    let repository =
+        provenance_store::repository::Repository::open(temp.path(), "default").unwrap();
+    GraphReferences::open(&repository).unwrap()
 }
 
 fn issue(temp: &tempfile::TempDir) -> GraphReference {
-    references(temp).issue("default", None, None).unwrap()
+    references(temp).issue(None, None).unwrap()
 }
 
 /// Reads a refusal back as the field it named, what the reference claimed, and
@@ -427,5 +429,25 @@ fn refuses_a_reference_renamed_onto_another_scope() {
     assert!(
         detail.contains("other"),
         "refusal should name the scope that is not in the pinned manifest: {detail}"
+    );
+}
+
+/// Exact export hands out the selected scope's graph only: a reference that
+/// names another scope is refused before any Git work.
+#[test]
+#[verifies("rule_operation_scope_is_the_opened_scope", examples)]
+fn exact_export_refuses_a_reference_for_another_scope() {
+    let temp = committed_store();
+    let mut reference = issue(&temp);
+    reference.scope_id = "other".to_string();
+
+    let error = references(&temp).exact_export(&reference).unwrap_err();
+    assert_eq!(
+        error,
+        GraphReferenceError::Mismatched {
+            field: "scope_id",
+            expected: "default".to_string(),
+            actual: "other".to_string(),
+        }
     );
 }

@@ -5,9 +5,10 @@
 //! for another command and never writes to the repository.
 
 use super::grammar::TargetVerb;
-use crate::store::Store;
 use provenance_core::{NodeType, ScopeId};
 use provenance_porcelain::action::Action;
+use provenance_store::layout::ProvenanceLayout;
+use provenance_store::state_store::StateStore;
 
 /// The kind of an existing target, or `None` when the read cannot give one
 /// kind. Help then lists the fields of every record type.
@@ -27,8 +28,11 @@ pub(super) fn resolve_record_kind(
     let target = selection.get_one::<String>("target")?;
     let repo = selection.get_one::<String>("repo")?;
     let scope = ScopeId::new(selection.get_one::<String>("scope")?).ok()?;
-    let store = Store::open(repo.as_str());
-    provenance_store::publication::with_read_only_validation(store.layout(), || {
+    // Opening a repository takes the publication lock, so help reads the
+    // record files through the layout instead.
+    let layout = ProvenanceLayout::new(repo.as_str());
+    let store = StateStore::new(layout.clone());
+    provenance_store::publication::with_read_only_validation(&layout, || {
         let mut kinds = Vec::new();
         for kind in NodeType::ALL {
             if holds(&store, &scope, kind, target)? {
@@ -44,7 +48,7 @@ pub(super) fn resolve_record_kind(
     })
 }
 
-fn holds(store: &Store, scope: &ScopeId, kind: NodeType, id: &str) -> anyhow::Result<bool> {
+fn holds(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &str) -> anyhow::Result<bool> {
     macro_rules! any_id {
         ($list:ident) => {
             store

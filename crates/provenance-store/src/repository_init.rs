@@ -1,5 +1,9 @@
-//! Manifest planning shared by repository initialization and its test support.
+//! Repository initialization before a repository can be opened: manifest
+//! planning, recovery of an interrupted publication, and validation of the
+//! planned manifest against the state already on disk.
 
+use crate::layout::ProvenanceLayout;
+use crate::state_store::StateStore;
 use camino::Utf8PathBuf;
 use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
 
@@ -53,4 +57,32 @@ pub fn plan_manifest(
         manifest.disposition_actor_ids.extend(selected_actor);
     }
     Ok(manifest)
+}
+
+/// Finishes an interrupted publication before initialization reads the
+/// repository. A directory with no `.provenance` has nothing to recover.
+pub fn recover_before_init(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+    match std::fs::symlink_metadata(layout.provenance_dir()) {
+        Ok(_) => crate::publication::with_repository_publication(layout, || Ok(())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Runs `validate` over the state on disk and the manifest initialization
+/// plans to write. An existing `.provenance` is validated under the
+/// publication lock, after recovery; a new repository is validated read-only.
+pub fn validate_planned_manifest<R>(
+    layout: &ProvenanceLayout,
+    manifest: &Manifest,
+    validate: impl FnOnce(&StateStore, &Manifest) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    let store = StateStore::new(layout.clone());
+    match std::fs::symlink_metadata(layout.provenance_dir()) {
+        Ok(_) => store.with_repository_publication(|| validate(&store, manifest)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            crate::publication::with_read_only_validation(layout, || validate(&store, manifest))
+        }
+        Err(error) => Err(error.into()),
+    }
 }

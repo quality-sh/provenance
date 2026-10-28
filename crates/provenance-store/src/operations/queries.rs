@@ -200,9 +200,8 @@ pub(crate) async fn stale_answer(
     policy: ReadPolicy,
     request: StaleQuery,
 ) -> anyhow::Result<Stamped<StaleResult>> {
-    let inner = repository.scope().clone();
     served(repository, policy, move |ctx| {
-        Box::pin(async move { stale::stale(ctx, &inner, request) })
+        Box::pin(async move { stale::stale(ctx, request) })
     })
     .await
 }

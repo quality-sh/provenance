@@ -287,3 +287,34 @@ fn commands_in_a_subdirectory_name_the_enclosing_repository() {
     }
     assert!(!sub.join(".provenance").exists());
 }
+
+#[test]
+#[verifies("rule_operation_scope_is_the_opened_scope", examples)]
+fn gaps_and_health_read_only_the_selected_scope() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path();
+    init(repo, "a", ".");
+    init(repo, "b", "b");
+    active_rule(repo, "a", "rule_a");
+    let report = |command: &str, scope: &str| -> Value {
+        let output = provenance()
+            .args([command, "--repo", repo.to_str().unwrap(), "--scope", scope])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{command} {scope}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        serde_json::from_slice(&output.stdout).unwrap()
+    };
+
+    let health = report("health", "b");
+    assert_eq!(health["requirements"]["total"], 0, "{health}");
+    assert_eq!(health["rules"]["total"], 0, "{health}");
+    let gaps = report("gaps", "b");
+    assert!(!gaps.to_string().contains("req_a"), "{gaps}");
+    assert_eq!(report("health", "a")["rules"]["total"], 1);
+    let gaps = report("gaps", "a").to_string();
+    assert!(gaps.contains("req_a") || gaps.contains("rule_a"), "{gaps}");
+}

@@ -4,7 +4,7 @@
 
 use super::super::{compute_gaps, find_gaps, GapGraph, GapItem, GapKind};
 use super::fixtures::{domain, requirement};
-use crate::cache::tests::fixtures::{append_record, seeded_layout};
+use crate::cache::tests::fixtures::{append_record, open, seeded_layout};
 use crate::state_store::{CreateContributionInput, StateStore};
 use provenance_core::{
     Boundary, Contribution, ContributionStance, IdeationTarget, IdeationTargetType, NodeType,
@@ -167,7 +167,7 @@ fn an_existing_dangling_target_is_a_gap_not_a_refusal() {
         &synthesis_json("synth_old", "rule", "rule_gone"),
     );
 
-    let gaps = find_gaps(&layout, &scope).unwrap();
+    let gaps = find_gaps(&open(&layout)).unwrap();
     let reasons: Vec<&str> = dangling(&gaps)
         .iter()
         .map(|gap| gap.reason.as_str())

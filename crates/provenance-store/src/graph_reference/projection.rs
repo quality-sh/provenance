@@ -1,5 +1,6 @@
 use super::{ensure_graph_schema_version, incomplete, GraphReferenceError};
-use crate::{layout::ProvenanceLayout, state_store::StateStore};
+use crate::repository::{OpenFailure, Repository};
+use crate::state_store::StateStore;
 use camino::Utf8Path;
 use provenance_core::{Scope, ScopeId, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::rule;
@@ -166,16 +167,34 @@ macro_rules! define_graph_projection {
             }
         }
 
+        /// The projection of a tree that is not the live repository, such as
+        /// a commit materialized from Git: the tree opens as its own handle.
         pub(super) fn load_projection(
-            repository: &Utf8Path,
+            tree: &Utf8Path,
             scope: &str,
         ) -> Result<GraphExport, GraphReferenceError> {
             let scope_id = ScopeId::new(scope.to_string()).map_err(incomplete)?;
-            let store = StateStore::new(ProvenanceLayout::new(repository.to_path_buf()));
+            let pinned = Repository::open(tree, scope).map_err(|failure| match failure {
+                OpenFailure::NotInitialized => GraphReferenceError::Missing {
+                    detail: "canonical manifest is absent".into(),
+                },
+                OpenFailure::UnknownScope { .. } => GraphReferenceError::Missing {
+                    detail: format!("scope '{scope}' is absent from the pinned manifest"),
+                },
+                other => incomplete(other),
+            })?;
+            read_projection(&pinned.store(), &scope_id)
+        }
+
+        pub(super) fn read_projection(
+            store: &StateStore,
+            scope_id: &ScopeId,
+        ) -> Result<GraphExport, GraphReferenceError> {
+            let scope = scope_id.as_str();
             let (manifest_version, selected_scope) =
-                store.closed_manifest_scope(&scope_id).map_err(|error| {
+                store.closed_manifest_scope(scope_id).map_err(|error| {
                     let detail = error.to_string();
-                    if repository.join(".provenance/state/manifest.json").exists() {
+                    if store.layout.manifest_path().exists() {
                         incomplete(detail)
                     } else {
                         GraphReferenceError::Missing {
@@ -190,7 +209,7 @@ macro_rules! define_graph_projection {
             let mut graph = GraphExport {
                 schema_version: SUPPORTED_SCHEMA_VERSION.0,
                 scope: selected_scope,
-                $($export_field: store.$export_closed(&scope_id).map_err(incomplete)?,)*
+                $($export_field: store.$export_closed(scope_id).map_err(incomplete)?,)*
                 $($binding_field: Vec::new(),)*
             };
             $(read_binding!(
@@ -203,7 +222,7 @@ macro_rules! define_graph_projection {
             );)*
             graph.validate_schema_versions()?;
             graph.validate_rule_archives()?;
-            validate_scope_ownership(&graph, &scope_id)?;
+            validate_scope_ownership(&graph, scope_id)?;
             strip_collaboration_fields(&mut graph);
             sort_records(&mut graph);
             Ok(graph)

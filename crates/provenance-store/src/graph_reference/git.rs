@@ -34,10 +34,6 @@ impl GitRepository {
         Ok(Self { root })
     }
 
-    pub(super) fn root(&self) -> &Utf8Path {
-        &self.root
-    }
-
     pub(super) fn resolve_commit(&self, revision: &str) -> Result<String, GraphReferenceError> {
         let spec = format!("{revision}^{{commit}}");
         let output = run_git(&self.root, &["rev-parse", "--verify", &spec]).map_err(|_| {

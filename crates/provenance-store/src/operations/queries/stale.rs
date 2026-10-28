@@ -1,18 +1,13 @@
 use crate::operations::reader::{Live, ReadContext};
 use provenance_core::coverage::{EvidenceDiffSite, EvidenceDiffState, EvidenceDiffSummary};
 use provenance_core::protocol::{take_page, StaleQuery, StaleResult};
-use provenance_core::ScopeId;
 
 /// What a commit range did to the code carrying graph evidence.
 ///
 /// Stale is read from a diff, never guessed from the working tree, so every
 /// caller names a base. `head` defaults to the current commit. The graph
 /// evidence the diff is read against comes from canonical shards.
-pub(super) fn stale(
-    ctx: &ReadContext,
-    scope: &ScopeId,
-    request: StaleQuery,
-) -> anyhow::Result<StaleResult> {
+pub(super) fn stale(ctx: &ReadContext, request: StaleQuery) -> anyhow::Result<StaleResult> {
     request
         .validate()
         .map_err(provenance_core::protocol::QueryValidation::into_native)?;
@@ -20,7 +15,7 @@ pub(super) fn stale(
     // error that surfaces.
     let diff = ctx.live(Live::Diff);
     let (base, head) = diff.resolve_range(request.base, request.head)?;
-    let graph = ctx.live(Live::Canonical).graph_evidence(scope)?;
+    let graph = ctx.live(Live::Canonical).graph_evidence()?;
     let found = diff.disturbed(base, head, &request.rules, &graph)?;
     let summary = summarize(&found.sites);
     let (sites, has_more) = take_page(found.sites, request.limit);

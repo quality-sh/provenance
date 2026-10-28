@@ -2,7 +2,6 @@ use crate::output;
 use crate::repo_context::{
     declared_scope_in, initialization_hint, is_not_initialized, RepoContext,
 };
-use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
@@ -11,6 +10,9 @@ use provenance_porcelain::check::{
     PortFuture, Refusal, Status,
 };
 use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
+use provenance_store::layout::ProvenanceLayout;
+use provenance_store::settings::BindingFindingsSeverity;
+use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
 
 mod index;
@@ -65,19 +67,26 @@ impl RepositoryCheckPort {
         }
     }
 
+    /// The store for a run over the manifest's scopes. A repository-wide run
+    /// has no scope to open a repository with, so it reads through the layout.
+    fn repository_wide_store(&self) -> (ProvenanceLayout, StateStore) {
+        let layout = ProvenanceLayout::new(&self.context.repo);
+        let store = StateStore::new(layout.clone());
+        (layout, store)
+    }
+
     fn graph_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
-        let store = self.context.open_store();
-        let result =
-            provenance_store::layout::with_initialized_graph(store.layout(), |mut manifest| {
-                if let Some(scope) = scope {
-                    declared_scope_in(&manifest, scope)?;
-                    manifest
-                        .scopes
-                        .retain(|candidate| candidate.id.as_str() == scope);
-                }
-                validate_locked(&store, &manifest, scope.is_none())
-            })
-            .map_err(|error| initialization_hint(&self.context.repo, error));
+        let (layout, store) = self.repository_wide_store();
+        let result = provenance_store::layout::with_initialized_graph(&layout, |mut manifest| {
+            if let Some(scope) = scope {
+                declared_scope_in(&manifest, scope)?;
+                manifest
+                    .scopes
+                    .retain(|candidate| candidate.id.as_str() == scope);
+            }
+            validate_locked(&store, &manifest, scope.is_none())
+        })
+        .map_err(|error| initialization_hint(&self.context.repo, error));
         let findings = match result {
             Ok(()) => Vec::new(),
             Err(error)
@@ -97,9 +106,9 @@ impl RepositoryCheckPort {
     }
 
     fn statement_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
-        let store = self.context.open_store();
+        let (layout, store) = self.repository_wide_store();
         let (diagnostics, context) =
-            provenance_store::layout::with_initialized_graph(store.layout(), |mut manifest| {
+            provenance_store::layout::with_initialized_graph(&layout, |mut manifest| {
                 if let Some(scope) = scope {
                     declared_scope_in(&manifest, scope)?;
                     manifest
@@ -107,7 +116,7 @@ impl RepositoryCheckPort {
                         .retain(|candidate| candidate.id.as_str() == scope);
                 }
                 if self.strict {
-                    ensure_strict_dictionary_index(store.layout())?;
+                    ensure_strict_dictionary_index(&layout)?;
                     let analysis = statement_report::changed_statements_from_commits(
                         &self.context.repo,
                         &manifest,
@@ -148,59 +157,23 @@ impl RepositoryCheckPort {
     /// Finds missing code bindings without running project tests.
     #[rule("rule_porcelain_coverage_does_not_run_tests")]
     fn binding_run(&self, selected_scope: Option<&str>) -> Result<CategoryRun, String> {
-        let store = self
-            .context
-            .open_graph()
-            .map_err(|error| format!("{error:#}"))?;
+        provenance_store::layout::require_initialized_graph(&ProvenanceLayout::new(
+            &self.context.repo,
+        ))
+        .map_err(|error| format!("{:#}", initialization_hint(&self.context.repo, error)))?;
         let scanned = provenance_scanner::scan_path_with_content(&self.context.repo)
             .map_err(|error| format!("{error:#}"))?;
-        self.binding_run_with_store(&store, selected_scope, &scanned)
+        self.binding_run_from_scanned(selected_scope, &scanned)
     }
 
-    #[cfg(test)]
+    /// Scans each selected scope through the repository opened for it.
     fn binding_run_from_scanned(
         &self,
         selected_scope: Option<&str>,
         scanned: &[provenance_scanner::FileScanWithContent],
     ) -> Result<CategoryRun, String> {
-        let store = self
-            .context
-            .open_graph()
-            .map_err(|error| format!("{error:#}"))?;
-        self.binding_run_with_store(&store, selected_scope, scanned)
-    }
-
-    fn binding_run_with_store(
-        &self,
-        store: &Store,
-        selected_scope: Option<&str>,
-        scanned: &[provenance_scanner::FileScanWithContent],
-    ) -> Result<CategoryRun, String> {
-        let policy = provenance_store::settings::Settings::load(store.layout())
-            .map_err(|error| format!("{error:#}"))?
-            .coverage
-            .binding_findings;
-        let (warnings, governed_finding_count) =
-            provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
-                let scopes = match selected_scope {
-                    Some(selected) => vec![declared_scope_in(&manifest, selected)?],
-                    None => manifest.scopes.iter().collect(),
-                };
-                let mut warnings = Vec::new();
-                let mut governed_finding_count = 0;
-                for scope in scopes {
-                    let outcome = super::coverage::coverage_scan_from_scanned(
-                        &self.context.repo,
-                        &self.context.repo,
-                        scope,
-                        &manifest,
-                        scanned,
-                    )?;
-                    governed_finding_count += outcome.governed_finding_count;
-                    warnings.extend(outcome.scan.report.warnings);
-                }
-                Ok((warnings, governed_finding_count))
-            })
+        let (warnings, governed_finding_count, policy) = self
+            .scan_selected_scopes(selected_scope, scanned)
             .map_err(|error| format!("{error:#}"))?;
         let severity = match policy {
             provenance_store::settings::BindingFindingsSeverity::Warning => {
@@ -234,6 +207,46 @@ impl RepositoryCheckPort {
             context: BindingContext { policy },
             refusal,
         })
+    }
+}
+
+impl RepositoryCheckPort {
+    fn scan_selected_scopes(
+        &self,
+        selected_scope: Option<&str>,
+        scanned: &[provenance_scanner::FileScanWithContent],
+    ) -> anyhow::Result<(
+        Vec<provenance_core::coverage::ValidationWarning>,
+        usize,
+        BindingFindingsSeverity,
+    )> {
+        let manifest = provenance_store::layout::with_initialized_graph(
+            &ProvenanceLayout::new(&self.context.repo),
+            Ok,
+        )?;
+        let scopes = match selected_scope {
+            Some(selected) => vec![declared_scope_in(&manifest, selected)?],
+            None => manifest.scopes.iter().collect(),
+        };
+        let mut warnings = Vec::new();
+        let mut governed_finding_count = 0;
+        let mut policy = BindingFindingsSeverity::default();
+        for scope in scopes {
+            let repository =
+                RepoContext::new(self.context.repo.clone(), scope.id.as_str()).open()?;
+            policy = repository.settings().coverage.binding_findings;
+            let outcome = super::coverage::coverage_scan_from_scanned(
+                &repository,
+                &self.context.repo,
+                &self.context.repo,
+                scope,
+                &manifest,
+                scanned,
+            )?;
+            governed_finding_count += outcome.governed_finding_count;
+            warnings.extend(outcome.scan.report.warnings);
+        }
+        Ok((warnings, governed_finding_count, policy))
     }
 }
 
@@ -290,37 +303,29 @@ pub(super) async fn check(
     Ok(())
 }
 
-pub(super) fn validate_repository(repo: Utf8PathBuf) -> anyhow::Result<()> {
-    let store = Store::open(repo);
+/// Validates every scope of a staged repository.
+pub(super) fn validate_repository(store: &StateStore) -> anyhow::Result<()> {
     store.with_repository_publication(|| {
         let manifest = store.manifest()?;
-        validate_locked(&store, &manifest, true)
+        validate_locked(store, &manifest, true)
     })
 }
 
-pub(super) fn validate_repository_with_manifest(
+/// Validates the state on disk against the manifest `init` plans to write.
+pub(super) fn validate_planned_manifest(
     repo: &Utf8Path,
     manifest: &Manifest,
 ) -> anyhow::Result<()> {
-    let store = Store::open(repo);
-    match std::fs::symlink_metadata(store.layout().provenance_dir()) {
-        Ok(_) => store.with_repository_publication(|| validate_locked(&store, manifest, true)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            provenance_store::publication::with_read_only_validation(store.layout(), || {
-                validate_locked(&store, manifest, true)
-            })
-        }
-        Err(error) => Err(error.into()),
-    }
+    provenance_store::repository_init::validate_planned_manifest(
+        &ProvenanceLayout::new(repo),
+        manifest,
+        |store, manifest| validate_locked(store, manifest, true),
+    )
 }
 
-pub(super) fn recover_repository_before_init(repo: &Utf8Path) -> anyhow::Result<()> {
-    let store = Store::open(repo);
-    match std::fs::symlink_metadata(store.layout().provenance_dir()) {
-        Ok(_) => store.with_repository_publication(|| Ok(())),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
-    }
+/// Finishes an interrupted publication before `init` reads the repository.
+pub(super) fn recover_before_init(repo: &Utf8Path) -> anyhow::Result<()> {
+    provenance_store::repository_init::recover_before_init(&ProvenanceLayout::new(repo))
 }
 
 /// Fails a strict check when the committed dictionary reference has no
@@ -351,7 +356,7 @@ fn ensure_strict_dictionary_index(
 /// Validates graph records without treating missing code bindings as graph errors.
 #[rule("rule_porcelain_missing_binding_not_invalid")]
 fn validate_locked(
-    store: &Store,
+    store: &StateStore,
     manifest: &Manifest,
     repository_wide: bool,
 ) -> anyhow::Result<()> {

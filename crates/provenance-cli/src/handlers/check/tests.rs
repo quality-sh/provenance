@@ -15,7 +15,7 @@ fn planned_manifest_validation_runs_publication_recovery_before_reading_state() 
     let manifest =
         Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
 
-    let error = validate_repository_with_manifest(&repo, &manifest).unwrap_err();
+    let error = validate_planned_manifest(&repo, &manifest).unwrap_err();
 
     assert!(format!("{error:#}").contains("expected ident"));
     assert!(layout.publication_lock_path().exists());
@@ -38,7 +38,7 @@ fn planned_manifest_validation_refuses_a_symlinked_publication_cache() {
     let manifest =
         Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
 
-    let error = validate_repository_with_manifest(&repo, &manifest).unwrap_err();
+    let error = validate_planned_manifest(&repo, &manifest).unwrap_err();
 
     assert!(format!("{error:#}").contains("symlink component"));
 }
@@ -52,7 +52,7 @@ fn planned_manifest_validation_locks_an_existing_state_tree() {
     let manifest =
         Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
 
-    validate_repository_with_manifest(&repo, &manifest).unwrap();
+    validate_planned_manifest(&repo, &manifest).unwrap();
 
     assert!(layout.publication_lock_path().exists());
 }
@@ -65,7 +65,7 @@ fn planned_manifest_validation_keeps_a_new_repository_read_only() {
     let manifest =
         Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
 
-    validate_repository_with_manifest(&repo, &manifest).unwrap();
+    validate_planned_manifest(&repo, &manifest).unwrap();
 
     assert!(!layout.provenance_dir().exists());
 }

@@ -121,7 +121,7 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
         })
         .unwrap();
 
-    let prime = prime_context(&layout, &scope, false).unwrap();
+    let prime = prime_context(&open(&layout), false).unwrap();
 
     assert!(!serde_json::to_string(&prime)
         .unwrap()
@@ -196,7 +196,7 @@ fn find_gaps_reports_the_frontier_taxonomy() {
         QuestionStatus::Open,
     );
 
-    let gaps = find_gaps(&layout, &scope).unwrap();
+    let gaps = find_gaps(&open(&layout)).unwrap();
     for (kind, node_type, id) in [
         (
             GapKind::MissingSourceRefs,
@@ -254,7 +254,7 @@ fn find_gaps_reports_the_frontier_taxonomy() {
         contradiction.related_node_id.as_deref(),
         Some("req_contradicts_b")
     );
-    assert_eq!(prime_context(&layout, &scope, false).unwrap().gaps, gaps);
+    assert_eq!(prime_context(&open(&layout), false).unwrap().gaps, gaps);
 }
 
 #[test]
@@ -279,7 +279,7 @@ fn prime_renders_frontier_gap_subjects() {
         "question_frontier",
         QuestionStatus::Open,
     );
-    let rendered = render_prime_markdown(&prime_context(&layout, &scope, false).unwrap());
+    let rendered = render_prime_markdown(&prime_context(&open(&layout), false).unwrap());
     assert!(rendered.contains("- requirement req_contradicts_a -> requirement req_contradicts_b: unresolved `contradicts` pair"));
     assert!(rendered.contains("- question question_frontier: open question"));
     assert!(rendered.contains("- topic topic_frontier: unexplored topic"));
@@ -306,13 +306,13 @@ fn prime_renders_blocked_on_human_questions_with_status() {
         "question_blocked",
         QuestionStatus::BlockedOnHuman,
     );
-    let gaps = find_gaps(&layout, &scope).unwrap();
+    let gaps = find_gaps(&open(&layout)).unwrap();
     let blocked = gaps
         .iter()
         .find(|gap| gap.kind == GapKind::OpenQuestion && gap.node_id == "question_blocked")
         .unwrap();
     assert!(blocked.reason.contains("blocked_on_human"));
-    let rendered = render_prime_markdown(&prime_context(&layout, &scope, false).unwrap());
+    let rendered = render_prime_markdown(&prime_context(&open(&layout), false).unwrap());
     assert!(rendered.contains("- question question_blocked:"));
     assert!(rendered.contains("blocked_on_human"));
 }

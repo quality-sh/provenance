@@ -75,7 +75,7 @@ fn a_rule_named_by_a_requirement_and_a_resolution_traces_back_to_both_requiremen
     let (_dir, layout, scope) = empty_layout();
     seed_two_producers(&layout, &scope);
 
-    let trace = trace_rule(&layout, &scope, &sid("rule_two_producers")).unwrap();
+    let trace = trace_rule(&open(&layout), &sid("rule_two_producers")).unwrap();
 
     assert_eq!(
         sorted(
@@ -104,7 +104,7 @@ fn both_requirements_bring_their_own_sources() {
     let (_dir, layout, scope) = empty_layout();
     seed_two_producers(&layout, &scope);
 
-    let trace = trace_rule(&layout, &scope, &sid("rule_two_producers")).unwrap();
+    let trace = trace_rule(&open(&layout), &sid("rule_two_producers")).unwrap();
 
     assert_eq!(
         sorted(
@@ -126,7 +126,7 @@ fn only_the_walked_relations_are_returned() {
     let (_dir, layout, scope) = empty_layout();
     seed_two_producers(&layout, &scope);
 
-    let trace = trace_rule(&layout, &scope, &sid("rule_two_producers")).unwrap();
+    let trace = trace_rule(&open(&layout), &sid("rule_two_producers")).unwrap();
 
     let mut walked = trace
         .relations

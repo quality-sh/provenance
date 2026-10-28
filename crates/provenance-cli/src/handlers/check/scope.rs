@@ -1,6 +1,7 @@
 use super::index::CheckIndex;
-use crate::store::{ScopeSnapshot, Store};
+use crate::store::{snapshot, ScopeSnapshot};
 use provenance_core::{Scope, ScopeId, StableId};
+use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
 
 mod collaboration;
@@ -14,7 +15,7 @@ struct ScopeRecords {
 
 impl ScopeRecords {
     fn load(
-        store: &Store,
+        store: &StateStore,
         scope_id: &ScopeId,
         disposition_actor_ids: &[String],
     ) -> anyhow::Result<Self> {
@@ -22,7 +23,7 @@ impl ScopeRecords {
         store.validate_graph_scope(scope_id)?;
         Ok(Self {
             scope_id: scope_id.clone(),
-            snapshot: store.snapshot(scope_id)?,
+            snapshot: snapshot(store, scope_id)?,
         })
     }
 
@@ -60,7 +61,7 @@ fn check_scope_ownership(
 }
 
 pub(super) fn validate(
-    store: &Store,
+    store: &StateStore,
     scopes: &[Scope],
     disposition_actor_ids: &[String],
     manifest_scopes: &BTreeSet<String>,

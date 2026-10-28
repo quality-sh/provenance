@@ -3,16 +3,17 @@ use provenance_core::{
     Manifest, RepoPathPrefix, RequirementStatus, RuleSeverity, RuleStatus, ScopeId, SourceType,
     StableId,
 };
+use provenance_store::repository::Repository;
 use provenance_store::state_store::{CreateRequirementInput, CreateRuleInput, CreateSourceInput};
 
 fn initialized_store() -> (tempfile::TempDir, Store, ScopeId) {
     let directory = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
-    let store = Store::open(root);
+    let layout = provenance_store::layout::ProvenanceLayout::new(root.clone());
     let scope = ScopeId::new("default").unwrap();
-    std::fs::create_dir_all(store.layout().manifest_path().parent().unwrap()).unwrap();
+    std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
     std::fs::write(
-        store.layout().manifest_path(),
+        layout.manifest_path(),
         serde_json::to_vec(&Manifest::default_with_scope(
             scope.clone(),
             RepoPathPrefix::new("."),
@@ -20,7 +21,8 @@ fn initialized_store() -> (tempfile::TempDir, Store, ScopeId) {
         .unwrap(),
     )
     .unwrap();
-    (directory, store, scope)
+    let repository = Repository::open(&root, "default").unwrap();
+    (directory, Store::new(&repository), scope)
 }
 
 fn seeded_store() -> (tempfile::TempDir, Store, ScopeId) {
@@ -79,20 +81,18 @@ fn seeded_store() -> (tempfile::TempDir, Store, ScopeId) {
 }
 
 #[test]
-fn open_builds_the_layout_from_the_repository_root() {
-    let directory = tempfile::tempdir().unwrap();
-    let root = camino::Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+fn the_snapshot_reads_the_scope_the_repository_selected() {
+    let (_directory, store, scope) = seeded_store();
 
-    let store = Store::open(root.clone());
-
-    assert_eq!(store.layout().state_dir(), root.join(".provenance/state"));
+    assert_eq!(store.repository().scope(), &scope);
+    assert_eq!(store.snapshot().unwrap().rules.len(), 1);
 }
 
 #[test]
 fn graph_records_borrows_the_graph_families_from_the_full_snapshot() {
-    let (_directory, store, scope) = seeded_store();
+    let (_directory, store, _scope) = seeded_store();
 
-    let snapshot = store.snapshot(&scope).unwrap();
+    let snapshot = store.snapshot().unwrap();
     let graph = snapshot.graph_records();
 
     assert_eq!(graph.sources[0].id.as_str(), "source_policy");

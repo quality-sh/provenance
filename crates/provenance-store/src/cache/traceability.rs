@@ -1,4 +1,4 @@
-use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use crate::state_store::StateStore;
 use provenance_core::model::relations::RelationRow;
 use provenance_core::{NodeType, Requirement, Resolution, Rule, Source, StableId};
@@ -18,12 +18,11 @@ pub struct TraceabilityView {
 }
 
 pub fn trace_rule(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     rule_id: &provenance_core::StableId,
 ) -> anyhow::Result<TraceabilityView> {
-    let store = StateStore::new(layout.clone());
-    store.with_repository_publication(|| trace_rule_locked(scope, rule_id, &store))
+    let store = repository.store();
+    store.with_repository_publication(|| trace_rule_locked(repository.scope(), rule_id, &store))
 }
 
 fn row(owner: (NodeType, &StableId), relation: &str, target: (NodeType, &StableId)) -> RelationRow {

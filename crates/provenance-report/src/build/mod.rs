@@ -20,7 +20,7 @@ use camino::Utf8Path;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
 use provenance_store::stale::git;
-use provenance_store::{cache, layout::ProvenanceLayout, settings};
+use provenance_store::{cache, layout::ProvenanceLayout, repository::Repository, settings};
 
 mod findings;
 mod graph_snapshots;
@@ -81,7 +81,6 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         base: &base,
         head: &head,
         scope: &scope,
-        layout: &layout,
         scans: &scans,
         verifications: &verifications,
         implementations: &implementations,
@@ -207,7 +206,6 @@ fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<CollectedFinding
                 input.base,
                 input.head,
                 input.scope,
-                input.layout,
             )?);
         }
     }
@@ -228,7 +226,6 @@ struct FindingInput<'a> {
     base: &'a str,
     head: &'a str,
     scope: &'a ScopeId,
-    layout: &'a ProvenanceLayout,
     scans: &'a [provenance_scanner::FileScan],
     verifications: &'a [provenance_core::VerificationBinding],
     implementations: &'a [provenance_core::ImplementationBinding],
@@ -281,9 +278,9 @@ fn evidence_site_findings(
     base: &str,
     head: &str,
     scope: &ScopeId,
-    layout: &ProvenanceLayout,
 ) -> anyhow::Result<Vec<crate::envelope::Finding>> {
-    let graph = cache::graph_evidence(layout, scope)?;
+    let repository = Repository::open(repo, scope.as_str())?;
+    let graph = cache::graph_evidence(&repository)?;
     let base_files = git::revision_files(repo, base)?;
     let head_files = git::revision_files(repo, head)?;
     let changes = git::changed_files(repo, base, head)?;
