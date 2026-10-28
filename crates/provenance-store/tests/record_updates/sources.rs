@@ -181,7 +181,7 @@ async fn a_source_update_that_removes_a_superseded_source_checks_it_in_the_stage
         )
         .await
         .unwrap();
-    assert_eq!(removed["supersedes"], json!([]));
+    assert!(removed.get("supersedes").is_none(), "{removed}");
 
     let error = fixture
         .call(

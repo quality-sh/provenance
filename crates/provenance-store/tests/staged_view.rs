@@ -268,10 +268,9 @@ fn live_access_in_the_body_refuses_and_works_again_after_the_stage() {
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()?;
-            let waited = runtime.block_on(tokio::time::timeout(
-                Duration::from_secs(5),
-                publication_guard(&repository),
-            ));
+            let waited = runtime.block_on(async {
+                tokio::time::timeout(Duration::from_secs(5), publication_guard(&repository)).await
+            });
             let Ok(Err(async_guard)) = waited else {
                 runtime.shutdown_background();
                 panic!("the async guard did not refuse at once");
