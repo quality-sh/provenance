@@ -21,10 +21,18 @@ export function checkPackage({ checkout, temporary, target, cargo, expected, run
   const patches = metadata.packages.filter(pkg => pkg.name !== 'provenance-cli' && pkg.manifest_path.startsWith(join(checkout, 'crates')));
   const config = join(temporary, 'patches.toml');
   writeFileSync(config, '[patch.crates-io]\n' + patches.map(pkg => `${pkg.name} = { path = ${JSON.stringify(join(dependencies, 'crates', pkg.name).replaceAll('\\', '/'))} }`).join('\n') + '\n');
-  // Workspace packaging resolves unpublished workspace crates without patches, so --locked checks the committed lock.
-  // The build of the extracted package below verifies the CLI archive. Cargo steps run offline: CI fetches the
-  // locked crates through Socket Firewall before the tests.
-  run(cargo, ['package', '--workspace', '--locked', '--offline', '--allow-dirty', '--no-verify', '--registry', 'crates-io']);
+  // Cargo verifies the CLI archive against a local overlay of the packaged workspace crates, so --locked checks the
+  // committed lock. Cargo steps run offline: CI fetches the locked crates through Socket Firewall before the tests.
+  const packages = new Map(metadata.packages.map(pkg => [pkg.name, pkg]));
+  const selected = new Set();
+  const pending = ['provenance-cli'];
+  while (pending.length) {
+    const name = pending.pop();
+    if (selected.has(name)) continue;
+    selected.add(name);
+    for (const dependency of packages.get(name).dependencies) if (dependency.path && packages.has(dependency.name)) pending.push(dependency.name);
+  }
+  run(cargo, ['package', ...[...selected].flatMap(name => ['-p', name]), '--locked', '--offline', '--allow-dirty', '--registry', 'crates-io']);
   const version = metadata.packages.find(pkg => pkg.name === 'provenance-cli').version;
   const extracted = join(temporary, 'extracted');
   mkdirSync(extracted);
