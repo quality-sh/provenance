@@ -186,7 +186,7 @@ pub(super) fn diff_snapshots(base: &GraphSnapshot, head: &GraphSnapshot) -> Vec<
         RecordKind::Requirement,
         |record| record.id.as_str(),
         |record| record.statement.clone(),
-        requirement_lifecycle,
+        |record| lifecycle_word(&record.status),
         requirement_relations,
         &mut changes,
     );
@@ -196,7 +196,7 @@ pub(super) fn diff_snapshots(base: &GraphSnapshot, head: &GraphSnapshot) -> Vec<
         RecordKind::Rule,
         |record| record.id.as_str(),
         |record| record.statement.clone(),
-        rule_lifecycle,
+        |record| lifecycle_word(&record.status),
         rule_relations,
         &mut changes,
     );
@@ -206,7 +206,7 @@ pub(super) fn diff_snapshots(base: &GraphSnapshot, head: &GraphSnapshot) -> Vec<
         RecordKind::Resolution,
         |record| record.id.as_str(),
         |record| record.title.clone(),
-        resolution_lifecycle,
+        |record| lifecycle_word(&record.status),
         resolution_relations,
         &mut changes,
     );
@@ -241,6 +241,18 @@ fn diff_records<'a, T>(
 ) {
     let base_by_id: BTreeMap<&str, &T> = base.iter().map(|record| (id(record), record)).collect();
     let head_ids: BTreeSet<&str> = head.iter().map(&id).collect();
+    let mut replacements: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for record in head {
+        for (relation, target_kind, target) in relations(record) {
+            if relation == "supersedes" && target_kind == kind {
+                replacements
+                    .entry(target)
+                    .or_default()
+                    .insert(id(record).to_string());
+            }
+        }
+    }
+    let first_change = changes.len();
     for record in head {
         let record_id = id(record);
         let after_statement = statement(record);
@@ -285,6 +297,12 @@ fn diff_records<'a, T>(
                 .cloned()
                 .collect(),
         ));
+    }
+    for change in &mut changes[first_change..] {
+        change.superseded_by = replacements
+            .get(&change.id)
+            .map(|ids| ids.iter().cloned().collect())
+            .unwrap_or_default();
     }
     for record in base {
         if !head_ids.contains(id(record)) {
@@ -332,6 +350,7 @@ fn change_with(
         statement_before,
         lifecycle_before,
         lifecycle_after,
+        superseded_by: Vec::new(),
         relations_added: to_changes(relations_added),
         relations_removed: to_changes(relations_removed),
     }
@@ -341,44 +360,18 @@ fn relation(name: &str, kind: RecordKind, id: &str) -> RelationKey {
     (name.to_string(), kind, id.to_string())
 }
 
-fn requirement_lifecycle(record: &Requirement) -> String {
-    let status = match record.status {
-        provenance_core::RequirementStatus::Active => "active",
-        provenance_core::RequirementStatus::Discovery => "discovery",
-        provenance_core::RequirementStatus::Refinement => "refinement",
-        provenance_core::RequirementStatus::Resolved => "resolved",
-    };
-    status.to_string()
-}
-
-fn rule_lifecycle(record: &Rule) -> String {
-    let status = match record.status {
-        provenance_core::RuleStatus::Draft => "draft",
-        provenance_core::RuleStatus::Review => "review",
-        provenance_core::RuleStatus::Active => "active",
-        provenance_core::RuleStatus::Deprecated => "deprecated",
-        provenance_core::RuleStatus::Archived => "archived",
-    };
-    status.to_string()
-}
-
-fn resolution_lifecycle(record: &Resolution) -> String {
-    let status = match record.status {
-        provenance_core::ResolutionStatus::Draft => "draft",
-        provenance_core::ResolutionStatus::Review => "review",
-        provenance_core::ResolutionStatus::Proposed => "proposed",
-        provenance_core::ResolutionStatus::Approved => "approved",
-        provenance_core::ResolutionStatus::Rejected => "rejected",
-        provenance_core::ResolutionStatus::Revised => "revised",
-        provenance_core::ResolutionStatus::Superseded => "superseded",
-        provenance_core::ResolutionStatus::Abandoned => "abandoned",
-    };
-    status.to_string()
+/// The wire word of a record's lifecycle status. The serde rename on the
+/// status enum is the only word list.
+fn lifecycle_word(status: &impl serde::Serialize) -> String {
+    serde_json::to_value(status)
+        .ok()
+        .and_then(|word| word.as_str().map(str::to_owned))
+        .expect("a lifecycle status serializes as one word")
 }
 
 fn requirement_relations(record: &Requirement) -> BTreeSet<RelationKey> {
     let mut relations = BTreeSet::new();
-    if let Some(target) = &record.refines {
+    for target in &record.refines {
         relations.insert(relation(
             "refines",
             RecordKind::Requirement,

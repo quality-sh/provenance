@@ -94,18 +94,25 @@ export async function renderNested(projected, generate) {
  * substituted and their declarations are skipped. `exceptRendering` drops one
  * rendering (and every name sharing it) from substitution entirely, so a
  * declaration body is never swallowed by its own — or a sibling's — identical
- * span. Returns the rewritten text, the set of names that actually appear,
- * and the canonical-name map over all rendered components.
+ * span. When `owner` is present, identical renderings use the name with the
+ * longest prefix in common with that owner. This keeps structurally identical
+ * nested types in their operation family. Returns the rewritten text, the set
+ * of names that actually appear, and the selected-name map over all rendered
+ * components.
  */
-export function substitute(text, renderings, exceptRendering = null) {
+export function substitute(text, renderings, exceptRendering = null, owner = null) {
   const byText = new Map();
   for (const name of [...renderings.keys()].sort()) {
     const rendering = renderings.get(name);
     if (rendering === exceptRendering) continue;
     if (!isStructured(rendering)) continue;
-    if (!byText.has(rendering)) byText.set(rendering, name);
+    const names = byText.get(rendering) ?? [];
+    names.push(name);
+    byText.set(rendering, names);
   }
-  const entries = [...byText.entries()].sort((a, b) => b[0].length - a[0].length);
+  const selected = new Map([...byText].map(([rendering, names]) =>
+    [rendering, selectName(names, owner)]));
+  const entries = [...selected.entries()].sort((a, b) => b[0].length - a[0].length);
   if (entries.length === 0) {
     // An empty alternation would match everywhere; nothing to substitute.
     return { rewritten: text, used: new Set(), canonical: new Map() };
@@ -120,7 +127,19 @@ export function substitute(text, renderings, exceptRendering = null) {
     return name;
   });
   return { rewritten, used, canonical: new Map([...renderings.keys()].map(name =>
-    [name, byText.get(renderings.get(name))]).filter(([, canonical]) => canonical !== undefined)) };
+    [name, selected.get(renderings.get(name))]).filter(([, canonical]) => canonical !== undefined)) };
+}
+
+function selectName(names, owner) {
+  if (owner === null) return names[0];
+  return [...names].sort((a, b) => sharedPrefixLength(b, owner) - sharedPrefixLength(a, owner)
+    || a.localeCompare(b))[0];
+}
+
+function sharedPrefixLength(left, right) {
+  let length = 0;
+  while (left[length] !== undefined && left[length] === right[length]) length++;
+  return length;
 }
 
 /** Objects and top-level unions are structured; bare literals are not. */
@@ -143,6 +162,29 @@ export function declaration(name, rendering, limit = 200) {
     return [`export type ${name} =`, ...members.map(member => `  | ${member}`)].join('\n');
   }
   return `export type ${name} = ${rendering}`;
+}
+
+/** Keep public names, but reuse a byte-identical type and runtime schema pair. */
+export function reuseSchemaDeclarations(source) {
+  const pattern = /^export type (\w+) = ([\s\S]*?)^export const \1 = (.+)$/gm;
+  const declarations = new Map();
+  return source.replace(pattern, (declaration, name, body, expression) => {
+    const key = `${body.trimEnd()}\0${expression}`;
+    const canonical = declarations.get(key);
+    if (canonical === undefined) {
+      declarations.set(key, name);
+      return declaration;
+    }
+    return `export type ${name} = ${canonical}\nexport const ${name} = ${canonical}`;
+  });
+}
+
+/** Stop declaration emit from expanding the inferred schema behind each named type. */
+export function eraseSchemaInferences(source) {
+  const types = new Set([...source.matchAll(/^export type (\w+) =/gm)].map(match => match[1]));
+  return source.replace(/^export const (\w+) = (.+)$/gm, (line, name, expression) => types.has(name)
+    ? `export const ${name} = generatedSchema<${name}>(${expression})`
+    : line);
 }
 
 const INDEX_SUFFIX = ' & { readonly [x: string]: Schema.Json }';

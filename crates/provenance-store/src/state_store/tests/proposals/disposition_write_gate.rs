@@ -27,7 +27,10 @@ fn refuses_a_disposition_naming_a_proposal_that_was_never_created() {
         .to_string();
 
     assert!(error.contains("proposal does not exist"), "{error}");
-    assert!(store.list_dispositions(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_dispositions(&scope).unwrap(),
+        [] as [provenance_core::DispositionRecord; 0]
+    );
 }
 
 #[test]
@@ -357,7 +360,11 @@ fn disposition_by(
     }
 }
 
-fn rejected_input(scope: &ScopeId, id: &str, proposal_id: &str) -> CreateDispositionInput {
+pub(super) fn rejected_input(
+    scope: &ScopeId,
+    id: &str,
+    proposal_id: &str,
+) -> CreateDispositionInput {
     CreateDispositionInput {
         scope_id: scope.clone(),
         id: StableId::new(id).unwrap(),
@@ -374,7 +381,7 @@ fn rejected_input(scope: &ScopeId, id: &str, proposal_id: &str) -> CreateDisposi
     }
 }
 
-fn allow_actor(store: &StateStore) {
+pub(super) fn allow_actor(store: &StateStore) {
     let mut manifest = store.manifest().unwrap();
     manifest.disposition_actor_ids.push("reviewer".into());
     std::fs::write(

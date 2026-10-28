@@ -7,6 +7,8 @@ use std::path::Path;
 #[path = "cargo_init/support.rs"]
 mod support;
 use support::CargoFixture;
+#[path = "cargo_init/presentation.rs"]
+mod presentation;
 
 #[test]
 #[verifies("rule_cargo_init_selects_workspace_package", examples)]
@@ -29,7 +31,7 @@ fn cargo_injected_argument_initializes_one_package_at_the_cli_version() {
         .exists());
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@=0.2.3 --manifest-path"));
+        .contains("add provenance-sdk@=0.3.0 --manifest-path"));
 }
 
 #[test]
@@ -205,6 +207,7 @@ fn later_init_failure_exactly_restores_cargo_files() {
         .args(["provenance", "init"])
         .assert()
         .failure()
+        .stdout(predicate::str::is_empty())
         .stderr(predicate::str::contains(
             "changed after initialization was planned",
         ));
@@ -280,7 +283,7 @@ fn explicit_package_selects_its_manifest_directory_as_the_path_prefix() {
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@=0.2.3 --manifest-path"));
+        .contains("add provenance-sdk@=0.3.0 --manifest-path"));
 }
 
 #[test]
@@ -335,7 +338,7 @@ fn rerun_refuses_to_change_the_existing_target_package() {
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
     assert!(!fixture
         .cargo_calls()
-        .contains("add provenance-sdk@0.2.3 --package worker --exact"));
+        .contains("add provenance-sdk@0.3.0 --package worker --exact"));
 }
 
 #[test]
@@ -361,4 +364,64 @@ fn rerun_accepts_an_equivalent_existing_path_prefix() {
         .success();
 
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
+}
+
+#[test]
+fn cargo_init_reports_only_published_changes_then_no_change() {
+    let fixture = CargoFixture::new(&[("app", "Cargo.toml")]);
+    let assets = fixture.temporary.path().join("assets");
+    let indexes = fixture.temporary.path().join("indexes");
+    let first = fixture
+        .command()
+        .args(["provenance", "init"])
+        .env("PROVENANCE_STE100_ASSET_DIR", &assets)
+        .env("PROVENANCE_STE100_INDEX_DIR", &indexes)
+        .env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
+        )
+        .output()
+        .unwrap();
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let first = String::from_utf8(first.stdout).unwrap();
+    assert!(first.contains("  Cargo.toml (added the Provenance SDK dependency)\n"));
+    assert!(first.contains("  Cargo.lock (created by Cargo)\n"));
+    assert!(first.contains("  .provenance/state/manifest.json (manifest for scope \"default\")\n"));
+    assert!(!first.contains("Dictionary:"));
+    assert!(first.ends_with("Have your agent run provenance prime to get acclimated.\n"));
+    let manifest = std::fs::read(fixture.root().join(".provenance/state/manifest.json")).unwrap();
+    let cargo_manifest = fixture.cargo_manifest();
+    let cargo_lock = fixture.cargo_lock();
+
+    let second = fixture
+        .command()
+        .args(["provenance", "init"])
+        .env("PROVENANCE_STE100_ASSET_DIR", &assets)
+        .env("PROVENANCE_STE100_INDEX_DIR", &indexes)
+        .env(
+            "PROVENANCE_TEST_STE100_ASSET_URL",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
+        )
+        .output()
+        .unwrap();
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    let second = String::from_utf8(second.stdout).unwrap();
+    assert!(second.contains("No change.\n"));
+    assert!(!second.contains("\nNew\n"));
+    assert!(!second.contains("\nChanged\n"));
+    assert!(second.ends_with("Have your agent run provenance prime to get acclimated.\n"));
+    assert_eq!(
+        std::fs::read(fixture.root().join(".provenance/state/manifest.json")).unwrap(),
+        manifest
+    );
+    assert_eq!(fixture.cargo_manifest(), cargo_manifest);
+    assert_eq!(fixture.cargo_lock(), cargo_lock);
 }

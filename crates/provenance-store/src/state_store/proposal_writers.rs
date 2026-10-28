@@ -4,8 +4,9 @@ use super::{
 };
 use crate::shards;
 use provenance_core::{
-    validate_optional_confidence_score, AssertionRecord, DispositionRecord, PromotionState,
-    ProposalCard, ProposalType, ScopeId, StableId, SUPPORTED_SCHEMA_VERSION,
+    ensure_record_id_assignable, validate_optional_confidence_score, AssertionRecord,
+    DispositionRecord, PromotionState, ProposalCard, ProposalType, ScopeId, StableId,
+    SUPPORTED_SCHEMA_VERSION,
 };
 use provenance_macros::rule;
 
@@ -133,6 +134,7 @@ impl StateStore {
     }
 
     fn write_assertion(&self, input: CreateAssertionInput) -> anyhow::Result<AssertionRecord> {
+        ensure_record_id_assignable(input.id.as_str())?;
         let assertion = AssertionRecord {
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: input.scope_id.clone(),
@@ -161,6 +163,7 @@ impl StateStore {
                 assertions: &assertions,
                 dispositions: &self.list_dispositions(&input.scope_id)?,
             })?;
+            super::read_budget::ensure_within_read_budget(&assertion)?;
             records.push(assertion.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(assertion)
@@ -177,6 +180,7 @@ impl StateStore {
 
     fn write_proposal_card(&self, input: CreateProposalCardInput) -> anyhow::Result<ProposalCard> {
         let candidate = proposal_from_input(input)?;
+        ensure_record_id_assignable(candidate.id.as_str())?;
         anyhow::ensure!(
             candidate.proposal_type != ProposalType::RecordRevision
                 || crate::review::guard::writer_allows(
@@ -184,6 +188,10 @@ impl StateStore {
                     "*"
                 ),
             "review submissions go through the review seam"
+        );
+        anyhow::ensure!(
+            candidate.actor.is_none() || candidate.proposal_type == ProposalType::RecordRevision,
+            "only a review submission names its actor"
         );
         let mut proposals = self.list_proposal_definitions(&candidate.scope_id)?;
         proposals.push(candidate.clone());
@@ -204,6 +212,7 @@ impl StateStore {
                     records[index].id.as_str()
                 );
             }
+            super::read_budget::ensure_within_read_budget(&candidate)?;
             records.push(candidate.clone());
             records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
             Ok(candidate)
@@ -243,6 +252,7 @@ impl StateStore {
             canonical_artifact,
             external_action,
         };
+        ensure_record_id_assignable(disposition.id.as_str())?;
         let proposals = self.list_proposal_definitions(&scope_id)?;
         let assertions = self.list_assertion_records(&scope_id)?;
         let mut dispositions = self.list_dispositions(&scope_id)?;
@@ -285,6 +295,7 @@ impl StateStore {
                     !records.iter().any(|record| record.id == disposition.id),
                     "disposition already exists"
                 );
+                super::read_budget::ensure_within_read_budget(&disposition)?;
                 records.push(disposition.clone());
                 records.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
                 Ok(disposition)
@@ -425,6 +436,7 @@ fn proposal_from_input(input: CreateProposalCardInput) -> anyhow::Result<Proposa
         duplicate_of: input.duplicate_of,
         superseded_by: input.superseded_by,
         record_revision: input.record_revision,
+        actor: input.actor,
         revises: input.revises,
         revises_rejection: input.revises_rejection,
     };

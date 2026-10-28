@@ -5,6 +5,7 @@
 use super::decl::{RelationDecl, RelationOwner};
 use crate::model::graph::NodeType;
 use crate::model::ids::StableId;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// The product word for one record kind.
 pub const fn kind_word(node_type: NodeType) -> &'static str {
@@ -50,15 +51,90 @@ pub struct RelationCycle {
     pub path: Vec<StableId>,
 }
 
+struct RelationIndex {
+    incoming: BTreeMap<String, Vec<StableId>>,
+}
+
+impl RelationIndex {
+    fn new<T: RelationOwner>(records: &[T], name: &str) -> Self {
+        let mut incoming = BTreeMap::<String, Vec<StableId>>::new();
+        for record in records {
+            for (_, target) in record
+                .references()
+                .into_iter()
+                .filter(|(relation, _)| *relation == name)
+            {
+                incoming
+                    .entry(target.as_str().to_owned())
+                    .or_default()
+                    .push(record.id().clone());
+            }
+        }
+        for owners in incoming.values_mut() {
+            owners.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+            owners.dedup();
+        }
+        Self { incoming }
+    }
+
+    fn paths_to(&self, wanted: &StableId) -> PathsToTarget {
+        let mut next_hop = BTreeMap::new();
+        let mut seen = BTreeSet::from([wanted.as_str().to_owned()]);
+        let mut pending = VecDeque::from([wanted.clone()]);
+        while let Some(current) = pending.pop_front() {
+            if let Some(owners) = self.incoming.get(current.as_str()) {
+                for owner in owners {
+                    if seen.insert(owner.as_str().to_owned()) {
+                        next_hop.insert(owner.as_str().to_owned(), current.clone());
+                        pending.push_back(owner.clone());
+                    }
+                }
+            }
+        }
+        PathsToTarget {
+            wanted: wanted.clone(),
+            next_hop,
+        }
+    }
+}
+
+struct PathsToTarget {
+    wanted: StableId,
+    next_hop: BTreeMap<String, StableId>,
+}
+
+impl PathsToTarget {
+    fn contains(&self, start: &StableId) -> bool {
+        start == &self.wanted || self.next_hop.contains_key(start.as_str())
+    }
+
+    fn path_from(&self, start: &StableId) -> Option<Vec<StableId>> {
+        if !self.contains(start) {
+            return None;
+        }
+        let mut path = vec![start.clone()];
+        while path.last() != Some(&self.wanted) {
+            let next = self
+                .next_hop
+                .get(path.last().expect("a path has a current node").as_str())
+                .expect("each reachable node has a next hop");
+            path.push(next.clone());
+        }
+        Some(path)
+    }
+}
+
 /// The first cycle of this relation in record order, with the pair that
 /// closes it and the path around it.
 pub fn cycle_in<T: RelationOwner>(records: &[T], name: &str) -> Option<RelationCycle> {
+    let index = RelationIndex::new(records, name);
     for record in records {
+        let paths = index.paths_to(record.id());
         for (relation, target) in record.references() {
             if relation != name {
                 continue;
             }
-            if let Some(walked) = walk_path(records, name, target, record.id()) {
+            if let Some(walked) = paths.path_from(target) {
                 let mut path = vec![record.id().clone()];
                 path.extend(walked);
                 let closes_from = path[path.len() - 2].clone();
@@ -68,6 +144,28 @@ pub fn cycle_in<T: RelationOwner>(records: &[T], name: &str) -> Option<RelationC
                     path,
                 });
             }
+        }
+    }
+    None
+}
+
+/// The first cycle that one of the hypothetical owner-to-target edges would form.
+pub fn cycle_with_added_edges<T: RelationOwner>(
+    records: &[T],
+    name: &str,
+    owner: &StableId,
+    targets: &[StableId],
+) -> Option<RelationCycle> {
+    let index = RelationIndex::new(records, name);
+    let paths = index.paths_to(owner);
+    for target in targets {
+        if let Some(mut path) = paths.path_from(target) {
+            path.push(target.clone());
+            return Some(RelationCycle {
+                closes_from: owner.clone(),
+                closes_into: target.clone(),
+                path,
+            });
         }
     }
     None
@@ -87,38 +185,7 @@ pub fn reaches<T: RelationOwner>(
     start: &StableId,
     wanted: &StableId,
 ) -> bool {
-    walk_path(records, name, start, wanted).is_some()
-}
-
-/// One path over the named relation from `start` to `wanted`, both
-/// included; none when no path exists.
-fn walk_path<T: RelationOwner>(
-    records: &[T],
-    name: &str,
-    start: &StableId,
-    wanted: &StableId,
-) -> Option<Vec<StableId>> {
-    let mut stack = vec![(start.clone(), vec![start.clone()])];
-    let mut seen = Vec::new();
-    while let Some((current, path)) = stack.pop() {
-        if current == *wanted {
-            return Some(path);
-        }
-        if seen.contains(&current) {
-            continue;
-        }
-        seen.push(current.clone());
-        if let Some(record) = records.iter().find(|record| *record.id() == current) {
-            for (_, id) in record
-                .references()
-                .into_iter()
-                .filter(|(relation, _)| *relation == name)
-            {
-                let mut next = path.clone();
-                next.push(id.clone());
-                stack.push((id.clone(), next));
-            }
-        }
-    }
-    None
+    RelationIndex::new(records, name)
+        .paths_to(wanted)
+        .contains(start)
 }

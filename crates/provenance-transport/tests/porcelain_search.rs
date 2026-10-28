@@ -1,0 +1,423 @@
+#![cfg(feature = "test-fixture")]
+
+use provenance_macros::verifies;
+
+mod support {
+    pub mod mcp;
+    pub mod records;
+}
+
+use provenance_store::operations::catalog::{self, Operation as _};
+use provenance_transport::{
+    fixture::{FixtureAccess, Target},
+    StatementHost,
+};
+use rmcp::model::CallToolRequestParams;
+use serde_json::json;
+use support::mcp::{call, Session};
+use support::records::Repository;
+
+fn access(repository: &Repository) -> FixtureAccess {
+    FixtureAccess::new(
+        vec![Target {
+            id: "selected".into(),
+            root: repository.dir.path().to_path_buf(),
+        }],
+        vec![("selected".into(), "default".into())],
+        "fixture-secret",
+        "fixture.test",
+    )
+    .unwrap()
+}
+
+fn deny_operations(mut access: FixtureAccess, operations: &[&str]) -> FixtureAccess {
+    for operation in operations {
+        access = access.deny_operation(operation);
+    }
+    access
+}
+
+const LIST_SEARCH_OPERATIONS: [&str; 8] = [
+    "list-sources",
+    "list-requirements",
+    "list-resolutions",
+    "list-rules",
+    "list-topics",
+    "list-questions",
+    "list-domains",
+    "list-boundaries",
+];
+
+async fn assert_search_hidden_and_refused(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+) {
+    let tools = client.list_all_tools().await.unwrap();
+    assert!(!tools.iter().any(|tool| tool.name == "search"));
+    let direct = client.call_tool(CallToolRequestParams::new("search")).await;
+    assert!(direct.is_err(), "{direct:?}");
+}
+
+#[tokio::test]
+async fn named_mcp_search_intersects_text_and_multiple_kinds() {
+    let repository = Repository::new("The shared graph is searchable.");
+    repository.all_kinds();
+    let host = StatementHost::with_fixture_access(access(&repository));
+    let session = Session::start(host).await;
+    let client = &session.client;
+
+    let tools = client.list_all_tools().await.unwrap();
+    let tool = tools.iter().find(|tool| tool.name == "search").unwrap();
+    assert!(tool.input_schema["properties"]["text"].is_object());
+    assert!(tool.input_schema["properties"]["node_types"].is_object());
+    assert!(tool.output_schema.is_some());
+
+    let text_only = call(client, "search", json!({"text":"excludes code"})).await;
+    assert_eq!(
+        text_only.structured_content.as_ref().unwrap()["nodes"][0]["node_type"],
+        "boundary"
+    );
+
+    let kind_only = call(client, "search", json!({"node_types":["domain", "rule"]})).await;
+    let kinds = kind_only.structured_content.as_ref().unwrap()["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["node_type"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(kinds, ["rule", "domain"]);
+
+    let combined = call(
+        client,
+        "search",
+        json!({"text":"searchable", "node_types":["requirement", "rule"]}),
+    )
+    .await;
+    let nodes = combined.structured_content.as_ref().unwrap()["nodes"]
+        .as_array()
+        .unwrap();
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0]["node_type"], "rule");
+
+    session.close().await;
+}
+
+#[tokio::test]
+async fn mcp_search_content_matches_the_structured_bounded_page() {
+    let repository = Repository::new("The shared graph is searchable.");
+    repository.all_kinds();
+    let host = StatementHost::with_fixture_access(access(&repository));
+    let session = Session::start(host).await;
+    let client = &session.client;
+
+    let first = call(client, "search", json!({"text":"shared", "limit":2})).await;
+    assert_ne!(first.is_error, Some(true), "{first:?}");
+    let structured = first.structured_content.as_ref().unwrap();
+    assert_eq!(structured["limit"], 2);
+    assert_eq!(structured["has_more"], true);
+    let cursor = structured["next_cursor"].as_str().unwrap();
+    let readable = &first.content[0].as_text().unwrap().text;
+    for node in structured["nodes"].as_array().unwrap() {
+        assert!(
+            readable.contains(node["id"].as_str().unwrap()),
+            "{readable}"
+        );
+    }
+    assert!(readable.contains("limit=2"), "{readable}");
+    assert!(readable.contains(cursor), "{readable}");
+
+    let second = call(
+        client,
+        "search",
+        json!({"text":"shared", "limit":2, "cursor":cursor}),
+    )
+    .await;
+    let first_ids = structured["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    let second_ids = second.structured_content.as_ref().unwrap()["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert!(first_ids.iter().all(|id| !second_ids.contains(id)));
+
+    let wrong_query = call(
+        client,
+        "search",
+        json!({"text":"different", "limit":2, "cursor":cursor}),
+    )
+    .await;
+    assert_eq!(wrong_query.is_error, Some(true), "{wrong_query:?}");
+
+    session.close().await;
+}
+
+#[tokio::test]
+async fn list_denial_excludes_a_kind_before_selection_and_paging() {
+    let repository = Repository::new("The shared graph is searchable.");
+    repository.all_kinds();
+    let restricted = access(&repository).deny_operation("list-sources");
+    let host = StatementHost::with_fixture_access(restricted);
+    let session = Session::start(host).await;
+    let client = &session.client;
+
+    let source_only = call(client, "search", json!({"node_types":["source"]})).await;
+    assert_eq!(source_only.is_error, Some(true), "{source_only:?}");
+    assert_eq!(
+        source_only.structured_content.as_ref().unwrap()["error"]["kind"],
+        "access_denied"
+    );
+
+    let first = call(
+        client,
+        "search",
+        json!({"node_types":["source", "requirement", "rule"], "limit":1}),
+    )
+    .await;
+    let first_page = first.structured_content.as_ref().unwrap();
+    assert_eq!(first_page["nodes"].as_array().unwrap().len(), 1);
+    assert_eq!(first_page["nodes"][0]["node_type"], "requirement");
+    assert_eq!(first_page["has_more"], true);
+    let cursor = first_page["next_cursor"].as_str().unwrap();
+    assert!(!serde_json::to_string(&first)
+        .unwrap()
+        .contains("source_shared"));
+
+    let second = call(
+        client,
+        "search",
+        json!({
+            "node_types":["source", "requirement", "rule"],
+            "limit":1,
+            "cursor":cursor
+        }),
+    )
+    .await;
+    let second_page = second.structured_content.as_ref().unwrap();
+    assert_eq!(second_page["nodes"].as_array().unwrap().len(), 1);
+    assert_eq!(second_page["nodes"][0]["node_type"], "rule");
+    assert_eq!(second_page["has_more"], false);
+    assert!(second_page["next_cursor"].is_null());
+    assert!(!serde_json::to_string(&second)
+        .unwrap()
+        .contains("source_shared"));
+
+    let implicit = call(client, "search", json!({"text":"shared", "limit":20})).await;
+    let implicit_page = implicit.structured_content.as_ref().unwrap();
+    assert_eq!(implicit_page["nodes"].as_array().unwrap().len(), 7);
+    assert!(implicit_page["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|node| node["node_type"] != "source"));
+    assert_eq!(implicit_page["has_more"], false);
+    assert!(implicit_page["next_cursor"].is_null());
+    assert!(!serde_json::to_string(&implicit)
+        .unwrap()
+        .contains("source_shared"));
+
+    session.close().await;
+}
+
+#[tokio::test]
+async fn list_grant_allows_search_when_get_is_denied() {
+    let repository = Repository::new("The shared graph is searchable.");
+    repository.all_kinds();
+    let restricted = access(&repository).deny_operation("get-source");
+    let host = StatementHost::with_fixture_access(restricted);
+    let session = Session::start(host).await;
+    let client = &session.client;
+
+    let result = call(client, "search", json!({"node_types":["source"]})).await;
+    assert_ne!(result.is_error, Some(true), "{result:?}");
+    assert_eq!(
+        result.structured_content.as_ref().unwrap()["nodes"][0]["id"],
+        "source_shared"
+    );
+
+    session.close().await;
+}
+
+#[tokio::test]
+async fn no_list_search_grant_hides_and_refuses_named_search() {
+    let repository = Repository::new("The shared graph is searchable.");
+    let restricted = deny_operations(access(&repository), &LIST_SEARCH_OPERATIONS);
+    let host = StatementHost::with_fixture_access(restricted);
+    let session = Session::start(host).await;
+    let client = &session.client;
+
+    assert_search_hidden_and_refused(client).await;
+
+    session.close().await;
+}
+
+#[tokio::test]
+async fn global_search_denial_hides_and_refuses_named_search() {
+    let repository = Repository::new("The shared graph is searchable.");
+    let restricted = access(&repository).deny_operation(catalog::Search::NAME);
+    let host = StatementHost::with_fixture_access(restricted);
+    let session = Session::start(host).await;
+    let client = &session.client;
+
+    assert_search_hidden_and_refused(client).await;
+
+    session.close().await;
+}
+
+#[tokio::test]
+#[provenance_macros::verifies("rule_search_refusal_names_query", examples)]
+async fn empty_mcp_search_carries_the_reason_and_recovery_forms() {
+    let repository = Repository::new("The shared graph is searchable.");
+    let host = StatementHost::with_fixture_access(access(&repository));
+    let session = Session::start(host).await;
+    let client = &session.client;
+    let result = call(client, "search", json!({})).await;
+    assert_eq!(result.is_error, Some(true));
+    let message = result.structured_content.as_ref().unwrap()["error"]["message"]
+        .as_str()
+        .unwrap();
+    for text in [
+        "search requires text or at least one filter",
+        "provenance search --text <query>",
+        "provenance search --kind <kind>",
+        "\"text\": \"<query>\"",
+        "\"node_types\": [\"<kind>\"]",
+    ] {
+        assert!(message.contains(text), "{message}");
+    }
+    session.close().await;
+}
+
+async fn update_status(
+    client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
+    target: &str,
+    status: &str,
+) {
+    let mut arguments = json!({"target":target,"data":{"status":status}});
+    if let Some(collection) = match target {
+        "question_shared" => Some("questions"),
+        "topic_shared" => Some("topics"),
+        _ => None,
+    } {
+        let current = client
+            .call_tool(
+                CallToolRequestParams::new("api").with_arguments(
+                    json!({"path":format!("{collection}/{target}")})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                ),
+            )
+            .await
+            .unwrap();
+        assert_ne!(current.is_error, Some(true), "{current:?}");
+        arguments["if_match"] =
+            current.structured_content.as_ref().unwrap()["data"]["edit"]["etag"].clone();
+    }
+    let updated = client
+        .call_tool(
+            CallToolRequestParams::new("update")
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+        .await
+        .unwrap();
+    assert_ne!(updated.is_error, Some(true), "{target}: {updated:?}");
+}
+
+#[tokio::test]
+#[verifies("rule_search_readable_lifecycle", examples)]
+async fn mcp_search_shows_each_record_lifecycle() {
+    let repository = Repository::new("The shared graph is searchable.");
+    repository.all_kinds();
+    let host = StatementHost::with_fixture_access(access(&repository).allow_writes());
+    let session = Session::start(host).await;
+    let client = &session.client;
+    for (action, target, data) in [
+        ("update", "rule_shared", json!({"status":"deprecated"})),
+        (
+            "answer",
+            "question_shared",
+            json!({"answer":"Use the current state."}),
+        ),
+    ] {
+        let updated = client
+            .call_tool(
+                CallToolRequestParams::new(action).with_arguments(
+                    json!({"target":target,"data":data})
+                        .as_object()
+                        .unwrap()
+                        .clone(),
+                ),
+            )
+            .await
+            .unwrap();
+        assert_ne!(updated.is_error, Some(true), "{updated:?}");
+    }
+    let result = call(client, "search", json!({"text":"shared"})).await;
+    assert_ne!(result.is_error, Some(true), "{result:?}");
+    let readable = &result.content[0].as_text().unwrap().text;
+    for expected in [
+        "source source_shared\n",
+        "requirement req_shared · active",
+        "resolution resolution_shared · draft",
+        "rule rule_shared · deprecated",
+        "topic topic_shared · open",
+        "question question_shared · answered",
+        "domain domain_shared\n",
+        "boundary boundary_shared\n",
+    ] {
+        assert!(readable.contains(expected), "{readable}");
+    }
+    for (target, status) in [
+        ("rule_shared", "review"),
+        ("topic_shared", "closed"),
+        ("question_shared", "blocked_on_human"),
+        ("resolution_shared", "review"),
+    ] {
+        update_status(client, target, status).await;
+        let result = call(client, "search", json!({"text":target})).await;
+        let readable = &result.content[0].as_text().unwrap().text;
+        assert!(
+            readable.contains(&format!("{target} · {status}")),
+            "{readable}"
+        );
+    }
+    let archived = client
+        .call_tool(
+            CallToolRequestParams::new("update").with_arguments(
+                json!({
+                    "target":"rule_shared", "data":{
+                        "status":"archived",
+                        "archived_in_commit":{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+                    }
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_ne!(archived.is_error, Some(true), "{archived:?}");
+    let hidden = call(client, "search", json!({"node_types":["rule"]})).await;
+    assert_eq!(
+        hidden.structured_content.as_ref().unwrap()["nodes"],
+        json!([])
+    );
+    let included = call(
+        client,
+        "search",
+        json!({"node_types":["rule"], "exclude_terminal":false}),
+    )
+    .await;
+    assert!(included.content[0]
+        .as_text()
+        .unwrap()
+        .text
+        .contains("rule rule_shared · archived"));
+    session.close().await;
+}

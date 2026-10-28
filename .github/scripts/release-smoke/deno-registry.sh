@@ -33,7 +33,7 @@ JSON
 
 (
   cd "$fixture"
-  npx --yes "@quality-sh/create-provenance@$version" \
+  sfw npx --yes "@quality-sh/create-provenance@$version" \
     --path "$fixture" --package-manager deno
 )
 

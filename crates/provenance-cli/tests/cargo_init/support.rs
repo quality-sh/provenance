@@ -70,18 +70,22 @@ fn main() {
             if std::path::Path::new(&env::var_os("FAKE_CARGO_DEPENDENCY_STATE").unwrap()).exists() {
                 metadata = metadata.replace(
                     "\"dependencies\":[]",
-                    "\"dependencies\":[{\"name\":\"provenance-sdk\",\"req\":\"=0.2.3\"}]",
+                    "\"dependencies\":[{\"name\":\"provenance-sdk\",\"req\":\"=0.3.0\"}]",
                 );
             }
             print!("{metadata}");
         }
         Some("add") => {
+            if env::var_os("FAKE_CARGO_ADD_NOISE").is_some() {
+                println!("FAKE_CARGO_STDOUT");
+                eprintln!("FAKE_CARGO_STDERR");
+            }
             let manifest_path = env::var_os("FAKE_CARGO_MANIFEST").unwrap();
             let workspace_path = env::var_os("FAKE_CARGO_WORKSPACE").unwrap();
             let workspace = std::path::Path::new(&workspace_path);
             let mut manifest = fs::read_to_string(&manifest_path).unwrap();
             if !manifest.contains("provenance-sdk") {
-                manifest.push_str("\n[dependencies]\nprovenance-sdk = \"=0.2.3\"\n");
+                manifest.push_str("\n[dependencies]\nprovenance-sdk = \"=0.3.0\"\n");
                 fs::write(&manifest_path, manifest).unwrap();
             }
             fs::write(env::var_os("FAKE_CARGO_LOCK").unwrap(), "version = 4\n").unwrap();
@@ -137,7 +141,12 @@ fn main() {
     }
 
     pub fn command(&self) -> Command {
-        let mut command = Command::cargo_bin("cargo-provenance").unwrap();
+        Command::from_std(self.std_command())
+    }
+
+    pub fn std_command(&self) -> std::process::Command {
+        use assert_cmd::prelude::CommandCargoExt;
+        let mut command = std::process::Command::cargo_bin("cargo-provenance").unwrap();
         let path = std::env::join_paths(std::iter::once(self.fake_bin.clone()).chain(
             std::env::split_paths(&std::env::var_os("PATH").expect("PATH is set")),
         ))

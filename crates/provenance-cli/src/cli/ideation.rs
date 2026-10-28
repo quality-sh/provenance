@@ -1,14 +1,13 @@
 use crate::output::JsonFormat;
 use camino::Utf8PathBuf;
 use clap::{Subcommand, ValueEnum};
+use provenance_cli::repo_context::RepoContext;
 
 #[derive(Subcommand)]
 pub enum SwarmBacktraceCommand {
     Land {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         #[arg(long)]
         run_dir: Utf8PathBuf,
         #[arg(long)]

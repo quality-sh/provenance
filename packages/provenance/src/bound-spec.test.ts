@@ -34,9 +34,10 @@ function repository(): string {
 /** One canonical record as the state shard holds it. */
 interface WrittenRecord {
   id: string;
+  status?: string;
   requirement_ids?: string[];
   resolution_ids?: string[];
-  refines?: string;
+  refines?: string[];
   depends_on?: string[];
   supersedes?: string[];
   spawned_by?: string;
@@ -50,50 +51,47 @@ function readRecords(repo: string, relative: string): WrittenRecord[] {
     .map((line) => JSON.parse(line) as WrittenRecord);
 }
 
+function catalogWrite(
+  repo: string,
+  address: string[],
+  data: Record<string, unknown>,
+  headers: string[] = [],
+): any {
+  return JSON.parse(execFileSync(
+    engine,
+    [...address, "--repo", repo, "--scope", "default", "--format", "json", ...headers, "--stdin"],
+    { encoding: "utf8", input: JSON.stringify(data) },
+  ));
+}
+
+const requirementData = (id: string, statement: string) => ({
+  actor: "sdk-test", id, statement, status: "discovery", depends_on: [], supersedes: [],
+});
+
 /** A requirement and a resolution the writers already hold, for the
  *  declarations that name a resolution by canonical id. */
-function seedResolution(repo: string): void {
-  execFileSync(engine, [
-    "requirements",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "req_seed",
-    "--statement",
-    "The seed requirement stands",
-  ]);
-  execFileSync(engine, [
-    "resolutions",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "res_seed",
-    "--title",
-    "Seed decision",
-    "--requirement-id",
-    "req_seed",
-    "--position",
-    "Adopt",
-    "--rationale",
-    "Seeds the relations",
-    "--status",
-    "proposed",
-  ]);
+function seedResolution(repo: string, status = "approved"): void {
+  catalogWrite(repo, ["requirements", "create"], requirementData(
+    "req_seed", "The seed requirement stands",
+  ));
+  catalogWrite(repo, ["resolutions", "create"], {
+    id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
+    supersedes: [], position: "Adopt", rationale: "Seeds the relations",
+    status, inputs: [],
+  });
 }
 
 
 function engineJson(repo: string, args: string[]): unknown {
-  return JSON.parse(
-    execFileSync(engine, [...args, "--repo", repo, "--format", "json"], {
-      encoding: "utf8",
-    }),
-  );
+  const command = args[0] === "sdk" && args[1] === "verification-runs"
+    ? ["verification-runs", "list", ...args.slice(2)]
+    : args;
+  const envelope = JSON.parse(execFileSync(
+    engine,
+    [...command, "--repo", repo, "--format", "json"],
+    { encoding: "utf8" },
+  ));
+  return envelope.data.items;
 }
 
 test("a spec-bound Rule is its own immutable verification handle", async () => {
@@ -206,61 +204,20 @@ test("spec-bound declarations serialize exact unowned adoption targets", async (
 test("spec-bound declarations adopt exact unowned engine records", async () => {
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-adoption-runtime" });
-  execFileSync(engine, [
-    "sources",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "source_existing",
-    "--name",
-    "policy",
-    "--source-type",
-    "document",
-    "--reference",
-    "docs/policy.md",
-  ]);
-  execFileSync(engine, [
-    "requirements",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "req_existing",
-    "--statement",
-    "The canonical Requirement keeps its identity",
-  ]);
-  execFileSync(engine, [
-    "requirements",
-    "source-ref",
-    "add",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--requirement-id",
-    "req_existing",
-    "--source-id",
-    "source_existing",
-  ]);
-  execFileSync(engine, [
-    "rules",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "rule_existing",
-    "--requirement-id",
-    "req_existing",
-    "--statement",
-    "The canonical Rule keeps its identity",
-  ]);
+  catalogWrite(repo, ["sources", "create"], {
+    id: "source_existing", name: "policy", source_type: "document",
+    reference: "docs/policy.md", supersedes: [],
+  });
+  const requirement = catalogWrite(repo, ["requirements", "create"], requirementData(
+    "req_existing", "The canonical Requirement keeps its identity",
+  ));
+  catalogWrite(repo, ["requirements", "req_existing", "update"], {
+    actor: "sdk-test", relationships: { cites: [{ source_id: "source_existing" }] },
+  }, ["--if-match", requirement.data.edit.etag]);
+  catalogWrite(repo, ["rules", "create"], {
+    id: "rule_existing", requirement_ids: ["req_existing"], resolution_ids: [],
+    statement: "The canonical Rule keeps its identity", status: "draft", severity: "high",
+  });
   const provenance = defineSpec("bound-adoption-runtime");
   const policy = provenance
     .source("policy")
@@ -322,47 +279,19 @@ test("a spec-bound Source declares a supported non-document kind", async () => {
 test("spec-bound declarations adopt an unowned external_integration Source", async () => {
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-source-kind-runtime" });
-  execFileSync(engine, [
-    "sources",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "source_workflowd_integration_brief",
-    "--name",
-    "workflowd integration brief (agent-authored, relayed by Ben Nasraoui 2026-08-19)",
-    "--source-type",
-    "external_integration",
-    "--reference",
-    "session:824f8174 workflowd-agent brief",
-  ]);
-  execFileSync(engine, [
-    "requirements",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "req_env_key_at_invocation",
-    "--statement",
-    "The provider reads the environment value at invocation",
-  ]);
-  execFileSync(engine, [
-    "requirements",
-    "source-ref",
-    "add",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--requirement-id",
-    "req_env_key_at_invocation",
-    "--source-id",
-    "source_workflowd_integration_brief",
-  ]);
+  catalogWrite(repo, ["sources", "create"], {
+    id: "source_workflowd_integration_brief",
+    name: "workflowd integration brief (agent-authored, relayed by Ben Nasraoui 2026-08-19)",
+    source_type: "external_integration",
+    reference: "session:824f8174 workflowd-agent brief", supersedes: [],
+  });
+  const requirement = catalogWrite(repo, ["requirements", "create"], requirementData(
+    "req_env_key_at_invocation", "The provider reads the environment value at invocation",
+  ));
+  catalogWrite(repo, ["requirements", "req_env_key_at_invocation", "update"], {
+    actor: "sdk-test",
+    relationships: { cites: [{ source_id: "source_workflowd_integration_brief" }] },
+  }, ["--if-match", requirement.data.edit.etag]);
 
   const provenance = defineSpec("noscope");
   const brief = provenance
@@ -683,7 +612,7 @@ test("relation fields on spec-bound declarations reach the written records", asy
   const child = readRecords(repo, "requirements/req.jsonl").find(
     ({ id }) => id === idOf("requirement", "child"),
   );
-  assert.equal(child?.refines, idOf("requirement", "parent"));
+  assert.deepEqual(child?.refines, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.depends_on, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.supersedes, [idOf("requirement", "retired")]);
   assert.equal(child?.spawned_by, "res_seed");
@@ -695,6 +624,29 @@ test("relation fields on spec-bound declarations reach the written records", asy
     ({ id }) => id === idOf("rule", "decision"),
   );
   assert.deepEqual(writtenDecision?.resolution_ids, ["res_seed"]);
+  assert.equal(writtenDecision?.status, "active");
+});
+
+test("a spec-bound requirement keeps both parents it refines", async () => {
+  const repo = repository();
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/bound-parents" });
+  const provenance = defineSpec("parents");
+  const policy = provenance.source("policy").document("docs/policy.md");
+  const access = provenance.requirement("access").statement("Access is governed").from(policy);
+  const sharing = provenance.requirement("sharing").statement("Sharing is governed").from(policy);
+  const child = provenance
+    .requirement("child")
+    .statement("Share links are governed")
+    .from(policy)
+    .refines(access)
+    .refines(sharing)
+    .refines(access);
+  const result = await apply(provenance.build(access, sharing, child));
+
+  const idOf = (key: string): string =>
+    result.resources.find((resource) => resource.kind === "requirement" && resource.key === key)!.id;
+  const written = readRecords(repo, "requirements/req.jsonl").find(({ id }) => id === idOf("child"));
+  assert.deepEqual(written?.refines, [idOf("access"), idOf("sharing")].sort());
 });
 
 test("a spec-bound relation to a requirement outside the build is refused", () => {
@@ -705,4 +657,27 @@ test("a spec-bound relation to a requirement outside the build is refused", () =
     () => provenance.build(child),
     /Requirement `child` names Requirement `parent` not included in the spec/,
   );
+});
+
+// Implementation-aid test: checks the store refusal through the public SDK.
+test("an active Rule reports the store refusal for a proposed Resolution", async () => {
+  const repo = repository();
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/refused-resolution" });
+  seedResolution(repo, "proposed");
+  const provenance = defineSpec("refused-resolution");
+  const parent = provenance.requirement("parent").statement("Access is governed");
+  const decision = provenance.rule("decision")
+    .statement("Access follows the seed decision").resolutions("res_seed");
+
+  await assert.rejects(apply(provenance.build(parent.rules(decision))), (error: unknown) => {
+    assert.ok(error instanceof OperationError);
+    const failure = error.failure.error;
+    assert.equal(failure.kind, "resolution_not_approved");
+    assert.equal(failure.kind === "resolution_not_approved" ? failure.resolution_id : undefined, "res_seed");
+    assert.match(
+      error.message,
+      /^resolution_not_approved: .* cites resolution res_seed, which is proposed\. /,
+    );
+    return true;
+  });
 });

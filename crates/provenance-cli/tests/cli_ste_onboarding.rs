@@ -1,35 +1,17 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
 use provenance_macros::verifies;
-use std::{
-    io::{Read, Write},
-    net::{TcpListener, TcpStream},
-    path::{Path, PathBuf},
-    process::Stdio,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
-    thread,
-    time::Duration,
-};
+use std::{net::TcpStream, thread, time::Duration};
 
 #[path = "cli_dictionary/support.rs"]
 #[allow(dead_code)]
 mod dictionary_support;
 
-/// These tests each spawn a debug-build `provenance` doing CPU-heavy PDF
-/// imports against a 10s-timeout HTTP client. Run concurrently on a small CI
-/// runner they starve each other into client timeouts and silent retries,
-/// which the request-count assertions then observe (this test file has failed
-/// exactly that way on main). Serialize them.
-static SERIAL: Mutex<()> = Mutex::new(());
+#[path = "cli_ste_onboarding/support.rs"]
+#[allow(dead_code)]
+mod support;
 
-fn serial() -> std::sync::MutexGuard<'static, ()> {
-    SERIAL
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-}
+use support::{init_args, serial, Fixture, TestServer};
 
 #[test]
 #[verifies("rule_ste_dictionary_agent_acquisition", examples)]
@@ -49,7 +31,11 @@ fn onboarding_downloads_and_imports_the_official_asset() {
 
     assert!(dictionary_support::reference_path(&fixture.repo).is_file());
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    assert!(stdout.contains("Imported the Issue 9 dictionary from the official asset."));
+    assert!(!stdout.contains("Imported the Issue 9 dictionary"));
+    assert!(
+        stdout.contains("  .provenance/state/dictionary.json (added the dictionary reference)\n")
+    );
+    assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
     let requests = server.requests();
     assert_eq!(
         requests.len(),
@@ -77,8 +63,9 @@ fn onboarding_imports_a_selected_pdf_without_network_access() {
         .args(["--ste-pdf", pdf.to_str().unwrap()])
         .assert()
         .success()
+        .stdout(predicate::str::contains("Imported the Issue 9 dictionary").not())
         .stdout(predicate::str::contains(
-            "Imported the Issue 9 dictionary from",
+            "  .provenance/state/dictionary.json (added the dictionary reference)\n",
         ));
 
     assert!(dictionary_support::reference_path(&fixture.repo).is_file());
@@ -143,45 +130,96 @@ fn repeated_setup_and_normal_checks_use_local_data_without_network_access() {
 }
 
 #[test]
-#[verifies("rule_ste_dictionary_download_concurrency", examples)]
-fn concurrent_onboarding_shares_one_download() {
+#[verifies("rule_ste_dictionary_import_reuse", examples)]
+fn new_projects_reuse_a_verified_index_and_reject_a_changed_asset() {
     let _serial = serial();
     let server = TestServer::new(200, dictionary_support::dictionary_pdf());
-    let temporary = tempfile::tempdir().unwrap();
-    let asset_dir = temporary.path().join("assets");
-    let index_dir = temporary.path().join("indexes");
-    let mut children = Vec::new();
+    let fixture = Fixture::new();
+    fixture
+        .init()
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+    let another_repo = fixture.temporary.path().join("another-repo");
 
-    for name in ["one", "two"] {
-        let repo = temporary.path().join(name);
-        let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin!("provenance"));
-        children.push(
-            command
-                .env("PROVENANCE_STE100_ASSET_DIR", &asset_dir)
-                .env("PROVENANCE_STE100_INDEX_DIR", &index_dir)
-                .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
-                .args(init_args(&repo))
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .unwrap(),
-        );
-    }
+    fixture
+        .command()
+        .args(init_args(&another_repo))
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
 
-    for child in children {
-        let output = child.wait_with_output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
+    assert_eq!(server.requests().len(), 1);
     assert_eq!(
-        server.requests().len(),
-        1,
-        "recorded requests: {:#?}",
-        server.requests()
+        std::fs::read(dictionary_support::reference_path(&fixture.repo)).unwrap(),
+        std::fs::read(dictionary_support::reference_path(&another_repo)).unwrap()
     );
+
+    let asset = fixture.asset_dir.join("ASD-STE100_ISSUE9.pdf");
+    std::fs::write(&asset, b"not a PDF").unwrap();
+    let third_repo = fixture.temporary.path().join("third-repo");
+    fixture
+        .command()
+        .args(init_args(&third_repo))
+        .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+        .assert()
+        .success();
+    assert_eq!(server.requests().len(), 2);
+    assert!(dictionary_support::reference_path(&third_repo).is_file());
+    assert_eq!(
+        std::fs::read(asset).unwrap(),
+        dictionary_support::dictionary_pdf()
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_index_digest_verification", examples)]
+fn invalid_shared_indexes_are_rebuilt_from_the_cached_pdf() {
+    let _serial = serial();
+    for corruption in ["truncated", "digest", "identity"] {
+        let server = TestServer::new(200, dictionary_support::dictionary_pdf());
+        let fixture = Fixture::new();
+        fixture
+            .init()
+            .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+            .assert()
+            .success();
+        let index = std::fs::read_dir(&fixture.index_dir)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "json")
+            })
+            .expect("the first init stored an index");
+        let mut stored: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&index).unwrap()).unwrap();
+        match corruption {
+            "digest" => stored["entries"][0]["headword"] = "CHANGED".into(),
+            "identity" => stored["identity"]["source_sha256"] = "wrong".into(),
+            _ => {}
+        }
+        let damaged = if corruption == "truncated" {
+            b"{\"identity\":".to_vec()
+        } else {
+            serde_json::to_vec(&stored).unwrap()
+        };
+        std::fs::write(&index, damaged).unwrap();
+        let another_repo = fixture.temporary.path().join("another-repo");
+
+        fixture
+            .command()
+            .args(init_args(&another_repo))
+            .env("PROVENANCE_TEST_STE100_ASSET_URL", server.url())
+            .assert()
+            .success();
+
+        assert_eq!(server.requests().len(), 1, "corruption: {corruption}");
+        assert!(dictionary_support::reference_path(&another_repo).is_file());
+        let restored: provenance_ste100::DictionaryImport =
+            serde_json::from_slice(&std::fs::read(&index).unwrap()).unwrap();
+        assert_eq!(&restored, dictionary_support::imported_dictionary());
+    }
 }
 
 #[test]
@@ -198,13 +236,16 @@ fn exhausted_download_retries_fall_back_to_a_loud_warning() {
         .output()
         .unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(output.status.success(), "init failed: {stdout}");
-    assert!(stdout.contains("Warning:"), "stdout: {stdout}");
-    assert!(stdout.contains("rerun init"), "stdout: {stdout}");
-    assert!(stdout.contains("dictionary import"), "stdout: {stdout}");
+    assert!(stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"));
+    assert!(!stdout.contains("Warning:"), "stdout: {stdout}");
+    assert!(stderr.contains("Warning:"), "stderr: {stderr}");
+    assert!(stderr.contains("rerun init"), "stderr: {stderr}");
+    assert!(stderr.contains("dictionary import"), "stderr: {stderr}");
     assert!(
-        !stdout.to_ascii_lowercase().contains("asd-ste100.org"),
-        "the warning carries no ASD link: {stdout}"
+        !stderr.to_ascii_lowercase().contains("asd-ste100.org"),
+        "the warning carries no ASD link: {stderr}"
     );
     assert!(!stdout.contains("ASD owns"), "stdout: {stdout}");
 
@@ -218,6 +259,53 @@ fn exhausted_download_retries_fall_back_to_a_loud_warning() {
 }
 
 #[test]
+#[verifies("rule_ste_dictionary_download_off", examples)]
+fn a_test_asset_url_that_is_not_loopback_http_skips_the_download() {
+    let _serial = serial();
+    for value in [
+        "off",
+        "Off",
+        " off",
+        "none",
+        "",
+        "https://127.0.0.1/ASD-STE100_ISSUE9.pdf",
+        "http://192.0.2.1/ASD-STE100_ISSUE9.pdf",
+    ] {
+        let fixture = Fixture::new();
+        // A file in place of the asset cache directory: a download cannot
+        // start without that directory, so this init cannot use the network.
+        std::fs::write(&fixture.asset_dir, b"not a directory").unwrap();
+
+        let output = fixture
+            .init()
+            .env("PROVENANCE_TEST_STE100_ASSET_URL", value)
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert!(output.status.success(), "{value:?}: init failed: {stderr}");
+        assert!(
+            stdout.ends_with("Have your agent run provenance prime to get acclimated.\n"),
+            "{value:?}: stdout: {stdout}"
+        );
+        assert!(
+            stderr.contains("Warning: the official Issue 9 dictionary could not be added (the dictionary download is off)"),
+            "{value:?}: stderr: {stderr}"
+        );
+        assert!(stderr.contains("rerun init"), "{value:?}: stderr: {stderr}");
+        assert!(
+            stderr.contains("dictionary import"),
+            "{value:?}: stderr: {stderr}"
+        );
+        assert!(
+            !stderr.contains("asset cache"),
+            "{value:?}: stderr: {stderr}"
+        );
+        assert!(!dictionary_support::reference_path(&fixture.repo).exists());
+    }
+}
+
+#[test]
 fn init_help_omits_the_removed_ste_onboarding_flag() {
     Command::cargo_bin("provenance")
         .unwrap()
@@ -228,54 +316,6 @@ fn init_help_omits_the_removed_ste_onboarding_flag() {
         .stdout(predicate::str::contains("--ste-onboarding").not());
 }
 
-struct Fixture {
-    temporary: tempfile::TempDir,
-    repo: PathBuf,
-    asset_dir: PathBuf,
-    index_dir: PathBuf,
-}
-
-impl Fixture {
-    fn new() -> Self {
-        let temporary = tempfile::tempdir().unwrap();
-        Self {
-            repo: temporary.path().join("repo"),
-            asset_dir: temporary.path().join("assets"),
-            index_dir: temporary.path().join("indexes"),
-            temporary,
-        }
-    }
-
-    fn command(&self) -> Command {
-        let mut command = Command::new(assert_cmd::cargo::cargo_bin!("provenance"));
-        command
-            .env("PROVENANCE_STE100_ASSET_DIR", &self.asset_dir)
-            .env("PROVENANCE_STE100_INDEX_DIR", &self.index_dir);
-        command
-    }
-
-    fn init(&self) -> Command {
-        let mut command = self.command();
-        command.args(init_args(&self.repo));
-        command
-    }
-}
-
-fn init_args(repo: &Path) -> Vec<String> {
-    [
-        "init",
-        "--path",
-        repo.to_str().unwrap(),
-        "--scope",
-        "default",
-        "--path-prefix",
-        ".",
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect()
-}
-
 #[test]
 fn server_ignores_connections_that_send_nothing() {
     let _serial = serial();
@@ -284,109 +324,4 @@ fn server_ignores_connections_that_send_nothing() {
     drop(TcpStream::connect(server.address).unwrap());
     thread::sleep(Duration::from_millis(50));
     assert_eq!(server.requests().len(), 0);
-}
-
-struct TestServer {
-    address: std::net::SocketAddr,
-    requests: Arc<Mutex<Vec<String>>>,
-    stop: Arc<AtomicBool>,
-    thread: Option<thread::JoinHandle<()>>,
-}
-
-impl TestServer {
-    fn new(status: u16, body: &[u8]) -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
-        let address = listener.local_addr().unwrap();
-        let requests = Arc::new(Mutex::new(Vec::new()));
-        let stop = Arc::new(AtomicBool::new(false));
-        let shared_requests = Arc::clone(&requests);
-        let shared_stop = Arc::clone(&stop);
-        let body = body.to_vec();
-        let thread = thread::spawn(move || {
-            while !shared_stop.load(Ordering::SeqCst) {
-                match listener.accept() {
-                    // Drop's wake-up socket can land here before the stop flag
-                    // is observed; never serve once shutdown has begun.
-                    Ok(_) if shared_stop.load(Ordering::SeqCst) => break,
-                    Ok((stream, _)) => serve(stream, status, &body, &shared_requests),
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(5));
-                    }
-                    Err(error) => panic!("accept test request: {error}"),
-                }
-            }
-        });
-        Self {
-            address,
-            requests,
-            stop,
-            thread: Some(thread),
-        }
-    }
-
-    fn url(&self) -> String {
-        format!("http://{}/ASD-STE100_ISSUE9.pdf", self.address)
-    }
-
-    fn requests(&self) -> Vec<String> {
-        self.requests.lock().unwrap().clone()
-    }
-}
-
-impl Drop for TestServer {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::SeqCst);
-        let _ = TcpStream::connect(self.address);
-        if let Some(thread) = self.thread.take() {
-            thread.join().unwrap();
-        }
-    }
-}
-
-fn serve(mut stream: TcpStream, status: u16, body: &[u8], requests: &Mutex<Vec<String>>) {
-    // BSD-derived systems (macOS) make accepted sockets inherit the
-    // listener's O_NONBLOCK; a nonblocking stream turns write_all into
-    // silent truncation (or a panic, before the hardening) as soon as the
-    // client is slow to drain the body, which the client reports as
-    // "response body closed before all bytes were read" and retries.
-    stream.set_nonblocking(false).unwrap();
-    // Generous: on loaded CI runners the client can sit descheduled for
-    // seconds between connect and first byte; giving up early drops real
-    // requests from the recorded count. The timeout only guards against a
-    // connection that never progresses at all.
-    stream
-        .set_read_timeout(Some(Duration::from_secs(30)))
-        .unwrap();
-    let mut bytes = Vec::new();
-    let mut buffer = [0_u8; 1024];
-    while !bytes.ends_with(b"\r\n\r\n") {
-        // A torn or instantly-closed connection (Drop's wake-up socket shows
-        // up as a reset on Windows) must never panic the accept thread.
-        let read = match stream.read(&mut buffer) {
-            Ok(0) | Err(_) => break,
-            Ok(read) => read,
-        };
-        bytes.extend_from_slice(&buffer[..read]);
-    }
-    if bytes.is_empty() {
-        return;
-    }
-    requests
-        .lock()
-        .unwrap()
-        .push(String::from_utf8(bytes).unwrap());
-    let reason = if status == 200 {
-        "OK"
-    } else {
-        "Service Unavailable"
-    };
-    // Response failures surface as a failed download in the test under
-    // observation; they must not panic the shared accept thread.
-    let _ = write!(
-        stream,
-        "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    );
-    let _ = stream.write_all(body);
 }

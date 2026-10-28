@@ -1,53 +1,75 @@
-//! Recoverable Requirement edits and immutable evidence.
+//! Guarded graph record edits and their review state.
 mod classifier;
 pub(crate) mod guard;
 mod input;
-mod journal;
-mod relationships;
+mod publication;
+pub(crate) mod relationships;
+mod resource_read;
+pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
-pub use input::{RequirementRelations, SaveRequirement};
+pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
-fn owner_matches(record: &provenance_core::Requirement, owner: Option<&str>) -> anyhow::Result<()> {
-    if record.declared_by.as_deref() != owner {
+/// Creates the identity of a review record.
+fn new_id() -> provenance_core::StableId {
+    provenance_core::StableId::new(uuid::Uuid::new_v4().to_string())
+        .expect("UUID uses valid stable ID characters")
+}
+
+fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
+    let value = serde_json::to_value(record)?;
+    let saved_owner = value
+        .get("declared_by")
+        .or_else(|| value.get("made_by"))
+        .and_then(serde_json::Value::as_str);
+    if saved_owner != owner {
         return Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::RecordOwnershipConflict,
+            crate::write_error::WriteFailure::record_ownership_conflict(saved_owner),
             anyhow::anyhow!("declared_by must match the existing owner"),
         ));
     }
     Ok(())
 }
 
-pub(crate) mod cache;
-
+mod history;
 mod reads;
 pub use reads::{read_evidence, read_history};
 
-mod snapshot;
-
+#[cfg(test)]
+mod concurrency_tests;
 #[cfg(test)]
 mod recovery_tests;
 
-#[cfg(all(test, any(unix, windows)))]
-mod path_tests;
-
 mod discussion_input;
 pub use discussion_input::{DiscussionAction, WriteDiscussion};
+mod discussion_target;
+pub use discussion_target::TargetDiscussionWrite;
 mod discussion_state;
 mod discussion_writes;
 
 mod create;
 pub use create::CreateReviewRequirement;
+mod authoring;
+mod native_batch;
+pub(crate) use native_batch::NativeRecordBatch;
+mod discussion_discovery;
 mod discussion_messages;
+mod discussion_page;
 mod discussion_reads;
-pub use discussion_messages::read_discussion_messages;
-pub use discussion_reads::read_discussions;
+mod discussion_removal;
+mod typed_adoption;
+#[cfg(test)]
+mod typed_adoption_tests;
+pub use discussion_discovery::{read_discussion_conversation, read_discussion_list};
+pub use discussion_messages::{read_discussion_message, read_discussion_messages};
+pub use discussion_reads::{read_discussion, read_discussions};
 #[cfg(test)]
 mod discussion_recovery_tests;
 
 mod decision_input;
 pub use decision_input::{
-    DecideRequirementReview, ReviewFeedback, SubmitRequirementReview, WithdrawRequirementReview,
+    DecideRecordReview, ReviewFeedback, SubmitRecordReview, WithdrawRecordReview,
 };
+mod automatic_submission;
 mod decision;
 mod decision_reads;
 mod decision_state;

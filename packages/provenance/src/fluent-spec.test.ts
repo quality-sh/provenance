@@ -44,9 +44,10 @@ function repository(): string {
 /** One canonical record as the state shard holds it. */
 interface WrittenRecord {
   id: string;
+  status?: string;
   requirement_ids?: string[];
   resolution_ids?: string[];
-  refines?: string;
+  refines?: string[];
   depends_on?: string[];
   supersedes?: string[];
   spawned_by?: string;
@@ -60,41 +61,31 @@ function readRecords(repo: string, relative: string): WrittenRecord[] {
     .map((line) => JSON.parse(line) as WrittenRecord);
 }
 
+function catalogCreate(
+  repo: string,
+  collection: string,
+  data: Record<string, unknown>,
+  headers: string[] = [],
+): void {
+  execFileSync(
+    engine,
+    [collection, "create", "--repo", repo, "--scope", "default", ...headers, "--stdin"],
+    { input: JSON.stringify(data) },
+  );
+}
+
 /** A requirement and a resolution the writers already hold, for the
  *  declarations that name a resolution by canonical id. */
 function seedResolution(repo: string): void {
-  execFileSync(engine, [
-    "requirements",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "req_seed",
-    "--statement",
-    "The seed requirement stands",
-  ]);
-  execFileSync(engine, [
-    "resolutions",
-    "create",
-    "--repo",
-    repo,
-    "--scope",
-    "default",
-    "--id",
-    "res_seed",
-    "--title",
-    "Seed decision",
-    "--requirement-id",
-    "req_seed",
-    "--position",
-    "Adopt",
-    "--rationale",
-    "Seeds the relations",
-    "--status",
-    "proposed",
-  ]);
+  catalogCreate(repo, "requirements", {
+    actor: "sdk-test", id: "req_seed", statement: "The seed requirement stands",
+    status: "discovery", depends_on: [], supersedes: [],
+  });
+  catalogCreate(repo, "resolutions", {
+    id: "res_seed", title: "Seed decision", requirement_ids: ["req_seed"],
+    supersedes: [], position: "Adopt", rationale: "Seeds the relations",
+    status: "approved", inputs: [],
+  });
 }
 
 
@@ -391,12 +382,12 @@ test("direct nested Rule handles apply and verify through the Rust engine", asyn
   );
 
   assert.equal(callbackRan, true);
-  const runs = JSON.parse(
+  const response = JSON.parse(
     execFileSync(
       engine,
       [
-        "sdk",
         "verification-runs",
+        "list",
         "--repo",
         repo,
         "--scope",
@@ -406,7 +397,8 @@ test("direct nested Rule handles apply and verify through the Rust engine", asyn
       ],
       { encoding: "utf8" },
     ),
-  ) as Array<{ status: string }>;
+  ) as { data: { items: Array<{ status: string }> } };
+  const runs = response.data.items;
   assert.deepEqual(runs.map(({ status }) => status), ["passed"]);
 });
 
@@ -591,7 +583,7 @@ test("relation fields on fluent declarations reach the written records", async (
   const child = readRecords(repo, "requirements/req.jsonl").find(
     ({ id }) => id === idOf("requirement", "child"),
   );
-  assert.equal(child?.refines, idOf("requirement", "parent"));
+  assert.deepEqual(child?.refines, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.depends_on, [idOf("requirement", "parent")]);
   assert.deepEqual(child?.supersedes, [idOf("requirement", "retired")]);
   assert.equal(child?.spawned_by, "res_seed");
@@ -603,6 +595,29 @@ test("relation fields on fluent declarations reach the written records", async (
     ({ id }) => id === idOf("rule", "decision"),
   );
   assert.deepEqual(writtenDecision?.resolution_ids, ["res_seed"]);
+  assert.equal(writtenDecision?.status, "active");
+});
+
+test("a fluent requirement keeps both parents it refines", async () => {
+  const repo = repository();
+  configure({ ...await fixtureSettings(repo), owner: "spec://typescript/fluent-parents" });
+  const policy = source("policy").document("docs/policy.md");
+  const access = requirement("access").statement("Access is governed").from(policy);
+  const sharing = requirement("sharing").statement("Sharing is governed").from(policy);
+  const child = requirement("child")
+    .statement("Share links are governed")
+    .from(policy)
+    .refines(access)
+    .refines(sharing)
+    .refines(access);
+  const result = await apply(
+    defineSpec("parents").sources(policy).requirements(access, sharing, child).build(),
+  );
+
+  const idOf = (key: string): string =>
+    result.resources.find((resource) => resource.kind === "requirement" && resource.key === key)!.id;
+  const written = readRecords(repo, "requirements/req.jsonl").find(({ id }) => id === idOf("child"));
+  assert.deepEqual(written?.refines, [idOf("access"), idOf("sharing")].sort());
 });
 
 test("a fluent relation to a requirement outside the build is refused", () => {

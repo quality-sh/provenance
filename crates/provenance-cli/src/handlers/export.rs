@@ -1,7 +1,7 @@
 use crate::output::OutputFormat;
-use crate::store::{ScopeSnapshot, Store};
+use crate::repo_context::RepoContext;
+use crate::store::ScopeSnapshot;
 use camino::Utf8PathBuf;
-use provenance_core::ScopeId;
 use serde::Serialize;
 
 #[derive(Serialize, serde::Deserialize)]
@@ -63,17 +63,16 @@ impl ScopeExport {
     }
 }
 
-pub fn export_scope(repo: Utf8PathBuf, scope: String) -> anyhow::Result<ScopeExport> {
-    let scope_id = ScopeId::new(scope.clone())?;
-    let store = Store::open(repo);
+fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
+    let scope_id = context.scope_id()?;
+    context.declared_scope()?;
+    let store = context.open_graph()?;
     store.with_repository_publication(|| {
+        let snapshot = store.snapshot(&scope_id)?;
         store.ensure_review_portable(&scope_id)?;
         store.validate_ideation_scope(&scope_id)?;
         store.validate_graph_scope(&scope_id)?;
-        Ok(ScopeExport::from_snapshot(
-            scope,
-            store.snapshot(&scope_id)?,
-        ))
+        Ok(ScopeExport::from_snapshot(context.scope.clone(), snapshot))
     })
 }
 
@@ -83,67 +82,95 @@ pub(super) fn render_export(
 ) -> anyhow::Result<String> {
     match format {
         OutputFormat::Json => Ok(format!("{}\n", serde_json::to_string_pretty(exported)?)),
-        OutputFormat::Jsonl => {
-            let mut out = String::new();
-            for value in serde_json::to_value(exported)?.as_object().unwrap().values() {
-                if let Some(records) = value.as_array() {
-                    for record in records {
-                        out.push_str(&serde_json::to_string(record)?);
-                        out.push('\n');
-                    }
-                }
-            }
-            Ok(out)
-        }
-        OutputFormat::Markdown => Ok(format!(
-            "# Provenance Export\n\n- Scope: {}\n- Sources: {}\n- Domains: {}\n- Requirements: {}\n- Boundaries: {}\n- Topics: {}\n- Questions: {}\n- Resolutions: {}\n- Rules: {}\n- Proposals: {}\n",
-            exported.scope,
-            exported.sources.len(),
-            exported.domains.len(),
-            exported.requirements.len(),
-            exported.boundaries.len(),
-            exported.topics.len(),
-            exported.questions.len(),
-            exported.resolutions.len(),
-            exported.rules.len(),
-            exported.proposal_cards.len()
-        )),
-        OutputFormat::Toon => Ok(format!(
-            "scope: {}\nsources: {}\ndomains: {}\nrequirements: {}\nboundaries: {}\ntopics: {}\nquestions: {}\nresolutions: {}\nrules: {}\nproposals: {}\n",
-            exported.scope,
-            exported.sources.len(),
-            exported.domains.len(),
-            exported.requirements.len(),
-            exported.boundaries.len(),
-            exported.topics.len(),
-            exported.questions.len(),
-            exported.resolutions.len(),
-            exported.rules.len(),
-            exported.proposal_cards.len()
-        )),
-        OutputFormat::Table => Ok(format!(
-            "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\tresolutions\trules\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-            exported.scope,
-            exported.sources.len(),
-            exported.domains.len(),
-            exported.requirements.len(),
-            exported.boundaries.len(),
-            exported.topics.len(),
-            exported.questions.len(),
-            exported.resolutions.len(),
-            exported.rules.len(),
-            exported.proposal_cards.len()
-        )),
+        OutputFormat::Jsonl => render_jsonl(exported),
+        OutputFormat::Markdown => Ok(render_markdown(exported)),
+        OutputFormat::Toon => Ok(render_toon(exported)),
+        OutputFormat::Table => Ok(render_table(exported)),
     }
 }
 
+/// One line for each record of each collection. Collections and record keys
+/// come out in alphabetical order.
+fn render_jsonl(exported: &ScopeExport) -> anyhow::Result<String> {
+    let value = serde_json::to_value(exported)?;
+    let records = value
+        .as_object()
+        .into_iter()
+        .flat_map(serde_json::Map::values)
+        .filter_map(serde_json::Value::as_array)
+        .flatten();
+    let mut out = String::new();
+    for record in records {
+        out.push_str(&serde_json::to_string(record)?);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
+fn render_markdown(exported: &ScopeExport) -> String {
+    format!(
+        concat!(
+            "# Provenance Export\n\n- Scope: {}\n- Sources: {}\n- Domains: {}\n",
+            "- Requirements: {}\n- Boundaries: {}\n- Topics: {}\n- Questions: {}\n",
+            "- Resolutions: {}\n- Rules: {}\n- Proposals: {}\n"
+        ),
+        exported.scope,
+        exported.sources.len(),
+        exported.domains.len(),
+        exported.requirements.len(),
+        exported.boundaries.len(),
+        exported.topics.len(),
+        exported.questions.len(),
+        exported.resolutions.len(),
+        exported.rules.len(),
+        exported.proposal_cards.len()
+    )
+}
+
+fn render_toon(exported: &ScopeExport) -> String {
+    format!(
+        concat!(
+            "scope: {}\nsources: {}\ndomains: {}\nrequirements: {}\nboundaries: {}\n",
+            "topics: {}\nquestions: {}\nresolutions: {}\nrules: {}\nproposals: {}\n"
+        ),
+        exported.scope,
+        exported.sources.len(),
+        exported.domains.len(),
+        exported.requirements.len(),
+        exported.boundaries.len(),
+        exported.topics.len(),
+        exported.questions.len(),
+        exported.resolutions.len(),
+        exported.rules.len(),
+        exported.proposal_cards.len()
+    )
+}
+
+fn render_table(exported: &ScopeExport) -> String {
+    format!(
+        concat!(
+            "scope\tsources\tdomains\trequirements\tboundaries\ttopics\tquestions\t",
+            "resolutions\trules\tproposals\n{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n"
+        ),
+        exported.scope,
+        exported.sources.len(),
+        exported.domains.len(),
+        exported.requirements.len(),
+        exported.boundaries.len(),
+        exported.topics.len(),
+        exported.questions.len(),
+        exported.resolutions.len(),
+        exported.rules.len(),
+        exported.proposal_cards.len()
+    )
+}
+
 pub(super) fn handle(
-    repo: Utf8PathBuf,
-    scope: String,
+    context: &RepoContext,
     format: OutputFormat,
     output: Option<Utf8PathBuf>,
 ) -> anyhow::Result<()> {
-    let exported = export_scope(repo, scope)?;
+    let exported = export_context(context)?;
     let rendered = render_export(format, &exported)?;
     if let Some(output_path) = output {
         std::fs::write(output_path, rendered)?;
@@ -152,3 +179,7 @@ pub(super) fn handle(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "export_tests.rs"]
+mod tests;

@@ -2,6 +2,21 @@ use super::*;
 #[cfg(unix)]
 use std::io::Read;
 
+#[path = "tests/held_write_cleanup.rs"]
+mod held_write_cleanup;
+#[path = "tests/held_write_races.rs"]
+mod held_write_races;
+#[path = "tests/held_writes.rs"]
+mod held_writes;
+#[path = "tests/prepared_files.rs"]
+mod prepared_files;
+#[cfg(any(unix, windows))]
+#[path = "../../publication/source_edit_recovery_tests.rs"]
+mod source_edit_recovery_tests;
+#[cfg(any(unix, windows))]
+#[path = "tests/source_edit_review.rs"]
+mod source_edit_review;
+
 #[cfg(unix)]
 fn physical_tempdir() -> tempfile::TempDir {
     // The selected test root must not inherit system aliases such as /var on macOS.
@@ -20,6 +35,7 @@ fn portable_relative_identity_rejects_all_escape_forms() {
         "C:x.rs",
         "a\\x.rs",
         "//server/file.rs",
+        "nul\0file.rs",
     ] {
         assert!(validate_relative(Utf8Path::new(name)).is_err(), "{name}");
     }
@@ -109,7 +125,10 @@ fn ignored_symlinks_are_not_entered_and_cuts_count_only_source_files() {
     let (scans, cut) = root.scan_tree(1).unwrap();
     assert_eq!(scans.len(), 1);
     assert!(!cut);
-    assert!(scans[0].bindings.is_empty());
+    assert_eq!(
+        scans[0].bindings,
+        [] as [provenance_scanner::AttributeBinding; 0]
+    );
     assert!(root.scan_tree(0).unwrap().1);
 }
 
@@ -158,7 +177,7 @@ fn unscanned_symlink_entries_are_skipped_without_following_their_targets() {
     std::os::unix::fs::symlink(outside.path(), root_path.join("skills")).unwrap();
     let root = RepositoryFiles::open(root_path).unwrap();
     let (scans, cut) = root.scan_tree(10).unwrap();
-    assert!(scans.is_empty());
+    assert_eq!(scans, [] as [provenance_scanner::FileScan; 0]);
     assert!(!cut);
     assert!(matches!(
         root.open_file(Utf8Path::new("skills/sentinel.rs")),

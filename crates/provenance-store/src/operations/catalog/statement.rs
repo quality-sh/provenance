@@ -15,6 +15,8 @@ impl Operation for CheckStatement {
     type Failure = StatementFailure;
     const NAME: &'static str = "check-statement";
 
+    /// Keeps statement checks independent of repository state.
+    #[rule("rule_ste_sdk_statement_repository_independence")]
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[]
     }
@@ -25,6 +27,11 @@ impl Operation for CheckStatement {
         _: PreparedContext,
         request: Self::Request,
     ) -> OperationFuture<Report, StatementFailure> {
-        Box::pin(async move { Ok(provenance_ste100::check_descriptive(&request.statement)) })
+        Box::pin(async move {
+            Ok(crate::statement_analysis::check_statement(
+                &request.statement,
+                None,
+            ))
+        })
     }
 }

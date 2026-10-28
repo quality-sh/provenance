@@ -22,7 +22,7 @@ fn request_validator(operation: &str) -> jsonschema::JSONSchema {
         .iter()
         .find(|entry| entry.name == operation)
         .unwrap();
-    compiled(&definition.request_schema)
+    compiled(definition.request_schema().unwrap())
 }
 
 fn round_trip<T: JsonSchema + DeserializeOwned + Serialize>(value: &Value) {
@@ -120,34 +120,34 @@ fn assertion_json_roundtrips_with_legacy_claim_ids() {
 #[test]
 fn creation_requests_are_closed_and_keep_optional_fields_optional() {
     let proposals = request_validator("create-proposal");
-    let minimal = json!({"context":{"repository":"selected","scope":"default"},"request":{
-        "scope_id":"default","id":"proposal_new","proposal_key":"overtime",
+    let minimal = json!({"data":{
+        "id":"proposal_new","proposal_key":"overtime",
         "proposal_type":"requirement_candidate","title":"T","summary":"S",
         "traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_a"},
             "source_ids":[],"evidence_references":[],"supporting_claim_ids":[]},
         "builds_on":[],"promotion_state":"proposed"}});
     assert!(proposals.is_valid(&minimal));
     let mut confidence = minimal.clone();
-    confidence["request"]["confidence"] = json!(0.5);
+    confidence["data"]["confidence"] = json!(0.5);
     assert!(proposals.is_valid(&confidence));
     let mut out_of_range = confidence.clone();
-    out_of_range["request"]["confidence"] = json!("high");
+    out_of_range["data"]["confidence"] = json!("high");
     assert!(!proposals.is_valid(&out_of_range));
-    let dispositions = request_validator("create-disposition");
-    let disposition = json!({"context":{"repository":"selected","scope":"default"},"request":{
-        "scope_id":"default","id":"disposition_new","proposal_id":"proposal_a",
+    let dispositions = request_validator("create-proposal-disposition");
+    let disposition = json!({"data":{
+        "id":"disposition_new",
         "decision":"rejected","rationale":"Reviewed",
         "actor":{"identity_type":"human","id":"reviewer"}}});
     assert!(dispositions.is_valid(&disposition));
     let mut null_action = disposition.clone();
-    null_action["request"]["external_action"] = Value::Null;
+    null_action["data"]["external_action"] = Value::Null;
     assert!(dispositions.is_valid(&null_action));
     let mut unknown_decision = disposition.clone();
-    unknown_decision["request"]["decision"] = json!("postponed");
+    unknown_decision["data"]["decision"] = json!("postponed");
     assert!(!dispositions.is_valid(&unknown_decision));
-    let assertions = request_validator("create-assertion");
-    let assertion = json!({"context":{"repository":"selected","scope":"default"},"request":{
-        "scope_id":"default","id":"assertion_new","proposal_id":"proposal_a",
+    let assertions = request_validator("create-proposal-assertion");
+    let assertion = json!({"data":{
+        "id":"assertion_new",
         "synthesis_packet_id":"synthesis_a","supporting_claim_ids":["claim_a"]}});
     assert!(assertions.is_valid(&assertion));
     for (validator, mut extra, field) in [
@@ -155,39 +155,56 @@ fn creation_requests_are_closed_and_keep_optional_fields_optional() {
         (dispositions, disposition, "rationale_note"),
         (assertions, assertion, "confidence"),
     ] {
-        extra["request"][field] = json!("extra");
+        extra["data"][field] = json!("extra");
         assert!(!validator.is_valid(&extra), "{field}");
     }
 }
 
 #[test]
-fn list_requests_take_a_scope_and_a_null_request() {
-    for operation in ["list-proposals", "list-dispositions", "list-assertions"] {
-        let validator = request_validator(operation);
-        let valid = json!({"context":{"repository":"selected","scope":"default"},"request":null});
-        assert!(validator.is_valid(&valid), "{operation}");
-        let mut scoped = valid.clone();
-        scoped["request"] = json!({"limit": 5});
-        assert!(!validator.is_valid(&scoped), "{operation}");
-        let mut unscoped = valid;
-        unscoped["context"] = json!({"repository":"selected"});
-        assert!(!validator.is_valid(&unscoped), "{operation}");
+fn list_routes_have_no_request_body() {
+    let definitions = catalog::definitions();
+    for operation in [
+        "list-proposals",
+        "list-proposal-dispositions",
+        "list-proposal-assertions",
+    ] {
+        let definition = definitions
+            .iter()
+            .find(|entry| entry.name == operation)
+            .unwrap();
+        assert!(definition.request_schema().is_none(), "{operation}");
     }
 }
 
 #[test]
-fn list_results_are_arrays_and_mcp_wraps_them_in_result() {
+fn list_results_use_the_shared_items_envelope() {
     let definitions = catalog::definitions();
-    for name in ["list-proposals", "list-dispositions", "list-assertions"] {
+    for name in [
+        "list-proposals",
+        "list-proposal-dispositions",
+        "list-proposal-assertions",
+    ] {
         let definition = definitions.iter().find(|entry| entry.name == name).unwrap();
-        assert_eq!(definition.success_schema["type"], "array", "{name}");
-        assert!(!definition.mutates, "{name}");
+        let success_schema = definition.success_schema();
+        assert_eq!(success_schema["type"], "object", "{name}");
+        assert_eq!(
+            success_schema["properties"]["data"]["required"],
+            json!(["items"])
+        );
+        assert!(!definition.mutates(), "{name}");
         let output = definition.mcp_output_schema();
         assert_eq!(output["type"], "object");
-        assert_eq!(output["properties"]["result"]["type"], "array");
+        assert_eq!(
+            output["properties"]["data"]["properties"]["items"]["type"],
+            "array"
+        );
     }
-    for name in ["create-proposal", "create-assertion", "create-disposition"] {
+    for name in [
+        "create-proposal",
+        "create-proposal-assertion",
+        "create-proposal-disposition",
+    ] {
         let definition = definitions.iter().find(|entry| entry.name == name).unwrap();
-        assert!(definition.mutates, "{name}");
+        assert!(definition.mutates(), "{name}");
     }
 }

@@ -3,12 +3,14 @@ use super::rows::{decode, select_columns};
 use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
 use provenance_core::model::ProjectionRow;
+use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::rule;
 use sqlx::Row;
 
 pub const RECORD_BYTES: usize = 65_536;
 pub const PAGE_BYTES: usize = 1_048_576;
+pub const RESOURCE_RECORD_BYTES: usize = PAGE_BYTES - 16_384;
 
 impl ReadSnapshot {
     /// Limits `SQLite` work in this page transaction, including joins and sorts.
@@ -27,6 +29,19 @@ impl ReadSnapshot {
     }
 }
 
+/// Refuses a page limit outside 1..=200 with the typed input refusal that
+/// names the `limit` field.
+pub fn check_limit(limit: usize) -> anyhow::Result<()> {
+    if (1..=200).contains(&limit) {
+        return Ok(());
+    }
+    Err(OperationFailure::InvalidInput {
+        field: Some("limit".to_owned()),
+        reason: InvalidInputReason::InvalidValue,
+    }
+    .into())
+}
+
 pub fn page_error(error: anyhow::Error) -> anyhow::Error {
     if error.downcast_ref::<sqlx::Error>().is_some_and(
         |error| matches!(error, sqlx::Error::Database(db) if db.code().as_deref() == Some("9")),
@@ -43,6 +58,22 @@ pub fn byte_expression(columns: &[&str]) -> String {
         .map(|c| format!("coalesce(length(CAST({} AS BLOB)), 0)", quoted(c)))
         .collect::<Vec<_>>()
         .join(" + ")
+}
+
+/// Returns the SQL text for one keyset page of at most `LIMIT` IDs after a
+/// key, in primary-key order. An ID over 1024 bytes comes back as NULL.
+///
+/// Bind the scope, the previous key, values named by `filter`, and the limit,
+/// in that order. `filter` is trusted SQL text from a fixed set of literals and
+/// never holds caller input. `ORDER BY` names the table column: a bare `id`
+/// binds to the guarded output alias, and `SQLite` then sorts every remaining
+/// row for each page.
+pub fn id_page_sql(table: &str, filter: &str) -> String {
+    let table = quoted(table);
+    format!(
+        "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id \
+         FROM {table} WHERE scope_id = ? AND id > ?{filter} ORDER BY {table}.id LIMIT ?"
+    )
 }
 
 impl<K: ProjectionRow> Table<'_, K> {
@@ -75,16 +106,47 @@ impl<K: ProjectionRow> Table<'_, K> {
         row.as_ref().map(decode::<K>).transpose()
     }
 
+    /// Reads one public resource within the resource-page byte ceiling.
+    pub(crate) async fn resource_record(&self, id: &str) -> anyhow::Result<Option<K>> {
+        let mut tx = self.snapshot().connection().await;
+        let maximum = i64::try_from(RESOURCE_RECORD_BYTES)?;
+        let size: Option<i64> = sqlx::query_scalar(&format!(
+            "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
+            byte_expression(K::COLUMNS),
+            quoted(K::TABLE)
+        ))
+        .bind(self.snapshot().scope().as_str())
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        if size.is_some_and(|size| size > maximum) {
+            return Err(ReadFailure::PageRecordTooLarge.into());
+        }
+        let row = sqlx::query(&format!(
+            "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
+            select_columns::<K>(),
+            quoted(K::TABLE)
+        ))
+        .bind(self.snapshot().scope().as_str())
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        drop(tx);
+        row.as_ref().map(decode::<K>).transpose()
+    }
+
     /// Reads at most `limit` candidate IDs strictly after the previous key.
     pub(crate) async fn search_ids(
         &self,
         after: &str,
         limit: usize,
+        exclude_terminal: bool,
     ) -> anyhow::Result<Vec<String>> {
-        let sql = format!(
-            "SELECT CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id FROM {} WHERE scope_id = ? AND id > ? ORDER BY id LIMIT ?",
-            quoted(K::TABLE)
+        let filter = crate::cache::projection_families::exclude_terminal_predicate(
+            K::TABLE,
+            exclude_terminal,
         );
+        let sql = id_page_sql(K::TABLE, &filter);
         let mut tx = self.snapshot().connection().await;
         let rows = sqlx::query(&sql)
             .bind(self.snapshot().scope().as_str())
@@ -92,6 +154,34 @@ impl<K: ProjectionRow> Table<'_, K> {
             .bind(i64::try_from(limit)?)
             .fetch_all(&mut **tx)
             .await?;
+        drop(tx);
+        rows.iter()
+            .map(|row| {
+                row.try_get::<Option<String>, _>("id")?
+                    .ok_or_else(|| ReadFailure::PageRecordTooLarge.into())
+            })
+            .collect()
+    }
+}
+
+impl Table<'_, provenance_core::VerificationBinding> {
+    pub(crate) async fn resource_ids_for_rule(
+        &self,
+        after: &str,
+        limit: usize,
+        rule: Option<&provenance_core::StableId>,
+    ) -> anyhow::Result<Vec<String>> {
+        let filter = rule.map_or("", |_| " AND rule_id = ?");
+        let sql = id_page_sql("verification_bindings", filter);
+        let mut query = sqlx::query(&sql)
+            .bind(self.snapshot().scope().as_str())
+            .bind(after);
+        if let Some(rule) = rule {
+            query = query.bind(rule.as_str());
+        }
+        query = query.bind(i64::try_from(limit)?);
+        let mut tx = self.snapshot().connection().await;
+        let rows = query.fetch_all(&mut **tx).await?;
         drop(tx);
         rows.iter()
             .map(|row| {

@@ -128,8 +128,7 @@ def main() -> int:
         build_os = require_runner(entry["build_os"], "build_os")
         smoke_os = require_runner(entry["smoke_os"], "smoke_os")
         for field, runner in (("build_os", build_os), ("smoke_os", smoke_os)):
-            platform_runner = re.sub(r"^blacksmith-[1-9][0-9]*vcpu-", "", runner)
-            if not platform_runner.startswith(f"{runner_family}-"):
+            if not runner.startswith(f"{runner_family}-"):
                 fail(f"{target} {field} must use an {runner_family} runner")
 
         archive = entry["archive"]

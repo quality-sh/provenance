@@ -3,6 +3,27 @@ use serde::{Deserialize, Serialize};
 use super::{CanonicalArtifactType, DispositionDecision, IdentityType};
 use crate::model::ids::{SchemaVersion, ScopeId, StableId};
 
+/// An approval lacks the evidence required for acceptance.
+#[derive(Debug, thiserror::Error)]
+#[error("accepted proposal must be asserted before disposition")]
+pub struct ApprovalEvidenceRequired;
+
+/// The disposition actor cannot decide in this repository.
+///
+/// An empty allowlist means that no configuration exists. It does not mean
+/// that the supplied actor id is refused, so that refusal names the field and
+/// the setup command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum DispositionActorRefusal {
+    #[error(
+        "no disposition actors configured: repository manifest disposition_actor_ids is empty; \
+         set it with provenance init --disposition-actor-id <ACTOR_ID>"
+    )]
+    NoActorsConfigured,
+    #[error("disposition actor is not in the repository allowlist")]
+    ActorNotListed,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
@@ -40,6 +61,7 @@ pub struct DispositionRecord {
     pub id: StableId,
     pub proposal_id: StableId,
     pub decision: DispositionDecision,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub rationale: String,
     pub actor: DispositionActor,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -84,11 +106,15 @@ pub fn disposition_requires_prior_assertion(disposition: &DispositionRecord) -> 
             && disposition.canonical_artifact.is_some())
 }
 
+/// Enforces the intrinsic fields that make a Disposition valid.
+#[provenance_macros::rule("rule_review_rejection_requires_comment")]
 pub fn validate_disposition_intrinsic(disposition: &DispositionRecord) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        !disposition.rationale.trim().is_empty(),
-        "disposition rationale must not be empty"
-    );
+    if disposition.decision == DispositionDecision::Rejected {
+        anyhow::ensure!(
+            !disposition.rationale.trim().is_empty(),
+            "rejected disposition rationale must not be empty"
+        );
+    }
     anyhow::ensure!(
         !disposition.actor.id.trim().is_empty(),
         "disposition actor id must not be empty"

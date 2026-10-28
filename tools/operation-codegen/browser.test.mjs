@@ -7,5 +7,6 @@ test('public browser client bundles without Node imports or runtime code generat
   const source = output.outputFiles[0].text;
   assert.doesNotMatch(source, /\b(?:eval|Function)\s*\(/);
   assert.doesNotMatch(source, /(?:from|import)\s*[('"].*node:/);
-  assert.match(source, /UncertainWriteError/);
+  assert.match(source, /ProtocolMismatchError/);
+  assert.doesNotMatch(source, /UncertainWriteError|unresolvedWrites/);
 });

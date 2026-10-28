@@ -12,7 +12,7 @@ test('a changed archive cannot create composition output', async t => {
   const archive = join(work, 'changed.tar.gz');
   const output = join(work, 'output');
   await writeFile(archive, 'not the approved archive');
-  const result = spawnSync(process.execPath, [fileURLToPath(new URL('./prepare.ts', import.meta.url)), 'unused-sdk', output], {
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('./prepare.ts', import.meta.url)), output], {
     encoding: 'utf8', env: { ...process.env, PROVENANCE_REVIEW_ARCHIVE: archive },
   });
   assert.notEqual(result.status, 0);

@@ -58,14 +58,14 @@ async fn wait_for_completion(layout: &ProvenanceLayout) {
 #[tokio::test]
 async fn a_failed_first_materialization_completes_its_connection() {
     let (_dir, layout, _scope) = fixtures::empty_layout();
-    crate::test_probes::arm("run_migrations_under_guard", || {
-        anyhow::bail!("injected migration failure")
+    crate::test_probes::arm("prepare_current_schema_under_guard", || {
+        anyhow::bail!("injected schema failure")
     });
     let result = materialize_empty_state(&layout).await;
-    crate::test_probes::disarm("run_migrations_under_guard");
+    crate::test_probes::disarm("prepare_current_schema_under_guard");
     let error = result.expect_err("the injected failure must surface");
     assert!(
-        error.to_string().contains("injected migration failure"),
+        error.to_string().contains("injected schema failure"),
         "{error:#}"
     );
     assert_completed(&layout);
@@ -76,14 +76,14 @@ async fn a_failed_first_materialization_completes_its_connection() {
 #[tokio::test]
 async fn a_failed_rebuild_materialization_completes_its_connection() {
     let (_dir, layout, _scope) = fixtures::empty_layout();
-    crate::test_probes::arm("run_migrations_under_guard", || {
-        anyhow::bail!("injected migration failure")
+    crate::test_probes::arm("prepare_current_schema_under_guard", || {
+        anyhow::bail!("injected schema failure")
     });
     let result = materialize_state(&layout).await;
-    crate::test_probes::disarm("run_migrations_under_guard");
+    crate::test_probes::disarm("prepare_current_schema_under_guard");
     let error = result.expect_err("the injected failure must surface");
     assert!(
-        error.to_string().contains("injected migration failure"),
+        error.to_string().contains("injected schema failure"),
         "{error:#}"
     );
     assert_completed(&layout);
@@ -115,14 +115,14 @@ async fn a_refused_stale_read_completes_its_connection() {
     assert_completed(&layout);
 }
 
-/// A read that refuses a projection behind on migrations must still
+/// A read that refuses an incompatible projection must still
 /// complete its connection before the refusal leaves the reader.
 #[tokio::test]
 async fn a_refused_schema_behind_read_completes_its_connection() {
     let (_dir, layout, scope) = fixtures::seeded_layout();
     catch_up_state(&layout).await.unwrap();
     let cache = open_existing_cache(&layout).await.unwrap();
-    sqlx::query("DELETE FROM _schema_migrations")
+    sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
         .execute(cache.pool())
         .await
         .unwrap();
@@ -134,7 +134,7 @@ async fn a_refused_schema_behind_read_completes_its_connection() {
         |_| Box::pin(async { Ok(1usize) }),
     )
     .await
-    .expect_err("a projection behind on migrations must refuse");
+    .expect_err("an incompatible projection must refuse");
     assert!(
         matches!(
             error.downcast_ref::<ReadRefusal>(),
@@ -157,7 +157,7 @@ async fn a_failed_catch_up_step_completes_its_connection() {
         })
         .await
         .unwrap();
-    crate::test_probes::arm("run_migrations_under_guard", || {
+    crate::test_probes::arm("prepare_current_schema_under_guard", || {
         anyhow::bail!("injected catch-up failure")
     });
     let stamped =
@@ -166,7 +166,7 @@ async fn a_failed_catch_up_step_completes_its_connection() {
         })
         .await
         .unwrap();
-    crate::test_probes::disarm("run_migrations_under_guard");
+    crate::test_probes::disarm("prepare_current_schema_under_guard");
     assert_eq!(
         stamped.stamp.policy,
         provenance_core::protocol::StampPolicy::CatchUpFailed

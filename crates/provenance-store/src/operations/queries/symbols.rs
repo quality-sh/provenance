@@ -1,5 +1,5 @@
 use crate::operations::reader::{Live, ReadContext};
-use provenance_core::protocol::{take_page, GraphNode, ResolveSymbolQuery, ResolveSymbolResult};
+use provenance_core::protocol::{GraphNode, ResolveSymbolQuery, ResolveSymbolResult};
 use provenance_core::{ImplementationBinding, Rule, StableId, VerificationBinding};
 use provenance_macros::rule;
 use provenance_scanner::source_sites;
@@ -12,8 +12,9 @@ use std::collections::BTreeSet;
 /// request that names only a file reads both. The scanner reads the named
 /// file alone, so the tree's file count never applies and the file cannot
 /// be missed; a file it has no language for, or cannot read, yields no
-/// sites and the bindings still answer. Rule records come from the
-/// projection.
+/// sites and the bindings still answer. Binding candidates give up their
+/// rule ids alone, and the page is chosen by id, so only the served Rule
+/// records decode.
 #[rule("rule_resolve_symbol_reads_the_named_file_only")]
 pub(super) async fn resolve(
     ctx: &ReadContext,
@@ -35,39 +36,34 @@ pub(super) async fn resolve(
         }
     }
     if request.line.is_none() {
-        let by_file = [file.as_str()];
-        for binding in snapshot
+        let by_file = file.as_str();
+        for rule_id in snapshot
             .table::<ImplementationBinding>()
-            .by_field("file", &by_file)
+            .rule_ids_for_file(by_file, symbol)
             .await?
         {
-            if symbol.is_none_or(|wanted| binding.symbol == wanted) {
-                ids.insert(binding.rule_id.as_str().to_string());
-            }
+            ids.insert(rule_id);
         }
-        for binding in snapshot
+        for rule_id in snapshot
             .table::<VerificationBinding>()
-            .by_field("file", &by_file)
+            .rule_ids_for_file(by_file, symbol)
             .await?
         {
-            if symbol.is_none_or(|wanted| binding.symbol.as_deref() == Some(wanted)) {
-                ids.insert(binding.rule_id.as_str().to_string());
-            }
+            ids.insert(rule_id);
         }
     }
     let wanted = ids
         .into_iter()
         .filter_map(|id| StableId::new(id).ok())
         .collect::<Vec<_>>();
-    let matched = snapshot
+    let (matched, has_more) = snapshot
         .table::<Rule>()
-        .by_ids(&wanted)
-        .await?
+        .page_by_ids(&wanted, request.limit)
+        .await?;
+    let rules = matched
         .into_iter()
         .map(|rule| GraphNode::Rule(Box::new(rule)))
-        .take(request.limit + 1)
         .collect::<Vec<_>>();
-    let (rules, has_more) = take_page(matched, request.limit);
     Ok(ResolveSymbolResult {
         file: request.file,
         symbol: request.symbol,

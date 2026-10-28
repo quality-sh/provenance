@@ -1,61 +1,35 @@
 use crate::cli::Command;
+use crate::output;
+use provenance_core::StableId;
+use provenance_store::cache;
 
-mod boundaries;
 mod cargo_init;
-mod check;
-mod common;
-mod contributions;
+pub mod check;
 mod coverage;
 mod dictionary;
-mod dispositions;
 mod docs;
 #[cfg(feature = "dogfood")]
 mod dogfood;
-mod domains;
 mod export;
-mod gaps;
-mod graph;
 mod graph_reference;
-mod health;
-mod impact;
 mod import;
-mod materialize;
 mod merge_jsonl;
-mod native;
-mod orphans;
 mod prime;
-mod proposals;
-mod questions;
-mod refs;
 mod repo;
 mod report;
-mod requirements;
-mod resolutions;
-mod rules;
 mod schema;
-mod sdk;
 mod skills;
-mod sources;
-mod stale;
 mod swarm_backtrace;
-mod synthesis_packets;
-mod thread;
-mod topics;
-mod traceability;
-mod updates;
 mod validate;
-mod wiki;
 
-#[allow(clippy::redundant_pub_crate)]
-pub(super) use export::{export_scope, ScopeExport};
-
-#[allow(clippy::too_many_lines)]
+/// Runs one built-in command. The commands that wait on async work or on a
+/// blocking thread run here. Every other command runs on the calling thread.
 #[allow(clippy::redundant_pub_crate)]
 pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()> {
     match command {
+        Command::Search(args) => args.dispatch().await,
         Command::CargoInit { package, ste_pdf } => {
-            tokio::task::spawn_blocking(move || cargo_init::handle(package.as_deref(), ste_pdf))
-                .await??;
+            run_blocking(move || cargo_init::handle(package.as_deref(), ste_pdf, quiet)).await
         }
         Command::Init {
             path,
@@ -67,177 +41,133 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             invocation_channel,
             package_manager,
         } => {
-            tokio::task::spawn_blocking(move || {
-                repo::init(
-                    &path,
-                    repo::InitOptions {
-                        scope,
-                        path_prefix,
-                        disposition_actor_ids: disposition_actor_id,
-                        clear_disposition_actors,
-                        ste_pdf,
-                        invocation_channel,
-                        package_manager,
-                    },
-                )
-            })
-            .await??;
+            let options = repo::InitOptions {
+                scope,
+                path_prefix,
+                disposition_actor_ids: disposition_actor_id,
+                clear_disposition_actors,
+                ste_pdf,
+                invocation_channel,
+                package_manager,
+                quiet,
+            };
+            run_blocking(move || repo::init(&path, options)).await
         }
         Command::Check {
-            repo, strict, base, ..
+            repo,
+            strict,
+            base,
+            graph,
+            statements,
+            bindings,
+            format,
         } => {
-            check::check(&repo, strict, base.as_deref())?;
+            let selectors = check::Selectors {
+                graph,
+                statements,
+                bindings,
+            };
+            let context = provenance_cli::repo_context::RepoContext::new(repo, "default");
+            check::check(context, strict, base, format.is_some(), selectors).await
         }
-        Command::Docs { command } => {
-            docs::handle(command).await?;
-        }
-        Command::Dictionary { command } => {
-            dictionary::handle(command)?;
-        }
-        Command::Wiki { command } => {
-            wiki::handle(command).await?;
-        }
-        Command::Review(options) => crate::review::run(options).await?,
+        Command::Docs { command } => docs::handle(command).await,
+        Command::Review(options) => crate::review::run(options).await,
         Command::Materialize { repo, .. } => {
-            materialize::handle(repo).await?;
+            let store = crate::store::Store::open_required(repo)?;
+            output::print_json(&cache::materialize_state(store.layout()).await?)
         }
-        Command::Sources { command } => {
-            sources::handle(command).await?;
-        }
-        Command::Requirements { command } => {
-            requirements::handle(command).await?;
-        }
-        Command::GraphReference { command } => {
-            graph_reference::handle(command)?;
-        }
-        Command::Domains { command } => {
-            domains::handle(command).await?;
-        }
-        Command::Boundaries { command } => {
-            boundaries::handle(command).await?;
-        }
-        Command::Topics { command } => {
-            topics::handle(command).await?;
-        }
-        Command::Questions { command } => {
-            questions::handle(command, quiet).await?;
-        }
+        command => dispatch_on_thread(command, quiet),
+    }
+}
+
+/// Runs a synchronous handler on a blocking thread and waits for it.
+async fn run_blocking(
+    handler: impl FnOnce() -> anyhow::Result<()> + Send + 'static,
+) -> anyhow::Result<()> {
+    tokio::task::spawn_blocking(handler).await?
+}
+
+/// Runs one built-in command whose handler does its work on the calling
+/// thread.
+#[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
+fn dispatch_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
+    match command {
         Command::Graph {
             requirement_id,
-            repo,
-            scope,
+            context,
             ..
         } => {
-            graph::handle(requirement_id, repo, scope)?;
-        }
-        Command::Resolutions { command } => {
-            resolutions::handle(command).await?;
-        }
-        Command::Rules { command } => {
-            rules::handle(command).await?;
+            let store = context.open_graph()?;
+            let graph = cache::get_requirement_graph(
+                store.layout(),
+                &context.scope_id()?,
+                &StableId::new(requirement_id)?,
+            )?;
+            output::print_json(&graph)
         }
         Command::Traceability {
-            rule_id,
-            repo,
-            scope,
-            ..
+            rule_id, context, ..
         } => {
-            traceability::handle(rule_id, repo, scope)?;
+            let store = context.open_graph()?;
+            let trace = cache::trace_rule(
+                store.layout(),
+                &context.scope_id()?,
+                &StableId::new(rule_id)?,
+            )?;
+            output::print_json(&trace)
         }
-        Command::Gaps { repo, scope, .. } => {
-            gaps::handle(repo, scope)?;
+        Command::Gaps { context, .. } => {
+            let store = scoped_store(&context)?;
+            output::print_json(&cache::find_gaps(store.layout(), &context.scope_id()?)?)
         }
-        Command::Thread { command } => {
-            thread::handle(command)?;
+        Command::Prime { format, .. } => prime::handle(format),
+        Command::Health { context, .. } => {
+            let store = scoped_store(&context)?;
+            output::print_json(&cache::coverage_health(
+                store.layout(),
+                &context.scope_id()?,
+            )?)
         }
-        Command::Contributions { command } => {
-            contributions::handle(command, quiet)?;
-        }
-        Command::SynthesisPackets { command } => {
-            synthesis_packets::handle(command, quiet)?;
-        }
-        Command::Proposals { command } => {
-            proposals::handle(command, quiet)?;
-        }
-        Command::Dispositions { command } => {
-            dispositions::handle(command)?;
-        }
-        Command::Prime {
-            repo,
-            scope,
-            format,
-            include_threads,
-        } => {
-            prime::handle(repo, scope, format, include_threads)?;
-        }
-        Command::Impact {
-            id,
-            repo,
-            scope,
-            node_type,
-            max_hops,
-            follow_indirect,
-            ..
-        } => {
-            impact::handle(id, repo, scope, &node_type, max_hops, follow_indirect)?;
-        }
-        Command::Stale {
-            base,
-            head,
-            since,
-            repo,
-            scope,
-            strict,
-            format,
-        } => {
-            stale::handle(&repo, scope, base, head, since, strict, format)?;
-        }
-        Command::Health { repo, scope, .. } => {
-            health::handle(repo, scope)?;
-        }
-        Command::Orphans { repo, scope, .. } => {
-            orphans::handle(repo, scope)?;
-        }
-        Command::Coverage { command } => {
-            coverage::handle(command)?;
-        }
-        Command::Report { command } => {
-            report::handle(command)?;
-        }
-        Command::Sdk { command } => {
-            sdk::handle(command).await?;
-        }
-        Command::SwarmBacktrace { command } => {
-            swarm_backtrace::handle(command)?;
-        }
-        Command::Skills { command } => {
-            skills::handle(command)?;
-        }
-        Command::Schema { command } => {
-            schema::handle(command)?;
-        }
-        Command::Validate {
-            artifact, input, ..
-        } => {
-            validate::handle(artifact, &input)?;
+        Command::Orphans { context, .. } => {
+            let store = scoped_store(&context)?;
+            output::print_json(&cache::orphan_rules(store.layout(), &context.scope_id()?)?)
         }
         Command::Export {
-            repo,
-            scope,
+            context,
             format,
             output,
-        } => {
-            export::handle(repo, scope, format, output)?;
-        }
+        } => export::handle(&context, format, output),
         Command::Import {
-            repo,
-            scope,
+            context,
             input,
             dry_run,
             ..
-        } => {
-            import::handle(repo, scope, input, dry_run)?;
-        }
+        } => import::handle(&context, input, dry_run),
+        command => dispatch_remaining_on_thread(command, quiet),
+    }
+}
+
+/// Opens the graph for a report over one scope, after the manifest confirms
+/// that the scope exists.
+fn scoped_store(context: &crate::repo_context::RepoContext) -> anyhow::Result<crate::store::Store> {
+    context.declared_scope()?;
+    context.open_graph()
+}
+
+/// Runs a synchronous command that does not use the shared repository context.
+#[cfg_attr(not(feature = "dogfood"), allow(unused_variables))]
+fn dispatch_remaining_on_thread(command: Command, quiet: bool) -> anyhow::Result<()> {
+    match command {
+        Command::Dictionary { command } => dictionary::handle(command),
+        Command::GraphReference { command } => graph_reference::handle(command),
+        Command::Coverage { command } => coverage::handle(command),
+        Command::Report { command } => report::handle(command),
+        Command::SwarmBacktrace { command } => swarm_backtrace::handle(command),
+        Command::Skills { command } => skills::handle(command),
+        Command::Schema { command } => schema::handle(command),
+        Command::Validate {
+            artifact, input, ..
+        } => validate::handle(artifact, &input),
         Command::MergeJsonl {
             base,
             ours,
@@ -245,13 +175,26 @@ pub(super) async fn dispatch(command: Command, quiet: bool) -> anyhow::Result<()
             output,
             path,
             ..
-        } => {
-            merge_jsonl::handle(&base, &ours, &theirs, output, path.as_deref())?;
-        }
+        } => merge_jsonl::handle(&base, &ours, &theirs, output, path.as_deref()),
         #[cfg(feature = "dogfood")]
-        Command::Dogfood { command } => {
-            dogfood::handle(command, quiet)?;
+        Command::Dogfood { command } => dogfood::handle(command, quiet),
+        // These commands run in `dispatch` or `dispatch_on_thread`.
+        Command::Search(_)
+        | Command::CargoInit { .. }
+        | Command::Init { .. }
+        | Command::Check { .. }
+        | Command::Docs { .. }
+        | Command::Review(_)
+        | Command::Materialize { .. }
+        | Command::Graph { .. }
+        | Command::Traceability { .. }
+        | Command::Gaps { .. }
+        | Command::Prime { .. }
+        | Command::Health { .. }
+        | Command::Orphans { .. }
+        | Command::Export { .. }
+        | Command::Import { .. } => {
+            unreachable!("an earlier dispatcher runs this command")
         }
     }
-    Ok(())
 }

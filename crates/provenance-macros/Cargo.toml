@@ -2,7 +2,7 @@
 name = "provenance-macros"
 version.workspace = true
 edition.workspace = true
-description = "Attributes that bind Rust code and tests to Provenance Rules"
+description = "Supported Rule binding attributes and internal derives for Provenance"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -22,5 +22,5 @@ syn.workspace = true
 
 [dev-dependencies]
 camino.workspace = true
-provenance-scanner.workspace = true
+provenance-scanner = { path = "../provenance-scanner" }
 trybuild.workspace = true

@@ -15,6 +15,7 @@ pub fn init_repo(repo: &str) {
         ])
         .assert()
         .success();
+    crate::export_fixture_support::make_default_scope_portable(repo);
 }
 
 pub fn create_source(repo: &str) {

@@ -1,6 +1,6 @@
 import type { components } from "./generated/schema.js";
 
-export type VerificationMethod = components["schemas"]["EvidenceSuccessOutputVerificationMethod"];
+export type VerificationMethod = components["schemas"]["GetRuleEvidenceSuccessVerificationMethod"];
 
 type AnyFunction = (...args: never[]) => unknown;
 

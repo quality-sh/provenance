@@ -1,118 +1,19 @@
+#[path = "review_host_support/mod.rs"]
+mod review_host_support;
+
 use provenance_macros::verifies;
-use serde_json::{json, Value};
-use std::{
-    io::{BufRead, BufReader},
-    net::TcpListener,
-    process::{Child, Command, Stdio},
-    sync::mpsc,
-    time::Duration,
+use review_host_support::{
+    configure_disposition_actors, list_discussions, repository, repository_with_actors, request,
+    response, start,
 };
-
-struct Host {
-    child: Child,
-    config: Value,
-}
-
-impl Drop for Host {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-fn repository() -> tempfile::TempDir {
-    let dir = tempfile::tempdir().unwrap();
-    let layout = provenance_store::layout::ProvenanceLayout::new(dir.path().to_str().unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    let manifest = provenance_core::Manifest::default_with_scope(
-        provenance_core::ScopeId::new("default").unwrap(),
-        provenance_core::RepoPathPrefix::new("."),
-    );
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-    dir
-}
-
-fn start(root: &std::path::Path) -> Host {
-    let mut child = Command::new(assert_cmd::cargo::cargo_bin("provenance"))
-        .args([
-            "review",
-            "--repo",
-            root.to_str().unwrap(),
-            "--repository-id",
-            "A",
-            "--scope",
-            "default",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .unwrap();
-    let stdout = child.stdout.take().unwrap();
-    let (send, receive) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut line = String::new();
-        BufReader::new(stdout).read_line(&mut line).unwrap();
-        let _ = send.send(line);
-    });
-    let mut host = Host {
-        child,
-        config: Value::Null,
-    };
-    let line = receive
-        .recv_timeout(Duration::from_secs(15))
-        .expect("host startup line");
-    assert!(
-        !line.is_empty(),
-        "review host must start and publish its configuration"
-    );
-    host.config = serde_json::from_str(&line).unwrap();
-    host
-}
-
-fn request(host: &Host, method: &str, path: &str, auth: bool) -> ureq::Request {
-    let req = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .request(
-            method,
-            &format!("{}{path}", host.config["endpoint"].as_str().unwrap()),
-        );
-    if auth {
-        req.set(
-            "Authorization",
-            &format!("Bearer {}", host.config["bearer"].as_str().unwrap()),
-        )
-    } else {
-        req
-    }
-}
-
-fn response(result: Result<ureq::Response, ureq::Error>) -> ureq::Response {
-    match result {
-        Ok(response) | Err(ureq::Error::Status(_, response)) => response,
-        Err(error) => panic!("{error}"),
-    }
-}
-
-fn call(host: &Host, target: &str, scope: &str) -> ureq::Response {
-    response(
-        request(host, "POST", "/v9/operations/list-threads", true)
-            .set("Content-Type", "application/json")
-            .send_string(
-                &json!({"context":{"repository":target,"scope":scope},"request":null}).to_string(),
-            ),
-    )
-}
+use serde_json::{json, Value};
+use std::{net::TcpListener, time::Duration};
 
 #[test]
+/// This flow checks startup assets, configuration, and selected-graph routing.
 #[verifies("rule_cli_serves_review_assets", examples)]
 fn serves_assets_configuration_and_only_the_selected_graph() {
     let repo = repository();
-    let other = repository();
     let host = start(repo.path());
     let index = request(&host, "GET", "/", false).call().unwrap();
     assert_eq!(
@@ -121,7 +22,7 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
     );
     assert!(index.into_string().unwrap().contains("<!doctype html>"));
     assert_eq!(
-        request(&host, "GET", "/metadata", false)
+        request(&host, "GET", "/metadata", true)
             .call()
             .unwrap()
             .status(),
@@ -141,13 +42,13 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
     .unwrap();
     assert_eq!(config["repositoryId"], "A");
     assert_eq!(config["scope"], "default");
-    assert_eq!(config["protocolVersion"], 9);
+    assert_eq!(config["dispositionActorIds"], json!([]));
+    assert_eq!(
+        config["compatibility"],
+        json!({"wire":9,"state":2,"review_journal":3,"read_derivation":3})
+    );
     assert!(config.get("bearer").is_none());
-    assert_eq!(call(&host, "A", "default").status(), 200);
-    for target in ["B", other.path().to_str().unwrap()] {
-        assert_eq!(call(&host, target, "default").status(), 404);
-    }
-    assert_eq!(call(&host, "A", "other").status(), 403);
+    assert_eq!(list_discussions(&host).status(), 200);
     for path in [
         "/.provenance/manifest.json",
         "/assets/missing.js",
@@ -155,27 +56,81 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
     ] {
         assert_eq!(
             response(request(&host, "GET", path, false).call()).status(),
+            401
+        );
+        assert_eq!(
+            response(request(&host, "GET", path, true).call()).status(),
             404
         );
     }
 }
 
 #[test]
+/// Implementation aid: pins per-request reviewer configuration reloads.
+fn review_configuration_reads_disposition_actors_for_each_request() {
+    let repo = repository_with_actors(&["maintainer"]);
+    let host = start(repo.path());
+    let read_config = || {
+        let response = request(&host, "GET", "/review-config", true)
+            .call()
+            .unwrap();
+        serde_json::from_str::<Value>(&response.into_string().unwrap()).unwrap()
+    };
+
+    assert_eq!(read_config()["dispositionActorIds"], json!(["maintainer"]));
+    configure_disposition_actors(repo.path(), &["release-manager", "maintainer"]);
+    assert_eq!(
+        read_config()["dispositionActorIds"],
+        json!(["release-manager", "maintainer"])
+    );
+}
+
+#[cfg(unix)]
+#[test]
+/// Implementation aid: hardens the selected repository against path replacement.
+fn review_configuration_stays_with_the_repository_selected_at_start() {
+    use std::os::unix::fs::symlink;
+
+    let repo_a = repository();
+    let repo_b = repository();
+    configure_disposition_actors(repo_a.path(), &["maintainer"]);
+    configure_disposition_actors(repo_b.path(), &["attacker"]);
+    let aliases = tempfile::tempdir().unwrap();
+    let alias = aliases.path().join("review-repo");
+    symlink(repo_a.path(), &alias).unwrap();
+    let host = start(&alias);
+
+    std::fs::remove_file(&alias).unwrap();
+    symlink(repo_b.path(), &alias).unwrap();
+
+    let config: Value = serde_json::from_str(
+        &request(&host, "GET", "/review-config", true)
+            .call()
+            .unwrap()
+            .into_string()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(config["dispositionActorIds"], json!(["maintainer"]));
+}
+
+#[test]
+/// Implementation aid: keeps authentication and origin checks before request decoding.
 fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
     let repo = repository();
     let host = start(repo.path());
-    for path in [
-        "/v9/operations/post-thread-message",
-        "/v9/operations/list-threads",
-        "/v9/operations/read-document",
+    for (method, path) in [
+        ("POST", "/requirements/req_example/discussions"),
+        ("GET", "/discussion-containers"),
+        ("GET", "/requirements/req_absent/document"),
     ] {
         assert_eq!(
-            response(request(&host, "POST", path, false).send_string("invalid")).status(),
+            response(request(&host, method, path, false).send_string("invalid")).status(),
             401
         );
         assert_eq!(
             response(
-                request(&host, "POST", path, true)
+                request(&host, method, path, true)
                     .set("Origin", "https://unrelated.test")
                     .send_string("invalid")
             )
@@ -184,7 +139,7 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
         );
         assert_eq!(
             response(
-                request(&host, "POST", path, true)
+                request(&host, method, path, true)
                     .set("Origin", "null")
                     .send_string("invalid")
             )
@@ -193,7 +148,7 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
         );
         assert_eq!(
             response(
-                request(&host, "POST", path, true)
+                request(&host, method, path, true)
                     .set("Host", "unrelated.test")
                     .send_string("invalid")
             )
@@ -202,12 +157,24 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
         );
         assert_eq!(
             response(
-                request(&host, "POST", path, true)
+                request(&host, method, path, true)
                     .set("Origin", host.config["endpoint"].as_str().unwrap())
                     .send_string("invalid")
             )
             .status(),
             400
+        );
+    }
+    for (site, expected) in [("cross-site", 403), ("same-origin", 400)] {
+        assert_eq!(
+            response(
+                request(&host, "POST", "/requirements/req_example/discussions", true)
+                    .set("Origin", host.config["endpoint"].as_str().unwrap())
+                    .set("Sec-Fetch-Site", site)
+                    .send_string("invalid")
+            )
+            .status(),
+            expected
         );
     }
     assert_eq!(
@@ -219,40 +186,90 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
         .status(),
         403
     );
-    let threads: Value =
-        serde_json::from_str(&call(&host, "A", "default").into_string().unwrap()).unwrap();
-    assert_eq!(threads, json!([]));
+    let discussions: Value =
+        serde_json::from_str(&list_discussions(&host).into_string().unwrap()).unwrap();
+    assert_eq!(discussions["data"]["items"], json!([]));
 }
 
 #[test]
-fn existing_writes_keep_native_scope_checks() {
+#[verifies("rule_record_comment_joins_anchored_thread", examples)]
+fn record_comment_joins_the_selected_record_thread() {
     let repo = repository();
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo.path().to_str().unwrap());
+    provenance_store::state_store::StateStore::new(layout)
+        .create_requirement(provenance_store::state_store::CreateRequirementInput {
+            scope_id: provenance_core::ScopeId::new("default").unwrap(),
+            id: provenance_core::StableId::new("req_example").unwrap(),
+            statement: "The Requirement accepts review.".into(),
+            description: None,
+            status: provenance_core::RequirementStatus::Discovery,
+            domain_id: None,
+            refines: Vec::new(),
+            depends_on: Vec::new(),
+            supersedes: Vec::new(),
+            spawned_by: None,
+            origin_thread: None,
+            origin_message: None,
+        })
+        .unwrap();
     let host = start(repo.path());
-    let mut body = json!({"context":{"repository":"A","scope":"default"},"request":{
-        "scope_id":"other", "parent":{"node_type":"requirement","node_id":"req_example"},
-        "role":"user", "body":"Check this requirement."
+    let body = json!({"data":{
+        "actor":"ben", "role":"user",
+        "body":"Check this requirement."
     }});
     let post = |body: &Value| {
         response(
-            request(&host, "POST", "/v9/operations/post-thread-message", true)
+            request(&host, "POST", "/requirements/req_example/discussions", true)
                 .set("Origin", host.config["endpoint"].as_str().unwrap())
                 .set("Content-Type", "application/json")
                 .send_string(&body.to_string()),
         )
     };
-    assert_eq!(post(&body).status(), 400);
-    body["request"]["scope_id"] = json!("default");
     let saved = post(&body);
     assert_eq!(saved.status(), 200);
     let saved: Value = serde_json::from_str(&saved.into_string().unwrap()).unwrap();
-    assert_eq!(saved["message"]["body"], "Check this requirement.");
-    assert!(saved["message"]["created_at"].is_u64());
-    let threads: Value =
-        serde_json::from_str(&call(&host, "A", "default").into_string().unwrap()).unwrap();
-    assert_eq!(threads.as_array().unwrap().len(), 1);
+    assert_eq!(saved["data"]["parent"]["node_type"], "requirement");
+    assert_eq!(saved["data"]["parent"]["node_id"], "req_example");
+    let discussion_id = saved["data"]["discussion_id"].as_str().unwrap();
+    let messages = request(
+        &host,
+        "GET",
+        &format!("/requirements/req_example/discussions/{discussion_id}/messages"),
+        true,
+    )
+    .call()
+    .unwrap();
+    let messages: Value = serde_json::from_str(&messages.into_string().unwrap()).unwrap();
+    assert_eq!(
+        messages["data"]["items"][0]["body"],
+        "Check this requirement."
+    );
 }
 
 #[test]
+/// Implementation aid: the addressed route owns scope selection and rejects a caller override.
+fn discussion_writes_refuse_a_caller_scope() {
+    let repo = repository();
+    let host = start(repo.path());
+    let body = json!({"data":{
+        "actor":"ben", "scope_id":"other", "role":"user",
+        "body":"Check this requirement."
+    }});
+
+    assert_eq!(
+        response(
+            request(&host, "POST", "/requirements/req_example/discussions", true)
+                .set("Origin", host.config["endpoint"].as_str().unwrap())
+                .set("Content-Type", "application/json")
+                .send_string(&body.to_string()),
+        )
+        .status(),
+        400
+    );
+}
+
+#[test]
+/// Implementation aid: pins review-host startup validation and port ownership.
 fn refuses_missing_configuration_invalid_repositories_and_busy_ports() {
     assert_cmd::Command::cargo_bin("provenance")
         .unwrap()
@@ -307,6 +324,7 @@ fn refuses_missing_configuration_invalid_repositories_and_busy_ports() {
 
 #[cfg(unix)]
 #[test]
+/// Implementation aid: keeps listener cleanup reliable during host shutdown.
 fn termination_releases_the_listener() {
     use std::{io::Write, net::TcpStream};
     let repo = repository();
@@ -318,31 +336,16 @@ fn termination_releases_the_listener() {
         .unwrap()
         .to_owned();
     let mut stalled = TcpStream::connect(&address).unwrap();
-    write!(stalled, "POST /v9/operations/list-threads HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {}\r\nContent-Length: 1000\r\n\r\n{{", host.config["bearer"].as_str().unwrap()).unwrap();
+    write!(stalled, "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {}\r\nContent-Length: 1000\r\n\r\n{{", host.config["bearer"].as_str().unwrap()).unwrap();
     let mut partial_headers = TcpStream::connect(&address).unwrap();
     partial_headers.write_all(b"GET / HTTP/1.1\r\nHo").unwrap();
-    assert!(Command::new("kill")
-        .args(["-TERM", &host.child.id().to_string()])
-        .status()
-        .unwrap()
-        .success());
-    let deadline = std::time::Instant::now() + Duration::from_secs(10);
-    loop {
-        if let Some(status) = host.child.try_wait().unwrap() {
-            assert!(status.success());
-            break;
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "host shutdown timed out"
-        );
-        std::thread::sleep(Duration::from_millis(25));
-    }
+    assert!(host.terminate_and_wait(Duration::from_secs(10)).success());
     assert!(TcpStream::connect(&address).is_err());
     assert!(TcpListener::bind(&address).is_ok());
 }
 
 #[test]
+/// Implementation aid: hardens every review response against credential disclosure.
 fn launch_url_and_responses_do_not_disclose_the_credential() {
     let repo = repository();
     let host = start(repo.path());
@@ -393,25 +396,19 @@ fn launch_url_and_responses_do_not_disclose_the_credential() {
 }
 
 #[test]
+/// Implementation aid: keeps route refusals behind the same access checks as successful reads.
 fn document_root_refusal_follows_target_and_scope_access_checks() {
     let repo = repository();
     let host = start(repo.path());
-    for (target, scope, authorized, expected) in [
-        ("A", "default", false, 401),
-        ("other", "default", true, 404),
-        ("A", "other", true, 403),
-        ("A", "default", true, 409),
-    ] {
+    for (authorized, expected) in [(false, 401), (true, 409)] {
         let result = response(
-            request(&host, "POST", "/v9/operations/read-document", authorized)
-                .set("Content-Type", "application/json")
-                .send_string(
-                    &json!({
-                        "context":{"repository":target,"scope":scope,"freshness":"catch_up"},
-                        "request":{"id":"req_absent"}
-                    })
-                    .to_string(),
-                ),
+            request(
+                &host,
+                "GET",
+                "/requirements/req_absent/document",
+                authorized,
+            )
+            .call(),
         );
         assert_eq!(result.status(), expected);
         if expected == 409 {

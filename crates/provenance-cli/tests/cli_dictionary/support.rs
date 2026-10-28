@@ -55,6 +55,8 @@ pub fn create_requirement(
             id,
             "--statement",
             statement,
+            "--format",
+            "json",
         ])
         .output()
         .unwrap()
@@ -79,13 +81,8 @@ pub fn write_reference(repo: &Path, dictionary: &DictionaryImport) {
 
 pub fn error_json(output: &Output) -> serde_json::Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
-    serde_json::from_str(
-        stderr
-            .trim()
-            .strip_prefix("Error: ")
-            .expect("CLI failure contains one machine-readable JSON object"),
-    )
-    .unwrap()
+    // A JSON-mode record command prints the refusal object bare.
+    serde_json::from_str::<serde_json::Value>(stderr.trim_end()).unwrap()["error"].clone()
 }
 
 /// The synthetic Issue 9 PDF. The builder makes every word, so no dictionary
@@ -132,7 +129,11 @@ fn approved_entry(index: usize) -> FixtureEntry {
 }
 
 fn unapproved_entry(index: usize) -> FixtureEntry {
-    let headword = format!("bunapproved{}", alpha_suffix(index));
+    let headword = match index {
+        0 => "attach".to_owned(),
+        index if index + 1 == UNAPPROVED_TABLE_ROWS => "claim".to_owned(),
+        index => format!("bunapproved{}", alpha_suffix(index - 1)),
+    };
     FixtureEntry {
         word: format!("{headword} (n)"),
         meaning: "ITEM (n)".to_owned(),

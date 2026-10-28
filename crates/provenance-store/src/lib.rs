@@ -1,22 +1,32 @@
+//! This crate is an implementation part of Provenance. Provenance is pre-release, and this API can
+//! change without compatibility shims. Use `provenance-sdk` for Rust.
+
 pub mod cache;
 pub mod canonical_digest;
 pub mod code_refs;
+pub mod current_schema;
 pub mod dictionary_reference;
-pub mod evidence_anchors;
+#[cfg(feature = "test-fixture")]
+pub mod fixture_probe;
 pub mod graph_reference;
 pub mod jsonl;
 pub mod layout;
 pub mod merge;
-pub mod migrations;
 pub mod operations;
 pub mod publication;
+pub mod repository_init;
 pub mod review;
+pub mod review_changes;
 pub mod settings;
 pub mod shards;
 pub mod stale;
 pub mod state_store;
 pub mod statement_analysis;
 mod test_probes;
+#[cfg(test)]
+extern crate self as provenance_store;
+#[cfg(test)]
+mod test_support;
 
 /// The validator version that a completed projection rebuild records.
 ///

@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use serde_json::json;
 use std::path::Path;
 
 pub fn init_repo(repo: &Path) {
@@ -42,22 +43,23 @@ pub fn create_rule(repo: &Path, id: &str, status: &str) {
         repo.to_str().unwrap(),
         "--scope",
         "default",
-        "--id",
-        id,
-        "--requirement-id",
-        "req_anchor",
-        "--statement",
-        "Payroll follows the current policy",
-        "--status",
-        status,
-        "--severity",
-        "high",
+        "--stdin",
     ]);
-    if status == "archived" {
-        command.args([
-            "--archived-in-commit",
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        ]);
-    }
-    command.assert().success();
+    let archived = (status == "archived")
+        .then(|| json!({"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}));
+    command
+        .write_stdin(
+            json!({
+                "id": id,
+                "requirement_ids": ["req_anchor"],
+                "resolution_ids": [],
+                "statement": "Payroll follows the current policy",
+                "status": status,
+                "severity": "high",
+                "archived_in_commit": archived
+            })
+            .to_string(),
+        )
+        .assert()
+        .success();
 }

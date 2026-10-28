@@ -7,42 +7,23 @@ fn provenance() -> Command {
 }
 
 #[test]
-fn top_level_help_keeps_commands_from_each_cli_domain() {
+fn top_level_help_keeps_product_commands_and_retires_the_sdk_dispatcher() {
     provenance().arg("--help").assert().success().stdout(
-        contains("requirements")
-            .and(contains("questions"))
-            .and(contains("proposals"))
-            .and(contains("docs"))
-            .and(contains("sdk")),
+        contains("docs")
+            .and(contains("graph"))
+            .and(contains("traceability"))
+            .and(contains("coverage"))
+            .and(contains("review"))
+            .and(contains("sdk").not()),
     );
 }
 
 #[test]
-fn nested_help_parses_commands_from_each_cli_domain() {
-    for command in [
-        &["requirements", "--help"][..],
-        &["questions", "--help"][..],
-        &["proposals", "--help"][..],
-        &["docs", "--help"][..],
-        &["sdk", "--help"][..],
-    ] {
-        provenance().args(command).assert().success();
-    }
-}
-
-/// Neither list is required: emptying one is allowed, so the help text
-/// must not claim a last entry is kept.
-#[test]
-fn optional_list_clear_help_does_not_claim_a_required_last_entry() {
-    for command in [
-        &["resolutions", "supersedes", "clear", "--help"][..],
-        &["rules", "resolution", "clear", "--help"][..],
-    ] {
-        provenance()
-            .args(command)
-            .assert()
-            .success()
-            .stdout(contains("Remove one record from the list"))
-            .stdout(contains("keeps its last requirement").not());
-    }
+fn product_and_catalog_help_are_available() {
+    provenance().args(["docs", "--help"]).assert().success();
+    provenance()
+        .args(["requirements", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("requirements list"));
 }

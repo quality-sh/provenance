@@ -1,4 +1,4 @@
-use super::SaveRequirement;
+use super::{CreateReviewRequirement, SaveRequirement};
 use crate::{layout::ProvenanceLayout, state_store::StateStore, test_probes};
 use camino::Utf8Path;
 use provenance_core::{ScopeId, StableId};
@@ -14,8 +14,17 @@ fn open(root: &Utf8Path) -> StateStore {
     StateStore::new(ProvenanceLayout::new(root))
 }
 fn input(store: &StateStore, request: &str) -> SaveRequirement {
-    serde_json::from_value(json!({"request_id":request,"actor":"ben", "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
+    serde_json::from_value(json!({"actor":"ben", "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update":{"scope_id":"default","id":"req_a","description":request},"relationships":null})).unwrap()
+}
+fn create_input() -> CreateReviewRequirement {
+    serde_json::from_value(json!({
+        "actor":"ben", "origin":null,
+        "create":{"scope_id":"default", "id":"req_new",
+            "statement":"The system recovers creation.", "status":"discovery",
+            "depends_on":[], "supersedes":[]}
+    }))
+    .unwrap()
 }
 fn fixture() -> tempfile::TempDir {
     let temp = tempfile::tempdir().unwrap();
@@ -29,7 +38,9 @@ fn fixture() -> tempfile::TempDir {
     .unwrap();
     let store = open(root);
     store.create_requirement(serde_json::from_value(json!({"scope_id":"default","id":"req_a","statement":"The system stores records.","status":"discovery","depends_on":[],"supersedes":[]})).unwrap()).unwrap();
-    store.save_requirement(input(&store, "baseline")).unwrap();
+    store
+        .save_requirement_resource(input(&store, "baseline"))
+        .unwrap();
     temp
 }
 
@@ -48,14 +59,74 @@ fn crash_child() {
         _ => panic!("unknown crash phase"),
     };
     let store = open(Utf8Path::new(&root));
-    let input = input(&store, "crash_request");
     test_probes::arm(phase, || std::process::exit(86));
-    store.save_requirement(input).unwrap();
+    if std::env::var("PROVENANCE_REVIEW_CRASH_OPERATION").as_deref() == Ok("create") {
+        store.create_review_requirement(create_input()).unwrap();
+    } else {
+        store
+            .save_requirement_resource(input(&store, "crash_request"))
+            .unwrap();
+    }
     panic!("crash phase was not reached");
 }
 
 #[test]
 fn process_crashes_reopen_as_complete_old_or_new_state() {
+    for (phase, committed) in [
+        ("state_prepared", false),
+        ("state_marker_prepared", false),
+        ("state_backup_created", false),
+        ("state_installed", true),
+        ("state_published", true),
+    ] {
+        let temp = fixture();
+        let root = Utf8Path::from_path(temp.path()).unwrap();
+        let previous = open(root)
+            .requirement_decision_state(&scope(), &id())
+            .unwrap()
+            .pending
+            .unwrap()
+            .proposal_id;
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "review::recovery_tests::crash_child",
+                "--nocapture",
+            ])
+            .env("PROVENANCE_REVIEW_CRASH_ROOT", root.as_str())
+            .env("PROVENANCE_REVIEW_CRASH_PHASE", phase)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert_eq!(status.code(), Some(86), "{phase}");
+        let store = open(root);
+        let record = store.list_requirements(&scope()).unwrap().remove(0);
+        assert_eq!(
+            record.description.as_deref(),
+            Some(if committed {
+                "crash_request"
+            } else {
+                "baseline"
+            }),
+            "{phase}"
+        );
+        let pending = store
+            .requirement_decision_state(&scope(), &id())
+            .unwrap()
+            .pending
+            .unwrap();
+        assert_eq!(pending.proposal_id == previous, !committed, "{phase}");
+        super::decision_state::CycleFacts::validated(&store, &scope()).unwrap();
+        assert!(!ProvenanceLayout::new(root)
+            .publication_marker_path()
+            .exists());
+    }
+}
+
+#[test]
+fn creation_crashes_reopen_with_both_or_neither_published_half() {
+    let new_id = StableId::new("req_new").unwrap();
     for (phase, committed) in [
         ("state_prepared", false),
         ("state_marker_prepared", false),
@@ -73,36 +144,28 @@ fn process_crashes_reopen_as_complete_old_or_new_state() {
             ])
             .env("PROVENANCE_REVIEW_CRASH_ROOT", root.as_str())
             .env("PROVENANCE_REVIEW_CRASH_PHASE", phase)
+            .env("PROVENANCE_REVIEW_CRASH_OPERATION", "create")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
             .unwrap();
         assert_eq!(status.code(), Some(86), "{phase}");
+
         let store = open(root);
-        let receipt = store
-            .requirement_save_receipt(
-                &scope(),
-                &id(),
-                &StableId::new("crash_request").unwrap(),
-                "ben",
-                None,
-            )
-            .unwrap();
-        assert_eq!(receipt.is_some(), committed, "{phase}");
-        let record = store.list_requirements(&scope()).unwrap().remove(0);
         assert_eq!(
-            record.description.as_deref(),
-            Some(if committed {
-                "crash_request"
-            } else {
-                "baseline"
-            }),
+            store.requirement(&scope(), &new_id).is_ok(),
+            committed,
             "{phase}"
         );
-        store.validated_review_entries(&scope()).unwrap();
-        assert!(!ProvenanceLayout::new(root)
-            .publication_marker_path()
-            .exists());
+        assert_eq!(
+            store
+                .requirement_decision_state(&scope(), &new_id)
+                .ok()
+                .and_then(|state| state.pending)
+                .is_some(),
+            committed,
+            "{phase}"
+        );
     }
 }
 
@@ -140,16 +203,6 @@ fn assert_failed_rollback(root: &Utf8Path) {
         .publication_marker_path()
         .exists());
     let store = open(root);
-    assert!(store
-        .requirement_save_receipt(
-            &scope(),
-            &id(),
-            &StableId::new("failed").unwrap(),
-            "ben",
-            None
-        )
-        .unwrap()
-        .is_none());
     assert_eq!(
         store.list_requirements(&scope()).unwrap()[0]
             .description
@@ -159,28 +212,32 @@ fn assert_failed_rollback(root: &Utf8Path) {
 }
 
 #[test]
-fn a_lost_result_is_uncertain_until_the_receipt_is_read_after_recovery() {
+fn a_lost_result_resolves_through_resubmission_after_recovery() {
     let temp = fixture();
     let root = Utf8Path::from_path(temp.path()).unwrap();
     let store = open(root);
     let input = input(&store, "lost_result");
+    let request = serde_json::to_vec(&input).unwrap();
     test_probes::crash_at("state_published");
     let error = store.save_requirement(input).unwrap_err();
     test_probes::disarm("state_published");
     assert!(matches!(
         crate::write_error::WriteError(error).safe(),
-        crate::write_error::WriteFailure::UncertainWrite
+        crate::write_error::WriteFailure::WriteFailed
     ));
-    let receipt = open(root)
-        .requirement_save_receipt(
-            &scope(),
-            &id(),
-            &StableId::new("lost_result").unwrap(),
-            "ben",
-            None,
-        )
-        .unwrap();
-    assert!(receipt.is_some());
+    let reopened = open(root);
+    let retried: SaveRequirement = serde_json::from_slice(&request).unwrap();
+    let state = reopened.save_requirement(retried).unwrap();
+    assert_eq!(
+        state,
+        reopened.requirement_edit_state(&scope(), &id()).unwrap()
+    );
+    assert_eq!(
+        reopened.list_requirements(&scope()).unwrap()[0]
+            .description
+            .as_deref(),
+        Some("lost_result")
+    );
 }
 
 #[test]
@@ -244,10 +301,10 @@ fn a_relationship_only_review_save_updates_the_record_stamp() {
     ]);
     let second = git(&["rev-parse", "HEAD"]);
     let save: SaveRequirement = serde_json::from_value(json!({
-        "request_id":"relationships", "actor":"ben",
+        "actor":"ben",
         "expected_etag":store.requirement_edit_state(&scope(), &id()).unwrap().etag,
         "update":{"scope_id":"default","id":"req_a"},
-        "relationships":{"refines":null,"depends_on":["req_b"],"supersedes":[],"spawned_by":null,"source_refs":[]}
+        "relationships":{"refines":[],"depends_on":["req_b"],"supersedes":[],"spawned_by":null,"cites":[]}
     })).unwrap();
     store.save_requirement(save).unwrap();
     let after = store.requirement(&scope(), &id()).unwrap();

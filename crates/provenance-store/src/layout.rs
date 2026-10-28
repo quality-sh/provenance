@@ -1,4 +1,5 @@
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_core::Manifest;
 
 #[derive(Debug, Clone)]
 pub struct ProvenanceLayout {
@@ -26,11 +27,6 @@ impl ProvenanceLayout {
     }
     pub fn cache_dir(&self) -> Utf8PathBuf {
         self.provenance_dir().join("cache")
-    }
-    /// Default output directory for the generated wiki: a derived artifact,
-    /// gitignored the same way `cache_dir` is.
-    pub fn wiki_dir(&self) -> Utf8PathBuf {
-        self.provenance_dir().join("wiki")
     }
     pub fn cache_db_path(&self) -> Utf8PathBuf {
         self.cache_dir().join("provenance.db")
@@ -72,6 +68,12 @@ impl ProvenanceLayout {
     pub fn import_transactions_dir(&self) -> Utf8PathBuf {
         self.cache_dir().join("import-transactions")
     }
+    pub fn source_edit_marker_path(&self) -> Utf8PathBuf {
+        self.cache_dir().join("source-edit-publication.json")
+    }
+    pub fn source_edit_transactions_dir(&self) -> Utf8PathBuf {
+        self.cache_dir().join("source-edit-transactions")
+    }
 }
 
 pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
@@ -83,6 +85,75 @@ pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
         }
     }
     anyhow::bail!("could not locate repository root from {start}")
+}
+
+#[derive(Debug)]
+pub struct GraphNotInitialized;
+
+impl std::fmt::Display for GraphNotInitialized {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "Provenance graph is not initialized; run `provenance init`"
+        )
+    }
+}
+
+impl std::error::Error for GraphNotInitialized {}
+
+fn path_exists(path: &Utf8Path) -> anyhow::Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+/// Run a graph operation after publication recovery and manifest validation.
+pub fn with_initialized_graph<R>(
+    layout: &ProvenanceLayout,
+    operation: impl FnOnce(Manifest) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    // A publisher creates its lock before it can move the live state.
+    if !path_exists(&layout.manifest_path())?
+        && !path_exists(&layout.publication_marker_path())?
+        && !path_exists(&layout.publication_lock_path())?
+    {
+        return Err(GraphNotInitialized.into());
+    }
+    crate::publication::with_repository_publication_checked(
+        layout,
+        || {
+            if !path_exists(&layout.manifest_path())?
+                && !path_exists(&layout.publication_marker_path())?
+            {
+                return Err(GraphNotInitialized.into());
+            }
+            Ok(())
+        },
+        || {
+            let manifest = match std::fs::metadata(layout.manifest_path()) {
+                Ok(metadata) if metadata.is_file() => {
+                    crate::state_store::StateStore::new(layout.clone()).manifest()?
+                }
+                Ok(_) => anyhow::bail!("Provenance graph manifest is not a file"),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    if path_exists(&layout.manifest_path())? {
+                        anyhow::bail!("Provenance graph manifest is not a file");
+                    }
+                    return Err(GraphNotInitialized.into());
+                }
+                Err(error) => return Err(error.into()),
+            };
+            manifest.ensure_has_scopes()?;
+            operation(manifest)
+        },
+    )
+}
+
+/// Require a valid manifest before a caller opens a graph operation.
+pub fn require_initialized_graph(layout: &ProvenanceLayout) -> anyhow::Result<()> {
+    with_initialized_graph(layout, |_| Ok(()))
 }
 
 #[cfg(test)]
@@ -100,7 +171,18 @@ mod tests {
             layout.cache_db_path(),
             root.join(".provenance/cache/provenance.db")
         );
-        assert_eq!(layout.wiki_dir(), root.join(".provenance/wiki"));
+        assert_eq!(
+            layout.source_edit_marker_path(),
+            root.join(".provenance/cache/source-edit-publication.json")
+        );
+        assert_eq!(
+            layout.source_edit_transactions_dir(),
+            root.join(".provenance/cache/source-edit-transactions")
+        );
+        assert_ne!(
+            layout.source_edit_transactions_dir(),
+            layout.import_transactions_dir()
+        );
         assert_eq!(
             layout
                 .state_shard_lock_path(&layout.scopes_dir().join("default/sources/source.jsonl"))

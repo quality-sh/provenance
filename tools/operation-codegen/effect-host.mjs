@@ -17,7 +17,7 @@ export function effectModule(module) {
     },
   });
   return { ...module, ...effectSdk, HttpClient: {
-    connect: async (baseUrl, fetch) => adapt(await execute(effectSdk.EffectHttpClient.connect({ baseUrl, fetch }))),
-    connectWithBearer: async (baseUrl, bearer, fetch) => adapt(await execute(effectSdk.EffectHttpClient.connect({ baseUrl, bearer, fetch }))),
+    connect: async (baseUrl, fetch, options = {}) => adapt(await execute(effectSdk.EffectHttpClient.connect({ baseUrl, fetch, ...options }))),
+    connectWithBearer: async (baseUrl, bearer, fetch, options = {}) => adapt(await execute(effectSdk.EffectHttpClient.connect({ baseUrl, bearer, fetch, ...options }))),
   } };
 }

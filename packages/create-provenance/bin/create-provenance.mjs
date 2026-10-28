@@ -22,15 +22,12 @@ try {
     readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
   );
   const options = parseArguments(process.argv.slice(2), process.cwd());
-  const result = initializeProject({
+  initializeProject({
     ...options,
     packageVersion: manifest.version,
     packageSpec: process.env.PROVENANCE_PACKAGE_SPEC,
     enginePath: process.env.PROVENANCE_BIN,
   });
-  process.stdout.write(
-    `Provenance is ready in ${options.projectDirectory} with ${result.packageManager}.\n`,
-  );
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exit(1);

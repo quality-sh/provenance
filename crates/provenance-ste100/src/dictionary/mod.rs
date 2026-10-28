@@ -4,7 +4,10 @@ mod layout;
 mod parse;
 mod pdf;
 
-pub use index::{load_dictionary_index, store_dictionary_index, DictionaryIndexError};
+pub use index::{
+    load_dictionary_index, load_dictionary_index_for_source, store_dictionary_index,
+    DictionaryIndexError,
+};
 
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};

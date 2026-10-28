@@ -8,6 +8,7 @@ use provenance_store::statement_analysis::{analyze_changed_statements, Statement
 
 fn requirement(id: &str, statement: &str) -> Requirement {
     Requirement {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -22,7 +23,7 @@ fn requirement(id: &str, statement: &str) -> Requirement {
 
         domain_id: None,
         source_refs: Vec::new(),
-        refines: None,
+        refines: Vec::new(),
         depends_on: Vec::new(),
         supersedes: Vec::new(),
         spawned_by: None,
@@ -163,8 +164,9 @@ fn non_statement_changes_and_clean_changed_statements_have_no_findings() {
     metadata_change.description = Some("Unrelated metadata".to_owned());
     let clean = requirement("req_clean", "Clean statement");
 
-    assert!(
-        analyze_changed_statements(&[base], &[], &[metadata_change, clean], &[], None).is_empty()
+    assert_eq!(
+        analyze_changed_statements(&[base], &[], &[metadata_change, clean], &[], None),
+        [] as [provenance_store::statement_analysis::StatementDiagnostic; 0]
     );
 }
 

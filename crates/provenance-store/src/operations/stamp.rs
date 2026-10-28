@@ -7,7 +7,7 @@ use sqlx::SqliteConnection;
 /// The reader logic version the stamp carries.
 ///
 /// It moves when reader logic changes an answer for the same rows; not for
-/// a migration, and not for a fix on a live part. The pinned answers test compares
+/// a cache rebuild, and not for a fix on a live part. The pinned answers test compares
 /// a frozen store's answers to a file keyed by this number, regenerated
 /// only in the commit that bumps it.
 ///

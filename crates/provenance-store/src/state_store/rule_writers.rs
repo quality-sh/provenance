@@ -3,11 +3,13 @@ use super::writers::sorted_ids;
 use super::{CreateResolutionInput, CreateRuleInput, StateStore};
 use crate::shards;
 use provenance_core::model::relations::required_refusal;
-use provenance_core::{NodeType, Resolution, Rule, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, NodeType, Resolution, Rule};
 
 impl StateStore {
     pub fn create_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
-        self.with_repository_publication(|| self.write_resolution(input))
+        let path = shards::resolutions_path(&self.layout, &input.scope_id);
+        let id = input.id.clone();
+        self.create_native_record(&path, &id, |store| store.write_resolution(input))
     }
 
     fn write_resolution(&self, input: CreateResolutionInput) -> anyhow::Result<Resolution> {
@@ -30,6 +32,12 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
+        self.ensure_canonical_id_available(&scope_id, &id)?;
+        self.validate_requirement_origin(
+            &scope_id,
+            origin_thread.as_ref(),
+            origin_message.as_ref(),
+        )?;
         crate::write_error::ensure!(
             MissingReference,
             !requirement_ids.is_empty(),
@@ -52,9 +60,10 @@ impl StateStore {
         let path = shards::resolutions_path(&self.layout, &scope_id);
         let resolution = self.mutate_graph_record(&path, |records: &mut Vec<Resolution>| {
             let resolution = Resolution {
+                archived_in_commit: None,
                 created: None,
                 updated: None,
-                schema_version: SUPPORTED_SCHEMA_VERSION,
+                schema_version: REVIEW_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id: id.clone(),
                 title,
@@ -87,7 +96,9 @@ impl StateStore {
     }
 
     pub fn create_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
-        self.with_repository_publication(|| self.write_rule(input))
+        let path = shards::rules_path(&self.layout, &input.scope_id);
+        let id = input.id.clone();
+        self.create_native_record(&path, &id, |store| store.write_rule(input))
     }
 
     fn write_rule(&self, input: CreateRuleInput) -> anyhow::Result<Rule> {
@@ -107,6 +118,12 @@ impl StateStore {
             origin_thread,
             origin_message,
         } = input;
+        self.ensure_canonical_id_available(&scope_id, &id)?;
+        self.validate_requirement_origin(
+            &scope_id,
+            origin_thread.as_ref(),
+            origin_message.as_ref(),
+        )?;
         super::statement_policy::ensure_statement_is_writable(&self.layout, &statement)?;
         crate::write_error::ensure!(
             MissingReference,
@@ -138,7 +155,7 @@ impl StateStore {
                 created: None,
                 updated: None,
                 archived_in_commit,
-                schema_version: SUPPORTED_SCHEMA_VERSION,
+                schema_version: REVIEW_SCHEMA_VERSION,
                 scope_id: scope_id.clone(),
                 id: id.clone(),
                 declared_by: None,

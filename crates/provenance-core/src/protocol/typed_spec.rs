@@ -81,9 +81,9 @@ pub struct TypedRequirementInput {
     pub description: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<String>,
-    /// The key of the requirement in the same document this one refines.
+    /// Keys of requirements in the same document this one refines.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub refines: Option<String>,
+    pub refines: Option<Vec<String>>,
     /// Keys of requirements in the same document this one depends on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub depends_on: Option<Vec<String>>,
@@ -130,6 +130,7 @@ pub struct TypedImplementationInput {
 }
 
 /// The fixed request shape for one statement preflight.
+#[rule("rule_ste_sdk_statement_request_schema")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

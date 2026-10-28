@@ -30,6 +30,7 @@ impl ClaudeAction {
         claude_dir: &Path,
         force: bool,
         copy: bool,
+        guidance: &str,
     ) -> anyhow::Result<Self> {
         let name = skill_name(skill)?;
         let path = claude_dir.join(name);
@@ -43,9 +44,16 @@ impl ClaudeAction {
                 TargetEntry::Symlink(_) | TargetEntry::Other => TargetState::Foreign,
             };
             let verdict = classify_install(state, force);
-            refuse_claude(&path, &before, verdict, true)?;
+            refuse_claude(&path, &before, verdict, true, guidance)?;
             let prospective_missing = !matches!(before, TargetEntry::Directory);
-            let files = plan_copy_files(skill, canonical_dir, &path, force, prospective_missing)?;
+            let files = plan_copy_files(
+                skill,
+                canonical_dir,
+                &path,
+                force,
+                prospective_missing,
+                guidance,
+            )?;
             return Ok(Self::Copy {
                 path,
                 before,
@@ -62,7 +70,7 @@ impl ClaudeAction {
             TargetEntry::Symlink(_) | TargetEntry::Other => TargetState::Foreign,
         };
         let verdict = classify_install(state, force);
-        refuse_claude(&path, &before, verdict, false)?;
+        refuse_claude(&path, &before, verdict, false, guidance)?;
         let fallback = if verdict == InstallVerdict::Ours {
             Vec::new()
         } else {
@@ -72,6 +80,7 @@ impl ClaudeAction {
                 &path,
                 force,
                 !matches!(before, TargetEntry::Directory),
+                guidance,
             )?
         };
         Ok(Self::Symlink {
@@ -316,20 +325,65 @@ fn refuse_claude(
     entry: &TargetEntry,
     verdict: InstallVerdict,
     copy: bool,
+    guidance: &str,
 ) -> anyhow::Result<()> {
     if verdict != InstallVerdict::Refuse {
         return Ok(());
     }
     match entry {
         TargetEntry::Symlink(current) => anyhow::bail!(
-            "{} {} {}; rerun with --force to overwrite",
+            "{} {} {}; {}",
             path.display(),
             if copy { "is a symlink to" } else { "points at" },
-            current.display()
+            current.display(),
+            guidance
         ),
         _ => anyhow::bail!(
-            "{} exists and is not a skill directory; rerun with --force to overwrite",
-            path.display()
+            "{} exists and is not a skill directory; {}",
+            path.display(),
+            guidance
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn symlink_failure_reports_the_copied_child_file() {
+        let temporary = tempfile::tempdir().unwrap();
+        let base = temporary.path();
+        let canonical = base.join(".agents/skills");
+        let claude = base.join(".claude/skills");
+        let action = ClaudeAction::plan(
+            &crate::skills::EMBEDDED_SKILLS[0],
+            &canonical,
+            &claude,
+            false,
+            false,
+            &super::super::conflict_guidance(base, false, false),
+        )
+        .unwrap();
+        let mut rollback = FileRollbackJournal::within(base);
+        let (reports, reason) = action
+            .apply_with(
+                |_, _| {
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::PermissionDenied,
+                        "denied",
+                    ))
+                },
+                &mut rollback,
+            )
+            .unwrap();
+        assert!(reason.unwrap().contains("failed to symlink"));
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].status, FileStatus::Installed);
+        assert_eq!(
+            std::path::Path::new(&reports[0].path),
+            claude.join("provenance-fork-tournament/SKILL.md")
+        );
+        assert!(claude.join("provenance-fork-tournament/SKILL.md").exists());
     }
 }

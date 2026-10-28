@@ -12,6 +12,9 @@ use super::super::{
 };
 use crate::shards;
 
+#[cfg(test)]
+mod tests;
+
 pub(super) struct Cascade {
     pub(super) rules: BTreeSet<String>,
     resolutions: Vec<Resolution>,
@@ -69,7 +72,7 @@ impl Cascade {
             requirement
                 .source_refs
                 .retain(|r| !source_ids.contains(r.source_id.as_str()));
-            clear_id(&mut requirement.refines, &requirement_ids);
+            remove_ids(&mut requirement.refines, &requirement_ids);
             remove_ids(&mut requirement.depends_on, &requirement_ids);
             remove_ids(&mut requirement.supersedes, &requirement_ids);
             clear_id(&mut requirement.spawned_by, &resolution_ids);
@@ -163,15 +166,46 @@ impl Cascade {
             };
             let survives = match artifact.artifact_type {
                 CanonicalArtifactType::Source => {
-                    contains_id(sources, &artifact.artifact_id, |r| &r.id)
+                    contains_scoped_id(sources, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
                 }
                 CanonicalArtifactType::Requirement => {
-                    contains_id(requirements, &artifact.artifact_id, |r| &r.id)
+                    contains_scoped_id(requirements, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
                 }
                 CanonicalArtifactType::Resolution => {
-                    contains_id(&self.resolutions, &artifact.artifact_id, |r| &r.id)
+                    contains_scoped_id(&self.resolutions, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
                 }
-                CanonicalArtifactType::Rule => contains_id(rules, &artifact.artifact_id, |r| &r.id),
+                CanonicalArtifactType::Rule => {
+                    contains_scoped_id(rules, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
+                CanonicalArtifactType::Domain => contains_scoped_id(
+                    &store.list_domains(scope)?,
+                    scope,
+                    &artifact.artifact_id,
+                    |r| (&r.scope_id, &r.id),
+                ),
+                CanonicalArtifactType::Boundary => {
+                    contains_scoped_id(&self.boundaries, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
+                CanonicalArtifactType::Topic => {
+                    contains_scoped_id(&self.topics, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
+                CanonicalArtifactType::Question => {
+                    contains_scoped_id(&self.questions, scope, &artifact.artifact_id, |r| {
+                        (&r.scope_id, &r.id)
+                    })
+                }
             };
             anyhow::ensure!(
                 survives,
@@ -185,22 +219,20 @@ impl Cascade {
     }
 
     pub(super) fn publish(self, store: &StateStore, scope: &ScopeId) -> anyhow::Result<()> {
+        use crate::state_store::read_budget::ensure_slice_within_read_budget;
+        ensure_slice_within_read_budget(&self.topics)?;
+        ensure_slice_within_read_budget(&self.questions)?;
+        ensure_slice_within_read_budget(&self.boundaries)?;
         store.replace_graph_records(
             &shards::resolutions_path(&store.layout, scope),
             self.resolutions,
         )?;
-        super::replace_records(
-            store,
-            &shards::topics_path(&store.layout, scope),
-            self.topics,
-        )?;
-        super::replace_records(
-            store,
+        store.replace_graph_records(&shards::topics_path(&store.layout, scope), self.topics)?;
+        store.replace_graph_records(
             &shards::questions_path(&store.layout, scope),
             self.questions,
         )?;
-        super::replace_records(
-            store,
+        store.replace_graph_records(
             &shards::boundaries_path(&store.layout, scope),
             self.boundaries,
         )?;
@@ -393,12 +425,16 @@ fn retain_links(
     });
 }
 
-fn contains_id<'a, T>(
+fn contains_scoped_id<'a, T>(
     records: &'a [T],
+    scope: &ScopeId,
     wanted: &StableId,
-    id: impl Fn(&'a T) -> &'a StableId,
+    identity: impl Fn(&'a T) -> (&'a ScopeId, &'a StableId),
 ) -> bool {
-    records.iter().any(|record| id(record) == wanted)
+    records.iter().any(|record| {
+        let (record_scope, id) = identity(record);
+        record_scope == scope && id == wanted
+    })
 }
 
 const fn canonical_kind(kind: CanonicalArtifactType) -> &'static str {
@@ -407,6 +443,10 @@ const fn canonical_kind(kind: CanonicalArtifactType) -> &'static str {
         CanonicalArtifactType::Requirement => "requirement",
         CanonicalArtifactType::Resolution => "resolution",
         CanonicalArtifactType::Rule => "rule",
+        CanonicalArtifactType::Domain => "domain",
+        CanonicalArtifactType::Boundary => "boundary",
+        CanonicalArtifactType::Topic => "topic",
+        CanonicalArtifactType::Question => "question",
     }
 }
 

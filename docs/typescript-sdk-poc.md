@@ -35,25 +35,16 @@ process seam. Node runs it between Rust-backed begin and complete commands. On
 failure, the SDK sends a serialized error and rethrows the exact value caught
 from the callback.
 
-## Process protocol
+## Resource protocol
 
-The SDK launches the CLI for each operation and exchanges one JSON document on
-stdin/stdout:
-
-- `provenance sdk info` reports the engine, protocol, state schema, and resolved
-  project root. The SDK uses it to reject an incompatible engine before sending
-  declarations or evidence.
-- `provenance sdk apply` reconciles one complete declaration document.
-- `provenance sdk plan` previews the same reconciliation without publishing it.
-- `provenance sdk begin-verification` checks the rule and creates a running
-  evidence record.
-- `provenance sdk complete-verification` records passed or failed.
-- `provenance sdk verification-runs` queries that evidence, optionally by rule.
-- `provenance sdk get`, `search`, `neighbors`, `trace`, `impact`, `evidence`,
-  `stale`, and `resolve-symbol` answer structured questions about the graph.
-  Each is one named operation with a bounded answer, described in
-  [`cli.md`](cli.md). The TypeScript functions over them add no traversal or
-  filtering of their own.
+The SDK connects to a host, reads `/metadata`, and pins the compatibility tuple.
+It then uses the generated resource operations. Authoring documents use
+`POST /authoring-changes`, previews use `POST /authoring-plans`, and verification
+uses `POST /verification-runs/begin-verification` followed by
+`POST /verification-runs/{run_id}/complete-verification`. Reads use collection,
+member, subresource, or query parameters on those resource routes. The CLI
+projects the same catalog as collection commands, as described in
+[`cli.md`](cli.md).
 
 No daemon, socket, native addon, FFI object graph, or callback bridge is used
 in this POC. Each verification uses two short-lived Rust processes. Published
@@ -159,13 +150,13 @@ that address to the canonical ID and rejects an unapplied declaration before
 Node executes the callback. Keeping runs in the existing derived cache prevents
 every local test from dirtying Git-tracked canonical state. Declarations
 themselves remain in `.provenance/state` and therefore appear in exports,
-traceability queries, checks, graph references, and generated wiki pages like
+traceability queries, checks, graph references, and the review page like
 records created by the existing CLI.
 
-The wiki and validating coverage scan consume canonical typed bindings alongside
+The validating coverage scan consumes canonical typed bindings alongside
 scanner-discovered bindings. Runtime results remain separate and are queried
-with `sdk verification-runs`; durable relationships are queried with
-`sdk verification-bindings`. Stale analysis treats a changed typed verification
+with `verification-runs list`; durable relationships are queried with
+`verification-bindings list`. Stale analysis treats a changed typed verification
 path as disturbed evidence without executing the callback.
 
 ## Compile-time result
@@ -220,5 +211,5 @@ canonical model without a data migration.
 
 The next decision is how durable verification relationships and runtime
 evidence should shape CI policy. Typed bindings already join coverage, stale
-detection, wiki views, and semantic change plans. More languages are not the
+detection, and semantic change plans. More languages are not the
 next task.

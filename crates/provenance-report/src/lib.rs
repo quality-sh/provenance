@@ -1,3 +1,6 @@
+//! This crate is an implementation part of Provenance. Provenance is pre-release, and this API can
+//! change without compatibility shims. Use `provenance-sdk` for Rust.
+//!
 //! Deterministic pull request report rendering and envelope production.
 //!
 //! Layers stay separate: the builder module writes the versioned report
@@ -10,4 +13,7 @@ pub mod build;
 pub mod catalog;
 pub mod envelope;
 pub mod escape;
-pub mod render;
+mod pipeline;
+mod render;
+
+pub use pipeline::{render_envelope, RenderError, RenderFormat};

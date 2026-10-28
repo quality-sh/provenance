@@ -1,4 +1,4 @@
-use crate::output::OutputFormat;
+use crate::output::ReportFormat;
 use camino::Utf8PathBuf;
 use clap::Subcommand;
 
@@ -9,8 +9,8 @@ pub enum ReportCommand {
         /// Report envelope JSON (schema version 1).
         #[arg(long)]
         input: Utf8PathBuf,
-        #[arg(long, value_enum, default_value_t = OutputFormat::Markdown)]
-        format: OutputFormat,
+        #[arg(long, value_enum, default_value_t = ReportFormat::Markdown)]
+        format: ReportFormat,
         /// Write the result to this file instead of standard output.
         #[arg(long)]
         output: Option<Utf8PathBuf>,

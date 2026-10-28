@@ -1,9 +1,0 @@
-ALTER TABLE sources ADD COLUMN created TEXT;
-ALTER TABLE sources ADD COLUMN updated TEXT;
-ALTER TABLE requirements ADD COLUMN created TEXT;
-ALTER TABLE requirements ADD COLUMN updated TEXT;
-ALTER TABLE rules ADD COLUMN created TEXT;
-ALTER TABLE rules ADD COLUMN updated TEXT;
-ALTER TABLE rules ADD COLUMN archived_in_commit TEXT;
-ALTER TABLE resolutions ADD COLUMN created TEXT;
-ALTER TABLE resolutions ADD COLUMN updated TEXT;

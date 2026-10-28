@@ -1,9 +1,8 @@
-use provenance_core::{ImplementationBinding, Requirement, Rule, ScopeId, Source};
+use provenance_core::{ImplementationBinding, NodeType, Requirement, Rule, ScopeId, Source};
 
 use super::{cascade::Cascade, replace_records};
-use crate::review::guard::protect_requirements;
+use crate::shards;
 use crate::state_store::{ReconciledResource, StateStore, TypedSpecResult};
-use crate::{shards, write_error::publication_started};
 
 pub(super) struct Replacement {
     pub sources: Vec<Source>,
@@ -22,8 +21,26 @@ impl Replacement {
         requirement_resources: &[ReconciledResource],
         rule_resources: &[ReconciledResource],
     ) -> anyhow::Result<()> {
+        let replacements = self
+            .sources
+            .iter()
+            .map(|record| (Some(NodeType::Source), &record.id))
+            .chain(
+                self.requirements
+                    .iter()
+                    .map(|record| (Some(NodeType::Requirement), &record.id)),
+            )
+            .chain(
+                self.rules
+                    .iter()
+                    .map(|record| (Some(NodeType::Rule), &record.id)),
+            );
+        store.ensure_canonical_replacement_ids_unique(
+            scope,
+            replacements,
+            &[NodeType::Source, NodeType::Requirement, NodeType::Rule],
+        )?;
         super::super::typed_statement_policy::ensure_typed_spec_is_writable(result)?;
-        protect_requirements(&store.layout, scope, &self.requirements)?;
         for rule in &self.rules {
             rule.validate_archive()?;
         }
@@ -34,7 +51,7 @@ impl Replacement {
             &self.requirements,
             &self.rules,
         )?;
-        (|| -> anyhow::Result<()> {
+        store.publish_typed_spec(scope, &result.declared_by, |store| {
             store
                 .replace_graph_records(&shards::sources_path(&store.layout, scope), self.sources)?;
             crate::test_probes::at("typed_spec_sources_published")?;
@@ -50,7 +67,6 @@ impl Replacement {
             )?;
             self.cascade.publish(store, scope)?;
             store.raise_requirement_reviews(scope, requirement_resources, rule_resources)
-        })()
-        .map_err(publication_started)
+        })
     }
 }

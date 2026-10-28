@@ -8,8 +8,6 @@ import test, { type TestContext } from "node:test";
 import { startFixtureHost } from "../scripts/fixture-host.js";
 import { recordingHost } from "./http-recorder.test-helper.js";
 import { OperationError } from "./client.js";
-import { PROTOCOL_VERSION } from "./generated/client.js";
-import { STATE_SCHEMA_VERSION } from "./protocol.js";
 
 import {
   apply,
@@ -93,11 +91,21 @@ function declareFixture(settings: Parameters<typeof configure>[0]) {
 }
 
 function engineJson(repo: string, args: string[]): unknown {
-  return JSON.parse(
-    execFileSync(engine, [...args, "--repo", repo, "--format", "json"], {
-      encoding: "utf8",
-    }),
-  );
+  let command = args;
+  let list = false;
+  if (args[0] === "rules" && args[1] === "show") {
+    const id = args[args.indexOf("--id") + 1]!;
+    command = ["rules", id, "get"];
+  } else if (args[0] === "sdk" && args[1] === "verification-runs") {
+    command = ["verification-runs", "list", ...args.slice(2)];
+    list = true;
+  }
+  const envelope = JSON.parse(execFileSync(
+    engine,
+    [...command, "--repo", repo, "--format", "json"],
+    { encoding: "utf8" },
+  ));
+  return list ? envelope.data.items : envelope.data;
 }
 
 
@@ -217,12 +225,6 @@ test("verify sends distinct durable binding keys from one test file", async (t) 
 
 test("plan sends the finalized spec to the read-only HTTP operation", async (t) => {
   const recorder = await recordingHost({
-    info: {
-      engine_version: "0.1.0",
-      protocol_version: PROTOCOL_VERSION,
-      state_schema_version: STATE_SCHEMA_VERSION,
-      repository: "/project",
-    },
     plan: {
       declared_by: "spec://typescript",
       created: 0,

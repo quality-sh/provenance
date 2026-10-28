@@ -78,8 +78,8 @@ fn an_unresolved_implementation_target_refuses_apply_without_writes() {
         "unexpected refusal: {error}"
     );
     let store = StateStore::new(ProvenanceLayout::new(root));
-    assert!(store
-        .list_rules(&ScopeId::new("default").unwrap())
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        store.list_rules(&ScopeId::new("default").unwrap()).unwrap(),
+        [] as [provenance_core::Rule; 0]
+    );
 }

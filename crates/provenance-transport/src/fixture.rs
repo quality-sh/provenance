@@ -1,4 +1,5 @@
 //! Explicit test policy. This module is absent without the test-fixture feature.
+pub mod local_host;
 pub mod records;
 use provenance_core::{
     protocol::failure::{InvalidInputReason, OperationFailure},
@@ -91,13 +92,19 @@ impl FixtureAccess {
         self
     }
     pub(crate) fn permits_operation(&self, operation: &str) -> bool {
-        !self.denied_operations.contains(operation)
-            && (self.writes || !provenance_store::operations::catalog::mutates(operation))
+        let mutates = provenance_store::operations::catalog::definitions()
+            .iter()
+            .find(|definition| definition.name == operation)
+            .is_some_and(provenance_store::operations::catalog::Definition::mutates);
+        !self.denied_operations.contains(operation) && (self.writes || !mutates)
     }
-    pub(crate) fn authenticate(
-        &self,
-        headers: &axum::http::HeaderMap,
-    ) -> Result<(), OperationFailure> {
+    pub(crate) fn bound_identity(&self) -> Option<(String, String)> {
+        self.grants.iter().next().cloned()
+    }
+}
+
+impl crate::HttpCredential for FixtureAccess {
+    fn authenticate(&self, headers: &axum::http::HeaderMap) -> Result<(), OperationFailure> {
         let credential = headers
             .get("authorization")
             .and_then(|header| header.to_str().ok());
@@ -113,10 +120,46 @@ impl FixtureAccess {
         Ok(())
     }
 }
+
+impl FixtureAccess {
+    /// The target map and grant check that both resolver steps apply.
+    fn check_grant(&self, target: &str, scope: Option<&str>) -> Result<(), OperationFailure> {
+        if !self.targets.contains_key(target) {
+            return Err(OperationFailure::UnknownTarget);
+        }
+        let granted = scope.map_or_else(
+            || self.grants.iter().any(|(granted, _)| granted == target),
+            |scope| {
+                self.grants
+                    .iter()
+                    .any(|(granted, granted_scope)| granted == target && granted_scope == scope)
+            },
+        );
+        if granted {
+            Ok(())
+        } else {
+            Err(OperationFailure::AccessDenied)
+        }
+    }
+}
+
 impl ContextResolver for FixtureAccess {
+    fn authorize(
+        &self,
+        _: &'static str,
+        context: &RequestedContext,
+    ) -> Result<(), OperationFailure> {
+        let (target, scope) = match context {
+            RequestedContext::Repository(context) => (&context.repository, None),
+            RequestedContext::Scope(context) => (&context.repository, Some(&context.scope)),
+            RequestedContext::Scoped(context) => (&context.repository, Some(&context.scope)),
+        };
+        self.check_grant(target, scope.map(String::as_str))
+    }
+
     fn prepare(
         &self,
-        operation: &'static str,
+        _operation: &'static str,
         context: RequestedContext,
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
@@ -132,20 +175,14 @@ impl ContextResolver for FixtureAccess {
             ),
             RequestedContext::Scoped(context) => (context.repository.clone(), Some(context)),
         };
+        self.check_grant(
+            &target,
+            selected.as_ref().map(|context| context.scope.as_str()),
+        )?;
         let root = self
             .targets
             .get(&target)
             .ok_or(OperationFailure::UnknownTarget)?;
-        let granted = selected.as_ref().map_or_else(
-            || self.grants.iter().any(|(granted, _)| granted == &target),
-            |context| {
-                self.grants
-                    .contains(&(target.clone(), context.scope.clone()))
-            },
-        );
-        if !self.permits_operation(operation) || !granted {
-            return Err(OperationFailure::AccessDenied);
-        }
         let Some(context) = selected else {
             return Ok(PreparedContext::for_repository(PreparedRepository {
                 root: root.to_str().ok_or(OperationFailure::Internal)?.into(),

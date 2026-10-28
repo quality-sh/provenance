@@ -85,6 +85,14 @@ impl PreparedContext {
             scope: Some(scope),
         }
     }
+    /// Use native answer framing after a host has authorized this context.
+    #[must_use]
+    pub const fn into_native(mut self) -> Self {
+        if let Some(read) = &mut self.read {
+            read.external = false;
+        }
+        self
+    }
     pub(super) fn scope(self) -> Result<PreparedScope, OperationFailure> {
         self.scope.ok_or(OperationFailure::UnavailableNeeds)
     }
@@ -127,6 +135,14 @@ impl PreparedContext {
 
 /// Hosts authorize the selected target before reading settings or preparing storage.
 pub trait ContextResolver: Send + Sync {
+    /// Identity only, no repository IO. Runs on the runtime thread before the work slot wait.
+    fn authorize(
+        &self,
+        operation: &'static str,
+        context: &RequestedContext,
+    ) -> Result<(), OperationFailure>;
+    /// Repository IO: manifest grant, settings, read policy. Runs on the blocking path and
+    /// repeats the identity check.
     fn prepare(
         &self,
         operation: &'static str,
@@ -134,8 +150,15 @@ pub trait ContextResolver: Send + Sync {
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure>;
 }
+/// Tests only: a resolver with no repositories.
+#[cfg(test)]
 pub(super) struct NoRepositories;
+#[cfg(test)]
 impl ContextResolver for NoRepositories {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Err(OperationFailure::UnavailableNeeds)
+    }
+
     fn prepare(
         &self,
         _: &'static str,

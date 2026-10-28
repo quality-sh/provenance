@@ -1,0 +1,17 @@
+{
+  "base_image": "ghcr.io/bnasraoui/workflowd-agent-base@sha256:a096c9b8ec5ab0d11db91d195902c214f5e77831d1f77c416f127bf1ca08ca3e",
+  "workdir": "/workdir",
+  "env": [
+    "PROVENANCE_CI_LOCAL=1",
+    "PATH=/home/agent/.local/bin:/home/agent/.cargo/bin:/bin:/usr/bin"
+  ],
+  "setup_commands": [
+    "rustup toolchain install stable --profile minimal --component rustfmt --component clippy",
+    "rustup default stable",
+    "npm install --global --prefix /home/agent/.local pnpm@10.15.0"
+  ],
+  "install_commands": [
+    "npm ci --prefix tools/operation-codegen --ignore-scripts",
+    "node tools/operation-codegen/ensure-generated.mjs"
+  ]
+}

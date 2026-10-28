@@ -110,8 +110,38 @@ fn init_download_work_runs_on_tokios_blocking_pool() {
         fs::read_to_string(workspace.join("crates/provenance-cli/src/ste_onboarding.rs"))
             .expect("read STE onboarding");
 
-    assert!(handlers.matches("tokio::task::spawn_blocking").count() >= 2);
+    // Both init commands hand their work to the one helper that runs it on
+    // the blocking pool.
+    assert!(handlers.contains("tokio::task::spawn_blocking(handler)"));
+    assert!(handlers.contains("run_blocking(move || cargo_init::handle("));
+    assert!(handlers.contains("run_blocking(move || repo::init("));
     assert!(!onboarding.contains("std::thread::spawn"));
+}
+
+/// The summary `init` prints is one ending defined in one module: status line,
+/// tagline, new-versus-changed inventory, numbered next steps, and exactly one
+/// docs link. The dictionary attribution stays out of the summary; the LICENSE
+/// notice test pins it.
+#[test]
+fn init_summary_structure_stays_pinned_in_one_module() {
+    let workspace = workspace_root();
+    let summary = fs::read_to_string(workspace.join("crates/provenance-cli/src/init_summary.rs"))
+        .expect("read init summary");
+    let repo = fs::read_to_string(workspace.join("crates/provenance-cli/src/handlers/repo.rs"))
+        .expect("read init handler");
+
+    assert!(summary.contains("Have your agent run provenance prime to get acclimated."));
+    assert!(!summary.contains("Next steps"));
+    assert!(summary.contains("New"));
+    assert!(summary.contains("Changed"));
+
+    assert!(repo.contains("added the Provenance section"));
+    assert!(repo.contains("updated the Provenance section"));
+    assert!(repo.contains("added one line"));
+    assert!(
+        !repo.contains("print_message"),
+        "the STE message is folded into the summary"
+    );
 }
 
 #[test]
@@ -199,7 +229,7 @@ fn packed_target_parser_accepts_windows_line_endings() {
 }
 
 #[test]
-fn cargo_provenance_is_a_std_only_forwarding_shim() {
+fn cargo_provenance_stays_a_std_only_forwarding_shim_when_the_cli_has_a_library() {
     let workspace = workspace_root();
     let crate_root = workspace.join("crates/provenance-cli");
     let temporary = tempfile::tempdir().unwrap();
@@ -211,7 +241,6 @@ fn cargo_provenance_is_a_std_only_forwarding_shim() {
         .output()
         .expect("compile cargo-provenance directly");
 
-    assert!(!crate_root.join("src/lib.rs").exists());
     assert!(
         output.status.success(),
         "the shim requires more than std: {}",
@@ -245,13 +274,13 @@ fn native_archives_include_cargo_provenance_but_npm_engines_do_not() {
 }
 
 #[test]
-fn workspace_release_versions_are_unified_at_0_2_3() {
+fn workspace_release_versions_are_unified_at_0_3_0() {
     let metadata = cargo_metadata();
     assert!(metadata["packages"]
         .as_array()
         .unwrap()
         .iter()
-        .all(|package| package["version"] == "0.2.3"));
+        .all(|package| package["version"] == "0.3.0"));
 
     let workspace = workspace_root();
     let sdk: Value = serde_json::from_slice(
@@ -262,8 +291,8 @@ fn workspace_release_versions_are_unified_at_0_2_3() {
         &fs::read(workspace.join("packages/create-provenance/package.json")).unwrap(),
     )
     .unwrap();
-    assert_eq!(sdk["version"], "0.2.3");
-    assert_eq!(initializer["version"], "0.2.3");
+    assert_eq!(sdk["version"], "0.3.0");
+    assert_eq!(initializer["version"], "0.3.0");
     let targets: Value =
         serde_json::from_slice(&fs::read(workspace.join(".github/release-targets.json")).unwrap())
             .unwrap();
@@ -286,7 +315,7 @@ fn workspace_release_versions_are_unified_at_0_2_3() {
         .as_object()
         .unwrap()
         .values()
-        .all(|version| version == "0.2.3"));
+        .all(|version| version == "0.3.0"));
 }
 
 #[test]
@@ -326,7 +355,7 @@ fn release_version_preflight_gates_every_artifact_build() {
     {
         let output = Command::new("bash")
             .arg(script)
-            .arg("v0.2.3")
+            .arg("v0.3.0")
             .current_dir(workspace)
             .output()
             .expect("run release version preflight");

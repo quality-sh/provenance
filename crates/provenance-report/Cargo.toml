@@ -2,7 +2,7 @@
 name = "provenance-report"
 version.workspace = true
 edition.workspace = true
-description = "Versioned report envelope contract and deterministic pull request report renderer"
+description = "Internal part of Provenance for report envelopes and rendering"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -19,7 +19,6 @@ provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-scanner.workspace = true
 provenance-store.workspace = true
-same-file.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

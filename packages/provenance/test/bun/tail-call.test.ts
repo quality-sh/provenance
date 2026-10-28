@@ -1,3 +1,4 @@
+import { offlineDictionaryUrl } from "../../../../tools/test-dictionary-url.js";
 // Bun removes the caller frame for the tail position below. Node does not.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -7,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { startFixtureHost } from "../../scripts/fixture-host.js";
 
+
 const cli = fileURLToPath(new URL(`../../../../target/debug/provenance${process.platform === "win32" ? ".exe" : ""}`, import.meta.url));
 const sdk = new URL("../../dist/index.js", import.meta.url).href;
 
@@ -14,14 +16,14 @@ async function runCase(statedFile: boolean) {
   const root = mkdtempSync(join(tmpdir(), "provenance-bun-tail-call-"));
   try {
     // Bun caps each test at five seconds, and onboarding needs none of the
-    // dictionary: point the download at a refused loopback port and the
+    // dictionary: use the shared offline dictionary URL and the
     // caches inside the throwaway root, so init takes its offline fallback
     // path instead of fetching or importing the real asset.
     execFileSync(cli, ["--quiet", "init", "--path", root, "--scope", "default", "--path-prefix", "."], {
       stdio: "pipe",
       env: {
         ...process.env,
-        PROVENANCE_TEST_STE100_ASSET_URL: "http://127.0.0.1:9/ASD-STE100_ISSUE9.pdf",
+        PROVENANCE_TEST_STE100_ASSET_URL: offlineDictionaryUrl,
         PROVENANCE_STE100_ASSET_DIR: join(root, "assets"),
         PROVENANCE_STE100_INDEX_DIR: join(root, "indexes"),
       },
@@ -39,7 +41,8 @@ async function runCase(statedFile: boolean) {
       output = result.stdout.toString() + result.stderr.toString();
       if (statedFile && result.exitCode !== 0) throw new Error(output);
     } finally { await fixture.close(); }
-    const runs = JSON.parse(execFileSync(cli, ["sdk", "verification-runs", "--repo", root, "--scope", "default", "--format", "json"], { encoding: "utf8" }));
+    const response = JSON.parse(execFileSync(cli, ["verification-runs", "list", "--repo", root, "--scope", "default", "--format", "json"], { encoding: "utf8" }));
+    const runs = response.data.items;
     return { output, runs };
   } finally { rmSync(root, { recursive: true, force: true }); }
 }

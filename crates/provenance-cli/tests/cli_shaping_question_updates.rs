@@ -5,7 +5,28 @@ mod provenance;
 
 use fixtures::{create_source_and_requirement, create_topic, init};
 use predicates::str::contains;
-use provenance::provenance;
+use provenance::{provenance, provenance_stdin};
+use serde_json::Value;
+
+fn question_etag(repo: &str, id: &str) -> String {
+    let output = assert_cmd::Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
+            "questions",
+            id,
+            "get",
+            "--repo",
+            repo,
+            "--scope",
+            "default",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    let output: Value = serde_json::from_slice(&output.stdout).unwrap();
+    output["data"]["edit"]["etag"].as_str().unwrap().to_owned()
+}
 
 #[test]
 fn cli_questions_update_changes_method_status_links_and_resolution_id() {
@@ -44,13 +65,12 @@ fn create_claimed_fork_question(repo: &str) {
     .success();
     provenance(&[
         "questions",
+        "question_fork",
         "claim",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "question_fork",
         "--actor",
         "agent-one",
         "--format",
@@ -86,26 +106,21 @@ fn create_resolution(repo: &str) {
 }
 
 fn update_question_to_blocked_prototype(repo: &str) {
-    let updated = provenance(&[
+    let etag = question_etag(repo, "question_fork");
+    let updated = provenance_stdin(&[
         "questions",
+        "question_fork",
         "update",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "question_fork",
-        "--method",
-        "prototype",
-        "--status",
-        "blocked-on-human",
-        "--links-json",
-        r#"[{"target_type":"source","target_id":"source_schads"},{"target_type":"resolution","target_id":"res_overtime"}]"#,
-        "--resolution-id",
-        "res_overtime",
+        "--if-match",
+        &etag,
+        "--stdin",
         "--format",
         "json",
-    ])
+    ], r#"{"resolution_method":"prototype","status":"blocked_on_human","links":[{"target_type":"source","target_id":"source_schads"},{"target_type":"resolution","target_id":"res_overtime"}],"resolution_id":"res_overtime"}"#)
     .success()
     .stdout(contains(r#""resolution_method": "prototype""#))
     .stdout(contains(r#""status": "blocked_on_human""#))
@@ -117,35 +132,38 @@ fn update_question_to_blocked_prototype(repo: &str) {
 
     provenance(&[
         "questions",
+        "question_fork",
         "claim",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "question_fork",
         "--actor",
         "agent-two",
     ])
     .failure()
-    .stderr(contains("blocked_on_human"));
+    .stderr(contains("invalid_update"));
 }
 
 fn question_update_rejects_invalid_links(repo: &str) {
-    provenance(&[
-        "questions",
-        "update",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--id",
-        "question_fork",
-        "--links-json",
-        r#"[{"target_type":"source","target_id":"missing_source"}]"#,
-    ])
+    let etag = question_etag(repo, "question_fork");
+    provenance_stdin(
+        &[
+            "questions",
+            "question_fork",
+            "update",
+            "--repo",
+            repo,
+            "--scope",
+            "default",
+            "--if-match",
+            &etag,
+            "--stdin",
+        ],
+        r#"{"links":[{"target_type":"source","target_id":"missing_source"}]}"#,
+    )
     .failure()
-    .stderr(contains("linked artifact does not exist"));
+    .stderr(contains("missing_reference"));
 }
 
 fn question_update_rejects_answered_without_answer(repo: &str) {
@@ -168,18 +186,22 @@ fn question_update_rejects_answered_without_answer(repo: &str) {
         "json",
     ])
     .success();
-    provenance(&[
-        "questions",
-        "update",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--id",
-        "question_unanswered",
-        "--status",
-        "answered",
-    ])
+    let etag = question_etag(repo, "question_unanswered");
+    provenance_stdin(
+        &[
+            "questions",
+            "question_unanswered",
+            "update",
+            "--repo",
+            repo,
+            "--scope",
+            "default",
+            "--if-match",
+            &etag,
+            "--stdin",
+        ],
+        r#"{"status":"answered"}"#,
+    )
     .failure()
-    .stderr(contains("use questions answer"));
+    .stderr(contains("invalid_update"));
 }

@@ -50,19 +50,30 @@ pub(super) fn open_root(path: &Utf8Path) -> Result<File, Refusal> {
 }
 
 pub(super) fn open_file(root: &File, relative: &Utf8Path) -> Result<File, Refusal> {
-    super::validate_relative(relative)?;
-    let mut held = root.try_clone().map_err(error)?;
-    let mut parts = relative.as_str().split('/').peekable();
-    while let Some(name) = parts.next() {
-        held = child(&held, name, Access::Read)?;
-        if parts.peek().is_some() {
-            require_directory(&held)?;
-        }
-    }
+    let (held, leaf) = open_parent(root, relative)?;
+    regular(&held, &leaf)
+}
+
+pub(super) fn regular(parent: &File, leaf: &str) -> Result<File, Refusal> {
+    let held = child(parent, leaf, Access::Read)?;
     if !metadata(&held)?.is_file() {
         return Err(Refusal::Denied);
     }
     Ok(held)
+}
+
+pub(super) fn open_parent(root: &File, relative: &Utf8Path) -> Result<(File, String), Refusal> {
+    super::validate_relative(relative)?;
+    let mut held = root.try_clone().map_err(error)?;
+    let mut parts = relative.as_str().split('/').peekable();
+    while let Some(name) = parts.next() {
+        if parts.peek().is_none() {
+            return Ok((held, name.to_owned()));
+        }
+        held = child(&held, name, Access::Read)?;
+        require_directory(&held)?;
+    }
+    Err(Refusal::Denied)
 }
 
 pub(super) fn scan_tree(

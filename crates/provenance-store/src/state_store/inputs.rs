@@ -38,7 +38,8 @@ pub struct CreateRequirementInput {
     pub description: Option<String>,
     pub status: RequirementStatus,
     pub domain_id: Option<StableId>,
-    pub refines: Option<StableId>,
+    #[serde(default)]
+    pub refines: Vec<StableId>,
     pub depends_on: Vec<StableId>,
     pub supersedes: Vec<StableId>,
     pub spawned_by: Option<StableId>,
@@ -384,6 +385,10 @@ pub struct CreateProposalCardInput {
     /// the review seam may state one; ordinary writers refuse the type.
     #[serde(default)]
     pub record_revision: Option<provenance_core::RecordRevisionBinding>,
+    /// The actor who submitted a review submission. Only the review seam
+    /// states one.
+    #[serde(default)]
+    pub actor: Option<String>,
     /// The rejected predecessor this resubmission revises.
     #[serde(default)]
     pub revises: Option<StableId>,
@@ -400,8 +405,11 @@ pub struct CreateDispositionInput {
     pub id: StableId,
     pub proposal_id: StableId,
     pub decision: DispositionDecision,
+    #[serde(default)]
     pub rationale: String,
     pub actor: DispositionActor,
+    /// An approval requires a prior assertion. A human can instead name an
+    /// existing canonical artifact.
     pub canonical_artifact: Option<CanonicalArtifact>,
     pub external_action: Option<provenance_core::ExternalActionCorrelation>,
 }

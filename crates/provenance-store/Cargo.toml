@@ -2,7 +2,7 @@
 name = "provenance-store"
 version.workspace = true
 edition.workspace = true
-description = "Git-backed graph storage for Provenance requirements traceability"
+description = "Internal part of Provenance for Git-backed graph storage"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -14,6 +14,7 @@ workspace = true
 
 [features]
 schema = ["dep:schemars", "provenance-core/schema", "provenance-ste100/schema"]
+test-fixture = []
 
 [dependencies]
 time.workspace = true
@@ -22,6 +23,7 @@ schemars = { workspace = true, optional = true }
 anyhow.workspace = true
 camino.workspace = true
 fs2.workspace = true
+fs_at.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-scanner.workspace = true
@@ -37,12 +39,12 @@ tokio = { workspace = true, features = ["time"] }
 uuid.workspace = true
 hmac = "0.12.1"
 base64 = "0.22.1"
+libsqlite3-sys = "0.30.1"
 
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-fs_at.workspace = true
 windows-sys.workspace = true
 
 [dev-dependencies]

@@ -1,0 +1,412 @@
+//! Help rendered from the registered catalog contracts.
+//!
+//! One block per registered address: the real nested usage line, the
+//! operation description, the body fields with their types, enums, aliases
+//! and defaults, the selected query parameters, and the request controls.
+use super::address::{self, Segment};
+use super::fields::{self, Source};
+use provenance_store::operations::catalog::{CliDefaultValue, Definition, Parameter};
+use serde_json::Value;
+use std::collections::BTreeSet;
+use std::fmt::Write as _;
+
+mod schema;
+
+#[provenance_macros::rule("rule_create_help_accepted_fields")]
+pub(super) fn target(
+    mut command: clap::Command,
+    action: Option<crate::invocation::grammar::TargetVerb>,
+    kind: Option<provenance_core::NodeType>,
+) -> anyhow::Result<()> {
+    use crate::invocation::grammar::TargetVerb;
+    use provenance_store::operations::catalog;
+
+    if let Some(TargetVerb::Action(action)) = action {
+        if catalog::TargetAction::RECORD.contains(&action) {
+            let needs_type = action == catalog::TargetAction::Create && kind.is_none();
+            let mut allowed = super::COMMON
+                .iter()
+                .copied()
+                .chain(["stdin", "help"])
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>();
+            if action == catalog::TargetAction::Create {
+                allowed.insert("record_type".into());
+            }
+            for (_, definition) in catalog::target_definitions(action).filter(|(registered, _)| {
+                !needs_type && kind.is_none_or(|kind| *registered == kind)
+            }) {
+                allowed.extend(fields::accepted_flags(&fields::declared(definition)?));
+            }
+            if action == catalog::TargetAction::Update
+                && kind.is_none_or(|kind| kind == provenance_core::NodeType::Requirement)
+            {
+                allowed.extend(["replace_parent".into(), "with_parent".into()]);
+            }
+            allowed.remove("id");
+            allowed.remove("id-json");
+            command = command.mut_args(|arg| {
+                let hidden = !allowed.contains(arg.get_id().as_str());
+                arg.hide(hidden)
+            });
+            if needs_type {
+                command = command.after_help(
+                    "Select a record type to see its accepted fields:\n  provenance <id> create --type <kind> --help",
+                );
+            }
+        } else if provenance_porcelain::action::Action::DISCUSSION.contains(&action) {
+            command = discussion_help(command, action);
+        }
+    }
+    println!("{}", command.render_help());
+    Ok(())
+}
+
+/// Discussion action help lists the typed input fields of that action and
+/// marks the ones the action cannot run without.
+fn discussion_help(
+    command: clap::Command,
+    action: provenance_porcelain::action::Action,
+) -> clap::Command {
+    let schema = provenance_porcelain::discussion::input_schema(action);
+    let bound = [
+        provenance_porcelain::discussion::target_field(action),
+        "parent",
+        "discussion_id",
+    ];
+    let properties = schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .map(|properties| {
+            properties
+                .keys()
+                .filter(|field| !bound.contains(&field.as_str()))
+                .map(|field| fields::cli_name(field))
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let required = required_discussion_flags(&schema, action);
+    let mut allowed = super::COMMON
+        .iter()
+        .copied()
+        .chain(["stdin", "help"])
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    allowed.extend(properties);
+    command.mut_args(|arg| {
+        let name = arg.get_id().as_str().to_owned();
+        let hidden = !allowed.contains(&name);
+        arg.hide(hidden).required(required.contains(&name))
+    })
+}
+
+/// The flags a Discussion action needs on the command line: the required
+/// schema fields that neither the target nor a CLI default supplies.
+pub fn required_discussion_flags(
+    schema: &Value,
+    action: provenance_porcelain::action::Action,
+) -> BTreeSet<String> {
+    let supplied = [
+        provenance_porcelain::discussion::target_field(action),
+        "parent",
+        "discussion_id",
+        "actor",
+        "role",
+    ];
+    schema
+        .get("required")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|field| !supplied.contains(field))
+        .map(fields::cli_name)
+        .collect()
+}
+
+/// Render the help block that lists every registered operation.
+pub(super) fn collection(collection: &str) -> String {
+    let mut registrations = address::registrations(collection);
+    registrations.sort_unstable_by_key(|address| usage(collection, address));
+    let mut help = format!("Catalog commands for {collection}:");
+    for address in registrations {
+        operation(&mut help, collection, address);
+    }
+    help
+}
+
+/// Print help for the parsed selection: the addressed operation when the
+/// address words resolve, the collection overview otherwise. Unknown
+/// addresses report the address error as a usage failure.
+pub(super) fn print_selection(collection: &str, words: &[String]) -> ! {
+    if words.is_empty() {
+        println!("{}", overview(collection));
+        std::process::exit(0);
+    }
+    let address::Resolved { address, .. } = match address::resolve(collection, words) {
+        Ok(resolved) => resolved,
+        Err(error) => super::usage_error(error),
+    };
+    let mut rendered = String::new();
+    operation(&mut rendered, collection, address);
+    if collection == "questions" {
+        rendered.push_str(question_guidance());
+    }
+    println!("{rendered}");
+    std::process::exit(0);
+}
+
+/// The full Clap help for the collection command, including the overview.
+fn overview(collection: &str) -> String {
+    super::command(collection)
+        .expect("catalog command compiles")
+        .render_help()
+        .to_string()
+}
+
+pub(super) const fn question_guidance() -> &'static str {
+    "\nA question should be resolvable in one agent session;\notherwise it is fog or needs decomposition."
+}
+
+fn operation(help: &mut String, collection: &str, address: &address::Address) {
+    let definition = address.definition;
+    writeln!(help, "\n  {}", usage(collection, address)).expect("writing to a String cannot fail");
+    writeln!(help, "      {}", description(collection, address))
+        .expect("writing to a String cannot fail");
+    let declared = fields::declared(definition).expect("catalog fields compile");
+    print_body_fields(help, definition, &declared);
+    print_options(help, address);
+}
+
+fn usage(collection: &str, address: &address::Address) -> String {
+    let words = address
+        .words
+        .iter()
+        .map(|segment| match segment {
+            Segment::Literal(word) => (*word).to_owned(),
+            Segment::Parameter(name) => format!("<{name}>"),
+        })
+        .collect::<Vec<_>>();
+    format!("provenance {collection} {}", words.join(" "))
+}
+
+fn description(collection: &str, address: &address::Address) -> String {
+    address.query.map_or_else(
+        || address.definition.description.to_owned(),
+        |query| format!("Run the {query} query on the selected {collection} resource."),
+    )
+}
+
+fn print_body_fields(help: &mut String, definition: &Definition, declared: &[fields::Field]) {
+    let Some(request) = definition.request_schema() else {
+        return;
+    };
+    let aliases = &definition.registration.request.argument_aliases;
+    let alias_names = aliases
+        .iter()
+        .map(|alias| fields::cli_name(alias.argument))
+        .collect::<BTreeSet<_>>();
+    let canonical = declared
+        .iter()
+        .filter(|field| !alias_names.contains(&field.name))
+        .collect::<Vec<_>>();
+    let body = canonical
+        .iter()
+        .filter(|field| matches!(field.source, Source::Body { .. }))
+        .collect::<Vec<_>>();
+    if body.is_empty() {
+        return;
+    }
+    writeln!(help, "\n      Body fields:").expect("writing to a String cannot fail");
+    let mut json_fields = BTreeSet::new();
+    for field in body {
+        let Source::Body {
+            wire_field,
+            value_schema,
+            wrap_array,
+        } = &field.source
+        else {
+            continue;
+        };
+        let details = field_details(request, definition, wire_field, value_schema);
+        if let Some((kind, repeatable)) = plain_usage(request, value_schema, *wrap_array) {
+            writeln!(
+                help,
+                "        --{} <{kind}>{repeatable}{}",
+                field.name,
+                bracketed(&details)
+            )
+            .expect("writing to a String cannot fail");
+        }
+        if json_fields.insert(wire_field.clone()) {
+            writeln!(
+                help,
+                "        --{} <json>{}",
+                fields::json_flag(wire_field),
+                bracketed(&details)
+            )
+            .expect("writing to a String cannot fail");
+        }
+    }
+    print_aliases(help, request, definition, declared);
+    writeln!(
+        help,
+        "\n      --<field>-json carries one whole JSON value; --stdin fills only the body fields that no flag assigned."
+    )
+    .expect("writing to a String cannot fail");
+}
+
+fn print_aliases(
+    help: &mut String,
+    request: &Value,
+    definition: &Definition,
+    declared: &[fields::Field],
+) {
+    for alias in &definition.registration.request.argument_aliases {
+        let Some(field) = declared
+            .iter()
+            .find(|field| field.name == fields::cli_name(alias.argument))
+        else {
+            continue;
+        };
+        let Source::Body {
+            value_schema,
+            wrap_array,
+            ..
+        } = &field.source
+        else {
+            continue;
+        };
+        let kind = schema::type_label(request, value_schema);
+        let repeatable = if *wrap_array { " (repeatable)" } else { "" };
+        writeln!(
+            help,
+            "        --{} <{kind}>{repeatable} [alias for --{}]",
+            field.name,
+            fields::cli_name(alias.field)
+        )
+        .expect("writing to a String cannot fail");
+    }
+}
+
+fn print_options(help: &mut String, address: &address::Address) {
+    let definition = address.definition;
+    let mut seen = BTreeSet::new();
+    let parameters = variant_parameters(definition, address.query)
+        .into_iter()
+        .filter(|parameter| {
+            parameter.location != "path" && parameter.name != "query" && seen.insert(parameter.name)
+        })
+        .collect::<Vec<_>>();
+    if parameters.is_empty() {
+        return;
+    }
+    writeln!(help, "\n      Options:").expect("writing to a String cannot fail");
+    for parameter in parameters {
+        let flag = fields::cli_name(parameter.name);
+        let kind = schema::type_label(&parameter.schema, &parameter.schema);
+        let mut details = Vec::new();
+        if parameter.location == "header" && parameter.name == "Idempotency-Key" {
+            details.push("generated if omitted".into());
+        }
+        if parameter.required {
+            details.push("required".into());
+        }
+        if parameter.location == "header" && parameter.name == "If-Match" {
+            let guard = definition
+                .registration
+                .controls
+                .headers
+                .iter()
+                .find(|binding| binding.name == parameter.name)
+                .map(|binding| binding.field);
+            match guard {
+                Some("expected_etag") => {
+                    details
+                        .push("pass data.edit.etag from the latest record read unchanged".into());
+                }
+                Some("expected_version") => {
+                    details.push("pass the latest Discussion version unchanged".into());
+                }
+                _ => {}
+            }
+        }
+        if let Some(default) = schema::default(&parameter.schema) {
+            details.push(format!("schema default: {default}"));
+        }
+        if let Some(constraints) = schema::constraints(&parameter.schema) {
+            details.push(constraints);
+        }
+        writeln!(help, "        --{flag} <{kind}>{}", bracketed(&details))
+            .expect("writing to a String cannot fail");
+    }
+}
+
+/// The parameter set of the selected query variant, from the typed contracts.
+fn variant_parameters(definition: &Definition, selected: Option<&str>) -> Vec<Parameter> {
+    definition
+        .query_variants()
+        .into_iter()
+        .find(|variant| variant.selector == selected)
+        .map_or_else(|| definition.parameters(), |variant| variant.parameters)
+}
+
+fn plain_usage(
+    request: &Value,
+    value_schema: &Value,
+    wrap_array: bool,
+) -> Option<(String, &'static str)> {
+    if wrap_array {
+        return Some((schema::type_label(request, value_schema), " (repeatable)"));
+    }
+    if let Some(item) = schema::array_item_label(request, value_schema) {
+        return Some((item, " (repeatable)"));
+    }
+    if schema::object_only(request, value_schema) {
+        return None;
+    }
+    Some((schema::type_label(request, value_schema), ""))
+}
+
+fn field_details(
+    request: &Value,
+    definition: &Definition,
+    wire_field: &str,
+    value_schema: &Value,
+) -> Vec<String> {
+    let mut details = Vec::new();
+    let schema_default = schema::default(value_schema).map(Value::to_owned);
+    let required = schema::required(request, wire_field)
+        && cli_default(definition, wire_field).is_none()
+        && schema_default.is_none();
+    if required {
+        details.push("required".into());
+    }
+    if let Some(default) = cli_default(definition, wire_field) {
+        details.push(format!("CLI default: {default}"));
+    } else if let Some(default) = schema_default {
+        details.push(format!("schema default: {default}"));
+    }
+    details
+}
+
+fn cli_default(definition: &Definition, field: &str) -> Option<String> {
+    definition
+        .registration
+        .cli
+        .defaults
+        .iter()
+        .find(|default| default.field == field)
+        .map(|default| match default.value {
+            CliDefaultValue::String(value) => Value::String(value.to_owned()).to_string(),
+            CliDefaultValue::EmptyArray => "[]".into(),
+        })
+}
+
+fn bracketed(details: &[String]) -> String {
+    let mut rendered = String::new();
+    for detail in details {
+        write!(rendered, " [{detail}]").expect("writing to a String cannot fail");
+    }
+    rendered
+}

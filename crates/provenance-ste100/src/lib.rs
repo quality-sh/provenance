@@ -1,3 +1,6 @@
+//! This crate is an implementation part of Provenance. Provenance is pre-release, and this API can
+//! change without compatibility shims. Use `provenance-sdk` for Rust.
+//!
 //! Deterministic descriptive-text checks from ASD-STE100 Issue 9.
 
 mod contracted_verbs;
@@ -7,9 +10,9 @@ mod protected_spans;
 mod vocabulary;
 
 pub use dictionary::{
-    import_dictionary, load_dictionary_index, store_dictionary_index, DictionaryEntry,
-    DictionaryImport, DictionaryImportError, DictionaryImportIdentity, DictionaryIndexError,
-    DictionaryStatus, PartOfSpeech,
+    import_dictionary, load_dictionary_index, load_dictionary_index_for_source,
+    store_dictionary_index, DictionaryEntry, DictionaryImport, DictionaryImportError,
+    DictionaryImportIdentity, DictionaryIndexError, DictionaryStatus, PartOfSpeech,
 };
 
 use provenance_macros::rule;
@@ -25,7 +28,6 @@ const SEMICOLON_MESSAGE: &str = "Do not use semicolons in descriptive text.";
 const CONTRACTED_VERB_MESSAGE: &str = "Use the full verb form in descriptive text.";
 const SENTENCE_LENGTH_MESSAGE: &str = "This descriptive sentence has more than 25 words.";
 const PARAGRAPH_LENGTH_MESSAGE: &str = "This paragraph has more than six sentences.";
-const UNAPPROVED_WORD_MESSAGE: &str = "Do not use unapproved dictionary words in descriptive text.";
 
 /// A report from the fixed ASD-STE100 Issue 9 analyzer.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -202,11 +204,16 @@ fn unapproved_word_findings(
     vocabulary::classify(text, protected, dictionary)
         .into_iter()
         .filter(|word_use| word_use.category == VocabularyCategory::Unapproved)
-        .map(|word_use| Finding {
-            rule: RuleNumber::OneOne,
-            kind: FindingKind::Violation,
-            span: word_use.span,
-            message: UNAPPROVED_WORD_MESSAGE.to_owned(),
+        .map(|word_use| {
+            let rejected = &text[word_use.span.start..word_use.span.end];
+            Finding {
+                rule: RuleNumber::OneOne,
+                kind: FindingKind::Violation,
+                span: word_use.span,
+                message: format!(
+                    "The word or phrase \"{rejected}\" is not approved by ASD-STE100 Rule 1.1."
+                ),
+            }
         })
         .collect()
 }

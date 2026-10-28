@@ -47,27 +47,30 @@ fn init_repo() -> tempfile::TempDir {
 }
 
 fn create_rule(repo: &Path, id: &str, status: &str) {
-    run(
-        repo,
-        &[
+    provenance()
+        .args([
             "rules",
             "create",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            id,
-            "--requirement-id",
-            "req_anchor",
-            "--statement",
-            "The covered obligation holds",
-            "--status",
-            status,
-            "--severity",
-            "high",
-        ],
-    );
+            "--stdin",
+        ])
+        .current_dir(repo)
+        .write_stdin(
+            json!({
+                "id": id,
+                "requirement_ids": ["req_anchor"],
+                "resolution_ids": [],
+                "statement": "The covered obligation holds",
+                "status": status,
+                "severity": "high"
+            })
+            .to_string(),
+        )
+        .assert()
+        .success();
 }
 
 fn set_binding_policy(repo: &Path, severity: &str) {
@@ -112,7 +115,7 @@ fn begin_verification(repo: &Path, rule: &str, key: &str, file: &str) {
     std::fs::write(&path, "// exercises the rule\n").unwrap();
     provenance()
         .args([
-            "sdk",
+            "verification-runs",
             "begin-verification",
             "--repo",
             repo.to_str().unwrap(),
@@ -120,6 +123,7 @@ fn begin_verification(repo: &Path, rule: &str, key: &str, file: &str) {
             "default",
             "--format",
             "json",
+            "--stdin",
         ])
         .write_stdin(
             serde_json::to_vec(&json!({
@@ -189,6 +193,34 @@ fn the_error_policy_passes_once_the_active_rule_has_a_verification_site() {
     .unwrap();
 
     full_scan(repo.path()).assert().success();
+}
+
+#[test]
+#[verifies("rule_active_rule_reports_missing_implementation", examples)]
+fn the_error_policy_does_not_fail_for_only_a_missing_implementation() {
+    let repo = init_repo();
+    create_rule(repo.path(), "rule_unimplemented", "active");
+    set_binding_policy(repo.path(), "error");
+    std::fs::write(
+        repo.path().join("src_check.rs"),
+        "#[verifies(\"rule_unimplemented\", examples)]\nfn checks_the_rule() {}\n",
+    )
+    .unwrap();
+
+    let output = full_scan(repo.path()).output().unwrap();
+
+    assert!(output.status.success());
+    let findings = warnings(&output.stdout);
+    let finding = findings
+        .iter()
+        .find(|warning| {
+            warning["rule_id"] == "rule_unimplemented"
+                && warning["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("has no implementation"))
+        })
+        .expect("the missing implementation must remain visible");
+    assert!(finding["binding_finding"].is_null(), "{finding}");
 }
 
 #[test]

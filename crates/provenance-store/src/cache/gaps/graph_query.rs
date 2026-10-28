@@ -39,9 +39,9 @@ impl GapGraph<'_> {
 
 /// Read-only joins over a [`GapGraph`].
 ///
-/// Gap policy is written against these helpers, and they are the single home
-/// for the traversals the wiki assembler needs too, so both readers answer
-/// "what resolves this?" and "what did this produce?" the same way.
+/// Gap policy and the health report are written against these helpers, so
+/// both readers answer "what resolves this?" and "what did this produce?" the
+/// same way.
 pub struct GraphQuery<'a, 'graph> {
     pub graph: &'a GapGraph<'graph>,
 }
@@ -121,14 +121,6 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
             .collect()
     }
 
-    pub fn produced_rules_for_resolution(&self, resolution_id: &StableId) -> Vec<&'graph Rule> {
-        self.graph
-            .rules
-            .iter()
-            .filter(|rule| rule.resolution_ids.contains(resolution_id))
-            .collect()
-    }
-
     /// The requirements a rule names. A named requirement that is not in
     /// the scope is a dangling reference, not a producer.
     pub fn producing_requirements(&self, rule_id: &StableId) -> Vec<&'graph Requirement> {
@@ -139,19 +131,6 @@ impl<'a, 'graph> GraphQuery<'a, 'graph> {
             .requirements
             .iter()
             .filter(|requirement| rule.requirement_ids.contains(&requirement.id))
-            .collect()
-    }
-
-    /// The resolutions a rule names, on the same terms as
-    /// [`Self::producing_requirements`].
-    pub fn producing_resolutions(&self, rule_id: &StableId) -> Vec<&'graph Resolution> {
-        let Some(rule) = self.graph.rules.iter().find(|rule| rule.id == *rule_id) else {
-            return Vec::new();
-        };
-        self.graph
-            .resolutions
-            .iter()
-            .filter(|resolution| rule.resolution_ids.contains(&resolution.id))
             .collect()
     }
 

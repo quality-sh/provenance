@@ -10,6 +10,7 @@ mod discussions;
 mod document;
 mod front;
 pub(crate) mod page;
+pub(crate) mod payloads;
 mod records;
 mod rows;
 

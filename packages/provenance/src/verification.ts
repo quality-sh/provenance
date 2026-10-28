@@ -1,4 +1,4 @@
-import { connection, context, type SdkSettings } from './settings.js';
+import { connection, type SdkSettings } from './settings.js';
 import { portableFile } from './portable-file.js';
 import type { DeclarationAddress } from './protocol.js';
 import type { components } from './generated/schema.js';
@@ -10,7 +10,7 @@ export interface VerifyOptions {
   url?: string;
   symbol?: string;
 }
-type VerificationRequest = components['schemas']['BeginVerificationRequestInput']['request'];
+type VerificationRequest = components['schemas']['BeginVerificationRequest']['data'];
 type DeclarationReference = NonNullable<VerificationRequest['declaration']>;
 export type VerificationTarget =
   | { rule: NonNullable<VerificationRequest['rule']> }
@@ -26,21 +26,20 @@ export async function runVerification(
 ): Promise<void> {
   const relativeFile = portableFile(file, settings.localRoot);
   const client = await connection(settings);
-  const selected = context(settings);
   const coordinates = 'declaration' in target
     ? { declaration: { ...target.declaration, address: [...target.declaration.address] } }
     : target;
-  const run = await client.beginVerification({ context: selected, request: {
+  const run = await client.beginVerification({ data: {
     ...coordinates, key, method: options.method ?? 'examples',
     declared_by: settings.verificationOwner, file: relativeFile, symbol: options.symbol,
   } });
   try { await callback(); }
   catch (error) {
-    try { await client.completeVerification({ context: selected, request: { run: run.id, status: 'failed', error: serializeError(error) } }); }
+    try { await client.completeVerification({ run_id: run.data.id, data: { status: 'failed', error: serializeError(error) } }); }
     catch { /* Preserve the callback as the primary test failure. */ }
     throw error;
   }
-  await client.completeVerification({ context: selected, request: { run: run.id, status: 'passed' } });
+  await client.completeVerification({ run_id: run.data.id, data: { status: 'passed' } });
 }
 
 function serializeError(error: unknown): string {

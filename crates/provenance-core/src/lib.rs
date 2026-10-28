@@ -1,3 +1,6 @@
+//! This crate is an implementation part of Provenance. Provenance is pre-release, and this API can
+//! change without compatibility shims. Use `provenance-sdk` for Rust.
+
 // The `Relations` derive names this crate by its package name, inside it too.
 extern crate self as provenance_core;
 
@@ -9,20 +12,21 @@ pub mod scope;
 pub mod threads;
 
 pub use model::{
-    disposition_requires_prior_assertion, effective_proposal_state,
+    disposition_requires_prior_assertion, effective_proposal_state, ensure_record_id_assignable,
     ensure_supported_schema_version, is_shipped_legacy_disposition_audit,
     packet_qualifies_proposal, validate_assertion_intrinsic, validate_commit_pin,
     validate_confidence_score, validate_disposition_admissible, validate_disposition_intrinsic,
     validate_ideation_aggregate, validate_optional_commit_pin, validate_optional_confidence_score,
-    validate_proposal_intrinsic, validate_resolution_input_content, ArchivedStamp,
-    ArtifactChangeType, ArtifactLink, ArtifactLinkTargetType, Assertion, AssertionId,
-    AssertionRecord, Boundary, CanonicalArtifact, CanonicalArtifactType, ClaimChallenge,
-    ConsensusFinding, ContestedClaim, Contribution, ContributionStance, DeclarationAddress,
-    DispositionActor, DispositionDecision, DispositionRecord, Domain, EvidenceGap, EvidenceQuality,
-    ExternalActionCorrelation, IdeationAggregate, IdeationEvidenceReference, IdeationEvidenceType,
-    IdeationTarget, IdeationTargetType, IdentityType, ImplementationBinding, LegacyProposalPolicy,
-    Manifest, MaterialClaim, Message, MessageRole, MinorityObjection, NodeType, PromotionState,
-    Proposal, ProposalCard, ProposalTraceability, ProposalType, Question, QuestionStatus,
+    validate_proposal_intrinsic, validate_resolution_input_content, ApprovalEvidenceRequired,
+    ArchivedStamp, ArtifactChangeType, ArtifactLink, ArtifactLinkTargetType, Assertion,
+    AssertionId, AssertionRecord, Boundary, CanonicalArtifact, CanonicalArtifactType,
+    ClaimChallenge, ConsensusFinding, ContestedClaim, Contribution, ContributionStance,
+    DeclarationAddress, DispositionActor, DispositionActorRefusal, DispositionDecision,
+    DispositionRecord, Domain, EvidenceGap, EvidenceQuality, ExternalActionCorrelation,
+    IdeationAggregate, IdeationEvidenceReference, IdeationEvidenceType, IdeationTarget,
+    IdeationTargetType, IdentityType, ImplementationBinding, LegacyProposalPolicy, Manifest,
+    MaterialClaim, Message, MessageRole, MinorityObjection, NodeType, PromotionState, Proposal,
+    ProposalCard, ProposalTraceability, ProposalType, Question, QuestionStatus,
     RecordRevisionBinding, RepoPathPrefix, RequiredHumanDecision, Requirement, RequirementReview,
     RequirementStatus, Resolution, ResolutionInput, ResolutionInputType, ResolutionMethod,
     ResolutionStatus, Rule, RuleSeverity, RuleStatus, SchemaVersion, Scope, ScopeId, Source,
@@ -30,8 +34,8 @@ pub use model::{
     SuggestedArtifactChange, SynthesisPacket, Thread, ThreadParent, ThreadStatus, Topic,
     TopicStatus, UncertaintyLevel, UncertaintyRating, UnsupportedRecommendation,
     UnsupportedSpeculation, VerificationBinding, VerificationMethod, VerificationRun,
-    VerificationRunStatus, SUPPORTED_SCHEMA_VERSION,
+    VerificationRunStatus, Withdrawal, RESERVED_RECORD_IDS, SUPPORTED_SCHEMA_VERSION,
 };
-pub use protocol::{EngineInfo, SDK_PROTOCOL_VERSION};
+pub use protocol::{EngineInfo, TargetAction, SDK_PROTOCOL_VERSION};
 
 pub mod review;

@@ -1,12 +1,49 @@
-use super::{classifier, guard, journal, SaveRequirement};
-use crate::{canonical_digest, publication::with_staged_state, shards, state_store::StateStore};
-use provenance_core::review::{
-    RequirementEditState, ReviewEntry, SaveOutcome, REVIEW_SCHEMA_VERSION,
+use super::{classifier, guard, SaveRequirement};
+use crate::{
+    review::publication::with_record_state,
+    shards,
+    state_store::StateStore,
+    write_error::{SourceFailure, WriteFailure},
 };
-use provenance_core::{Requirement, ScopeId, StableId};
+use provenance_core::review::{RequirementEditState, ReviewRecord};
+use provenance_core::threads::DiscussionOrigin;
+use provenance_core::{NodeType, Requirement, ScopeId, StableId};
 use provenance_macros::rule;
 
+/// The edit precondition is a digest of the record without its stored format
+/// marker or record stamps.
+pub(super) fn etag(record: &ReviewRecord) -> anyhow::Result<String> {
+    let mut content = provenance_core::model::record_stamps::content_value(record)?;
+    content
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("record does not serialize to an object"))?
+        .remove("schema_version");
+    Ok(crate::canonical_digest::digest(
+        &crate::canonical_digest::canonical_bytes(&content)?,
+    ))
+}
+
+/// The review revision depends only on the review content of the record.
+pub(super) fn current_revision(record: &ReviewRecord) -> anyhow::Result<Option<StableId>> {
+    classifier::review_revision(record.kind(), record).map(Some)
+}
+
 impl StateStore {
+    pub(super) fn requirement(
+        &self,
+        scope: &ScopeId,
+        id: &StableId,
+    ) -> anyhow::Result<Requirement> {
+        let records = self.list_requirements(scope)?;
+        let matches = records.iter().filter(|r| r.id == *id).collect::<Vec<_>>();
+        anyhow::ensure!(
+            matches.len() == 1 && matches[0].scope_id == *scope,
+            "requirement {} does not exist uniquely in this scope",
+            id.as_str()
+        );
+        Ok(matches[0].clone())
+    }
+
     pub fn requirement_edit_state(
         &self,
         scope: &ScopeId,
@@ -14,54 +51,74 @@ impl StateStore {
     ) -> anyhow::Result<RequirementEditState> {
         self.with_repository_publication(|| {
             let record = self.requirement(scope, id)?;
-            let head = self.head(&record)?;
-            Ok(RequirementEditState {
-                etag: head
-                    .as_ref()
-                    .map(|e| e.etag.clone())
-                    .unwrap_or(journal::etag(&record, None)?),
-                revision: head.as_ref().map(|e| e.revision.clone()),
-                snapshot: head.map(|e| e.after),
-            })
+            Self::record_edit_state_for_record(&record.into())
         })
     }
 
-    /// Publishes a Requirement edit, its evidence, and its request receipt together.
-    pub fn save_requirement(&self, input: SaveRequirement) -> anyhow::Result<ReviewEntry> {
-        self.save_requirement_with_origin(input, None)
+    pub fn record_edit_state(
+        &self,
+        scope: &ScopeId,
+        kind: NodeType,
+        id: &StableId,
+    ) -> anyhow::Result<RequirementEditState> {
+        self.with_repository_publication(|| {
+            let record = crate::cache::review_families::record(self, scope, kind, id)?;
+            Self::record_edit_state_for_record(&record)
+        })
     }
 
-    /// Saves a Requirement edit as a Discussion outcome and keeps the previous
-    /// text with it, so the outcome shows the change from the record's earlier
-    /// state through the Before snapshot rather than a link to the latest text.
+    pub(super) fn record_edit_state_for_record(
+        record: &ReviewRecord,
+    ) -> anyhow::Result<RequirementEditState> {
+        Ok(RequirementEditState {
+            etag: etag(record)?,
+            revision: current_revision(record)?,
+        })
+    }
+
+    /// Publishes a Requirement edit and the review state it opens together.
+    pub fn save_requirement(&self, input: SaveRequirement) -> anyhow::Result<RequirementEditState> {
+        self.save_requirement_with_origin(input, None, |_, after| {
+            Self::record_edit_state_for_record(&after.into())
+        })
+    }
+
+    pub(crate) fn save_requirement_resource(
+        &self,
+        input: SaveRequirement,
+    ) -> anyhow::Result<super::RequirementResourceSnapshot> {
+        self.save_requirement_with_origin(input, None, |store, after| {
+            store.requirement_resource_snapshot_unlocked(&after.scope_id, &after.id)
+        })
+    }
+
+    /// Saves a Requirement edit as a Discussion outcome. The first history
+    /// version that contains the outcome shows its Discussion origin.
     #[rule("rule_discussion_outcome_shows_record_change")]
     pub fn save_requirement_from_discussion(
         &self,
         input: SaveRequirement,
-        origin: provenance_core::threads::DiscussionOrigin,
-    ) -> anyhow::Result<ReviewEntry> {
-        self.save_requirement_with_origin(input, Some(origin))
+        origin: &DiscussionOrigin,
+    ) -> anyhow::Result<RequirementEditState> {
+        self.save_requirement_with_origin(input, Some(origin), |_, after| {
+            Self::record_edit_state_for_record(&after.into())
+        })
     }
 
-    fn save_requirement_with_origin(
+    fn save_requirement_with_origin<R>(
         &self,
         mut input: SaveRequirement,
-        origin: Option<provenance_core::threads::DiscussionOrigin>,
-    ) -> anyhow::Result<ReviewEntry> {
-        anyhow::ensure!(
-            !input.actor.trim().is_empty(),
-            "invalid review request identity"
-        );
+        origin: Option<&DiscussionOrigin>,
+        complete: impl FnOnce(&Self, Requirement) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        crate::write_error::ensure_actor(&input.actor)?;
         anyhow::ensure!(
             serde_json::to_vec(&input)?.len() <= 1_048_576,
             "review request exceeds the operation byte budget"
         );
         input.normalize();
-        let intent_digest = canonical_digest::digest(&match &origin {
-            Some(origin) => canonical_digest::canonical_bytes(&(&input, origin))?,
-            None => canonical_digest::canonical_bytes(&input)?,
-        });
         self.with_repository_publication(|| {
+            crate::test_probes::at("requirement_save_locked")?;
             let scope_id = input.update.scope_id.clone();
             let scope = &scope_id;
             anyhow::ensure!(
@@ -70,126 +127,162 @@ impl StateStore {
             );
             let record = self.requirement(scope, &input.update.id)?;
             super::owner_matches(&record, input.update.declared_by.as_deref())?;
-            let receipt_path = journal::entry_path(&self.layout, scope, &input.request_id);
-            if receipt_path.try_exists()? {
-                let receipt = journal::read_entry(&self.layout, &receipt_path)?;
-                anyhow::ensure!(
-                    receipt.scope_id == *scope
-                        && receipt.request_id == input.request_id
-                        && receipt.intent_digest == intent_digest
-                        && receipt.requirement_id == input.update.id
-                        && receipt.actor == input.actor,
-                    "review request ID was reused with different intent"
-                );
-                return Ok(receipt);
-            }
-            if let Some(origin) = &origin {
+            if let Some(origin) = origin {
                 self.validate_discussion_origin(scope, origin)?;
             }
-            self.validated_review_entries(scope)?;
-            let head = self.head(&record)?;
-            let current_etag = head
-                .as_ref()
-                .map(|e| e.etag.clone())
-                .unwrap_or(journal::etag(&record, None)?);
-            anyhow::ensure!(
-                input.expected_etag == current_etag,
-                "stale Requirement edit etag"
-            );
-            with_staged_state(&self.layout, false, |layout| {
-                let staged = Self::new(layout.clone());
+            let current_etag = etag(&ReviewRecord::from(record.clone()))?;
+            let stale = (input.expected_etag != current_etag).then_some(current_etag);
+            let stamp = self.current_record_stamp()?;
+            with_record_state(&self.layout, |layout| {
+                let staged = Self::staged(layout.clone(), stamp);
                 let path = shards::requirements_path(layout, scope);
                 let record_id = record.id.clone();
                 guard::with_writer(&path, record_id.as_str(), || {
-                    staged.commit_requirement(input, &record, head, intent_digest, origin)
+                    let after = staged.commit_requirement(input, &record, origin, stale)?;
+                    complete(&staged, after)
                 })
             })
         })
     }
 
+    /// A change to review content creates a new review submission.
+    #[rule("rule_content_change_requires_new_review")]
     fn commit_requirement(
         &self,
         input: SaveRequirement,
         before: &Requirement,
-        head: Option<ReviewEntry>,
-        intent_digest: String,
-        origin: Option<provenance_core::threads::DiscussionOrigin>,
-    ) -> anyhow::Result<ReviewEntry> {
+        origin: Option<&DiscussionOrigin>,
+        stale: Option<String>,
+    ) -> anyhow::Result<Requirement> {
         let scope = before.scope_id.clone();
         let id = before.id.clone();
-        self.update_requirement(input.update)?;
+        let actor = input.actor;
+        self.apply_requirement_update(input.update)?;
         if let Some(relationships) = input.relationships {
-            self.replace_review_relationships(&scope, &id, relationships)?;
+            crate::test_probes::at("requirement_relationships_expanding")?;
+            self.replace_review_relationships(&scope, &id, &relationships)?;
         }
-        let path = shards::requirements_path(&self.layout, &scope);
-        let after = self.mutate_jsonl_records(&path, |records: &mut Vec<Requirement>| {
-            let record = records.iter_mut().find(|r| r.id == id).unwrap();
-            record.schema_version = REVIEW_SCHEMA_VERSION;
-            Ok(record.clone())
-        })?;
+        let after = self.requirement(&scope, &id)?;
         self.validate_graph_scope(&scope)?;
-        let mut manifest = self.manifest()?;
-        manifest.schema_version = REVIEW_SCHEMA_VERSION;
+        let before_record = ReviewRecord::from(before.clone());
+        let after_record = ReviewRecord::from(after.clone());
+        let content = provenance_core::model::record_stamps::content_value;
+        if content(&before_record)? == content(&after_record)? {
+            return Ok(before.clone());
+        }
+        if let Some(current_etag) = stale {
+            return Err(SourceFailure::wrap(
+                WriteFailure::RequirementEditConflict { current_etag },
+                anyhow::anyhow!("stale Requirement edit etag"),
+            ));
+        }
+        let fields =
+            classifier::changed_fields(NodeType::Requirement, &before_record, &after_record)?;
+        let revision = classifier::review_revision(NodeType::Requirement, &after_record)?;
+        if let Some(origin) = origin {
+            self.add_discussion_outcome(&scope, origin, NodeType::Requirement, &id, &revision)?;
+        }
+        if classifier::changes_revision(NodeType::Requirement, &fields) {
+            self.commit_automatic_submission(&after, &actor, &revision)?;
+        }
+        Ok(after)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layout::ProvenanceLayout;
+    use camino::Utf8Path;
+    use serde_json::json;
+
+    fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
+        let temp = tempfile::tempdir().unwrap();
+        let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+        std::fs::create_dir_all(layout.state_dir()).unwrap();
         std::fs::write(
-            self.layout.manifest_path(),
-            serde_json::to_vec_pretty(&manifest)?,
-        )?;
-        let fields = classifier::changed_fields(before, &after)?;
-        let outcome = if head.is_none() {
-            SaveOutcome::Enrolled
-        } else if fields.is_empty() {
-            SaveOutcome::NoChange
-        } else if classifier::changes_revision(&fields) {
-            SaveOutcome::Changed
-        } else {
-            SaveOutcome::LifecycleOnly
-        };
-        let revision = match &head {
-            Some(head) if !classifier::changes_revision(&fields) => head.revision.clone(),
-            _ => journal::new_id(),
-        };
-        let before_snapshot = match &head {
-            Some(entry) => entry.after.clone(),
-            None => journal::snapshot(&self.layout, before)?,
-        };
-        let after_snapshot = if outcome == SaveOutcome::NoChange {
-            before_snapshot.clone()
-        } else {
-            journal::snapshot(&self.layout, &after)?
-        };
-        let entry_id = journal::new_id();
-        let etag = if outcome == SaveOutcome::NoChange {
-            head.as_ref().unwrap().etag.clone()
-        } else {
-            journal::etag(&after, Some(&entry_id))?
-        };
-        let entry = ReviewEntry {
-            schema_version: REVIEW_SCHEMA_VERSION,
-            scope_id: scope.clone(),
-            requirement_id: id,
-            sequence: head.as_ref().map_or(1, |e| e.sequence + 1),
-            id: entry_id,
-            predecessor: head.as_ref().map(|e| e.id.clone()),
-            revision,
-            prior_revision: head.map(|e| e.revision),
-            before: Some(before_snapshot),
-            after: after_snapshot,
-            changed_fields: fields,
-            actor: input.actor,
-            request_id: input.request_id,
-            intent_digest,
-            etag,
-            outcome,
-            origin,
-        };
-        anyhow::ensure!(
-            serde_json::to_vec(&entry)?.len() as u64 <= journal::ENTRY_BYTES,
-            "review receipt exceeds the entry byte budget"
+            layout.manifest_path(),
+            r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
+        )
+        .unwrap();
+        (
+            temp,
+            StateStore::new(layout),
+            ScopeId::new("default").unwrap(),
+        )
+    }
+
+    fn enroll(store: &StateStore, id: &StableId, update: &serde_json::Value) {
+        let input: SaveRequirement = serde_json::from_value(json!({
+            "actor":"ben",
+            "expected_etag":store.requirement_edit_state(&ScopeId::new("default").unwrap(), id).unwrap().etag,
+            "update":update, "relationships":null
+        }))
+        .unwrap();
+        assert!(store.save_requirement(input).unwrap().revision.is_some());
+    }
+
+    /// Implementation aid: pins that the etag ignores record stamps; no Rule
+    /// names it.
+    #[test]
+    fn requirement_etag_ignores_record_stamps() {
+        let value = json!({
+            "schema_version": 2,
+            "scope_id": "default",
+            "id": "req_stamp",
+            "statement": "The system stores records.",
+            "status": "active"
+        });
+        let before: Requirement = serde_json::from_value(value.clone()).unwrap();
+        let mut after: Requirement = serde_json::from_value(value).unwrap();
+        after.created = Some(
+            serde_json::from_value(json!({"commit": "a".repeat(40), "at": "2026-09-12T00:00:00Z"}))
+                .unwrap(),
         );
-        journal::write_new(
-            &journal::entry_path(&self.layout, &scope, &entry.request_id),
-            &entry,
-        )?;
-        Ok(entry)
+        after.updated = Some(
+            serde_json::from_value(json!({"commit": "b".repeat(40), "at": "2026-09-12T01:00:00Z"}))
+                .unwrap(),
+        );
+        assert_eq!(etag(&before.into()).unwrap(), etag(&after.into()).unwrap());
+    }
+
+    #[test]
+    fn first_enrollment_submits_only_when_review_content_changes() {
+        let (_temp, store, scope) = fixture();
+        for id in ["req_changed", "req_unchanged"] {
+            store
+                .write_requirement(
+                    serde_json::from_value(json!({
+                        "scope_id":"default", "id":id,
+                        "statement":format!("The system stores {id}."),
+                        "status":"discovery", "depends_on":[], "supersedes":[]
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+        let changed = StableId::new("req_changed").unwrap();
+        enroll(
+            &store,
+            &changed,
+            &json!({"scope_id":"default", "id":"req_changed", "description":"Needs audit."}),
+        );
+        assert!(store
+            .requirement_decision_state(&scope, &changed)
+            .unwrap()
+            .pending
+            .is_some());
+
+        let unchanged = StableId::new("req_unchanged").unwrap();
+        enroll(
+            &store,
+            &unchanged,
+            &json!({"scope_id":"default", "id":"req_unchanged"}),
+        );
+        assert!(store
+            .requirement_decision_state(&scope, &unchanged)
+            .unwrap()
+            .pending
+            .is_none());
     }
 }

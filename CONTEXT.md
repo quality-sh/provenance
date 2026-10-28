@@ -1,12 +1,18 @@
 # Domain Glossary
 
+## Command keyword
+
+A word that names a CLI command, collection, or record action. A new record cannot receive a Command keyword as its Stable ID. An existing record keeps its ID.
+
 ## Domain
 
 A reader-facing taxonomy classification for requirements. A derived rule belongs to each Domain of its upstream requirements through the canonical graph relationships.
 
 ## Requirement
 
-A higher-level obligation the system must satisfy. Requirements are refined into Rules.
+A higher-level obligation the system must satisfy. A Requirement can refine more than one
+parent Requirement. Each parent refers to the same Requirement and its Rules. A Requirement
+with no refinement parent is a root. A dependency is separate from refinement.
 
 ## Resolution
 
@@ -15,6 +21,10 @@ A recorded decision that removes ambiguity. A Resolution may produce a Rule when
 ## Rule
 
 An identified atomic behavioural obligation that refines one or more Requirements and may also be produced by a Resolution. A Rule can exist before any Implementation binding or Verification.
+
+## Document lifecycle filter
+
+A read choice that omits a record according to that record's lifecycle. The filter does not omit an active record only because the record links to an omitted terminal record.
 
 ## Implementation binding
 
@@ -172,11 +182,22 @@ A named repository that a host makes available to a caller. Its name identifies 
 
 The canonical graph saved in a selected repository, including saved changes that are not committed to Git.
 
+## Source-edit transaction
+
+A publication unit that couples one working-tree source-file replacement with one canonical state swap. Recovery completes both changes or keeps the prior file and state.
+
 ## Local caller
 
 The person who starts a local review host and the clients to which that person
 gives access. They share access to the repository target and scope selected for
 that host session.
+
+## Review page action
+
+Any write made through an authenticated review page session. A person action
+means a Review page action; the mark does not establish browser or human identity.
+An agent that drives the review page itself, such as the in-app browser of the
+Codex app or Claude Desktop, will notify itself. CLI, SDK and MCP writes never notify.
 
 ## Review document
 
@@ -200,6 +221,13 @@ in other Requirement branches can be references without becoming members.
 The state in which all member, reference, and discussion pages have been read
 at one unchanged projection revision. A failed refresh does not establish it.
 
+## Terminal-and-dead record
+
+A record whose lifecycle removes it from the current review document but keeps
+it available for historical views. An archived Rule and an abandoned or rejected
+Resolution are terminal-and-dead records. A superseded Resolution is not a
+terminal-and-dead record.
+
 ## Thread container
 
 A record's collection of collaboration history. Its active, resolved, or archived
@@ -219,3 +247,8 @@ does not assign those Messages to an inferred root.
 
 An immutable record of a Requirement creation or edit, with its origin and
 After evidence. An edit also has Before evidence; creation has none.
+
+## Busy host
+
+A host that has no free request slot. This condition is separate from missing
+execution context or needs.

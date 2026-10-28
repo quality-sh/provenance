@@ -1,3 +1,4 @@
+use super::message_ids::{ensure_unique_message_ids, ShardLine};
 use super::{DispositionRecord, Message, ProvenanceLayout, ScopeId, StateStore};
 use crate::shards;
 use anyhow::Context;
@@ -24,6 +25,49 @@ const IDEATION_LANDING_RECORD_FIELDS: &[&str] = &[
     "dispositions",
 ];
 
+/// Names the shard and its line when a stored line is not one JSON record.
+///
+/// `serde_json` reports a position inside the one line it was given, which
+/// reads as "line 1" for every row; the shard path and the row number are
+/// what locate the fault. The path is relative to the state directory, so the
+/// message is safe to show on the review page.
+pub fn located(path: &Utf8Path, line_number: usize, error: &serde_json::Error) -> anyhow::Error {
+    let text = error.to_string();
+    let message = text
+        .rfind(" at line ")
+        .map_or(text.as_str(), |at| &text[..at]);
+    anyhow::anyhow!("{} line {line_number}: {message}", state_relative(path))
+}
+
+/// Locates a parse error from a deserializer that returns `anyhow`: a serde
+/// error loses its in-line position, any other refusal gets the shard prefix.
+fn located_any(path: &Utf8Path, line_number: usize, error: anyhow::Error) -> anyhow::Error {
+    match error.downcast::<serde_json::Error>() {
+        Ok(error) => located(path, line_number, &error),
+        Err(error) => anyhow::anyhow!("{} line {line_number}: {error}", state_relative(path)),
+    }
+}
+
+fn state_relative(path: &Utf8Path) -> &Utf8Path {
+    let components: Vec<&str> = path.iter().collect();
+    components
+        .windows(2)
+        .rposition(|pair| pair == [".provenance", "state"])
+        .and_then(|at| {
+            let prefix: Utf8PathBuf = components[..at + 2].iter().collect();
+            path.strip_prefix(prefix).ok()
+        })
+        .unwrap_or(path)
+}
+
+pub fn parse_line(
+    path: &Utf8Path,
+    line_number: usize,
+    line: &str,
+) -> anyhow::Result<serde_json::Value> {
+    serde_json::from_str(line).map_err(|error| located(path, line_number, &error))
+}
+
 /// The one place a stored line becomes a record.
 ///
 /// Every reader in this module lands here: [`read_records`] carries the open
@@ -45,10 +89,14 @@ fn record_from_line<T: DeserializeOwned>(
     ensure_supported_record_version(path, line_number, &value)?;
     ensure_supported_nested_record_versions(path, line_number, &value, nested_record_fields)?;
     match fields {
-        Fields::Open => Ok(serde_json::from_value(value)?),
+        Fields::Open => {
+            serde_json::from_value(value).map_err(|error| located(path, line_number, &error))
+        }
         // The closed reader needs the untouched line: `serde_ignored` reports
         // an unknown field by walking the document as it was written.
-        Fields::Closed => deserialize_closed(line),
+        Fields::Closed => {
+            deserialize_closed(line).map_err(|error| located_any(path, line_number, error))
+        }
     }
 }
 
@@ -103,13 +151,19 @@ pub fn ensure_supported_record_version(
         }
         return Ok(());
     }
-    if value["schema_version"] == 3
-        && path.file_name() == Some("req.jsonl")
-        && path.parent().and_then(Utf8Path::file_name) == Some("requirements")
-        && serde_json::from_value::<provenance_core::Requirement>(value.clone()).is_ok()
-    {
-        deserialize_closed::<provenance_core::Requirement>(&serde_json::to_string(value)?)
-            .with_context(|| format!("{path} line {line_number}: invalid enrolled Requirement"))?;
+    let family = path
+        .parent()
+        .and_then(Utf8Path::file_name)
+        .and_then(crate::cache::review_families::by_directory);
+    if let (true, Some(family)) = (value["schema_version"] == 3, family) {
+        crate::cache::review_families::deserialize_record(family.kind, value).with_context(
+            || {
+                format!(
+                    "{path} line {line_number}: invalid enrolled {}",
+                    family.kind.as_str()
+                )
+            },
+        )?;
         return Ok(());
     }
     let Some((id, version)) = first_unsupported_record(value) else {
@@ -211,7 +265,7 @@ fn read_records<T: DeserializeOwned>(
     let contents = std::fs::read_to_string(path)?;
     let mut records = Vec::new();
     for (index, line) in contents.lines().enumerate() {
-        let mut value: serde_json::Value = serde_json::from_str(line)?;
+        let mut value = parse_line(path, index + 1, line)?;
         prepare(&mut value);
         records.push(record_from_line(
             path,
@@ -227,14 +281,14 @@ fn read_records<T: DeserializeOwned>(
 
 const fn leave_as_written(_value: &mut serde_json::Value) {}
 
-pub(super) fn read_jsonl<T: DeserializeOwned>(
+pub fn read_jsonl<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
     store.state_path_access(path, || read_jsonl_unlocked(path))
 }
 
-fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
+pub(super) fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
     read_records(path, Fields::Open, leave_as_written, NO_NESTED_RECORDS)
 }
 
@@ -242,14 +296,18 @@ pub(super) fn read_ideation_landings<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, || {
-        read_records(
-            path,
-            Fields::Open,
-            leave_as_written,
-            IDEATION_LANDING_RECORD_FIELDS,
-        )
-    })
+    store.state_path_access(path, || read_ideation_landings_unlocked(path))
+}
+
+pub(super) fn read_ideation_landings_unlocked<T: DeserializeOwned>(
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
+    read_records(
+        path,
+        Fields::Open,
+        leave_as_written,
+        IDEATION_LANDING_RECORD_FIELDS,
+    )
 }
 
 pub(super) fn read_legacy_dispositions(
@@ -259,7 +317,9 @@ pub(super) fn read_legacy_dispositions(
     store.state_path_access(path, || read_legacy_dispositions_unlocked(path))
 }
 
-fn read_legacy_dispositions_unlocked(path: &Utf8Path) -> anyhow::Result<Vec<DispositionRecord>> {
+pub(super) fn read_legacy_dispositions_unlocked(
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<DispositionRecord>> {
     read_records(
         path,
         Fields::Open,
@@ -328,22 +388,15 @@ pub(super) fn deserialize_closed<T: DeserializeOwned>(input: &str) -> anyhow::Re
 fn read_jsonl_shards<T: DeserializeOwned>(
     shard_paths: Vec<Utf8PathBuf>,
     shard_kind: &str,
-) -> anyhow::Result<Vec<T>> {
+) -> anyhow::Result<Vec<(T, ShardLine)>> {
     let mut records = Vec::new();
     for path in shard_paths {
         crate::test_probes::record_read(&path);
         let contents = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {shard_kind} shard {}", path.as_str()))?;
         for (index, line) in contents.lines().enumerate() {
-            let context = || {
-                format!(
-                    "failed to parse {shard_kind} shard {} line {}",
-                    path.as_str(),
-                    index + 1
-                )
-            };
-            let value: serde_json::Value = serde_json::from_str(line).with_context(context)?;
-            records.push(
+            let value = parse_line(&path, index + 1, line)?;
+            records.push((
                 record_from_line(
                     &path,
                     index + 1,
@@ -351,9 +404,12 @@ fn read_jsonl_shards<T: DeserializeOwned>(
                     value,
                     Fields::Open,
                     NO_NESTED_RECORDS,
-                )
-                .with_context(context)?,
-            );
+                )?,
+                ShardLine {
+                    path: path.clone(),
+                    line: index + 1,
+                },
+            ));
         }
     }
     Ok(records)
@@ -365,8 +421,17 @@ pub(super) fn read_message_shards(
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
     store.state_path_access(&shards::threads_path(layout, scope), || {
-        read_jsonl_shards(message_shard_paths(layout, scope)?, "message")
+        read_message_shards_unlocked(layout, scope)
     })
+}
+
+pub(super) fn read_message_shards_unlocked(
+    layout: &ProvenanceLayout,
+    scope: &ScopeId,
+) -> anyhow::Result<Vec<Message>> {
+    let rows = read_jsonl_shards(message_shard_paths(layout, scope)?, "message")?;
+    ensure_unique_message_ids(&rows)?;
+    Ok(rows.into_iter().map(|(message, _)| message).collect())
 }
 
 /// Every month shard of the scope's messages, sorted. All message reads

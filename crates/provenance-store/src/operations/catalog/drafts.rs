@@ -1,11 +1,8 @@
 //! Draft replacements retain the native asserted-evidence and lifecycle gates.
-use super::{
-    creation::creation, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture, PreparedContext,
-};
-use crate::{
-    layout::ProvenanceLayout,
-    state_store::{CreateContributionInput, CreateSynthesisPacketInput, StateStore},
-    write_error::{SourceFailure, WriteError, WriteFailure},
+use super::{creation::creation, ExecutionNeed};
+use crate::state_store::{
+    CreateContributionInput, CreateSynthesisPacketInput, UpdateContributionInput,
+    UpdateSynthesisPacketInput,
 };
 creation!(
     CreateContribution,
@@ -18,9 +15,9 @@ creation!(
 creation!(
     UpsertContribution,
     "upsert-contribution",
-    CreateContributionInput,
+    UpdateContributionInput,
     provenance_core::Contribution,
-    upsert_contribution,
+    update_contribution,
     [GraphStorage]
 );
 creation!(
@@ -34,8 +31,8 @@ creation!(
 creation!(
     UpsertSynthesisPacket,
     "upsert-synthesis-packet",
-    CreateSynthesisPacketInput,
+    UpdateSynthesisPacketInput,
     provenance_core::SynthesisPacket,
-    upsert_synthesis_packet,
+    update_synthesis_packet,
     [GraphStorage]
 );

@@ -12,10 +12,14 @@ use crate::StandardIssue;
 pub(super) fn identity(source: &[u8], entries: &[DictionaryEntry]) -> DictionaryImportIdentity {
     DictionaryImportIdentity {
         issue: StandardIssue::Nine,
-        source_sha256: format!("{:x}", Sha256::digest(source)),
+        source_sha256: source_digest(source),
         data_sha256: normalized_data_digest(entries),
         extractor_version: DICTIONARY_EXTRACTOR_VERSION.to_owned(),
     }
+}
+
+pub(super) fn source_digest(source: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(source))
 }
 
 pub(super) fn normalized_data_digest(entries: &[DictionaryEntry]) -> String {

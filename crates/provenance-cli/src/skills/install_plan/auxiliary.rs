@@ -10,6 +10,7 @@ pub(super) fn plan_copy_files(
     destination: &Path,
     force: bool,
     prospective_missing: bool,
+    guidance: &str,
 ) -> anyhow::Result<Vec<FileAction>> {
     let name = skill_name(skill)?;
     let mut sources = vec![(
@@ -43,7 +44,7 @@ pub(super) fn plan_copy_files(
                     false,
                 ));
             }
-            FileAction::managed(path, contents, force)
+            FileAction::managed(path, contents, force, guidance)
         })
         .collect()
 }

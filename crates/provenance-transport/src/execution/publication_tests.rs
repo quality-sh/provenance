@@ -37,14 +37,14 @@ fn requirements(repo: &Repository) -> usize {
 }
 
 #[tokio::test]
-async fn a_panicked_task_after_publication_has_an_uncertain_outcome() {
+async fn a_panicked_task_after_publication_has_an_internal_failure() {
     let repo = Repository::new("The graph is readable.");
     let before = requirements(&repo);
     let context = context(&repo);
     let runtime = tokio::runtime::Handle::current();
     let execution = Execution::default();
     let error = execution
-        .run("apply", move || {
+        .run::<(), _>(move || {
             apply(context, &runtime);
             panic!("injected response loss after publication");
         })
@@ -52,8 +52,7 @@ async fn a_panicked_task_after_publication_has_an_uncertain_outcome() {
         .unwrap_err();
     execution.shutdown().await;
     assert_eq!(requirements(&repo), before + 1, "the write took effect");
-    assert_eq!(error.error, serde_json::json!({"kind":"uncertain_write"}));
-    assert_eq!(error.operation.as_deref(), Some("apply"));
+    assert_eq!(error, OperationFailure::Internal);
 }
 
 #[tokio::test]
@@ -71,13 +70,12 @@ async fn a_disconnected_caller_keeps_publication_owned_until_shutdown() {
     let (finished, done) = oneshot::channel();
     let caller = tokio::spawn(async move {
         worker
-            .run("apply", move || {
+            .run(move || {
                 attempts.fetch_add(1, Ordering::SeqCst);
                 apply(context, &runtime);
                 published.send(()).unwrap();
                 continue_work.blocking_recv().unwrap();
                 finished.send(()).unwrap();
-                Ok(Value::Null)
             })
             .await
     });

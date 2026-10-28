@@ -1,0 +1,107 @@
+use super::grammar::{DiscussionsArgs, TargetArgs};
+use provenance_cli::porcelain;
+use provenance_core::StableId;
+use provenance_porcelain::{
+    action::Action,
+    discussion::{self, DiscussionOutcome},
+};
+use serde_json::{json, Value};
+
+pub async fn dispatch_root(
+    args: DiscussionsArgs,
+    matches: &clap::ArgMatches,
+) -> anyhow::Result<()> {
+    let (action, target) = if let Some(id) = args.discussion_id {
+        anyhow::ensure!(
+            args.action.as_deref() == Some("get"),
+            "an addressed Discussion requires get"
+        );
+        (Action::Discussion, Some(StableId::new(id)?))
+    } else {
+        anyhow::ensure!(args.action.is_none(), "get requires a Discussion ID");
+        (Action::Discussions, None)
+    };
+    let schema = discussion::input_schema(action);
+    let mut input = crate::catalog_cli::fields::schema_input(
+        &schema,
+        matches,
+        &["parent", "discussion_id"],
+        &[],
+    )
+    .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
+    if let Some(target) = target {
+        input.insert("discussion_id".into(), json!(target));
+    }
+    let host = args.common.context().repo.local_host()?;
+    let service = host.porcelain().discussion();
+    let outcome = service
+        .execute_discussion(action, Value::Object(input))
+        .await?;
+    print(&outcome, args.common.format())
+}
+
+pub async fn dispatch_target(
+    args: TargetArgs,
+    action: Action,
+    matches: &clap::ArgMatches,
+) -> anyhow::Result<()> {
+    let schema = discussion::input_schema(action);
+    let mut input = crate::catalog_cli::fields::schema_input(
+        &schema,
+        matches,
+        &["parent", "discussion_id"],
+        &["limit"],
+    )
+    .unwrap_or_else(|error| crate::catalog_cli::usage_error(error));
+    let target = StableId::new(args.target)?;
+    let host = args.common.context().repo.local_host()?;
+    let service = host.porcelain().discussion();
+    let target_field = discussion::target_field(action);
+    let identity = if target_field == "parent" {
+        let resolver = host.porcelain().get();
+        serde_json::to_value(resolver.select_parent(target.as_str()).await?)?
+    } else {
+        json!(target)
+    };
+    input.insert(target_field.into(), identity);
+    for (field, value) in [("actor", "cli"), ("role", "user")] {
+        if schema["properties"].get(field).is_some() {
+            input.entry(field).or_insert_with(|| json!(value));
+        }
+    }
+    ensure_required_flags(&schema, action, &input);
+    let outcome = service
+        .execute_discussion(action, Value::Object(input))
+        .await?;
+    print(&outcome, args.common.format())
+}
+
+fn print(
+    outcome: &DiscussionOutcome,
+    format: Option<porcelain::OutputFormat>,
+) -> anyhow::Result<()> {
+    if format == Some(porcelain::OutputFormat::Json) {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+    } else {
+        println!(
+            "{}",
+            provenance_porcelain::discussion::render_readable(outcome)
+        );
+    }
+    Ok(())
+}
+
+/// A Discussion action that lacks a required option is a usage error, so
+/// the shell sees exit code 2 and the flag name, not a host refusal.
+fn ensure_required_flags(schema: &Value, action: Action, input: &serde_json::Map<String, Value>) {
+    let missing = crate::catalog_cli::required_discussion_flags(schema, action)
+        .into_iter()
+        .filter(|flag| !input.contains_key(&flag.replace('-', "_")))
+        .collect::<Vec<_>>();
+    if let Some(first) = missing.first() {
+        crate::catalog_cli::usage_error(anyhow::anyhow!(
+            "--{first} is required for {}",
+            action.as_str()
+        ));
+    }
+}

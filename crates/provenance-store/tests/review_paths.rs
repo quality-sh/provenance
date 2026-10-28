@@ -1,8 +1,9 @@
 #![cfg(any(unix, windows))]
+#[allow(dead_code)]
 mod review_support;
 
-use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::review::{EvidenceQuery, RequirementSnapshot, ReviewHistoryQuery};
+use camino::Utf8Path;
+use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};
 use provenance_store::{
     cache,
     layout::ProvenanceLayout,
@@ -35,69 +36,40 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         .is_symlink());
     let layout = ProvenanceLayout::new(&root);
     let store = StateStore::new(layout.clone());
-    let first = store
-        .save_requirement(save(&store, "enroll", json!({"description":"saved"})))
+    store
+        .save_requirement(save(&store, json!({"description":"saved"})))
         .unwrap();
-    let second = store
-        .save_requirement(save(&store, "next", json!({"description":"later"})))
-        .unwrap();
-    drop(store);
-    let reopened = StateStore::new(layout.clone());
-    assert_eq!(
-        reopened
-            .requirement_save_receipt(&scope(), &id(), &second.request_id, "ben", None)
-            .unwrap(),
-        Some(second.clone())
-    );
     cache::materialize_state(&layout).await.unwrap();
     let history = read_history(
         &root,
         &scope(),
         ReadPolicy::default(),
         ReviewHistoryQuery {
-            requirement_id: id(),
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
             limit: 10,
             cursor: None,
         },
     )
     .await
     .unwrap();
-    assert_eq!(history.result.entries, [first.clone(), second]);
+    assert_eq!(history.result.entries.len(), 1);
+    let working = history.result.entries[0].id.clone();
+    assert_eq!(working.as_str(), "working");
     let page = read_evidence(
         &root,
         &scope(),
         ReadPolicy::default(),
         EvidenceQuery {
-            requirement_id: id(),
-            entry_id: first.id,
+            record_kind: provenance_core::NodeType::Requirement,
+            record_id: id(),
+            entry_id: working,
             before: false,
-            field: None,
+            field: Some("description".into()),
             offset: 0,
         },
     )
     .await
     .unwrap();
-    let snapshot: RequirementSnapshot = serde_json::from_str(&page.result.json_text).unwrap();
-    assert_eq!(snapshot.record.description.as_deref(), Some("saved"));
-}
-
-fn review_dir(root: &Utf8Path) -> Utf8PathBuf {
-    root.join(".provenance/state/scopes/default/review")
-}
-
-#[test]
-fn receipt_rejects_an_internal_directory_escape() {
-    let (temp, store) = fixture();
-    let entry = store
-        .save_requirement(save(&store, "enroll", json!({})))
-        .unwrap();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
-    let journal = review_dir(root).join("journal");
-    let outside = tempfile::tempdir().unwrap();
-    let moved = Utf8Path::from_path(outside.path()).unwrap().join("journal");
-    std::fs::rename(&journal, &moved).unwrap();
-    symlink_dir(&moved, &journal);
-    assert!(store
-        .requirement_save_receipt(&scope(), &id(), &entry.request_id, "ben", None)
-        .is_err());
+    assert_eq!(page.result.json_text, "\"saved\"");
 }

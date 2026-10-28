@@ -9,6 +9,7 @@
 use super::comparison::requests::{self, Request};
 use super::comparison::test_stores::TestStore;
 use super::comparison::{served_value, strip_additive};
+use crate::cache::tests::fixtures::pinned_store::{LINKED_REQUIREMENT_ID, LINKED_RULE_ID};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::stamp::READ_DERIVATION;
 use provenance_core::protocol::{
@@ -67,8 +68,8 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         get(NodeType::Boundary, "boundary_no_backpay"),
         get(NodeType::Requirement, "req_old_overtime"),
         get(NodeType::Requirement, "req_old_overtime"),
-        get(NodeType::Requirement, "twin_record"),
-        get(NodeType::Rule, "twin_record"),
+        get(NodeType::Requirement, LINKED_REQUIREMENT_ID),
+        get(NodeType::Rule, LINKED_RULE_ID),
         Request::Search(requests::search("over", Vec::new())),
         Request::Search(requests::search(
             "pay",
@@ -83,7 +84,7 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         Request::Neighbors(requests::neighbors("topic_rates", 50)),
         Request::Neighbors(requests::neighbors("req_old_overtime", 50)),
         Request::Neighbors(requests::neighbors("question_threshold", 50)),
-        Request::Neighbors(requests::neighbors("twin_record", 50)),
+        Request::Neighbors(requests::neighbors(LINKED_REQUIREMENT_ID, 50)),
     ]);
     let mut named_origin = requests::neighbors("req_right", 50);
     named_origin.node_type = Some(NodeType::Requirement);
@@ -101,7 +102,7 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
         Request::Trace(requests::trace("req_top", 50)),
         Request::Trace(requests::trace("req_top", 50)),
         Request::Trace(requests::trace("req_overtime", 3)),
-        Request::Trace(requests::trace("twin_record", 50)),
+        Request::Trace(requests::trace(LINKED_REQUIREMENT_ID, 50)),
         impact("source_schads", 50),
         impact("req_overtime", 5),
         impact("rule_overtime_001", 50),
@@ -154,26 +155,49 @@ async fn answers() -> Vec<Value> {
         strip_additive(&mut answer);
         normalize_record_stamps(&mut answer);
         normalize_cursor(&mut answer);
-        answers.push(json!({
+        normalize_revision_digest(&mut answer);
+        let mut rendered = json!({
             "operation": request.operation(),
             "request": request.describe(),
             "answer": answer,
-        }));
+        });
+        normalize_revision_digest(&mut rendered);
+        answers.push(rendered);
     }
     answers
 }
 
-// The pinned file holds record content. Stamp behavior and SQL retention have
-// dedicated tests; archive permalinks remain part of the content pinned here.
+// The pinned file holds record content. Stamp and review enrollment behavior
+// have dedicated tests; archive permalinks remain part of the content pinned here.
 fn normalize_record_stamps(value: &mut Value) {
     match value {
         Value::Object(record) => {
+            let kind = record
+                .get("node_type")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
             if matches!(
-                record.get("node_type").and_then(Value::as_str),
+                kind.as_deref(),
                 Some("source" | "requirement" | "rule" | "resolution")
             ) {
                 record.remove("created");
                 record.remove("updated");
+            }
+            if matches!(
+                kind.as_deref(),
+                Some(
+                    "source"
+                        | "requirement"
+                        | "resolution"
+                        | "rule"
+                        | "domain"
+                        | "boundary"
+                        | "topic"
+                        | "question"
+                )
+            ) && record.get("schema_version") == Some(&json!(3))
+            {
+                record.insert("schema_version".into(), json!(2));
             }
             for value in record.values_mut() {
                 normalize_record_stamps(value);
@@ -189,8 +213,8 @@ fn normalize_record_stamps(value: &mut Value) {
 }
 
 // Cursor authentication and target binding have dedicated behavioral tests.
-// The golden file retains the revision digest, serial, derivation, and position;
-// only random instance, temporary repository identity, and signature vary.
+// The golden file retains the serial, derivation, and position. Occurrence,
+// instance, repository, and signature identities vary between fixtures.
 fn normalize_cursor(answer: &mut Value) {
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
     let Some(token) = answer.get("next_cursor").and_then(Value::as_str) else {
@@ -207,6 +231,33 @@ fn normalize_cursor(answer: &mut Value) {
     payload["identity"] = json!("<query identity>");
     payload["instance"] = json!("<projection instance>");
     answer["next_cursor"] = payload;
+}
+
+fn normalize_revision_digest(value: &mut Value) {
+    match value {
+        Value::Object(object) => {
+            if object.get("operation") == Some(&json!("stale")) {
+                object.insert("request".into(), json!("base=<base commit>"));
+            }
+            if object.get("identity") == Some(&json!("<query identity>"))
+                && object.contains_key("digest")
+            {
+                object.insert("digest".into(), json!("<revision digest>"));
+            }
+            if object.contains_key("base")
+                && object.contains_key("head")
+                && object.contains_key("sites")
+            {
+                object.insert("base".into(), json!("<base commit>"));
+                object.insert("head".into(), json!("<head commit>"));
+            }
+            for value in object.values_mut() {
+                normalize_revision_digest(value);
+            }
+        }
+        Value::Array(values) => values.iter_mut().for_each(normalize_revision_digest),
+        _ => {}
+    }
 }
 
 fn digest(answers: &[Value]) -> String {
@@ -226,7 +277,9 @@ fn parse(file: &str) -> (Value, Vec<Value>) {
         .lines()
         .map(|line| serde_json::from_str::<Value>(line).unwrap());
     let header = lines.next().expect("a header line");
-    (header, lines.collect())
+    let mut answers = lines.collect::<Vec<_>>();
+    answers.iter_mut().for_each(normalize_revision_digest);
+    (header, answers)
 }
 
 #[tokio::test]

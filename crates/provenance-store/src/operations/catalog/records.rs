@@ -4,62 +4,63 @@ use super::{
 };
 use provenance_core::protocol::{
     self,
-    failure::OperationFailure,
     repository::{InfoRequest, RepositoryInfo},
     QueryResponse,
 };
 
 macro_rules! query {
-    ($name:ident, $wire:literal, $request:ident, $result:ident, $handler:ident, $needs:expr) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = protocol::$request;
-            type Success = QueryResponse<protocol::$result>;
-            type Failure = ReadError;
-            fn failure_status(error: &ReadError) -> u16 {
-                error.status()
-            }
-            const NAME: &'static str = $wire;
-            const CONTEXT: super::ContextKind = super::ContextKind::Scoped;
-            const FAILURE_STATUSES: &'static [u16] = &[409, 500];
-            fn needs(request: &Self::Request) -> ExecutionNeeds {
-                ($needs)(request)
-            }
-            fn validate_external(request: &Self::Request) -> Result<(), OperationFailure> {
+    (
+        $name:ident,
+        $wire:literal,
+        $request:ident,
+        $result:ident,
+        $handler:ident,
+        $answer:ident,
+        $needs:expr
+    ) => {
+        $crate::operations::catalog::shapes::graph_read_operation!(
+            pub $name,
+            $wire,
+            protocol::$request,
+            QueryResponse<protocol::$result>,
+            &[409, 500],
+            $needs,
+            validate = |request: &protocol::$request| {
                 request
                     .validate()
                     .map_err(provenance_core::protocol::QueryValidation::into_failure)
-            }
-            fn run(
-                context: PreparedContext,
-                request: Self::Request,
-            ) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let context = context.graph()?;
-                    let mut answer = crate::operations::queries::$handler(
+            },
+            |context, request| async move {
+                let mut answer = if context.external {
+                    crate::operations::queries::$answer(
                         Some(context.root),
                         &context.scope,
                         context.policy,
                         request,
                     )
-                    .await?;
-                    if context.external
-                        && answer.stamp.policy == protocol::StampPolicy::CatchUpFailed
-                    {
-                        answer.freshness_error =
-                            Some("catch-up failed; answer uses the stored projection".to_owned());
-                    }
-                    let mut response = QueryResponse::new(Self::NAME, answer);
-                    if context.external
-                        && response.stamp.policy == protocol::StampPolicy::CatchUpFailed
-                    {
-                        response.freshness_cause =
-                            Some(protocol::read_failure::FreshnessCause::CatchUpFailed);
-                    }
-                    Ok(response)
-                })
+                    .await?
+                } else {
+                    crate::operations::queries::$handler(
+                        Some(context.root),
+                        &context.scope,
+                        context.policy,
+                        request,
+                    )
+                    .await?
+                };
+                if context.external && answer.stamp.policy == protocol::StampPolicy::CatchUpFailed {
+                    answer.freshness_error =
+                        Some("catch-up failed; answer uses the stored projection".to_owned());
+                }
+                let mut response = QueryResponse::new($wire, answer);
+                if context.external && response.stamp.policy == protocol::StampPolicy::CatchUpFailed
+                {
+                    response.freshness_cause =
+                        Some(protocol::read_failure::FreshnessCause::CatchUpFailed);
+                }
+                Ok(response)
             }
-        }
+        );
     };
 }
 query!(
@@ -68,15 +69,34 @@ query!(
     ReadDocumentQuery,
     ReadDocumentResult,
     read_document,
+    read_document_answer,
     graph_needs
 );
-query!(Get, "get", GetQuery, GetResult, get, graph_needs);
+query!(
+    Get,
+    "get",
+    GetQuery,
+    GetResult,
+    get,
+    get_answer,
+    graph_needs
+);
+query!(
+    ResolveRecord,
+    "resolve-record",
+    ResolveRecordQuery,
+    ResolveRecordResult,
+    resolve_record,
+    resolve_record_answer,
+    graph_needs
+);
 query!(
     Search,
     "search",
     SearchQuery,
     SearchResult,
     search,
+    search_answer,
     graph_needs
 );
 query!(
@@ -85,9 +105,18 @@ query!(
     NeighborsQuery,
     NeighborsResult,
     neighbors,
+    neighbors_answer,
     graph_needs
 );
-query!(Trace, "trace", TraceQuery, TraceResult, trace, graph_needs);
+query!(
+    Trace,
+    "trace",
+    TraceQuery,
+    TraceResult,
+    trace,
+    trace_answer,
+    graph_needs
+);
 
 pub struct Info;
 impl Operation for Info {
@@ -99,6 +128,7 @@ impl Operation for Info {
     }
     const NAME: &'static str = "info";
     const CONTEXT: super::ContextKind = super::ContextKind::Repository;
+    const FAILURE_STATUSES: &'static [u16] = &[409];
     fn needs(_: &Self::Request) -> ExecutionNeeds {
         &[ExecutionNeed::GraphStorage]
     }

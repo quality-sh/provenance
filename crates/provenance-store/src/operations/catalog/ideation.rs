@@ -4,17 +4,8 @@
 //! use `StateStore::list_proposal_cards`, the validated native effective-state
 //! projection, and never the actor-override projection or the raw definition
 //! list.
-use super::{
-    scoped_list::scoped_list, ExecutionNeed, ExecutionNeeds, Operation, OperationFuture,
-    PreparedContext,
-};
-use crate::{
-    layout::ProvenanceLayout,
-    state_store::{
-        CreateAssertionInput, CreateDispositionInput, CreateProposalCardInput, StateStore,
-    },
-    write_error::{SourceFailure, WriteError, WriteFailure},
-};
+use super::{scoped_list::scoped_list, ExecutionNeed};
+use crate::state_store::{CreateAssertionInput, CreateDispositionInput, CreateProposalCardInput};
 
 scoped_list!(
     ListProposals,
@@ -37,37 +28,10 @@ scoped_list!(
 
 macro_rules! ideation_create {
     ($name:ident, $wire:literal, $input:ty, $output:ty, $method:ident) => {
-        pub struct $name;
-        impl Operation for $name {
-            type Request = $input;
-            type Success = $output;
-            type Failure = WriteError;
-            const NAME: &'static str = $wire;
-            const MUTATES: bool = true;
-            const CONTEXT: super::ContextKind = super::ContextKind::Scope;
-            fn failure_status(error: &WriteError) -> u16 {
-                error.status()
-            }
-            fn needs(_: &Self::Request) -> ExecutionNeeds {
-                &[ExecutionNeed::GraphStorage]
-            }
-            fn run(
-                context: PreparedContext,
-                request: Self::Request,
-            ) -> OperationFuture<Self::Success, Self::Failure> {
-                Box::pin(async move {
-                    let context = context.scope()?;
-                    if request.scope_id != context.scope {
-                        return Err(SourceFailure::wrap(
-                            WriteFailure::ScopeMismatch,
-                            anyhow::anyhow!("request scope does not match selected scope"),
-                        )
-                        .into());
-                    }
-                    Ok(StateStore::new(ProvenanceLayout::new(context.root)).$method(request)?)
-                })
-            }
-        }
+        $crate::operations::catalog::shapes::scoped_write_operation!(
+            pub $name, $wire, $input, $output, &[], &[ExecutionNeed::GraphStorage],
+            scope = scope_id, |store, _scope, request| store.$method(request)
+        );
     };
 }
 ideation_create!(

@@ -25,6 +25,8 @@ pub enum ReadFailure {
     GitUnavailable,
     #[error("Git revision does not name a commit")]
     GitRevisionNotFound,
+    #[error("the addressed resource does not exist")]
+    ResourceNotFound,
     #[error("no projection; run provenance materialize")]
     NoProjection,
     #[error("projection differs from canonical state")]

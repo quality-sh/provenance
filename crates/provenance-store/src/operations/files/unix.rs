@@ -45,7 +45,7 @@ pub(super) fn open_root(path: &Utf8Path) -> Result<File, Refusal> {
     }
     Ok(held)
 }
-fn regular(parent: &File, name: &str) -> Result<File, Refusal> {
+pub(super) fn regular(parent: &File, name: &str) -> Result<File, Refusal> {
     let stat = fs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW).map_err(error)?;
     if !FileType::from_raw_mode(stat.st_mode).is_file() {
         return Err(Refusal::Denied);
@@ -65,12 +65,17 @@ fn regular(parent: &File, name: &str) -> Result<File, Refusal> {
     Ok(file)
 }
 pub(super) fn open_file(root: &File, relative: &Utf8Path) -> Result<File, Refusal> {
+    let (held, leaf) = open_parent(root, relative)?;
+    regular(&held, &leaf)
+}
+
+pub(super) fn open_parent(root: &File, relative: &Utf8Path) -> Result<(File, String), Refusal> {
     let mut held = root.try_clone().map_err(Refusal::Read)?;
     let components = relative.as_str().split('/').collect::<Vec<_>>();
     for name in &components[..components.len() - 1] {
         held = directory(&held, name)?;
     }
-    regular(&held, components[components.len() - 1])
+    Ok((held, components[components.len() - 1].to_owned()))
 }
 struct Frame {
     directory: File,

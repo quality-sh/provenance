@@ -5,13 +5,12 @@ isolated targets and explicit target/scope grants. These tests do not authorize
 real repository hosting. The [local review host](review-host.md) defines the
 production caller and repository access contract.
 
-The catalog adds `impact`, `resolve-symbol`, `evidence`, `stale`,
-`verification-runs`, and `verification-bindings`. The four structured reads use
-repository, scope, and optional freshness. The two verification lists accept
-repository and scope, with an optional Rule filter. They reject freshness and
-page controls. Native and HTTP list results remain complete arrays. MCP returns
-the complete array in `{"result": [...]}` and declares that object in its output
-schema. A queue refusal never returns a partial list as a complete answer.
+The catalog exposes `impact`, `resolve-symbol`, `evidence`, and `stale` on their
+owning resource paths. It also exposes the `verification-runs` and
+`verification-bindings` collections. The connection binds the repository and
+scope. Queries use GET parameters on the owning path. HTTP and MCP use the same
+response envelope. Lists return records in `data.items`. A queue refusal never
+returns a partial list as a complete answer.
 
 Evidence without a base reads verification runs but does not request Git.
 A head without a base retains this behavior. A base adds canonical evidence and
@@ -74,6 +73,35 @@ original directory identity; it does not switch to a replacement pathname.
 This is a handle identity guarantee, not a promise that a file remains beneath
 the root's current text pathname after a concurrent rename.
 
+Held writes use the same traversal. A bounded read opens the parent directory
+and the regular-file leaf without following links. It returns the exact UTF-8
+bytes, their SHA-256 digest, and the file identity. The identity is the device
+and inode on Unix. It is the volume serial number and file index on Windows.
+The read refuses a file that is larger than the caller's byte limit. If a file
+grows during the read, the read stops after one byte beyond the limit and
+refuses the file. The read does not change line endings or other bytes.
+
+A replacement temporary file is created as a new leaf in the held parent. The
+operation keeps its handle open. Before installation, the operation checks that
+the temporary leaf has the same identity and digest as that handle. It also
+checks that the prepared file belongs to the selected leaf and read snapshot.
+
+On Unix, the operation refuses a target that has an owner UID other than the
+process effective UID. It does not change the owner. It copies all mode bits to
+the replacement. On Windows, it copies the target DACL to the replacement. A
+DACL copy failure refuses the operation. It also keeps the read-only attribute.
+
+The compare-and-swap operation moves the current leaf to a new backup name
+without replacement. It checks the displaced file's identity and SHA-256 digest
+against the bounded read. If the check fails, it restores the displaced leaf
+without replacement. Thus, a new file that appears at the selected name is not
+overwritten. If the check passes, the operation installs the temporary file. It
+then checks the backup identity and digest again. It removes the backup only if
+that check passes. A changed backup or a backup removal failure returns an
+installed outcome that names the retained backup. Access, size, UTF-8,
+concurrent-change, write, and restore failures are typed refusals. File and
+graph state transactions and recovery are outside this file-access operation.
+
 Review journal and snapshot reads also use this held-file seam. These reads
 resolve only the configured repository root, so a trusted root or parent alias
 is accepted. Each internal path component, including `.provenance`, must pass
@@ -121,7 +149,7 @@ Linux tests exercise selected and ancestor symlinks, portable invalid paths,
 root replacement after open, repeated ancestor replacement, FIFO refusal,
 ignored symlinks, deterministic cuts, real Git revisions, and a missing promised
 blob whose control run invokes a remote helper. They also cover all six HTTP and
-MCP operations, complete arrays, all four cuts, scope isolation, and no-base
-behavior. Passing these tests does not certify every filesystem or production
-host configuration. Platform runtime checks must run on their target operating
-systems before release.
+MCP operations, complete list envelopes, all four cuts, scope isolation, and
+no-base behavior. Passing these tests does not certify every filesystem or
+production host configuration. Platform runtime checks must run on their target
+operating systems before release.

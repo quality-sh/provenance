@@ -22,14 +22,21 @@ pub(in crate::handlers::schema) fn disposition_schema() -> Value {
         "title": "Disposition",
         "type": "object",
         "additionalProperties": false,
-        "required": ["schema_version", "scope_id", "id", "proposal_id", "decision", "rationale", "actor"],
+        "required": ["schema_version", "scope_id", "id", "proposal_id", "decision", "actor"],
+        "allOf": [{
+            "if": {"properties": {"decision": {"const": "rejected"}}},
+            "then": {
+                "required": ["rationale"],
+                "properties": {"rationale": {"type": "string", "pattern": ".*\\S.*"}}
+            }
+        }],
         "properties": {
             "schema_version": {"const": 1},
             "scope_id": {"$ref": "#/$defs/scopeId"},
             "id": {"$ref": "#/$defs/stableId"},
             "proposal_id": {"$ref": "#/$defs/stableId"},
             "decision": {"enum": ["accepted", "rejected", "deferred"]},
-            "rationale": {"type": "string", "pattern": ".*\\S.*"},
+            "rationale": {"type": "string"},
             "actor": {
                 "type": "object", "additionalProperties": false,
                 "required": ["identity_type", "id"],
@@ -44,7 +51,7 @@ pub(in crate::handlers::schema) fn disposition_schema() -> Value {
                 "additionalProperties": false,
                 "required": ["artifact_type", "artifact_id"],
                 "properties": {
-                    "artifact_type": {"enum": ["source", "requirement", "resolution", "rule"]},
+                    "artifact_type": {"enum": ["source", "requirement", "resolution", "rule", "domain", "boundary", "topic", "question"]},
                     "artifact_id": {"$ref": "#/$defs/stableId"}
                 }
             },

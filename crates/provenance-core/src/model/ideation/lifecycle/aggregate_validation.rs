@@ -3,8 +3,8 @@ use super::{
     validate_proposal_intrinsic, AssertionRecord, IdeationAggregate,
 };
 use crate::model::{
-    disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionRecord,
-    PromotionState, ProposalCard, SchemaVersion,
+    disposition_requires_prior_assertion, validate_disposition_intrinsic, DispositionActorRefusal,
+    DispositionRecord, PromotionState, ProposalCard, SchemaVersion,
 };
 use provenance_macros::rule;
 use serde::Serialize;
@@ -21,13 +21,24 @@ const PROPOSAL_KIND: &str = "proposal";
 const DISPOSITION_KIND: &str = "disposition";
 pub(super) const ASSERTION_KIND: &str = "assertion";
 
-/// Reads legacy records and the enrolled manifest and Requirement versions.
+/// Reads legacy records and the enrolled manifest and graph-record versions.
 #[rule("rule_schema_version_one")]
 pub fn ensure_supported_schema_version(kind: &str, version: SchemaVersion) -> anyhow::Result<()> {
     anyhow::ensure!(
         version == SUPPORTED_SCHEMA_VERSION
             || (version == crate::review::REVIEW_SCHEMA_VERSION
-                && matches!(kind, "manifest" | "requirement")),
+                && matches!(
+                    kind,
+                    "manifest"
+                        | "source"
+                        | "requirement"
+                        | "resolution"
+                        | "rule"
+                        | "domain"
+                        | "boundary"
+                        | "topic"
+                        | "question"
+                )),
         "{kind} schema_version must be {}",
         SUPPORTED_SCHEMA_VERSION.0
     );
@@ -171,25 +182,17 @@ fn validate_actor_allowlist(
         effective_proposal_state(proposal, assertions, &[]),
         PromotionState::Proposed | PromotionState::Asserted
     );
-    if requires_allowlisted_actor {
-        anyhow::ensure!(
-            disposition_actor_ids.iter().any(|id| id == actor_id),
-            "{}",
-            allowlist_refusal(disposition_actor_ids)
-        );
+    if requires_allowlisted_actor && !disposition_actor_ids.iter().any(|id| id == actor_id) {
+        return Err(allowlist_refusal(disposition_actor_ids).into());
     }
     Ok(())
 }
 
-/// An empty allowlist means configuration is absent, not that every possible
-/// actor was deliberately denied, so its refusal names the field and setup
-/// command rather than blaming the supplied actor ID.
-const fn allowlist_refusal(disposition_actor_ids: &[String]) -> &'static str {
+const fn allowlist_refusal(disposition_actor_ids: &[String]) -> DispositionActorRefusal {
     if disposition_actor_ids.is_empty() {
-        "no disposition actors configured: repository manifest disposition_actor_ids is empty; \
-         set it with provenance init --disposition-actor-id <ACTOR_ID>"
+        DispositionActorRefusal::NoActorsConfigured
     } else {
-        "disposition actor is not in the repository allowlist"
+        DispositionActorRefusal::ActorNotListed
     }
 }
 
@@ -230,14 +233,13 @@ pub fn validate_disposition_admissible<'a>(
         .iter()
         .find(|proposal| proposal.id == disposition.proposal_id)
         .ok_or_else(|| anyhow::anyhow!("proposal does not exist"))?;
-    if proposal.promotion_state == PromotionState::Proposed {
-        anyhow::ensure!(
-            !disposition_requires_prior_assertion(disposition)
-                || assertions
-                    .iter()
-                    .any(|assertion| assertion.proposal_id == disposition.proposal_id),
-            "accepted proposal must be asserted before disposition"
-        );
+    if proposal.promotion_state == PromotionState::Proposed
+        && disposition_requires_prior_assertion(disposition)
+        && !assertions
+            .iter()
+            .any(|assertion| assertion.proposal_id == disposition.proposal_id)
+    {
+        return Err(crate::model::ApprovalEvidenceRequired.into());
     }
     anyhow::ensure!(
         !recorded

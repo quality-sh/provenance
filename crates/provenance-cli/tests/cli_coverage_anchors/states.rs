@@ -29,7 +29,7 @@ fn a_scan_without_a_baseline_reports_every_site_as_new() {
     let report = fixture.scan(None, true);
 
     let bindings = report["bindings"].as_array().unwrap();
-    assert!(!bindings.is_empty());
+    assert_ne!(bindings.as_slice(), [] as [serde_json::Value; 0]);
     for site in bindings {
         assert_eq!(site["anchor_state"], "new");
         assert!(site.get("original_line").is_none());

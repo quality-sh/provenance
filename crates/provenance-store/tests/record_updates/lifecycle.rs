@@ -62,7 +62,11 @@ async fn all_four_records_keep_created_and_update_only_for_changed_content() {
     ] {
         assert_eq!(before["created"]["commit"], first, "{kind}");
         assert_eq!(before["updated"], before["created"], "{kind}");
-        let operation = format!("update-{kind}");
+        let operation = if kind == "requirement" {
+            "update-requirement-native".to_owned()
+        } else {
+            format!("update-{kind}")
+        };
         let mut request = json!({"scope_id":"default","id":before["id"]});
         let unchanged = fixture.call(&operation, request.clone()).await.unwrap();
         assert_eq!(unchanged, before, "no-op {kind}");
@@ -80,6 +84,52 @@ async fn all_four_records_keep_created_and_update_only_for_changed_content() {
             "repeated edit {kind}"
         );
     }
+}
+
+#[tokio::test]
+async fn repeated_valid_relationship_removal_keeps_the_record_stamp() {
+    let fixture = Fixture::new();
+    git(&fixture, &["init", "--quiet"]);
+    commit(&fixture);
+    create_source_for_stamp(&fixture, "source_old", &[]).await;
+    create_source_for_stamp(&fixture, "source_one", &["source_old"]).await;
+    let removal_commit = commit(&fixture);
+    let removed = fixture
+        .call(
+            "update-source",
+            json!({
+                "scope_id":"default", "id":"source_one",
+                "supersedes":{"remove":["source_old"]}
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(removed["updated"]["commit"], removal_commit);
+    commit(&fixture);
+    let repeated = fixture
+        .call(
+            "update-source",
+            json!({
+                "scope_id":"default", "id":"source_one",
+                "supersedes":{"remove":["source_old"]}
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(repeated, removed);
+}
+
+async fn create_source_for_stamp(fixture: &Fixture, id: &str, supersedes: &[&str]) {
+    fixture
+        .call(
+            "create-source",
+            json!({
+                "scope_id":"default", "id":id, "name":id,
+                "source_type":"policy", "supersedes":supersedes
+            }),
+        )
+        .await
+        .unwrap();
 }
 
 async fn rule(fixture: &Fixture, status: &str, archive: Option<Value>) -> Result<Value, Value> {
@@ -101,16 +151,12 @@ async fn archive_requires_a_permalink_and_refuses_every_exit() {
         .dir
         .path()
         .join(".provenance/state/scopes/default/rules/rule.jsonl");
-    assert!(std::fs::read_to_string(&rule_path)
-        .unwrap_or_default()
-        .is_empty());
+    assert_eq!(std::fs::read_to_string(&rule_path).unwrap_or_default(), "");
     let permalink = json!({"commit":"a".repeat(40),"at":"2026-09-12T00:00:00Z"});
     assert!(rule(&fixture, "draft", Some(permalink.clone()))
         .await
         .is_err());
-    assert!(std::fs::read_to_string(&rule_path)
-        .unwrap_or_default()
-        .is_empty());
+    assert_eq!(std::fs::read_to_string(&rule_path).unwrap_or_default(), "");
     rule(&fixture, "draft", None).await.unwrap();
     assert!(fixture
         .call(

@@ -1,17 +1,23 @@
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 #[test]
 fn import_replaces_only_target_scope_and_removes_all_stale_target_shards() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");
     init(&repo);
     add_other_scope(&repo);
-    create_source(&repo, "default", "source_target");
-    create_source(&repo, "other", "source_other");
+    // Requirements seed first: each seed import replaces its target scope, so
+    // sources created afterwards survive the replacement.
     create_requirement(&repo, "default", "requirement_target");
     create_requirement(&repo, "other", "requirement_other");
+    create_source(&repo, "default", "source_target");
+    create_source(&repo, "other", "source_other");
     seed_stale_target_shards(&repo);
+    export_fixture_support::make_default_scope_portable(&repo);
 
     let export = dir.path().join("replacement.json");
     Command::cargo_bin("provenance")
@@ -129,21 +135,41 @@ fn create_source(repo: &std::path::Path, scope: &str, id: &str) {
 }
 
 fn create_requirement(repo: &std::path::Path, scope: &str, id: &str) {
+    // Seeds through the import path, which keeps the record plain: this test
+    // pins exact-replacement import across scopes, and a CLI-created
+    // Requirement would enroll its scope into the review journal, whose
+    // lossless export is a later phase.
+    let seed = repo.join(format!("seed-{scope}-{id}.json"));
+    std::fs::write(
+        &seed,
+        serde_json::json!({
+            "scope": scope,
+            "requirements": [{
+                "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+                "scope_id": scope,
+                "id": id,
+                "statement": id,
+                "status": "active"
+            }],
+            "sources": [],
+            "resolutions": [],
+            "rules": [],
+            "threads": [],
+            "messages": []
+        })
+        .to_string(),
+    )
+    .unwrap();
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
-            "create",
+            "import",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             scope,
-            "--id",
-            id,
-            "--statement",
-            id,
-            "--status",
-            "active",
+            "--input",
+            seed.to_str().unwrap(),
             "--format",
             "json",
         ])

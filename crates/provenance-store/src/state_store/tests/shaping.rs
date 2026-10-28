@@ -9,6 +9,36 @@ use provenance_core::{
 use provenance_macros::verifies;
 
 #[test]
+#[verifies("rule_porcelain_id_unique_in_repository", examples)]
+fn canonical_record_ids_are_unique_across_kinds() {
+    let (_dir, store, scope) = seeded_requirement_store();
+    let shared = StableId::new("shared_record_id").unwrap();
+
+    store
+        .create_topic(CreateTopicInput {
+            scope_id: scope.clone(),
+            id: shared.clone(),
+            requirement_id: StableId::new("req_overtime").unwrap(),
+            title: "Shared identity".into(),
+            status: TopicStatus::Open,
+            links: Vec::new(),
+        })
+        .unwrap();
+
+    let error = store
+        .create_boundary(CreateBoundaryInput {
+            scope_id: scope,
+            id: shared,
+            requirement_id: StableId::new("req_overtime").unwrap(),
+            statement: "A different record kind cannot reuse this ID.".into(),
+            source_ref: None,
+        })
+        .unwrap_err();
+
+    assert!(error.to_string().contains("record ID already exists"));
+}
+
+#[test]
 fn shaping_records_are_written_deterministically_and_validate_relationships() {
     let (_dir, store, scope) = seeded_source_requirement_store();
 
@@ -108,6 +138,7 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
 #[test]
 #[verifies("rule_claim_eligibility", examples)]
 #[verifies("rule_claim_cleared_on_exit", examples)]
+#[verifies("rule_claim_holder_exclusive", examples)]
 fn topic_claims_are_check_and_set_and_clear_on_close() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
@@ -132,12 +163,24 @@ fn topic_claims_are_check_and_set_and_clear_on_close() {
     assert!(err
         .to_string()
         .contains("topic topic_overtime is already claimed by agent-one"));
+    assert!(matches!(
+        crate::write_error::WriteError(err).safe(),
+        crate::write_error::WriteFailure::ClaimConflict { holder } if holder == "agent-one"
+    ));
+    let repeated = store.claim_topic(&scope, &topic_id, "agent-one").unwrap();
+    assert_eq!(repeated.topic.claimed_at, claimed.topic.claimed_at);
+    let err = store
+        .release_topic(&scope, &topic_id, "agent-two")
+        .unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("topic topic_overtime is already claimed by agent-one"));
 
-    let released = store.release_topic(&scope, &topic_id).unwrap();
+    let released = store.release_topic(&scope, &topic_id, "agent-one").unwrap();
     assert_eq!(released.claimed_by, None);
     assert_eq!(released.claimed_at, None);
     assert!(store
-        .release_topic(&scope, &topic_id)
+        .release_topic(&scope, &topic_id, "agent-one")
         .unwrap_err()
         .to_string()
         .contains("topic topic_overtime is not claimed"));

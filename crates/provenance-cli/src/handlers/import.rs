@@ -1,5 +1,6 @@
 use super::export::ScopeExport;
 use crate::output;
+use crate::repo_context::RepoContext;
 use crate::store::{ScopeSnapshot, Store};
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
@@ -20,19 +21,20 @@ pub struct ImportReport {
     pub records: usize,
 }
 
+/// Refuses an import that changes or removes shipped-v1 terminal proposals.
+#[rule("rule_legacy_terminal_proposals_frozen")]
 pub(super) fn import_scope(
-    repo: Utf8PathBuf,
-    scope: String,
+    context: &RepoContext,
     input: Utf8PathBuf,
     dry_run: bool,
 ) -> anyhow::Result<ImportReport> {
     let input = std::fs::read_to_string(input)?;
     let exported = deserialize_scope_export(&input)?;
     anyhow::ensure!(
-        exported.scope == scope,
+        exported.scope == context.scope,
         "import scope does not match --scope"
     );
-    let scope_id = ScopeId::new(scope)?;
+    let scope_id = context.scope_id()?;
     let records = exported.sources.len()
         + exported.domains.len()
         + exported.requirements.len()
@@ -49,7 +51,7 @@ pub(super) fn import_scope(
         + exported.proposal_cards.len()
         + exported.assertion_records.len()
         + exported.dispositions.len();
-    let store = Store::open(repo);
+    let store = context.open_graph()?;
     store.with_repository_publication(|| {
         store.ensure_review_portable(&scope_id)?;
         anyhow::ensure!(
@@ -98,9 +100,31 @@ pub(super) fn import_scope(
     })
 }
 
+/// Reads one export document, refusing record fields a typed import drops.
+///
+/// The export envelope refuses unknown fields on its own. A record type is
+/// open, so without this check an unknown field on one record would be
+/// dropped when the scope is written back, and the published state would
+/// quietly miss data the document carried. The refusal happens before the
+/// publication lock is taken, so a refused import changes nothing.
 fn deserialize_scope_export(input: &str) -> anyhow::Result<ScopeExport> {
-    match serde_json::from_str(input) {
-        Ok(exported) => Ok(exported),
+    let mut unknown = None;
+    let mut deserializer = serde_json::Deserializer::from_str(input);
+    let decoded = serde_ignored::deserialize(&mut deserializer, |path| {
+        if unknown.is_none() {
+            unknown = Some(path.to_string());
+        }
+    });
+    match decoded {
+        Ok(exported) => {
+            if let Some(field) = unknown {
+                anyhow::bail!(
+                    "import refuses unknown field `{field}`: writing it back would drop it"
+                );
+            }
+            deserializer.end()?;
+            Ok(exported)
+        }
         Err(_) if has_removed_service_family(input) => anyhow::bail!(
             "this export predates the service family removal; re-export from current provenance"
         ),
@@ -217,10 +241,6 @@ fn apply_import(
     dry_run: bool,
 ) -> anyhow::Result<()> {
     provenance_store::publication::with_staged_state(live_layout, dry_run, |layout| {
-        let staged_scope = layout.scopes_dir().join(scope_id.as_str());
-        if staged_scope.exists() {
-            std::fs::remove_dir_all(&staged_scope)?;
-        }
         StateStore::new(layout.clone()).import_scope(scope_id, &scope_shards(exported))?;
         let staged_repo = layout.provenance_dir().parent().unwrap().to_path_buf();
         super::check::validate_repository(staged_repo)?;
@@ -276,20 +296,74 @@ fn ensure_changed_statements_are_clean(
 }
 
 pub(super) fn handle(
-    repo: Utf8PathBuf,
-    scope: String,
+    context: &RepoContext,
     input: Utf8PathBuf,
     dry_run: bool,
 ) -> anyhow::Result<()> {
-    let report = import_scope(repo, scope, input, dry_run)?;
+    let report = import_scope(context, input, dry_run)?;
     output::print_json(&report)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{ensure_asserted_evidence_not_deleted, CONTRIBUTION_KIND, SYNTHESIS_KIND};
+    use super::{
+        deserialize_scope_export, ensure_asserted_evidence_not_deleted, CONTRIBUTION_KIND,
+        SYNTHESIS_KIND,
+    };
     use provenance_macros::verifies;
+    use serde_json::json;
+
+    fn minimal_export(source: &serde_json::Value) -> serde_json::Value {
+        json!({
+            "scope": "default",
+            "sources": [source],
+            "requirements": [],
+            "resolutions": [],
+            "rules": [],
+            "threads": [],
+            "messages": []
+        })
+    }
+
+    #[test]
+    fn import_refuses_an_unknown_record_field_instead_of_dropping_it() {
+        let document = minimal_export(&json!({
+            "schema_version": 2,
+            "scope_id": "default",
+            "id": "source_one",
+            "name": "Policy",
+            "source_type": "policy",
+            "url": null,
+            "extension": {"owner": "newer-tool"}
+        }));
+
+        let message = match deserialize_scope_export(&document.to_string()) {
+            Ok(_) => panic!("import accepted a record field that it cannot represent"),
+            Err(error) => error.to_string(),
+        };
+
+        assert!(
+            message.contains("unknown field `sources.0.extension`"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn import_accepts_a_supported_record_alias() {
+        let document = minimal_export(&json!({
+            "schema_version": 2,
+            "scope_id": "default",
+            "id": "source_one",
+            "name": "Policy",
+            "sourceType": "policy",
+            "url": null
+        }));
+
+        let exported = deserialize_scope_export(&document.to_string()).unwrap();
+
+        assert_eq!(exported.sources[0].source_type.as_str(), "policy");
+    }
 
     // The decision ranges over two finite axes and nothing else: the kind of
     // evidence being dropped, and whether an assertion cites it. The kinds are

@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Superseded by `res_typed_declarations_use_git_history` under owner ruling D2 in
+`source_owner_hygiene_rulings_20261027`.
 
 ## Decision
 

@@ -1,0 +1,454 @@
+//! CLI dispatch over the registered resource catalog.
+use crate::invocation::{grammar, GlobalContext};
+use axum::http::{HeaderMap, Method};
+use clap::{parser::ValueSource, Arg, ArgAction, ArgMatches, Command};
+use provenance_porcelain::action::Action;
+use provenance_store::operations::catalog::{self, Definition, TargetAction};
+use serde_json::Value;
+use std::collections::BTreeMap;
+
+mod address;
+pub mod fields;
+mod help;
+mod input;
+mod input_guard;
+mod parent_replacement;
+pub mod refusal;
+
+pub use help::required_discussion_flags;
+
+use refusal::HostRefusal;
+
+pub struct Invocation {
+    context: GlobalContext,
+    format: Option<provenance_cli::porcelain::OutputFormat>,
+    path: String,
+    definition: &'static Definition,
+    data: Value,
+    query: BTreeMap<String, String>,
+    headers: HeaderMap,
+    affected_review_record: Option<crate::review_link::AffectedReviewRecord>,
+}
+
+impl Invocation {
+    pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
+        if matches.get_flag("help") {
+            help::print_selection(&args.collection, &args.address);
+        }
+        let context = args.common.context();
+        let resolved = address::resolve_in(&args.collection, &args.address, Some(&context.repo))
+            .unwrap_or_else(|error| usage_error(error));
+        let (data, query, headers) = input::parse(
+            resolved.address.definition,
+            matches,
+            args.stdin,
+            resolved.query,
+            &["stdin"],
+        )
+        .unwrap_or_else(|error| usage_error(error));
+        if resolved.address.definition.method == catalog::HttpMethod::Post {
+            if let Some(id) = data.get("id").and_then(Value::as_str) {
+                provenance_core::ensure_record_id_assignable(id)
+                    .unwrap_or_else(|error| usage_error(error));
+            }
+        }
+        let affected_review_record = resolved
+            .address
+            .definition
+            .registration
+            .review_link
+            .and_then(|kind| {
+                resolved
+                    .values
+                    .get("id")
+                    .cloned()
+                    .or_else(|| data.get("id").and_then(Value::as_str).map(str::to_owned))
+                    .map(|id| crate::review_link::AffectedReviewRecord { kind, id })
+            });
+        Self {
+            context,
+            format: args.common.format(),
+            path: resolved.path,
+            definition: resolved.address.definition,
+            data,
+            query,
+            headers,
+            affected_review_record,
+        }
+    }
+
+    pub const fn json_output(&self) -> bool {
+        matches!(
+            self.format,
+            Some(provenance_cli::porcelain::OutputFormat::Json)
+        )
+    }
+}
+
+pub fn is_collection(word: &str) -> bool {
+    !address::registrations(word).is_empty()
+}
+
+pub fn command(collection: &str) -> anyhow::Result<Command> {
+    let registrations = address::registrations(collection);
+    let mut command = grammar::catalog_command().disable_help_flag(true).arg(
+        Arg::new("help")
+            .long("help")
+            .short('h')
+            .action(ArgAction::SetTrue)
+            .help("Print help for the addressed operation, or the collection overview"),
+    );
+    let mut help = help::collection(collection);
+    help.push_str(
+        "\n\nFor a bounded view across related record kinds, run:\n  provenance <id> --view children --depth N",
+    );
+    if collection == "questions" {
+        help.push_str(help::question_guidance());
+    }
+    command = command.after_help(help);
+    fields::augment(
+        command,
+        registrations.into_iter().map(|address| address.definition),
+        &["repo", "scope", "format", "quiet", "stdin"],
+    )
+}
+
+pub fn target_command() -> anyhow::Result<Command> {
+    let definitions = TargetAction::RECORD
+        .into_iter()
+        .flat_map(catalog::target_definitions)
+        .map(|(_, definition)| definition)
+        .collect::<Vec<_>>();
+    let command = fields::augment_with_overrides(
+        grammar::target_command()
+            .arg(
+                Arg::new("replace_parent")
+                    .long("replace-parent")
+                    .requires("with_parent")
+                    .help("Replace this Requirement parent and preserve its other parents"),
+            )
+            .arg(
+                Arg::new("with_parent")
+                    .long("with-parent")
+                    .requires("replace_parent")
+                    .help("Add this parent before the selected parent is removed"),
+            ),
+        definitions,
+        &COMMON
+            .iter()
+            .copied()
+            .chain([
+                "type",
+                "view",
+                "depth",
+                "kind",
+                "limit",
+                "review_link",
+                "stdin",
+                "replace_parent",
+                "with_parent",
+            ])
+            .collect::<Vec<_>>(),
+        &[],
+    )?;
+    fields::augment_schemas(
+        command,
+        provenance_porcelain::action::Action::DISCUSSION
+            .map(provenance_porcelain::discussion::input_schema),
+        &["parent", "discussion_id", "declared_by"],
+    )
+}
+
+pub fn print_target_help(
+    command: Command,
+    action: Option<grammar::TargetVerb>,
+    kind: Option<provenance_core::NodeType>,
+) -> anyhow::Result<()> {
+    help::target(command, action, kind)
+}
+
+/// Dispatch one catalog request through the local in-process host.
+pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
+    let Invocation {
+        context,
+        format: _,
+        path,
+        definition,
+        data,
+        query,
+        headers,
+        affected_review_record,
+    } = invocation;
+    let method = match definition.method {
+        catalog::HttpMethod::Get => Method::GET,
+        catalog::HttpMethod::Post => Method::POST,
+        catalog::HttpMethod::Patch => Method::PATCH,
+    };
+    if matches!(
+        path.split('/').nth(1),
+        Some("questions" | "contributions" | "synthesis-packets" | "proposals")
+    ) {
+        warn_if_skills_missing(context.repo.repo.as_str(), context.quiet)?;
+    }
+    let repo = context.repo.clone();
+    let host = repo.local_host()?;
+    if matches!(
+        definition.registration.cli.execution,
+        catalog::CliExecution::ProjectStatementCheck
+    ) {
+        let request: provenance_core::protocol::CheckStatementRequest =
+            serde_json::from_value(data)?;
+        let root = std::fs::canonicalize(&context.repo.repo)?;
+        let layout = provenance_store::layout::ProvenanceLayout::new(
+            camino::Utf8PathBuf::from_path_buf(root)
+                .map_err(|_| anyhow::anyhow!("the repository path is not valid UTF-8"))?,
+        );
+        let report = provenance_store::statement_analysis::check_project_statement(
+            &layout,
+            &request.statement,
+        );
+        return crate::output::print_json(&serde_json::json!({"data": report, "meta": {}}));
+    }
+    match host
+        .invoke_resource(method, &path, data, query, headers)
+        .await
+    {
+        Ok(mut value) => {
+            crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
+            crate::output::print_json(&value)?;
+        }
+        Err(failure) => {
+            return Err(failure_with_guidance(
+                &failure,
+                &path,
+                record_id(&path),
+                &context.repo,
+            ))
+        }
+    }
+    Ok(())
+}
+
+pub async fn dispatch_target(
+    context: GlobalContext,
+    format: Option<provenance_cli::porcelain::OutputFormat>,
+    target: String,
+    action: Action,
+    kind: Option<provenance_core::NodeType>,
+    matches: ArgMatches,
+) -> anyhow::Result<()> {
+    if action == Action::Create {
+        provenance_core::ensure_record_id_assignable(&target)
+            .unwrap_or_else(|error| usage_error(error));
+    }
+    let repo = context.repo.clone();
+    let host = repo.local_host()?;
+    let route = host
+        .target_route(action, &target, kind)
+        .await
+        .map_err(anyhow::Error::new)?;
+    if route.kind == provenance_core::NodeType::Question {
+        warn_if_skills_missing(context.repo.repo.as_str(), context.quiet)?;
+    }
+    let stdin = matches.get_flag("stdin");
+    let (data, query, headers) = input::parse(
+        route.definition,
+        &matches,
+        stdin,
+        None,
+        &["record_type", "stdin", "replace_parent", "with_parent"],
+    )
+    .unwrap_or_else(|error| usage_error(error));
+    if !query.is_empty() {
+        usage_error(anyhow::anyhow!(
+            "target actions do not accept query options"
+        ));
+    }
+    let replacement = matches.get_one::<String>("replace_parent");
+    let result = if let Some(old) = replacement {
+        anyhow::ensure!(
+            action == Action::Update && route.kind == provenance_core::NodeType::Requirement,
+            "parent replacement requires a Requirement update"
+        );
+        parent_replacement::replace(
+            &host,
+            &route.path,
+            data,
+            headers,
+            (
+                old,
+                matches
+                    .get_one::<String>("with_parent")
+                    .expect("paired parent options"),
+            ),
+            |failure| failure_with_guidance(failure, &route.path, Some(&target), &context.repo),
+        )
+        .await
+    } else {
+        host.invoke_target(&route, data, headers)
+            .await
+            .map_err(|failure| {
+                failure_with_guidance(&failure, &route.path, Some(&target), &context.repo)
+            })
+    };
+    let mut value = match result {
+        Ok(value) => value,
+        Err(failure) => return Err(failure),
+    };
+    let affected = route.definition.registration.review_link.map(|kind| {
+        crate::review_link::AffectedReviewRecord {
+            kind,
+            id: target.clone(),
+        }
+    });
+    crate::review_link::annotate_write(&repo, affected, &mut value).await;
+    if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
+        crate::output::print_json(&value)?;
+    } else {
+        println!(
+            "{}",
+            provenance_porcelain::action::render_readable(action, &target, route.kind, &value)
+        );
+    }
+    Ok(())
+}
+
+fn record_id(path: &str) -> Option<&str> {
+    path.trim_matches('/').split('/').nth(1)
+}
+
+fn failure_with_guidance(
+    failure: &provenance_core::protocol::failure::ErasedFailure,
+    path: &str,
+    target: Option<&str>,
+    context: &provenance_cli::repo_context::RepoContext,
+) -> anyhow::Error {
+    actionable_failure(
+        failure,
+        target,
+        path.trim_matches('/').split('/').next(),
+        context,
+    )
+}
+
+/// The `--scope` and `--repo` words that make a hinted command run against
+/// the caller's repository and scope. A default repository path stays implicit.
+fn context_options(context: Option<&provenance_cli::repo_context::RepoContext>) -> String {
+    let Some(context) = context else {
+        return String::new();
+    };
+    let repo = if context.repo.as_str() == "." {
+        String::new()
+    } else {
+        format!(" --repo {}", context.repo)
+    };
+    format!(" --scope {}{repo}", context.scope)
+}
+
+/// Names the command that reads the review after a review-workflow refusal.
+#[provenance_macros::rule("rule_review_refusal_names_read_command")]
+fn review_read_command(
+    id: &str,
+    context: Option<&provenance_cli::repo_context::RepoContext>,
+) -> String {
+    format!("provenance {id} --view review{}", context_options(context))
+}
+
+fn actionable_failure(
+    failure: &provenance_core::protocol::failure::ErasedFailure,
+    record_id: Option<&str>,
+    collection: Option<&str>,
+    context: &provenance_cli::repo_context::RepoContext,
+) -> anyhow::Error {
+    let value = serde_json::to_value(failure).unwrap_or_default();
+    let error = &value["error"];
+    let kind = error["kind"].as_str();
+    if kind == Some("review_submission_conflict") {
+        if let (Some(id), Some(submission), Some(collection)) =
+            (record_id, error["current_submission"].as_str(), collection)
+        {
+            let hint = format!(
+                "record {id} already has pending submission {submission}; \
+                 run `{}` to see it; to withdraw it, run \
+                 `provenance {collection} {id} submissions {submission} withdraw --actor <actor>{}`. \
+                 For an owned record, also pass --declared-by <owner>",
+                review_read_command(id, Some(context)),
+                context_options(Some(context))
+            );
+            return HostRefusal {
+                failure: value,
+                hint: Some(hint),
+                text_shows_failure: false,
+            }
+            .into();
+        }
+    }
+    let hint = match (record_id, kind) {
+        (
+            Some(id),
+            Some(
+                "review_submission_conflict"
+                | "requirement_edit_conflict"
+                | "record_edit_conflict"
+                | "unsupported_review_feedback",
+            ),
+        ) => Some(format!("run `{}`", review_read_command(id, Some(context)))),
+        _ => None,
+    };
+    HostRefusal {
+        failure: value,
+        hint,
+        text_shows_failure: true,
+    }
+    .into()
+}
+
+const COMMON: &[&str] = &[
+    "repo",
+    "scope",
+    "format",
+    "quiet",
+    "target",
+    "action",
+    "collection",
+    "address",
+    "command",
+    "discussion_id",
+];
+
+pub fn ensure_only_fields(matches: &ArgMatches, allowed: &[&str]) {
+    for id in matches.ids() {
+        let name = id.as_str();
+        if matches.value_source(name) != Some(ValueSource::CommandLine) {
+            continue;
+        }
+        let normalized = name.replace('_', "-");
+        if !COMMON.contains(&name)
+            && !allowed.contains(&name)
+            && !allowed.contains(&normalized.as_str())
+        {
+            usage_error(anyhow::anyhow!(
+                "unsupported option --{}",
+                name.replace('_', "-")
+            ));
+        }
+    }
+}
+
+pub fn usage_error(error: impl std::fmt::Display) -> ! {
+    clap::Error::raw(clap::error::ErrorKind::InvalidValue, error.to_string()).exit()
+}
+
+fn warn_if_skills_missing(repo: &str, quiet: bool) -> anyhow::Result<()> {
+    if quiet {
+        return Ok(());
+    }
+    let status = crate::skills::install_status(std::path::Path::new(repo))?;
+    if !status.installed {
+        eprintln!(
+            "hint: provenance skills are not installed; run `{}` from the repo root",
+            status.install_command
+        );
+    }
+    Ok(())
+}

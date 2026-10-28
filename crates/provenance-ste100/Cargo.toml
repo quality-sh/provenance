@@ -2,7 +2,7 @@
 name = "provenance-ste100"
 version.workspace = true
 edition.workspace = true
-description = "ASD-STE100 statement checks for Provenance Requirements and Rules"
+description = "Internal part of Provenance for ASD-STE100 statement checks"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -18,7 +18,10 @@ schema = ["dep:schemars"]
 [dependencies]
 schemars = { workspace = true, optional = true }
 fs2.workspace = true
-pdf_oxide = { version = "=0.3.77", default-features = false, features = ["legacy-crypto"] }
+# Keep the DocumentIR shape that pdf_oxide supports.
+# Raise the ceiling only with a pdf_oxide release that builds with the newer DocumentIR.
+office_oxide = { version = ">=0.1.15, <0.1.16", default-features = false }
+pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy-crypto"] }
 provenance-macros.workspace = true
 serde.workspace = true
 serde_json.workspace = true

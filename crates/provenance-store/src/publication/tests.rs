@@ -24,6 +24,25 @@ fn concurrent_first_access_creates_publication_lock_directories_idempotently() {
 }
 
 #[test]
+fn source_edit_recovery_runs_before_import_recovery() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    let layout = ProvenanceLayout::new(root);
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::create_dir_all(layout.import_transactions_dir()).unwrap();
+    std::fs::write(layout.source_edit_marker_path(), "{").unwrap();
+    let transaction = layout.import_transactions_dir().join("completed");
+    std::fs::create_dir(&transaction).unwrap();
+    write_publication_marker(&layout, &transaction, PublicationPhase::Published).unwrap();
+    std::fs::remove_dir(transaction).unwrap();
+
+    let error = with_repository_publication(&layout, || Ok(())).unwrap_err();
+
+    assert!(error.to_string().contains("EOF"), "{error:#}");
+    assert!(layout.publication_marker_path().exists());
+}
+
+#[test]
 #[verifies("rule_recovery_stays_in_cache", examples)]
 fn recovery_rejects_traversal_outside_import_transactions() {
     let directory = tempfile::tempdir().unwrap();
@@ -278,7 +297,7 @@ fn publication_lock_marker_is_cleared_after_panic() {
         .unwrap();
     });
     assert!(panic.is_err());
-    let key = layout.publication_lock_path().to_string();
+    let key = publication_lock_identity(&layout).unwrap();
     assert!(!HELD_LOCKS.with(|locks| locks.borrow().contains(&key)));
 
     let transaction = layout.import_transactions_dir().join("completed");
@@ -289,4 +308,69 @@ fn publication_lock_marker_is_cleared_after_panic() {
     with_repository_publication(&layout, || Ok(())).unwrap();
 
     assert!(!layout.publication_marker_path().exists());
+}
+
+// Implementation aid: checks nested publication sections through path aliases.
+// rule_store_under_guard_takes_no_second_lock covers guarded store reads instead.
+#[cfg(unix)]
+#[test]
+fn nested_publication_through_a_repository_alias_completes() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("repo");
+    std::fs::create_dir(&root).unwrap();
+    let alias = temporary.path().join("alias");
+    std::os::unix::fs::symlink(&root, &alias).unwrap();
+    let layout = ProvenanceLayout::new(root.to_str().unwrap());
+    let alias = ProvenanceLayout::new(alias.to_str().unwrap());
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let result =
+            with_repository_publication(&layout, || with_repository_publication(&alias, || Ok(())));
+        sender.send(result).unwrap();
+    });
+    receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("a nested publication through an alias must complete")
+        .unwrap();
+}
+
+// Implementation aid: checks alias identity during validation, without a guarded store.
+#[cfg(unix)]
+#[test]
+fn read_only_validation_through_an_alias_does_not_publish() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("repo");
+    std::fs::create_dir(&root).unwrap();
+    let alias = temporary.path().join("alias");
+    std::os::unix::fs::symlink(&root, &alias).unwrap();
+    let layout = ProvenanceLayout::new(root.to_str().unwrap());
+    let alias = ProvenanceLayout::new(alias.to_str().unwrap());
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    with_read_only_validation(&layout, || {
+        with_read_only_validation(&alias, || Ok(()))?;
+        with_repository_publication(&alias, || Ok(()))?;
+        let _guard = runtime.block_on(publication_guard(&alias))?;
+        assert!(!layout.publication_lock_path().exists());
+        assert!(!layout.import_transactions_dir().exists());
+        Ok(())
+    })
+    .unwrap();
+}
+
+// Implementation aid: init validates planned state before its repository exists.
+#[test]
+fn read_only_validation_accepts_a_planned_repository() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().join("planned/repository");
+    let layout = ProvenanceLayout::new(root.to_str().unwrap());
+    with_read_only_validation(&layout, || {
+        with_repository_publication(&layout, || Ok(()))?;
+        Ok(())
+    })
+    .unwrap();
+    assert!(!root.exists());
 }

@@ -7,10 +7,10 @@ use provenance_store::{
     state_store::{
         CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
         CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
+        UpdateRuleInput,
     },
 };
-use serde_json::{json, Value};
-use std::fmt::Write;
+use serde_json::json;
 
 pub struct Repository {
     pub dir: tempfile::TempDir,
@@ -29,15 +29,18 @@ impl Repository {
         )
         .unwrap();
         let result = Self { dir, layout };
-        result.seed(scope, statement);
+        result.seed(scope, statement, "");
         result
     }
-    pub fn seed(&self, scope: ScopeId, statement: &str) {
+    pub fn seed(&self, scope: ScopeId, statement: &str, id_suffix: &str) {
         let store = StateStore::new(self.layout.clone());
+        let domain_id = sid(&format!("domain_shared{id_suffix}"));
+        let requirement_id = sid(&format!("req_shared{id_suffix}"));
+        let rule_id = sid(&format!("rule_shared{id_suffix}"));
         store
             .create_domain(CreateDomainInput {
                 scope_id: scope.clone(),
-                id: sid("domain_shared"),
+                id: domain_id.clone(),
                 name: "Shared domain".into(),
                 description: None,
                 color: None,
@@ -46,12 +49,12 @@ impl Repository {
         store
             .create_requirement(CreateRequirementInput {
                 scope_id: scope.clone(),
-                id: sid("req_shared"),
+                id: requirement_id.clone(),
                 statement: "The graph is readable.".into(),
                 description: None,
                 status: RequirementStatus::Active,
-                domain_id: Some(sid("domain_shared")),
-                refines: None,
+                domain_id: Some(domain_id),
+                refines: Vec::new(),
                 depends_on: vec![],
                 supersedes: vec![],
                 spawned_by: None,
@@ -63,10 +66,10 @@ impl Repository {
             .create_rule(CreateRuleInput {
                 archived_in_commit: None,
                 scope_id: scope,
-                id: sid("rule_shared"),
+                id: rule_id,
                 name: None,
                 description: None,
-                requirement_ids: vec![sid("req_shared")],
+                requirement_ids: vec![requirement_id],
                 resolution_ids: vec![],
                 statement: statement.into(),
                 status: RuleStatus::Active,
@@ -91,7 +94,7 @@ impl Repository {
             serde_json::to_vec(&manifest).unwrap(),
         )
         .unwrap();
-        self.seed(scope, statement);
+        self.seed(scope, statement, &format!("_{name}"));
     }
     pub fn all_kinds(&self) {
         use provenance_core::{
@@ -195,19 +198,16 @@ impl Repository {
         found
     }
     pub fn edit(&self, scope: &str, text: &str) {
-        let path =
-            provenance_store::shards::rules_path(&self.layout, &ScopeId::new(scope).unwrap());
-        let mut records: Vec<Value> = std::fs::read_to_string(&path)
-            .unwrap()
-            .lines()
-            .map(|line| serde_json::from_str(line).unwrap())
-            .collect();
-        records[0]["statement"] = json!(text);
-        let mut encoded = String::new();
-        for record in records {
-            writeln!(encoded, "{record}").unwrap();
-        }
-        std::fs::write(path, encoded).unwrap();
+        StateStore::new(self.layout.clone())
+            .update_rule(
+                serde_json::from_value::<UpdateRuleInput>(json!({
+                    "scope_id": scope,
+                    "id": "rule_shared",
+                    "statement": text
+                }))
+                .unwrap(),
+            )
+            .unwrap();
     }
 }
 fn sid(value: &str) -> StableId {

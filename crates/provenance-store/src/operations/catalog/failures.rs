@@ -1,5 +1,7 @@
 //! Keep native error sources while publishing a closed safe projection.
+use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::ReadRefusal;
+use crate::stale::git::GitRefusal;
 use provenance_core::protocol::{
     failure::OperationFailure,
     read_failure::{MovedUnit, ReadFailure},
@@ -20,72 +22,91 @@ impl From<OperationFailure> for ReadError {
 }
 impl ReadError {
     pub(super) fn status(&self) -> u16 {
+        if let Some(error) = self.common() {
+            return error.status_code();
+        }
         match self.safe() {
+            ReadFailure::ResourceNotFound => 404,
             ReadFailure::ReadFailed => 500,
             ReadFailure::FileAccessDenied => 403,
             ReadFailure::FileUnavailable | ReadFailure::GitUnavailable => 503,
             _ => 409,
         }
     }
+    /// A common refusal that a read handler raised itself, such as an input
+    /// refusal; it keeps its own kind and status.
+    fn common(&self) -> Option<&OperationFailure> {
+        self.0.downcast_ref::<OperationFailure>()
+    }
+    /// The closed failure for the native error. An error of no known kind
+    /// reads as `ReadFailed`.
     fn safe(&self) -> ReadFailure {
         if let Some(error) = self.0.downcast_ref::<ReadFailure>() {
             return error.clone();
         }
-        if let Some(error) = self.0.downcast_ref::<crate::stale::git::GitRefusal>() {
-            return match error {
-                crate::stale::git::GitRefusal::Unavailable { .. } => ReadFailure::GitUnavailable,
-                crate::stale::git::GitRefusal::RevisionNotFound { .. } => {
-                    ReadFailure::GitRevisionNotFound
-                }
-            };
+        if let Some(error) = self.0.downcast_ref::<GitRefusal>() {
+            return git_failure(error);
         }
-        if let Some(error) = self
-            .0
-            .downcast_ref::<crate::operations::files::FileAccessRefusal>()
-        {
-            return match error {
-                crate::operations::files::FileAccessRefusal::Unavailable => {
-                    ReadFailure::FileUnavailable
-                }
-                crate::operations::files::FileAccessRefusal::Denied => {
-                    ReadFailure::FileAccessDenied
-                }
-                _ => ReadFailure::ReadFailed,
-            };
+        if let Some(error) = self.0.downcast_ref::<FileAccessRefusal>() {
+            return file_failure(error);
         }
-        match self.0.downcast_ref::<ReadRefusal>() {
-            Some(ReadRefusal::NoProjection { .. }) => ReadFailure::NoProjection,
-            Some(ReadRefusal::Stale {
-                serial,
-                digest,
-                instance_id,
-                moved,
-                ..
-            }) => ReadFailure::Stale {
-                serial: *serial,
-                digest: digest.clone(),
-                instance_id: instance_id.clone(),
-                moved: moved
-                    .iter()
-                    .map(|unit| MovedUnit {
-                        unit: unit.unit.clone(),
-                        stored: unit.stored.clone(),
-                        live: unit.live.clone(),
-                    })
-                    .collect(),
-            },
-            Some(ReadRefusal::UnitUnreadable { unit, .. }) => {
-                ReadFailure::UnitUnreadable { unit: unit.clone() }
-            }
-            Some(ReadRefusal::SchemaBehind { .. }) => ReadFailure::SchemaBehind,
-            Some(ReadRefusal::HalfMigrated { .. }) => ReadFailure::HalfMigrated,
-            None => ReadFailure::ReadFailed,
+        self.0
+            .downcast_ref::<ReadRefusal>()
+            .map_or(ReadFailure::ReadFailed, refusal_failure)
+    }
+}
+
+const fn git_failure(error: &GitRefusal) -> ReadFailure {
+    match error {
+        GitRefusal::Unavailable { .. } => ReadFailure::GitUnavailable,
+        GitRefusal::RevisionNotFound { .. } => ReadFailure::GitRevisionNotFound,
+    }
+}
+
+const fn file_failure(error: &FileAccessRefusal) -> ReadFailure {
+    match error {
+        FileAccessRefusal::Unavailable => ReadFailure::FileUnavailable,
+        FileAccessRefusal::Denied => ReadFailure::FileAccessDenied,
+        FileAccessRefusal::Missing | FileAccessRefusal::Read(_) => ReadFailure::ReadFailed,
+    }
+}
+
+fn refusal_failure(refusal: &ReadRefusal) -> ReadFailure {
+    match refusal {
+        ReadRefusal::NoProjection { .. } => ReadFailure::NoProjection,
+        ReadRefusal::Stale {
+            serial,
+            digest,
+            instance_id,
+            moved,
+            ..
+        } => ReadFailure::Stale {
+            serial: *serial,
+            digest: digest.clone(),
+            instance_id: instance_id.clone(),
+            moved: moved.iter().map(moved_unit).collect(),
+        },
+        ReadRefusal::UnitUnreadable { unit, .. } => {
+            ReadFailure::UnitUnreadable { unit: unit.clone() }
         }
+        ReadRefusal::SchemaBehind { .. } => ReadFailure::SchemaBehind,
+        ReadRefusal::HalfMigrated { .. } => ReadFailure::HalfMigrated,
+    }
+}
+
+fn moved_unit(unit: &crate::operations::reader::MovedUnit) -> MovedUnit {
+    MovedUnit {
+        unit: unit.unit.clone(),
+        stored: unit.stored.clone(),
+        live: unit.live.clone(),
     }
 }
 impl serde::Serialize for ReadError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.safe().serialize(serializer)
+        match self.common() {
+            Some(error) => error.serialize(serializer),
+            None => self.safe().serialize(serializer),
+        }
     }
 }
 #[cfg(feature = "schema")]
@@ -97,3 +118,7 @@ impl schemars::JsonSchema for ReadError {
         ReadFailure::json_schema(generator)
     }
 }
+
+#[cfg(test)]
+#[path = "failures_tests.rs"]
+mod tests;

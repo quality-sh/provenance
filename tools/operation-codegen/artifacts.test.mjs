@@ -55,3 +55,17 @@ test('test and documentation edits do not invalidate generated source', async t 
   await writeFile(join(root, 'tools/operation-codegen/templates.mjs'), 'export const version = 2;');
   assert.equal(await generationIsCurrent(root), false);
 });
+
+for (const helper of ['contract-render.mjs', 'contract-families.mjs']) {
+  test(`a ${helper} edit invalidates generated source`, async t => {
+    const root = await fixture(t);
+    const toolDirectory = join(root, 'tools/operation-codegen');
+    const helperPath = join(toolDirectory, helper);
+    await mkdir(toolDirectory, { recursive: true });
+    await writeFile(helperPath, 'export const version = 1;\n');
+    await recordGeneration(root, root);
+    assert.equal(await generationIsCurrent(root), true);
+    await writeFile(helperPath, 'export const version = 2;\n');
+    assert.equal(await generationIsCurrent(root), false);
+  });
+}

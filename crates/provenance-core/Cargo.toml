@@ -2,7 +2,7 @@
 name = "provenance-core"
 version.workspace = true
 edition.workspace = true
-description = "Core records and validation for Provenance requirements traceability"
+description = "Internal part of Provenance for core records and validation"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -22,6 +22,7 @@ anyhow.workspace = true
 camino.workspace = true
 provenance-macros.workspace = true
 serde.workspace = true
+serde_ignored.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true

@@ -3,6 +3,7 @@ use crate::state_store::{
     BeginVerificationInput, CreateRuleInput, MaterializeVerificationBindingInput,
 };
 use provenance_core::{RuleSeverity, RuleStatus, StableId, VerificationMethod};
+use provenance_macros::verifies;
 
 fn seeded_rule_store() -> (
     tempfile::TempDir,
@@ -44,6 +45,7 @@ fn input(scope: &provenance_core::ScopeId) -> MaterializeVerificationBindingInpu
 }
 
 #[test]
+#[verifies("rule_verification_binding_identity", examples)]
 fn repeated_materialization_updates_one_binding_with_stable_identity() {
     let (_directory, store, scope) = seeded_rule_store();
     let first = store
@@ -67,6 +69,7 @@ fn repeated_materialization_updates_one_binding_with_stable_identity() {
 }
 
 #[test]
+#[verifies("rule_verification_binding_identity", examples)]
 fn identity_changes_with_owner_rule_or_explicit_key() {
     let (_directory, store, scope) = seeded_rule_store();
     let first = store
@@ -87,8 +90,9 @@ fn identity_changes_with_owner_rule_or_explicit_key() {
 }
 
 #[test]
-fn explicit_identity_is_independent_of_the_containing_scope() {
-    let (_directory, store, scope) = seeded_rule_store();
+#[verifies("rule_porcelain_id_unique_in_repository", examples)]
+fn canonical_identity_cannot_be_reused_in_another_scope() {
+    let (_directory, store, _scope) = seeded_rule_store();
     let other_scope = provenance_core::ScopeId::new("other").unwrap();
     let mut manifest = store.manifest().unwrap();
     manifest.scopes.push(provenance_core::Scope {
@@ -108,7 +112,7 @@ fn explicit_identity_is_independent_of_the_containing_scope() {
             description: None,
             status: provenance_core::RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -116,10 +120,10 @@ fn explicit_identity_is_independent_of_the_containing_scope() {
             origin_message: None,
         })
         .unwrap();
-    store
+    let error = store
         .create_rule(CreateRuleInput {
             archived_in_commit: None,
-            scope_id: other_scope.clone(),
+            scope_id: other_scope,
             id: StableId::new("rule_expiry").unwrap(),
             name: None,
             description: None,
@@ -133,16 +137,9 @@ fn explicit_identity_is_independent_of_the_containing_scope() {
             origin_thread: None,
             origin_message: None,
         })
-        .unwrap();
+        .unwrap_err();
 
-    let first = store
-        .materialize_verification_binding(input(&scope))
-        .unwrap();
-    let second = store
-        .materialize_verification_binding(input(&other_scope))
-        .unwrap();
-
-    assert_eq!(first.id, second.id);
+    assert!(error.to_string().contains("record ID already exists"));
 }
 
 #[test]
@@ -219,4 +216,35 @@ fn beginning_a_run_materializes_and_cites_the_canonical_binding() {
     );
     assert_eq!(run.file, Some(bindings[0].file.clone()));
     assert_eq!(run.symbol, bindings[0].symbol);
+}
+
+#[tokio::test]
+async fn the_verification_page_lists_only_the_bindings_of_the_named_rule() {
+    let (directory, store, scope) = seeded_rule_store();
+    let binding = store
+        .materialize_verification_binding(input(&scope))
+        .unwrap();
+    let root = camino::Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+
+    let named = verification_page(&root, "rule_expiry").await;
+    let items = named["result"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["id"], binding.id.as_str());
+    assert_eq!(named["result"]["has_more"], false);
+
+    let other = verification_page(&root, "rule_other").await;
+    assert_eq!(
+        other["result"]["items"].as_array().unwrap().as_slice(),
+        [] as [serde_json::Value; 0]
+    );
+}
+
+async fn verification_page(root: &camino::Utf8Path, rule: &str) -> serde_json::Value {
+    super::read_budget::operation_read(
+        root,
+        "page-verification-bindings",
+        serde_json::json!({"rule": rule, "limit": 10, "cursor": null}),
+    )
+    .await
+    .unwrap()
 }

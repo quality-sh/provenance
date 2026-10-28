@@ -28,9 +28,9 @@ pub(crate) use cursor::{Cursor, Position};
 pub(crate) use freshness::is_missing_table;
 pub use live::{Disturbed, Live, LiveHandle};
 pub use refuse_stale::MovedUnit;
-pub use snapshot::{ReadSnapshot, Relations, Table};
+pub use snapshot::{ReadSnapshot, RecordIdentities, RecordIdentity, Relations, Table};
 
-pub(crate) use crate::cache::read::page::{page_error, PAGE_BYTES, RECORD_BYTES};
+pub(crate) use crate::cache::read::page::{check_limit, page_error, PAGE_BYTES, RECORD_BYTES};
 /// The projection readers that run over the handles: the fetched relation
 /// front and the kind probe. The operations reach them from here, so a
 /// query module never names the cache.
@@ -74,9 +74,9 @@ pub enum ReadRefusal {
         path: Utf8PathBuf,
         error: String,
     },
-    #[error("the projection in {database} is behind on migrations or validation; run `provenance materialize`")]
+    #[error("the projection in {database} has an incompatible cache schema or old validation; run `provenance materialize`")]
     SchemaBehind { database: Utf8PathBuf },
-    #[error("the projection in {database} holds a revision but no family digests, so its tables were never reloaded after a migration; run `provenance materialize`")]
+    #[error("the projection in {database} holds a revision but no family digests, so the cache is incomplete; run `provenance materialize`")]
     HalfMigrated { database: Utf8PathBuf },
 }
 

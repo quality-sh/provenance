@@ -18,14 +18,14 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
         })
         .unwrap();
     store
-        .create_requirement(CreateRequirementInput {
+        .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: StableId::new("req_metadata").unwrap(),
             statement: STATEMENT.to_string(),
             description: Some("Metadata authored outside the typed spec".to_string()),
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -33,14 +33,13 @@ fn seed_external_metadata(store: &StateStore, scope: &ScopeId) {
             origin_message: None,
         })
         .unwrap();
-    store
-        .add_source_reference(AddSourceReferenceInput {
-            scope_id: scope.clone(),
-            source_id: StableId::new("source_metadata").unwrap(),
-            requirement_id: StableId::new("req_metadata").unwrap(),
-            clause: Some("section 4".to_string()),
-        })
-        .unwrap();
+    seed_plain_citation(
+        store,
+        scope,
+        "req_metadata",
+        "source_metadata",
+        Some("section 4"),
+    );
     store
         .create_rule(CreateRuleInput {
             archived_in_commit: None,

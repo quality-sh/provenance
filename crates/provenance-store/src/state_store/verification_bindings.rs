@@ -1,4 +1,5 @@
 use provenance_core::{StableId, VerificationBinding, SUPPORTED_SCHEMA_VERSION};
+use provenance_macros::rule;
 use sha2::{Digest, Sha256};
 
 use super::{MaterializeVerificationBindingInput, StateStore};
@@ -12,6 +13,8 @@ impl StateStore {
         self.with_repository_publication(|| self.write_verification_binding(input))
     }
 
+    /// Updates one binding for each owner, Rule, and owner-local key.
+    #[rule("rule_verification_binding_identity")]
     fn write_verification_binding(
         &self,
         input: MaterializeVerificationBindingInput,
@@ -83,6 +86,7 @@ impl StateStore {
                 records.push(binding.clone());
             }
             records.sort_by(|left, right| left.id.as_str().cmp(right.id.as_str()));
+            super::read_budget::ensure_within_read_budget(&binding)?;
             Ok(binding)
         })
     }
@@ -91,6 +95,7 @@ impl StateStore {
 /// Deletes the relationship an owner-local key replaced in one test file. A
 /// run vouches only for the owner, file, and key it just reported, so a key
 /// reused by another owner or from another file stays untouched.
+#[rule("rule_run_retires_only_its_key")]
 fn delete_replaced(records: &mut Vec<VerificationBinding>, reported: &VerificationBinding) {
     records.retain(|record| {
         !(record.declared_by == reported.declared_by

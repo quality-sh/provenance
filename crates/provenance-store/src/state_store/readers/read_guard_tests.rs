@@ -1,6 +1,6 @@
 use super::{record_from_line, Fields, IDEATION_LANDING_RECORD_FIELDS, NO_NESTED_RECORDS};
 use camino::Utf8Path;
-use provenance_core::SUPPORTED_SCHEMA_VERSION;
+use provenance_core::{review::REVIEW_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION};
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
@@ -86,10 +86,9 @@ fn only_the_supported_version_loads() {
 #[test]
 #[verifies("rule_reads_supported_version_only", examples)]
 fn refusal_names_the_file_the_record_and_both_versions() {
-    let future = SUPPORTED_SCHEMA_VERSION.0 + 1;
+    let future = REVIEW_SCHEMA_VERSION.0 + 1;
     let supported = SUPPORTED_SCHEMA_VERSION.0;
-    let line =
-        json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0 + 1, "id": "req_overtime"}).to_string();
+    let line = json!({"schema_version": future, "id": "req_overtime"}).to_string();
     let message = load(&line, Fields::Open).unwrap_err().to_string();
 
     assert_eq!(
@@ -103,7 +102,7 @@ record req_overtime has schema_version {future}, but this build reads schema_ver
 #[test]
 #[verifies("rule_reads_supported_version_only", examples)]
 fn refusal_says_so_even_when_the_line_carries_no_id() {
-    let future = SUPPORTED_SCHEMA_VERSION.0 + 1;
+    let future = REVIEW_SCHEMA_VERSION.0 + 1;
     let line = json!({"schema_version": future}).to_string();
     let message = load(&line, Fields::Open).unwrap_err().to_string();
 

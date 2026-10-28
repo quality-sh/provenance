@@ -132,7 +132,10 @@ fn a_domain_only_ever_appears_as_a_target() {
 fn an_unknown_record_reaches_nothing() {
     let records = fixture();
     let front = front(&records);
-    assert!(related_nodes(&front, NodeType::Rule, &sid("rule_missing")).is_empty());
+    assert_eq!(
+        related_nodes(&front, NodeType::Rule, &sid("rule_missing")),
+        [] as [RelatedNode; 0]
+    );
 }
 
 #[test]
@@ -190,7 +193,7 @@ fn flow_follows_each_declared_flow_and_skips_none_relations() {
 #[test]
 fn a_dangling_reference_is_still_reported_as_stored() {
     let mut records = fixture();
-    records.requirements[1].refines = Some(sid("req_vanished"));
+    records.requirements[1].refines = vec![sid("req_vanished")];
     let front = front(&records);
     let reached = flatten(related_nodes(&front, NodeType::Requirement, &sid("req_penalty")));
     assert!(reached.contains(&out("refines", NodeType::Requirement, "req_vanished")));

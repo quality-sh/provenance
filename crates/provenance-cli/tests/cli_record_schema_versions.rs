@@ -31,30 +31,21 @@ const STORED_FAMILIES: [(&str, &str); 16] = [
     ),
 ];
 
+const UNSUPPORTED_SCHEMA_VERSION: u32 = REVIEW_SCHEMA_VERSION.0 + 1;
+
 #[test]
 #[verifies("rule_reads_supported_version_only", examples)]
-fn wiki_and_check_refuse_v2_rows_in_every_stored_family() {
-    for command in ["check", "wiki"] {
+fn export_and_check_refuse_unsupported_version_rows_in_every_stored_family() {
+    for command in ["check", "export"] {
         for (family, relative_path) in STORED_FAMILIES {
             let dir = tempfile::tempdir().unwrap();
             let repo = dir.path().to_str().unwrap();
             init(repo);
             let record_id = format!("{family}_future");
-            plant_v2_row(dir.path(), relative_path, &record_id);
+            plant_unsupported_version_row(dir.path(), relative_path, &record_id);
 
             let mut invocation = Command::cargo_bin("provenance").unwrap();
-            if command == "check" {
-                invocation.args(["check", "--repo", repo]);
-            } else {
-                invocation.args([
-                    "wiki",
-                    "build",
-                    "--repo",
-                    repo,
-                    "--out",
-                    dir.path().join("wiki").to_str().unwrap(),
-                ]);
-            }
+            invocation.args([command, "--repo", repo]);
             invocation
                 .assert()
                 .failure()
@@ -66,8 +57,7 @@ fn wiki_and_check_refuse_v2_rows_in_every_stored_family() {
                 .stderr(contains(format!("record {record_id}")))
                 .stderr(contains(format!(
                     "has schema_version {}, but this build reads schema_version {} only",
-                    SUPPORTED_SCHEMA_VERSION.0 + 1,
-                    SUPPORTED_SCHEMA_VERSION.0
+                    UNSUPPORTED_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION.0
                 )));
         }
     }
@@ -75,14 +65,14 @@ fn wiki_and_check_refuse_v2_rows_in_every_stored_family() {
 
 #[test]
 #[verifies("rule_reads_supported_version_only", examples)]
-fn coverage_rule_validation_refuses_a_v2_rule_row() {
+fn coverage_rule_validation_refuses_a_unsupported_version_rule_row() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().to_str().unwrap();
     init(repo);
     let source_dir = dir.path().join("src");
     std::fs::create_dir_all(&source_dir).unwrap();
     std::fs::write(source_dir.join("lib.rs"), "fn example() {}\n").unwrap();
-    plant_v2_row(dir.path(), "scopes/default/rules/rule.jsonl", "rule_future");
+    plant_unsupported_version_row(dir.path(), "scopes/default/rules/rule.jsonl", "rule_future");
 
     Command::cargo_bin("provenance")
         .unwrap()
@@ -106,8 +96,7 @@ fn coverage_rule_validation_refuses_a_v2_rule_row() {
         .stderr(contains("record rule_future"))
         .stderr(contains(format!(
             "has schema_version {}, but this build reads schema_version {} only",
-            SUPPORTED_SCHEMA_VERSION.0 + 1,
-            SUPPORTED_SCHEMA_VERSION.0
+            UNSUPPORTED_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION.0
         )));
 }
 
@@ -134,19 +123,31 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
         .path()
         .join(".provenance/state/scopes/default/requirements/req.jsonl");
     let stored = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(
-        &path,
-        stored.replace(
-            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
-            &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0 + 1),
-        ),
-    )
-    .unwrap();
+    let planted = stored.replace(
+        &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+        &format!("\"schema_version\":{}", REVIEW_SCHEMA_VERSION.0 + 1),
+    );
+    assert_ne!(planted, stored, "the fixture must change the stored marker");
+    std::fs::write(&path, planted).unwrap();
 
     let export = dir.path().join("export.json");
-    for command in [
-        vec!["check", "--repo", repo.as_str()],
-        vec![
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["check", "--repo", repo.as_str()])
+        .assert()
+        .failure()
+        .stderr(contains("requirements/req.jsonl line 1"))
+        .stderr(contains("record req_overtime"))
+        .stderr(contains(format!(
+            "has schema_version {}, but this build reads schema_version {} only",
+            REVIEW_SCHEMA_VERSION.0 + 1,
+            SUPPORTED_SCHEMA_VERSION.0
+        )));
+
+    // The export refuses on the same unsupported row.
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args([
             "export",
             "--repo",
             repo.as_str(),
@@ -156,21 +157,15 @@ fn a_hand_edited_requirement_version_is_refused_by_every_reader() {
             "json",
             "--output",
             export.to_str().unwrap(),
-        ],
-    ] {
-        Command::cargo_bin("provenance")
-            .unwrap()
-            .args(&command)
-            .assert()
-            .failure()
-            .stderr(contains("requirements/req.jsonl line 1"))
-            .stderr(contains("record req_overtime"))
-            .stderr(contains(format!(
-                "has schema_version {}, but this build reads schema_version {} only",
-                REVIEW_SCHEMA_VERSION.0 + 1,
-                SUPPORTED_SCHEMA_VERSION.0
-            )));
-    }
+        ])
+        .assert()
+        .failure()
+        .stderr(contains("record req_overtime"))
+        .stderr(contains(format!(
+            "has schema_version {}, but this build reads schema_version {} only",
+            REVIEW_SCHEMA_VERSION.0 + 1,
+            SUPPORTED_SCHEMA_VERSION.0
+        )));
 }
 
 /// Writing to a shard that holds a hand-edited record changes nothing.
@@ -196,16 +191,16 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
     let path = dir
         .path()
         .join(".provenance/state/scopes/default/requirements/req.jsonl");
-    let planted = std::fs::read_to_string(&path)
-        .unwrap()
-        .replace(
-            &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
-            &format!("\"schema_version\":{} ", REVIEW_SCHEMA_VERSION.0 + 1),
-        )
-        .replace(
-            "\"statement\"",
-            "\"unknown_to_this_build\":\"keep me\",\"statement\"",
-        );
+    let stored = std::fs::read_to_string(&path).unwrap();
+    let planted = stored.replace(
+        &format!("\"schema_version\":{}", SUPPORTED_SCHEMA_VERSION.0),
+        &format!("\"schema_version\":{} ", REVIEW_SCHEMA_VERSION.0 + 1),
+    );
+    assert_ne!(planted, stored, "the fixture must change the stored marker");
+    let planted = planted.replace(
+        "\"statement\"",
+        "\"unknown_to_this_build\":\"keep me\",\"statement\"",
+    );
     std::fs::write(&path, &planted).unwrap();
 
     Command::cargo_bin("provenance")
@@ -226,13 +221,7 @@ fn a_write_beside_a_hand_edited_record_is_refused_and_changes_nothing() {
         ])
         .assert()
         .failure()
-        .stderr(contains("requirements/req.jsonl line 1"))
-        .stderr(contains("record req_overtime"))
-        .stderr(contains(format!(
-            "has schema_version {}, but this build reads schema_version {} only",
-            REVIEW_SCHEMA_VERSION.0 + 1,
-            SUPPORTED_SCHEMA_VERSION.0
-        )));
+        .stderr(contains(r#""kind":"write_failed""#));
 
     assert_eq!(std::fs::read_to_string(&path).unwrap(), planted);
 }
@@ -266,15 +255,12 @@ fn create_requirement(repo: &str, id: &str, statement: &str) {
         .success();
 }
 
-fn plant_v2_row(repo: &std::path::Path, relative_path: &str, record_id: &str) {
+fn plant_unsupported_version_row(repo: &std::path::Path, relative_path: &str, record_id: &str) {
     let path = repo.join(".provenance/state").join(relative_path);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         path,
-        format!(
-            "{{\"schema_version\":{},\"id\":\"{record_id}\"}}\n",
-            SUPPORTED_SCHEMA_VERSION.0 + 1
-        ),
+        format!("{{\"schema_version\":{UNSUPPORTED_SCHEMA_VERSION},\"id\":\"{record_id}\"}}\n"),
     )
     .unwrap();
 }

@@ -1,72 +1,25 @@
+#[path = "review_host_support/mod.rs"]
+mod review_host_support;
+
 use std::{
-    io::{BufRead, BufReader, Read},
-    process::{Child, Command, Stdio},
-    sync::mpsc,
+    collections::BTreeMap,
+    io::{Cursor, Read, Write},
+    net::TcpStream,
     time::Duration,
 };
 
 use provenance_macros::verifies;
+use review_host_support::{repository, start};
 
 include!(concat!(env!("OUT_DIR"), "/review_assets.rs"));
 
-struct Host(Child);
-impl Drop for Host {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
-fn start(repo: &std::path::Path) -> (Host, serde_json::Value) {
-    let mut host = Host(
-        Command::new(assert_cmd::cargo::cargo_bin("provenance"))
-            .args([
-                "review",
-                "--repo",
-                repo.to_str().unwrap(),
-                "--repository-id",
-                "A",
-                "--scope",
-                "default",
-            ])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .unwrap(),
-    );
-    let stdout = host.0.stdout.take().unwrap();
-    let (send, receive) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut line = String::new();
-        BufReader::new(stdout).read_line(&mut line).unwrap();
-        let _ = send.send(line);
-    });
-    let config: serde_json::Value =
-        serde_json::from_str(&receive.recv_timeout(Duration::from_secs(15)).unwrap()).unwrap();
-    (host, config)
-}
-
 #[test]
-// The loop tries every compiled asset over GET and HEAD, byte for byte.
+/// This flow tries every asset and the router's access checks over GET and HEAD.
 #[verifies("rule_cli_serves_review_assets", exhaustion)]
 fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
-    let repo = tempfile::tempdir().unwrap();
-    let layout = provenance_store::layout::ProvenanceLayout::new(repo.path().to_str().unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    let manifest = provenance_core::Manifest::default_with_scope(
-        provenance_core::ScopeId::new("default").unwrap(),
-        provenance_core::RepoPathPrefix::new("."),
-    );
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
-    let (_host, config) = start(repo.path());
-    let endpoint = config["endpoint"].as_str().unwrap();
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(5))
-        .build();
+    let repo = repository();
+    let host = start(repo.path());
+    let endpoint = host.config["endpoint"].as_str().unwrap();
     for (path, expected) in ASSETS.iter().copied().chain(std::iter::once((
         "/",
         ASSETS
@@ -76,8 +29,7 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
             .1,
     ))) {
         for method in ["GET", "HEAD"] {
-            let url = format!("{endpoint}{path}");
-            let reply = response(agent.request(method, &url).call());
+            let reply = request(endpoint, method, path, &[], &[]);
             assert_eq!(reply.status(), 200, "{method} {path}");
             assert_eq!(
                 reply.header("Content-Length").unwrap(),
@@ -98,42 +50,123 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
                 ("Sec-Fetch-Site", "cross-site"),
             ] {
                 assert_eq!(
-                    response(agent.request(method, &url).set(header, value).call()).status(),
+                    request(endpoint, method, path, &[(header, value)], &[]).status(),
                     403,
                     "{method} {path} {header}"
                 );
             }
         }
     }
+    // Paths outside the bundle answer like the host API: authentication, then classification.
+    let bearer = format!("Bearer {}", host.bearer());
     for path in [
         "/%2e%2e/Cargo.toml",
         "/.provenance/manifest.json",
         "/assets/missing.js",
     ] {
         assert_eq!(
-            response(agent.get(&format!("{endpoint}{path}")).call()).status(),
+            request(endpoint, "GET", path, &[], &[]).status(),
+            401,
+            "{path}"
+        );
+        assert_eq!(
+            request(endpoint, "GET", path, &[("Authorization", &bearer)], &[]).status(),
             404,
             "{path}"
         );
     }
     assert_eq!(
-        response(agent.get(&format!("{endpoint}/review-config")).call()).status(),
+        request(endpoint, "GET", "/review-config", &[], &[]).status(),
         401
     );
     assert_eq!(
-        response(
-            agent
-                .post(&format!("{endpoint}/v9/operations/list-threads"))
-                .send_string("invalid")
-        )
-        .status(),
+        request(endpoint, "GET", "/discussion-containers", &[], b"invalid").status(),
         401
     );
 }
 
-fn response(result: Result<ureq::Response, ureq::Error>) -> ureq::Response {
-    match result {
-        Ok(response) | Err(ureq::Error::Status(_, response)) => response,
-        Err(error) => panic!("{error}"),
+struct WireResponse {
+    status: u16,
+    headers: BTreeMap<String, String>,
+    body: Vec<u8>,
+}
+
+impl WireResponse {
+    const fn status(&self) -> u16 {
+        self.status
+    }
+
+    fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .get(&name.to_ascii_lowercase())
+            .map(String::as_str)
+    }
+
+    fn into_reader(self) -> Cursor<Vec<u8>> {
+        Cursor::new(self.body)
+    }
+}
+
+fn request(
+    endpoint: &str,
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: &[u8],
+) -> WireResponse {
+    let authority = endpoint.strip_prefix("http://").unwrap();
+    let mut stream = TcpStream::connect(authority).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+
+    write!(stream, "{method} {path} HTTP/1.1\r\n").unwrap();
+    if !headers
+        .iter()
+        .any(|(name, _)| name.eq_ignore_ascii_case("Host"))
+    {
+        write!(stream, "Host: {authority}\r\n").unwrap();
+    }
+    write!(
+        stream,
+        "Connection: close\r\nContent-Length: {}\r\n",
+        body.len()
+    )
+    .unwrap();
+    for (name, value) in headers {
+        write!(stream, "{name}: {value}\r\n").unwrap();
+    }
+    stream.write_all(b"\r\n").unwrap();
+    stream.write_all(body).unwrap();
+
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response).unwrap();
+    let header_end = response
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .unwrap();
+    let head = std::str::from_utf8(&response[..header_end]).unwrap();
+    let mut lines = head.split("\r\n");
+    let status = lines
+        .next()
+        .unwrap()
+        .split_whitespace()
+        .nth(1)
+        .unwrap()
+        .parse()
+        .unwrap();
+    let headers = lines
+        .map(|line| {
+            let (name, value) = line.split_once(':').unwrap();
+            (name.to_ascii_lowercase(), value.trim().to_owned())
+        })
+        .collect();
+    WireResponse {
+        status,
+        headers,
+        body: response[(header_end + 4)..].to_vec(),
     }
 }

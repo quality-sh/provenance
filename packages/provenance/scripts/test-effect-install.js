@@ -41,46 +41,45 @@ try {
         assert.equal(existsSync(join(application, 'node_modules/effect')), false);
         writeFileSync(join(application, 'consumer.mjs'), `import {HttpClient} from '@quality-sh/provenance/client';
 const client = await HttpClient.connectWithBearer(${JSON.stringify(host.environment.PROVENANCE_ENDPOINT)}, ${JSON.stringify(host.environment.PROVENANCE_TOKEN)});
-const result = await client.checkStatement({request:{statement:'Install the cover.'}});
-if(result.issue!==9) throw new Error('Invalid report');`);
+const result = await client.checkStatement({data:{statement:'Install the cover.'}});
+if(result.data.issue!==9) throw new Error('Invalid report');`);
         run(process.execPath, ['consumer.mjs'], application);
         continue;
       }
       const source = `import * as Effect from 'effect/Effect';
 import * as Schema from 'effect/Schema';
 import {Atom, AtomRegistry} from 'effect/unstable/reactivity';
-import {EffectHttpClient, ProvenanceClient, CheckStatementSuccessOutput, ProvenanceApi} from '@quality-sh/provenance/effect';
+import {EffectHttpClient, ProvenanceClient, CheckStatementSuccess, ProvenanceApi} from '@quality-sh/provenance/effect';
 export async function exercise(baseUrl: string, bearer: string, suffix = '') {
- const client = await Effect.runPromise(EffectHttpClient.connect({baseUrl,bearer}));
- const context = {repository:'fixture',scope:'default'};
- const statement = await Effect.runPromise(client.checkStatement({request:{statement:'Install the cover.'}}));
- Schema.decodeUnknownSync(CheckStatementSuccessOutput)(statement);
- const created = await Effect.runPromise(client.createRequirement({context,request:{scope_id:'default',status:'active',depends_on:[],supersedes:[],id:'req_${name.replaceAll('-', '_')}'+suffix,statement:'The record retains its fields.'}}));
- if(created.id!=='req_${name.replaceAll('-', '_')}'+suffix) throw new Error('Mutation failed');
- const runtime=Atom.runtime(ProvenanceClient.layer({baseUrl,bearer}));
- const atom=runtime.atom(Effect.flatMap(ProvenanceClient,sdk=>sdk.get({context,request:{node_type:'requirement',id:created.id}})));
+ const options={baseUrl,bearer,repository:'fixture',scope:'default'};
+ const client = await Effect.runPromise(EffectHttpClient.connect(options));
+ const statement = await Effect.runPromise(client.checkStatement({data:{statement:'Install the cover.'}}));
+ Schema.decodeUnknownSync(CheckStatementSuccess)(statement);
+ const id='source_${name.replaceAll('-', '_')}'+suffix;
+ const created = await Effect.runPromise(client.createSource({data:{id,name:'Installed client',source_type:'document',supersedes:[]}}));
+ if(created.data.id!==id) throw new Error('Mutation failed');
+ const runtime=Atom.runtime(ProvenanceClient.layer(options));
+ const atom=runtime.atom(Effect.flatMap(ProvenanceClient,sdk=>sdk.getSource({id})));
  const registry=AtomRegistry.make();
- try { const result=await Effect.runPromise(AtomRegistry.getResult(registry,atom)); if(!result.found)throw new Error('Read failed'); }
+ try { const result=await Effect.runPromise(AtomRegistry.getResult(registry,atom)); if(result.data.id!==id)throw new Error('Read failed'); }
  finally {registry.dispose();}
  let dispatched = 0;
- const uncertainClient = await Effect.runPromise(EffectHttpClient.connect({baseUrl,bearer,fetch:async(input,init)=>{
+ const lostId='source_lost_${name.replaceAll('-', '_')}'+suffix;
+ const lostClient = await Effect.runPromise(EffectHttpClient.connect({...options,fetch:async(input,init)=>{
    const response=await fetch(input,init);
-   if(init?.method==='POST' && input.toString().endsWith('/create-requirement')) {
+   if(init?.method==='POST' && new URL(input.toString()).pathname==='/sources') {
      dispatched++; await response.arrayBuffer();
-     return new Response(new ReadableStream());
+     return new Response(new ReadableStream({start(controller){controller.error(new Error('Lost response'));}}));
    }
    return response;
  }}));
- const unknownId='req_unknown_${name.replaceAll('-', '_')}'+suffix;
- await Effect.runPromise(Effect.flip(uncertainClient.createRequirement({context,request:{scope_id:'default',status:'active',depends_on:[],supersedes:[],id:unknownId,statement:'The record retains its fields.'}}).pipe(Effect.timeout('1 second'))));
- const unresolved=uncertainClient.unresolvedWrites();
- if(dispatched!==1 || unresolved.length!==1 || unresolved[0].state!=='uncertain') throw new Error('Lost mutation outcome');
- const evidence=await Effect.runPromise(client.get({context,request:{node_type:'requirement',id:unknownId}}));
- if(!evidence.found) throw new Error('Expected the mutation to persist after response loss');
- uncertainClient.resolveWrite(unresolved[0].id);
+ const lost = await Effect.runPromise(Effect.flip(lostClient.createSource({data:{id:lostId,name:'Lost response',source_type:'document',supersedes:[]}})));
+ if(dispatched!==1 || lost._tag!=='ConnectionError') throw new Error('Lost mutation response classification');
+ const evidence=await Effect.runPromise(client.getSource({id:lostId}));
+ if(evidence.data.id!==lostId) throw new Error('Expected the mutation to persist after response loss');
  if(!ProvenanceApi) throw new Error('Missing contract');
 }
-`;
+`
       writeFileSync(join(application, 'consumer.ts'), source);
       run(process.execPath, [join(packageRoot, 'node_modules/typescript/bin/tsc'), '--strict', '--skipLibCheck', '--target', 'es2022', '--module', 'nodenext', 'consumer.ts'], application);
       writeFileSync(join(application, 'run.mjs'), `import {exercise} from './consumer.js'; await exercise(${JSON.stringify(host.environment.PROVENANCE_ENDPOINT)},${JSON.stringify(host.environment.PROVENANCE_TOKEN)});`);

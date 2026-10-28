@@ -4,8 +4,7 @@ use provenance_store::graph_reference::{ExternalCorrelation, GraphReference, Gra
 pub(super) fn handle(command: GraphReferenceCommand) -> anyhow::Result<()> {
     match command {
         GraphReferenceCommand::Issue {
-            repo,
-            scope,
+            context,
             commit,
             correlation_system,
             correlation_key,
@@ -13,8 +12,11 @@ pub(super) fn handle(command: GraphReferenceCommand) -> anyhow::Result<()> {
             let correlation = correlation_system
                 .zip(correlation_key)
                 .map(|(system, key)| ExternalCorrelation { system, key });
-            let reference =
-                GraphReferences::open(&repo)?.issue(&scope, commit.as_deref(), correlation)?;
+            let reference = GraphReferences::open(&context.repo)?.issue(
+                &context.scope,
+                commit.as_deref(),
+                correlation,
+            )?;
             output::print_json(&reference)?;
         }
         GraphReferenceCommand::Show { repo, reference } => {

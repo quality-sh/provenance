@@ -28,23 +28,17 @@ pub fn corpus() -> Value {
     add!("CheckStatementInput", CheckStatementRequest, Deserialize);
     add!("ReportOutput", provenance_ste100::Report, Serialize);
     add!("SearchInput", SearchQuery, Deserialize);
-    for (name, operation, schema) in [
+    for (name, schema) in [
         (
             "GetOutput",
-            "get",
             schema::<QueryResponse<GetResult>>(Contract::Serialize),
         ),
         (
             "EvidenceOutput",
-            "evidence",
             schema::<QueryResponse<EvidenceResult>>(Contract::Serialize),
         ),
     ] {
-        crate::component(
-            name,
-            provenance_store::operations::catalog::bind_response_identity(schema, operation),
-            &mut schemas,
-        );
+        crate::component(name, schema, &mut schemas);
     }
     add!("GraphNodeOutput", GraphNode, Serialize);
     add!(

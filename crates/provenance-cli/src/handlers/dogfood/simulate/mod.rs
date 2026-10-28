@@ -164,8 +164,12 @@ fn step_arguments(sandbox: &Path) -> Vec<StepSpec> {
             ],
         ),
         StepSpec {
-            label: "sdk check-statement",
-            args: vec!["sdk".to_owned(), "check-statement".to_owned()],
+            label: "statement-checks create",
+            args: vec![
+                "statement-checks".to_owned(),
+                "create".to_owned(),
+                "--stdin".to_owned(),
+            ],
             stdin: Some(serde_json::json!({ "statement": STATEMENT }).to_string()),
         },
         spec("check", &["check", "--repo", "."]),

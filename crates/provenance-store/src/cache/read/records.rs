@@ -54,6 +54,175 @@ impl<K: ProjectionRow> Table<'_, K> {
         Ok(records.into_iter().map(|(_, record)| record).collect())
     }
 
+    /// Reads query-page records only after every stored row passes the
+    /// record ceiling. Answers whose registered shape carries every
+    /// match read here; one oversized row refuses the answer wherever it
+    /// sits.
+    pub(crate) async fn checked_by_field(
+        &self,
+        column: &'static str,
+        values: &[&str],
+    ) -> anyhow::Result<Vec<K>> {
+        let mut values = values.to_vec();
+        values.sort_unstable();
+        values.dedup();
+        let expression = super::page::byte_expression(K::COLUMNS);
+        let maximum = i64::try_from(super::page::RECORD_BYTES)?;
+        for chunk in values.chunks(BIND_CHUNK) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND {} IN ({marks})",
+                quoted(K::TABLE),
+                quoted(column)
+            );
+            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            for value in chunk {
+                query = query.bind(*value);
+            }
+            let sizes: Vec<i64> = {
+                let mut tx = self.snapshot().connection().await;
+                query.fetch_all(&mut **tx).await?
+            };
+            if sizes.into_iter().any(|size| size > maximum) {
+                return Err(
+                    provenance_core::protocol::read_failure::ReadFailure::PageRecordTooLarge.into(),
+                );
+            }
+        }
+        self.by_field(column, &values).await
+    }
+
+    /// Every record with the given ids that counts under the view, each
+    /// checked against the record ceiling before it decodes, in id order.
+    /// The caller bounds the list, so the read stays within the page it
+    /// serves.
+    pub(crate) async fn checked_by_ids(&self, ids: &[StableId]) -> anyhow::Result<Vec<K>> {
+        let wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
+        self.checked_by_field("id", &wanted).await
+    }
+
+    /// The first `limit` records whose named column holds one of the
+    /// values, in id order, each checked against the record ceiling
+    /// before it decodes, plus whether more matches remain. The page is
+    /// chosen by id alone, so a match past the page never decodes and an
+    /// oversized match past the page cannot refuse the answer. The
+    /// condition, when given, is a SQL predicate over the table's own
+    /// columns that a candidate must satisfy to count.
+    pub(crate) async fn page_by_field(
+        &self,
+        column: &'static str,
+        values: &[&str],
+        condition: &'static str,
+        limit: usize,
+    ) -> anyhow::Result<(Vec<K>, bool)> {
+        let mut values = values.to_vec();
+        values.sort_unstable();
+        values.dedup();
+        let filter = match condition {
+            "" => String::new(),
+            condition => format!(" AND ({condition})"),
+        };
+        // Each value chunk answers with its smallest candidate ids; the
+        // page is the smallest set over all chunks, so the global order
+        // holds across the chunked statements.
+        let mut candidates: Vec<String> = Vec::new();
+        let wanted = i64::try_from(limit + 1)?;
+        for chunk in values.chunks(BIND_CHUNK) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT id FROM {} WHERE scope_id = ? AND {} IN ({marks}){filter} ORDER BY id LIMIT ?",
+                quoted(K::TABLE),
+                quoted(column)
+            );
+            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            for value in chunk {
+                query = query.bind(*value);
+            }
+            query = query.bind(wanted);
+            let ids: Vec<String> = {
+                let mut tx = self.snapshot().connection().await;
+                query.fetch_all(&mut **tx).await?
+            };
+            candidates.extend(ids);
+        }
+        candidates.sort();
+        let more = candidates.len() > limit;
+        candidates.truncate(limit);
+        let records = self.page_rows(&candidates).await?;
+        Ok((records, more))
+    }
+
+    /// The first `limit` records with the given ids that count under the
+    /// view, in id order, plus whether more of the ids count.
+    pub(crate) async fn page_by_ids(
+        &self,
+        ids: &[StableId],
+        limit: usize,
+    ) -> anyhow::Result<(Vec<K>, bool)> {
+        let wanted: Vec<&str> = ids.iter().map(StableId::as_str).collect();
+        self.page_by_field("id", &wanted, "", limit).await
+    }
+
+    /// The rule ids named by the rows whose file column holds the file,
+    /// and whose symbol matches when one is named. Only the two columns
+    /// are read, so collecting candidates decodes no record.
+    pub(crate) async fn rule_ids_for_file(
+        &self,
+        file: &str,
+        symbol: Option<&str>,
+    ) -> anyhow::Result<Vec<String>> {
+        let filter = symbol.map_or(String::new(), |_| " AND symbol = ?".to_string());
+        let sql = format!(
+            "SELECT rule_id FROM {} WHERE scope_id = ? AND file = ?{filter} ORDER BY rule_id",
+            quoted(K::TABLE)
+        );
+        let mut query = sqlx::query_scalar(&sql)
+            .bind(self.snapshot().scope().as_str())
+            .bind(file);
+        if let Some(symbol) = symbol {
+            query = query.bind(symbol);
+        }
+        let mut tx = self.snapshot().connection().await;
+        let ids: Vec<String> = query.fetch_all(&mut **tx).await?;
+        drop(tx);
+        Ok(ids)
+    }
+
+    /// The given ids that count, in id order, each after its stored byte
+    /// count passes the cap. The caller bounds the list.
+    async fn page_rows(&self, ids: &[String]) -> anyhow::Result<Vec<K>> {
+        let wanted: Vec<&str> = ids.iter().map(String::as_str).collect();
+        let expression = super::page::byte_expression(K::COLUMNS);
+        let maximum = i64::try_from(super::page::RECORD_BYTES)?;
+        for chunk in wanted.chunks(BIND_CHUNK) {
+            let marks = vec!["?"; chunk.len()].join(", ");
+            let sql = format!(
+                "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND id IN ({marks})",
+                quoted(K::TABLE)
+            );
+            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            for value in chunk {
+                query = query.bind(*value);
+            }
+            let sizes: Vec<i64> = {
+                let mut tx = self.snapshot().connection().await;
+                query.fetch_all(&mut **tx).await?
+            };
+            if sizes.into_iter().any(|size| size > maximum) {
+                return Err(
+                    provenance_core::protocol::read_failure::ReadFailure::PageRecordTooLarge.into(),
+                );
+            }
+        }
+        let rows = self.rows_in(&select_columns::<K>(), "id", &wanted).await?;
+        let mut records = rows
+            .iter()
+            .map(|row| Ok((row.try_get::<String, _>("id")?, decode::<K>(row)?)))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        records.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(records.into_iter().map(|(_, record)| record).collect())
+    }
+
     /// The given ids that name a row that counts under the view, in id
     /// order.
     pub async fn ids_that_count(&self, ids: &[StableId]) -> anyhow::Result<Vec<StableId>> {

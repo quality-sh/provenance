@@ -1,7 +1,7 @@
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use serde_json::{json, Value};
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, io::Write, path::Path};
 
 pub const REQUIREMENTS_SHARD: &str = ".provenance/state/scopes/default/requirements/req.jsonl";
 pub const RULES_SHARD: &str = ".provenance/state/scopes/default/rules/rule.jsonl";
@@ -27,21 +27,29 @@ pub fn init(repo: &Path) {
 }
 
 pub fn create_requirement(repo: &Path, id: &str, statement: &str) {
-    provenance()
-        .args([
-            "requirements",
-            "create",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--id",
-            id,
-            "--statement",
-            statement,
-        ])
-        .assert()
-        .success();
+    // Appends a plain record directly to the shard: these tests pin statement
+    // diagnostics over export and import, and a CLI-created Requirement would
+    // enroll its scope into the review journal, whose lossless export is a
+    // later phase. The shard write keeps the scope plain and lossless.
+    let path = repo.join(REQUIREMENTS_SHARD);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .unwrap();
+    writeln!(
+        file,
+        "{}",
+        json!({
+            "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+            "scope_id": "default",
+            "id": id,
+            "statement": statement,
+            "status": "discovery"
+        })
+    )
+    .unwrap();
 }
 
 pub fn create_rule(repo: &Path, id: &str, statement: &str) {
@@ -65,6 +73,7 @@ pub fn create_rule(repo: &Path, id: &str, statement: &str) {
 }
 
 pub fn export(repo: &Path, output: &Path) -> Value {
+    crate::export_fixture_support::make_default_scope_portable(repo);
     provenance()
         .args([
             "export",
@@ -94,7 +103,7 @@ pub fn diagnostic(kind: &str, id: &str, start: usize) -> Value {
         "field": "statement",
         "standard": "ASD-STE100",
         "issue": 9,
-        "analyzer_version": "0.2.3",
+        "analyzer_version": "0.3.0",
         "rule": "8.1",
         "disposition": "violation",
         "span": {"start": start, "end": start + 1},
@@ -104,6 +113,8 @@ pub fn diagnostic(kind: &str, id: &str, start: usize) -> Value {
 
 pub fn error_json(output: &std::process::Output) -> Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
+    // `import` and `merge-jsonl` are not record commands: they print the
+    // refusal object after `Error: ` in every output format.
     serde_json::from_str(
         stderr
             .trim()

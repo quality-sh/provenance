@@ -98,8 +98,8 @@ async fn refuse_stale_names_new_and_departed_scopes_in_order() {
             .collect::<Vec<_>>(),
         ["global", "scope:default", "scope:new_scope"]
     );
-    assert!(moved[1].live.is_empty());
-    assert!(moved[2].stored.is_empty());
+    assert_eq!(moved[1].live, "");
+    assert_eq!(moved[2].stored, "");
     let text = error.to_string();
     assert!(text.contains("moved: global (stored sha256:"), "{text}");
     let departed = text.find("scope:default (stored sha256:").expect(&text);
@@ -211,9 +211,9 @@ async fn refuse_stale_refuses_a_half_migrated_projection() {
 }
 
 #[tokio::test]
-async fn refuse_stale_refuses_old_migrations_and_validation() {
+async fn refuse_stale_refuses_an_incompatible_schema_and_old_validation() {
     for sql in [
-        "DELETE FROM _schema_migrations",
+        "UPDATE _cache_metadata SET schema_digest = 'incompatible'",
         "UPDATE projection_validation SET version = 0",
     ] {
         let store = test_stores::seeded_queries();
@@ -230,6 +230,23 @@ async fn refuse_stale_refuses_old_migrations_and_validation() {
             "{error}"
         );
     }
+}
+
+#[tokio::test]
+async fn refuse_stale_does_not_change_a_delete_mode_cache_that_it_refuses() {
+    let store = test_stores::seeded_queries();
+    let before = super::incompatible_delete_mode_cache(&store).await;
+
+    let refused = get_through(&store, policy()).await.unwrap_err();
+
+    assert!(matches!(
+        refused.downcast_ref::<ReadRefusal>(),
+        Some(ReadRefusal::SchemaBehind { .. })
+    ));
+    assert_eq!(
+        std::fs::read(store.layout().cache_db_path()).unwrap(),
+        before
+    );
 }
 
 #[tokio::test]
@@ -271,7 +288,7 @@ async fn refuse_stale_refuses_a_unit_it_cannot_hash() {
     };
     assert_eq!(unit, "scope:default");
     assert_eq!(unreadable, &path);
-    assert!(!cause.is_empty());
+    assert_ne!(cause, "");
     let answer = get_through(&store, ReadPolicy::default()).await.unwrap();
     assert_eq!(answer.stamp.policy, StampPolicy::CatchUpFailed);
 }
@@ -387,5 +404,5 @@ async fn refuse_stale_refuses_a_shard_that_vanishes_during_the_hash() {
     };
     assert_eq!(unit, "scope:default");
     assert_eq!(unreadable, &path);
-    assert!(!cause.is_empty());
+    assert_ne!(cause, "");
 }

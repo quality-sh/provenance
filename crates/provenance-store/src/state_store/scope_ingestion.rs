@@ -1,67 +1,369 @@
-use super::{serde_name, StateStore};
-use crate::cache::ProjectionFamily;
+use super::read_budget::{ensure_slice_within_read_budget, ReadBudget};
+use super::{
+    ensure_new_ids_assignable, overlay_records, read_jsonl_unlocked, read_message_shards_unlocked,
+    serde_name, IdeationLandingBatch, StateStore,
+};
+use crate::cache::{BudgetKind, ProjectionFamily, RecordFamily};
 use crate::jsonl::write_jsonl_atomic_under_publication;
+use crate::shards;
 use provenance_core::{
-    AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
-    Message, ProposalCard, Question, Requirement, Resolution, Rule, ScopeId, Source,
-    SynthesisPacket, Thread, ThreadStatus, Topic, VerificationBinding,
+    AssertionRecord, Contribution, DispositionRecord, NodeType, ProposalCard, ScopeId,
+    SynthesisPacket, Thread, ThreadStatus,
 };
 
-macro_rules! define_scope_shards {
-    ($($field:ident: $record:ty => $family:ident),+ $(,)?) => {
+macro_rules! collect_node_ids {
+    ($records:ident, $kinds:ident, $shards:ident, $field:ident, [$node:ident]) => {
+        $kinds.push(NodeType::$node);
+        $records.extend(
+            $shards
+                .$field
+                .iter()
+                .map(|record| (NodeType::$node, &record.id)),
+        );
+    };
+    ($records:ident, $kinds:ident, $shards:ident, $field:ident, []) => {};
+}
+
+fn ensure_family_budget<T: ReadBudget + RecordFamily>(records: &[T]) -> anyhow::Result<()> {
+    if T::META.budget != BudgetKind::Unchecked {
+        ensure_slice_within_read_budget(records)?;
+    }
+    Ok(())
+}
+
+macro_rules! ensure_assignable {
+    (
+        $store:ident, $scope:ident, $shards:ident, $field:ident,
+        $path:ident, $strategy:ident, node_budget
+    ) => {};
+    ($store:ident, $scope:ident, $shards:ident, $field:ident, $path:ident, direct, assignable) => {
+        ensure_new_ids_assignable(
+            &read_jsonl_unlocked(&crate::shards::$path(&$store.layout, $scope))?,
+            $shards.$field,
+            |record| record.id.as_str(),
+        )?;
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $field:ident,
+        $path:ident, $strategy:ident, assignable_budget
+    ) => {
+        ensure_assignable!($store, $scope, $shards, $field, $path, $strategy, assignable);
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $field:ident,
+        $path:ident, direct, threads_assignable_budget
+    ) => {
+        ensure_assignable!($store, $scope, $shards, $field, $path, direct, assignable);
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $field:ident,
+        $path:ident, messages, messages_assignable_budget
+    ) => {
+        ensure_new_ids_assignable(
+            &read_message_shards_unlocked(&$store.layout, $scope)?,
+            $shards.$field,
+            |record| record.id.as_str(),
+        )?;
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $field:ident,
+        $path:ident, contributions, assignable
+    ) => {
+        ensure_new_ids_assignable(
+            &read_ideation_records_unlocked($store, $scope)?.contributions,
+            $shards.$field,
+            |record| record.id.as_str(),
+        )?;
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $field:ident,
+        $path:ident, synthesis_packets, assignable
+    ) => {
+        ensure_new_ids_assignable(
+            &read_ideation_records_unlocked($store, $scope)?.synthesis_packets,
+            $shards.$field,
+            |record| record.id.as_str(),
+        )?;
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $field:ident,
+        $path:ident, proposal_cards, assignable
+    ) => {
+        ensure_new_ids_assignable(
+            &read_ideation_records_unlocked($store, $scope)?.proposals,
+            $shards.$field,
+            |record| record.id.as_str(),
+        )?;
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $field:ident,
+        $path:ident, assertion_records, assignable
+    ) => {
+        ensure_new_ids_assignable(
+            &read_ideation_records_unlocked($store, $scope)?.assertions,
+            $shards.$field,
+            |record| record.id.as_str(),
+        )?;
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $field:ident,
+        $path:ident, dispositions, assignable
+    ) => {
+        ensure_new_ids_assignable(
+            &read_ideation_records_unlocked($store, $scope)?.dispositions,
+            $shards.$field,
+            |record| record.id.as_str(),
+        )?;
+    };
+}
+
+macro_rules! write_binding {
+    (
+        verification, $store:ident, $scope:ident, $shards:ident,
+        $variant:ident, $field:ident,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
+    ) => {
+        write_family!($store, $scope, $shards, $variant, $field);
+    };
+    (
+        implementation, $store:ident, $scope:ident, $shards:ident,
+        $variant:ident, $field:ident,
+        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
+    ) => {
+        write_family!($store, $scope, $shards, $variant, $field);
+    };
+    (
+        verification, $store:ident, $scope:ident, $shards:ident,
+        $variant:ident, $field:ident,
+        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
+    ) => {};
+    (
+        implementation, $store:ident, $scope:ident, $shards:ident,
+        $variant:ident, $field:ident,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal)
+    ) => {};
+}
+
+macro_rules! ensure_binding_budget {
+    (
+        $shards:ident, verification,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal), $field:ident
+    ) => {
+        ensure_family_budget($shards.$field)?;
+    };
+    (
+        $shards:ident, $phase:ident,
+        $other:ident($kind:literal, $test_kind:ident, $fixture:ident, $id:literal), $field:ident
+    ) => {};
+}
+
+macro_rules! ensure_binding_assignable {
+    (
+        $store:ident, $scope:ident, $shards:ident, verification,
+        verification($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $path:ident, $strategy:ident, $import:ident
+    ) => {
+        ensure_assignable!($store, $scope, $shards, $field, $path, $strategy, $import);
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, implementation,
+        implementation($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $path:ident, $strategy:ident, $import:ident
+    ) => {
+        ensure_assignable!($store, $scope, $shards, $field, $path, $strategy, $import);
+    };
+    (
+        $store:ident, $scope:ident, $shards:ident, $phase:ident,
+        $other:ident($kind:literal, $test_kind:ident, $fixture:ident, $id:literal),
+        $field:ident, $path:ident, $strategy:ident, $import:ident
+    ) => {};
+}
+
+macro_rules! write_family {
+    ($store:ident, $scope:ident, $shards:ident, $variant:ident, $field:ident) => {
+        write_jsonl_atomic_under_publication(
+            &ProjectionFamily::$variant.shard_path(&$store.layout, $scope),
+            $shards.$field,
+        )?;
+        crate::test_probes::at(concat!("scope_import_", stringify!($field), "_written"))?;
+    };
+}
+
+macro_rules! define_imported_scope_shards {
+    (
+        export { $(
+            $export_variant:ident {
+                record: $export_type:ty,
+                field: $export_field:ident,
+                path: $export_path:ident,
+                meta: $export_meta:tt,
+                node: [$($export_node:tt)*],
+                reader: {
+                    open: $export_reader:ident,
+                    closed: [$($export_closed:tt)*],
+                    strategy: $export_strategy:ident
+                },
+                id: $export_id:ident,
+                loader: [$($export_loader:tt)*],
+                graph: [$($export_graph:tt)*],
+                import: [$export_import:ident],
+                catalog: [$($export_catalog:tt)*],
+                route: [$($export_route:tt)*]
+                $(, review: $export_review:ident)?
+            };
+        )* }
+        canonical { $(
+            $canonical_variant:ident {
+                record: $canonical_type:ty,
+                field: $canonical_field:ident,
+                path: $canonical_path:ident,
+                meta: $canonical_meta:tt,
+                node: [$($canonical_node:tt)*],
+                reader: {
+                    open: $canonical_reader:ident,
+                    closed: [$($canonical_closed:tt)*],
+                    strategy: $canonical_strategy:ident
+                },
+                id: $canonical_id:ident,
+                loader: [$($canonical_loader:tt)*],
+                graph: [$($canonical_graph:tt)*],
+                import: [$canonical_import:ident],
+                catalog: [$($canonical_catalog:tt)*],
+                route: [$($canonical_route:tt)*]
+                $(, review: $canonical_review:ident)?
+            };
+        )* }
+        bindings { $(
+            $binding_variant:ident {
+                record: $binding_type:ty,
+                field: $binding_field:ident,
+                path: $binding_path:ident,
+                meta: $binding_meta:tt,
+                node: [$($binding_node:tt)*],
+                reader: {
+                    open: $binding_reader:ident,
+                    closed: [$($binding_closed:tt)*],
+                    strategy: $binding_strategy:ident
+                },
+                id: $binding_id:ident,
+                loader: [$($binding_loader:tt)*],
+                graph: [$($binding_graph:tt)+],
+                import: [$binding_import:ident],
+                catalog: [$($binding_catalog:tt)*],
+                route: [$($binding_route:tt)*]
+                $(, review: $binding_review:ident)?
+            };
+        )* }
+        internal { $($internal:tt)* }
+    ) => {
         /// The complete canonical shard contents for one scope import.
-        ///
-        /// Each slice replaces one shard. An empty slice creates an empty shard.
         #[derive(Default)]
         pub struct ScopeShards<'a> {
-            $(pub $field: &'a [$record],)+
+            $(pub $export_field: &'a [$export_type],)*
+            $(pub $canonical_field: &'a [$canonical_type],)*
+            $(pub $binding_field: &'a [$binding_type],)*
         }
 
         impl StateStore {
             /// Writes the canonical record shards for one scope.
-            ///
-            /// The caller must hold the publication lock for the complete staged transaction. This
-            /// method does not acquire that lock. The caller must remove the old scope directory and
-            /// apply the freeze, STE, and repository checks before it publishes the staged state.
-            ///
-            /// This method does not write the manifest, requirement reviews, the review journal, or
-            /// ideation landings.
             pub fn import_scope(
                 &self,
                 scope: &ScopeId,
                 shards: &ScopeShards<'_>,
             ) -> anyhow::Result<()> {
                 validate_threads(shards.threads)?;
-                $(
-                    write_jsonl_atomic_under_publication(
-                        &ProjectionFamily::$family.shard_path(&self.layout, scope),
-                        shards.$field,
-                    )?;
-                )+
+                $(ensure_family_budget(shards.$export_field)?;)*
+                $(ensure_binding_budget!(
+                    shards, verification, $($binding_graph)+, $binding_field
+                );)*
+                $(ensure_family_budget(shards.$canonical_field)?;)*
+
+                let mut records = Vec::new();
+                let mut kinds = Vec::new();
+                $(collect_node_ids!(records, kinds, shards, $export_field, [$($export_node)*]);)*
+                self.ensure_import_ids_unique(scope, records, &kinds)?;
+                $(ensure_binding_assignable!(
+                    self, scope, shards, verification, $($binding_graph)+,
+                    $binding_field, $binding_path, $binding_strategy, $binding_import
+                );)*
+                $(ensure_binding_assignable!(
+                    self, scope, shards, implementation, $($binding_graph)+,
+                    $binding_field, $binding_path, $binding_strategy, $binding_import
+                );)*
+                $(ensure_assignable!(
+                    self, scope, shards, $canonical_field, $canonical_path,
+                    $canonical_strategy, $canonical_import
+                );)*
+
+                super::resolution_decisions::ensure_resolution_decisions(
+                    shards.resolutions, shards.questions, shards.rules,
+                )?;
+                let scope_dir = self.layout.scopes_dir().join(scope.as_str());
+                if scope_dir.exists() {
+                    std::fs::remove_dir_all(&scope_dir)?;
+                }
+                $(write_family!(self, scope, shards, $export_variant, $export_field);)*
+                $(write_binding!(
+                    verification, self, scope, shards, $binding_variant,
+                    $binding_field, $($binding_graph)+
+                );)*
+                $(write_binding!(
+                    implementation, self, scope, shards, $binding_variant,
+                    $binding_field, $($binding_graph)+
+                );)*
+                $(write_family!(self, scope, shards, $canonical_variant, $canonical_field);)*
                 Ok(())
             }
         }
     };
 }
 
-define_scope_shards! {
-    sources: Source => Sources,
-    domains: Domain => Domains,
-    requirements: Requirement => Requirements,
-    boundaries: Boundary => Boundaries,
-    topics: Topic => Topics,
-    questions: Question => Questions,
-    resolutions: Resolution => Resolutions,
-    rules: Rule => Rules,
-    verification_bindings: VerificationBinding => VerificationBindings,
-    implementation_bindings: ImplementationBinding => ImplementationBindings,
-    threads: Thread => Threads,
-    messages: Message => Messages,
-    contributions: Contribution => Contributions,
-    synthesis_packets: SynthesisPacket => SynthesisPackets,
-    proposal_cards: ProposalCard => ProposalCards,
-    assertion_records: AssertionRecord => AssertionRecords,
-    dispositions: DispositionRecord => Dispositions,
+crate::cache::family_table::record_family_rows!(define_imported_scope_shards);
+
+struct StoredIdeationRecords {
+    contributions: Vec<Contribution>,
+    synthesis_packets: Vec<SynthesisPacket>,
+    proposals: Vec<ProposalCard>,
+    assertions: Vec<AssertionRecord>,
+    dispositions: Vec<DispositionRecord>,
+}
+
+fn read_ideation_records_unlocked(
+    store: &StateStore,
+    scope: &ScopeId,
+) -> anyhow::Result<StoredIdeationRecords> {
+    let layout = &store.layout;
+    let mut records = StoredIdeationRecords {
+        contributions: read_jsonl_unlocked(&shards::contributions_path(layout, scope))?,
+        synthesis_packets: read_jsonl_unlocked(&shards::synthesis_packets_path(layout, scope))?,
+        proposals: read_jsonl_unlocked(&shards::proposal_cards_path(layout, scope))?,
+        assertions: read_jsonl_unlocked(&shards::assertion_records_path(layout, scope))?,
+        dispositions: read_jsonl_unlocked(&shards::dispositions_path(layout, scope))?,
+    };
+    records
+        .dispositions
+        .extend(super::readers::read_legacy_dispositions_unlocked(
+            &shards::legacy_promotion_decisions_path(layout, scope),
+        )?);
+    let landings: Vec<IdeationLandingBatch> = super::readers::read_ideation_landings_unlocked(
+        &shards::ideation_landings_path(layout, scope),
+    )?;
+    for batch in landings {
+        overlay_records(&mut records.contributions, batch.contributions, |r| {
+            r.id.as_str()
+        });
+        overlay_records(
+            &mut records.synthesis_packets,
+            batch.synthesis_packets,
+            |r| r.id.as_str(),
+        );
+        overlay_records(&mut records.proposals, batch.proposals, |r| r.id.as_str());
+        overlay_records(&mut records.assertions, batch.assertions, |r| r.id.as_str());
+        overlay_records(&mut records.dispositions, batch.dispositions, |r| {
+            r.id.as_str()
+        });
+    }
+    Ok(records)
 }
 
 fn validate_threads(threads: &[Thread]) -> anyhow::Result<()> {

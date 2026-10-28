@@ -1,4 +1,5 @@
 //! Update requests use explicit clear lists so every client can preserve omissions.
+use crate::review::ListEdit;
 use provenance_core::{
     ArtifactLink, QuestionStatus, RequirementStatus, ResolutionInput, ResolutionMethod,
     ResolutionStatus, RuleSeverity, RuleStatus, ScopeId, SourceReference, SourceType, StableId,
@@ -19,6 +20,8 @@ macro_rules! update_input {
         pub struct $name {
             pub scope_id: ScopeId,
             pub id: StableId,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub expected_etag: Option<String>,
             $(pub $field: Option<$ty>,)*
             #[serde(default, skip_serializing_if = "Vec::is_empty")]
             pub clear_fields: Vec<$clear>,
@@ -30,27 +33,31 @@ update_input!(UpdateSourceInput, SourceClearField {
     Url, Reference, CommitPin, EffectiveDate, ReviewDate
 }, {
     declared_by: String, name: String, source_type: SourceType, url: String,
-    reference: String, commit_pin: String, effective_date: i64, review_date: i64
+    reference: String, commit_pin: String, effective_date: i64, review_date: i64,
+    supersedes: ListEdit
 });
 update_input!(UpdateResolutionInput, ResolutionClearField {
     Context, Enforcement, Confidence, MadeBy, ApprovedBy, ApprovedAt, ReviewOn
 }, {
     title: String, position: String, rationale: String, status: ResolutionStatus,
     context: String, enforcement: String, confidence: f64, inputs: Vec<ResolutionInput>,
-    made_by: String, approved_by: String, approved_at: i64, review_on: String
+    made_by: String, approved_by: String, approved_at: i64, review_on: String,
+    archived_in_commit: provenance_core::ArchivedStamp,
+    requirement_ids: ListEdit, supersedes: ListEdit
 });
 update_input!(UpdateRequirementInput, RequirementClearField {
     Description, Fog, DomainId
 }, {
     declared_by: String, statement: String, description: String, fog: String,
-    status: RequirementStatus, domain_id: StableId
+    status: RequirementStatus, domain_id: StableId, archived_in_commit: provenance_core::ArchivedStamp
 });
 update_input!(UpdateRuleInput, RuleClearField {
     Name, Description, SourceDocument, SourceSection
 }, {
     declared_by: String, name: String, description: String, statement: String,
     status: RuleStatus, severity: RuleSeverity, source_document: String,
-    source_section: String, archived_in_commit: provenance_core::ArchivedStamp
+    source_section: String, archived_in_commit: provenance_core::ArchivedStamp,
+    requirement_ids: ListEdit, resolution_ids: ListEdit
 });
 update_input!(UpdateDomainInput, DomainClearField { Description, Color }, {
     name: String, description: String, color: String
@@ -59,9 +66,11 @@ update_input!(UpdateBoundaryInput, BoundaryClearField { SourceRef }, {
     statement: String, source_ref: SourceReference
 });
 update_input!(UpdateTopicInput, TopicClearField {}, {
-    title: String, status: TopicStatus, links: Vec<ArtifactLink>
+    title: String, status: TopicStatus, links: Vec<ArtifactLink>,
+    archived_in_commit: provenance_core::ArchivedStamp
 });
 update_input!(EditQuestionInput, QuestionClearField { ResolutionId, Contradicts }, {
     question: String, resolution_method: ResolutionMethod, status: QuestionStatus,
-    links: Vec<ArtifactLink>, resolution_id: StableId, contradicts: StableId
+    links: Vec<ArtifactLink>, resolution_id: StableId, contradicts: StableId,
+    archived_in_commit: provenance_core::ArchivedStamp
 });

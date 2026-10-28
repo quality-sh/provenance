@@ -32,6 +32,14 @@ pub struct Manifest {
 }
 
 impl Manifest {
+    pub fn ensure_has_scopes(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.scopes.is_empty(),
+            "manifest must contain at least one scope"
+        );
+        Ok(())
+    }
+
     pub fn default_with_scope(scope: ScopeId, path_prefix: RepoPathPrefix) -> Self {
         Self {
             schema_version: SUPPORTED_SCHEMA_VERSION,

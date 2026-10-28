@@ -1,19 +1,22 @@
+#[cfg(unix)]
+mod canonical_preservation;
 mod catch_up_behavior;
 mod catch_up_derived_state;
 mod catch_up_domain_coverage;
-mod catch_up_migration_behavior;
 mod catch_up_serial_behavior;
 mod catch_up_validation_behavior;
 mod close_cancellation;
 mod close_order_behavior;
 mod close_progress;
 mod completion_behavior;
+mod current_schema_behavior;
 pub mod fixtures;
 mod frontier_behavior;
 mod gap_rule_behavior;
 mod in_place_behavior;
 mod materialization_behavior;
 mod materialize_guard_behavior;
+mod page_order;
 mod projection_digest_sensitivity;
 pub mod projection_stamp_behavior;
 mod record_columns;

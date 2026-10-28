@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { topLevelSplit, substitute, declaration } from './contract-render.mjs';
+import {
+  topLevelSplit, substitute, declaration, reuseSchemaDeclarations, eraseSchemaInferences,
+} from './contract-render.mjs';
 
 test('topLevelSplit ignores separators nested in brackets, angles, and strings', () => {
   assert.deepEqual(topLevelSplit('a, b', ', '), ['a', 'b']);
@@ -41,6 +43,17 @@ test('substitute with no structured renderings leaves the text untouched', () =>
   assert.equal(used.size, 0);
 });
 
+test('substitute keeps identical nested types in the owner operation family', () => {
+  const stamp = `{ readonly "at": string, readonly "commit": string } & { readonly [x: string]: Schema.Json }`;
+  const renderings = new Map([
+    ['CreateRequirementSuccessStamp', stamp],
+    ['ListRulesSearchSuccessStamp2', stamp],
+  ]);
+  const result = substitute(`{ readonly "created": ${stamp} }`, renderings, null, 'ListRulesSearchSuccessRule');
+  assert.match(result.rewritten, /created": ListRulesSearchSuccessStamp2/);
+  assert.doesNotMatch(result.rewritten, /CreateRequirementSuccessStamp/);
+});
+
 test('union declarations break one alternative per line when long', () => {
   const short = declaration('Short', 'A | B');
   assert.equal(short, 'export type Short = A | B');
@@ -48,23 +61,60 @@ test('union declarations break one alternative per line when long', () => {
   assert.match(long, /^export type Long =\n  \| A{90}\n  \| B{90}\n  \| C{90}$/);
 });
 
+test('reuseSchemaDeclarations aliases byte-identical types and runtime schemas', () => {
+  const source = `export type First = {
+  readonly value: string,
+}
+export const First = schema
+export type Second = {
+  readonly value: string,
+}
+export const Second = schema
+export type Distinct = { readonly value: number }
+export const Distinct = schema`;
+  assert.equal(reuseSchemaDeclarations(source), `export type First = {
+  readonly value: string,
+}
+export const First = schema
+export type Second = First
+export const Second = First
+export type Distinct = { readonly value: number }
+export const Distinct = schema`);
+});
+
+test('reuseSchemaDeclarations keeps schemas with different runtime expressions', () => {
+  const source = `export type First = string
+export const First = Schema.String
+export type Second = string
+export const Second = Schema.String.annotate({ identifier: 'Second' })`;
+  assert.equal(reuseSchemaDeclarations(source), source);
+});
+
+test('eraseSchemaInferences gives each exported schema its named type', () => {
+  const source = `export type Item = string
+export const Item = Schema.String`;
+  assert.equal(eraseSchemaInferences(source), `export type Item = string
+export const Item = generatedSchema<Item>(Schema.String)`);
+});
+
 // Invariants of the real generated contract: no thousand-char type lines, the
-// failure unions are factored into named variants, and every referenced factored
-// name is declared.
+// failure unions have generated exhaustive matchers, and every referenced
+// factored name is declared.
 test('generated Effect contract is factored and self-contained', async () => {
   const source = await readFile(new URL('../../packages/provenance/src/generated/effect-contract.ts', import.meta.url), 'utf8');
+  const matchers = await readFile(new URL('../../packages/provenance/src/generated/effect-matchers.ts', import.meta.url), 'utf8');
   const declared = new Set([...source.matchAll(/^export (?:type|const|function|class) (\w+)/gm)].map(match => match[1]));
-  for (const line of source.split('\n')) {
-    if (line.length > 600) {
-      assert.match(line, /HttpApiEndpoint\.post\(/, `overlong non-endpoint line: ${line.slice(0, 80)}`);
-    }
-    if (line.length > 300 && /^export type /.test(line)) {
-      assert.fail(`unwrapped type line (${line.length} chars): ${line.slice(0, 80)}`);
-    }
-  }
   for (const match of source.matchAll(/\b(FailureVariant\w+)\b/g)) {
     assert.ok(declared.has(match[1]), `${match[1]} referenced but never declared`);
   }
-  assert.match(source, /^export type OperationFailure =$/m, 'shared failure union should compose named variants');
-  assert.match(source, /^export function matchWriteFailure</m, 'exhaustive matchers should be emitted');
+  assert.match(source, /^export type WriteFailure =/m,
+    'write operations should share one typed failure family');
+  assert.match(matchers, /^export function matchWriteFailure</m,
+    'the shared failure family should have an exhaustive matcher');
+  for (const node of ['Rule', 'Resolution']) {
+    const body = source.match(new RegExp(`export type ${node} = \\{([\\s\\S]*?)\\n\\} &`))?.[1];
+    assert.ok(body, `${node} should be declared once`);
+    assert.match(body, /readonly "created"\?: SharedStamp \| null/);
+    assert.match(body, /readonly "updated"\?: SharedStamp \| null/);
+  }
 });

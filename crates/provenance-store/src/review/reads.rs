@@ -1,27 +1,22 @@
-use super::journal;
-use super::snapshot::evidence;
+use super::history::{evidence_page, VersionedRecord};
 use crate::operations::read_policy::ReadPolicy;
 use crate::operations::reader::{
-    self, Cursor, Live, Position, ReadContext, ReadSnapshot, PAGE_BYTES, RECORD_BYTES,
+    self, check_limit, Cursor, Live, Position, ReadContext, PAGE_BYTES,
 };
-use crate::state_store::StateStore;
 use camino::Utf8Path;
 use provenance_core::protocol::{read_failure::ReadFailure, Stamped};
-use provenance_core::review::{
-    EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryPage, ReviewHistoryQuery,
-};
-use provenance_core::{ScopeId, StableId};
+use provenance_core::review::{EvidencePage, EvidenceQuery, ReviewHistoryPage, ReviewHistoryQuery};
+use provenance_core::{NodeType, StableId};
+use provenance_macros::rule;
+use serde_json::Value;
 
 pub async fn read_history(
     repo: &Utf8Path,
-    scope: &ScopeId,
+    scope: &provenance_core::ScopeId,
     policy: ReadPolicy,
     query: ReviewHistoryQuery,
 ) -> anyhow::Result<Stamped<ReviewHistoryPage>> {
-    anyhow::ensure!(
-        (1..=200).contains(&query.limit),
-        "review history limit must be between 1 and 200"
-    );
+    check_limit(query.limit)?;
     let answer = reader::answer(repo, scope, policy, move |ctx| {
         Box::pin(history(ctx, query))
     })
@@ -33,127 +28,112 @@ async fn history(
     ctx: &ReadContext,
     query: ReviewHistoryQuery,
 ) -> anyhow::Result<ReviewHistoryPage> {
-    let (cursor, mut position) = Cursor::open(
+    let (cursor, position) = Cursor::open(
         ctx,
         "review-history",
-        &(&query.requirement_id, query.limit),
+        &(&query.record_kind, &query.record_id, query.limit),
         query.cursor.as_deref(),
     )?;
     ctx.snapshot().bound_page_work().await?;
-    ctx.snapshot().attest("review_journal");
-    let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String, i64, i64)> = sqlx::query_as(
-        "SELECT id, sequence, length(CAST(payload AS BLOB)) FROM review_journal WHERE scope_id = ? AND requirement_id = ? AND sequence > ? ORDER BY sequence LIMIT ?"
-    ).bind(ctx.snapshot().scope().as_str()).bind(query.requirement_id.as_str()).bind(position.counter)
-        .bind(i64::try_from(query.limit + 1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
-    drop(tx);
-    let mut more = keys.len() > query.limit;
+    let versions = versions(ctx, query.record_kind, query.record_id.clone()).await?;
+    let skip = usize::try_from(position.counter)?;
+    let mut more = versions.len() > skip + query.limit;
     let mut entries = Vec::new();
     let mut bytes = 0;
-    for (id, sequence, size) in keys.into_iter().take(query.limit) {
-        if size > i64::try_from(RECORD_BYTES)? {
-            return Err(ReadFailure::PageRecordTooLarge.into());
-        }
-        if bytes + usize::try_from(size)? > PAGE_BYTES - 16_384 {
+    let mut counter = position.counter;
+    for versioned in versions.into_iter().skip(skip).take(query.limit) {
+        let size = serde_json::to_vec(&versioned.version)?.len();
+        if bytes + size > PAGE_BYTES - 16_384 {
             more = true;
             break;
         }
-        let entry = ctx
-            .snapshot()
-            .review_entry(&query.requirement_id, &id)
-            .await?;
-        bytes += serde_json::to_vec(&entry)?.len() + 1;
-        entries.push(entry);
-        position = Position {
-            counter: sequence,
-            ..Position::default()
-        };
+        bytes += size + 1;
+        entries.push(versioned.version);
+        counter += 1;
     }
     Ok(ReviewHistoryPage {
         entries,
-        next_cursor: more.then(|| cursor.encode(ctx, position)).transpose()?,
+        next_cursor: more
+            .then(|| {
+                cursor.encode(
+                    ctx,
+                    Position {
+                        counter,
+                        ..Position::default()
+                    },
+                )
+            })
+            .transpose()?,
     })
 }
 
-impl ReadSnapshot {
-    async fn review_entry(&self, requirement: &StableId, id: &str) -> anyhow::Result<ReviewEntry> {
-        self.attest("review_journal");
-        let mut tx = self.connection().await;
-        let row: Option<(i64, Option<String>)> = sqlx::query_as(
-            "SELECT length(CAST(payload AS BLOB)), CASE WHEN length(CAST(payload AS BLOB)) <= ? THEN payload END FROM review_journal WHERE scope_id = ? AND requirement_id = ? AND id = ?"
-        ).bind(i64::try_from(RECORD_BYTES)?).bind(self.scope().as_str()).bind(requirement.as_str()).bind(id)
-            .fetch_optional(&mut **tx).await?;
-        drop(tx);
-        let (size, payload) =
-            row.ok_or_else(|| anyhow::anyhow!("review entry does not exist at this address"))?;
-        if size > i64::try_from(RECORD_BYTES)? {
-            return Err(ReadFailure::PageRecordTooLarge.into());
-        }
-        Ok(serde_json::from_str(&payload.unwrap())?)
-    }
+/// Reads the versions of one record from Git and the saved working copy.
+async fn versions(
+    ctx: &ReadContext,
+    kind: NodeType,
+    id: StableId,
+) -> anyhow::Result<Vec<VersionedRecord>> {
+    // Git history and the working copy are outside the projection stamp.
+    ctx.live(Live::Diff);
+    let store = ctx.live(Live::Canonical).store();
+    let scope = ctx.snapshot().scope().clone();
+    tokio::task::spawn_blocking(move || store.record_versions(&scope, kind, &id)).await?
 }
 
-/// Reads a bounded span from the immutable snapshot named by a pinned journal row.
+/// Reads a bounded span of one record version, or of the version before it.
 pub async fn read_evidence(
     repo: &Utf8Path,
-    scope: &ScopeId,
+    scope: &provenance_core::ScopeId,
     policy: ReadPolicy,
     query: EvidenceQuery,
 ) -> anyhow::Result<Stamped<EvidencePage>> {
     let answer = reader::answer(repo, scope, policy, move |ctx| {
         Box::pin(async move {
             ctx.snapshot().bound_page_work().await?;
-            let entry = ctx
-                .snapshot()
-                .review_entry(&query.requirement_id, query.entry_id.as_str())
-                .await?;
-            let reference = if query.before {
-                entry
-                    .before
-                    .ok_or_else(|| anyhow::anyhow!("this change has no Before snapshot"))?
+            let versions = versions(ctx, query.record_kind, query.record_id.clone()).await?;
+            let index = versions
+                .iter()
+                .position(|versioned| versioned.version.id == query.entry_id)
+                .ok_or(ReadFailure::ResourceNotFound)?;
+            let selected = if query.before {
+                index.checked_sub(1).ok_or(ReadFailure::ResourceNotFound)?
             } else {
-                entry.after
+                index
             };
-            let store = ctx.live(Live::Canonical).store();
-            let scope = ctx.snapshot().scope().clone();
-            tokio::task::spawn_blocking(move || {
-                store.with_repository_publication(|| {
-                    evidence(&store, &scope, reference, query.field, query.offset)
-                })
-            })
-            .await?
+            let value = evidence_value(&versions, selected, query.field.as_deref())?;
+            evidence_page(
+                versions[selected].version.id.clone(),
+                &value,
+                query.field,
+                query.offset,
+            )
         })
     })
     .await?;
     crate::operations::queries::page::checked("review-evidence", answer)
 }
 
-impl StateStore {
-    /// An absent receipt is authoritative only after publication recovery and owner checks.
-    pub fn requirement_save_receipt(
-        &self,
-        scope: &ScopeId,
-        requirement: &StableId,
-        request: &StableId,
-        actor: &str,
-        owner: Option<&str>,
-    ) -> anyhow::Result<Option<ReviewEntry>> {
-        self.with_repository_publication(|| {
-            let record = self.requirement(scope, requirement)?;
-            super::owner_matches(&record, owner)?;
-            let path = journal::entry_path(&self.layout, scope, request);
-            if !path.try_exists()? {
-                return Ok(None);
-            }
-            let entry = journal::read_entry(&self.layout, &path)?;
-            anyhow::ensure!(
-                entry.request_id == *request
-                    && entry.scope_id == *scope
-                    && entry.requirement_id == *requirement
-                    && entry.actor == actor,
-                "receipt identity mismatch"
-            );
-            Ok(Some(entry))
-        })
+/// The value one evidence read pages: the selected record version, or one
+/// field of it. A field that no version of the record holds names no
+/// evidence. A field that the selected version does not hold is `null`.
+#[rule("rule_evidence_read_states_absent_fields")]
+fn evidence_value(
+    versions: &[VersionedRecord],
+    selected: usize,
+    field: Option<&str>,
+) -> anyhow::Result<Value> {
+    let Some(name) = field else {
+        return Ok(versions[selected].record.clone());
+    };
+    if !versions
+        .iter()
+        .any(|versioned| versioned.record.get(name).is_some())
+    {
+        return Err(ReadFailure::ResourceNotFound.into());
     }
+    Ok(versions[selected]
+        .record
+        .get(name)
+        .cloned()
+        .unwrap_or(Value::Null))
 }

@@ -1,14 +1,13 @@
 use camino::Utf8PathBuf;
 use clap::Subcommand;
+use provenance_cli::repo_context::RepoContext;
 
 #[derive(Subcommand)]
 pub enum GraphReferenceCommand {
     /// Issue an immutable reference after canonical graph state is committed.
     Issue {
-        #[arg(long, default_value = ".")]
-        repo: Utf8PathBuf,
-        #[arg(long, default_value = "default")]
-        scope: String,
+        #[command(flatten)]
+        context: RepoContext,
         /// Git revision to pin. When omitted, clean relevant state at HEAD is required.
         #[arg(long)]
         commit: Option<String>,

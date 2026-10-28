@@ -1,6 +1,9 @@
 use assert_cmd::Command;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 #[test]
 fn import_export_roundtrip_cli_exports_imports_checks_and_merges_local_state() {
     let dir = tempfile::tempdir().unwrap();
@@ -13,6 +16,7 @@ fn import_export_roundtrip_cli_exports_imports_checks_and_merges_local_state() {
 
     init(&repo);
     create_graph(&repo);
+    export_fixture_support::make_default_scope_portable(&repo);
 
     Command::cargo_bin("provenance")
         .unwrap()
@@ -238,22 +242,7 @@ fn create_graph(repo: &str) {
         ])
         .assert()
         .success();
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "requirements",
-            "create",
-            "--repo",
-            repo,
-            "--scope",
-            "default",
-            "--id",
-            "req_schads_overtime",
-            "--statement",
-            "Overtime must follow SCHADS thresholds",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success();
+    // The seed stays free of CLI-created Requirements: creating one enrolls it
+    // in the review journal, and a review-bearing scope refuses a lossy
+    // export. The Requirement content arrives through the import below.
 }

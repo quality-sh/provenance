@@ -9,9 +9,8 @@ use provenance_store::{
 use serde::de::DeserializeOwned;
 
 pub(super) struct CommittedStatementAnalysis {
-    pub candidate_commit: String,
-    pub base_commit: Option<String>,
     pub diagnostics: Vec<StatementDiagnostic>,
+    pub context: provenance_porcelain::check::StatementContext,
 }
 
 #[derive(Default)]
@@ -41,11 +40,9 @@ pub(super) fn changed_statements_from_commits(
     manifest: &Manifest,
     explicit_base: Option<&str>,
 ) -> anyhow::Result<CommittedStatementAnalysis> {
-    let candidate_commit = resolve_commit(repo, "HEAD")?;
-    let base_commit = match explicit_base {
-        Some(base) => Some(resolve_commit(repo, base)?),
-        None => first_parent(repo, &candidate_commit)?,
-    };
+    let context = committed_statement_context(repo, explicit_base)?;
+    let candidate_commit = context.candidate_commit;
+    let base_commit = context.base_commit;
     let base = base_commit.as_deref().map_or_else(
         || Ok(StatementFamily::default()),
         |base| read_commit_family(repo, base, &manifest.scopes),
@@ -53,9 +50,26 @@ pub(super) fn changed_statements_from_commits(
     let candidate = read_commit_family(repo, &candidate_commit, &manifest.scopes)?;
     let diagnostics = analyze_family_change(repo, &base, &candidate);
     Ok(CommittedStatementAnalysis {
+        diagnostics,
+        context: provenance_porcelain::check::StatementContext {
+            candidate_commit,
+            base_commit,
+        },
+    })
+}
+
+pub(super) fn committed_statement_context(
+    repo: &Utf8Path,
+    explicit_base: Option<&str>,
+) -> anyhow::Result<provenance_porcelain::check::StatementContext> {
+    let candidate_commit = resolve_commit(repo, "HEAD")?;
+    let base_commit = match explicit_base {
+        Some(base) => Some(resolve_commit(repo, base)?),
+        None => first_parent(repo, &candidate_commit)?,
+    };
+    Ok(provenance_porcelain::check::StatementContext {
         candidate_commit,
         base_commit,
-        diagnostics,
     })
 }
 

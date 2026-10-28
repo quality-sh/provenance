@@ -5,12 +5,12 @@ type Schemas = components["schemas"];
 // Fluent builders use omitted optional values and readonly addresses. Wire
 // requests retain the generated nullable fields and mutable JSON arrays.
 type NonNullFields<T> = { [Key in keyof T]: NonNullable<T[Key]> };
-type WireSpecDocument = Schemas["ApplyRequestInput"]["request"];
+type WireSpecDocument = Schemas["ApplyAuthoringRequest"]["data"];
 type WireRule = NonNullable<WireSpecDocument["rules"]>[number];
 export type DeclarationAddress = readonly string[];
 export type AdoptionTarget = NonNullable<WireSpecDocument["adopt_unowned"]>[number];
 export type ResourceKind = AdoptionTarget["kind"];
-export type SourceKind = Schemas["GetSuccessOutputSourceType"];
+export type SourceKind = Schemas["GetSourceSuccessSourceType"];
 export type SourceDeclaration = NonNullFields<NonNullable<WireSpecDocument["sources"]>[number]>;
 export type RequirementDeclaration = NonNullFields<NonNullable<WireSpecDocument["requirements"]>[number]> & {
   sources: string[];
@@ -29,8 +29,8 @@ export type TypedSpecDocument = Omit<NonNullFields<WireSpecDocument>, "schema_ve
   rules: RuleDeclaration[];
 };
 
-export type ApplyResult = Schemas["ApplySuccessOutput"];
-export type PlanResult = Schemas["PlanSuccessOutput"];
+export type ApplyResult = Schemas["ApplyAuthoringSuccess"]["data"];
+export type PlanResult = Schemas["PlanAuthoringSuccess"]["data"];
 export type ReconciledResource = ApplyResult["resources"][number];
 export type ReconcileState = ReconciledResource["state"];
 export type FieldChange = NonNullable<ReconciledResource["changes"]>[number];
@@ -38,47 +38,56 @@ export type TypedSpecDiagnostic = NonNullable<ApplyResult["diagnostics"]>[number
 export type RuleEvidence = PlanResult["affected_rules"][number]["evidence"];
 export type ReviewReason = NonNullable<RuleEvidence["reasons"]>[number];
 
-export type GetRequest = Schemas["GetRequestInput"]["request"];
-export type GetResponse = Schemas["GetSuccessOutput"];
-export type SearchRequest = Schemas["SearchRequestInput"]["request"];
-export type SearchResponse = Schemas["SearchSuccessOutput"];
-export type NeighborsRequest = Schemas["NeighborsRequestInput"]["request"];
-export type NeighborsResponse = Schemas["NeighborsSuccessOutput"];
-export type TraceRequest = Schemas["TraceRequestInput"]["request"];
-export type TraceResponse = Schemas["TraceSuccessOutput"];
-export type ImpactRequest = Schemas["ImpactRequestInput"]["request"];
-export type ImpactResponse = Schemas["ImpactSuccessOutput"];
-export type ResolveSymbolRequest = Schemas["ResolveSymbolRequestInput"]["request"];
-export type ResolveSymbolResponse = Schemas["ResolveSymbolSuccessOutput"];
-export type EvidenceRequest = Schemas["EvidenceRequestInput"]["request"];
-export type EvidenceResponse = Schemas["EvidenceSuccessOutput"];
-export type StaleRequest = Schemas["StaleRequestInput"]["request"];
-export type StaleResponse = Schemas["StaleSuccessOutput"];
-
-export type NodeType = GetRequest["node_type"];
-export type Direction = NonNullable<NeighborsRequest["direction"]>;
-export type GraphNode = NonNullable<GetResponse["node"]>;
-export type Stamp = GetResponse["stamp"];
+export type NodeType = Schemas["ListRulesSuccessGraphNode"]["node_type"];
+export type Direction = Schemas["GetRuleSuccessDirection"];
+export type GraphNode = Schemas["ListRulesSuccessGraphNode"];
+export type Stamp = Schemas["GetRuleSuccessResponseMetaStamp"];
 export type StampPolicy = Stamp["policy"];
 export type LiveWord = Stamp["live"][number];
 
-type QueryResponse = GetResponse | SearchResponse | NeighborsResponse | TraceResponse
-  | ImpactResponse | ResolveSymbolResponse | EvidenceResponse | StaleResponse;
-/** The common fields of current generated query responses. */
-export type QueryEnvelope = Pick<QueryResponse,
-  "protocol_version" | "operation" | "stamp" | "freshness_error" | "freshness_cause">;
+export interface GetRequest<Kind extends NodeType = NodeType> { node_type: Kind; id: string }
+export interface SearchRequest { collection: GraphCollection; text: string; limit?: number; cursor?: string }
+export interface NeighborsRequest { node_type: NodeType; id: string; direction?: Direction; limit?: number }
+export interface TraceRequest { node_type: NodeType; id: string; direction?: Direction; max_depth?: number }
+export interface ImpactRequest { node_type: NodeType; id: string }
+export interface ResolveSymbolRequest { file: string; symbol?: string; line?: number }
+export interface EvidenceRequest { rule: string; base?: string; head?: string }
+export interface StaleRequest { base: string; head?: string; limit?: number; cursor?: string }
+export type GraphCollection = "sources" | "requirements" | "resolutions" | "rules" | "domains" | "boundaries" | "topics" | "questions";
 
-export type Neighbor = NeighborsResponse["neighbors"][number];
-export type TracedNode = TraceResponse["nodes"][number];
-export type AffectedRule = ImpactResponse["affected_rules"][number];
-export type ImplementationSite = AffectedRule["implementations"][number];
-export type VerificationSite = AffectedRule["verifications"][number];
-export type ImplementationBinding = EvidenceResponse["implementation_bindings"][number];
-export type VerificationBinding = Schemas["VerificationBindingsSuccessOutput"][number];
-export type VerificationRun = Schemas["VerificationRunsSuccessOutput"][number];
-export type RequirementReview = EvidenceResponse["reviews"][number];
-export type EvidenceDiffSite = StaleResponse["sites"][number];
+type MemberResponse<Response> = Response extends { data: infer Data }
+  ? Data extends { id: unknown; schema_version: number; scope_id: unknown } ? Response : never
+  : never;
+type ResourceGetResponses = {
+  source: MemberResponse<Schemas["GetSourceBaseSuccess"]>;
+  requirement: MemberResponse<Schemas["GetRequirementBaseSuccess"]>;
+  resolution: MemberResponse<Schemas["GetResolutionBaseSuccess"]>;
+  rule: MemberResponse<Schemas["GetRuleBaseSuccess"]>;
+  domain: MemberResponse<Schemas["GetDomainBaseSuccess"]>;
+  boundary: MemberResponse<Schemas["GetBoundaryBaseSuccess"]>;
+  topic: MemberResponse<Schemas["GetTopicBaseSuccess"]>;
+  question: MemberResponse<Schemas["GetQuestionBaseSuccess"]>;
+};
+export type GetResponse<Kind extends NodeType = NodeType> = ResourceGetResponses[Kind];
+export type SearchResponse = Schemas["ListRulesSearchSuccess"];
+export type Neighbor = Schemas["GetRuleSuccessNeighbor"];
+export type NeighborsResponse = Schemas["GetRuleNeighborsSuccess"];
+export type TracedNode = Schemas["GetRuleSuccessTracedNode"];
+export type TraceResponse = Schemas["GetRuleTraceSuccess"];
+export type AffectedRule = Schemas["GetRuleSuccessAffectedRule"];
+export type ImpactResponse = Schemas["GetRuleImpactSuccess"];
+export type ResolveSymbolResponse = Schemas["ListRulesResolveSymbolSuccess"];
+export type EvidenceResponse = Schemas["GetRuleEvidenceSuccess"];
+export type EvidenceDiffSite = Schemas["ListRulesSuccessEvidenceDiffSite"];
 export type EvidenceDiffState = EvidenceDiffSite["state"];
 export type EvidenceSiteKind = EvidenceDiffSite["kind"];
-export type EvidenceDiffSummary = StaleResponse["summary"];
-export type StaleEvidence = NonNullable<EvidenceResponse["stale"]>;
+export type EvidenceDiffSummary = Schemas["ListRulesSuccessEvidenceDiffSummary"];
+export type StaleResponse = Schemas["ListRulesStaleSuccess"];
+export type QueryEnvelope = { meta: SearchResponse["meta"] };
+export type ImplementationSite = AffectedRule["implementations"][number];
+export type VerificationSite = AffectedRule["verifications"][number];
+export type ImplementationBinding = Schemas["GetRuleEvidenceSuccessImplementationBinding"];
+export type VerificationBinding = Schemas["ListVerificationBindingsSuccessVerificationBinding"];
+export type VerificationRun = Schemas["ListVerificationRunsSuccessVerificationRun"];
+export type RequirementReview = Schemas["GetRuleEvidenceSuccessRequirementReview"];
+export type StaleEvidence = Schemas["GetRuleEvidenceSuccessStaleEvidence"];

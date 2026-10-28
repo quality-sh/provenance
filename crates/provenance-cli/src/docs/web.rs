@@ -1,4 +1,5 @@
 use super::{local_markdown_path, resolve_markdown_link, DocPage, DocsSite, MARKDOWN_OPTIONS};
+use crate::html::{escape_attr, escape_html};
 use axum::{
     extract::State,
     http::{header, StatusCode, Uri},
@@ -293,15 +294,4 @@ fn normalize_request_route(path: &str) -> String {
         route.push('/');
     }
     route
-}
-
-fn escape_html(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-}
-
-fn escape_attr(value: &str) -> String {
-    escape_html(value).replace('"', "&quot;")
 }

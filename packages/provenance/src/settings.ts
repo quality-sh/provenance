@@ -39,10 +39,13 @@ export async function connection(settings: SdkSettings): Promise<HttpClient> {
   context(settings);
   const endpoint = settings.endpoint!;
   const bearer = settings.bearer!;
-  const key = JSON.stringify([endpoint, bearer]);
+  const key = JSON.stringify([endpoint, bearer, settings.repositoryId, settings.scope]);
   let pending = connections.get(key);
   if (!pending) {
-    pending = HttpClient.connectWithBearer(endpoint, bearer);
+    pending = HttpClient.connectWithBearer(endpoint, bearer, fetch, {
+      repository: settings.repositoryId,
+      scope: settings.scope,
+    });
     connections.set(key, pending);
   }
   try { return await pending; }

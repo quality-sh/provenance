@@ -84,6 +84,7 @@ fn proposal_input(scope: &ScopeId, id: &str) -> CreateProposalCardInput {
         duplicate_of: None,
         superseded_by: None,
         record_revision: None,
+        actor: None,
         revises: None,
         revises_rejection: None,
     }
@@ -112,14 +113,14 @@ fn rejected_disposition(scope: &ScopeId, id: &str, proposal_id: &str) -> CreateD
 
 fn seed_requirement(store: &StateStore, scope: &ScopeId) {
     store
-        .create_requirement(CreateRequirementInput {
+        .write_requirement(CreateRequirementInput {
             scope_id: scope.clone(),
             id: StableId::new("req_overtime").unwrap(),
             statement: "Overtime".into(),
             description: None,
             status: provenance_core::RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

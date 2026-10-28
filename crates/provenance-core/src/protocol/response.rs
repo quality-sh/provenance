@@ -50,6 +50,22 @@ pub struct GetResult {
     pub node: Option<GraphNode>,
 }
 
+/// The visible result of resolving one repository-local record ID.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "status", content = "node", rename_all = "snake_case")]
+pub enum RecordResolution {
+    Found(GraphNode),
+    Missing,
+    Ambiguous,
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ResolveRecordResult {
+    pub resolution: RecordResolution,
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SearchResult {

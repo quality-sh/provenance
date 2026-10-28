@@ -1,7 +1,7 @@
 //! Loopback HTTP fixture that serves the synthetic dictionary PDF to the
 //! `init` child.
 //!
-//! Copies the pattern from `tests/cli_ste_onboarding.rs`: one std-only
+//! Copies the pattern from `tests/cli_ste_onboarding/support.rs`: one std-only
 //! `TcpListener` on 127.0.0.1, one worker thread, one response per
 //! connection, and a wake-up socket on drop. `PROVENANCE_TEST_STE100_ASSET_URL`
 //! accepts loopback hosts only, so this server is the one place the child can
