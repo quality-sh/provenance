@@ -201,3 +201,13 @@ fn legacy_coverage_baseline_round_trips_byte_for_byte() {
     assert_eq!(baseline.bindings[0].site.verification, None);
     assert_eq!(serde_json::to_string_pretty(&baseline).unwrap(), json);
 }
+
+// This test has no Rule. It keeps the digest text the same when the hash library changes.
+#[test]
+fn evidence_anchor_hashes_the_trimmed_line_as_lowercase_sha256_hex() {
+    let anchor = EvidenceAnchor::new(None, "  abc\t");
+    assert_eq!(
+        anchor.content_hash,
+        "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+}

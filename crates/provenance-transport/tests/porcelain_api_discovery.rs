@@ -5,7 +5,7 @@ mod support {
     pub mod records;
 }
 
-use jsonschema::JSONSchema;
+use jsonschema::Validator;
 use provenance_macros::verifies;
 use provenance_porcelain::api::{ApiMethod, ApiOutcome, ApiParameter, ApiRequest};
 use provenance_porcelain::Porcelain;
@@ -265,11 +265,9 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
             .as_ref()
             .clone(),
     );
-    // jsonschema resolves #/$defs/ references lazily, so a dangling reference
-    // compiles and only fails validation of an output that reaches it; the
-    // discovery output below carries routes, which reach the route defs.
-    let published =
-        JSONSchema::compile(&published_schema).expect("the published api output schema compiles");
+    // jsonschema resolves each local reference when it builds the validator,
+    // so a dangling reference fails here.
+    let published = compile(&published_schema).expect("the published api output schema compiles");
 
     let discovery = session.call(json!({})).await;
     let structured = discovery.structured_content.as_ref().unwrap();
@@ -304,12 +302,20 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
         .find(|form| form["query"].is_null())
         .expect("the base form is described")["success_schema"]
         .clone();
-    let base_contract =
-        JSONSchema::compile(&base_schema).expect("the described base form schema compiles");
+    let base_contract = compile(&base_schema).expect("the described base form schema compiles");
     assert!(
         base_contract.is_valid(named.structured_content.as_ref().unwrap()),
         "named tool output violates the described route schema: {named:?}"
     );
 
     session.shutdown().await;
+}
+
+/// Read a schema that has no `$schema` keyword as a Draft 7 document.
+fn compile(schema: &Value) -> Result<Validator, jsonschema::ValidationError<'static>> {
+    if schema.get("$schema").is_some() {
+        jsonschema::validator_for(schema)
+    } else {
+        jsonschema::draft7::new(schema)
+    }
 }

@@ -24,7 +24,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         );
         let row = {
             let mut tx = self.snapshot().connection().await;
-            sqlx::query(&sql)
+            sqlx::query(sqlx::AssertSqlSafe(sql))
                 .bind(self.snapshot().scope().as_str())
                 .bind(id.as_str())
                 .fetch_optional(&mut **tx)
@@ -81,7 +81,8 @@ impl<K: ProjectionRow> Table<'_, K> {
                 column = quoted(column),
                 marks = marks,
             );
-            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            let mut query =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
             for value in chunk {
                 query = query.bind(*value);
             }
@@ -146,7 +147,8 @@ impl<K: ProjectionRow> Table<'_, K> {
                 marks = marks,
                 filter = filter,
             );
-            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            let mut query =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
             for value in chunk {
                 query = query.bind(*value);
             }
@@ -188,7 +190,7 @@ impl<K: ProjectionRow> Table<'_, K> {
             "SELECT rule_id FROM {} WHERE scope_id = ? AND file = ?{filter} ORDER BY rule_id",
             quoted(K::TABLE)
         );
-        let mut query = sqlx::query_scalar(&sql)
+        let mut query = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
             .bind(self.snapshot().scope().as_str())
             .bind(file);
         if let Some(symbol) = symbol {
@@ -217,7 +219,8 @@ impl<K: ProjectionRow> Table<'_, K> {
                 table = quoted(K::TABLE),
                 marks = marks,
             );
-            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            let mut query =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
             for value in chunk {
                 query = query.bind(*value);
             }
@@ -275,7 +278,8 @@ impl<K: ProjectionRow> Table<'_, K> {
                 quoted(K::TABLE),
                 quoted(column)
             );
-            let mut query = sqlx::query(&sql).bind(self.snapshot().scope().as_str());
+            let mut query =
+                sqlx::query(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
             for value in chunk {
                 query = query.bind(*value);
             }
@@ -296,7 +300,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         );
         let found: Option<i64> = {
             let mut tx = self.snapshot().connection().await;
-            sqlx::query_scalar(&sql)
+            sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
                 .bind(self.snapshot().scope().as_str())
                 .bind(id.as_str())
                 .fetch_optional(&mut **tx)
@@ -317,7 +321,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         );
         let rows = {
             let mut tx = self.snapshot().connection().await;
-            sqlx::query(&sql)
+            sqlx::query(sqlx::AssertSqlSafe(sql))
                 .bind(self.snapshot().scope().as_str())
                 .bind(needle.to_lowercase())
                 .fetch_all(&mut **tx)

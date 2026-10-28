@@ -113,9 +113,9 @@ async fn materialization_loads_binding_and_review_families_into_their_tables() {
         ("verification_bindings", "bind_ver_a"),
         ("requirement_reviews", "review_a"),
     ] {
-        let found: Option<String> = sqlx::query_scalar(&format!(
+        let found: Option<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "SELECT id FROM {table} WHERE scope_id = ? AND rule_id = 'rule_schads_pay_001'"
-        ))
+        )))
         .bind(scope.as_str())
         .fetch_optional(pool.pool())
         .await
@@ -286,11 +286,12 @@ async fn record_stamps_survive_projection_without_changing_content_digests() {
         std::fs::write(path, records.join("\n") + "\n").unwrap();
         materialize_state(&layout).await.unwrap();
         let pool = open_cache(&layout).await.unwrap();
-        let (created, updated): (String, String) =
-            sqlx::query_as(&format!("SELECT created, updated FROM {table} LIMIT 1"))
-                .fetch_one(pool.pool())
-                .await
-                .unwrap();
+        let (created, updated): (String, String) = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+            "SELECT created, updated FROM {table} LIMIT 1"
+        )))
+        .fetch_one(pool.pool())
+        .await
+        .unwrap();
         assert_eq!(
             serde_json::from_str::<serde_json::Value>(&created).unwrap()["commit"],
             "a".repeat(40)

@@ -20,7 +20,7 @@ use serde_json::{json, Value};
 struct Replica {
     origin: &'static str,
     pattern: String,
-    validator: jsonschema::JSONSchema,
+    validator: jsonschema::Validator,
 }
 
 impl Replica {
@@ -73,7 +73,7 @@ fn replicas() -> Vec<Replica> {
     .into_iter()
     .map(|(origin, pattern)| {
         let schema = json!({"type": "string", "pattern": pattern});
-        let validator = jsonschema::JSONSchema::compile(&schema)
+        let validator = jsonschema::draft7::new(&schema)
             .unwrap_or_else(|error| panic!("{origin} publishes an uncompilable pattern: {error}"));
         Replica {
             origin,

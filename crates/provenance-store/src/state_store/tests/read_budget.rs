@@ -213,9 +213,9 @@ async fn write_side_measure_matches_the_read_side_accounting() {
 
     let cache = crate::cache::open_cache(&store.layout).await.unwrap();
     let expression = crate::cache::read::page::byte_expression(Source::COLUMNS);
-    let stored: i64 = sqlx::query_scalar(&format!(
+    let stored: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT {expression} FROM sources WHERE scope_id = ? AND id = ?"
-    ))
+    )))
     .bind(scope.as_str())
     .bind(OVERSIZED_ID)
     .fetch_one(cache.pool())
@@ -419,9 +419,9 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
     let cache = crate::cache::open_cache(&store.layout).await.unwrap();
     let expression =
         crate::cache::read::page::byte_expression(provenance_core::Resolution::COLUMNS);
-    let stored: i64 = sqlx::query_scalar(&format!(
+    let stored: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT {expression} FROM resolutions WHERE scope_id = ? AND id = ?"
-    ))
+    )))
     .bind(scope.as_str())
     .bind("res_base")
     .fetch_one(cache.pool())

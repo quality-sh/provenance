@@ -348,7 +348,7 @@ fn minimal_exact_export_without_digest() -> Value {
 fn graph_reference_export_schema_validates_record_structure() {
     let shown = schema_for(IdeationArtifactKind::GraphReferenceExport);
     let schema = shown.get("schema").unwrap();
-    let validator = jsonschema::JSONSchema::compile(schema).unwrap();
+    let validator = jsonschema::draft7::new(schema).unwrap();
     let valid = minimal_exact_export();
     assert!(validator.is_valid(&valid));
 
