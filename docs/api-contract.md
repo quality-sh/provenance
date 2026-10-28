@@ -36,17 +36,23 @@ Collections:
   `dispositions`. An index entry carries the canonical parent address.
 - The optional `exclude_terminal` Boolean query parameter applies to graph
   collection lists and searches. When it is `true`, the result excludes
-  archived Rules and abandoned Resolutions. A superseded Resolution stays in
-  the result. The default is `false`.
+  archived Rules and abandoned or rejected Resolutions. A superseded
+  Resolution stays in the result. The default is `false`.
 
 Subresources have parent-owned addresses:
 
 - `GET /requirements/{id}/document` reads the assembled document. The optional
   `exclude_terminal` Boolean query parameter excludes archived Rules and
-  abandoned Resolutions when it is `true`. A superseded Resolution stays in the
+  abandoned or rejected Resolutions when it is `true`. A superseded Resolution stays in the
   document. Each record follows its own lifecycle. An active Rule stays in the
   document when its only document link is an abandoned Resolution. The
-  abandoned Resolution and its discussions stay out of the document. The
+  abandoned Resolution and its discussions stay out of the document. When
+  `exclude_terminal` is `true`, the document also excludes a record that no
+  review accepted, that has no pending submission, and whose latest decision
+  is a rejection. Its lifecycle status does not change, and its decision
+  history still shows the rejection. A rejected change to an accepted record
+  keeps that record in the document. The review totals count only the records
+  in the document. The
   default is `false` so that omission keeps the complete historical view.
 - `GET /{collection}/{id}/history[/{entry_id}]` reads immutable outcomes for
   each graph record kind.
@@ -72,6 +78,10 @@ Subresources have parent-owned addresses:
 Actions are POSTs on a resource path with one declared action name:
 
 - Topics: `claim`, `release`, `close`. Questions: `claim`, `release`, `answer`.
+  `claim` and `release` name their actor. A claim is held by one actor: a
+  claim or release by another actor returns `claim_conflict` with the holder
+  and status 409, and a repeated claim by the holder returns the unchanged
+  record.
 - Record review: `POST /{collection}/{id}/submit`, and
   `POST /{collection}/{id}/submissions/{proposal_id}/decide|withdraw`, for each
   graph record kind.
@@ -99,8 +109,10 @@ dispatch, and no weaker authoring ownership checks.
 Typed-spec apply (`POST /authoring-changes`) records an occurrence for each
 changed enrolled record and refuses to delete an enrolled record. It continues
 to replace un-enrolled graph state without journal entries because those
-records have not entered review. Full-scope import still requires separate
-lossless support for review history.
+records have not entered review. When apply deletes a record, also by cascade,
+it deletes the Discussions of that record, active or resolved, with their
+Threads and Messages, in the same publication. Git keeps their history.
+Full-scope import still requires separate lossless support for review history.
 
 Receipts stay internal. A write returns success or an error. The client does not
 replay a write, and no client-side uncertain-write ledger exists. The journal
@@ -140,15 +152,18 @@ response `ETag` map to Store-supported precondition checks. The surface never
 advertises an unsupported guarantee.
 
 Review writes do not accept `Idempotency-Key`, and their bodies do not accept a
-request ID. The server creates the request identity. Requirement edit requests
-and versioned Discussion writes keep `If-Match`. A repeated Requirement create
+request ID. The server creates the request identity. Review record updates and
+versioned Discussion writes take their guard in `If-Match`; MCP takes it as
+`if_match`. Requirement, Topic, and Question updates require it. A body that
+carries `expected_etag` is refused with `invalid_input`. A repeated Requirement create
 with the same caller-selected Stable ID returns `already_exists` with status
 409.
 
 A repeated Discussion start after a lost response creates a new Discussion. A
 repeated Discussion reply or status change uses the old `If-Match` value and
 returns `discussion_version_conflict` with status 409. The client reads the
-Discussion before it sends another write.
+Discussion before it sends another write. A status change to the status the
+Discussion already has returns the unchanged Discussion with status 200.
 
 A submit body does not accept `proposal_id` or `proposal_key`, and a decide
 body does not accept `disposition_id`. The server creates these identities and
@@ -277,3 +292,21 @@ It rejects a prohibited route shape, request shape, response envelope, status,
 payload identity, or tool description before it writes generated output. The
 compatibility gate in `docs/compatibility-gate.md` remains independent and
 required.
+
+Requirement refinement parents use an ID list in `refines`. A record omits an empty
+list. An empty list identifies a root. Creation accepts a list. A relationship edit
+accepts a complete list or an `add`/`remove` delta. The scalar shape is not accepted.
+The protocol version stays unchanged. Both generated clients use this contract.
+
+For one selected child, the CLI accepts `update --replace-parent P --with-parent B`
+with `--actor`. For a Requirement owned by a declaration, `--declared-by` supplies
+the existing owner precondition to both writes. The helper reads the child guard,
+adds B, and uses the returned guard to remove P.
+An explicit `--if-match` controls the first write. A failed second write can leave
+both parents. A retry preserves the other parents. If B is a parent and P is
+not, the helper makes no write: it refuses a P that does not exist. Otherwise it
+writes a message to standard error that the replacement is already done, exits with
+success, and prints the unchanged record. Because it makes no write, it does
+not check `--if-match` or `--declared-by` in that case. Each write uses the existing
+Requirement PATCH operation. The helper changes no descendant and does not declare
+supersession. A supersession declaration alone changes no child or prior status.

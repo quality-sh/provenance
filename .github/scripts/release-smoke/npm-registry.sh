@@ -23,7 +23,7 @@ target_manifest="$script_directory/../../release-targets.json"
 initialize_npm_fixture() {
   (
     cd "$fixture"
-    npx --yes "@quality-sh/create-provenance@$version" \
+    sfw npx --yes "@quality-sh/create-provenance@$version" \
       --path "$fixture" --package-manager npm
   )
 }

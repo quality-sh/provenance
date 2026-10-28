@@ -23,11 +23,14 @@ pub(super) async fn summary(
         return Ok(None);
     }
     let resolved = host
-        .invoke_scoped_typed::<catalog::ResolveRecord>(ResolveRecordQuery {
-            protocol_version: Some(SDK_PROTOCOL_VERSION),
-            id: request.target.clone(),
-            allowed_node_types: vec![NodeType::Topic],
-        })
+        .invoke::<catalog::ResolveRecord>(
+            ResolveRecordQuery {
+                protocol_version: Some(SDK_PROTOCOL_VERSION),
+                id: request.target.clone(),
+                allowed_node_types: vec![NodeType::Topic],
+            },
+            crate::Invocation::native(),
+        )
         .await
         .map_err(|error| operation_error(&error))?;
     let (record, metadata) = response_parts(resolved);

@@ -7,16 +7,18 @@
 //! their own proposals; none of them attests the record's current contents.
 
 use super::decision_state::CycleFacts;
-use crate::state_store::StateStore;
+use crate::{cache::review_families::ReviewFamilyIndex, state_store::StateStore};
 use provenance_core::{
     protocol::DocumentReviewSummary,
-    review::{PendingSubmission, RecordedDecision, RequirementDecisionState},
-    DispositionDecision, DispositionRecord, NodeType, ProposalCard, ScopeId, StableId,
+    review::{PendingSubmission, RecordedDecision, RequirementDecisionState, ReviewRecord},
+    DispositionDecision, NodeType, ScopeId, StableId,
 };
 use provenance_macros::rule;
 
 pub struct DocumentReviewState {
     pub records: Vec<(NodeType, StableId, DocumentReviewSummary)>,
+    /// The records whose review rejected them before any acceptance.
+    pub rejected_new: Vec<(NodeType, StableId)>,
     pub digest: String,
 }
 
@@ -31,6 +33,27 @@ impl DocumentReviewState {
     }
 }
 
+/// A record that no review accepted and whose latest review decision rejected
+/// it is a rejected new record. A rejected change to an accepted record is
+/// not. Only decisions on review submissions count: a decision on a
+/// proposal of another type that names the record, such as a candidate
+/// answer to a Question, decides nothing about the record.
+#[rule("rule_review_document_hides_rejected_new_records")]
+fn rejected_before_acceptance(state: &RequirementDecisionState, facts: &CycleFacts) -> bool {
+    let reviews = state
+        .decisions
+        .iter()
+        .filter(|decision| facts.is_submission(&decision.disposition.proposal_id))
+        .collect::<Vec<_>>();
+    state.pending.is_none()
+        && reviews
+            .last()
+            .is_some_and(|decision| decision.disposition.decision == DispositionDecision::Rejected)
+        && !reviews
+            .iter()
+            .any(|decision| decision.disposition.decision == DispositionDecision::Accepted)
+}
+
 impl StateStore {
     /// Builds the current review outcome for each entry and the totals for the document.
     #[rule("rule_document_entry_has_review_outcome")]
@@ -41,24 +64,23 @@ impl StateStore {
         records: &[(NodeType, StableId)],
     ) -> anyhow::Result<DocumentReviewState> {
         self.with_repository_publication(|| {
-            let proposals = self.list_proposal_definitions(scope)?;
-            let dispositions = self.list_dispositions(scope)?;
             let facts = CycleFacts::validated(self, scope)?;
-            let states = records
-                .iter()
-                .map(|(kind, id)| {
-                    let record = crate::cache::review_families::record(self, scope, *kind, id)?;
-                    Self::record_decision_state_from_parts(
-                        &record,
-                        &proposals,
-                        &dispositions,
-                        &facts,
-                    )
-                })
-                .collect::<anyhow::Result<Vec<_>>>()?;
+            let mut families = ReviewFamilyIndex::new(self, scope, records);
+            let mut states = Vec::new();
+            for (kind, id) in records {
+                // A reference to a record that no longer exists has no review state.
+                if let Some(record) = families.find(*kind, id)? {
+                    states.push(Self::record_decision_state_from_parts(record, &facts)?);
+                }
+            }
             let digest = crate::canonical_digest::digest(
                 &crate::canonical_digest::canonical_bytes(&states)?,
             );
+            let rejected_new = states
+                .iter()
+                .filter(|state| rejected_before_acceptance(state, &facts))
+                .map(|state| (state.record_kind, state.record_id.clone()))
+                .collect();
             let records = states
                 .iter()
                 .map(|state| {
@@ -69,14 +91,17 @@ impl StateStore {
                     )
                 })
                 .collect::<Vec<_>>();
-            Ok(DocumentReviewState { records, digest })
+            Ok(DocumentReviewState {
+                records,
+                rejected_new,
+                digest,
+            })
         })
     }
 
     /// Reads the decision state of one Requirement: the submission still
     /// waiting, the acceptance that matches current content, every terminal
     /// decision, and every withdrawal.
-    #[rule("rule_content_change_requires_new_review")]
     pub fn requirement_decision_state(
         &self,
         scope: &ScopeId,
@@ -97,21 +122,20 @@ impl StateStore {
 
     pub(super) fn record_decision_state_for_record(
         &self,
-        record: &provenance_core::review::ReviewRecord,
+        record: &ReviewRecord,
     ) -> anyhow::Result<RequirementDecisionState> {
-        let scope = record.scope_id();
-        let proposals = self.list_proposal_definitions(scope)?;
-        let dispositions = self.list_dispositions(scope)?;
-        let facts = CycleFacts::validated(self, scope)?;
-        Self::record_decision_state_from_parts(record, &proposals, &dispositions, &facts)
+        let facts = CycleFacts::validated(self, record.scope_id())?;
+        Self::record_decision_state_from_parts(record, &facts)
     }
 
+    /// The decision state of one record from one read of the scope's
+    /// review records.
     fn record_decision_state_from_parts(
-        record: &provenance_core::review::ReviewRecord,
-        proposals: &[ProposalCard],
-        dispositions: &[DispositionRecord],
+        record: &ReviewRecord,
         facts: &CycleFacts,
     ) -> anyhow::Result<RequirementDecisionState> {
+        let proposals = facts.proposals();
+        let dispositions = facts.dispositions();
         let kind = record.kind();
         let record_id = record.id();
         let current_revision = super::save::current_revision(record)?;

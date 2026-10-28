@@ -41,6 +41,21 @@ impl LocalHostFixture {
         Self::serve(listener, endpoint, body, Some(registration))
     }
 
+    /// Serves the identity of a prepared registration that the caller announces later.
+    pub fn start_unannounced(
+        root: &Path,
+        scope: &str,
+        repository_id: &str,
+    ) -> (Self, LocalHostRegistration) {
+        let (listener, endpoint) = listener();
+        let registration =
+            LocalHostRegistration::prepare(root, scope, &endpoint, repository_id).unwrap();
+        let body = serde_json::to_value(registration.identity())
+            .unwrap()
+            .to_string();
+        (Self::serve(listener, endpoint, body, None), registration)
+    }
+
     pub fn identity(&self) -> LocalHostIdentity {
         self.registration.as_ref().unwrap().identity()
     }
@@ -91,8 +106,14 @@ fn serve(listener: TcpListener, body: String) -> (Arc<AtomicBool>, JoinHandle<()
                 std::thread::sleep(Duration::from_millis(5));
                 continue;
             };
+            // Accepted sockets can inherit the listener mode on macOS.
+            stream.set_nonblocking(false).unwrap();
             let mut request = [0_u8; 2048];
             let count = stream.read(&mut request).unwrap_or(0);
+            // The shutdown wakeup has no HTTP request.
+            if count == 0 {
+                continue;
+            }
             let path_matches = String::from_utf8_lossy(&request[..count])
                 .starts_with(&format!("GET {IDENTITY_ROUTE} HTTP/1.1"));
             let (status, response) = if path_matches {

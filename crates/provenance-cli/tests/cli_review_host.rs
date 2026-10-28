@@ -56,6 +56,10 @@ fn serves_assets_configuration_and_only_the_selected_graph() {
     ] {
         assert_eq!(
             response(request(&host, "GET", path, false).call()).status(),
+            401
+        );
+        assert_eq!(
+            response(request(&host, "GET", path, true).call()).status(),
             404
         );
     }
@@ -200,7 +204,7 @@ fn record_comment_joins_the_selected_record_thread() {
             description: None,
             status: provenance_core::RequirementStatus::Discovery,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

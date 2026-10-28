@@ -9,9 +9,14 @@ use serde_json::{json, Value};
 use tower::ServiceExt as _;
 
 mod support {
+    pub mod mcp;
     pub mod records;
 }
-use support::records::Repository;
+use provenance_macros::verifies;
+use support::{
+    mcp::{call as call_tool, Session},
+    records::Repository,
+};
 
 fn host(repo: &Repository) -> StatementHost {
     use provenance_transport::fixture::{FixtureAccess, Target};
@@ -80,7 +85,7 @@ fn add_child(repo: &Repository, index: usize, description_bytes: usize) {
             description: Some("x".repeat(description_bytes)),
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: Some(StableId::new("req_shared").unwrap()),
+            refines: vec![StableId::new("req_shared").unwrap()],
             depends_on: vec![],
             supersedes: vec![],
             spawned_by: None,
@@ -162,6 +167,9 @@ async fn public_query_wire_includes_final_catch_up_failure_metadata() {
     let (status, _, healthy) = call(&host, path).await;
     assert_eq!(status, 200, "{healthy}");
 
+    assert_eq!(healthy["data"]["items"].as_array().unwrap().len(), 1);
+    let stored_id = healthy["data"]["items"][0]["id"].as_str().unwrap();
+
     orphan_rules(&repo);
     let (status, bytes, value) = call(&host, path).await;
     assert_eq!(status, 200, "{value}");
@@ -171,7 +179,7 @@ async fn public_query_wire_includes_final_catch_up_failure_metadata() {
     );
     assert_eq!(value["meta"]["freshness_cause"], "catch_up_failed");
     assert_eq!(value["meta"]["stamp"]["policy"], "catch_up_failed");
-    assert!(value["data"]["items"].is_array());
+    assert_eq!(value["data"]["items"][0]["id"], stored_id);
     assert!(value.get("protocol_version").is_none());
     assert!(value.get("operation").is_none());
     assert!(bytes.len() <= QUERY_RESPONSE_BYTES);
@@ -209,4 +217,41 @@ async fn ordinary_member_wire_does_not_inherit_the_query_refusal() {
     let (status, _, value) = call(&host, "/requirements/req_large_000").await;
     assert_eq!(status, 200, "{value}");
     assert_eq!(value["data"]["id"], "req_large_000");
+}
+
+/// The MCP get and search tools are typed callers, so the store bounds their pages before
+/// the answer reaches the tool: a traversal over the budget refuses, a search page stops
+/// at the budget and continues through its cursor.
+#[verifies("rule_query_pages_bound_shared_reads", examples)]
+#[tokio::test]
+async fn mcp_get_and_search_keep_the_store_page_bound() {
+    let repo = Repository::new("The shared rule is readable.");
+    add_large_children(&repo, 20);
+    let session = Session::start(host(&repo)).await;
+    let client = &session.client;
+
+    let get = call_tool(
+        client,
+        "get",
+        json!({"target":"req_shared", "view":"children"}),
+    )
+    .await;
+    assert_eq!(get.is_error, Some(true), "{get:?}");
+    let error = &get.structured_content.as_ref().unwrap()["error"];
+    assert_eq!(error["kind"], "operation_failed", "{error}");
+    assert_eq!(error["message"], "page read work exceeds the engine budget");
+
+    let search = call_tool(client, "search", json!({"text":"record", "limit":200})).await;
+    assert_ne!(search.is_error, Some(true), "{search:?}");
+    let page = search.structured_content.as_ref().unwrap();
+    let returned = page["nodes"].as_array().unwrap().len();
+    assert!(
+        returned < 20,
+        "the search page stops before the budget: {returned}"
+    );
+    assert_eq!(page["has_more"], true);
+    assert!(page["next_cursor"].is_string());
+    assert!(serde_json::to_vec(page).unwrap().len() <= QUERY_RESPONSE_BYTES);
+
+    session.close().await;
 }

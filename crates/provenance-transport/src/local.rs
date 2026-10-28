@@ -1,74 +1,36 @@
-//! Access for one local caller, repository target, and scope.
-use crate::HostAccess;
+//! The credential of one local caller, and the host access of one local repository.
+use crate::{HostAccess, HttpCredential};
 use axum::http::HeaderMap;
-use provenance_core::{
-    protocol::failure::{InvalidInputReason, OperationFailure},
-    Manifest, ScopeId,
-};
-use provenance_store::{
-    layout::ProvenanceLayout,
-    operations::{
-        catalog::{
-            self, ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
-            PreparedRepository, PreparedScope, RequestedContext,
-        },
-        files::read_repository_file,
-        read_policy::ReadPolicy,
-    },
-    settings::Settings,
-};
-use std::{net::SocketAddr, path::Path};
+use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
+use provenance_store::operations::{catalog, LocalRepository};
+use std::net::SocketAddr;
 
+/// The bearer and origin a local HTTP caller must present.
 pub struct LocalAccess {
-    layout: ProvenanceLayout,
-    root: String,
-    repository: String,
-    scope: ScopeId,
     credential: String,
     authority: String,
     origin: String,
 }
 
 impl LocalAccess {
-    /// Bind a caller credential to one existing repository and scope.
-    pub fn new(
-        root: &Path,
-        repository: &str,
-        scope: &str,
-        token: &str,
-        address: SocketAddr,
-    ) -> Result<Self, OperationFailure> {
+    /// Bind a caller credential to one loopback address.
+    pub fn new(token: &str, address: SocketAddr) -> Result<Self, OperationFailure> {
         let invalid = || OperationFailure::InvalidInput {
             field: None,
             reason: InvalidInputReason::InvalidValue,
         };
-        if repository.is_empty()
-            || repository.contains(['/', '\\'])
-            || repository.chars().any(char::is_control)
-            || token.len() != 64
+        if token.len() != 64
             || !token.bytes().all(|byte| byte.is_ascii_hexdigit())
             || address.ip() != std::net::Ipv4Addr::LOCALHOST
             || address.port() == 0
         {
             return Err(invalid());
         }
-        let root = root.canonicalize().map_err(|_| invalid())?;
-        if !root.is_dir() {
-            return Err(invalid());
-        }
-        let layout = ProvenanceLayout::new(root.to_str().ok_or_else(invalid)?);
-        let scope = ScopeId::new(scope).map_err(|_| invalid())?;
-        let access = Self {
-            root: root.to_str().ok_or_else(invalid)?.to_owned(),
-            layout,
-            repository: repository.to_owned(),
-            scope,
+        Ok(Self {
             credential: format!("Bearer {token}"),
             authority: address.to_string(),
             origin: format!("http://{address}"),
-        };
-        access.check_scope()?;
-        Ok(access)
+        })
     }
 
     /// Check the destination and browser origin on both assets and operations.
@@ -85,30 +47,6 @@ impl LocalAccess {
             return Err(OperationFailure::AccessDenied);
         }
         Ok(())
-    }
-
-    fn check_scope(&self) -> Result<(), OperationFailure> {
-        let manifest = self.manifest()?;
-        if !manifest.scopes.iter().any(|scope| scope.id == self.scope) {
-            return Err(OperationFailure::UnknownScope);
-        }
-        Ok(())
-    }
-
-    fn manifest(&self) -> Result<Manifest, OperationFailure> {
-        let bytes = read_repository_file(
-            Path::new(&self.root),
-            Path::new(".provenance/state/manifest.json"),
-        )
-        .map_err(|_| OperationFailure::Internal)?;
-        let manifest: Manifest =
-            serde_json::from_slice(&bytes).map_err(|_| OperationFailure::Internal)?;
-        Ok(manifest)
-    }
-
-    /// Read disposition actors from the repository bound at startup.
-    pub fn disposition_actor_ids(&self) -> Result<Vec<String>, OperationFailure> {
-        Ok(self.manifest()?.disposition_actor_ids)
     }
 }
 
@@ -131,7 +69,8 @@ pub fn constant_time_eq(expected: &[u8], supplied: &[u8]) -> bool {
     difference == 0
 }
 
-impl HostAccess for LocalAccess {
+impl HttpCredential for LocalAccess {
+    /// The bearer first, then the origin checks.
     fn authenticate(&self, headers: &HeaderMap) -> Result<(), OperationFailure> {
         let supplied = single(headers, "authorization")
             .unwrap_or_default()
@@ -142,7 +81,9 @@ impl HostAccess for LocalAccess {
         }
         self.check_origin(headers)
     }
+}
 
+impl HostAccess for LocalRepository {
     fn advertises(&self, operation: &str) -> bool {
         [
             <catalog::ResolveRecord as catalog::Operation>::NAME,
@@ -162,64 +103,19 @@ impl HostAccess for LocalAccess {
     }
 
     fn bound_identity(&self) -> Option<(String, String)> {
-        Some((self.repository.clone(), self.scope.as_str().to_owned()))
-    }
-}
-
-impl ContextResolver for LocalAccess {
-    fn prepare(
-        &self,
-        _operation: &'static str,
-        context: RequestedContext,
-        needs: ExecutionNeeds,
-    ) -> Result<PreparedContext, OperationFailure> {
-        let (repository, scope, freshness) = match context {
-            RequestedContext::Repository(context) => (context.repository, None, None),
-            RequestedContext::Scope(context) => (context.repository, Some(context.scope), None),
-            RequestedContext::Scoped(context) => {
-                (context.repository, Some(context.scope), context.freshness)
-            }
-        };
-        if repository != self.repository {
-            return Err(OperationFailure::UnknownTarget);
-        }
-        if scope
-            .as_deref()
-            .is_some_and(|scope| scope != self.scope.as_str())
-        {
-            return Err(OperationFailure::AccessDenied);
-        }
-        let root = self.root.clone().into();
-        if scope.is_none() {
-            // Repository-only operations do not use the scope grant or scope storage.
-            return Ok(PreparedContext::for_repository(PreparedRepository {
-                root,
-                requested_target: repository,
-            }));
-        }
-        // Validate the grant before settings, recovery, or projection access.
-        self.check_scope()?;
-        if !needs.contains(&ExecutionNeed::ProjectionMaintenance) {
-            return Ok(PreparedContext::for_scope(PreparedScope {
-                root,
-                scope: self.scope.clone(),
-                requested_target: repository,
-            }));
-        }
-        let settings = Settings::load(&self.layout).map_err(|_| OperationFailure::Internal)?;
-        Ok(PreparedContext::read(PreparedRead {
-            root,
-            scope: self.scope.clone(),
-            policy: ReadPolicy::resolve(&settings, freshness),
-            requested_target: repository,
-            external: true,
-        }))
+        Some((
+            self.repository().to_owned(),
+            self.scope().as_str().to_owned(),
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::constant_time_eq;
+    use super::{constant_time_eq, LocalAccess};
+    use crate::HttpCredential as _;
+    use axum::http::HeaderMap;
+    use provenance_core::protocol::failure::OperationFailure;
 
     #[test]
     /// Implementation aid: this checks the constant-time credential comparison helper.
@@ -232,5 +128,82 @@ mod tests {
             expected,
             b"Bearer 0123456789abcdef-extra"
         ));
+    }
+
+    fn headers(pairs: &[(&str, &str)]) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        for (name, value) in pairs {
+            headers.append(
+                axum::http::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+                value.parse().unwrap(),
+            );
+        }
+        headers
+    }
+
+    /// One header table and the refusal the credential answers with.
+    type Case<'a> = (
+        &'a str,
+        &'a [(&'a str, &'a str)],
+        Result<(), OperationFailure>,
+    );
+
+    #[test]
+    fn local_access_keeps_its_origin_checks() {
+        let access = LocalAccess::new(&"a".repeat(64), "127.0.0.1:4100".parse().unwrap()).unwrap();
+        let bearer = format!("Bearer {}", "a".repeat(64));
+        let bearer = bearer.as_str();
+        let cases: [Case; 6] = [
+            (
+                "foreign host",
+                &[("authorization", bearer), ("host", "127.0.0.1:4101")],
+                Err(OperationFailure::AccessDenied),
+            ),
+            (
+                "foreign origin",
+                &[
+                    ("authorization", bearer),
+                    ("host", "127.0.0.1:4100"),
+                    ("origin", "http://127.0.0.1:4101"),
+                ],
+                Err(OperationFailure::AccessDenied),
+            ),
+            (
+                "cross-site fetch",
+                &[
+                    ("authorization", bearer),
+                    ("host", "127.0.0.1:4100"),
+                    ("sec-fetch-site", "cross-site"),
+                ],
+                Err(OperationFailure::AccessDenied),
+            ),
+            (
+                "duplicated host header",
+                &[
+                    ("authorization", bearer),
+                    ("host", "127.0.0.1:4100"),
+                    ("host", "127.0.0.1:4100"),
+                ],
+                Err(OperationFailure::AccessDenied),
+            ),
+            (
+                "missing bearer on a foreign host",
+                &[("host", "127.0.0.1:4101")],
+                Err(OperationFailure::Unauthenticated),
+            ),
+            (
+                "same origin",
+                &[
+                    ("authorization", bearer),
+                    ("host", "127.0.0.1:4100"),
+                    ("origin", "http://127.0.0.1:4100"),
+                    ("sec-fetch-site", "same-origin"),
+                ],
+                Ok(()),
+            ),
+        ];
+        for (case, pairs, expected) in cases {
+            assert_eq!(access.authenticate(&headers(pairs)), expected, "{case}");
+        }
     }
 }

@@ -11,6 +11,10 @@ use std::sync::Arc;
 
 struct Target(camino::Utf8PathBuf);
 impl ContextResolver for Target {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,
@@ -29,7 +33,7 @@ impl ContextResolver for Target {
 async fn read(root: camino::Utf8PathBuf) -> Value {
     catalog::invoke_with("read-document", provenance_core::SDK_PROTOCOL_VERSION,
         json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_overtime"}}),
-        Arc::new(Target(root))).await.expect("complete document operation")
+        catalog::Direct(Arc::new(Target(root)))).await.expect("complete document operation")
 }
 
 fn collections(mut page: Value) -> Value {
@@ -66,7 +70,7 @@ async fn complete(root: camino::Utf8PathBuf) -> Value {
     while all["next_cursor"].is_string() {
         let next = catalog::invoke_with("read-document", provenance_core::SDK_PROTOCOL_VERSION,
             json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime","cursor":all["next_cursor"]}}),
-            Arc::new(Target(root.clone()))).await.unwrap();
+            catalog::Direct(Arc::new(Target(root.clone())))).await.unwrap();
         for field in ["serial", "digest", "instance_id", "derivation"] {
             assert_eq!(next["stamp"][field], stamp[field]);
         }
@@ -88,7 +92,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
     let mut child =
         serde_json::to_value(store.list_requirements(&scope).unwrap()[0].clone()).unwrap();
     child["schema_version"] = json!(2);
-    child["refines"] = json!("req_overtime");
+    child["refines"] = json!(["req_overtime"]);
     let path = crate::shards::requirements_path(&store.layout, &scope);
     for i in 0..205 {
         child["id"] = json!(format!("req_child_{i:03}"));
@@ -123,7 +127,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
         "read-document",
         provenance_core::SDK_PROTOCOL_VERSION,
         json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime"}}),
-        Arc::new(Target(root_of(&dir))),
+        catalog::Direct(Arc::new(Target(root_of(&dir)))),
     )
     .await
     .unwrap_err();
@@ -171,7 +175,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
     let failed = catalog::invoke_with(
         "read-document", provenance_core::SDK_PROTOCOL_VERSION,
         json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_new"}}),
-        Arc::new(Target(root_of(&dir))),
+        catalog::Direct(Arc::new(Target(root_of(&dir)))),
     ).await.unwrap_err();
     assert_eq!(failed.error, json!({"kind":"document_catch_up_failed"}));
 
@@ -240,7 +244,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
             let mut child: Value = serde_json::from_str(std::fs::read_to_string(&path)?.lines().next().unwrap())?;
             child["schema_version"] = json!(2);
             child["id"] = json!("req_concurrent");
-            child["refines"] = json!("req_overtime");
+            child["refines"] = json!(["req_overtime"]);
             crate::cache::tests::fixtures::append_record(&path, &child);
             for (id, status, counter) in [("thread_one", "resolved", 1), ("thread_two", "active", 2)] {
                 crate::cache::tests::fixtures::append_record(&crate::shards::threads_path(&layout, &write_scope), &json!({
@@ -293,11 +297,11 @@ async fn document_page_requires_continuation_and_excludes_other_roots() {
     child["schema_version"] = json!(2);
     for i in 0..205 {
         child["id"] = json!(format!("req_aaa_{i:03}"));
-        child["refines"] = json!("req_overtime");
+        child["refines"] = json!(["req_overtime"]);
         crate::cache::tests::fixtures::append_record(&path, &child);
     }
     child["id"] = json!("req_outside");
-    child["refines"] = Value::Null;
+    child["refines"] = json!([]);
     crate::cache::tests::fixtures::append_record(&path, &child);
     let first = read(root_of(&dir)).await;
     assert_eq!(first["entries"][0]["node"]["id"], "req_overtime");
@@ -317,7 +321,7 @@ async fn search_returns_a_revision_bound_cursor() {
     }
     let first = catalog::invoke_with("search", provenance_core::SDK_PROTOCOL_VERSION,
         json!({"context":{"repository":"test","scope":"default"},"request":{"text":"req_","limit":200}}),
-        Arc::new(Target(root_of(&dir)))).await.unwrap();
+        catalog::Direct(Arc::new(Target(root_of(&dir))))).await.unwrap();
     assert_eq!(first["nodes"].as_array().unwrap().len(), 200);
     assert!(first["next_cursor"].is_string());
 }

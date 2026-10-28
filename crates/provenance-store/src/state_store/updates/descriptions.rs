@@ -9,10 +9,12 @@ use crate::{
     shards,
     state_store::{read_budget, RequirementReviewInput, StateStore},
 };
-use provenance_core::{Boundary, Domain, NodeType, Requirement};
+use provenance_core::{Boundary, Domain, NodeType, Requirement, RequirementStatus};
+use provenance_macros::rule;
 
 impl StateStore {
-    /// Mutates a Requirement only within the guarded save path.
+    /// Writes one review per produced Rule when the Requirement statement changes.
+    #[rule("rule_review_record_per_rule")]
     pub(crate) fn apply_requirement_update(
         &self,
         input: UpdateRequirementInput,
@@ -36,6 +38,7 @@ impl StateStore {
             let changed_at = super::super::requirement_reviews::now_millis()?;
             let path = shards::requirements_path(&self.layout, &input.scope_id);
             let mut before = String::new();
+            let mut was_archived = false;
             let record = self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
                 let record = records
                     .iter_mut()
@@ -43,8 +46,13 @@ impl StateStore {
                     .ok_or_else(missing)?;
                 owner_matches(record.declared_by.as_deref(), input.declared_by.as_deref())?;
                 before.clone_from(&record.statement);
+                was_archived = record.status == RequirementStatus::Archived;
                 set(&mut record.statement, input.statement);
                 set(&mut record.status, input.status);
+                set(
+                    &mut record.archived_in_commit,
+                    input.archived_in_commit.map(Some),
+                );
                 optional(
                     &mut record.description,
                     input.description,
@@ -66,6 +74,12 @@ impl StateStore {
                 )?;
                 Ok(record.clone())
             })?;
+            if record.status == RequirementStatus::Archived && !was_archived {
+                let stamp = record.archived_in_commit.as_ref().ok_or_else(|| {
+                    invalid("archived_in_commit is required for an archived Requirement")
+                })?;
+                self.archive_dependents(&record.scope_id, &record.id, stamp)?;
+            }
             if before != record.statement {
                 let reviews = rule_ids
                     .into_iter()

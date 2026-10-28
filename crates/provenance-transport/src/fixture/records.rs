@@ -54,7 +54,7 @@ impl Repository {
                 description: None,
                 status: RequirementStatus::Active,
                 domain_id: Some(domain_id),
-                refines: None,
+                refines: Vec::new(),
                 depends_on: vec![],
                 supersedes: vec![],
                 spawned_by: None,

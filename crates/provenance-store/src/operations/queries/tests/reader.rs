@@ -215,7 +215,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
 }
 
 #[tokio::test]
-#[verifies("rule_query_answer_carries_a_stamp", exhaustion)]
+#[verifies("rule_query_answer_carries_a_stamp", examples)]
 async fn every_answer_carries_a_stamp_at_the_stored_serial() {
     let store = test_stores::seeded_queries();
     let base = store.base_commit.clone().expect("a commit to diff against");

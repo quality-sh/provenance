@@ -166,7 +166,7 @@ fn owner_and_parent_membership_refuse_without_publication() {
     wrong_owner.declared_by = Some("other".into());
     assert!(matches!(
         failure(store.write_discussion(wrong_owner)),
-        WriteFailure::RecordOwnershipConflict
+        WriteFailure::RecordOwnershipConflict { .. }
     ));
     store
         .create_review_requirement(

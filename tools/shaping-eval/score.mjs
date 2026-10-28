@@ -1,57 +1,53 @@
-import { readFileSync } from 'node:fs';
+import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+export const categories = ['duplicate', 'placement', 'state', 'citationOnly'];
+const text = r => r.statement ?? r.position;
+const requirements = r => r.requirement_ids ?? [];
+const resolutions = r => [...(r.resolution_ids ?? []), ...(r.spawned_by ? [r.spawned_by] : [])];
 
-/** Evaluate saved Question states with an independent prerequisite oracle. */
-export function scoreGraph(turns, scenario) {
-  const prerequisite_violations = [];
-  for (const [turn, { before, after }] of turns.entries()) {
-    const prior = new Map(before.map(question => [question.id, question]));
-    for (const question of after) {
-      if (question.status !== 'answered' || prior.get(question.id)?.status === 'answered') continue;
-      for (const prerequisite of scenario.dependencies[question.id] ?? []) {
-        if (prior.get(prerequisite)?.status !== 'answered') {
-          prerequisite_violations.push({ turn, question: question.id, prerequisite });
-        }
-      }
+// Equality identifies review candidates; it cannot decide whether meaning is duplicated.
+export function score(graph) {
+  const records = [...graph.requirements, ...graph.rules, ...graph.resolutions];
+  const findings = [];
+  for (let i = 0; i < records.length; i++) {
+    for (const b of records.slice(i + 1)) {
+      const a = records[i];
+      const linked = [...(a.refines ?? []), ...requirements(a), ...resolutions(a)].includes(b.id)
+        || [...(b.refines ?? []), ...requirements(b), ...resolutions(b)].includes(a.id);
+      if (linked && text(a) && text(a) === text(b)) findings.push({
+        category: 'duplicate', recordIds: [a.id, b.id],
+        evidenceLocator: `graph.json:${a.id},${b.id}`, reviewerAssessment: null,
+      });
     }
   }
-  const last = new Map((turns.at(-1)?.after ?? []).map(question => [question.id, question]));
-  return {
-    prerequisite_violations,
-    unanswered_accepted_questions: scenario.accepted.filter(id => last.get(id)?.status !== 'answered' || !last.get(id)?.answer),
-    within_turn_order_requires_judge: true,
-  };
+  return { findings, reviewRequired: categories };
 }
 
-/** Commands are evidence of fresh reads; selection and method compliance need a blind judge. */
-export function readEvidence(events) {
-  const commands = [];
-  for (const event of events) {
-    if (event.type === 'item.completed' && event.item?.type === 'command_execution') commands.push(event.item.command);
-    for (const block of event.message?.content ?? []) {
-      if (block.type === 'tool_use' && block.name === 'Bash') commands.push(block.input.command);
-    }
-  }
-  return commands.filter(command => /provenance/.test(command) && /\b(get|list|api)\b/.test(command));
+export function compare(base, candidate) {
+  const runners = [...new Set([...Object.keys(base), ...Object.keys(candidate)])];
+  const gates = runners.flatMap(runner => categories.map((category, i) => {
+    const before = base[runner]?.[i], after = candidate[runner]?.[i];
+    const valid = Number.isInteger(before) && before >= 0 && Number.isInteger(after) && after >= 0;
+    return { runner, category, before, after, passed: valid && (before === 0 ? after === 0 : after < before) };
+  }));
+  return { passed: runners.length > 0 && gates.every(g => g.passed), gates };
 }
 
-/** Keep command and tool results for the blind order and method checks. */
-export function eventEvidence(events) {
-  const evidence = [];
-  for (const event of events) {
-    if (event.type === 'item.completed' && event.item?.type === 'command_execution') {
-      evidence.push({ type: 'shell', command: event.item.command, output: event.item.aggregated_output, exit_code: event.item.exit_code });
-    }
-    for (const block of event.message?.content ?? []) {
-      if (block.type === 'tool_use') evidence.push({ type: 'tool_call', id: block.id, name: block.name, input: block.input });
-      if (block.type === 'tool_result') evidence.push({ type: 'tool_result', id: block.tool_use_id, output: block.content, is_error: block.is_error });
-    }
+export function totals(assessment) {
+  if (assessment.completedCategories?.length !== categories.length
+      || categories.some(c => !assessment.completedCategories.includes(c))) throw new Error('Review is incomplete');
+  const counts = categories.map(() => 0);
+  for (const f of assessment.findings) {
+    if (!categories.includes(f.category) || !f.recordIds?.length || !f.evidenceLocator
+        || typeof f.reviewerAssessment?.isError !== 'boolean' || !f.reviewerAssessment.reason) throw new Error('Finding lacks evidence or assessment');
+    if (f.reviewerAssessment.isError) counts[categories.indexOf(f.category)]++;
   }
-  return evidence;
+  return counts;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (!process.argv.includes('--stdin')) throw new Error('Use --stdin with a JSON object containing turns and scenario');
-  const input = JSON.parse(readFileSync(0, 'utf8'));
-  process.stdout.write(`${JSON.stringify(scoreGraph(input.turns, input.scenario))}\n`);
+  const [basePath, candidatePath, output] = process.argv.slice(2);
+  const result = compare(JSON.parse(await readFile(basePath)), JSON.parse(await readFile(candidatePath)));
+  await writeFile(output, JSON.stringify(result, null, 2));
+  if (!result.passed) process.exitCode = 1;
 }

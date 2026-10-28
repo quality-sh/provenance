@@ -12,7 +12,7 @@ and SDK build and test commands prepare generated source automatically. See
 
 ## Cargo checks on maintainer hosts
 
-On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
+On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, `cargo test`, and `cargo package` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
 
 ## Code standards
 
@@ -38,6 +38,7 @@ a reader for an older format, or a migration on write. Do not bump an existing v
 field. Change a format in place; existing repositories are initialised again, not
 migrated. A review rejects a change that adds any of these. Bead provenance-u9mg
 removes the versioning that is already in the code.
+Exception: the managed skill stamp compares package release numbers to prevent downgrades.
 
 ## Technical writing
 

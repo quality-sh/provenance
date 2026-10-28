@@ -4,6 +4,7 @@ use provenance_core::{
     Message, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId, Thread,
     ThreadParent, Topic,
 };
+use provenance_macros::rule;
 use std::collections::{BTreeMap, BTreeSet};
 
 trait DiscussionParent {
@@ -199,7 +200,7 @@ impl StateStore {
         &self,
         input: &super::WriteDiscussion,
     ) -> anyhow::Result<()> {
-        anyhow::ensure!(!input.actor.trim().is_empty(), "invalid Discussion actor");
+        crate::write_error::ensure_actor(&input.actor)?;
         crate::write_error::ensure!(
             ResourceNotFound,
             self.manifest()?
@@ -244,7 +245,7 @@ pub(super) fn parent_owner_matches(
 ) -> anyhow::Result<()> {
     if saved != supplied {
         return Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::RecordOwnershipConflict,
+            crate::write_error::WriteFailure::record_ownership_conflict(saved),
             anyhow::anyhow!(
                 "declared_by must match the existing owner; omit it for a manual record"
             ),
@@ -278,6 +279,8 @@ pub(super) const fn parent_table(kind: NodeType) -> Option<&'static str> {
 }
 
 impl StateStore {
+    /// Refuses Discussions on Domain and Boundary records.
+    #[rule("rule_domain_boundary_accept_no_discussions")]
     pub(super) fn resolve_discussion_parent(
         &self,
         scope: &ScopeId,

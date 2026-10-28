@@ -29,7 +29,8 @@ Provenance records requirements, decisions, and the rules that connect them to c
 - Boundary: an explicit limit attached to a Requirement.\n\
 - Topic: a claimable shaping work area attached to a Requirement.\n\
 - Question: a concern to resolve, attached to a Topic and a Requirement, with a selected resolution method.\n\
-- Discussion: one concern identified by a root Message and its replies inside a Thread.\n\n\
+- Discussion: one concern identified by a root Message and its replies inside a Thread.\n\
+- Description: on a Requirement or Rule, how the product behaves in the present tense: states, what changes them, what the person sees, one example. History goes on the thread; unknowns go in fog or a Question.\n\n\
 ## Code and evidence\n\n\
 An Implementation binding connects a Rule to production code that realizes it.\n\
 Verification is evidence that a Rule holds. A Verification binding identifies intended evidence; a Verification run records one execution and its result.\n\

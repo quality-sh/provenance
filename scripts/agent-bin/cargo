@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 
-CHECK_JOBS = {"build": "Build", "check": "Check", "clippy": "Clippy", "test": "Test"}
+CHECK_JOBS = {"build": "Build", "check": "Check", "clippy": "Clippy", "test": "Test", "package": "Command"}
 WORKFLOW = "agent-cargo.yml"
 
 
@@ -129,7 +129,7 @@ def dispatch(root, sha, repository, command_json, command_key):
     push_snapshot(root, sha, repository, f"agent-snapshot/{sha}")
     payload = json.dumps(
         {
-            "ref": "main",
+            "ref": f"agent-snapshot/{sha}",
             "inputs": {
                 "snapshot_sha": sha,
                 "command_json": command_json,
@@ -210,7 +210,7 @@ def cleanup_completed_branch(root, sha, run_id, repository):
     branch = run.get("headBranch")
     if run.get("status") != "completed" or run.get("headSha") != sha:
         return
-    if not isinstance(branch, str) or not re.fullmatch(rf"agent-ci/(build|build-artifact|check|clippy|test)/{sha}-[0-9a-f]{{8}}", branch):
+    if not isinstance(branch, str) or not re.fullmatch(rf"agent-ci/(build|build-artifact|check|clippy|test|package)/{sha}-[0-9a-f]{{8}}", branch):
         return
     push_url = os.environ.get("PROVENANCE_CI_PUSH_URL", f"https://github.com/{repository}.git")
     ref = f"refs/heads/{branch}"
@@ -253,6 +253,8 @@ def main():
     if root is None or not args or args[0] not in CHECK_JOBS or os.environ.get("PROVENANCE_CI_LOCAL") == "1":
         native = real_cargo()
         os.execv(native, [native, *args])
+    if args == ["package"]:
+        raise RuntimeError("Bare cargo package is not supported remotely; use cargo package --workspace --locked --allow-dirty --registry crates-io")
     artifact = os.environ.get("PROVENANCE_CI_ARTIFACT") == "1"
     if artifact and args != ["build"]:
         raise RuntimeError("PROVENANCE_CI_ARTIFACT=1 requires plain cargo build")

@@ -151,7 +151,7 @@ impl StateStore {
     ) -> anyhow::Result<StableId> {
         use crate::review::discussion_input::{DiscussionAction, WriteDiscussion};
 
-        let discussion = WriteDiscussion {
+        let mut discussion = WriteDiscussion {
             scope_id: scope.clone(),
             parent: ThreadParent {
                 node_type: kind,
@@ -164,6 +164,14 @@ impl StateStore {
                 body: feedback.body,
             },
         };
+        if discussion.declared_by.is_none()
+            && matches!(
+                kind,
+                NodeType::Source | NodeType::Requirement | NodeType::Resolution | NodeType::Rule
+            )
+        {
+            discussion.declared_by = self.resolve_discussion_parent(scope, &discussion.parent)?;
+        }
         crate::review::discussion_writes::check_size(&discussion)?;
         self.authorize_discussion(&discussion)?;
         let started = guard::with_writer(&shards::threads_path(&self.layout, scope), "*", || {

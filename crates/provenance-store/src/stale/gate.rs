@@ -5,12 +5,15 @@ use provenance_core::coverage::{
     AnchorState, EvidenceDiffReport, EvidenceDiffSite, EvidenceDiffState, EvidenceDiffSummary,
     EvidenceSiteKind, SiteRole,
 };
+use provenance_macros::rule;
 use provenance_scanner::{CoverageBaseline, FileScanWithContent, ScannedCoverage};
 use std::collections::BTreeSet;
 
 mod source_refs;
 mod typed_bindings;
 
+/// Classifies evidence changes without a review decision.
+#[rule("rule_gate_reports_without_review")]
 pub fn report(
     repo: &Utf8Path,
     base: String,

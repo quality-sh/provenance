@@ -40,7 +40,7 @@ fn a_named_field_is_authoritative_and_an_omitted_field_stays() {
             requirement("pay", &json!({})),
             requirement(
                 "overtime",
-                &json!({"refines": "pay", "depends_on": ["pay"]})
+                &json!({"refines": ["pay"], "depends_on": ["pay"]})
             ),
         ]),
         &json!([]),
@@ -55,7 +55,7 @@ fn a_named_field_is_authoritative_and_an_omitted_field_stays() {
             .unwrap()
     };
     let written = overtime(&store);
-    assert!(written.refines.as_ref().unwrap().as_str().contains("pay"));
+    assert!(written.refines.first().unwrap().as_str().contains("pay"));
     assert_eq!(written.depends_on.len(), 1);
 
     let silent = spec(
@@ -131,7 +131,7 @@ fn an_undeclared_citation_key_is_refused() {
 fn an_undeclared_refines_key_is_refused() {
     let (_dir, store, scope) = initialized_store();
     let input = spec(
-        &json!([requirement("pay", &json!({"refines": "ghost"}))]),
+        &json!([requirement("pay", &json!({"refines": ["ghost"]}))]),
         &json!([]),
     );
     let error = store
@@ -247,8 +247,8 @@ fn a_refines_cycle_and_a_missing_resolution_are_refused() {
     let (_dir, store, scope) = initialized_store();
     let cycle = spec(
         &json!([
-            requirement("pay", &json!({"refines": "overtime"})),
-            requirement("overtime", &json!({"refines": "pay"})),
+            requirement("pay", &json!({"refines": ["overtime"]})),
+            requirement("overtime", &json!({"refines": ["pay"]})),
         ]),
         &json!([]),
     );

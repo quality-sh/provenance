@@ -1,4 +1,5 @@
-use provenance_core::{Question, QuestionStatus, Topic, TopicStatus};
+use crate::write_error::{SourceFailure, WriteFailure};
+use provenance_core::{Question, QuestionStatus, StableId, Topic, TopicStatus};
 use provenance_macros::rule;
 
 /// The status of a shaping record an actor is trying to claim.
@@ -63,10 +64,30 @@ pub(in crate::state_store) fn clear_question_claim_on_exit(question: &mut Questi
     }
 }
 
+/// A held claim belongs to one actor. The holder's repeated claim and the
+/// holder's release succeed; another actor's claim or release is refused with
+/// a conflict that names the holder.
+#[rule("rule_claim_holder_exclusive")]
+pub(super) fn ensure_claim_holder(
+    kind: &str,
+    id: &StableId,
+    holder: Option<&str>,
+    actor: &str,
+) -> anyhow::Result<()> {
+    match holder {
+        Some(holder) if holder != actor => Err(SourceFailure::wrap(
+            WriteFailure::ClaimConflict {
+                holder: holder.to_owned(),
+            },
+            anyhow::anyhow!("{kind} {} is already claimed by {holder}", id.as_str()),
+        )),
+        _ => Ok(()),
+    }
+}
+
 pub(super) fn validated_actor(actor: &str) -> anyhow::Result<String> {
-    let actor = actor.trim();
-    crate::write_error::ensure!(InvalidUpdate, !actor.is_empty(), "actor must not be empty");
-    Ok(actor.to_string())
+    crate::write_error::ensure_actor(actor)?;
+    Ok(actor.trim().to_string())
 }
 
 pub(super) fn now_ms() -> anyhow::Result<i64> {

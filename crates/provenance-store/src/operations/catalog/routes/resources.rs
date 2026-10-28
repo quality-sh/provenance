@@ -485,7 +485,7 @@ fn requirements(out: &mut Vec<Definition>) {
             ResponseKind::Resource,
             vec![schema::path("id")],
         )
-        .header("If-Match", "expected_etag", true)
+        .review_update_guard(NodeType::Requirement)
         .cli_defaults(UPDATE_REQUIREMENT_DEFAULTS)
         .public_patch(&[
             ("description", "description"),

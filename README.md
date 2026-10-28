@@ -88,7 +88,7 @@ npx provenance prime
 | `provenance graph-reference issue\|show\|verify\|exact-export` | Hand off an immutable pinned graph |
 | `provenance traceability <rule>` | Walk a Rule back to its Requirement and any producing Resolution |
 | `provenance proposals list --scope default --exclude-terminal true` | List proposals that do not have a terminal disposition |
-| `provenance wiki build` / `provenance wiki serve` | Build or serve the generated wiki with domain browsing and offline search |
+| `provenance review` | Serve the review page for the working-copy graph on a local host |
 | `provenance coverage scan --path . --validate-rules` | Check bindings and report active Rules with no implementation or verification |
 | `provenance statement-checks create --stdin` / `provenance authoring-changes create --stdin` / `provenance verification-runs list` | ASD-STE100 statement preflight, typed desired state, and callback evidence protocol |
 | `provenance rules stale --base main` | Report Rules with evidence paths that changed after `main` |

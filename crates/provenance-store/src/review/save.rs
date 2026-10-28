@@ -111,10 +111,7 @@ impl StateStore {
         origin: Option<&DiscussionOrigin>,
         complete: impl FnOnce(&Self, Requirement) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        anyhow::ensure!(
-            !input.actor.trim().is_empty(),
-            "invalid review request identity"
-        );
+        crate::write_error::ensure_actor(&input.actor)?;
         anyhow::ensure!(
             serde_json::to_vec(&input)?.len() <= 1_048_576,
             "review request exceeds the operation byte budget"
@@ -148,9 +145,8 @@ impl StateStore {
         })
     }
 
-    /// Applies one save. A save that would leave the record as it is returns
-    /// it unchanged, even with a stale etag; any other save with a stale etag
-    /// is refused.
+    /// A change to review content creates a new review submission.
+    #[rule("rule_content_change_requires_new_review")]
     fn commit_requirement(
         &self,
         input: SaveRequirement,

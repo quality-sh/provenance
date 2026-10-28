@@ -1,250 +1,172 @@
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { resolve, join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
-import { randomUUID, randomInt } from 'node:crypto';
-import assert from 'node:assert/strict';
-import { cli, prepareFixture, readGraph, prepareBinary } from './fixture.mjs';
-import { readEvidence, eventEvidence } from './score.mjs';
-import * as codex from './adapters/codex.mjs';
-import * as claude from './adapters/claude.mjs';
+import { spawn } from 'node:child_process';
+import { mkdir, readFile, writeFile, mkdtemp, cp, readdir } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { score } from './score.mjs';
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const fixture = JSON.parse(await readFile(new URL('./fixtures/session.json', import.meta.url)));
+const skillNames = ['provenance-shaping', 'provenance-grounded-writing'];
+const baseCommit = 'd981e0bd10f00900772bfc49544caa43d17f3154';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, '../..');
-const args = process.argv.slice(2);
-function option(name, fallback) {
-  const index = args.indexOf(name);
-  return index < 0 ? fallback : args[index + 1];
+export function command(executable, args, cwd, timeout = 120000) {
+  return new Promise((resolveResult, reject) => {
+    const child = spawn(executable, args, { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '', stderr = '', timedOut = false;
+    child.stdout.on('data', b => { stdout += b; });
+    child.stderr.on('data', b => { stderr += b; });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try { if (child.pid) process.kill(-child.pid, 'SIGTERM'); }
+      catch (error) { if (error.code !== 'ESRCH') reject(error); }
+    }, timeout);
+    child.on('error', error => { clearTimeout(timer); reject(error); });
+    child.on('close', code => { clearTimeout(timer); resolveResult({ executable, args, code, timedOut, stdout, stderr }); });
+  });
 }
-const output = resolve(option('--output', `/tmp/shaping-eval-${Date.now()}`));
-mkdirSync(output, { recursive: true });
-const scenario = JSON.parse(readFileSync(join(here, 'scenario.json'), 'utf8'));
-const agents = option('--agents', 'codex,claude').split(',').map(name => {
-  const adapter = { codex, claude }[name];
-  if (!adapter) throw new Error(`Unknown host: ${name}`);
-  return adapter;
-});
-function save(path, value) { writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`); }
-function version(name) {
-  const result = spawnSync(name, ['--version'], { encoding: 'utf8' });
-  if (result.status !== 0) throw new Error(`${name} version probe failed`);
-  return result.stdout.trim();
+async function checked(executable, args, cwd) {
+  const result = await command(executable, args, cwd);
+  if (result.code !== 0 || result.timedOut) throw new Error(JSON.stringify(result));
+  return result.stdout;
 }
-
-async function probe(adapter, binary) {
-  const dir = join(output, `probe-${adapter.name}`), repo = join(dir, 'repo');
-  mkdirSync(dir, { recursive: true });
-  prepareFixture(binary, repo, scenario, args.includes('--candidate-guidance'));
-  const first = await adapter.invoke({ repo, transcript: join(dir, 'first.jsonl'),
-    prompt: `Run ${binary} questions question_threshold get --repo ${repo} --scope default --format json. Report the stored resolution_method and include PROBE_OK. Do not change records.` });
-  if (!first.answer.includes('PROBE_OK') || !first.answer.includes('research')) throw new Error(`${adapter.name} did not read the public record`);
-  const resumed = await adapter.invoke({ repo, session: first.session, transcript: join(dir, 'resumed.jsonl'),
-    prompt: 'Which resolution method did that record have? Include RESUME_OK. Do not read files or run a command.' });
-  if (!resumed.answer.includes('RESUME_OK') || !resumed.answer.includes('research') || resumed.session !== first.session) throw new Error(`${adapter.name} saved-session resume failed`);
-  let compaction;
-  if (adapter.name === 'claude') {
-    const compacted = await adapter.invoke({ repo, session: first.session, transcript: join(dir, 'compact.jsonl'), prompt: '/compact' });
-    assert.ok(compacted.events.some(event => event.type === 'system' && event.subtype === 'compact_boundary'), 'no real compaction event');
-    cli(binary, repo, ['topics', 'topic_pay', 'release']);
-    cli(binary, repo, ['topics', 'topic_pay', 'claim', '--actor', 'other-worker']);
-    const current = cli(binary, repo, ['questions', 'question_threshold', 'get']);
-    cli(binary, repo, ['questions', 'question_threshold', 'update', '--if-match', current.data.edit.etag, '--stdin'], { resolution_method: 'verify' });
-    const before = readGraph(binary, repo);
-    const recovered = await adapter.invoke({ repo, session: first.session, transcript: join(dir, 'compact-recovery.jsonl'),
-      prompt: `Resume Topic topic_pay and Question question_threshold from stored state. Establish the stored claim and method before any work. Use ${binary}. Do not change records. Report the stored Topic actor and Question method.` });
-    const after = readGraph(binary, repo);
-    assert.deepEqual(after, before, 'compaction recovery changed records');
-    assert.ok(recovered.answer.includes('other-worker') && recovered.answer.includes('verify'), 'changed claim and method were not recovered');
-    const evidence = { case: 'forced_compaction', before, after, answer: recovered.answer, tool_events: eventEvidence(recovered.events) };
-    save(join(dir, 'compaction.json'), evidence);
-    compaction = { supported: true, evidence: 'compaction.json' };
-  } else {
-    const compacted = await adapter.invoke({ repo, session: first.session, transcript: join(dir, 'compact-attempt.jsonl'), prompt: '/compact' });
-    compaction = { supported: false, detail: 'exec resume /compact produced no compaction event; this protocol has no forced compaction control.' };
-    if (compacted.events.some(event => /compact/.test(event.type ?? ''))) throw new Error('New compaction event requires an adapter update');
+const cli = (workspace, args) => checked(process.env.PROVENANCE_BIN ?? 'provenance', [...args, '--format', 'json'], workspace);
+async function create(workspace, collection, fields) {
+  if (fields.statement) {
+    const report = JSON.parse(await cli(workspace, ['statement-checks', 'create', '--statement', fields.statement]));
+    if (report.data.findings.some(f => f.kind === 'violation')) throw new Error(JSON.stringify(report));
   }
-  const result = { host: adapter.name, runner: version(adapter.name), model: adapter.model,
-    protocol: adapter.protocol, session: first.session, transcripts: ['first.jsonl', 'resumed.jsonl'],
-    forced_compaction: compaction };
-  save(join(dir, 'probe.json'), result);
-  return result;
+  const args = [collection, 'create'];
+  for (const [key, value] of Object.entries(fields)) args.push(`--${key.replaceAll('_', '-')}-json`, JSON.stringify(value));
+  return cli(workspace, args);
+}
+export async function prepare(workspace, { variant }) {
+  await checked('git', ['init', '-q'], workspace);
+  await checked(process.env.PROVENANCE_BIN ?? 'provenance', ['init', '--path', '.', '--quiet'], workspace);
+  await cli(workspace, ['skills', 'install', '--copy', '--force']);
+  // Pin the evaluated guidance independently of the installed CLI build.
+  for (const name of skillNames) {
+    const content = variant === 'base'
+      ? await checked('git', ['show', `${baseCommit}:skills/${name}/SKILL.md`], root)
+      : await readFile(join(root, 'skills', name, 'SKILL.md'), 'utf8');
+    await writeFile(join(workspace, '.agents/skills', name, 'SKILL.md'), content);
+    await writeFile(join(workspace, '.claude/skills', name, 'SKILL.md'), content);
+  }
+  await mkdir(join(workspace, 'docs'), { recursive: true });
+  const shapingDoc = variant === 'base'
+    ? await checked('git', ['show', `${baseCommit}:docs/shaping.md`], root)
+    : await readFile(join(root, 'docs/shaping.md'), 'utf8');
+  await writeFile(join(workspace, 'docs/shaping.md'), shapingDoc);
+  await create(workspace, 'sources', { id: 'src_owner_brief', name: 'Owner brief, health negative control', source_type: 'project_artifact', reference: 'session.json:negativeControl' });
+  for (const [id, statement, refines] of [
+    ['req_robot', 'The robot supports personal work goals.'],
+    ['req_tasks', 'The robot rewards completed tasks.', 'req_robot'],
+    ['req_health', 'The robot loses health when goals are neglected.', 'req_robot'],
+    ['req_appearance', 'The robot has a friendly appearance.', 'req_robot'],
+  ]) await create(workspace, 'requirements', { id, statement, ...(refines ? { refines: [refines] } : {}) });
+  await create(workspace, 'resolutions', { id: 'res_negative_control', title: 'Health floor', requirement_ids: ['req_health'], position: 'Use a zero health floor.', context: 'Health cannot express a value below zero.', rationale: 'A zero floor prevents negative health. A negative floor would require a separate meaning.', status: 'proposed' });
+  await create(workspace, 'rules', { id: 'rule_negative_control', requirement_ids: ['req_health'], resolution_ids: ['res_negative_control'], statement: 'Health cannot decrease below 0.', source_document: 'Owner brief, health negative control', source_section: 'The owner requires a zero health floor independently of the proposed Resolution.', status: 'active' });
 }
 
-async function trial(adapter, build, number, variant) {
-  const dir = join(output, `${variant}-${adapter.name}-${number}`), repo = join(dir, 'repo');
-  const resuming = args.includes('--resume') && existsSync(repo);
-  if (existsSync(repo) && !resuming) throw new Error(`Refusing to reuse trial repository ${repo}`);
-  if (resuming && existsSync(join(dir, 'report.json'))) return JSON.parse(readFileSync(join(dir, 'report.json'), 'utf8'));
-  mkdirSync(dir, { recursive: true });
-  if (!resuming) prepareFixture(build.binary, repo, scenario, variant === 'candidate');
-  const turns = [];
-  if (resuming) {
-    for (let index = 0; existsSync(join(dir, `turn-${index}.json`)); index++) {
-      const turn = JSON.parse(readFileSync(join(dir, `turn-${index}.json`), 'utf8'));
-      if (turn.prompt !== scenario.turns[index]?.prompt) throw new Error('Owner script changed; cannot resume this trial');
-      turns.push(turn);
-    }
+export async function snapshot(workspace) {
+  const graph = {};
+  for (const collection of ['requirements', 'rules', 'resolutions', 'questions', 'sources']) {
+    graph[collection] = [];
+    let cursor;
+    do {
+      const result = JSON.parse(await cli(workspace, [collection, 'list', '--limit', '200', ...(cursor ? ['--cursor', cursor] : [])]));
+      graph[collection].push(...result.data.items);
+      cursor = result.meta.has_more ? result.meta.next_cursor : null;
+      if (result.meta.has_more && !cursor) throw new Error('Missing continuation cursor');
+    } while (cursor);
   }
-  let session = turns.at(-1)?.session;
-  for (const [index, turn] of scenario.turns.entries()) {
-    if (index < turns.length) continue;
-    const controller_action = turn.release_claim ? cli(build.binary, repo, ['questions', 'question_delivery', 'release']) : undefined;
-    if (turn.restart) {
-      if (!existsSync(join(repo, '.scenario/handoff.md'))) throw new Error(`Missing real handoff in ${repo}`);
-      session = undefined;
-    }
-    const before = readGraph(build.binary, repo);
-    const prompt = `${turn.prompt}\nUse ${build.binary} for every Provenance command. The repository is ${repo}.`;
-    writeFileSync(join(dir, `turn-${index}.prompt.txt`), `${prompt}\n`);
-    const result = await adapter.invoke({ repo, session, prompt, transcript: join(dir, `turn-${index}.jsonl`) });
-    session = result.session;
-    const after = readGraph(build.binary, repo);
-    const evidence = { index, restarted: !!turn.restart, prompt: turn.prompt, session, controller_action,
-      answer: result.answer, read_commands: readEvidence(result.events), tool_events: eventEvidence(result.events), before, after };
-    save(join(dir, `turn-${index}.json`), evidence);
-    turns.push(evidence);
-    console.log(`${variant} ${adapter.name} trial ${number}: turn ${index + 1}/${scenario.turns.length}`);
+  graph.reviews = {};
+  for (const collection of ['requirements', 'rules', 'resolutions']) for (const record of graph[collection]) {
+    graph.reviews[record.id] = JSON.parse(await cli(workspace, [record.id, 'get', '--view', 'review']));
   }
-  const scored = 'pending blind judgement';
-  const missingIds = 'pending blind judgement';
-  const report = { host: adapter.name, runner: version(adapter.name), model: adapter.model, build, trial: number,
-    variant, scenario: scenario.name, graph_findings: scored, missing_requirement_ids: missingIds,
-    missing_accepted_decisions: 'pending blind graph judgement', reminders: 'pending blind judgement',
-    method_departures: 'pending blind judgement', forced_compaction: 'not exercised', turns };
-  save(join(dir, 'report.json'), report);
-  return report;
+  return graph;
 }
 
-function packets(reports) {
-  const shuffled = [...reports];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = randomInt(i + 1); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+function runnerArgs(runner, session, prompt) {
+  if (runner.kind === 'codex') return session
+    ? ['exec', 'resume', '--json', '--dangerously-bypass-approvals-and-sandbox', '-m', runner.model, session, prompt]
+    : ['exec', '--json', '--dangerously-bypass-approvals-and-sandbox', '-m', runner.model, prompt];
+  if (runner.kind === 'claude') return ['-p', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions', '--setting-sources', '', '--model', runner.model, ...(session ? ['--resume', session] : []), prompt];
+  throw new Error('Only codex and claude runners are supported');
+}
+export function completedEvents(result) {
+  const events = result.stdout.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
+  if (result.code !== 0 || result.timedOut || events.some(e => e.type === 'error' || e.type === 'turn.failed' || e.is_error)) throw new Error('Runner failed');
+  if (!events.some(e => e.type === 'turn.completed' || (e.type === 'result' && e.subtype === 'success'))) throw new Error('Runner output is incomplete');
+  return events;
+}
+async function session(runner, workspace, output, prompts = [fixture.brief, ...fixture.responses]) {
+  let sessionId;
+  const transcript = [];
+  for (const [turn, prompt] of prompts.entries()) {
+    const result = await command(runner.executable, [...(runner.args ?? []), ...runnerArgs(runner, sessionId, prompt)], workspace, runner.timeoutMs ?? 600000);
+    await writeFile(join(output, `turn-${turn}.json`), JSON.stringify(result, null, 2));
+    let events;
+    try { events = completedEvents(result); } catch (error) { throw new Error(`${error.message}; see ${output}/turn-${turn}.json`); }
+    transcript.push({ role: 'owner', text: prompt }, ...events);
+    sessionId ??= events.find(e => e.type === 'thread.started')?.thread_id ?? events.find(e => e.session_id)?.session_id;
+    if (!sessionId) throw new Error('Runner did not return a resumable session id');
+    await writeFile(join(output, `graph-${turn}.json`), JSON.stringify(await snapshot(workspace), null, 2));
   }
-  const dir = join(output, 'blind-packets'); rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
-  const mapping = [];
-  for (const report of shuffled) {
-    const id = randomUUID();
-    mapping.push({ packet: id, host: report.host, model: report.model, trial: report.trial, variant: report.variant });
-    const turns = report.turns.map(({ session, ...turn }) => turn);
-    // Paths reveal run labels and are irrelevant to the graph and dialogue obligations.
-    const text = JSON.stringify({ packet: id, scenario: scenario.name, expected_decisions: scenario.accepted_decisions,
-      refused_decisions: scenario.refused_decisions, questions: scenario.questions, dependencies: scenario.dependencies, turns }, null, 2);
-    const scrubbed = text.replaceAll(report.build.binary, '<provenance>').replaceAll(output, '<run-root>')
-      .replaceAll(`${report.variant}-${report.host}-${report.trial}`, '<trial>');
-    writeFileSync(join(dir, `packet-${id}.json`), `${scrubbed}\n`);
-  }
-  save(join(output, 'packet-mapping.json'), mapping);
-  writeFileSync(join(dir, 'rubric.md'), `# Blind shaping evaluation\n\nScore each packet without inferring its host or variant. Return the packet ID and evidence for each finding.\n\n1. Missing accepted decisions: compare the expected facts with the final graph only. A stored Requirement, Resolution position, or Question answer must state the accepted fact. An ID alone is not evidence. Give one count per absent fact. Do not use dialogue promises as saved state.\n2. Prerequisite violations: read graph snapshots and the command order. Count each selection or resolution before all explicit prerequisites are answered. Use the independent dependency list. A claim conflict permits discovery but prevents work. Resolve same-turn order from command evidence; report unknown order separately.\n3. Reminders: count owner reminders that return the session to shaping or its method. Separate scheduled handoff instructions and ordinary answers from corrective reminders.\n4. Method departures: compare each selected Question's stored method with the actual work. Count departures with turn numbers and evidence. Do not treat Topic ownership as a Question method.\n5. Fresh reads: for each turn, check that the stored Topic claim and selected Question method were read before work. A fresh complete Topic summary can supply method and claim data. A handoff, prior dialogue, or unchecked read cannot replace stored recovery reads. Report missing reads separately.\n6. Refused decisions: check the final graph for the two refused ideas. A record of refusal is permitted. An obligation that adopts a refused idea is a failure.\n\nReturn uncertain cases separately. Structural findings are review aids, not the final semantic scores. Missing accepted decisions and prerequisite violations require zero in every candidate trial. Reminder and departure thresholds require owner approval after this baseline. Forced compaction is not part of these packets.\n`);
-  return dir;
+  return { transcript, sessionId };
 }
 
-function mixedPackets(baseline, candidate, compaction) {
-  const entries = [];
-  for (const directory of [baseline, candidate]) {
-    const mapping = JSON.parse(readFileSync(join(directory, 'packet-mapping.json'), 'utf8'));
-    for (const key of mapping) {
-      entries.push({ key, packet: JSON.parse(readFileSync(join(directory, 'blind-packets', `packet-${key.packet}.json`), 'utf8')) });
-    }
+async function modelEvidence(runner, sessionId, transcript) {
+  if (runner.kind === 'claude') {
+    const models = [...new Set(transcript.map(e => e.message?.model).filter(Boolean))];
+    if (!models.length) throw new Error('Claude did not report its model');
+    return { models, locator: 'transcript:assistant.message.model' };
   }
-  const evidence = JSON.parse(readFileSync(compaction, 'utf8'));
-  const compactEvent = readFileSync(join(dirname(compaction), 'compact.jsonl'), 'utf8').trim().split('\n')
-    .map(line => JSON.parse(line)).find(event => event.type === 'system' && event.subtype === 'compact_boundary');
-  if (!compactEvent) throw new Error('Missing retained manual compaction event');
-  entries.push({ key: { variant: 'candidate', host: 'claude', case: 'forced_compaction' }, packet: {
-    case: 'forced_compaction', scenario: scenario.name, expected_decisions: [], refused_decisions: [],
-    dependencies: scenario.dependencies, questions: scenario.questions,
-    compaction_event: { type: compactEvent.type, subtype: compactEvent.subtype, compact_metadata: compactEvent.compact_metadata },
-    turns: [{ index: 0, prompt: 'Resume Topic topic_pay and Question question_threshold from stored state. Establish the stored claim and method before any work. Do not change records. Report the stored Topic actor and Question method.',
-      before: evidence.before, after: evidence.after, answer: evidence.answer, tool_events: evidence.tool_events }],
-  } });
-  if (entries.length !== 14) throw new Error('Expected twelve trials and two compaction cases');
-  for (let index = entries.length - 1; index > 0; index--) {
-    const other = randomInt(index + 1); [entries[index], entries[other]] = [entries[other], entries[index]];
-  }
-  const directory = join(output, 'blind-packets');
-  mkdirSync(directory, { recursive: true });
-  if (readdirSync(directory).length) throw new Error('Mixed packet destination must be empty');
-  const mapping = [];
-  for (const entry of entries) {
-    const id = randomUUID();
-    mapping.push({ ...entry.key, original_packet: entry.key.packet, packet: id });
-    entry.packet.packet = id;
-    let content = JSON.stringify(entry.packet, null, 2);
-    content = content.replace(/\/home\/ben\/[^\s"\\]+/g, '<local-path>')
-      .replace(/\/tmp\/[^\s"\\]+/g, '<local-path>')
-      .replace(/gpt-6-astra|claude-opus-5-5\[1m\]|codex|claude|baseline|candidate/gi, '<identity>')
-      .replace(/"name": "Bash"/g, '"name": "shell"')
-      .replace(/"name": "Read"/g, '"name": "read_file"')
-      .replace(/"name": "Write"/g, '"name": "write_file"')
-      .replace(/"name": "Edit"/g, '"name": "edit_file"')
-      .replace(/"name": "Glob"/g, '"name": "find_files"')
-      .replace(/"name": "Grep"/g, '"name": "search_files"');
-    writeFileSync(join(directory, `packet-${id}.json`), `${content}\n`);
-  }
-  save(join(output, 'packet-mapping.json'), mapping);
-  const rubric = readFileSync(join(baseline, 'blind-packets/rubric.md'), 'utf8')
-    .replace('Reminder and departure thresholds require owner approval after this baseline. Forced compaction is not part of these packets.', 'The owner gate below applies to this mixed set.')
-    .replace('Keep its result separate from the six long-conversation trials. Its candidate counterpart remains required.', 'Keep both compaction results separate from the twelve conversation trials.');
-  writeFileSync(join(directory, 'rubric.md'), `${rubric}\nOwner gate, 2026-10-12: require zero missed fresh Topic claim and Question method reads before every work turn, with unfiltered output; zero missing accepted decisions, prerequisite violations, and corrective reminders. Method departures must not increase. A direct owner choice can settle a prototype Question when the stored answer explains why. Compare all anonymous packets with this same rule. Do not infer identities. Report note-only turns separately. Score the two forced-compaction cases separately.\n`);
-  console.log(`Mixed blind packets: ${directory}`);
+  const sessions = join(process.env.CODEX_HOME ?? join(process.env.HOME, '.codex'), 'sessions');
+  const files = await readdir(sessions, { recursive: true });
+  const file = files.find(f => f.endsWith(`${sessionId}.jsonl`));
+  if (!file) throw new Error('Codex session metadata is missing');
+  const events = (await readFile(join(sessions, file), 'utf8')).trim().split('\n').map(l => JSON.parse(l));
+  const models = [...new Set(events.filter(e => e.type === 'turn_context').map(e => e.payload.model).filter(Boolean))];
+  if (!models.length) throw new Error('Codex did not record its model');
+  return { models, locator: `${file}:turn_context.model` };
 }
 
-try {
-  if (args.includes('--mix-with')) {
-    mixedPackets(resolve(option('--mix-with')), resolve(option('--candidate-packets')), resolve(option('--compaction-evidence')));
-  } else if (args.includes('--packets-only')) {
-    const reports = readdirSync(output, { withFileTypes: true })
-      .filter(entry => entry.isDirectory() && existsSync(join(output, entry.name, 'report.json')))
-      .map(entry => {
-        const dir = join(output, entry.name);
-        const report = JSON.parse(readFileSync(join(dir, 'report.json'), 'utf8'));
-        for (const turn of report.turns) {
-          const events = readFileSync(join(dir, `turn-${turn.index}.jsonl`), 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
-          turn.tool_events = eventEvidence(events);
-        }
-        return report;
-      });
-    if (!reports.length) throw new Error('No completed trial reports for blind packets');
-    console.log(`Blind packets: ${packets(reports)}`);
-  } else if (args.includes('--probe')) {
-    const binary = option('--cli', process.env.SHAPING_EVAL_CLI ?? 'provenance');
-    const results = [];
-    for (const adapter of agents) results.push(await probe(adapter, binary));
-    save(join(output, 'probe.json'), results);
-    console.log(`Probe passed; evidence: ${output}`);
-  } else {
-    const trials = Number(option('--trials', '3'));
-    if (!Number.isInteger(trials) || trials < 1) throw new Error('--trials must be a positive integer');
-    const base = prepareBinary(option('--base', 'd981e0bd10f00900772bfc49544caa43d17f3154'), option('--base-cli'), root);
-    const candidate = prepareBinary(option('--candidate', 'HEAD'), option('--candidate-cli'), root);
-    save(join(output, 'builds.json'), { base, candidate });
-    for (const adapter of agents) {
-      const saved = join(output, `probe-${adapter.name}`, 'probe.json');
-      if (args.includes('--resume') && existsSync(saved)) {
-        const record = JSON.parse(readFileSync(saved, 'utf8'));
-        if (record.model !== adapter.model || record.runner !== version(adapter.name)) throw new Error('Runner identity changed; cannot resume');
-      } else await probe(adapter, base.binary);
-    }
-    const stage = option('--stage', 'baseline');
-    if (!['baseline', 'candidate'].includes(stage)) throw new Error('--stage must be baseline or candidate');
-    if (stage === 'candidate' && !option('--approved-thresholds')) throw new Error('Candidate trials require --approved-thresholds after baseline approval');
-    if (stage === 'candidate') {
-      const thresholds = JSON.parse(readFileSync(option('--approved-thresholds'), 'utf8'));
-      if (!thresholds.approval || !Number.isInteger(thresholds.reminders) || !Number.isInteger(thresholds.method_departures)) throw new Error('Missing owner threshold approval');
-      save(join(output, 'thresholds.json'), thresholds);
-    }
-    const reports = [];
-    // Separate repositories and sessions let the hosts run independently.
-    await Promise.all(agents.map(async adapter => {
-      for (let number = 1; number <= trials; number++) reports.push(await trial(adapter, stage === 'baseline' ? base : candidate, number, stage));
-    }));
-    const destination = packets(reports);
-    save(join(output, 'checkpoint.json'), { stage, trials, blind_packets: destination,
-      remaining: stage === 'baseline' ? 'Blind scores and owner threshold approval; then paired candidate trials.' : 'Blind scores and final release gates.' });
-    console.log(`Checkpoint: publish ${destination} alone, without packet-mapping.json, for blind scoring. Stop after publication.`);
+async function main() {
+  const flags = Object.fromEntries(process.argv.slice(2).reduce((pairs, arg, i, all) => i % 2 ? pairs : [...pairs, [arg.replace(/^--/, ''), all[i + 1]]], []));
+  if (!['base', 'candidate'].includes(flags.variant) || !flags.config || !flags.output) throw new Error('Use --config PATH --variant base|candidate --output PATH');
+  const config = JSON.parse(await readFile(flags.config));
+  const output = resolve(flags.output);
+  await mkdir(dirname(output), { recursive: true });
+  await mkdir(output, { recursive: false });
+  await writeFile(join(output, 'config.json'), JSON.stringify(config, null, 2));
+  for (const runner of config.runners) for (let run = 1; run <= (flags.probe === 'true' ? 1 : 3); run++) {
+    const dir = join(output, `${runner.kind}-${run}`);
+    await mkdir(dir);
+    const workspace = await mkdtemp(join(tmpdir(), 'shaping-eval-'));
+    await prepare(workspace, { variant: flags.variant });
+    const skillHashes = {};
+    for (const name of skillNames) skillHashes[name] = createHash('sha256').update(await readFile(join(workspace, '.agents/skills', name, 'SKILL.md'))).digest('hex');
+    skillHashes['docs/shaping.md'] = createHash('sha256').update(await readFile(join(workspace, 'docs/shaping.md'))).digest('hex');
+    await writeFile(join(dir, 'settings.json'), JSON.stringify({ runner, workspace, skillHashes, variant: flags.variant, baseCommit, cli: await checked(process.env.PROVENANCE_BIN ?? 'provenance', ['--version'], workspace) }, null, 2));
+    console.log(`Start ${runner.kind} session ${run}`);
+    const { transcript, sessionId } = await session(runner, workspace, dir, flags.probe === 'true' ? [
+      'Probe only. Read the installed grounded-writing skill. Use the real Provenance CLI to create Source src_runner_probe with name Runner probe and source type project_artifact. Then stop. Work only in this repository.',
+      'Resume probe. Read src_runner_probe through the real CLI. Report its id and stop. Do not recreate it.',
+    ] : undefined);
+    const identity = await modelEvidence(runner, sessionId, transcript);
+    if (identity.models.some(model => model !== runner.model)) throw new Error(`Model selection changed: ${JSON.stringify(identity)}`);
+    const graph = await snapshot(workspace);
+    await writeFile(join(dir, 'graph.json'), JSON.stringify(graph, null, 2));
+    const result = { transcript, model: identity, settings: runner, skillHashes, graph, ...score(graph) };
+    await writeFile(join(dir, 'result.json'), JSON.stringify(result, null, 2));
+    await cp(join(workspace, '.provenance'), join(dir, 'canonical'), { recursive: true });
+    // A separate review packet hides variant, runner, model, and skill hashes.
+    const blindId = randomUUID();
+    await writeFile(join(dir, 'blind-key.json'), JSON.stringify({ blindId, variant: flags.variant, runner: runner.kind, run }));
+    await mkdir(join(output, 'review'), { recursive: true });
+    await writeFile(join(output, 'review', `${blindId}.json`), JSON.stringify({ graph, ownerResponses: fixture.responses, transcript: transcript.flatMap(e => e.item?.type === 'agent_message' ? [e.item.text] : e.message?.content?.filter(c => c.type === 'text').map(c => c.text) ?? []), expectedPlacement: fixture.expectedPlacement, ...score(graph) }, null, 2));
+    console.log(`Complete ${runner.kind} session ${run}`);
   }
-} catch (error) {
-  save(join(output, 'stop.json'), { error: error.message, evidence: output });
-  console.error(error.message);
-  process.exitCode = 1;
 }
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

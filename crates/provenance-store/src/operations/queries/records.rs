@@ -43,6 +43,9 @@ pub(super) async fn search(
         .map_err(crate::operations::reader::page_error)
 }
 
+/// Intersects optional text, kind, and lifecycle search predicates.
+#[rule("rule_porcelain_search_text_optional")]
+#[rule("rule_porcelain_search_predicates_intersect")]
 async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<SearchResult> {
     use crate::operations::reader::PAGE_BYTES;
     use crate::operations::reader::{Cursor, Position};

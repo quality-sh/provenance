@@ -136,7 +136,8 @@ impl StateStore {
         )
     }
 
-    pub fn set_requirement_refines(
+    /// Adds one parent without changing the other parents or Rule records.
+    pub fn add_requirement_refines(
         &self,
         scope_id: &ScopeId,
         requirement: &StableId,
@@ -145,7 +146,7 @@ impl StateStore {
         self.save_record(
             empty_update(scope_id, requirement),
             Some(RequirementRelations {
-                refines: Some(SingleEdit::Set(target)),
+                refines: Some(add_delta(vec![target])),
                 ..RequirementRelations::default()
             }),
         )
@@ -159,7 +160,7 @@ impl StateStore {
         self.save_record(
             empty_update(scope_id, requirement),
             Some(RequirementRelations {
-                refines: Some(SingleEdit::Clear),
+                refines: Some(ListEdit::Set(Vec::new())),
                 ..RequirementRelations::default()
             }),
         )
@@ -195,6 +196,9 @@ impl StateStore {
         )
     }
 
+    /// Records supersession without changing children or the prior record.
+    #[provenance_macros::rule("rule_supersession_preserves_unselected_children")]
+    #[provenance_macros::rule("rule_supersession_does_not_archive_superseded_record")]
     pub fn add_requirement_supersedes(
         &self,
         scope_id: &ScopeId,
@@ -321,6 +325,7 @@ const fn remove_delta(remove: Vec<StableId>) -> ListEdit {
 
 fn empty_update(scope_id: &ScopeId, id: &StableId) -> UpdateRequirementInput {
     UpdateRequirementInput {
+        archived_in_commit: None,
         scope_id: scope_id.clone(),
         id: id.clone(),
         expected_etag: None,
@@ -348,7 +353,7 @@ impl StateStore {
             return Ok(None);
         };
         let mut wanted = serde_json::to_value(input)?;
-        for field in ["depends_on", "supersedes"] {
+        for field in ["refines", "depends_on", "supersedes"] {
             if let Some(serde_json::Value::Array(ids)) = wanted.get_mut(field) {
                 ids.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
                 ids.dedup();

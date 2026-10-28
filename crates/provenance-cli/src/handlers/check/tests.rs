@@ -105,6 +105,7 @@ async fn scoped_check_does_not_read_another_scope() {
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_graph_report_refuses_undeclared_scope", examples)]
 async fn binding_check_refuses_an_absent_selected_scope() {
     let directory = tempfile::tempdir().unwrap();
     let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
@@ -124,7 +125,10 @@ async fn binding_check_refuses_an_absent_selected_scope() {
         .await
         .unwrap_err();
 
-    assert!(error.contains("scope absent does not exist"), "{error}");
+    assert!(
+        error.contains("unknown scope `absent`; declared scopes: default"),
+        "{error}"
+    );
 }
 
 #[test]

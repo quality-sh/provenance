@@ -77,7 +77,7 @@ fn requirement(id: &str, refines: Option<&str>, depends_on: &[&str]) -> CreateRe
         description: None,
         status: RequirementStatus::Active,
         domain_id: Some(sid("domain_payroll")),
-        refines: refines.map(sid),
+        refines: refines.into_iter().map(sid).collect(),
         depends_on: depends_on.iter().map(|id| sid(id)).collect(),
         supersedes: Vec::new(),
         spawned_by: None,

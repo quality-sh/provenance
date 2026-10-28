@@ -20,6 +20,18 @@ resolver = "2"
 [profile.dev]
 debug = "line-tables-only"
 
+# A dev build serves the review page. Its reads hash every canonical shard,
+# parse JSON Lines, and query SQLite on each request; those three crates run
+# optimized so an unoptimized build does not spend most of a request there.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.serde_json]
+opt-level = 3
+
+[profile.dev.package.libsqlite3-sys]
+opt-level = 3
+
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
@@ -29,7 +41,7 @@ missing_panics_doc = "allow"
 must_use_candidate = "allow"
 module_name_repetitions = "allow"
 [workspace.package]
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 license = "BUSL-1.1"
 repository = "https://github.com/quality-sh/provenance"
@@ -47,7 +59,6 @@ filetime = "0.2"
 flate2 = "1"
 fs2 = "0.4"
 fs_at = "0.2"
-insta = "1.39"
 jsonschema = { version = "0.18", features = ["draft202012"] }
 open = "5.4"
 proc-macro2 = "1.0"
@@ -74,13 +85,13 @@ uuid = { version = "1.10", features = ["v4"] }
 toml = "0.8"
 trybuild = "1.0"
 predicates = "3.1"
-provenance-core = { path = "crates/provenance-core", version = "0.2.3" }
-provenance-macros = { path = "crates/provenance-macros", version = "0.2.3" }
-provenance-porcelain = { path = "crates/provenance-porcelain", version = "0.2.3" }
-provenance-report = { path = "crates/provenance-report", version = "0.2.3" }
-provenance-scanner = { path = "crates/provenance-scanner", version = "0.2.3" }
-provenance-ste100 = { path = "crates/provenance-ste100", version = "0.2.3" }
-provenance-store = { path = "crates/provenance-store", version = "0.2.3" }
+provenance-core = { path = "crates/provenance-core", version = "0.3.0" }
+provenance-macros = { path = "crates/provenance-macros", version = "0.3.0" }
+provenance-porcelain = { path = "crates/provenance-porcelain", version = "0.3.0" }
+provenance-report = { path = "crates/provenance-report", version = "0.3.0" }
+provenance-scanner = { path = "crates/provenance-scanner", version = "0.3.0" }
+provenance-ste100 = { path = "crates/provenance-ste100", version = "0.3.0" }
+provenance-store = { path = "crates/provenance-store", version = "0.3.0" }
 walkdir = "2.5"
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem"] }
 

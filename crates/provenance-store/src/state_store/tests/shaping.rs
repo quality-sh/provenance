@@ -140,6 +140,7 @@ fn shaping_records_are_written_deterministically_and_validate_relationships() {
 #[test]
 #[verifies("rule_claim_eligibility", examples)]
 #[verifies("rule_claim_cleared_on_exit", examples)]
+#[verifies("rule_claim_holder_exclusive", examples)]
 fn topic_claims_are_check_and_set_and_clear_on_close() {
     let (_dir, store, scope) = seeded_requirement_store();
     store
@@ -164,12 +165,24 @@ fn topic_claims_are_check_and_set_and_clear_on_close() {
     assert!(err
         .to_string()
         .contains("topic topic_overtime is already claimed by agent-one"));
+    assert!(matches!(
+        crate::write_error::WriteError(err).safe(),
+        crate::write_error::WriteFailure::ClaimConflict { holder } if holder == "agent-one"
+    ));
+    let repeated = store.claim_topic(&scope, &topic_id, "agent-one").unwrap();
+    assert_eq!(repeated.topic.claimed_at, claimed.topic.claimed_at);
+    let err = store
+        .release_topic(&scope, &topic_id, "agent-two")
+        .unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("topic topic_overtime is already claimed by agent-one"));
 
-    let released = store.release_topic(&scope, &topic_id).unwrap();
+    let released = store.release_topic(&scope, &topic_id, "agent-one").unwrap();
     assert_eq!(released.claimed_by, None);
     assert_eq!(released.claimed_at, None);
     assert!(store
-        .release_topic(&scope, &topic_id)
+        .release_topic(&scope, &topic_id, "agent-one")
         .unwrap_err()
         .to_string()
         .contains("topic topic_overtime is not claimed"));

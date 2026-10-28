@@ -17,25 +17,16 @@ export PATH="$CARGO_HOME/bin:$PATH"
 
 crates_are_visible() {
   local crate
-  for crate in \
-    provenance-macros \
-    provenance-core \
-    provenance-scanner \
-    provenance-ste100 \
-    provenance-store \
-    provenance-sdk \
-    provenance-http-client \
-    provenance-transport \
-    provenance-cli
+  while IFS= read -r crate
   do
     curl --fail --silent --show-error \
       --user-agent "provenance-release-smoke/$version" \
       --output /dev/null "https://crates.io/api/v1/crates/$crate/$version" || return
-  done
+  done < "$script_directory/../../release-crates.txt"
 }
 
 retry_channel "$channel" crates_are_visible
-if ! cargo install --locked provenance-cli --version "=$version"; then
+if ! sfw cargo install --locked provenance-cli --version "=$version"; then
   channel_failure "$channel" "provenance-cli $version failed to install after it became visible"
   exit 1
 fi
@@ -80,7 +71,7 @@ cat > "$fixture/tests/sdk_macros.rs" <<'RUST'
 use provenance_sdk::{rule, verifies};
 RUST
 
-if ! cargo check --manifest-path "$fixture/Cargo.toml" --all-targets; then
+if ! sfw cargo check --manifest-path "$fixture/Cargo.toml" --all-targets; then
   channel_failure "$channel" "the installed provenance-sdk macro reexports did not compile"
   exit 1
 fi
