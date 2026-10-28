@@ -72,14 +72,9 @@ impl<K: ProjectionRow> Table<'_, K> {
         for chunk in values.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
-                concat!(
-                    "SELECT {expression} AS record_bytes FROM {table} ",
-                    "WHERE scope_id = ? AND {column} IN ({marks})"
-                ),
-                expression = expression,
-                table = quoted(K::TABLE),
-                column = quoted(column),
-                marks = marks,
+                "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND {} IN ({marks})",
+                quoted(K::TABLE),
+                quoted(column)
             );
             let mut query =
                 sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
@@ -137,15 +132,9 @@ impl<K: ProjectionRow> Table<'_, K> {
         for chunk in values.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
-                concat!(
-                    "SELECT id FROM {table} WHERE scope_id = ? ",
-                    "AND {column} IN ({marks}){filter} ",
-                    "ORDER BY id LIMIT ?"
-                ),
-                table = quoted(K::TABLE),
-                column = quoted(column),
-                marks = marks,
-                filter = filter,
+                "SELECT id FROM {} WHERE scope_id = ? AND {} IN ({marks}){filter} ORDER BY id LIMIT ?",
+                quoted(K::TABLE),
+                quoted(column)
             );
             let mut query =
                 sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
@@ -186,13 +175,8 @@ impl<K: ProjectionRow> Table<'_, K> {
         for chunk in wanted.chunks(BIND_CHUNK) {
             let marks = vec!["?"; chunk.len()].join(", ");
             let sql = format!(
-                concat!(
-                    "SELECT {expression} AS record_bytes FROM {table} ",
-                    "WHERE scope_id = ? AND id IN ({marks})"
-                ),
-                expression = expression,
-                table = quoted(K::TABLE),
-                marks = marks,
+                "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND id IN ({marks})",
+                quoted(K::TABLE)
             );
             let mut query =
                 sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
