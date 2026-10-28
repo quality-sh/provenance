@@ -92,14 +92,7 @@ pub fn scan_path(path: &Utf8Path) -> anyhow::Result<Vec<FileScan>> {
 
 pub fn scan_path_with_content(path: &Utf8Path) -> anyhow::Result<Vec<FileScanWithContent>> {
     let mut scans = Vec::new();
-    for entry in repository_walk(path, false) {
-        let entry = entry?;
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let Some(file_path) = Utf8PathBuf::from_path_buf(entry.path().to_path_buf()).ok() else {
-            continue;
-        };
+    for file_path in source_paths(path)? {
         let Some(language) = file_path.extension().and_then(Language::from_extension) else {
             continue;
         };
@@ -110,8 +103,31 @@ pub fn scan_path_with_content(path: &Utf8Path) -> anyhow::Result<Vec<FileScanWit
             content,
         });
     }
-    scans.sort_by(|a, b| a.scan.file_path.cmp(&b.scan.file_path));
     Ok(scans)
+}
+
+/// The source files the scan selects under `path`, in path order. No file
+/// is read.
+pub fn source_paths(path: &Utf8Path) -> anyhow::Result<Vec<Utf8PathBuf>> {
+    let mut paths = Vec::new();
+    for entry in repository_walk(path, false) {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let Some(file_path) = Utf8PathBuf::from_path_buf(entry.path().to_path_buf()).ok() else {
+            continue;
+        };
+        if file_path
+            .extension()
+            .and_then(Language::from_extension)
+            .is_some()
+        {
+            paths.push(file_path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
 }
 
 /// Walks a repository tree for the scan. Directories named like dependency,

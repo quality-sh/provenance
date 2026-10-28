@@ -1,7 +1,7 @@
 //! The shared continuation identity and authenticated position.
 use super::ReadContext;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit as _, Mac};
 use provenance_core::protocol::read_failure::ReadFailure;
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
@@ -72,16 +72,13 @@ impl Cursor {
         token: Option<&str>,
         live_revision: Option<String>,
     ) -> anyhow::Result<(Self, Position)> {
-        let identity = format!(
-            "{:x}",
-            Sha256::digest(serde_json::to_vec(&(
-                1,
-                operation,
-                ctx.repo(),
-                ctx.snapshot().scope(),
-                selector,
-            ))?)
-        );
+        let identity = hex::encode(Sha256::digest(serde_json::to_vec(&(
+            1,
+            operation,
+            ctx.repo(),
+            ctx.snapshot().scope(),
+            selector,
+        ))?));
         let cursor = Self {
             identity,
             key: signing_key(ctx)?,
@@ -170,4 +167,22 @@ fn signing_key(ctx: &ReadContext) -> anyhow::Result<Vec<u8>> {
         .read_to_end(&mut bytes)?;
     anyhow::ensure!(bytes.len() == 32, "invalid cursor signing key");
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Signature;
+    use hmac::{KeyInit as _, Mac as _};
+
+    // This test has no Rule. It keeps the cursor signature the same when the hash library changes.
+    #[test]
+    fn signature_is_hmac_sha256() {
+        // RFC 4231, test case 2.
+        let mut mac = Signature::new_from_slice(b"Jefe").unwrap();
+        mac.update(b"what do ya want for nothing?");
+        assert_eq!(
+            hex::encode(mac.finalize().into_bytes()),
+            "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+        );
+    }
 }

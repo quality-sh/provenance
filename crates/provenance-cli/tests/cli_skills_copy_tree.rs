@@ -70,6 +70,38 @@ fn bundled_skills_carry_nothing_that_install_would_drop() {
     }
 }
 
+/// Implementation aid: each installed `SKILL.md`, after its stamp line, is
+/// byte for byte the root source on every platform.
+#[test]
+fn installed_payloads_match_the_root_sources() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let dir = tempfile::tempdir().unwrap();
+    install(dir.path(), &["--copy"]).success();
+
+    let names = std::fs::read_dir(workspace.join("skills"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(names.len(), 4, "{names:?}");
+    for name in &names {
+        let source =
+            std::fs::read_to_string(workspace.join("skills").join(name).join("SKILL.md")).unwrap();
+        for root in [".agents/skills", ".claude/skills"] {
+            let installed =
+                std::fs::read_to_string(dir.path().join(root).join(name).join("SKILL.md")).unwrap();
+            let start = installed.find("<!-- Installed by provenance ").unwrap();
+            let end = start + installed[start..].find('\n').unwrap() + 1;
+            let payload = format!("{}{}", &installed[..start], &installed[end..]);
+            assert_eq!(payload, source, "{root} payload differs for {name}");
+        }
+    }
+}
+
 /// Runs `provenance skills install` in `dir`, always with the JSON report.
 fn install(dir: &Path, arguments: &[&str]) -> assert_cmd::assert::Assert {
     Command::cargo_bin("provenance")

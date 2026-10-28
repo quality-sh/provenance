@@ -22,7 +22,9 @@ use std::collections::{BTreeMap, BTreeSet};
 /// limit bound in the order that `id_page_sql` requires.
 async fn plan(pool: &SqlitePool, sql: &str, filter_value: Option<&str>) -> Vec<String> {
     let sql = format!("EXPLAIN QUERY PLAN {sql}");
-    let mut query = sqlx::query(&sql).bind("default").bind("");
+    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql))
+        .bind("default")
+        .bind("");
     if let Some(value) = filter_value {
         query = query.bind(value);
     }

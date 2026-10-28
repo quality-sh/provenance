@@ -66,10 +66,10 @@ impl OutputFrame {
     }
 }
 
-static CONTRACT: LazyLock<jsonschema::JSONSchema> = LazyLock::new(|| {
+static CONTRACT: LazyLock<jsonschema::Validator> = LazyLock::new(|| {
     let schema =
         serde_json::from_str(include_str!("output.schema.json")).expect("follow contract is JSON");
-    jsonschema::JSONSchema::compile(&schema).expect("follow contract is a valid schema")
+    jsonschema::draft7::new(&schema).expect("follow contract is a valid schema")
 });
 
 pub(in crate::review) async fn emit(frame: &OutputFrame) -> anyhow::Result<()> {

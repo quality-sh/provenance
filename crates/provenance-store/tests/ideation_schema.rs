@@ -9,14 +9,14 @@ use schemars::{
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::{json, Value};
 
-fn compiled(schema: &Value) -> jsonschema::JSONSchema {
-    jsonschema::JSONSchema::options()
+fn compiled(schema: &Value) -> jsonschema::Validator {
+    jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(schema)
+        .build(schema)
         .unwrap()
 }
 
-fn request_validator(operation: &str) -> jsonschema::JSONSchema {
+fn request_validator(operation: &str) -> jsonschema::Validator {
     let definitions = catalog::definitions();
     let definition = definitions
         .iter()
@@ -39,12 +39,11 @@ fn validate<T: JsonSchema>(contract: Contract, value: &Value) {
             .into_root_schema_for::<T>(),
     )
     .unwrap();
-    if let Err(errors) = compiled(&schema).validate(value) {
-        panic!(
-            "{}",
-            errors.map(|e| e.to_string()).collect::<Vec<_>>().join("\n")
-        );
-    };
+    let errors = compiled(&schema)
+        .iter_errors(value)
+        .map(|e| e.to_string())
+        .collect::<Vec<_>>();
+    assert!(errors.is_empty(), "{}", errors.join("\n"));
 }
 
 /// The shipped-v1 proposal row layout: camelCase aliases, optional fields

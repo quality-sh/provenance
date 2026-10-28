@@ -112,6 +112,6 @@ fn binding_id(input: &MaterializeVerificationBindingInput) -> anyhow::Result<Sta
         input.rule_id.as_str(),
         input.key
     );
-    let digest = format!("{:x}", Sha256::digest(identity.as_bytes()));
+    let digest = hex::encode(Sha256::digest(identity.as_bytes()));
     StableId::new(format!("verification_binding_{}", &digest[..20]))
 }

@@ -108,6 +108,8 @@ fn rule_creation_rejects_a_deterministic_violation_without_writing_the_record() 
             "req_anchor",
             "--statement",
             "Use one sentence; do not join two",
+            "--status",
+            "active",
         ])
         .assert()
         .failure()

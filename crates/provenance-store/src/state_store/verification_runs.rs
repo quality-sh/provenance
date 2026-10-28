@@ -177,7 +177,7 @@ impl StateStore {
             let mut file = match std::fs::File::open(&path) {
                 Ok(file) => file,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    let digest = format!("{:x}", Sha256::digest([]));
+                    let digest = hex::encode(Sha256::digest([]));
                     let mut next = || Ok(None);
                     return read(&digest, &mut next);
                 }
@@ -192,7 +192,7 @@ impl StateStore {
                 }
                 hasher.update(&chunk[..count]);
             }
-            let digest = format!("{:x}", hasher.finalize());
+            let digest = hex::encode(hasher.finalize());
             let mut reader = BufReader::new(std::fs::File::open(&path)?);
             let mut line_number = 0_i64;
             let mut next = || {

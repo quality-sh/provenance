@@ -156,14 +156,17 @@ async fn clear_cache(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
         "projection_family_digests",
         "projection_unit_digests",
     ] {
-        sqlx::query(&format!("DELETE FROM {table}"))
+        sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {table}")))
             .execute(&mut **tx)
             .await?;
     }
     for family in super::ProjectionFamily::ALL {
-        sqlx::query(&format!("DELETE FROM {}", family.family_name()))
-            .execute(&mut **tx)
-            .await?;
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "DELETE FROM {}",
+            family.family_name()
+        )))
+        .execute(&mut **tx)
+        .await?;
     }
     Ok(())
 }
