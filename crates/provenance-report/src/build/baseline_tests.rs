@@ -1,13 +1,14 @@
 //! Base evidence that is retired, unreadable or replaced keeps the report
 //! comparisons honest.
 
-use super::test_repo::commit;
+use super::test_repo::{commit, git};
 use super::tests::{
     comparison, envelope, has_finding, remove_implementation_bindings, repository, write,
     write_graph, write_graph_with_statuses, write_implementation_binding,
 };
 use crate::envelope::{BaselineCompatibility, Completeness};
 use provenance_macros::verifies;
+use serde_json::json;
 
 #[test]
 #[verifies("rule_report_missing_evidence_compares_with_base", examples)]
@@ -126,16 +127,18 @@ fn unreadable_base_source_keeps_an_incomplete_report() {
 #[verifies("rule_report_envelope_states_only_known_facts", examples)]
 #[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn unreadable_base_source_on_a_complete_scan_keeps_the_other_findings() {
-    let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
+    let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
+    let (_directory, repo) = repository(&["rule_anchor"], source);
     std::fs::write(repo.join("src/legacy.rs"), [0xff, 0xfe, b'\n']).unwrap();
-    let base = commit(&repo, "Add a file that is not UTF-8");
+    let base = commit(&repo, "Add a marker and a file that is not UTF-8");
     std::fs::remove_file(repo.join("src/legacy.rs")).unwrap();
+    write(&repo, "src/lib.rs", "fn implements() {}\n");
     let rules = repo.join(".provenance/state/scopes/default/rules/rule.jsonl");
     let changed = std::fs::read_to_string(&rules)
         .unwrap()
         .replace("behavior is present", "behavior is changed");
     std::fs::write(&rules, changed).unwrap();
-    let head = commit(&repo, "Remove the file and change the Rule");
+    let head = commit(&repo, "Remove the file and the marker and change the Rule");
 
     let report = envelope(&repo, &base, &head);
 
@@ -146,7 +149,21 @@ fn unreadable_base_source_on_a_complete_scan_keeps_the_other_findings() {
         .baseline_reason
         .as_deref()
         .is_some_and(|reason| reason.contains("source files at base commit")));
-    assert!(!report.graph_changes.is_empty());
+    assert!(!has_finding(
+        &report,
+        "implementation_site_removed",
+        "rule_anchor"
+    ));
+    assert_eq!(
+        serde_json::to_value(&report.graph_changes).unwrap(),
+        json!([{
+            "kind": "rule",
+            "change": "changed",
+            "id": "rule_anchor",
+            "statement": "The rule_anchor behavior is changed",
+            "statement_before": "The rule_anchor behavior is present"
+        }])
+    );
     assert_eq!(
         comparison(&report, "requirement_statement_changed", "rule_anchor"),
         "uncertain"
@@ -197,4 +214,31 @@ fn assert_activated_rule_is_new(base_status: &str) {
         comparison(&report, "active_rule_missing_implementation", "rule_anchor"),
         "pre_existing"
     );
+}
+
+#[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
+fn marker_in_a_path_the_scan_skips_is_not_base_evidence() {
+    let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
+    let marker = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
+    write(&repo, ".gitignore", "generated/\n");
+    write(&repo, "generated/lib.rs", marker);
+    write(&repo, "target/lib.rs", marker);
+    git(&repo, &["add", "-f", "generated/lib.rs"]);
+    let base = commit(&repo, "Add markers in paths the scan skips");
+    write(&repo, "src/lib.rs", "fn after() {}\n");
+    let head = commit(&repo, "Change unrelated code");
+
+    let report = envelope(&repo, &base, &head);
+
+    assert_eq!(report.scan.baseline, BaselineCompatibility::Compatible);
+    assert_eq!(
+        comparison(&report, "active_rule_missing_implementation", "rule_anchor"),
+        "pre_existing"
+    );
+    assert!(!has_finding(
+        &report,
+        "implementation_site_removed",
+        "rule_anchor"
+    ));
 }
