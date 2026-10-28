@@ -7,8 +7,10 @@ use super::tests::{
     write_graph, write_graph_with_statuses, write_implementation_binding,
 };
 use crate::envelope::{BaselineCompatibility, Completeness};
+use provenance_macros::verifies;
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn retired_base_binding_is_not_evidence_for_comparison() {
     let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
     write_implementation_binding(&repo, Some(true));
@@ -27,6 +29,8 @@ fn retired_base_binding_is_not_evidence_for_comparison() {
 }
 
 #[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn unreadable_base_binding_keeps_graph_and_source_findings() {
     let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
     let (_directory, repo) = repository(&["rule_anchor"], source);
@@ -73,6 +77,7 @@ fn unreadable_base_binding_keeps_graph_and_source_findings() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn typed_replacement_of_a_scanned_site_is_not_removed() {
     let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
     let (_directory, repo) = repository(&["rule_anchor"], source);
@@ -96,6 +101,8 @@ fn typed_replacement_of_a_scanned_site_is_not_removed() {
 }
 
 #[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn unreadable_base_source_keeps_an_incomplete_report() {
     let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
     std::fs::write(repo.join("src/legacy.rs"), [0xff, 0xfe, b'\n']).unwrap();
@@ -116,6 +123,8 @@ fn unreadable_base_source_keeps_an_incomplete_report() {
 }
 
 #[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn unreadable_base_source_on_a_complete_scan_keeps_the_other_findings() {
     let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
     std::fs::write(repo.join("src/legacy.rs"), [0xff, 0xfe, b'\n']).unwrap();
@@ -149,6 +158,7 @@ fn unreadable_base_source_on_a_complete_scan_keeps_the_other_findings() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn rule_made_active_in_range_has_new_missing_evidence() {
     for status in ["draft", "review"] {
         assert_activated_rule_is_new(status);
@@ -156,6 +166,7 @@ fn rule_made_active_in_range_has_new_missing_evidence() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn deprecated_rule_made_active_again_has_new_missing_evidence() {
     assert_activated_rule_is_new("deprecated");
 }

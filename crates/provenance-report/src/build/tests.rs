@@ -3,6 +3,7 @@ use super::{build_envelope, BuildInput};
 use crate::envelope::{Comparison, SiteRole};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId, SUPPORTED_SCHEMA_VERSION};
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 pub(super) fn write(repo: &Utf8Path, relative: &str, contents: &str) {
@@ -130,6 +131,7 @@ pub(super) fn has_finding(envelope: &super::ReportEnvelope, code: &str, rule_id:
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn evidence_lost_in_the_range_is_new() {
     let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n\
                   #[verifies(\"rule_anchor\", examples)]\nfn verifies() {}\n";
@@ -151,6 +153,7 @@ fn evidence_lost_in_the_range_is_new() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn evidence_missing_at_both_commits_is_pre_existing() {
     let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
     let base = commit(&repo, "Add Rule without evidence");
@@ -170,6 +173,7 @@ fn evidence_missing_at_both_commits_is_pre_existing() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn rule_added_without_evidence_is_new() {
     let (_directory, repo) = repository(&["rule_anchor"], "fn anchor() {}\n");
     let base = commit(&repo, "Add anchor Rule");
@@ -189,6 +193,7 @@ fn rule_added_without_evidence_is_new() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn removed_implementation_site_is_reported() {
     let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
     let (_directory, repo) = repository(&["rule_anchor"], source);
@@ -217,6 +222,7 @@ fn removed_implementation_site_is_reported() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn legacy_base_binding_is_evidence_for_comparison() {
     let (_directory, repo) = repository(&["rule_anchor"], "fn before() {}\n");
     write_implementation_binding(&repo, Some(false));
@@ -238,6 +244,8 @@ fn legacy_base_binding_is_evidence_for_comparison() {
 }
 
 #[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn missing_base_makes_comparisons_uncertain() {
     let directory = tempfile::tempdir().unwrap();
     let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
@@ -261,6 +269,7 @@ fn missing_base_makes_comparisons_uncertain() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn rule_made_inactive_in_range_has_a_new_current_binding_finding() {
     for status in ["deprecated", "archived"] {
         let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
@@ -284,6 +293,7 @@ fn rule_made_inactive_in_range_has_a_new_current_binding_finding() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn moved_implementation_anchor_is_not_removed_or_missing() {
     let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
     let (_directory, repo) = repository(&["rule_anchor"], source);
@@ -314,6 +324,7 @@ fn moved_implementation_anchor_is_not_removed_or_missing() {
 }
 
 #[test]
+#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
 fn scanned_replacement_prevents_removed_or_missing_implementation() {
     let (_directory, repo) = repository(&["rule_anchor"], "fn implements() {}\n");
     write_implementation_binding(&repo, None);
