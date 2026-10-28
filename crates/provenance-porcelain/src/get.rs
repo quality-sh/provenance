@@ -240,7 +240,7 @@ impl GetOutcome {
         self.result.bounds()
     }
 
-    pub fn shaping(&self) -> Option<&SessionSummary> {
+    pub const fn shaping(&self) -> Option<&SessionSummary> {
         match &self.result {
             ViewResult::Children(traversal) => traversal.shaping.as_ref(),
             _ => None,
