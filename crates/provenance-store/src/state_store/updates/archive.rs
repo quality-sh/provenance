@@ -69,6 +69,22 @@ impl StateStore {
                 },
             )?;
             batch.mutate_all(
+                &shards::resolutions_path(&store.layout, scope),
+                |records: &mut Vec<Resolution>| {
+                    for record in records.iter_mut().filter(|r| live_resolution(r)) {
+                        if affected(&record.requirement_ids, &cascade) {
+                            if no_survivors(&record.requirement_ids, &unavailable) {
+                                record.status = ResolutionStatus::Archived;
+                                record.archived_in_commit = Some(stamp.clone());
+                            } else {
+                                prune(&mut record.requirement_ids, &cascade);
+                            }
+                        }
+                    }
+                    Ok(())
+                },
+            )?;
+            batch.mutate_all(
                 &shards::rules_path(&store.layout, scope),
                 |records: &mut Vec<Rule>| {
                     for record in records
@@ -87,25 +103,7 @@ impl StateStore {
                     Ok(())
                 },
             )?;
-            archive_shaping(batch, scope, &cascade, stamp)?;
-            // Resolutions go last: the decision check on an archived Resolution then
-            // sees each citing Question and Rule after the cascade has archived it.
-            batch.mutate_all(
-                &shards::resolutions_path(&store.layout, scope),
-                |records: &mut Vec<Resolution>| {
-                    for record in records.iter_mut().filter(|r| live_resolution(r)) {
-                        if affected(&record.requirement_ids, &cascade) {
-                            if no_survivors(&record.requirement_ids, &unavailable) {
-                                record.status = ResolutionStatus::Archived;
-                                record.archived_in_commit = Some(stamp.clone());
-                            } else {
-                                prune(&mut record.requirement_ids, &cascade);
-                            }
-                        }
-                    }
-                    Ok(())
-                },
-            )
+            archive_shaping(batch, scope, &cascade, stamp)
         })
     }
 }
