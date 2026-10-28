@@ -16,6 +16,16 @@ async fn answered_graph(fixture: &Fixture, topic_requirement: &str) {
     fixture.call("answer-question", json!({"scope_id":"default","id":"question_one","answer":"The saved record.","resolution_id":"resolution_one"})).await.unwrap();
 }
 
+/// Creates `req_one` with an approved Resolution, and an active Rule under
+/// `rule_requirement` that cites that Resolution.
+async fn ruled_graph(fixture: &Fixture, rule_requirement: &str) {
+    fixture.requirement().await;
+    fixture.call("create-requirement-native", json!({"scope_id":"default","id":"req_two","statement":"The system keeps the record.","status":"active","depends_on":[],"supersedes":[]})).await.unwrap();
+    fixture.call("create-resolution", json!({"scope_id":"default","id":"resolution_one","title":"Decision","position":"Use the saved record.","rationale":"The record is available.","status":"draft","requirement_ids":["req_one"],"supersedes":[],"inputs":[]})).await.unwrap();
+    fixture.call("update-resolution", json!({"scope_id":"default","id":"resolution_one","status":"approved","approved_by":"reviewer","approved_at":1234})).await.unwrap();
+    fixture.call("create-rule", json!({"scope_id":"default","id":"rule_one","statement":"The system saves the record.","status":"active","severity":"medium","requirement_ids":[rule_requirement],"resolution_ids":["resolution_one"]})).await.unwrap();
+}
+
 async fn archive_req_one(fixture: &Fixture) -> Result<Value, Value> {
     fixture
         .call(
@@ -32,6 +42,7 @@ fn statuses(fixture: &Fixture, ids: &[&str]) -> Vec<String> {
     let mut records = Vec::new();
     records.extend(store.list_requirements(scope).unwrap().iter().map(to_value));
     records.extend(store.list_resolutions(scope).unwrap().iter().map(to_value));
+    records.extend(store.list_rules(scope).unwrap().iter().map(to_value));
     records.extend(store.list_topics(scope).unwrap().iter().map(to_value));
     records.extend(store.list_questions(scope).unwrap().iter().map(to_value));
     ids.iter()
@@ -60,6 +71,20 @@ async fn archive_cascade_archives_a_resolution_and_the_question_it_answers() {
             &["req_one", "resolution_one", "topic_one", "question_one"]
         ),
         ["archived", "archived", "archived", "archived"]
+    );
+}
+
+/// The Resolution and the active Rule that cites it are in the same cascade, so
+/// one archive command archives both.
+#[tokio::test]
+#[verifies("rule_archive_completes_cascade_in_one_operation", examples)]
+async fn archive_cascade_archives_a_resolution_and_the_rule_it_produces() {
+    let fixture = Fixture::new();
+    ruled_graph(&fixture, "req_one").await;
+    archive_req_one(&fixture).await.unwrap();
+    assert_eq!(
+        statuses(&fixture, &["req_one", "resolution_one", "rule_one"]),
+        ["archived", "archived", "archived"]
     );
 }
 
