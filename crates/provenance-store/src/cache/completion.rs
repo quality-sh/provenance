@@ -23,7 +23,7 @@ const CLOSE_LOCK_RETRY: Duration = Duration::from_millis(1);
 
 /// What one completion is waiting for.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Stage {
+pub(crate) enum Stage {
     CloseLock(PathBuf),
     Teardown { connections: u32 },
 }
@@ -45,7 +45,7 @@ impl Stage {
     }
 
     /// The stage without its local facts, for a public failure.
-    pub const fn public(&self) -> CacheCloseStage {
+    pub(crate) const fn public(&self) -> CacheCloseStage {
         match self {
             Self::CloseLock(_) => CacheCloseStage::CloseLock,
             Self::Teardown { .. } => CacheCloseStage::Teardown,
@@ -56,9 +56,9 @@ impl Stage {
 /// A completion that had not finished when its caller's deadline passed.
 #[derive(Debug, thiserror::Error)]
 #[error("cache close did not finish within {deadline:?}: {stage}")]
-pub struct CompletionTimedOut {
-    pub deadline: Duration,
-    pub stage: Stage,
+pub(crate) struct CompletionTimedOut {
+    pub(crate) deadline: Duration,
+    pub(crate) stage: Stage,
 }
 
 impl fmt::Display for Stage {
