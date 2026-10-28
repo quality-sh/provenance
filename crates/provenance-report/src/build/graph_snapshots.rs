@@ -38,13 +38,13 @@ pub(super) enum SnapshotRead {
 /// The sorted relation key used for diffs: relation name, target kind, id.
 type RelationKey = (String, RecordKind, String);
 
-/// Read one shard file at a commit. `Ok(None)` says the file is absent, the
-/// normal state for a scope that did not exist yet.
 const EVIDENCE_SHARDS: [&str; 2] = [
     "verifications/binding.jsonl",
     "implementations/binding.jsonl",
 ];
 
+/// Read one shard file at a commit. `Ok(None)` says the file is absent, the
+/// normal state for a scope that did not exist yet.
 fn read_shard<T: serde::de::DeserializeOwned>(
     repo: &Utf8Path,
     commit: &str,
@@ -101,9 +101,8 @@ fn read_shard<T: serde::de::DeserializeOwned>(
                 .and_then(serde_json::Value::as_str)
                 .map_or_else(|| "record".to_string(), |id| format!("record {id}"));
             anyhow::bail!(
-                "{path} line {line_number} at commit {commit}: {name} contains \
-                 legacy field `retired`; canonical JSONL requires record-deletion \
-                 migration 026 before this build can read it"
+                "{path} line {line_number} at commit {commit}: {name} contains legacy field `retired`; \
+                 canonical JSONL requires record-deletion migration 026 before this build can read it"
             );
         }
         records.push(serde_json::from_value::<T>(value).with_context(context)?);
