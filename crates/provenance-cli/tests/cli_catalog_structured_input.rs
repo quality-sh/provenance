@@ -257,6 +257,8 @@ fn repeated_alias_items_accumulate_but_competing_spellings_fail() {
         "req_alias_a",
         "--requirement-id",
         "req_alias_b",
+        "--status",
+        "active",
     ]));
     assert_eq!(
         rule["data"]["requirement_ids"],
@@ -274,6 +276,8 @@ fn repeated_alias_items_accumulate_but_competing_spellings_fail() {
         "The system records canonical JSON input.",
         "--requirement-ids-json",
         r#"["req_alias_a"]"#,
+        "--status",
+        "active",
     ]));
     assert_eq!(
         canonical_json["data"]["requirement_ids"],
@@ -294,6 +298,8 @@ fn repeated_alias_items_accumulate_but_competing_spellings_fail() {
             "req_alias_a",
             "--requirement-ids",
             "req_alias_b",
+            "--status",
+            "active",
         ])
         .assert()
         .failure()
