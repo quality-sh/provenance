@@ -7,18 +7,17 @@
 //! and complete the connection with [`CacheConnection::close`]; no caller
 //! holds a raw pool, and no caller selects between close variants.
 
+use super::completion::{complete, within_deadline, Stage};
 use crate::layout::ProvenanceLayout;
-use anyhow::Context;
-use fs2::FileExt;
 use provenance_macros::rule;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 use sqlx::SqlitePool;
-use std::fs::{File, OpenOptions};
-use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
-/// How often a close retries the close lock while another close holds it.
-const CLOSE_LOCK_RETRY: Duration = Duration::from_millis(1);
+/// The longest a caller waits for one completion: close lock and physical
+/// teardown together. A competing close and a teardown take milliseconds.
+pub const COMPLETION_DEADLINE: Duration = Duration::from_secs(10);
 
 /// How a connect waits while another process holds a DELETE-mode file
 /// open across the switch to WAL.
@@ -59,6 +58,7 @@ impl Default for WalSwitchRetry {
 pub struct CacheConnection {
     pool: Option<SqlitePool>,
     immutable: bool,
+    deadline: Duration,
 }
 
 impl CacheConnection {
@@ -72,6 +72,7 @@ impl CacheConnection {
         Ok(Self {
             pool: Some(connect(options, retry).await?),
             immutable,
+            deadline: COMPLETION_DEADLINE,
         })
     }
 
@@ -90,7 +91,16 @@ impl CacheConnection {
         Self {
             pool: Some(pool),
             immutable: false,
+            deadline: COMPLETION_DEADLINE,
         }
+    }
+
+    /// The same connection with a shorter completion deadline, so a test
+    /// can reach the deadline quickly.
+    #[cfg(test)]
+    pub(crate) const fn completing_within(mut self, deadline: Duration) -> Self {
+        self.deadline = deadline;
+        self
     }
 
     /// Waits for the completion: the ordered close under the database's
@@ -102,6 +112,8 @@ impl CacheConnection {
     /// The completion runs on a task that owns the lock and the pool, so
     /// a caller cancelled mid-close, or one that panics there, cannot end
     /// the close early or release the lock before its teardown finishes.
+    /// The caller waits at most [`COMPLETION_DEADLINE`]; past it the close
+    /// fails with the stage of the completion, and the task goes on.
     #[rule("rule_completed_read_leaves_no_wal_files")]
     pub async fn close(mut self) -> anyhow::Result<()> {
         let pool = self
@@ -109,10 +121,11 @@ impl CacheConnection {
             .take()
             .expect("the pool stays until the completion takes it");
         let immutable = self.immutable;
+        let deadline = self.deadline;
         drop(self);
-        tokio::spawn(complete(pool, immutable))
-            .await
-            .context("cache close task failed")?
+        let stage = Stage::shared(&pool);
+        let task = tokio::spawn(complete(pool, immutable, Arc::clone(&stage)));
+        within_deadline(task, deadline, stage).await
     }
 
     /// Completes the connection after its work failed, then reports the
@@ -147,7 +160,8 @@ impl Drop for CacheConnection {
             return;
         };
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(complete(pool, self.immutable));
+            let stage = Stage::shared(&pool);
+            handle.spawn(complete(pool, self.immutable, stage));
         }
     }
 }
@@ -252,81 +266,6 @@ async fn connect(
                 tokio::time::sleep(retry.pause).await;
             }
             Err(error) => return Err(error.into()),
-        }
-    }
-}
-
-/// The completion of one connection, which always runs on a detached
-/// task: the caller's future can end before the physical teardown does
-/// without giving up the close order.
-///
-/// Two closes at the same moment can each fail their exclusive-lock attempt
-/// before the other releases its shared lock, and both then skip cleanup.
-/// The per-database close lock orders closes across independent pools. It
-/// is released only after the pool holds no connection, which is after the
-/// physical `SQLite` teardown has finished.
-///
-/// Never lock the database through another file descriptor: closing it can
-/// release `SQLite`'s process-owned POSIX locks on active connections.
-async fn complete(pool: SqlitePool, immutable: bool) -> anyhow::Result<()> {
-    if immutable {
-        close_until_empty(&pool).await;
-        return Ok(());
-    }
-    let path = pool
-        .connect_options()
-        .get_filename()
-        .with_extension("db.close.lock");
-    let lock = match acquire_close_lock(&path).await {
-        Ok(lock) => lock,
-        Err(error) => {
-            close_until_empty(&pool).await;
-            return Err(error);
-        }
-    };
-    close_until_empty(&pool).await;
-    drop(lock);
-    Ok(())
-}
-
-/// Opens the close lock file and waits until this close holds it.
-///
-/// Every attempt uses a non-blocking file lock and returns at once, so waiting
-/// for the lock never occupies a blocking worker; publication waiters can
-/// hold them all while this close waits.
-async fn acquire_close_lock(path: &Path) -> anyhow::Result<File> {
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(path)
-        .with_context(|| format!("open cache close lock {}", path.display()))?;
-    while let Err(error) = file.try_lock_exclusive() {
-        if error.raw_os_error() != fs2::lock_contended_error().raw_os_error() {
-            return Err(anyhow::Error::new(error)
-                .context(format!("acquire cache close lock {}", path.display())));
-        }
-        tokio::time::sleep(CLOSE_LOCK_RETRY).await;
-    }
-    Ok(file)
-}
-
-/// Closes the pool and waits until it holds no connection.
-///
-/// `SQLx 0.8` can return from close with a connection that reached the idle
-/// queue after its last drain; the closed pool cannot grow. A pool with no
-/// connection has dropped every connection state, which is the moment the
-/// last `SQLite` handle is gone, so the close lock is held over the whole
-/// physical teardown.
-async fn close_until_empty(pool: &SqlitePool) {
-    loop {
-        // Both SQLite closes can fail their exclusive-lock attempt before
-        // either releases its shared lock. The close lock keeps this close
-        // alone with the database.
-        pool.close().await;
-        if pool.size() == 0 {
-            return;
         }
     }
 }

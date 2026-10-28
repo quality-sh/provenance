@@ -9,6 +9,7 @@ mod close_cancellation;
 mod close_order_behavior;
 mod close_progress;
 mod completion_behavior;
+mod completion_deadline;
 mod current_schema_behavior;
 pub mod fixtures;
 mod frontier_behavior;

@@ -1,3 +1,4 @@
+mod completion;
 pub(crate) mod connection;
 pub(crate) mod family_table;
 pub(crate) mod family_views;
@@ -16,7 +17,7 @@ mod traceability;
 pub(crate) use connection::permission_failure;
 pub use connection::{
     open_cache, open_cache_with, open_existing_cache, open_immutable_cache, open_stored_cache,
-    CacheConnection, WalSwitchRetry,
+    CacheConnection, WalSwitchRetry, COMPLETION_DEADLINE,
 };
 pub(crate) use family_views::record_families;
 pub use gaps::*;

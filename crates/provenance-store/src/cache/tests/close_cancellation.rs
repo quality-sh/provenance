@@ -6,7 +6,7 @@ use fs2::FileExt;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-struct Release(Arc<(Mutex<bool>, Condvar)>);
+pub(super) struct Release(Arc<(Mutex<bool>, Condvar)>);
 impl Drop for Release {
     fn drop(&mut self) {
         let (mutex, cv) = &*self.0;
@@ -32,7 +32,7 @@ impl Drop for PauseOnDrop {
     }
 }
 
-async fn pause_physical_close(
+pub(super) async fn pause_physical_close(
     pool: &CacheConnection,
 ) -> (Release, tokio::sync::oneshot::Receiver<()>) {
     let gate = Arc::new((Mutex::new(false), Condvar::new()));
