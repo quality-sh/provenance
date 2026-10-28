@@ -172,7 +172,7 @@ function assertAgentInstructions(project) {
   const agents = readFileSync(join(project, "AGENTS.md"), "utf8");
   for (const expected of [
     "provenance-grounded-writing",
-    "npx --no provenance statement-checks create --stdin --format json",
+    'npx --no provenance statement-checks create --statement "<statement>" --format json',
     "npx --no provenance prime --quiet",
     "Write graph state only through the Provenance CLI or SDK",
     "Do not edit\n  `.provenance/state` directly",
@@ -304,7 +304,7 @@ function assertStrictCommittedEditGate(project, environment, npmCli, version) {
     rule: "1.1",
     disposition: "violation",
     span: { start: 4, end: 18 },
-    message: "Do not use unapproved dictionary words in descriptive text.",
+    message: "The word or phrase \"bunapprovedaaa\" is not approved by ASD-STE100 Rule 1.1.",
   }]);
 }
 

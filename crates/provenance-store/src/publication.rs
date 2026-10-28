@@ -13,7 +13,7 @@ mod source_edit;
 mod source_edit_recovery;
 mod staged;
 pub use durability::{sync_directory, sync_tree};
-pub use guard::{publication_guard, PublicationGuard};
+pub use guard::{publication_guard, with_publication_guard, PublicationGuard};
 pub use read_only::with_read_only_validation;
 use recovery::{canonical_transactions_dir, create_real_directory};
 pub use recovery::{
@@ -59,14 +59,13 @@ pub(crate) fn with_repository_publication_checked<R>(
     check: impl FnOnce() -> anyhow::Result<()>,
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let key = layout.publication_lock_path().to_string();
+    let key = publication_lock_identity(layout)?;
     if read_only::active(&key) {
         check()?;
         return operation();
     }
     prepare_publication_lock(layout)?;
     let lock_path = layout.publication_lock_path();
-    let key = lock_path.to_string();
     if HELD_LOCKS.with(|locks| locks.borrow().contains(&key)) {
         check()?;
         return operation();
@@ -77,6 +76,33 @@ pub(crate) fn with_repository_publication_checked<R>(
     prepare_transaction_dirs(layout)?;
     source_edit_recovery::recover_pending_source_edit(layout)?;
     recover_pending_publication(layout).and_then(|()| operation())
+}
+
+// Resolve the existing ancestor so planned-state validation creates no paths.
+fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
+    let absolute = std::path::absolute(layout.root())?;
+    for ancestor in absolute.ancestors() {
+        match std::fs::canonicalize(ancestor) {
+            Ok(resolved) => {
+                let root = resolved.join(absolute.strip_prefix(ancestor)?);
+                let root = Utf8PathBuf::from_path_buf(root).map_err(|path| {
+                    anyhow::anyhow!("repository path is not UTF-8: {}", path.display())
+                })?;
+                return Ok(ProvenanceLayout::new(root)
+                    .publication_lock_path()
+                    .to_string());
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("resolve repository path {}", layout.root()));
+            }
+        }
+    }
+    anyhow::bail!(
+        "repository path has no existing ancestor: {}",
+        layout.root()
+    )
 }
 
 fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()> {
@@ -128,6 +154,22 @@ impl crate::state_store::StateStore {
         self.with_repository_publication(|| {
             let lock_path = self.layout.state_shard_lock_path(path)?;
             crate::jsonl::mutate_jsonl_locked(path, &lock_path, mutate)
+        })
+    }
+
+    /// Like [`Self::mutate_jsonl_records`], but writes the shard only when
+    /// `mutate` returns `true`.
+    pub(crate) fn mutate_jsonl_records_if<T>(
+        &self,
+        path: &Utf8Path,
+        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<bool>,
+    ) -> anyhow::Result<bool>
+    where
+        T: DeserializeOwned + Serialize,
+    {
+        self.with_repository_publication(|| {
+            let lock_path = self.layout.state_shard_lock_path(path)?;
+            crate::jsonl::mutate_jsonl_locked_if(path, &lock_path, mutate)
         })
     }
 }

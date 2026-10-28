@@ -49,6 +49,7 @@ fn proposal_input(
         duplicate_of: None,
         superseded_by: None,
         record_revision: None,
+        actor: None,
         revises: None,
         revises_rejection: None,
     }
@@ -210,10 +211,12 @@ fn topic_claim_atomically_surfaces_matching_asserted_proposal_with_derived_state
     let (_dir, store, scope) = initialized_store();
     seed_asserted_proposal(&store, &scope);
 
-    assert!(store
-        .surface_proposals(&scope, &ProposalDemand::for_changed_paths(["src/other.rs"]),)
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        store
+            .surface_proposals(&scope, &ProposalDemand::for_changed_paths(["src/other.rs"]),)
+            .unwrap(),
+        [] as [crate::state_store::proposal_surfaces::SurfacedProposal; 0]
+    );
     assert_eq!(
         store
             .surface_proposals(
@@ -235,6 +238,7 @@ fn topic_claim_atomically_surfaces_matching_asserted_proposal_with_derived_state
             requirement_id: StableId::new("req_overtime").unwrap(),
             title: "Overtime".into(),
             status: TopicStatus::Open,
+            archived_in_commit: None,
             claimed_by: None,
             claimed_at: None,
             links: Vec::new(),
@@ -269,6 +273,7 @@ fn a_topic_claim_surfaces_proposals_in_its_explicit_territory() {
         requirement_id: StableId::new("req_overtime").unwrap(),
         title: "Overtime".into(),
         status: TopicStatus::Open,
+        archived_in_commit: None,
         claimed_by: Some("agent-one".into()),
         claimed_at: Some(1),
         links: vec![ArtifactLink {

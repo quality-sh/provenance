@@ -26,7 +26,7 @@ fn sample(order: bool) -> super::SpecBuilder {
 }
 
 #[test]
-#[verifies("rule_rust_authored_documents_are_canonical", property)]
+#[verifies("rule_rust_authored_documents_are_canonical", examples)]
 fn declaration_order_never_reaches_the_canonical_document() {
     let forward = sample(true).build().unwrap().materialize("spec://rust");
     let reversed = sample(false).build().unwrap().materialize("spec://rust");
@@ -275,7 +275,10 @@ fn explicit_id_after_adoption_returns_to_ordinary_identity_selection() {
         .unwrap()
         .materialize("spec://rust/migration");
 
-    assert!(document.adopt_unowned.is_empty());
+    assert_eq!(
+        document.adopt_unowned.as_slice(),
+        &document.adopt_unowned[..0]
+    );
     assert_eq!(document.sources[0].id.as_deref(), Some("source_existing"));
     assert_eq!(document.requirements[0].id.as_deref(), Some("req_existing"));
     assert_eq!(document.rules[0].id.as_deref(), Some("rule_existing"));
@@ -314,11 +317,8 @@ fn materialize_emits_the_wire_document_with_addresses() {
     );
 }
 
-/// The kernel source may not reach for files, environment, processes,
-/// clocks, or randomness. The scan reads the module sources as checked-in
-/// text; the kernel itself stays free of I/O.
+// Implementation aid: checks selected source spellings, which cannot establish kernel purity.
 #[test]
-#[verifies("rule_rust_authoring_kernel_is_pure", conformance)]
 fn kernel_modules_import_no_ambient_capability() {
     let root = camino::Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/authoring");
     let mut checked = 0;

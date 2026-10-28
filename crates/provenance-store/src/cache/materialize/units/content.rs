@@ -1,6 +1,9 @@
 //! Hash record content without the local Git creation and update metadata.
 use camino::Utf8Path;
 
+/// The bytes a content digest covers for one file. Catch-up keeps the stored
+/// content digest of a unit whose bytes have not changed, so a change to what
+/// this function covers must also raise `VALIDATION_VERSION`.
 pub(super) fn hash_bytes(path: &Utf8Path, bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
     if path.extension() != Some("jsonl")
         || !matches!(

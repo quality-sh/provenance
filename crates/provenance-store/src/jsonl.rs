@@ -1,4 +1,4 @@
-use crate::state_store::readers::ensure_supported_record_version;
+use crate::state_store::readers::{ensure_supported_record_version, located, parse_line};
 use camino::Utf8Path;
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
@@ -61,15 +61,35 @@ pub fn mutate_jsonl_locked<T, R>(
 where
     T: DeserializeOwned + Serialize,
 {
+    let mut result = None;
+    mutate_jsonl_locked_if(path, lock_path, |records| {
+        result = Some(mutate(records)?);
+        Ok(true)
+    })?;
+    Ok(result.expect("the mutation ran"))
+}
+
+/// Like [`mutate_jsonl_locked`], but writes the shard only when `mutate`
+/// returns `true`. The shard is read once.
+pub fn mutate_jsonl_locked_if<T>(
+    path: &Utf8Path,
+    lock_path: &Utf8Path,
+    mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<bool>,
+) -> anyhow::Result<bool>
+where
+    T: DeserializeOwned + Serialize,
+{
     with_state_publication(path, || {
         let _lock = AdvisoryLock::acquire(lock_path)?;
         let mut loaded = read_jsonl_unlocked(path)?;
-        let result = mutate(loaded.records_mut())?;
-        crate::review::guard::protect_rows(path, loaded.records())?;
+        if !mutate(loaded.records_mut())? {
+            return Ok(false);
+        }
         let lines = loaded.into_lines(path)?;
+        guard_jsonl_lines(path, &lines)?;
         write_jsonl_lines_atomic_unlocked(path, &lines)
             .map_err(crate::write_error::publication_started)?;
-        Ok(result)
+        Ok(true)
     })
 }
 
@@ -97,9 +117,14 @@ where
     let contents = std::fs::read_to_string(path)?;
     let mut loaded = LoadedRecords::default();
     for (index, line) in contents.lines().enumerate() {
-        let value: serde_json::Value = serde_json::from_str(line)?;
+        let value = parse_line(path, index + 1, line)?;
         ensure_supported_record_version(path, index + 1, &value)?;
-        let (record, raw) = RawRecord::deserialize(line, index + 1)?;
+        let (record, raw) = RawRecord::deserialize(line, index + 1).map_err(|error| {
+            match error.downcast::<serde_json::Error>() {
+                Ok(error) => located(path, index + 1, &error),
+                Err(error) => error,
+            }
+        })?;
         loaded.push(record, raw);
     }
     Ok(loaded)
@@ -141,9 +166,17 @@ pub fn write_preserved_jsonl_atomic(
 ) -> anyhow::Result<()> {
     let lines = crate::merge::preserved_lines(ours, theirs, records)?;
     with_state_publication(path, || {
-        crate::review::guard::protect_rows(path, records)?;
+        guard_jsonl_lines(path, &lines)?;
         write_jsonl_lines_atomic_unlocked(path, &lines)
     })
+}
+
+fn guard_jsonl_lines(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
+    let records = lines
+        .iter()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line))
+        .collect::<Result<Vec<_>, _>>()?;
+    crate::review::guard::protect_rows(path, &records)
 }
 
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { hoistSharedFamilies, requestSideNames } from './contract-families.mjs';
+import { differingKey, hoistSharedFamilies, requestSideNames, schemaShapes } from './contract-families.mjs';
 
 function responseAlternatives(schema, schemas) {
   if (schema?.$ref) return responseAlternatives(schemas[schema.$ref.split('/').at(-1)], schemas);
@@ -68,6 +68,64 @@ test('family hoisting keeps request and response shapes apart', async () => {
   }
 });
 
+test('family hoisting shares current operation response families', async () => {
+  const document = JSON.parse(await readFile(new URL('../../contracts/operations/openapi.json', import.meta.url), 'utf8'));
+  const contract = hoistSharedFamilies(document);
+  const schemas = contract.components.schemas;
+
+  assert.ok(schemas.OperationFailure, 'the shared transport failure must be declared once');
+  assert.ok(schemas.WriteFailure, 'the shared write failure must be declared once');
+  assert.ok(schemas.ResponseMeta, 'the shared response metadata must be declared once');
+  assert.equal(schemas.UpdateRuleFailureOperationFailure, undefined);
+  assert.equal(schemas.WithdrawSourceReviewFailureOperationFailure, undefined);
+  assert.deepEqual(schemas.WriteOperationError.anyOf, [
+    { $ref: '#/components/schemas/OperationFailure' },
+    { $ref: '#/components/schemas/WriteFailure' },
+  ]);
+  assert.deepEqual(schemas.UpdateRuleFailure.properties.error, {
+    $ref: '#/components/schemas/WriteOperationError',
+  });
+  assert.deepEqual(schemas.UpdateRuleFailure.properties.meta, {
+    $ref: '#/components/schemas/ResponseMeta',
+  });
+  assert.ok(schemas.Stamp2, 'query result record stamps must be shared');
+  assert.equal(schemas.ListRulesSearchSuccessStamp2, undefined);
+});
+
+test('family hoisting shares equal groups when one operation differs', () => {
+  const envelope = detail => ({
+    properties: { error: { $ref: `#/components/schemas/${detail}` } },
+    type: 'object',
+  });
+  const operation = failure => ({ responses: { 400: { content: {
+    'application/json': { schema: { $ref: `#/components/schemas/${failure}` } },
+  } } } });
+  const document = {
+    paths: {
+      '/a': { get: operation('GetAFailure') },
+      '/b': { get: operation('GetBFailure') },
+      '/c': { get: operation('GetCFailure') },
+    },
+    components: { schemas: {
+      GetAFailure: envelope('GetAFailureDetail'),
+      GetBFailure: envelope('GetBFailureDetail'),
+      GetCFailure: envelope('GetCFailureDetail'),
+      GetAFailureDetail: { properties: { kind: { const: 'shared' } }, type: 'object' },
+      GetBFailureDetail: { properties: { kind: { const: 'shared' } }, type: 'object' },
+      GetCFailureDetail: { properties: { kind: { const: 'different' } }, type: 'object' },
+    } },
+  };
+
+  const schemas = hoistSharedFamilies(document).components.schemas;
+  assert.deepEqual(schemas.Detail, {
+    properties: { kind: { const: 'shared' } },
+    type: 'object',
+  });
+  assert.equal(schemas.GetAFailureDetail, undefined);
+  assert.equal(schemas.GetBFailureDetail, undefined);
+  assert.ok(schemas.GetCFailureDetail);
+});
+
 test('operation and schema names do not use version suffixes', () => {
   const result = spawnSync('git', [
     'grep', '-n', '-E', '(-v[0-9]+|[A-Za-z]V[0-9]+)', '--',
@@ -76,4 +134,14 @@ test('operation and schema names do not use version suffixes', () => {
 
   assert.ok([0, 1].includes(result.status), result.stderr);
   assert.equal(result.stdout, '');
+});
+
+test('two failure variants that differ name the first differing key', () => {
+  const shapes = schemaShapes({});
+  const common = { type: 'object', properties: { kind: { type: 'string', const: 'access_denied' } } };
+  assert.equal(differingKey(shapes, common, structuredClone(common)), null);
+  assert.equal(differingKey(shapes, common, { ...common, description: 'Store refusal.' }), 'description');
+  const field = { type: 'object', properties: { ...common.properties, field: { type: 'string' } } };
+  const nullable = { type: 'object', properties: { ...common.properties, field: { type: ['string', 'null'] } } };
+  assert.equal(differingKey(shapes, field, nullable), 'properties.field.type');
 });

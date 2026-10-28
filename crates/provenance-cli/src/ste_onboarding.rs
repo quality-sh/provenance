@@ -8,7 +8,7 @@ use provenance_store::{dictionary_reference, layout::ProvenanceLayout};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::Duration,
 };
 
@@ -139,23 +139,22 @@ fn import_cached_bytes(bytes: &[u8]) -> anyhow::Result<DictionaryImport> {
     import_bytes(bytes)
 }
 
-/// Serializes access to the shared asset and retries only the official URL.
-#[rule("rule_ste_dictionary_download_concurrency")]
+/// Downloads the official asset with a bounded retry. The shared asset lock is
+/// held only to read or publish the cached asset, never during a download, so
+/// a failed download does not block other inits. Each attempt first uses an
+/// asset that another init put in the cache.
+#[rule("rule_ste_dictionary_download_lock_scope")]
 #[rule("rule_ste_dictionary_download_retry_bound")]
 #[rule("rule_ste_dictionary_download_identity")]
 #[rule("rule_ste_dictionary_asset_fallback")]
 fn acquire_official_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
+    let url = asset_url().context("the dictionary download is off")?;
     let directory = asset_directory().context("no machine cache directory is available")?;
     std::fs::create_dir_all(&directory).context("create the shared STE asset cache")?;
-    let lock = open_lock(&directory.join("issue-9.pdf.lock"))?;
-    FileExt::lock_exclusive(&lock).context("lock the shared STE asset cache")?;
-    let asset = directory.join("ASD-STE100_ISSUE9.pdf");
-    if let Ok(bytes) = std::fs::read(&asset) {
-        if let Ok(import) = import_cached_bytes(&bytes) {
-            return Ok(import);
-        }
-        std::fs::remove_file(&asset).context("remove an invalid cached STE asset")?;
-    }
+    let cache = AssetCache {
+        lock: directory.join("issue-9.pdf.lock"),
+        asset: directory.join("ASD-STE100_ISSUE9.pdf"),
+    };
 
     let client = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(10))
@@ -163,9 +162,12 @@ fn acquire_official_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
         .build();
     let mut last_error = None;
     for attempt in 0..DOWNLOAD_ATTEMPTS {
-        match download(&client).and_then(|bytes| {
+        if let Some(import) = cache.read()? {
+            return Ok(import);
+        }
+        match download(&client, &url).and_then(|bytes| {
             let import = import_cached_bytes(&bytes)?;
-            store_asset(&asset, &bytes)?;
+            cache.publish(&bytes)?;
             Ok(import)
         }) {
             Ok(import) => return Ok(import),
@@ -177,12 +179,84 @@ fn acquire_official_dictionary_blocking() -> anyhow::Result<DictionaryImport> {
             std::thread::sleep(Duration::from_millis(100));
         }
     }
+    if let Some(import) = cache.read()? {
+        return Ok(import);
+    }
     Err(last_error.unwrap_or_else(|| anyhow::anyhow!("the official asset is unavailable")))
 }
 
-fn download(client: &ureq::Agent) -> anyhow::Result<Vec<u8>> {
+struct AssetCache {
+    lock: PathBuf,
+    asset: PathBuf,
+}
+
+impl AssetCache {
+    /// Imports the cached asset, or removes it if it is not valid. The lock is
+    /// held only to read the bytes and to remove an invalid asset, not during
+    /// the import.
+    fn read(&self) -> anyhow::Result<Option<DictionaryImport>> {
+        let Some(bytes) = self.read_bytes()? else {
+            return Ok(None);
+        };
+        if let Ok(import) = import_cached_bytes(&bytes) {
+            return Ok(Some(import));
+        }
+        let _lock = self.lock()?;
+        // Another init can replace an invalid asset during the import.
+        if std::fs::read(&self.asset).is_ok_and(|current| current == bytes) {
+            std::fs::remove_file(&self.asset).context("remove an invalid cached STE asset")?;
+        }
+        Ok(None)
+    }
+
+    fn read_bytes(&self) -> anyhow::Result<Option<Vec<u8>>> {
+        let _lock = self.lock()?;
+        Ok(std::fs::read(&self.asset).ok())
+    }
+
+    /// Writes the asset to a staged file without the lock, then moves it into
+    /// the cache under the lock. An asset that another init put in the cache
+    /// first stays. No staged file stays after an error.
+    fn publish(&self, bytes: &[u8]) -> anyhow::Result<()> {
+        let staged = self
+            .asset
+            .with_extension(format!("pdf.{}.partial", std::process::id()));
+        let result = self.publish_staged(&staged, bytes);
+        if result.is_err() {
+            let _ = std::fs::remove_file(&staged);
+        }
+        result
+    }
+
+    fn publish_staged(&self, staged: &std::path::Path, bytes: &[u8]) -> anyhow::Result<()> {
+        let mut file = File::create(staged).context("create the staged STE asset")?;
+        file.write_all(bytes)
+            .context("write the staged STE asset")?;
+        file.sync_all().context("sync the staged STE asset")?;
+        drop(file);
+        let _lock = self.lock()?;
+        if self.asset.exists() {
+            return std::fs::remove_file(staged).context("remove the staged STE asset");
+        }
+        std::fs::rename(staged, &self.asset).context("publish the shared STE asset")
+    }
+
+    fn lock(&self) -> anyhow::Result<File> {
+        let lock = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&self.lock)
+            .context("open the shared STE asset lock")?;
+        FileExt::lock_exclusive(&lock).context("lock the shared STE asset cache")?;
+        Ok(lock)
+    }
+}
+
+fn download(client: &ureq::Agent, url: &str) -> anyhow::Result<Vec<u8>> {
     let response = client
-        .get(&asset_url())
+        .get(url)
         .set(
             "User-Agent",
             &format!("Provenance/{}", env!("CARGO_PKG_VERSION")),
@@ -209,37 +283,17 @@ fn download(client: &ureq::Agent) -> anyhow::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn open_lock(path: &Path) -> anyhow::Result<File> {
-    OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(path)
-        .context("open the shared STE asset lock")
-}
-
-fn store_asset(path: &Path, bytes: &[u8]) -> anyhow::Result<()> {
-    let partial = path.with_extension(format!("pdf.{}.partial", std::process::id()));
-    let mut file = File::create(&partial).context("create the staged STE asset")?;
-    file.write_all(bytes)
-        .context("write the staged STE asset")?;
-    file.sync_all().context("sync the staged STE asset")?;
-    std::fs::rename(&partial, path).context("publish the shared STE asset")
-}
-
-fn asset_url() -> String {
-    if let Some(url) = std::env::var_os("PROVENANCE_TEST_STE100_ASSET_URL") {
-        let url = url.to_string_lossy();
-        if let Ok(parsed) = url::Url::parse(&url) {
-            if parsed.scheme() == "http"
-                && matches!(parsed.host_str(), Some("127.0.0.1" | "localhost"))
-            {
-                return parsed.into();
-            }
-        }
-    }
-    OFFICIAL_ASSET.to_owned()
+/// Gives the asset URL. A test asset URL that is not a loopback `http` URL
+/// gives no URL, so that a typing error cannot start a download from the
+/// official site.
+#[rule("rule_ste_dictionary_download_off")]
+fn asset_url() -> Option<String> {
+    let Some(url) = std::env::var_os("PROVENANCE_TEST_STE100_ASSET_URL") else {
+        return Some(OFFICIAL_ASSET.to_owned());
+    };
+    let parsed = url::Url::parse(url.to_str()?).ok()?;
+    (parsed.scheme() == "http" && matches!(parsed.host_str(), Some("127.0.0.1" | "localhost")))
+        .then(|| parsed.into())
 }
 
 /// Keeps downloaded source material in a machine cache, not in a distribution.
@@ -248,28 +302,42 @@ fn asset_directory() -> Option<PathBuf> {
     if let Some(directory) = std::env::var_os("PROVENANCE_STE100_ASSET_DIR") {
         return Some(PathBuf::from(directory));
     }
-    Some(cache_directory()?.join("provenance").join("ste100-assets"))
-}
-
-#[cfg(target_os = "windows")]
-fn cache_directory() -> Option<PathBuf> {
-    std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
-}
-
-#[cfg(target_os = "macos")]
-fn cache_directory() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Caches"))
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn cache_directory() -> Option<PathBuf> {
-    std::env::var_os("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
+    Some(
+        crate::user_cache::cache_directory()?
+            .join("provenance")
+            .join("ste100-assets"),
+    )
 }
 
 fn fallback_guidance(error: &anyhow::Error) -> String {
     format!(
         "Warning: the official Issue 9 dictionary could not be added ({error:#}). Initialization continues without a dictionary. To add it later, rerun init, or run `provenance dictionary import --pdf <path>` with a local PDF file."
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use provenance_macros::verifies;
+
+    #[test]
+    #[verifies("rule_ste_dictionary_download_lock_scope", examples)]
+    fn a_second_publish_keeps_the_first_pdf_and_removes_its_staged_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let cache = AssetCache {
+            lock: directory.path().join("issue-9.pdf.lock"),
+            asset: directory.path().join("ASD-STE100_ISSUE9.pdf"),
+        };
+
+        cache.publish(b"first").unwrap();
+        cache.publish(b"second").unwrap();
+
+        assert_eq!(std::fs::read(&cache.asset).unwrap(), b"first");
+        let mut names: Vec<_> = std::fs::read_dir(directory.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(names, ["ASD-STE100_ISSUE9.pdf", "issue-9.pdf.lock"]);
+    }
 }

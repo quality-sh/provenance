@@ -74,6 +74,7 @@ fn envelope(stderr: &str) -> Value {
 #[test]
 #[verifies("rule_porcelain_api_public_path", examples)]
 #[verifies("rule_porcelain_api_uses_context", examples)]
+/// This flow compares the shared public path with the configured target-first read.
 fn api_get_reads_one_public_path_with_the_configured_context() {
     let (_directory, repo) = init();
     seed_source(&repo);
@@ -106,6 +107,7 @@ fn api_get_reads_one_public_path_with_the_configured_context() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
 fn api_get_defaults_to_get_and_prints_the_envelope() {
     let (_directory, repo) = init();
     seed_source(&repo);
@@ -126,6 +128,51 @@ fn api_get_defaults_to_get_and_prints_the_envelope() {
 }
 
 #[test]
+#[verifies("rule_cli_api_discovery_filter_limit", examples)]
+fn json_catalog_applies_limit() {
+    let (_directory, repo) = init();
+    let catalog = json(&["api", "--repo", &repo, "--limit", "2", "--format", "json"]);
+    let routes = catalog["routes"].as_array().unwrap();
+    assert_eq!(routes.len(), 2);
+}
+
+#[test]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
+fn limited_json_catalog_reports_truncation() {
+    let (_directory, repo) = init();
+    let catalog = json(&["api", "--repo", &repo, "--limit", "2", "--format", "json"]);
+
+    assert_eq!(catalog["bounds"]["truncated"], true);
+}
+
+#[test]
+#[verifies("rule_cli_api_discovery_filter_limit", examples)]
+fn json_catalog_applies_filter() {
+    let (_directory, repo) = init();
+    let catalog = json(&[
+        "api",
+        "--repo",
+        &repo,
+        "--filter",
+        "requirements/{id}",
+        "--format",
+        "json",
+    ]);
+    let routes = catalog["routes"].as_array().unwrap();
+    assert_ne!(routes.as_slice(), [] as [Value; 0]);
+    assert!(routes.iter().all(|route| {
+        format!(
+            "{} {} {}",
+            route["method"].as_str().unwrap(),
+            route["path"].as_str().unwrap(),
+            route["description"].as_str().unwrap()
+        )
+        .to_ascii_lowercase()
+        .contains("requirements/{id}")
+    }));
+}
+
+#[test]
 #[verifies("rule_porcelain_api_body_inputs", examples)]
 fn api_post_creates_from_a_file_body_with_selected_method_and_headers() {
     let (_directory, repo) = init();
@@ -143,16 +190,7 @@ fn api_post_creates_from_a_file_body_with_selected_method_and_headers() {
     );
 
     success(&[
-        "api",
-        "sources",
-        "--repo",
-        &repo,
-        "--method",
-        "post",
-        "--input",
-        &body,
-        "--header",
-        "Idempotency-Key: cli-file-create",
+        "api", "sources", "--repo", &repo, "--method", "post", "--input", &body,
     ]);
 
     let created = json(&["source_file", "get", "--repo", &repo, "--format", "json"]);
@@ -160,21 +198,13 @@ fn api_post_creates_from_a_file_body_with_selected_method_and_headers() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_body_inputs", examples)]
 fn api_stdin_body_creates_from_standard_input() {
     let (_directory, repo) = init();
 
     provenance()
         .args([
-            "api",
-            "sources",
-            "--repo",
-            &repo,
-            "--method",
-            "post",
-            "--input",
-            "-",
-            "--header",
-            "Idempotency-Key: cli-stdin-create",
+            "api", "sources", "--repo", &repo, "--method", "post", "--input", "-",
         ])
         .write_stdin(
             json!({
@@ -193,6 +223,7 @@ fn api_stdin_body_creates_from_standard_input() {
 }
 
 #[test]
+#[verifies("rule_review_conflict_returns_current_value", examples)]
 fn api_reports_the_typed_requirement_edit_conflict() {
     let (_directory, repo) = init();
     let created = json(&[
@@ -208,7 +239,7 @@ fn api_reports_the_typed_requirement_edit_conflict() {
         "json",
     ]);
     let old_etag = created["data"]["edit"]["etag"].as_str().unwrap();
-    let patch = |key: &str, description: &str| {
+    let patch = |description: &str| {
         provenance()
             .args([
                 "api",
@@ -220,8 +251,6 @@ fn api_reports_the_typed_requirement_edit_conflict() {
                 "--input",
                 "-",
                 "--header",
-                &format!("Idempotency-Key: {key}"),
-                "--header",
                 &format!("If-Match: {old_etag}"),
                 "--format",
                 "json",
@@ -230,7 +259,7 @@ fn api_reports_the_typed_requirement_edit_conflict() {
             .output()
             .unwrap()
     };
-    let current = patch("current-edit", "The current description applies.");
+    let current = patch("The current description applies.");
     assert!(
         current.status.success(),
         "{}",
@@ -238,7 +267,7 @@ fn api_reports_the_typed_requirement_edit_conflict() {
     );
     let current: Value = serde_json::from_slice(&current.stdout).unwrap();
 
-    let stale = patch("stale-edit", "The stale description does not apply.");
+    let stale = patch("The stale description does not apply.");
     assert!(!stale.status.success());
     let failure = envelope(&String::from_utf8_lossy(&stale.stderr));
     assert_eq!(failure["error"]["kind"], "requirement_edit_conflict");
@@ -263,10 +292,7 @@ fn api_discovery_describes_the_live_catalog() {
         readable.contains("  inputs: id (path, required)\n"),
         "{readable}"
     );
-    assert!(
-        readable.contains("Idempotency-Key (header, required)"),
-        "{readable}"
-    );
+    assert!(!readable.contains("Idempotency-Key"), "{readable}");
     assert!(
         readable.contains("  inputs with query=neighbors: "),
         "{readable}"
@@ -274,7 +300,7 @@ fn api_discovery_describes_the_live_catalog() {
     assert!(
         readable
             .trim_end()
-            .ends_with("Use --format json for the full request and response schemas."),
+            .ends_with("Use --format json for all schemas."),
         "{readable}"
     );
 
@@ -285,16 +311,32 @@ fn api_discovery_describes_the_live_catalog() {
         .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
         .expect("the source member route is described");
     let forms = member["queries"].as_array().unwrap();
-    assert!(!forms.is_empty());
+    assert_ne!(forms.as_slice(), [] as [serde_json::Value; 0]);
     let base = forms
         .iter()
         .find(|form| form["query"].is_null())
         .expect("the base form is described");
     assert!(!base["success_schema"].as_object().unwrap().is_empty());
-    assert!(!base["parameters"].as_array().unwrap().is_empty());
+    assert_ne!(
+        base["parameters"].as_array().unwrap().as_slice(),
+        [] as [serde_json::Value; 0]
+    );
 }
 
 #[test]
+#[verifies("rule_porcelain_output_reports_bounds", examples)]
+fn readable_api_catalog_explains_how_to_continue() {
+    let (_directory, repo) = init();
+    let readable =
+        String::from_utf8(success(&["api", "--repo", &repo, "--limit", "1"]).stdout).unwrap();
+    assert!(
+        readable.contains("Use --filter <text> or --limit <number> to see more."),
+        "{readable}"
+    );
+}
+
+#[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
 fn api_unknown_paths_refuse_with_the_canonical_failure() {
     let (_directory, repo) = init();
 
@@ -303,6 +345,7 @@ fn api_unknown_paths_refuse_with_the_canonical_failure() {
 }
 
 #[test]
+#[verifies("rule_porcelain_api_public_path", examples)]
 fn api_unsupported_methods_refuse_with_the_canonical_failure() {
     let (_directory, repo) = init();
 
@@ -413,5 +456,11 @@ fn directory_file(repo: &str, name: &str, content: &str) -> String {
 mod options;
 #[path = "porcelain_api/review_conflicts.rs"]
 mod review_conflicts;
+#[path = "porcelain_api/review_cycle.rs"]
+mod review_cycle;
+#[path = "porcelain_api/review_history.rs"]
+mod review_history;
+#[path = "porcelain_api/review_state_files.rs"]
+mod review_state_files;
 #[path = "porcelain_api/scope.rs"]
 mod scope;

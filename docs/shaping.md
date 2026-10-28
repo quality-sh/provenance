@@ -30,7 +30,8 @@ either all get the identical loop. There is no separate map/epic/project concept
 
 The map is an **index, not a store**. A session loads it low-res — the anchor requirement,
 decisions so far (resolutions, gisted one line each), the fog, and the frontier — and zooms
-into full artifact bodies on demand. A decision lives in exactly one place: its resolution.
+into full artifact bodies on demand. An obligation lives in a Requirement or Rule. A choice among alternatives lives in
+a Resolution. The session anchor does not determine where every new record belongs.
 
 ### Fog of war
 
@@ -44,9 +45,22 @@ into several questions, or none, once the frontier reaches it.
 Fog is the anti-over-modeling guard. A rich schema tempts agents into speculative
 node-minting; fog gives the not-yet-sharp a home that isn't forty premature Question nodes.
 
+### The tree is the spec
+
+The anchor's requirement tree is the product spec, and a developer must be able to build
+from it without the chat. A statement is one obligation in one plain clause. A description
+says how the product behaves, in the present tense: its states, what moves it between them,
+what the person sees, and one example. History, the person's words, and the
+brief's words go on the record's thread. Unknowns go in fog or a Question, never in a list of
+open items inside a description; one closing `Open:` line may name them. A Question is answered only when the answer covers all of
+it; a partial answer lands what it settled and narrows the Question. Before each handoff the
+session reads the rendered tree as a builder would, and fixes what does not read as a spec.
+
 ## Invocation
 
-Two modes. Every session ends with a handoff.
+Two modes. Every session starts or reuses the review host (`provenance review --detach`)
+and gives the person the page link as plain text, so they follow records as they land. Every
+session ends with a handoff that gives the link again.
 
 ### Chart
 
@@ -109,24 +123,40 @@ minted, telling the next session what to do. This complements the content-noun t
 
 ## Landing fan-out
 
-One answer routinely lands as **multiple graph mutations**, not a bare answered-question.
-Worked example — anchor: *"Provenance docs shareable via short-lived link"*; question:
-*"How long is short-lived?"* (method: grill). The answer lands as:
+An answer creates only the records its meaning requires. A fact can answer a Question
+without a Resolution. A broad obligation creates a Requirement. A precise atomic
+behavioural obligation creates a Rule. A choice among alternatives creates a Resolution.
+A Resolution states the unresolved problem in context, the choice in position, and the
+comparative reasons in rationale. Source quotations belong in citations or inputs.
 
-- a **Resolution**: "7-day default, configurable ceiling" — position + rationale;
-- which **produces** a **Rule**: "share links MUST expire ≤ 30 days" (severity: high),
-  later bound to its primary production implementation with
-  `#[rule("rule_share_link_expiry")]`;
-- and **spawns** a **Requirement**: "expiry configuration";
-- and **graduates fog**: "access auditing" is now statable as a question
-  ("should link accesses be logged as provenance events?").
+Read the Question's Topic and its Requirement, then select the lowest Requirement whose
+obligation the answer concerns. Read its children before selection. Use that Requirement
+for the discussion and new records. Re-select when the answer concerns another child.
 
-Landing an answer as a bare answered-question when it implies resolutions, rules, or
-requirements **starves the graph**. The dialogue itself persists as a Thread on the
-requirement; candidate artifacts land as **proposals** for human promotion (see below).
+A spawned record must add meaning beyond the position. Do not automatically create a
+Requirement and Rule for each Resolution. Identical statements require a meaning check;
+rewriting the words does not remove a repeated obligation. A precise obligation can
+correctly occur in a position and an independently needed Rule.
 
-Every statement landed this way — resolution, rule, requirement, or source — follows the
-specificity discipline in the `provenance-grounded-writing` skill before it lands, not only at the leaf.
+Examples:
+
+- "The owner can set the mascot appearance" creates a direct child Requirement under
+  appearance. No choice among alternatives needs to be recorded.
+- "A share link expires after seven days" creates a direct Rule under link expiry.
+  A Requirement alone can ground it; a Resolution producer is optional.
+- Selecting a robot instead of an animal to show repair without suggesting injury
+  creates a Resolution under appearance. No separate obligation requires a spawned record.
+- Selecting configurable expiry instead of a fixed duration can produce a separate
+  Requirement that owners receive advance notice of link expiry. Its parent link is `refines`; its
+  producing Resolution link is `spawned_by`. These links have different meanings.
+
+Read acceptance for the current content revision from review records. Read lifecycle
+separately. Answer text and `made_by` prove neither acceptance nor lifecycle. Omit guessed
+authorship. An independently grounded active Rule can coexist with a proposed Resolution;
+that pair of lifecycle values alone does not show unsupported behaviour.
+
+Record the dialogue on the relevant Requirement thread and answer the actual Question.
+Apply `provenance-grounded-writing` before each record write.
 
 ## Fork tournaments (`prototype`)
 
@@ -174,20 +204,20 @@ land their candidates through the same durable shapes (ported from the Convex
 
 ### Dispose on demand
 
-The proposal shard is evidence-backed context, not a batch-review inbox. Undisposed
-proposals surface when current work enters territory they already name:
+The proposal shard is evidence-backed context, not a batch-review inbox. A Topic claim
+surfaces undisposed proposals when the claim enters territory they already name:
 
 - a diff touches an exact repository-relative `file_path` in the proposal's evidence;
 - a shaping session claims the proposal's target topic, the topic's anchor requirement,
   or one of the topic's explicit artifact links; or
 - an external work item such as a bug explicitly identifies one of those typed targets.
 
-Use `provenance proposals surface --scope <scope> --changed-path <path>` for changed files.
-Topic claims derive matching `proposed` and `asserted` views and persist the claim in the
-same publication operation, so invalid lifecycle state cannot leave a claim behind.
-Integrations that already know a typed territory can use `provenance proposals surface
---scope <scope> --target-type <type> --target-id <id>`; Provenance does not infer territory
-from issue text, titles, graph proximity, or similar filenames.
+Run `provenance topics <topic_id> claim --scope <scope> --actor <actor> --format json`.
+The result includes proposals that match the Topic, its anchor Requirement, or its explicit
+artifact links. The command persists the claim and returns the matching `proposed` and
+`asserted` views in one operation. Provenance does not infer territory from issue text,
+titles, graph proximity, or similar filenames. The CLI does not have a changed-path
+proposal query.
 
 Review all proposals together only when a small set jointly blocks the work: competing
 fork proposals, explicitly contested synthesis claims, or conflicting backtrace findings.

@@ -314,7 +314,7 @@ class NativeGateTests(unittest.TestCase):
         method = by_name["Settings::from_env"]
         self.assertEqual(method["crate"], "provenance-sdk")
         self.assertTrue(method["file"].endswith("crates/provenance-sdk/src/settings.rs"))
-        self.assertEqual(by_name["Execution::run"]["cyclomatic"], 4.0)
+        self.assertEqual(by_name["Execution::run"]["cyclomatic"], 3.0)
         self.assertFalse(any("closure" in name for name in by_name))
         self.assertFalse(
             any(row["file"].endswith("operations/catalog/creation.rs") for row in rows),
@@ -348,6 +348,11 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("name: rust-lcov", self.test_job)
         self.assertNotIn("continue-on-error", self.test_job)
         self.assertNotIn("PROVENANCE_CI_LOCAL", self.test_job)
+
+    def test_coverage_merge_skips_corrupt_child_profiles_without_hiding_test_failures(self):
+        self.assertIn("--failure-mode all", self.test_job)
+        self.assertNotIn("continue-on-error", self.test_job)
+        self.assertNotIn("|| true", self.test_job)
 
     def test_job_reads_the_test_coverage_instead_of_running_tests(self):
         self.assertIn("needs: [changes, generate-operations, test]", self.job)

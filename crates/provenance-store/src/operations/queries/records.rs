@@ -43,6 +43,9 @@ pub(super) async fn search(
         .map_err(crate::operations::reader::page_error)
 }
 
+/// Intersects optional text, kind, and lifecycle search predicates.
+#[rule("rule_porcelain_search_text_optional")]
+#[rule("rule_porcelain_search_predicates_intersect")]
 async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<SearchResult> {
     use crate::operations::reader::PAGE_BYTES;
     use crate::operations::reader::{Cursor, Position};
@@ -64,7 +67,7 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
     let (cursor, mut position) = Cursor::open(
         ctx,
         "search",
-        &(&needle, &wanted, request.limit),
+        &(&needle, &wanted, request.limit, request.exclude_terminal),
         request.cursor.as_deref(),
     )?;
     let mut matched = Vec::new();
@@ -82,7 +85,14 @@ async fn search_page(ctx: &ReadContext, request: SearchQuery) -> anyhow::Result<
         };
         loop {
             let count = (request.limit + 1 - matched.len()).min(512 - scanned);
-            let ids = nodes::search_ids(ctx.snapshot(), kind, &after, count).await?;
+            let ids = nodes::search_ids(
+                ctx.snapshot(),
+                kind,
+                &after,
+                count,
+                request.exclude_terminal,
+            )
+            .await?;
             let exhausted = ids.len() < count;
             for id in ids {
                 let node = nodes::page_node(ctx.snapshot(), kind, &id)

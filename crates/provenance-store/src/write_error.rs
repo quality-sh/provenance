@@ -2,12 +2,22 @@
 use crate::state_store::{
     ReconciledResource, StatementWriteError, TypedSpecDiagnostic, TypedSpecWriteError,
 };
+use provenance_core::protocol::failure::InvalidInputReason;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum WriteFailure {
+    // `InvalidInput` and `AccessDenied` are the common failure kinds of the
+    // same name, raised by the store after decoding. Their wire shapes must
+    // stay identical to the common ones, so they carry no doc comment: the
+    // operation generator merges equal variants and refuses unequal twins.
+    InvalidInput {
+        field: Option<String>,
+        reason: InvalidInputReason,
+    },
+    AccessDenied,
     SchemaVersion,
     AlreadyExists,
     InvalidCommitPin,
@@ -19,16 +29,40 @@ pub enum WriteFailure {
     },
     InvalidDeclaration,
     InvalidUpdate,
+    ApprovalEvidenceRequired {
+        message: String,
+    },
+    ResolutionNotApproved {
+        resolution_id: String,
+        message: String,
+    },
     RequirementEditConflict {
+        current_etag: String,
+    },
+    RecordEditConflict {
+        record_kind: provenance_core::NodeType,
         current_etag: String,
     },
     ReviewSubmissionConflict {
         current_submission: Option<provenance_core::StableId>,
         current_revision: provenance_core::StableId,
     },
-    RecordOwnershipConflict,
+    UnsupportedReviewFeedback {
+        record_kind: provenance_core::NodeType,
+    },
+    RecordOwnershipConflict {
+        owner: Option<String>,
+        message: String,
+    },
     OwnershipConflict {
         conflicts: Vec<ReconciledResource>,
+    },
+    EnrolledRecordDeletionConflict {
+        record_kind: provenance_core::NodeType,
+        record_id: provenance_core::StableId,
+    },
+    ClaimConflict {
+        holder: String,
     },
     MissingReference,
     ResourceNotFound,
@@ -47,6 +81,40 @@ pub enum WriteFailure {
     FileUnavailable,
     RecordTooLarge,
     WriteFailed,
+}
+
+impl WriteFailure {
+    pub(crate) fn invalid_field(field: &str) -> Self {
+        Self::InvalidInput {
+            field: Some(field.to_owned()),
+            reason: InvalidInputReason::InvalidValue,
+        }
+    }
+
+    #[provenance_macros::rule("rule_ownership_refusal_names_owner")]
+    pub(crate) fn record_ownership_conflict(owner: Option<&str>) -> Self {
+        let message = owner.map_or_else(
+            || "This is a manual record; declared-by claims ownership. CLI: omit --declared-by; MCP: omit data.declared_by.".to_owned(),
+            |owner| format!("Record owner: {owner}; declared-by claims ownership. Set CLI --declared-by or MCP data.declared_by to {owner} when you act for them, or ask the owner to make the change."),
+        );
+        Self::RecordOwnershipConflict {
+            owner: owner.map(str::to_owned),
+            message,
+        }
+    }
+}
+
+/// Every write request names the actor who makes it. A blank actor is a
+/// client fault, named as the decoder names body fields.
+#[provenance_macros::rule("rule_write_actor_required")]
+pub(crate) fn ensure_actor(actor: &str) -> anyhow::Result<()> {
+    if actor.trim().is_empty() {
+        return Err(SourceFailure::wrap(
+            WriteFailure::invalid_field("request.actor"),
+            anyhow::anyhow!("actor must not be blank"),
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -109,6 +177,23 @@ impl WriteError {
         if let Some(error) = self.0.downcast_ref::<SourceFailure>() {
             return error.failure.clone();
         }
+        if self
+            .0
+            .downcast_ref::<provenance_core::DispositionActorRefusal>()
+            .is_some()
+        {
+            return WriteFailure::AccessDenied;
+        }
+        if self
+            .0
+            .downcast_ref::<provenance_core::ApprovalEvidenceRequired>()
+            .is_some()
+        {
+            return WriteFailure::ApprovalEvidenceRequired {
+                message: "An approval requires a prior assertion or a human canonical_artifact."
+                    .into(),
+            };
+        }
         if let Some(error) = self.0.downcast_ref::<StatementWriteError>() {
             return WriteFailure::StatementInvalid {
                 report: error.report.clone(),
@@ -135,18 +220,21 @@ impl WriteError {
     pub fn status(&self) -> u16 {
         match self.safe() {
             WriteFailure::WriteFailed => 500,
-            WriteFailure::FileAccessDenied => 403,
+            WriteFailure::FileAccessDenied | WriteFailure::AccessDenied => 403,
             WriteFailure::FileUnavailable => 503,
             WriteFailure::ResourceNotFound => 404,
-            WriteFailure::RecordOwnershipConflict
+            WriteFailure::RecordOwnershipConflict { .. }
             | WriteFailure::AlreadyExists
             | WriteFailure::OwnershipConflict { .. }
+            | WriteFailure::EnrolledRecordDeletionConflict { .. }
             | WriteFailure::RequirementEditConflict { .. }
+            | WriteFailure::RecordEditConflict { .. }
             | WriteFailure::ReviewSubmissionConflict { .. }
             | WriteFailure::DiscussionVersionConflict
             | WriteFailure::DiscussionClosed
             | WriteFailure::DiscussionResolved
             | WriteFailure::DiscussionIntentChanged
+            | WriteFailure::ClaimConflict { .. }
             | WriteFailure::AlreadyComplete => 409,
             _ => 400,
         }

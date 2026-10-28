@@ -124,12 +124,11 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         json!({
             "target":"req_mcp_target",
             "type":"requirement",
-            "idempotency_key":"create_req_mcp_target",
             "data":{
                 "actor":"agent",
                 "statement":"The MCP action submits the target Requirement.",
                 "status":"active",
-                "refines":"req_shared",
+                "refines":["req_shared"],
                 "depends_on":[],
                 "supersedes":[]
             }
@@ -143,7 +142,7 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
     );
     assert_eq!(
         requirement.structured_content.as_ref().unwrap()["data"]["refines"],
-        "req_shared"
+        json!(["req_shared"])
     );
     let created_submission = requirement.structured_content.as_ref().unwrap()["data"]["decision"]
         ["pending"]["proposal_id"]
@@ -157,7 +156,6 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         json!({
             "target":"req_mcp_dependency",
             "type":"requirement",
-            "idempotency_key":"create_req_mcp_dependency",
             "data":{
                 "actor":"agent",
                 "statement":"The MCP dependency exists.",
@@ -175,7 +173,6 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
         "update",
         json!({
             "target":"req_mcp_target",
-            "idempotency_key":"update_req_mcp_target",
             "if_match":requirement.structured_content.as_ref().unwrap()["data"]["edit"]["etag"],
             "data":{
                 "actor":"agent",
@@ -221,7 +218,7 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
         .unwrap()
         .proposal_id;
     store
-        .withdraw_requirement_review(
+        .withdraw_record_review(
             serde_json::from_value(
                 json!({"scope_id":"default","actor":"agent","proposal_id":proposal}),
             )
@@ -258,9 +255,11 @@ async fn mcp_target_first_requirement_submit_uses_the_target() {
         submitted.structured_content.as_ref().unwrap()["data"]["fact"],
         "submitted"
     );
-    assert_eq!(
-        submitted.structured_content.as_ref().unwrap()["data"]["proposal_key"],
-        submitted.structured_content.as_ref().unwrap()["data"]["proposal_id"]
+    assert!(
+        submitted.structured_content.as_ref().unwrap()["data"]["proposal_key"]
+            .as_str()
+            .unwrap()
+            .starts_with("review:requirement:req_shared:")
     );
 
     client.cancel().await.unwrap();
@@ -290,7 +289,12 @@ async fn mcp_named_actions_infer_kinds_and_refuse_invalid_targets() {
         "worker"
     );
 
-    let released = call(&client, "release", json!({"target":"topic_shared"})).await;
+    let released = call(
+        &client,
+        "release",
+        json!({"target":"topic_shared","data":{"actor":"worker"}}),
+    )
+    .await;
     assert_ne!(released.is_error, Some(true), "{released:?}");
     assert!(released.structured_content.as_ref().unwrap()["data"]["claimed_by"].is_null());
 

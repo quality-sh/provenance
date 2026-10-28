@@ -78,10 +78,12 @@ async fn requirement_review_read_waits_for_the_repository_guard() {
         before_release,
         Err(mpsc::RecvTimeoutError::Timeout)
     ));
-    assert!(receiver
-        .recv_timeout(Duration::from_secs(5))
-        .unwrap()
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        receiver
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap(),
+        [] as [provenance_core::RequirementReview; 0]
+    );
     reader.join().unwrap();
 }

@@ -26,6 +26,8 @@ pub enum TopicStatus {
     Explored,
     #[serde(rename = "closed")]
     Closed,
+    #[serde(rename = "archived")]
+    Archived,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -37,6 +39,8 @@ pub enum QuestionStatus {
     BlockedOnHuman,
     #[serde(rename = "answered")]
     Answered,
+    #[serde(rename = "archived")]
+    Archived,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -82,6 +86,10 @@ pub struct Boundary {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
+    {"properties":{"status":{"enum":["open","explored","closed"]},"archived_in_commit":{"type":"null"}},"required":["status"]},
+    {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}
+]))))]
 #[table("topics")]
 pub struct Topic {
     pub schema_version: SchemaVersion,
@@ -92,6 +100,9 @@ pub struct Topic {
     pub requirement_id: StableId,
     pub title: String,
     pub status: TopicStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub archived_in_commit: Option<super::ArchivedStamp>,
     #[serde(default, alias = "claimedBy", skip_serializing_if = "Option::is_none")]
     pub claimed_by: Option<String>,
     #[serde(default, alias = "claimedAt", skip_serializing_if = "Option::is_none")]
@@ -102,6 +113,10 @@ pub struct Topic {
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Relations, ProjectionRow)]
+#[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
+    {"properties":{"status":{"enum":["open","blocked_on_human","answered"]},"archived_in_commit":{"type":"null"}},"required":["status"]},
+    {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}
+]))))]
 #[table("questions")]
 pub struct Question {
     pub schema_version: SchemaVersion,
@@ -118,6 +133,9 @@ pub struct Question {
     #[serde(alias = "resolutionMethod")]
     pub resolution_method: ResolutionMethod,
     pub status: QuestionStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[column(json)]
+    pub archived_in_commit: Option<super::ArchivedStamp>,
     #[serde(default, alias = "claimedBy", skip_serializing_if = "Option::is_none")]
     pub claimed_by: Option<String>,
     #[serde(default, alias = "claimedAt", skip_serializing_if = "Option::is_none")]

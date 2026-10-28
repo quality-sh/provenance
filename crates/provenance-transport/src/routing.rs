@@ -1,6 +1,7 @@
 use crate::StatementHost;
 use axum::http::{HeaderMap, Method};
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
+use provenance_core::SDK_PROTOCOL_VERSION;
 use provenance_store::operations::catalog::{self, ContextKind, Definition, HttpMethod};
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, sync::OnceLock};
@@ -8,6 +9,7 @@ use std::{collections::BTreeMap, sync::OnceLock};
 mod identity;
 mod request;
 mod response;
+mod wire;
 
 pub use request::{decode_body, query};
 
@@ -90,6 +92,7 @@ pub async fn invoke(
     data: Value,
     query: BTreeMap<String, String>,
     headers: &HeaderMap,
+    page_write: bool,
 ) -> Result<(response::Success, Option<String>), ErasedFailure> {
     if !host.advertises(matched.definition.name) {
         return Err(ErasedFailure::new(None, OperationFailure::AccessDenied));
@@ -104,10 +107,17 @@ pub async fn invoke(
         headers,
         identity.as_ref().map(|(_, scope)| scope.as_str()),
     )?;
-    let call = host.bound_call(bound.handler.context, &bound.data)?;
-    let value = host
-        .invoke_backing(matched.definition.name, bound.handler.operation, call)
-        .await?;
+    let call = context(identity, bound.handler.context, &bound.data)?;
+    let value = catalog::invoke_with(
+        bound.handler.operation,
+        SDK_PROTOCOL_VERSION,
+        call,
+        wire::WireCall {
+            host: host.clone(),
+            page_write,
+        },
+    )
+    .await?;
     let value = response::success(
         value,
         matched.definition,
@@ -148,7 +158,7 @@ pub async fn invoke(
     Ok((value, etag))
 }
 
-pub fn context(
+fn context(
     identity: Option<(String, String)>,
     kind: ContextKind,
     request: &Value,
@@ -173,6 +183,18 @@ pub fn invalid(field: Option<&str>) -> ErasedFailure {
         OperationFailure::InvalidInput {
             field: field.map(str::to_owned),
             reason: InvalidInputReason::InvalidValue,
+        },
+    )
+}
+
+/// A required control that the request did not carry reports `required`,
+/// so a caller can tell an absent header from a malformed one.
+pub fn missing(field: &str) -> ErasedFailure {
+    ErasedFailure::new(
+        None,
+        OperationFailure::InvalidInput {
+            field: Some(field.to_owned()),
+            reason: InvalidInputReason::Required,
         },
     )
 }

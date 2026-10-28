@@ -1,25 +1,10 @@
-use super::support::Fixture;
+use super::support::{raw_rows, shard_path, Fixture};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const AT: &str = "2026-09-01T00:00:00Z";
-
-fn shard_path(fixture: &Fixture, family: &str, file: &str) -> PathBuf {
-    fixture
-        .dir
-        .path()
-        .join(format!(".provenance/state/scopes/default/{family}/{file}"))
-}
-
-fn raw_rows(fixture: &Fixture, family: &str, file: &str) -> Vec<String> {
-    std::fs::read_to_string(shard_path(fixture, family, file))
-        .unwrap()
-        .lines()
-        .map(str::to_owned)
-        .collect()
-}
 
 fn parsed_rows(fixture: &Fixture, family: &str, file: &str) -> Vec<Value> {
     raw_rows(fixture, family, file)
@@ -99,6 +84,8 @@ async fn create_keeps_every_unrelated_source_row_byte_for_byte() {
         .await
         .unwrap();
     let mut records = parsed_rows(&fixture, "sources", "source.jsonl");
+    records[0]["schema_version"] = json!(2);
+    records[1]["schema_version"] = json!(2);
     records[0]["created"] = json!({"commit":COMMIT,"at":AT});
     records[0]["updated"] = json!({"commit":COMMIT,"at":AT});
     records[0]["sourceType"] = records[0]
@@ -131,6 +118,7 @@ async fn create_keeps_a_row_with_repeated_unknown_members_exactly() {
     let fixture = Fixture::new();
     fixture.source().await;
     let mut record = parsed_rows(&fixture, "sources", "source.jsonl").remove(0);
+    record["schema_version"] = json!(2);
     record["created"] = json!({"commit":COMMIT,"at":AT});
     record["updated"] = json!({"commit":COMMIT,"at":AT});
     let mut raw = serde_json::to_string(&record).unwrap();
@@ -176,6 +164,7 @@ async fn resolution_create_keeps_unrelated_superseded_by_exactly() {
     });
     fixture.call("create-resolution", old).await.unwrap();
     let mut record = parsed_rows(&fixture, "resolutions", "res.jsonl").remove(0);
+    record["schema_version"] = json!(2);
     record["superseded_by"] = json!("resolution_future");
     let expected = padded(&record);
     write_rows(
@@ -254,6 +243,7 @@ async fn target_edit_keeps_top_level_unknown_data_and_accepts_aliases() {
     let fixture = Fixture::new();
     fixture.source().await;
     let mut record = parsed_rows(&fixture, "sources", "source.jsonl").remove(0);
+    record["schema_version"] = json!(2);
     record["sourceType"] = record
         .as_object_mut()
         .unwrap()
@@ -266,6 +256,13 @@ async fn target_edit_keeps_top_level_unknown_data_and_accepts_aliases() {
         .unwrap();
     record["extension"] = json!({"owner":"newer-tool","nested":{"value":7}});
     write_rows(&fixture, "sources", "source.jsonl", &[padded(&record)]);
+    let review = fixture
+        .dir
+        .path()
+        .join(".provenance/state/scopes/default/review");
+    if review.exists() {
+        std::fs::remove_dir_all(review).unwrap();
+    }
 
     let updated = fixture
         .call(
@@ -298,12 +295,20 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         .await
         .unwrap();
     let mut record = parsed_rows(&fixture, "boundaries", "boundary.jsonl").remove(0);
+    record["schema_version"] = json!(2);
     record["created"] = json!({"commit":COMMIT,"at":AT});
     // The same edit without the nested unknown must go through, so the
     // refusal below is about the nested field and not the row layout.
     let mut clean = record.clone();
     clean["sourceRef"] = json!({"sourceId":"source_one","clause":"section 1"});
     write_rows(&fixture, "boundaries", "boundary.jsonl", &[padded(&clean)]);
+    let review = fixture
+        .dir
+        .path()
+        .join(".provenance/state/scopes/default/review");
+    if review.exists() {
+        std::fs::remove_dir_all(review).unwrap();
+    }
     fixture
         .call(
             "update-boundary",

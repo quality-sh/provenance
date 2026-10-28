@@ -1,27 +1,23 @@
+#[allow(dead_code)]
+mod review_support;
 use camino::Utf8Path;
+use provenance_core::NodeType;
 use provenance_store::jsonl::write_jsonl_atomic;
+use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+use review_support::{fixture, scope};
 use serde_json::json;
 
+/// Implementation aid: a public raw writer cannot change submitted content.
 #[test]
-fn unintegrated_atomic_writer_cannot_replace_an_enrolled_requirement() {
-    let temp = tempfile::tempdir().unwrap();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
-    let path = root.join(".provenance/state/scopes/default/requirements/req.jsonl");
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let before = json!({"schema_version":3,"scope_id":"default","id":"req_a","statement":"A"});
-    std::fs::write(&path, format!("{before}\n")).unwrap();
-    let result = write_jsonl_atomic(
-        &path,
-        &[json!({"schema_version":2,"scope_id":"default","id":"req_a","statement":"B"})],
-    );
-    assert!(
-        result.is_err(),
-        "an enrolled row must refuse an unintegrated writer"
-    );
-    assert_eq!(
-        std::fs::read_to_string(path).unwrap(),
-        format!("{before}\n")
-    );
+fn unintegrated_atomic_writer_cannot_replace_a_submitted_requirement() {
+    let (temp, store) = fixture();
+    let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+    let path = provenance_store::shards::requirements_path(&layout, &scope());
+    let before = std::fs::read(&path).unwrap();
+    let mut record = serde_json::to_value(&store.list_requirements(&scope()).unwrap()[0]).unwrap();
+    record["statement"] = json!("Changed content.");
+    assert!(write_jsonl_atomic(&path, &[record]).is_err());
+    assert_eq!(std::fs::read(path).unwrap(), before);
 }
 
 #[test]
@@ -44,84 +40,84 @@ fn review_schema_is_readable_only_for_requirements_and_manifest() {
     .is_err());
 }
 
+/// Implementation aid: repeated ids cannot bypass the public writer guard.
 #[test]
-#[ignore = "requires PROVENANCE_LEGACY_BIN from a version-2 build"]
-fn installed_legacy_writer_refuses_the_enrolled_shard() {
-    #[path = "review_support/mod.rs"]
-    mod support;
-    let (temp, store) = support::fixture();
-    store
-        .save_requirement(support::save(&store, "enroll", json!({})))
-        .unwrap();
-    let shard = temp
-        .path()
-        .join(".provenance/state/scopes/default/requirements/req.jsonl");
-    let before = std::fs::read(&shard).unwrap();
-    let binary = std::env::var("PROVENANCE_LEGACY_BIN").unwrap();
-    let output = std::process::Command::new(binary)
-        .args([
-            "requirements",
-            "fog",
-            "set",
-            "--repo",
-            temp.path().to_str().unwrap(),
-            "--scope",
-            "default",
-            "--requirement-id",
-            "req_a",
-            "--text",
-            "old writer",
-        ])
-        .output()
-        .unwrap();
-    assert!(!output.status.success());
-    let error = String::from_utf8_lossy(&output.stderr);
-    assert!(error.contains("schema_version"), "{error}");
-    assert_eq!(std::fs::read(shard).unwrap(), before);
-    eprintln!("legacy writer refusal: {error}");
-}
-
-#[test]
-fn duplicate_enrolled_identity_cannot_hide_an_extra_mutation() {
-    let temp = tempfile::tempdir().unwrap();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
-    let path = root.join(".provenance/state/scopes/default/requirements/req.jsonl");
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let before = json!({"schema_version":3,"id":"req_a","statement":"A"});
-    std::fs::write(&path, format!("{before}\n")).unwrap();
+fn duplicate_submitted_identity_cannot_hide_an_extra_mutation() {
+    let (temp, store) = fixture();
+    let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+    let path = provenance_store::shards::requirements_path(&layout, &scope());
+    let before = serde_json::to_value(&store.list_requirements(&scope()).unwrap()[0]).unwrap();
     let mut duplicate = before.clone();
-    duplicate["statement"] = json!("B");
+    duplicate["statement"] = json!("Changed content.");
     assert!(write_jsonl_atomic(&path, &[before, duplicate]).is_err());
 }
 
+fn input<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> T {
+    serde_json::from_value(value).unwrap()
+}
+
+fn create(store: &StateStore, kind: NodeType) -> serde_json::Value {
+    let value = match kind {
+        NodeType::Requirement => serde_json::to_value(&store.list_requirements(&scope()).unwrap()[0]),
+        NodeType::Source => serde_json::to_value(store.create_source(input(json!({
+            "scope_id":"default","id":"source_a","name":"Policy","source_type":"policy","supersedes":[]
+        }))).unwrap()),
+        NodeType::Resolution => serde_json::to_value(store.create_resolution(input(json!({
+            "scope_id":"default","id":"resolution_a","title":"Store records",
+            "position":"Store records.","rationale":"Records are required.","status":"proposed",
+            "requirement_ids":["req_a"],"supersedes":[],"inputs":[]
+        }))).unwrap()),
+        NodeType::Rule => serde_json::to_value(store.create_rule(input(json!({
+            "scope_id":"default","id":"rule_a","statement":"The system stores records.",
+            "status":"active","severity":"medium","requirement_ids":["req_a"],"resolution_ids":[]
+        }))).unwrap()),
+        NodeType::Domain => serde_json::to_value(store.create_domain(input(json!({
+            "scope_id":"default","id":"domain_a","name":"Storage"
+        }))).unwrap()),
+        NodeType::Boundary => serde_json::to_value(store.create_boundary(input(json!({
+            "scope_id":"default","id":"boundary_a","requirement_id":"req_a","statement":"Storage only."
+        }))).unwrap()),
+        NodeType::Topic | NodeType::Question => {
+            let topic = store.create_topic(input(json!({
+                "scope_id":"default","id":"topic_a","requirement_id":"req_a",
+                "title":"Storage","status":"open","links":[]
+            }))).unwrap();
+            if kind == NodeType::Topic {
+                serde_json::to_value(topic)
+            } else {
+                serde_json::to_value(store.create_question(input(json!({
+                    "scope_id":"default","id":"question_a","topic_id":"topic_a",
+                    "question":"Which storage?","resolution_method":"research","status":"open","links":[]
+                }))).unwrap())
+            }
+        }
+    }.unwrap();
+    if kind != NodeType::Requirement {
+        store.submit_record_review(input(json!({
+            "scope_id":"default","actor":"author","record_kind":kind,"record_id":value["id"],
+            "title":"Review the record","summary":"Review the stored text.","declared_by":null,
+            "source_ids":[],"evidence_references":[],"builds_on":[],"expected_revision":null,"revises":null
+        }))).unwrap();
+    }
+    value
+}
+
+/// Implementation aid: each submitted record kind uses the same raw writer guard.
 #[test]
-fn unintegrated_writers_refuse_enrolled_rows_for_every_record_kind() {
-    let temp = tempfile::tempdir().unwrap();
-    let root = Utf8Path::from_path(temp.path()).unwrap();
-    for (directory, file) in [
-        ("sources", "source.jsonl"),
-        ("requirements", "req.jsonl"),
-        ("resolutions", "resolution.jsonl"),
-        ("rules", "rule.jsonl"),
-        ("domains", "domain.jsonl"),
-        ("boundaries", "boundary.jsonl"),
-        ("topics", "topic.jsonl"),
-        ("questions", "question.jsonl"),
-    ] {
-        let path = root.join(directory).join(file);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let before = json!({"schema_version":3,"scope_id":"default","id":"record_a"});
-        std::fs::write(&path, format!("{before}\n")).unwrap();
-        let after = json!({"schema_version":3,"scope_id":"default","id":"record_a","changed":true});
-        let error = write_jsonl_atomic(&path, &[after]).unwrap_err();
+fn unintegrated_writers_refuse_submitted_rows_for_every_record_kind() {
+    for kind in provenance_core::review::REVIEW_RECORD_KINDS {
+        let (temp, store) = fixture();
+        let mut record = create(&store, *kind);
+        let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
+        let path = provenance_store::shards::path_for(&layout, &scope(), *kind);
+        let before = std::fs::read(&path).unwrap();
+        record["changed"] = json!(true);
+        let error = write_jsonl_atomic(&path, &[record]).unwrap_err();
         assert!(
             error.to_string().contains("guarded review save"),
-            "{directory}: {error:#}"
+            "{kind:?}: {error:#}"
         );
-        assert_eq!(
-            std::fs::read_to_string(path).unwrap(),
-            format!("{before}\n")
-        );
+        assert_eq!(std::fs::read(path).unwrap(), before);
     }
 }
 

@@ -69,6 +69,8 @@ fn target_first_topic_actions_infer_kind_and_update_claim_state() {
         "release",
         "--repo",
         &repo,
+        "--actor",
+        "worker",
         "--format",
         "json",
     ]);
@@ -160,8 +162,8 @@ fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
     );
     assert_eq!(submitted["data"]["requirement_id"], "req_actions");
     assert_eq!(submitted["data"]["fact"], "submitted");
-    assert_eq!(
-        submitted["data"]["proposal_key"],
-        submitted["data"]["proposal_id"]
-    );
+    assert!(submitted["data"]["proposal_key"]
+        .as_str()
+        .unwrap()
+        .starts_with("review:requirement:req_actions:"));
 }

@@ -19,6 +19,12 @@ pub struct PathBinding {
 }
 
 #[derive(Clone)]
+pub struct FixedBinding {
+    pub field: &'static str,
+    pub value: &'static str,
+}
+
+#[derive(Clone)]
 pub struct ParentBinding {
     pub kind: &'static str,
     pub id_parameter: &'static str,
@@ -84,9 +90,19 @@ pub struct CliDefault {
     pub value: CliDefaultValue,
 }
 
+#[derive(Clone, Copy, Default)]
+pub enum CliExecution {
+    /// Invoke the operation through its registered transport adapter.
+    #[default]
+    RegisteredOperation,
+    /// Check the statement with the local repository dictionary.
+    ProjectStatementCheck,
+}
+
 #[derive(Clone, Default)]
 pub struct CliBinding {
     pub defaults: Vec<CliDefault>,
+    pub execution: CliExecution,
 }
 
 #[derive(Clone)]
@@ -99,6 +115,7 @@ pub struct RequestBinding {
     pub raw: Option<Value>,
     pub adapter: RequestAdapter,
     pub path: Vec<PathBinding>,
+    pub fixed: Vec<FixedBinding>,
     pub parent: Option<ParentBinding>,
     pub selector: Option<SelectorBinding>,
     pub scope_field: Option<&'static str>,
@@ -114,6 +131,7 @@ impl Default for RequestBinding {
             raw: None,
             adapter: super::routes::request::DIRECT,
             path: Vec::new(),
+            fixed: Vec::new(),
             parent: None,
             selector: None,
             scope_field: None,
@@ -130,6 +148,9 @@ pub struct HeaderBinding {
     pub field: &'static str,
     pub trim_quotes: bool,
     pub numeric: bool,
+    /// A required header that the request omits fails with reason `required`;
+    /// an optional one leaves its body field unset.
+    pub required: bool,
 }
 
 #[derive(Clone, Default)]
@@ -220,6 +241,8 @@ pub struct Registration {
     pub queries: Vec<QueryRoute>,
     pub cli: CliBinding,
     pub target: Option<TargetBinding>,
+    /// The record changed by a write that needs review-link decoration.
+    pub review_link: Option<NodeType>,
 }
 
 impl Registration {
@@ -239,6 +262,7 @@ impl Registration {
             queries: Vec::new(),
             cli: CliBinding::default(),
             target: None,
+            review_link: None,
         }
     }
 }

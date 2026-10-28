@@ -1,4 +1,4 @@
-use super::{DiscussionEntry, DiscussionMessagesPage, DiscussionStatus};
+use super::{Discussion, DiscussionMessagesPage, DiscussionStatus};
 use crate::{Message, NodeType, StableId, ThreadParent};
 use provenance_macros::rule;
 use serde::{Deserialize, Serialize};
@@ -76,7 +76,7 @@ pub struct DiscussionConversationQuery {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscussionConversation {
-    pub head: DiscussionEntry,
+    pub head: Discussion,
     pub messages: DiscussionMessagesPage,
 }
 
@@ -94,7 +94,7 @@ pub struct DiscussionResultPage<T> {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscussionConversationResult {
-    pub head: DiscussionEntry,
+    pub head: Discussion,
     pub messages: DiscussionResultPage<Message>,
 }
 

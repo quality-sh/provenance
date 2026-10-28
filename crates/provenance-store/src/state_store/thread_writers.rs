@@ -1,3 +1,4 @@
+use super::message_ids::{new_message_id, next_message_time};
 use super::read_budget::ensure_within_read_budget;
 use super::{serde_name, PostMessageInput, PostMessageResult, StateStore};
 use crate::shards;
@@ -16,10 +17,9 @@ impl StateStore {
         self.with_repository_publication(|| {
             anyhow::ensure!(
                 !self
-                    .list_threads(&input.scope_id)?
+                    .list_discussions(&input.scope_id)?
                     .iter()
-                    .any(|t| t.parent == input.parent
-                        && t.schema_version == provenance_core::review::REVIEW_SCHEMA_VERSION),
+                    .any(|discussion| discussion.parent == input.parent),
                 "enrolled Thread requires an addressed Discussion write"
             );
             self.write_thread_message(input)
@@ -104,18 +104,10 @@ impl StateStore {
         body: String,
     ) -> anyhow::Result<Message> {
         let existing = self.list_messages(scope_id)?;
-        let created_at = existing
-            .iter()
-            .map(|m| m.created_at)
-            .max()
-            .unwrap_or(0)
-            .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("Message timestamp overflow"))?;
-        let id = StableId::new(format!("msg_{created_at:06}"))?;
-        anyhow::ensure!(
-            !existing.iter().any(|m| m.id == id),
-            "Message identity already exists in a legacy shard"
-        );
+        let now_ms =
+            i64::try_from(time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000)?;
+        let created_at = next_message_time(now_ms, existing.iter().map(|m| m.created_at).max())?;
+        let id = new_message_id();
         let message = Message {
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: scope_id.clone(),

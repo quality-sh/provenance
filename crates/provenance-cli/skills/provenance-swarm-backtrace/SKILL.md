@@ -275,7 +275,7 @@ but silently dropped a partition is worse than one that says where it didn't loo
 The backtrace's output *feeds* the shaping loop; it does not finish anything. Tell the
 human how many proposals landed, what's contested, and what surprised the refuters. Bring
 forward only a small set that is already contested or conflicting and blocks a decision.
-The rest remain discoverable by `provenance proposals surface`: exact evidence paths for
-diff-driven work, and explicit topic/requirement/artifact targets for shaping work. Do not
-ask the human to dispose of the complete output, and do not create dispositions
-yourself.
+The CLI has no standalone proposal-surface command. Claiming a Topic returns proposals in
+its explicit territory. For diff-driven work, use `provenance proposals list` and inspect
+the explicit evidence paths. Do not infer territory from titles or graph proximity. Do not
+ask the human to dispose of the complete output, and do not create dispositions yourself.

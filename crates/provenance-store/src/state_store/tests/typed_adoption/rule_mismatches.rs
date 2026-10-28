@@ -141,7 +141,7 @@ fn rule_adoption_preserves_a_resolution_relationship_outside_the_typed_surface()
             supersedes: Vec::new(),
             position: "Keep the canonical Rule".to_string(),
             rationale: "The existing decision remains canonical".to_string(),
-            status: ResolutionStatus::Proposed,
+            status: ResolutionStatus::Approved,
             context: None,
             enforcement: None,
             confidence: None,

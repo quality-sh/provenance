@@ -21,7 +21,10 @@ export class MalformedResponseError extends ClientError {
 export class OperationError<F = OperationFailure> extends ClientError {
   readonly _tag = 'OperationError';
   constructor(readonly status: number, readonly failure: F) {
-    super('OperationError', 'Operation failed');
+    const error = failure && typeof failure === 'object' && 'error' in failure ? failure.error : undefined;
+    const kind = error && typeof error === 'object' && 'kind' in error && typeof error.kind === 'string' ? error.kind : 'Operation failed';
+    const message = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : undefined;
+    super('OperationError', message ? `${kind}: ${message}` : kind);
   }
 }
 export class ProtocolMismatchError extends ClientError {
@@ -42,6 +45,7 @@ export async function send(fetcher: typeof fetch, url: string | URL, init: Reque
   catch (cause) { throw new ConnectionError(cause); }
 }
 
+// @provenance rule: rule_sdk_read_interruption_releases_resources
 export async function readJson(response: Response, _operation: string, _mutates: boolean, signal?: AbortSignal): Promise<unknown> {
   const malformed = (cause?: unknown) => new MalformedResponseError(cause);
   const reader = response.body?.getReader();

@@ -300,6 +300,7 @@ fn proposal(id: &str, promotion_state: PromotionState) -> ProposalCard {
         duplicate_of: None,
         superseded_by: None,
         record_revision: None,
+        actor: None,
         revises: None,
         revises_rejection: None,
     }

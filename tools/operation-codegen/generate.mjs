@@ -9,6 +9,7 @@ import { responseSchemas } from './validators.mjs';
 import { compareTrees } from './inventory.mjs';
 import { rustClientFiles } from './templates.mjs';
 import { documentGrammarErrors } from './grammar-lint.mjs';
+import { exactQuerySuccesses } from './query-successes.mjs';
 import { generatedDirectories as directories, recordGeneration } from './artifacts.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -20,7 +21,8 @@ async function generate(temporary, generator) {
   for (const directory of directories) await mkdir(join(temporary, directory), { recursive: true });
   run(generator, ['export', join(temporary, directories[0])]);
   const openapiPath = join(temporary, directories[0], 'openapi.json');
-  const document = JSON.parse(await readFile(openapiPath, 'utf8'));
+  const document = exactQuerySuccesses(JSON.parse(await readFile(openapiPath, 'utf8')));
+  await writeFile(openapiPath, JSON.stringify(document, null, 2) + '\n');
   const mcp = JSON.parse(await readFile(join(temporary, directories[0], 'mcp.json'), 'utf8'));
   const compatibility = JSON.parse(await readFile(join(temporary, directories[0], 'compatibility.json'), 'utf8'));
   const grammarErrors = documentGrammarErrors(document, mcp);

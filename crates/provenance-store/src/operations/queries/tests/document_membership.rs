@@ -101,7 +101,7 @@ async fn member_work_budget_refuses_instead_of_claiming_a_complete_prefix() {
     let mut record = json!(store.list_requirements(&scope).unwrap()[0]);
     for i in 0..4100 {
         record["id"] = json!(format!("req_budget_{i:04}"));
-        record["refines"] = json!("req_overtime");
+        record["refines"] = json!(["req_overtime"]);
         append_record(&path, &record);
     }
     let error = page(&root_of(&dir), "req_overtime", Value::Null)
@@ -118,10 +118,11 @@ async fn byte_limited_pages_continue_without_truncating_canonical_records() {
     let (dir, store, scope) = seeded_store();
     let path = crate::shards::requirements_path(&store.layout, &scope);
     let mut record = json!(store.list_requirements(&scope).unwrap()[0]);
+    record["schema_version"] = json!(2);
     record["description"] = json!("x".repeat(40_000));
     for i in 0..35 {
         record["id"] = json!(format!("req_bytes_{i:03}"));
-        record["refines"] = json!("req_overtime");
+        record["refines"] = json!(["req_overtime"]);
         append_record(&path, &record);
     }
     let root = root_of(&dir);

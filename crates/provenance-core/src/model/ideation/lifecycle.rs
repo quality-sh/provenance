@@ -115,12 +115,6 @@ pub fn validate_proposal_intrinsic(proposal: &ProposalCard) -> anyhow::Result<()
         is_submission == proposal.record_revision.is_some(),
         "a record revision binding belongs on a record_revision submission and no other proposal"
     );
-    if let Some(binding) = &proposal.record_revision {
-        anyhow::ensure!(
-            !binding.content_digest.trim().is_empty(),
-            "record revision binding must carry a content digest"
-        );
-    }
     let linked = proposal.revises.is_some() && proposal.revises_rejection.is_some();
     let unlinked = proposal.revises.is_some() || proposal.revises_rejection.is_some();
     anyhow::ensure!(

@@ -72,6 +72,8 @@ pub struct SearchQuery {
     #[serde(default)]
     pub cursor: Option<String>,
     #[serde(default)]
+    pub exclude_terminal: bool,
+    #[serde(default)]
     pub text: Option<String>,
     #[serde(default)]
     pub node_types: Vec<NodeType>,

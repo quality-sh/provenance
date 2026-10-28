@@ -34,23 +34,35 @@ Collections:
   `verification-runs`, `verification-bindings`.
 - Read-only scope indexes: `discussion-containers`, `messages`, `assertions`,
   `dispositions`. An index entry carries the canonical parent address.
+- The optional `exclude_terminal` Boolean query parameter applies to graph
+  collection lists and searches. When it is `true`, the result excludes
+  archived Rules and abandoned or rejected Resolutions. A superseded
+  Resolution stays in the result. The default is `false`.
 
 Subresources have parent-owned addresses:
 
 - `GET /requirements/{id}/document` reads the assembled document. The optional
   `exclude_terminal` Boolean query parameter excludes archived Rules and
-  abandoned Resolutions when it is `true`. A superseded Resolution stays in the
+  abandoned or rejected Resolutions when it is `true`. A superseded Resolution stays in the
   document. Each record follows its own lifecycle. An active Rule stays in the
   document when its only document link is an abandoned Resolution. The
-  abandoned Resolution and its discussions stay out of the document. The
+  abandoned Resolution and its discussions stay out of the document. When
+  `exclude_terminal` is `true`, the document also excludes a record that no
+  review accepted, that has no pending submission, and whose latest decision
+  is a rejection. Its lifecycle status does not change, and its decision
+  history still shows the rejection. A rejected change to an accepted record
+  keeps that record in the document. The review totals count only the records
+  in the document. The
   default is `false` so that omission keeps the complete historical view.
-- `GET /requirements/{id}/history[/{entry_id}]` reads immutable outcomes.
-- `GET /requirements/{id}/history/{entry_id}/evidence/{side}` reads a
-  before or after snapshot span.
+- `GET /{collection}/{id}/history[/{entry_id}]` reads immutable outcomes for
+  each graph record kind.
+- `GET /{collection}/{id}/history/{entry_id}/evidence/{side}` reads a before or
+  after snapshot span for each graph record kind.
 - `GET /rules/{id}/evidence` reads implementation, verification, and
   Requirement-change evidence.
-- `GET|POST /{collection}/{id}/discussions` lists or starts concerns for the six
-  supported parent kinds.
+- `GET|POST /{collection}/{id}/discussions` lists or starts concerns for Source,
+  Requirement, Resolution, Rule, Topic, and Question records. Domain and
+  Boundary records have no Discussion routes.
 - `GET|PATCH /{collection}/{id}/discussions/{discussion_id}` reads a concern or
   changes its permitted status.
 - `GET|POST /{collection}/{id}/discussions/{discussion_id}/messages[/{message_id}]`
@@ -66,8 +78,13 @@ Subresources have parent-owned addresses:
 Actions are POSTs on a resource path with one declared action name:
 
 - Topics: `claim`, `release`, `close`. Questions: `claim`, `release`, `answer`.
-- Requirement review: `POST /requirements/{id}/submit`, and
-  `POST /requirements/{id}/submissions/{proposal_id}/decide|withdraw`.
+  `claim` and `release` name their actor. A claim is held by one actor: a
+  claim or release by another actor returns `claim_conflict` with the holder
+  and status 409, and a repeated claim by the holder returns the unchanged
+  record.
+- Record review: `POST /{collection}/{id}/submit`, and
+  `POST /{collection}/{id}/submissions/{proposal_id}/decide|withdraw`, for each
+  graph record kind.
   Submit creates the Proposal ID and Proposal key and returns both values. A
   client uses the returned Proposal ID in a later decide or withdraw path.
   Decide creates and returns the Disposition ID. The separate submit and
@@ -89,32 +106,37 @@ Three computation exceptions stay collection POSTs:
 These exceptions imply no new persistent plan records, no generic action
 dispatch, and no weaker authoring ownership checks.
 
-Known carve-out, to be reconciled in a later phase: typed-spec apply
-(`POST /authoring-changes`) and full-scope import still replace un-enrolled
-graph state without journal entries, while enrolled state takes every change
-through the guarded journal.
+Typed-spec apply (`POST /authoring-changes`) records an occurrence for each
+changed enrolled record and refuses to delete an enrolled record. It continues
+to replace un-enrolled graph state without journal entries because those
+records have not entered review. When apply deletes a record, also by cascade,
+it deletes the Discussions of that record, active or resolved, with their
+Threads and Messages, in the same publication. Git keeps their history.
+Full-scope import still requires separate lossless support for review history.
 
 Receipts stay internal. A write returns success or an error. The client does not
 replay a write, and no client-side uncertain-write ledger exists. The journal
 resolves an interrupted publication inside the Store. The legacy receipt
 operations have no public replacement.
 
-Requirement writes use one guarded path. The review layer is the editing
-interface. `POST /requirements` creates a Requirement. `PATCH /requirements/{id}`
-edits one under its ETag and enrollment preconditions. No parallel write surface
-exists. The read side merges the same way: `GET /requirements/{id}` returns one
-resource read carrying the edit state, the relationships, the ETag, and the
-decision state together, so the separate edit-state and decision-state reads of
-the #273 review surface have no successor.
+Graph record writes use one guarded path for each kind. The review layer is the
+editing interface. A collection POST creates a record. A collection member PATCH
+edits a record under its enrollment preconditions. A Requirement PATCH also
+uses its ETag precondition. No parallel write surface exists. The read side
+merges the same way: a graph record member GET returns one resource read carrying
+the edit state, the relationships, the ETag, and the decision state together.
+The separate edit-state and decision-state reads of the #273 review surface have
+no successor.
 
-`POST /requirements` publishes the new Requirement and its first review
-submission in one state write. A PATCH that changes review content publishes the
-new revision and a new submission in one state write. The prior pending
-submission becomes superseded; the client does not withdraw it. A PATCH that
-changes only lifecycle status keeps the current revision and submission. Create
-and PATCH responses carry the current submission under `decision.pending`,
-including its server-created Proposal ID and revision. Superseded Proposals,
-decisions, and feedback remain readable through their history resources.
+A collection POST publishes the new graph record and its first review submission
+in one state write. A PATCH that changes review content publishes the new
+revision and a new submission in one state write. The prior pending submission
+becomes superseded; the client does not withdraw it. A PATCH that changes only
+lifecycle status keeps the current revision and submission. The current member
+read carries the current submission under `decision.pending`, including its
+server-created Proposal ID and revision. Each decision binds the exact submitted
+record revision. Superseded Proposals, decisions, feedback, and before and after
+evidence remain readable through their history resources.
 
 ## 3. Envelope
 
@@ -125,17 +147,34 @@ unchanged from the current surface — stamps, freshness policy, the HMAC-bound
 cursor, and limits — per the plan's kept-unchanged list.
 
 A body-bearing request uses `{data}`. HTTP binds catalog-defined controls to
-headers. MCP and native calls use the same typed controls. `Idempotency-Key`,
-`If-Match`, and the response `ETag` map to Store-supported identity and
-precondition checks. The surface never advertises an unsupported guarantee.
+headers. MCP and native calls use the same typed controls. `If-Match` and the
+response `ETag` map to Store-supported precondition checks. The surface never
+advertises an unsupported guarantee.
 
-Requirement edit requests keep `If-Match`. Submit, decide, and withdraw do not
-accept `Idempotency-Key`. Their bodies do not accept a request ID. A submit body
-does not accept `proposal_id` or `proposal_key`, and a decide body does not
-accept `disposition_id`. The server creates these identities and returns them.
+Review writes do not accept `Idempotency-Key`, and their bodies do not accept a
+request ID. The server creates the request identity. Review record updates and
+versioned Discussion writes take their guard in `If-Match`; MCP takes it as
+`if_match`. Requirement, Topic, and Question updates require it. A body that
+carries `expected_etag` is refused with `invalid_input`. A repeated Requirement create
+with the same caller-selected Stable ID returns `already_exists` with status
+409.
+
+A repeated Discussion start after a lost response creates a new Discussion. A
+repeated Discussion reply or status change uses the old `If-Match` value and
+returns `discussion_version_conflict` with status 409. The client reads the
+Discussion before it sends another write. A status change to the status the
+Discussion already has returns the unchanged Discussion with status 200.
+
+A submit body does not accept `proposal_id` or `proposal_key`, and a decide
+body does not accept `disposition_id`. The server creates these identities and
+returns them.
 
 A decide request can omit `rationale` for an accepted or deferred decision. A
 rejected decision must include a nonempty `rationale`.
+
+A decision on a Domain or Boundary can carry a Disposition rationale. It cannot
+carry Discussion feedback. The server refuses such feedback with the typed
+`unsupported_review_feedback` error.
 
 ## 4. PATCH semantics
 
@@ -172,6 +211,9 @@ current ETag. A decide or withdraw request returns 409 with
 withdrawn, or already decided. This failure carries the current Proposal ID,
 when one is pending, and the current revision ID. The client applies its update
 only after a person resolves the conflict. The server does not merge changes.
+The CLI reports when the current Proposal is already pending and names
+`provenance <record-id> get --view review` as the read command. A guarded update
+after a rejection creates the replacement submission.
 
 ## 6. Compatibility tuple and gate
 
@@ -202,11 +244,11 @@ names, mutation classification, preconditions, receipts, paging, and statuses.
 Query parameter names use snake_case. A parameter that is omitted uses the
 default in its request schema.
 
-The document cursor binds `exclude_terminal`, the page limit, and the
-Requirement ID. A client must send the same values on each continuation. A
-filtered cursor is invalid in an unfiltered request, and an unfiltered cursor is
-invalid in a filtered request. The filter applies before the page limit and the
-`has_more` calculation.
+Collection, search, and document cursors bind `exclude_terminal`. The document
+cursor also binds the page limit and Requirement ID. A client must send the
+same values on each continuation. A filtered cursor is invalid in an
+unfiltered request, and an unfiltered cursor is invalid in a filtered request.
+The filter applies before the page limit and the `has_more` calculation.
 
 The generator linter rejects repository or scope path prefixes, relationship
 routes, legacy verb routes, duplicate bindings, unresolved path parameters,
@@ -250,3 +292,21 @@ It rejects a prohibited route shape, request shape, response envelope, status,
 payload identity, or tool description before it writes generated output. The
 compatibility gate in `docs/compatibility-gate.md` remains independent and
 required.
+
+Requirement refinement parents use an ID list in `refines`. A record omits an empty
+list. An empty list identifies a root. Creation accepts a list. A relationship edit
+accepts a complete list or an `add`/`remove` delta. The scalar shape is not accepted.
+The protocol version stays unchanged. Both generated clients use this contract.
+
+For one selected child, the CLI accepts `update --replace-parent P --with-parent B`
+with `--actor`. For a Requirement owned by a declaration, `--declared-by` supplies
+the existing owner precondition to both writes. The helper reads the child guard,
+adds B, and uses the returned guard to remove P.
+An explicit `--if-match` controls the first write. A failed second write can leave
+both parents. A retry preserves the other parents. If B is a parent and P is
+not, the helper makes no write: it refuses a P that does not exist. Otherwise it
+writes a message to standard error that the replacement is already done, exits with
+success, and prints the unchanged record. Because it makes no write, it does
+not check `--if-match` or `--declared-by` in that case. Each write uses the existing
+Requirement PATCH operation. The helper changes no descendant and does not declare
+supersession. A supersession declaration alone changes no child or prior status.

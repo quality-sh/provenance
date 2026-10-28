@@ -40,6 +40,7 @@ fn proposal_input(
         duplicate_of: None,
         superseded_by: None,
         record_revision: None,
+        actor: None,
         revises: None,
         revises_rejection: None,
     }

@@ -10,7 +10,9 @@ A reader-facing taxonomy classification for requirements. A derived rule belongs
 
 ## Requirement
 
-A higher-level obligation the system must satisfy. Requirements are refined into Rules.
+A higher-level obligation the system must satisfy. A Requirement can refine more than one
+parent Requirement. Each parent refers to the same Requirement and its Rules. A Requirement
+with no refinement parent is a root. A dependency is separate from refinement.
 
 ## Resolution
 
@@ -190,6 +192,13 @@ The person who starts a local review host and the clients to which that person
 gives access. They share access to the repository target and scope selected for
 that host session.
 
+## Review page action
+
+Any write made through an authenticated review page session. A person action
+means a Review page action; the mark does not establish browser or human identity.
+An agent that drives the review page itself, such as the in-app browser of the
+Codex app or Claude Desktop, will notify itself. CLI, SDK and MCP writes never notify.
+
 ## Review document
 
 A view of one explicit Requirement and the records related to it through
@@ -215,8 +224,8 @@ at one unchanged projection revision. A failed refresh does not establish it.
 ## Terminal-and-dead record
 
 A record whose lifecycle removes it from the current review document but keeps
-it available for historical views. An archived Rule and an abandoned Resolution
-are terminal-and-dead records. A superseded Resolution is not a
+it available for historical views. An archived Rule and an abandoned or rejected
+Resolution are terminal-and-dead records. A superseded Resolution is not a
 terminal-and-dead record.
 
 ## Thread container
@@ -238,3 +247,8 @@ does not assign those Messages to an inferred root.
 
 An immutable record of a Requirement creation or edit, with its origin and
 After evidence. An edit also has Before evidence; creation has none.
+
+## Busy host
+
+A host that has no free request slot. This condition is separate from missing
+execution context or needs.
