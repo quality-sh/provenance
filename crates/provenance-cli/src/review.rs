@@ -315,7 +315,7 @@ async fn configuration(
     if let Err(error) = config.credential.authenticate(request.headers()) {
         return refusal(error);
     }
-    let actor_ids = match config.repository.disposition_actor_ids() {
+    let actor_ids = match disposition_actor_ids(config.repository.clone()).await {
         Ok(actor_ids) => actor_ids,
         Err(error) => return refusal(error),
     };
@@ -330,6 +330,15 @@ async fn configuration(
     }
     config.value["dispositionActorIds"] = json!(actor_ids);
     Json(config.value).into_response()
+}
+
+/// The manifest read can wait for the publication lock, so it runs off the runtime workers.
+async fn disposition_actor_ids(
+    repository: Arc<LocalRepository>,
+) -> Result<Vec<String>, OperationFailure> {
+    tokio::task::spawn_blocking(move || repository.disposition_actor_ids())
+        .await
+        .unwrap_or(Err(OperationFailure::Internal))
 }
 
 async fn protect_origin(
@@ -358,9 +367,9 @@ async fn protect_origin(
     }
     let mut response = match access.check_origin(&headers) {
         Ok(()) => {
-            // A cross-site entry navigation serves only assets and cannot use a cookie.
+            // A cross-site entry navigation serves only assets and cannot use a page session.
             if access.check_origin(request.headers()).is_ok() {
-                let page = codes.authenticate_cookie(request.headers_mut());
+                let page = codes.authenticate_session(request.headers_mut());
                 if page && matches!(*request.method(), Method::POST | Method::PATCH) {
                     request
                         .extensions_mut()

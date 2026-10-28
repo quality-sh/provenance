@@ -1,6 +1,9 @@
 [profile.ci]
 # Bound process concurrency even when the runner receives extra CPUs.
 test-threads = 8
+# The single-source process tests run a full nested Cargo build. The
+# Default-features CLI test job runs them once per CI run.
+default-filter = 'not binary(cli_skills_single_source)'
 
 [profile.ci.junit]
 # target/nextest/ci/junit.xml; CI uploads it for TAG, the test aggregator.
@@ -44,4 +47,10 @@ slow-timeout = { period = "60s", terminate-after = 4 }
 [[profile.default.overrides]]
 # A blocked OS lock cannot be cancelled by an async timeout.
 filter = 'binary(page_write_response)'
+slow-timeout = { period = "30s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+# Slot tests hold work until the test releases it. A stuck test must fail in
+# about a minute, not at the job timeout.
+filter = 'package(provenance-transport) & (binary(host_queue) | binary(host_invocation))'
 slow-timeout = { period = "30s", terminate-after = 2 }

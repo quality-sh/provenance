@@ -83,10 +83,11 @@ fn review_link_opens_the_page_signed_in() {
     let session = redeem(&host, &launch_code(&link));
     assert_eq!(session.status(), 200);
     let session: Value = serde_json::from_str(&session.into_string().unwrap()).unwrap();
-    let bearer = session["bearer"].as_str().unwrap();
+    let session = session["session"].as_str().unwrap();
+    assert_ne!(session, host.bearer());
     let configuration = response(
         request(&host, "GET", "/review-config", false)
-            .set("Authorization", &format!("Bearer {bearer}"))
+            .set("Authorization", &format!("Bearer {session}"))
             .call(),
     );
     assert_eq!(configuration.status(), 200);

@@ -13,6 +13,9 @@ graph before you move on. The graph holds state between turns, not the conversat
 
 ## Invariants
 
+Before you call code redundant or delete tests, run
+`provenance rules resolve-symbol --file <path>` on the file.
+
 1. **Land every decision as it resolves.** Never carry a resolved-but-unrecorded decision
    in conversation state.
 2. **Do not outrun context.** Stop before the map is too large to hand off accurately.
@@ -377,6 +380,9 @@ change the artifact's kind.
    really produced the Rule. A Resolution producer is not required, and inventing one to
    satisfy the command misrecords how the obligation arose. If the CLI rejects a Rule that
    cites only a Requirement, the installed binary is out of date; see "Check your CLI".
+
+   Rule creation defaults to `draft`. Keep this default for an agent-created Rule. Pass
+   `--status active` only when a person ratifies the Rule.
 
    Only an approved Resolution can produce an active Rule or answer a Question. While the
    Resolution is proposed, keep the Rule in review with `--status review`, and answer the

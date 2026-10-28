@@ -195,7 +195,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
                     file: "src/pay.rs".into(),
                     symbol: None,
                     line: None,
-
+                    cursor: None,
                     limit: 10,
                 },
             )

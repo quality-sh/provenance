@@ -2,9 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generatedPaths } from './artifacts.mjs';
+import { bundledSkillNames } from '../skills/prepare.mjs';
+
+const skillOutputs = bundledSkillNames.flatMap(name =>
+  ['crates/provenance-cli/skills', '.agents/skills', '.claude/skills'].map(prefix => `${prefix}/${name}`));
 
 export function checkSourceControl(root) {
-  const result = spawnSync('git', ['ls-files', '-z', '--', ...generatedPaths, 'crates/provenance-cli/review-assets-generated'], { cwd: root, encoding: 'utf8' });
+  const result = spawnSync('git', ['ls-files', '-z', '--', ...generatedPaths, 'crates/provenance-cli/review-assets-generated', ...skillOutputs], { cwd: root, encoding: 'utf8' });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(result.stderr || 'Cannot inspect Git index');
   return result.stdout.split('\0').filter(Boolean);

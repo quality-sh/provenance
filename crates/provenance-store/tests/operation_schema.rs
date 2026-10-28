@@ -1,5 +1,6 @@
 #![cfg(feature = "schema")]
 use provenance_core::{VerificationBinding, VerificationRun};
+use provenance_macros::verifies;
 use provenance_store::{
     operations::TypedSpecPlan,
     state_store::{
@@ -121,7 +122,11 @@ fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
         .with_draft(jsonschema::Draft::Draft202012)
         .build(&schema)
         .unwrap();
-    let mut rule = json!({"schema_version":2,"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"]});
+    let mut rule = json!({
+        "schema_version":2, "scope_id":"default", "id":"rule_one",
+        "statement":"The system saves records.", "status":"draft", "severity":"medium",
+        "requirement_ids":["req_one"]
+    });
     assert!(compiled.is_valid(&rule));
     rule["status"] = json!("archived");
     assert!(!compiled.is_valid(&rule));
@@ -146,10 +151,33 @@ fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
         .with_draft(jsonschema::Draft::Draft202012)
         .build(&input_schema)
         .unwrap();
-    let mut input = json!({"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]});
+    let mut input = json!({
+        "scope_id":"default", "id":"rule_one", "statement":"The system saves records.",
+        "status":"draft", "severity":"medium", "requirement_ids":["req_one"],
+        "resolution_ids":[]
+    });
     assert!(input_contract.is_valid(&input));
     input["archived_in_commit"] = json!({"commit":"a".repeat(40)});
     assert!(!input_contract.is_valid(&input));
     input["status"] = json!("archived");
     assert!(input_contract.is_valid(&input));
+}
+
+#[test]
+#[verifies("rule_new_rule_defaults_to_draft", examples)]
+fn create_rule_input_without_a_status_is_draft() {
+    let input_schema = serde_json::to_value(schemars::schema_for!(CreateRuleInput)).unwrap();
+    let input_contract = jsonschema::options()
+        .with_draft(jsonschema::Draft::Draft202012)
+        .build(&input_schema)
+        .unwrap();
+    let without_status = json!({
+        "scope_id":"default", "id":"rule_default", "statement":"The system saves records.",
+        "severity":"medium", "requirement_ids":["req_one"], "resolution_ids":[]
+    });
+
+    let defaulted: CreateRuleInput = serde_json::from_value(without_status.clone()).unwrap();
+    assert_eq!(defaulted.status, provenance_core::RuleStatus::Draft);
+    assert_eq!(input_schema["properties"]["status"]["default"], "draft");
+    assert!(input_contract.is_valid(&without_status));
 }

@@ -38,6 +38,11 @@ pub(super) enum SnapshotRead {
 /// The sorted relation key used for diffs: relation name, target kind, id.
 type RelationKey = (String, RecordKind, String);
 
+const EVIDENCE_SHARDS: [&str; 2] = [
+    "verifications/binding.jsonl",
+    "implementations/binding.jsonl",
+];
+
 /// Read one shard file at a commit. `Ok(None)` says the file is absent, the
 /// normal state for a scope that did not exist yet.
 fn read_shard<T: serde::de::DeserializeOwned>(
@@ -81,6 +86,14 @@ fn read_shard<T: serde::de::DeserializeOwned>(
         let context =
             || format!("record in {path} line {line_number} at commit {commit} does not parse");
         let value: serde_json::Value = serde_json::from_str(line).with_context(context)?;
+        // Migration 026 deletes a retired row. A retired base binding is not
+        // evidence; graph records stay readable at base.
+        if role == CommitRole::Base
+            && EVIDENCE_SHARDS.contains(&shard)
+            && value.get("retired") == Some(&serde_json::Value::Bool(true))
+        {
+            continue;
+        }
         // Mirror the store reader's admission check. Historical bases stay readable.
         if role == CommitRole::Head && value.get("retired").is_some() {
             let name = value
@@ -97,12 +110,13 @@ fn read_shard<T: serde::de::DeserializeOwned>(
     Ok(Some(records))
 }
 
-/// Read the typed evidence bindings at the head commit. A missing shard file is
-/// the normal state for a store that never recorded bindings.
+/// Read the typed evidence bindings at one commit. A missing shard file is the
+/// normal state for a store that never recorded bindings.
 pub(super) fn read_bindings(
     repo: &Utf8Path,
     commit: &str,
     scope: &ScopeId,
+    role: CommitRole,
 ) -> anyhow::Result<(
     Vec<provenance_core::VerificationBinding>,
     Vec<provenance_core::ImplementationBinding>,
@@ -112,7 +126,7 @@ pub(super) fn read_bindings(
         commit,
         scope,
         "verifications/binding.jsonl",
-        CommitRole::Head,
+        role,
     )?
     .unwrap_or_default();
     let implementations = read_shard::<provenance_core::ImplementationBinding>(
@@ -120,7 +134,7 @@ pub(super) fn read_bindings(
         commit,
         scope,
         "implementations/binding.jsonl",
-        CommitRole::Head,
+        role,
     )?
     .unwrap_or_default();
     Ok((verifications, implementations))

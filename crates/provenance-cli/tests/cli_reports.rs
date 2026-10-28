@@ -135,6 +135,8 @@ fn seed_repo() -> (tempfile::TempDir, String) {
             "res_schads_overtime",
             "--statement",
             "Pay overtime after the threshold",
+            "--status",
+            "active",
             "--severity",
             "high",
         ])

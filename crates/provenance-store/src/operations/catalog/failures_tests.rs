@@ -1,10 +1,14 @@
 use super::ReadError;
+use crate::cache::completion::Stage;
+use crate::cache::CompletionTimedOut;
 use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::{MovedUnit as NativeMovedUnit, ReadRefusal};
 use crate::stale::git::GitRefusal;
 use camino::Utf8PathBuf;
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
-use provenance_core::protocol::read_failure::{MovedUnit, ReadFailure};
+use provenance_core::protocol::read_failure::{CacheCloseStage, MovedUnit, ReadFailure};
+use provenance_macros::verifies;
+use std::time::Duration;
 
 fn read_error(error: impl std::error::Error + Send + Sync + 'static) -> ReadError {
     ReadError(anyhow::Error::new(error))
@@ -122,6 +126,41 @@ fn a_stale_refusal_keeps_the_revision_facts_and_drops_the_local_paths() {
         })
         .unwrap(),
         "the published failure must not carry the local path or the native error"
+    );
+}
+
+#[test]
+#[verifies("rule_cache_completion_names_its_stage_at_the_deadline", examples)]
+fn a_timed_out_cache_close_names_its_stage_and_drops_the_lock_path() {
+    let lock = "/home/user/repo/.provenance/cache/provenance.db.close.lock";
+    let error = ReadError(
+        anyhow::Error::new(CompletionTimedOut {
+            deadline: Duration::from_secs(10),
+            stage: Stage::CloseLock(lock.into()),
+        })
+        .context("close the read cache"),
+    );
+    assert_eq!(
+        error.safe(),
+        ReadFailure::CacheCloseTimedOut {
+            stage: CacheCloseStage::CloseLock
+        }
+    );
+    assert_eq!(error.status(), 503);
+    let published = serde_json::to_value(&error).unwrap();
+    assert_eq!(
+        published,
+        serde_json::json!({"kind":"cache_close_timed_out","stage":"close_lock"})
+    );
+    assert!(!published.to_string().contains(lock), "{published}");
+
+    let teardown = read_error(CompletionTimedOut {
+        deadline: Duration::from_secs(10),
+        stage: Stage::Teardown { connections: 2 },
+    });
+    assert_eq!(
+        serde_json::to_value(&teardown).unwrap(),
+        serde_json::json!({"kind":"cache_close_timed_out","stage":"teardown"})
     );
 }
 

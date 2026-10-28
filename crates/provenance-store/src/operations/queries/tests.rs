@@ -35,6 +35,7 @@ mod order;
 mod pinned;
 mod reader;
 mod stamp;
+mod symbol_pages;
 mod symbols;
 mod tables;
 

@@ -42,8 +42,21 @@ pub enum ReadFailure {
     SchemaBehind,
     #[error("projection migration needs materialization")]
     HalfMigrated,
+    #[error("the cache close did not finish in time; retry the read")]
+    CacheCloseTimedOut { stage: CacheCloseStage },
     #[error("read failed")]
     ReadFailed,
+}
+
+/// What a cache close was waiting for when its deadline passed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum CacheCloseStage {
+    /// Another close held the per-database close lock.
+    CloseLock,
+    /// The pool still held a connection.
+    Teardown,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

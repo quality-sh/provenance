@@ -18,7 +18,7 @@ packages/*/LICENSE
 # Riptide artifacts (cloud-synced)
 .humanlayer/tasks/
 
-# Local Claude Code state (skills are tracked)
+# Local Claude Code state
 .claude/worktrees/
 .claude/settings.local.json
 
@@ -30,3 +30,17 @@ packages/*/LICENSE
 
 # Composed renderer assets enter packages, not source control.
 /crates/provenance-cli/review-assets-generated/
+
+# Bundled skill copies are generated or installed from root sources.
+/crates/provenance-cli/skills/provenance-fork-tournament/
+/crates/provenance-cli/skills/provenance-grounded-writing/
+/crates/provenance-cli/skills/provenance-shaping/
+/crates/provenance-cli/skills/provenance-swarm-backtrace/
+/.agents/skills/provenance-fork-tournament/
+/.agents/skills/provenance-grounded-writing/
+/.agents/skills/provenance-shaping/
+/.agents/skills/provenance-swarm-backtrace/
+/.claude/skills/provenance-fork-tournament
+/.claude/skills/provenance-grounded-writing
+/.claude/skills/provenance-shaping
+/.claude/skills/provenance-swarm-backtrace

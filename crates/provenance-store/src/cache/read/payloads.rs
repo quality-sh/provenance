@@ -82,7 +82,7 @@ impl<T: PayloadRow> Payloads<'_, T> {
              FROM {} WHERE scope_id = ? AND id = ?{filter}",
             crate::cache::quoted(T::TABLE)
         );
-        let mut query = sqlx::query(&sql)
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(sql))
             .bind(i64::try_from(RESOURCE_RECORD_BYTES)?)
             .bind(self.snapshot.scope().as_str())
             .bind(id);
@@ -112,7 +112,7 @@ impl<T: PayloadRow> Payloads<'_, T> {
     ) -> anyhow::Result<Vec<String>> {
         let filter = owner.map_or("", |_| " AND proposal_id = ?");
         let sql = id_page_sql(T::TABLE, filter);
-        let mut query = sqlx::query(&sql)
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(sql))
             .bind(self.snapshot.scope().as_str())
             .bind(after);
         if let Some(owner) = owner {

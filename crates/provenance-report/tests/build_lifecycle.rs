@@ -5,21 +5,11 @@ use provenance_report::{
     render_envelope, RenderFormat,
 };
 use serde_json::{json, Value};
-use std::{fmt::Write as _, path::Path, process::Command};
+use std::{fmt::Write as _, path::Path};
 
-fn git(repo: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .current_dir(repo)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
+#[path = "../src/build/test_repo.rs"]
+mod test_repo;
+use test_repo::{commit, init};
 
 fn write(repo: &Path, shard: &str, records: &[Value]) {
     let path = repo.join(format!(".provenance/state/scopes/default/{shard}"));
@@ -29,22 +19,6 @@ fn write(repo: &Path, shard: &str, records: &[Value]) {
         writeln!(text, "{row}").unwrap();
     }
     std::fs::write(path, text).unwrap();
-}
-
-fn commit(repo: &Path) -> String {
-    git(repo, &["add", "."]);
-    git(
-        repo,
-        &[
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "--allow-empty",
-            "-qm",
-            "Record graph state",
-        ],
-    );
-    git(repo, &["rev-parse", "HEAD"])
 }
 
 fn report(shard: &str, initial: Value, final_records: &[Value]) -> String {
@@ -59,9 +33,7 @@ fn report_with_base(
 ) -> String {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
-    git(repo, &["init", "-q"]);
-    git(repo, &["config", "user.name", "Test"]);
-    git(repo, &["config", "user.email", "test@example.com"]);
+    init(repo);
     write(
         repo,
         "requirements/req.jsonl",
@@ -70,12 +42,12 @@ fn report_with_base(
             "statement": "The graph is readable.", "status": "active"
         })],
     );
-    let empty = commit(repo);
+    let empty = commit(repo, "Record graph state");
     write(repo, shard, &[initial]);
-    let populated = commit(repo);
+    let populated = commit(repo, "Record graph state");
     let base = if existing { populated } else { empty };
     write(repo, shard, final_records);
-    let head = commit(repo);
+    let head = commit(repo, "Record graph state");
     let repo = Utf8Path::from_path(repo).unwrap();
     let envelope = build_envelope(&BuildInput {
         repo,

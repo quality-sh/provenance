@@ -437,3 +437,45 @@ fn read_only_record_kinds_create_no_path() {
     );
     assert!(!copy.cache_dir().exists(), "the read creates no cache");
 }
+
+/// The probe starts the host read while the publication holds its lock with the live state
+/// moved away, and does not wait for it. The open and the manifest read wait for the publication.
+#[test]
+#[verifies("rule_preparation_reads_published_state", examples)]
+fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    let layout = ProvenanceLayout::new(root.clone());
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    let manifest = provenance_core::Manifest::default_with_scope(
+        provenance_core::ScopeId::new("default").unwrap(),
+        provenance_core::RepoPathPrefix::new("."),
+    );
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    let reader = std::rc::Rc::new(std::cell::RefCell::new(None));
+    crate::test_probes::arm("state_after_backup_rename", {
+        let reader = reader.clone();
+        let root = root.clone();
+        move || {
+            let root = root.clone();
+            reader.replace(Some(std::thread::spawn(move || {
+                crate::repository::Repository::open(root.as_std_path(), "default")?.manifest()
+            })));
+            Ok(())
+        }
+    });
+    let mut published = manifest.clone();
+    published.disposition_actor_ids = vec!["actor_after".to_owned()];
+    with_staged_state(&layout, false, |staged| {
+        std::fs::write(staged.manifest_path(), serde_json::to_vec(&published)?)?;
+        Ok(())
+    })
+    .unwrap();
+    crate::test_probes::disarm("state_after_backup_rename");
+    let reader = reader.take().expect("the publication reached the gap");
+    assert_eq!(reader.join().unwrap().unwrap(), published);
+}

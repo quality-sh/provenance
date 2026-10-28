@@ -276,6 +276,10 @@ jobs:
           # Cargo generates the archive checksum. Keep this version fixed so
           # a later rerun can compare the same bytes with crates.io.
           toolchain: 1.98.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - run: node tools/skills/prepare.mjs
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
       - name: Verify packaged Rust workspace

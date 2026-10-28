@@ -6,7 +6,7 @@ use provenance_store::{
 };
 use std::sync::Arc;
 
-/// The owning host adds this mark after it authenticates the page's session cookie.
+/// The owning host adds this mark after it authenticates the page session.
 #[derive(Clone)]
 pub struct ReviewPageWrite;
 

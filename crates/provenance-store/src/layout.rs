@@ -109,16 +109,20 @@ fn path_exists(path: &Utf8Path) -> anyhow::Result<bool> {
     }
 }
 
+/// Tells if a publication can hold or hide the live state.
+///
+/// A publisher creates its lock before it can move the live state.
+pub(crate) fn publication_can_run(layout: &ProvenanceLayout) -> anyhow::Result<bool> {
+    Ok(path_exists(&layout.publication_marker_path())?
+        || path_exists(&layout.publication_lock_path())?)
+}
+
 /// Run a graph operation after publication recovery and manifest validation.
 pub fn with_initialized_graph<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce(Manifest) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    // A publisher creates its lock before it can move the live state.
-    if !path_exists(&layout.manifest_path())?
-        && !path_exists(&layout.publication_marker_path())?
-        && !path_exists(&layout.publication_lock_path())?
-    {
+    if !path_exists(&layout.manifest_path())? && !publication_can_run(layout)? {
         return Err(GraphNotInitialized.into());
     }
     crate::publication::with_repository_publication_checked(

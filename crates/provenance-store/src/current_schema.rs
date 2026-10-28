@@ -52,8 +52,11 @@ pub async fn replace(tx: &mut Transaction<'_, Sqlite>) -> anyhow::Result<()> {
     .fetch_all(&mut **tx)
     .await?;
     for table in tables {
-        tx.execute(format!("DROP TABLE {}", quoted(&table)).as_str())
-            .await?;
+        tx.execute(sqlx::AssertSqlSafe(format!(
+            "DROP TABLE {}",
+            quoted(&table)
+        )))
+        .await?;
     }
     for statement in DDL.split(';').map(str::trim).filter(|sql| !sql.is_empty()) {
         tx.execute(statement).await?;

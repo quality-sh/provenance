@@ -203,7 +203,8 @@ impl Repository {
         &self.inner.layout
     }
 
-    /// A fresh read of the manifest.
+    /// A fresh read of the manifest, under the publication lock.
+    #[rule("rule_preparation_reads_published_state")]
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.store().manifest()
     }
