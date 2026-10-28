@@ -11,7 +11,6 @@ export async function checkDiscussions({ HttpClient, OperationError }, fixture) 
 
   const first = await client.sourceCreateDiscussion({
     id: source.data.id,
-    idempotency_key: 'discussion_first',
     data: { actor: 'fixture', role: 'system', body: ' TypeScript text ' },
   });
   assert.equal(first.data.status, 'active');
@@ -20,7 +19,6 @@ export async function checkDiscussions({ HttpClient, OperationError }, fixture) 
   const second = await client.sourceCreateDiscussionMessage({
     id: source.data.id,
     discussion_id: first.data.discussion_id,
-    idempotency_key: 'discussion_second',
     if_match: String(first.data.version),
     data: { actor: 'fixture', role: 'system', body: 'Second' },
   });
@@ -36,7 +34,6 @@ export async function checkDiscussions({ HttpClient, OperationError }, fixture) 
   await assert.rejects(client.sourceCreateDiscussionMessage({
     id: source.data.id,
     discussion_id: first.data.discussion_id,
-    idempotency_key: 'discussion_empty',
     if_match: String(second.data.version),
     data: { actor: 'fixture', role: 'system', body: ' ' },
   }), error => {

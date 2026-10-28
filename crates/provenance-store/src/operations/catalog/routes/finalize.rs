@@ -73,6 +73,13 @@ fn hide_bound_fields(definition: &mut Definition) {
         .iter()
         .map(|binding| binding.field)
         .collect::<Vec<_>>();
+    fields.extend(
+        registration
+            .request
+            .fixed
+            .iter()
+            .map(|binding| binding.field),
+    );
     fields.extend(registration.request.scope_field);
     fields.extend(
         registration

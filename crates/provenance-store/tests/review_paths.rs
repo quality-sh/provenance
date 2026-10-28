@@ -2,8 +2,8 @@
 #[allow(dead_code)]
 mod review_support;
 
-use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::review::{EvidenceQuery, RecordSnapshot, ReviewHistoryQuery};
+use camino::Utf8Path;
+use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};
 use provenance_store::{
     cache,
     layout::ProvenanceLayout,
@@ -36,11 +36,8 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         .is_symlink());
     let layout = ProvenanceLayout::new(&root);
     let store = StateStore::new(layout.clone());
-    let first = store
-        .save_requirement(save(&store, "enroll", json!({"description":"saved"})))
-        .unwrap();
-    let second = store
-        .save_requirement(save(&store, "next", json!({"description":"later"})))
+    store
+        .save_requirement(save(&store, json!({"description":"saved"})))
         .unwrap();
     cache::materialize_state(&layout).await.unwrap();
     let history = read_history(
@@ -56,11 +53,9 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     )
     .await
     .unwrap();
-    assert_eq!(
-        history.result.entries[0].request_id.as_str(),
-        "fixture_create"
-    );
-    assert_eq!(&history.result.entries[1..], &[first.clone(), second]);
+    assert_eq!(history.result.entries.len(), 1);
+    let working = history.result.entries[0].id.clone();
+    assert_eq!(working.as_str(), "working");
     let page = read_evidence(
         &root,
         &scope(),
@@ -68,42 +63,13 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         EvidenceQuery {
             record_kind: provenance_core::NodeType::Requirement,
             record_id: id(),
-            entry_id: first.id,
+            entry_id: working,
             before: false,
-            field: None,
+            field: Some("description".into()),
             offset: 0,
         },
     )
     .await
     .unwrap();
-    let snapshot: RecordSnapshot = serde_json::from_str(&page.result.json_text).unwrap();
-    assert_eq!(
-        snapshot
-            .record
-            .as_requirement()
-            .unwrap()
-            .description
-            .as_deref(),
-        Some("saved")
-    );
-}
-
-fn review_dir(root: &Utf8Path) -> Utf8PathBuf {
-    root.join(".provenance/state/scopes/default/review")
-}
-
-#[test]
-fn journal_entries_refuse_an_internal_directory_escape() {
-    let (temp, store) = fixture();
-    store
-        .save_requirement(save(&store, "enroll", json!({})))
-        .unwrap();
-    let next = save(&store, "next", json!({}));
-    let root = Utf8Path::from_path(temp.path()).unwrap();
-    let journal = review_dir(root).join("journal");
-    let outside = tempfile::tempdir().unwrap();
-    let moved = Utf8Path::from_path(outside.path()).unwrap().join("journal");
-    std::fs::rename(&journal, &moved).unwrap();
-    symlink_dir(&moved, &journal);
-    assert!(store.save_requirement(next).is_err());
+    assert_eq!(page.result.json_text, "\"saved\"");
 }

@@ -49,6 +49,7 @@ pub fn create_system_source(repo: &Path) {
 }
 
 pub fn export_scope(repo: &Path, output: &Path) -> assert_cmd::assert::Assert {
+    crate::export_fixture_support::make_default_scope_portable(repo);
     provenance()
         .args([
             "export",

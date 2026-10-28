@@ -9,14 +9,17 @@ mod ideation_validation;
 mod ideation_writers;
 mod implementation_bindings;
 mod inputs;
+mod live_parents;
+pub(crate) mod message_ids;
 mod proposal_surfaces;
 mod proposal_writers;
 pub(crate) mod read_budget;
 pub(crate) mod readers;
-mod record_stamps;
+pub(crate) mod record_stamps;
 mod reference_methods;
 mod reference_writers;
 mod requirement_reviews;
+mod resolution_decisions;
 mod rule_writers;
 mod scope_ingestion;
 mod shaping_writers;
@@ -28,6 +31,7 @@ mod typed_statement_policy;
 mod updates;
 mod verification_bindings;
 mod verification_runs;
+mod withdrawal_writers;
 mod writers;
 pub use updates::*;
 
@@ -99,10 +103,18 @@ enum Access {
     Held,
 }
 
+#[derive(Clone, Debug)]
+enum RecordStamp {
+    ResolveFromRepository,
+    Omit,
+    Fixed(provenance_core::Stamp),
+}
+
 #[derive(Debug)]
 pub struct StateStore {
     pub(crate) layout: ProvenanceLayout,
     access: Access,
+    record_stamp: RecordStamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -288,8 +300,19 @@ impl StateStore {
         Self {
             layout,
             access: Access::Lock,
+            record_stamp: RecordStamp::ResolveFromRepository,
         }
     }
+
+    pub(crate) fn staged(layout: ProvenanceLayout, stamp: Option<provenance_core::Stamp>) -> Self {
+        let record_stamp = stamp.map_or(RecordStamp::Omit, RecordStamp::Fixed);
+        Self {
+            layout,
+            access: Access::Lock,
+            record_stamp,
+        }
+    }
+
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_read(|| {
             let path = self.layout.manifest_path();

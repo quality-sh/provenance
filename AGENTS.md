@@ -12,7 +12,7 @@ and SDK build and test commands prepare generated source automatically. See
 
 ## Cargo checks on maintainer hosts
 
-On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, and `cargo test` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
+On configured maintainer hosts, plain `cargo build`, `cargo check`, `cargo clippy`, `cargo test`, and `cargo package` run in GitHub Actions. The command returns the CI result and pushes a public snapshot branch. Stage new files before a check, and keep secrets out of tracked files. Use `PROVENANCE_CI_LOCAL=1 cargo ...` for native Cargo or `PROVENANCE_CI_ARTIFACT=1 cargo build` to receive a dev CLI binary. Public clones do not enable the shim automatically.
 
 ## Code standards
 
@@ -29,6 +29,16 @@ Do not add a browser suite here or move a broad suite into `provenance-web`.
 - Tests count too: split large test files by the behavior they pin.
 
 Before designing or restructuring modules, use the codebase-design and domain-modeling skills.
+
+## No versioning before 1.0
+
+Before Provenance 1.0, nothing is versioned. Do not add a schema version, a version
+field or marker, a version number in a name (`v1`, `v2`, `V1`), a compatibility shim,
+a reader for an older format, or a migration on write. Do not bump an existing version
+field. Change a format in place; existing repositories are initialised again, not
+migrated. A review rejects a change that adds any of these. Bead provenance-u9mg
+removes the versioning that is already in the code.
+Exception: the managed skill stamp compares package release numbers to prevent downgrades.
 
 ## Technical writing
 
@@ -63,6 +73,26 @@ all graph and bead references. Do not leave a broken repository-path citation.
 ## Pull requests
 
 Opening a pull request is not the end of the work. Do not abandon the PR at open.
+
+A `Behaviour` section that claims behaviour has not changed must cover these
+surfaces:
+
+- Which error or finding wins when an input has more than one fault.
+- Exit codes.
+- Diagnostic text and error text.
+- Output order, warning order, and finding order.
+- Write order and the state left after a failure.
+- The public Rust API of each published crate.
+- Wire names, route names, CLI names, and CLI help.
+
+Before a large refactor, add focused characterization tests on the base commit.
+Do not bind these tests to a Rule. See
+`crates/provenance-transport/tests/porcelain_route_inventory.rs` and
+`crates/provenance-store/src/state_store/tests/scope_ingestion_order.rs`.
+Make an observed order a Rule only when a user or integration depends on it.
+
+When a refactor replaces hand-written sequences with a loop over a table, list
+each sequence in the PR body. State its order before and after the refactor.
 
 - Stay with the PR and watch CI until every required check finishes. Use
   `gh pr checks <number> --watch` or read `gh pr view <number>` in a later turn.
@@ -106,6 +136,19 @@ cp -rf source dest          # NOT: cp -r source dest
 - `ssh` - use `-o BatchMode=yes` to fail instead of prompting
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
+
+## Tests are part of the spec
+
+A test that is bound to a Rule approves that behaviour for release. Use the
+bindings and evidence methods that the Rules section defines. An implementation-aid
+test is allowed, but it has no Rule binding and states its reason. Each code review
+lists the behaviours that the change asks the reviewer to approve. It also flags a
+test that has no Rule or has the wrong Rule, uses a private surface, reaches an
+otherwise unreachable state, checks non-source content, checks a type guarantee, or
+duplicates a mock, fake, or fixture. It flags a weak or overly broad assertion, a
+test-only production hook, setup that bypasses the public surface, a redundant test,
+the wrong verification method, or a platform gap. The `code-review` skill performs
+this work in its Tests axis.
 
 ## Rules
 

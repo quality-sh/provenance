@@ -1,14 +1,50 @@
 #![allow(clippy::literal_string_with_formatting_args)]
+//! Contract code: leaves the store with entry, invoke and schema as one unit. No store state here.
 
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
-    ArgumentAlias, CliDefault, CliDefaultValue, EtagBinding, HandlerBinding, HeaderBinding,
-    Operation, ParentBinding, PathBinding, QueryRequestBinding, QueryRoute, Registration,
-    RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding, TargetAction, TargetBinding,
+    ArgumentAlias, CliDefault, CliDefaultValue, CliExecution, EtagBinding, FixedBinding,
+    HandlerBinding, HeaderBinding, Operation, ParentBinding, PathBinding, QueryRequestBinding,
+    QueryRoute, Registration, RequestAdapter, ResponseAdapter, ResponseBinding, SelectorBinding,
+    TargetAction, TargetBinding,
 };
 use provenance_core::NodeType;
 use schemars::generate::Contract;
 use serde_json::{json, Value};
+
+#[allow(dead_code)]
+#[derive(schemars::JsonSchema)]
+struct ReviewStateSchema {
+    edit: provenance_core::review::RequirementEditState,
+    decision: provenance_core::review::RequirementDecisionState,
+}
+
+fn reviewed_resource_schema<T: schemars::JsonSchema + 'static>() -> Value {
+    let mut record = schema::type_schema::<T>(Contract::Serialize);
+    let mut state = schema::type_schema::<ReviewStateSchema>(Contract::Serialize);
+    for field in ["properties", "$defs"] {
+        let Some(additions) = state
+            .as_object_mut()
+            .and_then(|schema| schema.remove(field))
+            .and_then(|value| value.as_object().cloned())
+        else {
+            continue;
+        };
+        record
+            .as_object_mut()
+            .expect("record schema must be an object")
+            .entry(field)
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .expect("record schema section must be an object")
+            .extend(additions);
+    }
+    record["required"]
+        .as_array_mut()
+        .expect("record schema must declare required fields")
+        .extend([json!("edit"), json!("decision")]);
+    record
+}
 
 #[allow(clippy::too_many_arguments)]
 fn backed<O: Operation>(
@@ -55,7 +91,7 @@ fn backed<O: Operation>(
     }
 }
 
-fn read<T: schemars::JsonSchema, O: Operation>(
+fn read<T: schemars::JsonSchema + 'static, O: Operation>(
     name: &'static str,
     operation_id: &'static str,
     path: &'static str,
@@ -114,14 +150,36 @@ impl Definition {
         self
     }
 
-    fn header(mut self, name: &'static str, field: &'static str, trim_quotes: bool) -> Self {
+    fn fixed(mut self, field: &'static str, value: &'static str) -> Self {
+        self.registration
+            .request
+            .fixed
+            .push(FixedBinding { field, value });
+        self
+    }
+
+    fn header(mut self, name: &'static str, field: &'static str, required: bool) -> Self {
         self.registration.controls.headers.push(HeaderBinding {
             name,
             field,
-            trim_quotes,
+            trim_quotes: true,
             numeric: false,
+            required,
         });
         self
+    }
+
+    /// Every review-kind update takes its edit guard as `If-Match`.
+    /// Requirement, Topic and Question updates require it; the other kinds
+    /// accept it when sent.
+    #[provenance_macros::rule("rule_review_update_guard_header")]
+    #[provenance_macros::rule("rule_missing_if_match_is_required")]
+    fn review_update_guard(self, kind: NodeType) -> Self {
+        let required = matches!(
+            kind,
+            NodeType::Requirement | NodeType::Topic | NodeType::Question
+        );
+        self.header("If-Match", "expected_etag", required)
     }
 
     fn numeric_header(mut self, name: &'static str, field: &'static str) -> Self {
@@ -130,6 +188,7 @@ impl Definition {
             field,
             trim_quotes: true,
             numeric: true,
+            required: true,
         });
         self
     }
@@ -205,6 +264,14 @@ impl Definition {
         self
     }
 
+    fn reviewed_result<T: schemars::JsonSchema + 'static>(mut self) -> Self {
+        self.registration.response.adapter = ResponseAdapter::Result;
+        let payload = reviewed_resource_schema::<T>();
+        self.registration.response.schema =
+            schema::response_envelope(payload, self.registration.response.kind);
+        self
+    }
+
     fn cli_default(mut self, field: &'static str, value: CliDefaultValue) -> Self {
         self.registration
             .cli
@@ -215,6 +282,11 @@ impl Definition {
 
     fn cli_defaults(mut self, defaults: &[CliDefault]) -> Self {
         self.registration.cli.defaults.extend_from_slice(defaults);
+        self
+    }
+
+    const fn cli_execution(mut self, execution: CliExecution) -> Self {
+        self.registration.cli.execution = execution;
         self
     }
 
@@ -230,6 +302,11 @@ impl Definition {
         self.registration.target = kind.map(|kind| TargetBinding { action, kind });
         self
     }
+
+    const fn review_link(mut self, kind: Option<NodeType>) -> Self {
+        self.registration.review_link = kind;
+        self
+    }
 }
 
 fn response_binding(raw_schema: Value, kind: ResponseKind) -> ResponseBinding {
@@ -239,6 +316,10 @@ fn response_binding(raw_schema: Value, kind: ResponseKind) -> ResponseBinding {
 
 fn list_parameters(searchable: bool, rule: bool) -> Vec<Parameter> {
     let mut parameters = vec![
+        schema::query(
+            "exclude_terminal",
+            json!({"type":"boolean","default":false}),
+        ),
         schema::query("limit", json!({"type":"integer","minimum":1,"maximum":200})),
         schema::query("cursor", json!({"type":"string"})),
     ];
@@ -302,7 +383,10 @@ fn with_query_results(mut definition: Definition, queries: Vec<QueryRoute>) -> D
             .parameters
             .retain(|parameter| {
                 parameter.location == "path"
-                    || matches!(parameter.name, "limit" | "cursor" | "rule")
+                    || matches!(
+                        parameter.name,
+                        "exclude_terminal" | "limit" | "cursor" | "rule"
+                    )
             });
     } else {
         definition
@@ -407,6 +491,7 @@ pub(super) mod request;
 #[macro_use]
 mod resource;
 mod resources;
+mod review_subresources;
 mod subresources;
 
 pub(super) fn definitions() -> Vec<Definition> {

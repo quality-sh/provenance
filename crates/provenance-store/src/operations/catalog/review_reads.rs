@@ -3,7 +3,7 @@ use super::{shapes::graph_read_operation, ExecutionNeed};
 use crate::review;
 pub use provenance_core::threads::DiscussionResultPage;
 use provenance_core::{
-    review::{EvidencePage, EvidenceQuery, ReviewEntry, ReviewHistoryQuery},
+    review::{EvidencePage, EvidenceQuery, RecordVersion, ReviewHistoryQuery},
     threads::{DiscussionGroup, DiscussionMessagesQuery, DiscussionQuery, DiscussionSelector},
     Message, StableId, ThreadParent,
 };
@@ -88,7 +88,8 @@ pub struct UpdateDiscussionData {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct HistoryRequest {
-    pub requirement_id: StableId,
+    pub record_kind: provenance_core::NodeType,
+    pub record_id: StableId,
     #[serde(default = "limit")]
     pub limit: usize,
     pub cursor: Option<String>,
@@ -101,7 +102,7 @@ review_read!(
     ReviewHistory,
     "review-history",
     HistoryRequest,
-    ReadResult<DiscussionResultPage<ReviewEntry>>,
+    ReadResult<DiscussionResultPage<RecordVersion>>,
     |read, request| async move {
         let limit = request.limit;
         let page = review::read_history(
@@ -109,8 +110,8 @@ review_read!(
             &read.scope,
             read.policy,
             ReviewHistoryQuery {
-                record_kind: provenance_core::NodeType::Requirement,
-                record_id: request.requirement_id,
+                record_kind: request.record_kind,
+                record_id: request.record_id,
                 limit: request.limit,
                 cursor: request.cursor,
             },
@@ -128,7 +129,8 @@ review_read!(
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct HistoryEntryRequest {
-    pub requirement_id: StableId,
+    pub record_kind: provenance_core::NodeType,
+    pub record_id: StableId,
     pub entry_id: StableId,
 }
 
@@ -136,7 +138,7 @@ review_read!(
     ReviewHistoryEntry,
     "review-history-entry",
     HistoryEntryRequest,
-    ReviewEntry,
+    RecordVersion,
     |read, request| async move {
         let mut cursor = None;
         loop {
@@ -145,8 +147,8 @@ review_read!(
                 &read.scope,
                 read.policy,
                 ReviewHistoryQuery {
-                    record_kind: provenance_core::NodeType::Requirement,
-                    record_id: request.requirement_id.clone(),
+                    record_kind: request.record_kind,
+                    record_id: request.record_id.clone(),
                     limit: 200,
                     cursor,
                 },
@@ -188,7 +190,8 @@ pub enum ReviewEvidenceSide {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct HistoryEvidenceRequest {
-    pub requirement_id: StableId,
+    pub record_kind: provenance_core::NodeType,
+    pub record_id: StableId,
     pub entry_id: StableId,
     pub side: ReviewEvidenceSide,
     pub field: Option<String>,
@@ -207,8 +210,8 @@ review_read!(
             &read.scope,
             read.policy,
             EvidenceQuery {
-                record_kind: provenance_core::NodeType::Requirement,
-                record_id: request.requirement_id,
+                record_kind: request.record_kind,
+                record_id: request.record_id,
                 entry_id: request.entry_id,
                 before: request.side == ReviewEvidenceSide::Before,
                 field: request.field,

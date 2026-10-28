@@ -2,6 +2,7 @@
 
 use super::authoring::{description, render_readable, Action, ActionError};
 use provenance_core::NodeType;
+use provenance_macros::rule;
 use provenance_store::operations::catalog::Definition;
 use rmcp::model::{CallToolResult, Content, Tool};
 use serde_json::{json, Map, Value};
@@ -169,6 +170,8 @@ fn rewrite_references(value: &mut Value, prefix: &str) {
     }
 }
 
+/// Reads the target ID from the structured MCP arguments.
+#[rule("rule_porcelain_mcp_target_argument")]
 pub async fn call(
     host: &crate::StatementHost,
     action: Action,

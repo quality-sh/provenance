@@ -1,5 +1,7 @@
 use crate::output;
-use crate::repo_context::RepoContext;
+use crate::repo_context::{
+    declared_scope_in, initialization_hint, is_not_initialized, RepoContext,
+};
 use crate::store::Store;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
@@ -68,20 +70,19 @@ impl RepositoryCheckPort {
         let result =
             provenance_store::layout::with_initialized_graph(store.layout(), |mut manifest| {
                 if let Some(scope) = scope {
+                    declared_scope_in(&manifest, scope)?;
                     manifest
                         .scopes
                         .retain(|candidate| candidate.id.as_str() == scope);
-                    anyhow::ensure!(!manifest.scopes.is_empty(), "scope {scope} does not exist");
                 }
                 validate_locked(&store, &manifest, scope.is_none())
-            });
+            })
+            .map_err(|error| initialization_hint(&self.context.repo, error));
         let findings = match result {
             Ok(()) => Vec::new(),
             Err(error)
                 if error.downcast_ref::<std::io::Error>().is_some()
-                    || error
-                        .downcast_ref::<provenance_store::layout::GraphNotInitialized>()
-                        .is_some() =>
+                    || is_not_initialized(&error) =>
             {
                 return Err(format!("{error:#}"));
             }
@@ -100,10 +101,10 @@ impl RepositoryCheckPort {
         let (diagnostics, context) =
             provenance_store::layout::with_initialized_graph(store.layout(), |mut manifest| {
                 if let Some(scope) = scope {
+                    declared_scope_in(&manifest, scope)?;
                     manifest
                         .scopes
                         .retain(|candidate| candidate.id.as_str() == scope);
-                    anyhow::ensure!(!manifest.scopes.is_empty(), "scope {scope} does not exist");
                 }
                 if self.strict {
                     ensure_strict_dictionary_index(store.layout())?;
@@ -122,7 +123,7 @@ impl RepositoryCheckPort {
                     .map(|diagnostics| (diagnostics, None))
                 }
             })
-            .map_err(|error| format!("{error:#}"))?;
+            .map_err(|error| format!("{:#}", initialization_hint(&self.context.repo, error)))?;
         let findings = diagnostics
             .into_iter()
             .map(|diagnostic| {
@@ -181,23 +182,18 @@ impl RepositoryCheckPort {
             .binding_findings;
         let (warnings, governed_finding_count) =
             provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
-                let scopes = manifest
-                    .scopes
-                    .into_iter()
-                    .filter(|scope| {
-                        selected_scope.is_none_or(|selected| scope.id.as_str() == selected)
-                    })
-                    .collect::<Vec<_>>();
-                if let Some(scope) = selected_scope {
-                    anyhow::ensure!(!scopes.is_empty(), "scope {scope} does not exist");
-                }
+                let scopes = match selected_scope {
+                    Some(selected) => vec![declared_scope_in(&manifest, selected)?],
+                    None => manifest.scopes.iter().collect(),
+                };
                 let mut warnings = Vec::new();
                 let mut governed_finding_count = 0;
                 for scope in scopes {
                     let outcome = super::coverage::coverage_scan_from_scanned(
                         &self.context.repo,
                         &self.context.repo,
-                        scope.id.as_str(),
+                        scope,
+                        &manifest,
                         scanned,
                     )?;
                     governed_finding_count += outcome.governed_finding_count;

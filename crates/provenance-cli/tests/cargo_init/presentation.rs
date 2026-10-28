@@ -35,7 +35,7 @@ fn noisy_cargo_add_does_not_print_during_quiet_success() {
         )
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .output()
         .unwrap();

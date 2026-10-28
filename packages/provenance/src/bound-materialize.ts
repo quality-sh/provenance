@@ -147,7 +147,7 @@ function compileDocument(
       statement: state.text!,
       description: state.description,
       sources: state.sources.map((source) => sourceState(source).key).sort(),
-      refines: state.refines,
+      refines: state.refines?.slice().sort(),
       ...listField("depends_on", state.dependsOn),
       ...listField("supersedes", state.supersedes),
       spawned_by: state.spawnedBy,
@@ -196,7 +196,7 @@ function byKey(left: { key: string }, right: { key: string }): number {
 /** The keys a requirement's relations name in the same spec. */
 function relatedKeys(state: RequirementState): string[] {
   return [
-    ...(state.refines === undefined ? [] : [state.refines]),
+    ...(state.refines ?? []),
     ...(state.dependsOn ?? []),
     ...(state.supersedes ?? []),
   ];

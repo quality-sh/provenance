@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use provenance_transport::{fixture::local_host::LocalHostFixture, local_host::LocalHostIdentity};
 use serde_json::Value;
 
 pub fn provenance() -> Command {
@@ -46,4 +47,17 @@ pub fn json_stdin_output(arguments: &[&str], input: &Value) -> Value {
         String::from_utf8_lossy(&output.stderr)
     );
     serde_json::from_slice(&output.stdout).unwrap()
+}
+
+#[allow(dead_code)]
+pub fn local_host(repo: &str) -> LocalHostFixture {
+    LocalHostFixture::start(std::path::Path::new(repo), "default", "local")
+}
+
+#[allow(dead_code)]
+pub fn local_host_with_identity(
+    repo: &str,
+    response: impl FnOnce(LocalHostIdentity) -> Value,
+) -> LocalHostFixture {
+    LocalHostFixture::start_with_identity(std::path::Path::new(repo), "default", "local", response)
 }

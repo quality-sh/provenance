@@ -12,12 +12,15 @@ pub enum InvalidInputReason {
     MalformedJson,
     UnknownField,
     TooLarge,
+    /// The body was not complete when the request deadline passed.
+    Incomplete,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum OperationFailure {
+    // WriteFailure repeats InvalidInput and AccessDenied; doc comments break the generator merge.
     #[error("invalid operation input")]
     InvalidInput {
         field: Option<String>,
@@ -39,6 +42,8 @@ pub enum OperationFailure {
     UnknownScope,
     #[error("required execution resources are unavailable")]
     UnavailableNeeds,
+    #[error("host is busy")]
+    HostBusy,
     #[error("internal operation failure")]
     Internal,
 }
@@ -51,7 +56,7 @@ impl OperationFailure {
             Self::MethodNotAllowed => 405,
             Self::Unauthenticated => 401,
             Self::AccessDenied => 403,
-            Self::UnavailableNeeds => 503,
+            Self::UnavailableNeeds | Self::HostBusy => 503,
             Self::Internal => 500,
         }
     }

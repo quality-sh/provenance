@@ -34,6 +34,10 @@ const OVERSIZED_ID: &str = "source_oversized";
 struct Target(camino::Utf8PathBuf);
 
 impl ContextResolver for Target {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,
@@ -113,7 +117,7 @@ pub(super) async fn operation_read(
         operation,
         SDK_PROTOCOL_VERSION,
         wire_call(request),
-        Arc::new(Target(root.to_path_buf())),
+        catalog::Direct(Arc::new(Target(root.to_path_buf()))),
     )
     .await
     .map_err(|failure| failure.error["kind"].as_str().unwrap_or("").to_string())
@@ -239,6 +243,7 @@ async fn oversized_update_is_refused_and_keeps_the_published_record() {
         .update_source(UpdateSourceInput {
             scope_id: scope.clone(),
             id: StableId::new(OVERSIZED_ID).unwrap(),
+            expected_etag: None,
             declared_by: None,
             name: Some("y".repeat(READ_BUDGET)),
             source_type: None,
@@ -283,16 +288,19 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
         "a refused message is not published"
     );
 
-    // A refused write persists nothing, so the accepted message takes the
-    // first identity and lands exactly at the message read budget.
+    // The UUID identity and millisecond write time determine the encoded size.
+    // The accepted message lands exactly at the message read budget.
     let base = ReadBudget::read_bytes(&Message {
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
-        id: StableId::new("msg_000001").unwrap(),
+        id: StableId::new(format!("msg_{}", uuid::Uuid::new_v4())).unwrap(),
         thread_id: thread,
         role: MessageRole::User,
         body: String::new(),
-        created_at: 1,
+        created_at: i64::try_from(
+            time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000,
+        )
+        .unwrap(),
         ai_metadata: None,
     })
     .unwrap();
@@ -304,7 +312,10 @@ async fn oversized_message_write_is_refused_and_persists_nothing() {
             "x".repeat(crate::cache::read::page::RECORD_BYTES - base),
         )
         .expect("a message at the message read budget is accepted");
-    assert_eq!(message.id.as_str(), "msg_000001");
+    assert_eq!(
+        ReadBudget::read_bytes(&message).unwrap(),
+        crate::cache::read::page::RECORD_BYTES
+    );
 }
 
 #[test]
@@ -328,8 +339,14 @@ fn oversized_post_refuses_before_creating_or_archiving_threads() {
         WriteError(error).safe(),
         WriteFailure::RecordTooLarge
     ));
-    assert!(store.list_threads(&scope).unwrap().is_empty());
-    assert!(store.list_messages(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_threads(&scope).unwrap(),
+        [] as [provenance_core::Thread; 0]
+    );
+    assert_eq!(
+        store.list_messages(&scope).unwrap(),
+        [] as [provenance_core::Message; 0]
+    );
 
     let first = store.post_thread_message(post("small".into())).unwrap();
     let sibling = Thread {
@@ -358,7 +375,7 @@ fn oversized_post_refuses_before_creating_or_archiving_threads() {
         before
     );
     assert_eq!(store.list_messages(&scope).unwrap().len(), 1);
-    assert_eq!(first.message.id.as_str(), "msg_000001");
+    assert_eq!(store.list_messages(&scope).unwrap(), vec![first.message]);
 }
 
 fn resolution_input(scope: &ScopeId, id: &str, title: String) -> CreateResolutionInput {
@@ -395,7 +412,7 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
         "get-resolution",
         SDK_PROTOCOL_VERSION,
         wire_call(json!({"id": "res_base"})),
-        Arc::new(Target(root)),
+        catalog::Direct(Arc::new(Target(root))),
     )
     .await
     .unwrap();

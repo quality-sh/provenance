@@ -1,0 +1,216 @@
+<mxfile host="drawio" type="device" compressed="false">
+  <diagram id="01-core-and-macros" name="Foundation: provenance-core and provenance-macros">
+    <mxGraphModel dx="1540" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1540" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="01-core-and-macros-title" value="&lt;b&gt;Foundation: provenance-core and provenance-macros&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=18;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1500" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="core" value="provenance-core (crates/provenance-core/src)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8f1f5;strokeColor=#996185;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="55" width="1000" height="590" as="geometry" />
+        </mxCell>
+        <mxCell id="model" value="model (model.rs, model/)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8f1f5;strokeColor=#996185;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="core">
+          <mxGeometry x="15" y="30" width="970" height="270" as="geometry" />
+        </mxCell>
+        <mxCell id="m_graph" value='&lt;b&gt;Graph records&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Source, Requirement, Resolution,&lt;br&gt;Rule, Domain, Boundary,&lt;br&gt;Topic, Question (shaping.rs)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="model">
+          <mxGeometry x="15" y="30" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="m_idea" value='&lt;b&gt;Ideation and collaboration&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Proposal, Assertion, Disposition,&lt;br&gt;Contribution, SynthesisPacket,&lt;br&gt;Withdrawal; Thread, Message&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="model">
+          <mxGeometry x="335" y="30" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="m_int" value='&lt;b&gt;Integrations&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;ImplementationBinding,&lt;br&gt;VerificationBinding, VerificationRun,&lt;br&gt;RequirementReview, DeclarationAddress&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="model">
+          <mxGeometry x="655" y="30" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="m_ids" value='&lt;b&gt;Identity and manifest&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;StableId, ScopeId, SchemaVersion;&lt;br&gt;Manifest, Scope;&lt;br&gt;record_stamps: Stamp, ArchivedStamp&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="model">
+          <mxGeometry x="15" y="155" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="m_rel" value='&lt;b&gt;relations&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;closed relation vocabulary,&lt;br&gt;RelationOwner trait, integrity&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="model">
+          <mxGeometry x="335" y="155" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="m_row" value='&lt;b&gt;projection_row&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;ProjectionRow trait: one table&lt;br&gt;row per record, one column&lt;br&gt;per field&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="model">
+          <mxGeometry x="655" y="155" width="300" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="proto" value='&lt;b&gt;protocol&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;envelope: SuccessEnvelope, ResponseMeta;&lt;br&gt;failure: OperationFailure, typed errors;&lt;br&gt;query, document, node, stamp;&lt;br&gt;host: HostMetadata, CompatibilityTuple;&lt;br&gt;repository context; typed_spec inputs&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="core">
+          <mxGeometry x="30" y="330" width="300" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="auth" value='&lt;b&gt;authoring (pure kernel)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;spec, source, requirement, rule builders;&lt;br&gt;handles and declaration addresses;&lt;br&gt;checks; SpecDocument assembly;&lt;br&gt;no file, process or store access&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="core">
+          <mxGeometry x="350" y="330" width="300" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="cov" value='&lt;b&gt;coverage&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;EvidenceAnchor, EvidenceDiffReport,&lt;br&gt;ValidationWarning, site and&lt;br&gt;binding results&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="core">
+          <mxGeometry x="670" y="330" width="300" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="rev" value='&lt;b&gt;review&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;native review evidence types:&lt;br&gt;history pages, pending submission&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="core">
+          <mxGeometry x="30" y="475" width="300" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="thr" value='&lt;b&gt;threads&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;canonical thread for a record,&lt;br&gt;discussion discovery&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="core">
+          <mxGeometry x="350" y="475" width="300" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="scope" value='&lt;b&gt;scope&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;which scope owns a&lt;br&gt;repository path (path prefix)&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="core">
+          <mxGeometry x="670" y="475" width="300" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="mac" value="provenance-macros (proc-macro crate)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8f1f5;strokeColor=#996185;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="670" width="1000" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="rule" value='&lt;b&gt;#[rule("id")]&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;checks the id literal;&lt;br&gt;expands to the item unchanged&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="mac">
+          <mxGeometry x="15" y="35" width="230" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="ver" value='&lt;b&gt;#[verifies("id", method)]&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;method word: exhaustion, property,&lt;br&gt;examples, conformance,&lt;br&gt;construction (not on fn), proof&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="mac">
+          <mxGeometry x="260" y="35" width="240" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="drel" value='&lt;b&gt;derive(Relations)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;#[relation] fields;&lt;br&gt;emits impl RelationOwner&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="mac">
+          <mxGeometry x="515" y="35" width="225" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="drow" value='&lt;b&gt;derive(ProjectionRow)&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;#[table], #[column];&lt;br&gt;emits impl ProjectionRow&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="mac">
+          <mxGeometry x="755" y="35" width="230" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="deps" value="Dependent crates (which core modules they import)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;dashed=1;dashPattern=6 4;" vertex="1" parent="1">
+          <mxGeometry x="1080" y="55" width="440" height="775" as="geometry" />
+        </mxCell>
+        <mxCell id="d_store" value='&lt;b&gt;provenance-store&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;model, protocol, authoring, review,&lt;br&gt;threads, coverage&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="deps">
+          <mxGeometry x="20" y="35" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="d_trans" value='&lt;b&gt;provenance-transport&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;protocol, threads, model types&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="deps">
+          <mxGeometry x="20" y="109" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="d_porc" value='&lt;b&gt;provenance-porcelain&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;model, protocol&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="deps">
+          <mxGeometry x="20" y="183" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="d_cli" value='&lt;b&gt;provenance-cli&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;model, protocol, coverage, scope&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="deps">
+          <mxGeometry x="20" y="257" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="d_sdk" value='&lt;b&gt;provenance-sdk&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;re-exports authoring builders,&lt;br&gt;typed_spec inputs, EngineInfo&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="deps">
+          <mxGeometry x="20" y="331" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="d_scan" value='&lt;b&gt;provenance-scanner&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;coverage result types&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="deps">
+          <mxGeometry x="20" y="405" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="d_rep" value='&lt;b&gt;provenance-report&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;coverage types, ids&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="deps">
+          <mxGeometry x="20" y="479" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="d_cgen" value='&lt;b&gt;provenance-codegen&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;protocol; "schema" feature&lt;br&gt;adds schemars JsonSchema&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="deps">
+          <mxGeometry x="20" y="553" width="400" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="d_all" value='&lt;b&gt;Rust crates that mark code&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;every workspace crate except provenance-codegen&lt;br&gt;and provenance-http-client;&lt;br&gt;provenance-ste100 uses macros but not core&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="deps">
+          <mxGeometry x="20" y="645" width="400" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend" value="Legend" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="850" width="830" height="134" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-sw-found" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="12" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-tx-found" value="Foundation: core model, macros" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="44" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-sw-engine" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="12" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-tx-engine" value="Store: provenance-store" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="44" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-sw-host" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="12" y="72" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-tx-host" value="Host and operation contract" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="44" y="70" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-sw-iface" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="282" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-tx-iface" value="Interfaces: CLI and SDKs" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="314" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-sw-analysis" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#b0e3e6;strokeColor=#0e8088;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="282" y="50" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-tx-analysis" value="Analysis: scanner, STE100, report" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="314" y="48" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-sw-build" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="282" y="72" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-tx-build" value="Build, CI and generated files" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="314" y="70" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-sw-ext" value="" style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="552" y="28" width="26" height="16" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-tx-ext" value="External to this repository" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="584" y="26" width="230" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-legend-ek-dep" value="Uses: code call or Cargo dependency" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=11;fontColor=#1a1a1a;" vertex="1" parent="01-core-and-macros-legend">
+          <mxGeometry x="68" y="100" width="750" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="01-core-and-macros-e0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="auth" target="proto">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="auth" target="m_rel">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e2" value="uses ids, records" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="proto" target="m_ids">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e3" value="emits impl RelationOwner" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.6444;exitY=0;exitDx=0;exitDy=0;entryX=1;entryY=0.6;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="drel" target="m_rel">
+          <mxGeometry x="-0.774" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="680" y="300" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e4" value="emits impl ProjectionRow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.9783;exitY=0;exitDx=0;exitDy=0;entryX=1;entryY=0.7;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="drow" target="m_row">
+          <mxGeometry x="-0.765" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1000" y="310" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.1119;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="d_store" target="core">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.2373;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="d_trans" target="core">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.3627;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="d_porc" target="core">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.4881;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="d_cli" target="core">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.6136;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="d_sdk" target="core">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.739;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="d_scan" target="core">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.8644;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="d_rep" target="core">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.9898;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="d_cgen" target="core">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5312;entryDx=0;entryDy=0;strokeColor=#4d4d4d;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1" source="d_all" target="mac">
+          <mxGeometry x="0" relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="01-core-and-macros-f0" value="" style="edgeStyle=none;html=1;strokeColor=#4d4d4d;strokeWidth=1.5;endArrow=open;endSize=8;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="32" y="960" as="sourcePoint" />
+            <mxPoint x="80" y="960" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

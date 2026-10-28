@@ -16,8 +16,8 @@ CREATE INDEX idx_sources_commit_pin ON sources(scope_id, commit_pin);
 CREATE TABLE requirements (
     schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
     declared_by TEXT, declaration_address TEXT, statement TEXT NOT NULL,
-    description TEXT, fog TEXT, status TEXT NOT NULL, domain_id TEXT,
-    source_refs TEXT NOT NULL, refines TEXT, depends_on TEXT NOT NULL,
+    description TEXT, fog TEXT, status TEXT NOT NULL, archived_in_commit TEXT, domain_id TEXT,
+    source_refs TEXT NOT NULL, refines TEXT NOT NULL, depends_on TEXT NOT NULL,
     supersedes TEXT NOT NULL, spawned_by TEXT, origin_thread TEXT,
     origin_message TEXT, search_text TEXT NOT NULL, created TEXT, updated TEXT,
     PRIMARY KEY (scope_id, id)
@@ -26,7 +26,7 @@ CREATE TABLE requirements (
 CREATE TABLE resolutions (
     schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
     title TEXT NOT NULL, position TEXT NOT NULL, rationale TEXT NOT NULL,
-    status TEXT NOT NULL, context TEXT, enforcement TEXT, confidence REAL,
+    status TEXT NOT NULL, archived_in_commit TEXT, context TEXT, enforcement TEXT, confidence REAL,
     inputs TEXT NOT NULL, made_by TEXT, approved_by TEXT, approved_at INTEGER,
     requirement_ids TEXT NOT NULL, supersedes TEXT NOT NULL, review_on TEXT,
     origin_thread TEXT, origin_message TEXT, search_text TEXT NOT NULL,
@@ -55,7 +55,7 @@ CREATE INDEX idx_boundaries_requirement ON boundaries(scope_id, requirement_id);
 CREATE TABLE topics (
     schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
     requirement_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL,
-    claimed_by TEXT, claimed_at INTEGER, links TEXT NOT NULL,
+    archived_in_commit TEXT, claimed_by TEXT, claimed_at INTEGER, links TEXT NOT NULL,
     search_text TEXT NOT NULL, PRIMARY KEY (scope_id, id)
 );
 CREATE INDEX idx_topics_requirement ON topics(scope_id, requirement_id);
@@ -66,7 +66,7 @@ CREATE TABLE questions (
     schema_version INTEGER NOT NULL, scope_id TEXT NOT NULL, id TEXT NOT NULL,
     topic_id TEXT NOT NULL, requirement_id TEXT NOT NULL, question TEXT NOT NULL,
     resolution_method TEXT NOT NULL, status TEXT NOT NULL, claimed_by TEXT,
-    claimed_at INTEGER, answer TEXT, links TEXT NOT NULL, resolution_id TEXT,
+    archived_in_commit TEXT, claimed_at INTEGER, answer TEXT, links TEXT NOT NULL, resolution_id TEXT,
     contradicts TEXT, search_text TEXT NOT NULL, PRIMARY KEY (scope_id, id)
 );
 CREATE INDEX idx_questions_topic ON questions(scope_id, topic_id);
@@ -185,17 +185,19 @@ CREATE TABLE projection_validation (
     only_row INTEGER PRIMARY KEY CHECK (only_row = 1), version INTEGER NOT NULL
 );
 
-CREATE TABLE review_journal (
-    scope_id TEXT NOT NULL, kind TEXT NOT NULL, record_kind TEXT, record_id TEXT, id TEXT NOT NULL,
-    sequence INTEGER, request_id TEXT NOT NULL, payload TEXT NOT NULL,
-    discussion_id TEXT, thread_id TEXT, message_id TEXT, parent_type TEXT,
-    parent_id TEXT, version INTEGER, PRIMARY KEY (scope_id, id),
-    UNIQUE (scope_id, request_id), UNIQUE (scope_id, kind, record_kind, record_id, sequence),
-    UNIQUE (scope_id, discussion_id, version), UNIQUE (scope_id, message_id)
+CREATE TABLE discussions (
+    scope_id TEXT NOT NULL, discussion_id TEXT NOT NULL,
+    parent TEXT NOT NULL, thread_id TEXT NOT NULL, root_message_id TEXT NOT NULL,
+    message_ids TEXT NOT NULL, status TEXT NOT NULL, version INTEGER NOT NULL,
+    actor TEXT NOT NULL, outcomes TEXT NOT NULL, disposition_id TEXT,
+    PRIMARY KEY (scope_id, discussion_id)
 );
-CREATE INDEX discussion_parent ON review_journal(scope_id, parent_type, parent_id, discussion_id, version);
-CREATE INDEX discussion_thread ON review_journal(scope_id, thread_id, message_id);
-CREATE INDEX review_record ON review_journal(scope_id, record_kind, record_id, sequence);
+CREATE INDEX idx_discussions_parent ON discussions(scope_id, json_extract(parent, '$.node_type'), json_extract(parent, '$.node_id'), discussion_id);
+
+CREATE TABLE withdrawals (
+    scope_id TEXT NOT NULL, id TEXT NOT NULL,
+    proposal_id TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT, PRIMARY KEY (scope_id, id)
+);
 
 CREATE TABLE record_identities (
     scope_id TEXT NOT NULL, id TEXT NOT NULL, node_type TEXT NOT NULL,

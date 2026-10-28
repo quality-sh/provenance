@@ -83,7 +83,7 @@ fn requirement_input(scope: &ScopeId, id: &str, statement: &str) -> CreateRequir
         description: None,
         status: RequirementStatus::Active,
         domain_id: None,
-        refines: None,
+        refines: Vec::new(),
         depends_on: Vec::new(),
         supersedes: Vec::new(),
         spawned_by: None,

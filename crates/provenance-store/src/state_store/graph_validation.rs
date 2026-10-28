@@ -24,13 +24,18 @@ impl StateStore {
     pub fn validate_graph_scope(&self, scope: &ScopeId) -> anyhow::Result<()> {
         let sources = self.list_sources(scope)?;
         let requirements = self.list_requirements(scope)?;
+        ensure_archives(
+            &requirements,
+            provenance_core::Requirement::validate_archive,
+        )?;
         let resolutions = self.list_resolutions(scope)?;
+        ensure_archives(&resolutions, provenance_core::Resolution::validate_archive)?;
         let rules = self.list_rules(scope)?;
-        for rule in &rules {
-            rule.validate_archive()?;
-        }
+        ensure_archives(&rules, provenance_core::Rule::validate_archive)?;
         let topics = self.list_topics(scope)?;
+        ensure_archives(&topics, provenance_core::Topic::validate_archive)?;
         let questions = self.list_questions(scope)?;
+        ensure_archives(&questions, provenance_core::Question::validate_archive)?;
         let boundaries = self.list_boundaries(scope)?;
         ensure_required(&sources)?;
         ensure_required(&requirements)?;
@@ -47,6 +52,16 @@ impl StateStore {
         ensure_acyclic(&questions)?;
         ensure_acyclic(&boundaries)
     }
+}
+
+fn ensure_archives<T>(
+    records: &[T],
+    validate: impl Fn(&T) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    for record in records {
+        validate(record)?;
+    }
+    Ok(())
 }
 
 fn ensure_required<T: RelationOwner>(records: &[T]) -> anyhow::Result<()> {

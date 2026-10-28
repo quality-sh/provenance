@@ -16,22 +16,27 @@ pub enum InitResult {
 #[derive(Debug)]
 pub struct InitEnding {
     result: InitResult,
-    warning: Option<String>,
+    notices: Vec<String>,
 }
 
 impl InitEnding {
-    pub const fn already(line: String, warning: Option<String>) -> Self {
+    pub fn already(line: String, warning: Option<String>) -> Self {
         Self {
             result: InitResult::Already(line),
-            warning,
+            notices: warning.into_iter().collect(),
         }
     }
 
     pub fn applied(summary: InitSummary, warning: Option<String>) -> Self {
         Self {
             result: InitResult::Applied(Box::new(summary)),
-            warning,
+            notices: warning.into_iter().collect(),
         }
+    }
+
+    pub fn with_notice(mut self, notice: Option<String>) -> Self {
+        self.notices.extend(notice);
+        self
     }
 
     pub fn for_cargo(
@@ -63,8 +68,8 @@ impl InitEnding {
     }
 
     pub fn print(&self, out: &mut impl Write, quiet: bool) -> std::io::Result<()> {
-        if let Some(warning) = &self.warning {
-            eprintln!("{warning}");
+        for notice in &self.notices {
+            eprintln!("{notice}");
         }
         if !quiet {
             self.write_to(out)?;

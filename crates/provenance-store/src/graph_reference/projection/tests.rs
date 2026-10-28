@@ -176,6 +176,7 @@ fn domain_record(scope: &ScopeId) -> Domain {
 
 fn requirement_record(scope: &ScopeId) -> Requirement {
     Requirement {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -190,7 +191,7 @@ fn requirement_record(scope: &ScopeId) -> Requirement {
         status: RequirementStatus::Active,
         domain_id: None,
         source_refs: Vec::new(),
-        refines: None,
+        refines: Vec::new(),
         depends_on: Vec::new(),
         supersedes: Vec::new(),
         spawned_by: None,
@@ -218,6 +219,7 @@ fn topic_record(scope: &ScopeId) -> Topic {
         requirement_id: stable_id(RecordFamily::Requirement),
         title: "Pinned topic".into(),
         status: TopicStatus::Open,
+        archived_in_commit: None,
         claimed_by: None,
         claimed_at: None,
         links: Vec::new(),
@@ -234,6 +236,7 @@ fn question_record(scope: &ScopeId) -> Question {
         question: "Pinned question?".into(),
         resolution_method: ResolutionMethod::Grill,
         status: QuestionStatus::Open,
+        archived_in_commit: None,
         claimed_by: None,
         claimed_at: None,
         answer: None,
@@ -245,6 +248,7 @@ fn question_record(scope: &ScopeId) -> Question {
 
 fn resolution_record(scope: &ScopeId) -> Resolution {
     Resolution {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,

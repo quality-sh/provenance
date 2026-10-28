@@ -367,7 +367,7 @@ fn array_query_flags_use_the_registered_wire_encoding() {
     );
     let output: Value = serde_json::from_slice(&output.stdout).unwrap();
     let neighbors = output["data"]["neighbors"].as_array().unwrap();
-    assert!(!neighbors.is_empty());
+    assert_ne!(neighbors.as_slice(), [] as [Value; 0]);
     assert!(neighbors.iter().all(|item| item["relation"] == "domain_id"));
 }
 

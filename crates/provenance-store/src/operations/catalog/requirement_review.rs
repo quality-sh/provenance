@@ -1,19 +1,15 @@
 //! Resource adapters for the guarded Requirement review interface.
-use super::{
-    shapes::{scoped_read_operation, scoped_write_operation},
-    ExecutionNeed,
-};
+use super::{shapes::scoped_write_operation, ExecutionNeed};
 use crate::{
     review,
-    state_store::{
-        CreateRequirementInput, RequirementClearField, StateStore, UpdateRequirementInput,
-    },
+    state_store::{CreateRequirementInput, RequirementClearField, UpdateRequirementInput},
 };
 use provenance_core::{
     review::{CycleEntry, RequirementDecisionState, RequirementEditState},
     CanonicalArtifact, DispositionActor, DispositionDecision, Requirement, RequirementStatus,
     ScopeId, StableId,
 };
+use provenance_macros::verifies;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -23,15 +19,6 @@ pub struct RequirementResource {
     pub record: Requirement,
     pub edit: RequirementEditState,
     pub decision: RequirementDecisionState,
-}
-
-fn resource(
-    store: &StateStore,
-    scope: &ScopeId,
-    id: &StableId,
-) -> anyhow::Result<RequirementResource> {
-    let snapshot = store.requirement_resource_snapshot(scope, id)?;
-    Ok(resource_from(snapshot))
 }
 
 fn resource_from(snapshot: review::RequirementResourceSnapshot) -> RequirementResource {
@@ -45,32 +32,15 @@ fn resource_from(snapshot: review::RequirementResourceSnapshot) -> RequirementRe
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-pub struct GetRequirementRequest {
-    pub id: StableId,
-}
-
-scoped_read_operation!(
-    pub GetRequirement,
-    "get-requirement",
-    GetRequirementRequest,
-    RequirementResource,
-    &[409],
-    &[ExecutionNeed::GraphStorage],
-    |store, scope, request| resource(store, scope, &request.id)
-);
-
-#[derive(Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
 pub struct CreateRequirementRequest {
-    pub request_id: StableId,
     pub actor: String,
     pub id: StableId,
     pub statement: String,
     pub description: Option<String>,
     pub status: RequirementStatus,
     pub domain_id: Option<StableId>,
-    pub refines: Option<StableId>,
+    #[serde(default)]
+    pub refines: Vec<StableId>,
     pub depends_on: Vec<StableId>,
     pub supersedes: Vec<StableId>,
     pub spawned_by: Option<StableId>,
@@ -90,7 +60,6 @@ scoped_write_operation!(
     |store, scope, request| {
         let snapshot = store.create_review_requirement_resource(
             review::CreateReviewRequirement {
-                request_id: request.request_id,
                 actor: request.actor,
                 origin: request.origin,
                 create: CreateRequirementInput {
@@ -117,7 +86,6 @@ scoped_write_operation!(
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct UpdateRequirementRequest {
-    pub request_id: StableId,
     pub actor: String,
     pub expected_etag: String,
     pub declared_by: Option<String>,
@@ -125,6 +93,7 @@ pub struct UpdateRequirementRequest {
     pub description: Option<String>,
     pub fog: Option<String>,
     pub status: Option<RequirementStatus>,
+    pub archived_in_commit: Option<provenance_core::ArchivedStamp>,
     pub domain_id: Option<StableId>,
     #[serde(default)]
     pub clear_fields: Vec<RequirementClearField>,
@@ -142,13 +111,14 @@ scoped_write_operation!(
     scope = none,
     |store, scope, request| {
         let snapshot = store.save_requirement_resource(review::SaveRequirement {
-                request_id: request.request_id,
                 actor: request.actor,
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,
                 update: UpdateRequirementInput {
+                    archived_in_commit: request.archived_in_commit,
                     scope_id: scope,
                     id: request.id,
+                    expected_etag: None,
                     declared_by: request.declared_by,
                     statement: request.statement,
                     description: request.description,
@@ -172,22 +142,26 @@ macro_rules! decision {
     };
 }
 decision!(
-    SubmitRequirementReview,
-    "submit-requirement-review",
-    review::SubmitRequirementReview,
-    submit_requirement_review
+    SubmitRecordReview,
+    "submit-record-review",
+    review::SubmitRecordReview,
+    submit_record_review
 );
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[verifies("rule_review_disposition_identity_server_created", construction)]
 #[serde(deny_unknown_fields)]
-pub struct DecideRequirementReviewRequest {
+pub struct DecideRecordReviewRequest {
     pub scope_id: ScopeId,
-    pub requirement_id: StableId,
+    pub record_kind: provenance_core::NodeType,
+    pub record_id: StableId,
     pub actor: DispositionActor,
     pub proposal_id: StableId,
     pub decision: DispositionDecision,
     pub rationale: Option<String>,
+    /// An approval requires a prior assertion. A human can instead name an
+    /// existing canonical artifact.
     pub canonical_artifact: Option<CanonicalArtifact>,
     pub feedback: Option<review::ReviewFeedback>,
     pub declared_by: Option<String>,
@@ -196,9 +170,10 @@ pub struct DecideRequirementReviewRequest {
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-pub struct WithdrawRequirementReviewRequest {
+pub struct WithdrawRecordReviewRequest {
     pub scope_id: ScopeId,
-    pub requirement_id: StableId,
+    pub record_kind: provenance_core::NodeType,
+    pub record_id: StableId,
     pub actor: String,
     pub proposal_id: StableId,
     pub declared_by: Option<String>,
@@ -211,21 +186,22 @@ macro_rules! addressed_decision {
             pub $name, $wire, $request, CycleEntry, &[409], &[ExecutionNeed::GraphStorage],
             scope = scope_id,
             |store, _scope, request| {
-                let requirement_id = request.requirement_id.clone();
+                let record_kind = request.record_kind;
+                let record_id = request.record_id.clone();
                 let input: $input = ($convert)(request);
-                store.$method(&requirement_id, input)
+                store.$method(record_kind, &record_id, input)
             }
         );
     };
 }
 
 addressed_decision!(
-    DecideRequirementReview,
-    "decide-requirement-review",
-    DecideRequirementReviewRequest,
-    review::DecideRequirementReview,
-    decide_requirement_review_for,
-    |request: DecideRequirementReviewRequest| review::DecideRequirementReview {
+    DecideRecordReview,
+    "decide-record-review",
+    DecideRecordReviewRequest,
+    review::DecideRecordReview,
+    decide_record_review_for,
+    |request: DecideRecordReviewRequest| review::DecideRecordReview {
         scope_id: request.scope_id,
         actor: request.actor,
         proposal_id: request.proposal_id,
@@ -241,12 +217,12 @@ addressed_decision!(
 #[path = "requirement_review_tests.rs"]
 mod requirement_review_tests;
 addressed_decision!(
-    WithdrawRequirementReview,
-    "withdraw-requirement-review",
-    WithdrawRequirementReviewRequest,
-    review::WithdrawRequirementReview,
-    withdraw_requirement_review_for,
-    |request: WithdrawRequirementReviewRequest| review::WithdrawRequirementReview {
+    WithdrawRecordReview,
+    "withdraw-record-review",
+    WithdrawRecordReviewRequest,
+    review::WithdrawRecordReview,
+    withdraw_record_review_for,
+    |request: WithdrawRecordReviewRequest| review::WithdrawRecordReview {
         scope_id: request.scope_id,
         actor: request.actor,
         proposal_id: request.proposal_id,

@@ -3,6 +3,9 @@ use predicates::prelude::*;
 use serde_json::Value;
 use std::path::Path;
 
+#[path = "export_fixture_support/mod.rs"]
+mod export_fixture_support;
+
 fn provenance(repo: &Path) -> Command {
     let mut command = Command::cargo_bin("provenance").unwrap();
     command.args(["--quiet"]);
@@ -11,6 +14,9 @@ fn provenance(repo: &Path) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) {
+    if args.first() == Some(&"add") {
+        export_fixture_support::make_default_scope_portable(repo);
+    }
     let status = std::process::Command::new("git")
         .args(args)
         .current_dir(repo)

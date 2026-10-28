@@ -80,24 +80,44 @@ pub fn pascal(name: &str) -> String {
 
 pub fn documents() -> (Value, Value) {
     let mut schemas = Map::new();
+    let mut shared_components = BTreeMap::new();
     let mut paths: Map<String, Value> = Map::new();
     let mut tools = Vec::new();
     let definitions = provenance_store::operations::catalog::definitions();
     check_names(definitions);
     for definition in definitions {
         let family = pascal(definition.name);
-        let request = definition
-            .request_schema()
-            .cloned()
-            .map(|schema| component(&format!("{family}Request"), schema, &mut schemas));
-        let success = component(
+        let variants = definition.query_variants();
+        let share = variants.is_empty()
+            && shared_review_handler(definition.registration.handler.operation)
+            && !definition.name.contains("requirement");
+        let request = definition.request_schema().cloned().map(|schema| {
+            route_component(
+                definition,
+                "request",
+                &format!("{family}Request"),
+                schema,
+                share,
+                &mut shared_components,
+                &mut schemas,
+            )
+        });
+        let success = route_component(
+            definition,
+            "success",
             &format!("{family}Success"),
             definition.success_schema(),
+            share,
+            &mut shared_components,
             &mut schemas,
         );
-        let failure = component(
+        let failure = route_component(
+            definition,
+            "failure",
             &format!("{family}Failure"),
             definition.failure_schema().clone(),
+            share,
+            &mut shared_components,
             &mut schemas,
         );
         let parameters = definition
@@ -131,7 +151,6 @@ pub fn documents() -> (Value, Value) {
             operation["requestBody"] = json!({"required":true,
                 "content":{"application/json":{"schema":request}}});
         }
-        let variants = definition.query_variants();
         if !variants.is_empty() {
             operation["x-provenance-query-variants"] =
                 Value::Array(query_variant_documents(variants, &family, &mut schemas));
@@ -157,6 +176,44 @@ pub fn documents() -> (Value, Value) {
             "paths":paths,"components":{"schemas":schemas}}),
         json!({"tools":tools}),
     )
+}
+
+fn shared_review_handler(handler: &str) -> bool {
+    matches!(
+        handler,
+        "submit-record-review"
+            | "decide-record-review"
+            | "withdraw-record-review"
+            | "review-history"
+            | "review-history-entry"
+            | "review-evidence"
+            | "get-reviewed-resource"
+    )
+}
+
+fn route_component(
+    definition: &provenance_store::operations::catalog::Definition,
+    role: &str,
+    name: &str,
+    schema: Value,
+    share: bool,
+    shared: &mut BTreeMap<(String, String, String), Value>,
+    components: &mut Map<String, Value>,
+) -> Value {
+    if !share {
+        return component(name, schema, components);
+    }
+    let key = (
+        definition.registration.handler.operation.to_owned(),
+        role.to_owned(),
+        schema.to_string(),
+    );
+    if let Some(reference) = shared.get(&key) {
+        return reference.clone();
+    }
+    let reference = component(name, schema, components);
+    shared.insert(key, reference.clone());
+    reference
 }
 
 fn query_variant_documents(
@@ -367,11 +424,37 @@ fn check_names(definitions: &[provenance_store::operations::catalog::Definition]
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
+    fn schema_reference<'a>(document: &'a Value, pointer: &str) -> &'a Value {
+        document
+            .pointer(pointer)
+            .unwrap_or_else(|| panic!("missing schema reference: {pointer}"))
+    }
+
     #[test]
     #[should_panic(expected = "operationId collision")]
     fn operation_ids_cannot_collide() {
         let mut definitions = provenance_store::operations::catalog::definitions().to_vec();
         definitions[1].operation_id = definitions[0].operation_id;
         super::check_names(&definitions[..2]);
+    }
+
+    #[test]
+    fn routes_for_one_handler_share_identical_models() {
+        let (openapi, _) = super::documents();
+        let source = "/paths/~1sources~1{id}~1submit/post";
+        let domain = "/paths/~1domains~1{id}~1submit/post";
+
+        for suffix in [
+            "/requestBody/content/application~1json/schema",
+            "/responses/200/content/application~1json/schema",
+            "/responses/409/content/application~1json/schema",
+        ] {
+            assert_eq!(
+                schema_reference(&openapi, &format!("{source}{suffix}")),
+                schema_reference(&openapi, &format!("{domain}{suffix}")),
+            );
+        }
     }
 }

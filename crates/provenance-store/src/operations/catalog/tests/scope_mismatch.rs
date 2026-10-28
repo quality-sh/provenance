@@ -1,5 +1,6 @@
 use super::super::{
-    invoke_with, ContextResolver, ExecutionNeeds, PreparedContext, PreparedScope, RequestedContext,
+    invoke_with, ContextResolver, Direct, ExecutionNeeds, PreparedContext, PreparedScope,
+    RequestedContext,
 };
 use crate::layout::ProvenanceLayout;
 use provenance_core::{
@@ -12,6 +13,10 @@ use std::sync::Arc;
 struct Resolver(PreparedScope);
 
 impl ContextResolver for Resolver {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,
@@ -33,17 +38,16 @@ async fn discussion_write_scope_mismatch_keeps_its_safe_status() {
             "request": {
                 "scope_id": "other",
                 "parent": {"node_type": "requirement", "node_id": "req_one"},
-                "request_id": "request_one",
                 "actor": "ben",
                 "declared_by": null,
                 "action": {"kind": "start", "role": "user", "body": "Concern"}
             }
         }),
-        Arc::new(Resolver(PreparedScope {
+        Direct(Arc::new(Resolver(PreparedScope {
             root: camino::Utf8PathBuf::from_path_buf(directory.path().into()).unwrap(),
             scope: ScopeId::new("selected").unwrap(),
             requested_target: "fixture".into(),
-        })),
+        }))),
     )
     .await
     .unwrap_err();
@@ -85,7 +89,7 @@ async fn assert_review_scope_mismatch(operation: &str, request: Value) {
             "context": {"repository": "fixture", "scope": "selected"},
             "request": request,
         }),
-        resolver,
+        Direct(resolver),
     )
     .await
     .unwrap_err();
@@ -96,13 +100,14 @@ async fn assert_review_scope_mismatch(operation: &str, request: Value) {
 }
 
 #[tokio::test]
-async fn submit_requirement_review_rejects_a_scope_mismatch_without_writing() {
+async fn submit_record_review_rejects_a_scope_mismatch_without_writing() {
     assert_review_scope_mismatch(
-        "submit-requirement-review",
+        "submit-record-review",
         json!({
             "scope_id": "other",
             "actor": "agent",
-            "requirement_id": "req_one",
+            "record_kind": "requirement",
+            "record_id": "req_one",
             "declared_by": null,
             "title": "Review title",
             "summary": "Review summary",
@@ -118,12 +123,13 @@ async fn submit_requirement_review_rejects_a_scope_mismatch_without_writing() {
 }
 
 #[tokio::test]
-async fn decide_requirement_review_rejects_a_scope_mismatch_without_writing() {
+async fn decide_record_review_rejects_a_scope_mismatch_without_writing() {
     assert_review_scope_mismatch(
-        "decide-requirement-review",
+        "decide-record-review",
         json!({
             "scope_id": "other",
-            "requirement_id": "req_one",
+            "record_kind": "requirement",
+            "record_id": "req_one",
             "actor": {"identity_type": "human", "id": "reviewer"},
             "proposal_id": "proposal_one",
             "decision": "rejected",
@@ -137,12 +143,13 @@ async fn decide_requirement_review_rejects_a_scope_mismatch_without_writing() {
 }
 
 #[tokio::test]
-async fn withdraw_requirement_review_rejects_a_scope_mismatch_without_writing() {
+async fn withdraw_record_review_rejects_a_scope_mismatch_without_writing() {
     assert_review_scope_mismatch(
-        "withdraw-requirement-review",
+        "withdraw-record-review",
         json!({
             "scope_id": "other",
-            "requirement_id": "req_one",
+            "record_kind": "requirement",
+            "record_id": "req_one",
             "actor": "agent",
             "proposal_id": "proposal_one",
             "declared_by": null,

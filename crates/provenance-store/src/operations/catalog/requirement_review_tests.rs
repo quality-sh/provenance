@@ -30,16 +30,15 @@ fn fixture() -> (tempfile::TempDir, PreparedContext, StateStore, ScopeId) {
     (temp, context, StateStore::new(layout), scope)
 }
 
-fn create_request(request_id: &str) -> CreateRequirementRequest {
+fn create_request(_request_id: &str) -> CreateRequirementRequest {
     serde_json::from_value(json!({
-        "request_id": request_id,
         "actor": "ben",
         "id": "req_a",
         "statement": "The system stores records.",
         "description": null,
         "status": "discovery",
         "domain_id": null,
-        "refines": null,
+        "refines": [],
         "depends_on": [],
         "supersedes": [],
         "spawned_by": null,
@@ -61,12 +60,11 @@ fn update_request(store: &StateStore, request_id: &str) -> UpdateRequirementRequ
 }
 
 fn update_request_with_etag(
-    request_id: &str,
+    _request_id: &str,
     expected_etag: &str,
     description: &str,
 ) -> UpdateRequirementRequest {
     serde_json::from_value(json!({
-        "request_id": request_id,
         "actor": "ben",
         "expected_etag": expected_etag,
         "declared_by": null,
@@ -93,8 +91,14 @@ async fn create_response_failure_refuses_before_publication() {
     crate::test_probes::disarm("requirement_resource_snapshot");
 
     assert!(result.is_err());
-    assert!(store.list_requirements(&scope).unwrap().is_empty());
-    assert!(store.review_entries(&scope).unwrap().is_empty());
+    assert_eq!(
+        store.list_requirements(&scope).unwrap(),
+        [] as [provenance_core::Requirement; 0]
+    );
+    assert_eq!(
+        store.list_proposal_definitions(&scope).unwrap(),
+        [] as [provenance_core::ProposalCard; 0]
+    );
 
     let committed = CreateRequirementResource::run(
         PreparedContext::for_scope(PreparedScope {
@@ -111,7 +115,7 @@ async fn create_response_failure_refuses_before_publication() {
         committed.decision.pending.as_ref().unwrap().revision,
         committed.edit.revision.clone().unwrap()
     );
-    assert_eq!(store.review_entries(&scope).unwrap().len(), 1);
+    assert_eq!(store.list_proposal_definitions(&scope).unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -132,7 +136,7 @@ async fn content_update_replaces_or_opens_the_current_submission() {
     assert_eq!(second.revision, updated.edit.revision.unwrap());
 
     store
-        .withdraw_requirement_review(
+        .withdraw_record_review(
             serde_json::from_value(json!({
                 "scope_id":"default", "actor":"ben",
                 "proposal_id":second.proposal_id
@@ -172,7 +176,7 @@ async fn lifecycle_update_keeps_the_current_submission() {
         .unwrap();
     let pending = created.decision.pending.unwrap();
     let request: UpdateRequirementRequest = serde_json::from_value(json!({
-        "request_id":"activate", "actor":"ben", "expected_etag":created.edit.etag,
+        "actor":"ben", "expected_etag":created.edit.etag,
         "declared_by":null, "statement":null, "description":null, "fog":null,
         "status":"active", "domain_id":null, "clear_fields":[],
         "relationships":null, "id":"req_a"
@@ -209,7 +213,7 @@ async fn revision_keeps_the_prior_submission_and_feedback_readable() {
     )
     .unwrap();
     store
-        .decide_requirement_review(
+        .decide_record_review(
             serde_json::from_value(json!({
                 "scope_id":"default",
                 "actor":{"identity_type":"human","id":"reviewer"},
@@ -258,7 +262,7 @@ async fn update_response_failure_refuses_before_publication() {
         )
         .unwrap();
     let request = update_request(&store, "update_a");
-    let receipts_before = store.review_entries(&scope).unwrap();
+    let proposals_before = store.list_proposal_definitions(&scope).unwrap();
     crate::test_probes::arm("requirement_resource_snapshot", || {
         anyhow::bail!("injected response construction failure")
     });
@@ -269,7 +273,10 @@ async fn update_response_failure_refuses_before_publication() {
     assert!(result.is_err());
     let record = store.list_requirements(&scope).unwrap().remove(0);
     assert_eq!(record.description, None);
-    assert_eq!(store.review_entries(&scope).unwrap(), receipts_before);
+    assert_eq!(
+        store.list_proposal_definitions(&scope).unwrap(),
+        proposals_before
+    );
 
     let committed = UpdateRequirementResource::run(
         PreparedContext::for_scope(PreparedScope {
@@ -283,13 +290,13 @@ async fn update_response_failure_refuses_before_publication() {
     .unwrap();
     assert_eq!(committed.record.description.as_deref(), Some("Saved text."));
     assert_eq!(
-        store.review_entries(&scope).unwrap().len(),
-        receipts_before.len() + 1
+        store.list_proposal_definitions(&scope).unwrap().len(),
+        proposals_before.len() + 1
     );
 }
 
 #[tokio::test]
-async fn replay_precedes_stale_precondition_and_returns_current_state() {
+async fn a_repeated_update_with_an_old_etag_returns_a_typed_conflict() {
     let (_temp, context, store, scope) = fixture();
     CreateRequirementResource::run(context.clone(), create_request("create_a"))
         .await
@@ -310,19 +317,25 @@ async fn replay_precedes_stale_precondition_and_returns_current_state() {
     .await
     .unwrap();
 
-    let replay = UpdateRequirementResource::run(
+    let Err(error) = UpdateRequirementResource::run(
         context,
         update_request_with_etag("update_a", &first_etag, "First text."),
     )
     .await
-    .unwrap();
+    else {
+        panic!("the stale update succeeded");
+    };
 
-    assert_eq!(replay.record.description.as_deref(), Some("Second text."));
+    assert!(matches!(
+        error.safe(),
+        crate::write_error::WriteFailure::RequirementEditConflict { .. }
+    ));
     assert_eq!(
-        replay.edit.etag,
-        store.requirement_edit_state(&scope, &id).unwrap().etag
+        store.list_requirements(&scope).unwrap()[0]
+            .description
+            .as_deref(),
+        Some("Second text.")
     );
-    assert_eq!(store.review_entries(&scope).unwrap().len(), 3);
 }
 
 #[test]
@@ -331,7 +344,6 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
     store
         .create_review_requirement(
             serde_json::from_value(json!({
-                "request_id": "create_a",
                 "actor": "ben",
                 "origin": null,
                 "create": {
@@ -348,9 +360,8 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
         .unwrap();
     let id = StableId::new("req_a").unwrap();
     let etag = store.requirement_edit_state(&scope, &id).unwrap().etag;
-    let input = |request: &str, description: &str| {
+    let input = |_request: &str, description: &str| {
         serde_json::from_value(json!({
-            "request_id": request,
             "actor": "ben",
             "expected_etag": etag,
             "update": {
@@ -377,55 +388,5 @@ fn concurrent_resource_writes_with_one_etag_commit_once() {
             .to_string()
             .contains("etag"));
     });
-    assert_eq!(store.review_entries(&scope).unwrap().len(), 2);
-}
-
-#[test]
-fn review_action_requests_exclude_server_created_identities() {
-    let submit = serde_json::from_value::<review::SubmitRequirementReview>(json!({
-        "scope_id":"default", "actor":"agent", "requirement_id":"req_a",
-        "title":"Title", "summary":"Summary", "source_ids":[],
-        "evidence_references":[], "builds_on":[],
-        "expected_revision":null, "revises":null
-    }));
-    assert!(submit.is_ok());
-
-    let decide = serde_json::from_value::<DecideRequirementReviewRequest>(json!({
-        "scope_id":"default", "requirement_id":"req_a", "actor":{
-            "identity_type":"human", "id":"reviewer"
-        }, "proposal_id":"prop-1", "decision":"accepted", "rationale":null,
-        "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"},
-        "feedback":null, "declared_by":null
-    }));
-    assert!(decide.is_ok());
-
-    let withdraw = serde_json::from_value::<WithdrawRequirementReviewRequest>(json!({
-        "scope_id":"default", "requirement_id":"req_a", "actor":"agent",
-        "proposal_id":"prop-1", "declared_by":null, "reason":null
-    }));
-    assert!(withdraw.is_ok());
-
-    for (field, supplied) in [
-        ("request_id", json!("client-request")),
-        ("proposal_id", json!("client-proposal")),
-        ("proposal_key", json!("client-key")),
-    ] {
-        let mut value = json!({
-            "scope_id":"default", "actor":"agent", "requirement_id":"req_a",
-            "title":"Title", "summary":"Summary", "source_ids":[],
-            "evidence_references":[], "builds_on":[], "expected_revision":null, "revises":null
-        });
-        value[field] = supplied;
-        assert!(serde_json::from_value::<review::SubmitRequirementReview>(value).is_err());
-    }
-    assert!(
-        serde_json::from_value::<DecideRequirementReviewRequest>(json!({
-            "scope_id":"default", "requirement_id":"req_a", "request_id":"client-request",
-            "actor":{"identity_type":"human", "id":"reviewer"}, "proposal_id":"prop-1",
-            "disposition_id":"client-disposition", "decision":"accepted", "rationale":null,
-            "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_a"},
-            "feedback":null, "declared_by":null
-        }))
-        .is_err()
-    );
+    assert_eq!(store.list_proposal_definitions(&scope).unwrap().len(), 2);
 }

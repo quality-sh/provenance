@@ -3,8 +3,10 @@ import openapiTS, { astToString } from 'openapi-typescript';
 import { typescriptClient } from './templates.mjs';
 import { operationValidators } from './validators.mjs';
 import { typescriptSchema } from './typescript-schema.mjs';
+import { exactQuerySuccesses } from './query-successes.mjs';
 
 export async function typescriptFiles(document, compatibility) {
+  document = exactQuerySuccesses(document);
   return {
     'client.ts': typescriptClient(document, compatibility),
     'schema.ts': astToString(await openapiTS(typescriptSchema(document), { defaultNonNullable: false })),

@@ -34,10 +34,7 @@ pub(super) fn ensure_statement_is_writable(
     layout: &crate::layout::ProvenanceLayout,
     statement: &str,
 ) -> Result<(), StatementWriteError> {
-    let report = crate::dictionary_reference::load_project_dictionary(layout).map_or_else(
-        || provenance_ste100::check_descriptive(statement),
-        |dictionary| provenance_ste100::check_descriptive_with_dictionary(statement, &dictionary),
-    );
+    let report = crate::statement_analysis::check_project_statement(layout, statement);
     if report.findings.is_empty() {
         return Ok(());
     }

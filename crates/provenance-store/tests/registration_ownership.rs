@@ -29,7 +29,11 @@ fn route_construction_has_no_name_or_shape_inference() {
         source("src/operations/catalog/routes/resource.rs")
     );
     let resources = source("src/operations/catalog/routes/resources.rs");
-    let subresources = source("src/operations/catalog/routes/subresources.rs");
+    let subresources = format!(
+        "{}{}",
+        source("src/operations/catalog/routes/subresources.rs"),
+        source("src/operations/catalog/routes/review_subresources.rs")
+    );
     let actions = source("src/operations/catalog/routes/actions.rs");
     let schema = source("src/operations/catalog/schema.rs");
 

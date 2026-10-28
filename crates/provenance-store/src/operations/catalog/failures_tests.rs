@@ -3,6 +3,7 @@ use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::{MovedUnit as NativeMovedUnit, ReadRefusal};
 use crate::stale::git::GitRefusal;
 use camino::Utf8PathBuf;
+use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
 use provenance_core::protocol::read_failure::{MovedUnit, ReadFailure};
 
 fn read_error(error: impl std::error::Error + Send + Sync + 'static) -> ReadError {
@@ -121,5 +122,18 @@ fn a_stale_refusal_keeps_the_revision_facts_and_drops_the_local_paths() {
         })
         .unwrap(),
         "the published failure must not carry the local path or the native error"
+    );
+}
+
+#[test]
+fn a_common_refusal_raised_inside_a_read_keeps_its_kind_and_status() {
+    let error = read_error(OperationFailure::InvalidInput {
+        field: Some("offset".into()),
+        reason: InvalidInputReason::InvalidValue,
+    });
+    assert_eq!(error.status(), 400);
+    assert_eq!(
+        serde_json::to_value(&error).unwrap(),
+        serde_json::json!({"kind":"invalid_input","field":"offset","reason":"invalid_value"})
     );
 }
