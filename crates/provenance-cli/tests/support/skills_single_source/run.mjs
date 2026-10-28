@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, cpSync, rmSync, re
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const [mode, source, cargo, baseBinary, pdf] = process.argv.slice(2);
+const [mode, source, cargo, testBinary, pdf] = process.argv.slice(2);
 const names = ['provenance-fork-tournament', 'provenance-grounded-writing', 'provenance-shaping', 'provenance-swarm-backtrace'];
 const temporary = mkdtempSync(join(tmpdir(), 'skills-single-source-'));
 const checkout = join(temporary, 'checkout');
@@ -79,24 +79,24 @@ function checkCli(binary, expected) {
   const second = init(binary, project);
   checkInstalled(project, expected);
   rmSync(project, { recursive: true, force: true });
-  assert.equal(init(baseBinary, project), first, 'fresh init summary must match the unchanged build');
-  assert.equal(init(baseBinary, project), second, 'repeat init summary must match the unchanged build');
+  assert.equal(init(testBinary, project), first, 'fresh init summary must match the test binary built from the unedited sources');
+  assert.equal(init(testBinary, project), second, 'repeat init summary must match the test binary built from the unedited sources');
 }
 try {
   fixture();
   if (mode === 'clean') {
     // Normal onboarding files exist before the fixture commit; only skill outputs are absent.
-    init(baseBinary, checkout);
+    init(testBinary, checkout);
     for (const name of names) for (const root of ['.agents/skills', '.claude/skills']) {
       rmSync(join(checkout, root, name), { recursive: true, force: true });
     }
     run('git', ['add', '-A']);
     run('git', ['commit', '--allow-empty', '-qm', 'Prepared onboarding without installed skills']);
-    init(baseBinary, checkout);
+    init(testBinary, checkout);
     assert.equal(run('git', ['status', '--porcelain', '--untracked-files=all']), '', 'init must leave the prepared checkout clean');
-    const second = init(baseBinary, checkout);
+    const second = init(testBinary, checkout);
     assert.match(second, /No change\./);
-    assert.equal(init(baseBinary, checkout), second);
+    assert.equal(init(testBinary, checkout), second);
     const expected = Object.fromEntries(names.map(name => [name, readFileSync(join(checkout, 'skills', name, 'SKILL.md'), 'utf8')]));
     checkInstalled(checkout, expected);
     edit('This sentence checks source preparation');
