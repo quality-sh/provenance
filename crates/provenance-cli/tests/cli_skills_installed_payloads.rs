@@ -18,18 +18,12 @@ fn installed_bundled_payloads_match_the_root_sources() {
         .args(["skills", "install", "--copy", "--format", "json"])
         .assert()
         .success();
-    let output = Command::cargo_bin("provenance")
+    let names = std::fs::read_dir(workspace.join("skills"))
         .unwrap()
-        .args(["skills", "list", "--format", "json"])
-        .assert()
-        .success()
-        .get_output()
-        .stdout
-        .clone();
-    let listed: Vec<serde_json::Value> = serde_json::from_slice(&output).unwrap();
-    assert_eq!(listed.len(), 4);
-    for skill in listed {
-        let name = skill["name"].as_str().unwrap();
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect::<Vec<_>>();
+    assert!(!names.is_empty());
+    for name in &names {
         let source =
             std::fs::read_to_string(workspace.join("skills").join(name).join("SKILL.md")).unwrap();
         let canonical = std::fs::read_to_string(

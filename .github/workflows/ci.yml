@@ -1085,7 +1085,7 @@ jobs:
           CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
         run: sfw cargo fetch --locked
       - name: Test public skill installation and init
-        run: cargo test --locked -p provenance-cli --test cli_skills --test cli_skills_copy_tree --test cli_skills_committed_copies --test cli_skills_cleanup --test cli_init_onboarding --test cli_init_summary
+        run: cargo test --locked -p provenance-cli --test cli_skills --test cli_skills_copy_tree --test cli_skills_installed_payloads --test cli_skills_build_source --test cli_skills_cleanup --test cli_init_onboarding --test cli_init_summary
 
   # The one status the branch ruleset requires. Conditional jobs skip when a
   # pull request leaves their inputs untouched, and a skipped matrix job never
