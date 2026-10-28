@@ -60,3 +60,15 @@ fn frozen_digest<'a, T: Serialize + 'a>(
     }
     format!("{:x}", hasher.finalize())
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn frozen_digest_hashes_sorted_json_lines_as_lowercase_hex() {
+        let records = ["b".to_owned(), "a".to_owned()];
+        assert_eq!(
+            super::frozen_digest(&records, String::as_str),
+            "14bdec8c77f9feebc3b047fa42657bac4babc6d05439548a956ee1a9edf35eab"
+        );
+    }
+}

@@ -272,3 +272,14 @@ fn without_reviewer(repo: &Path) -> anyhow::Result<bool> {
         Ok(manifest.disposition_actor_ids.is_empty())
     })
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn host_key_is_the_lowercase_sha256_hex_of_repository_nul_scope() {
+        assert_eq!(
+            super::host_key(std::path::Path::new("/repo"), "scope"),
+            "5abb9782d062aa329b94abbae50db8aeaca5d6c48590f72d3f0dddb2fcbfca12"
+        );
+    }
+}
