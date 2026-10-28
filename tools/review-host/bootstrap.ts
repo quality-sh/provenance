@@ -79,15 +79,18 @@ function element(document: BrowserDocument, id: string): BrowserElement {
   return found;
 }
 
-/** The reviewer that the host reports; the page decides only as this person. */
-// @provenance rule: rule_review_host_reports_reviewer
-function configReviewer(value: unknown): ConfigReviewer {
-  if (typeof value !== 'object' || value === null ||
-    !('actorId' in value) || typeof value.actorId !== 'string' ||
-    !('allowed' in value) || typeof value.allowed !== 'boolean') {
+/** The reviewer that the host reports, as is; the page decides only as this person. */
+// @provenance rule: rule_review_host_app_passes_reviewer
+function configReviewer(value: object): { reviewer?: ConfigReviewer } {
+  // The app never invents a reviewer: without one from the host, the page is read-only.
+  if (!('reviewer' in value)) return {};
+  const reviewer = value.reviewer;
+  if (typeof reviewer !== 'object' || reviewer === null ||
+    !('actorId' in reviewer) || typeof reviewer.actorId !== 'string' ||
+    !('allowed' in reviewer) || typeof reviewer.allowed !== 'boolean') {
     throw new InvalidReviewer('Invalid reviewer');
   }
-  return { actorId: value.actorId, allowed: value.allowed };
+  return { reviewer: { actorId: reviewer.actorId, allowed: reviewer.allowed } };
 }
 
 function reviewConfig(value: unknown, origin: string): ReviewConfig {
@@ -104,8 +107,7 @@ function reviewConfig(value: unknown, origin: string): ReviewConfig {
     repositoryId: value.repositoryId,
     scope: value.scope,
     dispositionActorIds: value.dispositionActorIds,
-    // The page decides only as the reviewer that the host reports, so the app never invents one.
-    ...('reviewer' in value ? { reviewer: configReviewer(value.reviewer) } : {}),
+    ...configReviewer(value),
   };
 }
 

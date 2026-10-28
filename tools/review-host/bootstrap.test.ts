@@ -71,7 +71,7 @@ test('a launch link mounts the record with the redeemed session', async () => {
 
 // The page decides as the reviewer that the host reports, so the host app passes it as is.
 test('the reviewer that the host reports reaches the renderer', async function passesTheReviewer() {
-  verifies('rule_review_host_reports_reviewer', 'examples');
+  verifies('rule_review_host_app_passes_reviewer', 'examples');
   const reviewer = { actorId: 'maintainer', allowed: true };
   const page = launchPage({ served: { ...config, reviewer } });
   await page.mounting;
@@ -81,14 +81,14 @@ test('the reviewer that the host reports reaches the renderer', async function p
 });
 
 test('the renderer gets no reviewer when the host reports none', async function inventsNoReviewer() {
-  verifies('rule_review_host_reports_reviewer', 'examples');
+  verifies('rule_review_host_app_passes_reviewer', 'examples');
   const page = launchPage();
   await page.mounting;
   assert.equal('reviewer' in page.mounted[0]!, false);
 });
 
 test('a malformed reviewer stops the page and says that the host sent it', async function refusesAMalformedReviewer() {
-  verifies('rule_review_host_reports_reviewer', 'examples');
+  verifies('rule_review_host_app_passes_reviewer', 'examples');
   const reviewer = { actorId: 'maintainer' };
   const page = launchPage({ served: { ...config, reviewer } });
   await settle();
