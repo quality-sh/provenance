@@ -16,11 +16,12 @@ use crate::envelope::{
 };
 use crate::render;
 use anyhow::Context;
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8Path;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
 use provenance_store::stale::git;
 use provenance_store::{cache, layout::ProvenanceLayout, settings};
+use std::collections::BTreeSet;
 
 mod findings;
 mod graph_snapshots;
@@ -64,9 +65,8 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         .coverage
         .binding_findings;
 
-    let scan_candidates = provenance_scanner::scan_path_with_content(input.scan_path)?;
-    let files_scanned = scan_candidates.len() as u64;
-    let scans = scans_at_head(input.repo, &head, scan_candidates)?;
+    let scans = scans_at_head(input.repo, input.scan_path, &head)?;
+    let files_scanned = scans.len() as u64;
     let scan_covers = provenance_scanner::scan_covers_repository(input.repo, input.scan_path);
     let (completeness, incompleteness_reason) =
         scan_completeness(input.repo, input.scan_path, scan_covers, &head)?;
@@ -300,20 +300,27 @@ fn evidence_site_findings(
 }
 
 /// Scan requested-head blobs only for paths selected by the source walker.
-/// Working-copy bytes select the scan surface but do not supply head facts.
+/// Working-copy paths select the scan surface but do not supply head facts.
 fn scans_at_head(
     repo: &Utf8Path,
+    scan_path: &Utf8Path,
     head: &str,
-    candidates: Vec<provenance_scanner::FileScanWithContent>,
 ) -> anyhow::Result<Vec<provenance_scanner::FileScan>> {
-    let paths: Vec<Utf8PathBuf> = candidates
-        .into_iter()
-        .filter_map(|file| {
-            repository_relative_path(repo, &file.scan.file_path).map(Utf8Path::to_path_buf)
-        })
-        .collect();
-    let head_files = git::revision_files_at_paths(repo, head, &paths)?;
-    let scans = head_files
+    let root = repo
+        .canonicalize_utf8()
+        .with_context(|| format!("resolve the repository path {repo}"))?;
+    let walk_root = scan_path
+        .canonicalize_utf8()
+        .with_context(|| format!("resolve the scan path {scan_path}"))?;
+    anyhow::ensure!(
+        walk_root.starts_with(&root),
+        "the scan path {scan_path} is outside the repository {repo}"
+    );
+    let selected = provenance_scanner::source_paths(&walk_root)?
+        .iter()
+        .map(|path| git_path(&root, path))
+        .collect::<anyhow::Result<BTreeSet<_>>>()?;
+    let scans = git::revision_files_at_paths(repo, head, &selected)?
         .into_iter()
         .filter_map(|file| {
             let language = file
@@ -330,10 +337,17 @@ fn scans_at_head(
     Ok(scans)
 }
 
-fn repository_relative_path<'a>(repo: &'a Utf8Path, path: &'a Utf8Path) -> Option<&'a Utf8Path> {
-    path.strip_prefix(repo)
-        .ok()
-        .or_else(|| path.is_relative().then_some(path))
+/// The repository-relative path of a walked file, with `/` separators as Git
+/// writes it.
+fn git_path(root: &Utf8Path, path: &Utf8Path) -> anyhow::Result<String> {
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| anyhow::anyhow!("the scanned file {path} is outside the repository {root}"))?;
+    Ok(relative
+        .components()
+        .map(|component| component.as_str())
+        .collect::<Vec<_>>()
+        .join("/"))
 }
 
 /// Whether the working tree has no tracked or untracked changes.
