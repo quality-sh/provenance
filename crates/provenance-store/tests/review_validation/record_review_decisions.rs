@@ -418,3 +418,38 @@ fn domain_and_boundary_decisions_refuse_feedback() {
         ));
     }
 }
+
+/// Implementation aid: no Rule states that a refused decision leaves no
+/// Disposition; this pins the order of the owner check and the decision write.
+#[test]
+fn owner_refusal_of_rejection_feedback_leaves_no_decision() {
+    let (_temp, store, scope, proposal) = pending_classification_review(NodeType::Source);
+    let record_id = id("source_a");
+    let decide = |declared_by: Option<&str>| {
+        store.decide_record_review(DecideRecordReview {
+            scope_id: scope.clone(),
+            actor: reviewer(),
+            proposal_id: proposal.clone(),
+            decision: DispositionDecision::Rejected,
+            rationale: Some("The source name is not precise.".into()),
+            canonical_artifact: None,
+            feedback: review_feedback(NodeType::Source),
+            declared_by: declared_by.map(str::to_owned),
+        })
+    };
+
+    let error = decide(Some("agent_previous_owner")).unwrap_err();
+
+    assert!(matches!(
+        WriteError(error).safe(),
+        WriteFailure::RecordOwnershipConflict { owner: None, .. }
+    ));
+    let state = store
+        .record_decision_state(&scope, NodeType::Source, &record_id)
+        .unwrap();
+    assert_eq!(state.decisions.len(), 0);
+    assert!(state.pending.is_some());
+    assert_eq!(store.list_threads(&scope).unwrap().len(), 0);
+    let retried = decide(None).unwrap();
+    assert!(retried.disposition_id.is_some());
+}
