@@ -259,11 +259,13 @@ async fn set_rule_description_bytes(
         .await
         .unwrap();
     let expression = crate::cache::read::page::byte_expression(Rule::COLUMNS);
-    let size: i64 = sqlx::query_scalar(&format!("SELECT {expression} FROM rules WHERE id = ?"))
-        .bind(id)
-        .fetch_one(cache.pool())
-        .await
-        .unwrap();
+    let size: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT {expression} FROM rules WHERE id = ?"
+    )))
+    .bind(id)
+    .fetch_one(cache.pool())
+    .await
+    .unwrap();
     cache.close().await.unwrap();
     usize::try_from(size).unwrap()
 }

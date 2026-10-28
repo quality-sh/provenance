@@ -80,11 +80,11 @@ impl<K: ProjectionRow> Table<'_, K> {
     /// Reads one canonical row only after its stored byte count passes the cap.
     pub(crate) async fn page_record(&self, id: &str) -> anyhow::Result<Option<K>> {
         let mut tx = self.snapshot().connection().await;
-        let size: Option<i64> = sqlx::query_scalar(&format!(
+        let size: Option<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
             byte_expression(K::COLUMNS),
             quoted(K::TABLE)
-        ))
+        )))
         .bind(self.snapshot().scope().as_str())
         .bind(id)
         .fetch_optional(&mut **tx)
@@ -93,11 +93,11 @@ impl<K: ProjectionRow> Table<'_, K> {
         if size.is_some_and(|size| size > maximum) {
             return Err(ReadFailure::PageRecordTooLarge.into());
         }
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
             select_columns::<K>(),
             quoted(K::TABLE)
-        ))
+        )))
         .bind(self.snapshot().scope().as_str())
         .bind(id)
         .fetch_optional(&mut **tx)
@@ -110,11 +110,11 @@ impl<K: ProjectionRow> Table<'_, K> {
     pub(crate) async fn resource_record(&self, id: &str) -> anyhow::Result<Option<K>> {
         let mut tx = self.snapshot().connection().await;
         let maximum = i64::try_from(RESOURCE_RECORD_BYTES)?;
-        let size: Option<i64> = sqlx::query_scalar(&format!(
+        let size: Option<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
             byte_expression(K::COLUMNS),
             quoted(K::TABLE)
-        ))
+        )))
         .bind(self.snapshot().scope().as_str())
         .bind(id)
         .fetch_optional(&mut **tx)
@@ -122,11 +122,11 @@ impl<K: ProjectionRow> Table<'_, K> {
         if size.is_some_and(|size| size > maximum) {
             return Err(ReadFailure::PageRecordTooLarge.into());
         }
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!(
             "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
             select_columns::<K>(),
             quoted(K::TABLE)
-        ))
+        )))
         .bind(self.snapshot().scope().as_str())
         .bind(id)
         .fetch_optional(&mut **tx)
@@ -148,7 +148,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         );
         let sql = id_page_sql(K::TABLE, &filter);
         let mut tx = self.snapshot().connection().await;
-        let rows = sqlx::query(&sql)
+        let rows = sqlx::query(sqlx::AssertSqlSafe(sql))
             .bind(self.snapshot().scope().as_str())
             .bind(after)
             .bind(i64::try_from(limit)?)
@@ -173,7 +173,7 @@ impl Table<'_, provenance_core::VerificationBinding> {
     ) -> anyhow::Result<Vec<String>> {
         let filter = rule.map_or("", |_| " AND rule_id = ?");
         let sql = id_page_sql("verification_bindings", filter);
-        let mut query = sqlx::query(&sql)
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(sql))
             .bind(self.snapshot().scope().as_str())
             .bind(after);
         if let Some(rule) = rule {
