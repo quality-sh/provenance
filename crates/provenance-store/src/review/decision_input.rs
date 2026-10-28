@@ -2,11 +2,13 @@ use provenance_core::{
     CanonicalArtifact, DispositionActor, DispositionDecision, IdeationEvidenceReference,
     MessageRole, ScopeId, StableId,
 };
+use provenance_macros::verifies;
 use serde::{Deserialize, Serialize};
 
 /// Submits the record's current review revision as an immutable `proposed`
 /// candidate. The store derives the binding; the caller never states it.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[verifies("rule_review_proposal_identity_server_created", construction)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SubmitRecordReview {
@@ -47,8 +49,8 @@ pub struct DecideRecordReview {
     /// ratified artifact instead of an assertion.
     pub canonical_artifact: Option<CanonicalArtifact>,
     pub feedback: Option<ReviewFeedback>,
-    /// The owning agent of the record under review, checked when feedback
-    /// opens a Discussion on it.
+    /// Optional owner check when feedback opens a Discussion. If absent,
+    /// feedback uses the stored record owner.
     pub declared_by: Option<String>,
 }
 
@@ -61,7 +63,7 @@ pub struct ReviewFeedback {
     pub body: String,
 }
 
-/// Withdraws a pending submission from review. The candidate, its feedback,
+/// Withdraws a pending or rejected submission from review. The candidate, its feedback,
 /// and the graph record all stay.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

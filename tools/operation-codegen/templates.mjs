@@ -73,8 +73,11 @@ function tsRequest(path, method, op) {
 ${query.map(parameter => `    if (call[${JSON.stringify(propertyName(parameter))}] !== undefined) query.set(${JSON.stringify(parameter.name)}, ${parameter.schema.type === 'array' ? `call[${JSON.stringify(propertyName(parameter))}]!.join(',')` : `String(call[${JSON.stringify(propertyName(parameter))}])`});`).join('\n')}
     if (query.size) url.search = query.toString();` : '';
   const headers = (op.parameters ?? []).filter(parameter => parameter.in === 'header');
-  const headerCode = [`'content-type': 'application/json'`, ...headers.map(parameter =>
-    `${JSON.stringify(parameter.name)}: String(call[${JSON.stringify(propertyName(parameter))}])`)].join(', ');
+  const headerCode = [`'content-type': 'application/json'`, ...headers.map(parameter => {
+    const value = `call[${JSON.stringify(propertyName(parameter))}]`;
+    const entry = `${JSON.stringify(parameter.name)}: String(${value})`;
+    return parameter.required ? entry : `...(${value} === undefined ? {} : { ${entry} })`;
+  })].join(', ');
   const body = op.requestBody ? `, body: JSON.stringify({ data: call.data })` : '';
   return `    const url = new URL(${url});${queryCode}
     const response = await send(this.fetcher, url, {
@@ -144,6 +147,7 @@ export const COMPATIBILITY = ${JSON.stringify(compatibility)} as const;
 export const PROTOCOL_VERSION = COMPATIBILITY.wire;
 export type OperationFailure = ${failureTypes.map(name => `components['schemas']['${name}']`).join(' | ')};
 ${queryTypes.join('\n')}
+// @provenance rule: rule_generated_sdk_operations_use_http
 export class HttpClient {
   private constructor(private readonly baseUrl: string, private readonly fetcher: typeof fetch) {}
   static async connectWithBearer(baseUrl: string, bearer: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal; repository?: string; scope?: string } = {}): Promise<HttpClient> {
@@ -156,6 +160,7 @@ export class HttpClient {
     };
     return HttpClient.connect(baseUrl, authenticated, options);
   }
+  // @provenance rule: rule_sdk_protocol_handshake
   static async connect(baseUrl: string, fetcher: typeof fetch = fetch, options: { signal?: AbortSignal; repository?: string; scope?: string } = {}): Promise<HttpClient> {
     const validate = await import('./validators/metadata.mjs');
     const url = new URL(baseUrl);
@@ -246,6 +251,15 @@ function rustQueryStatement(parameter, enums) {
     : `if let Some(value) = ${name} { request = request.query(&[(${JSON.stringify(parameter.name)}, ${bound})]); }`;
 }
 
+// An optional header, such as the If-Match guard of a Rule update, is sent
+// only when the caller supplies it.
+function rustHeaderStatement(parameter, enums) {
+  const name = JSON.stringify(parameter.name);
+  return parameter.required
+    ? `request = request.header(${name}, ${wireValue(parameter, enums)});`
+    : `if let Some(value) = ${propertyName(parameter)} { request = request.header(${name}, ${wireValue(parameter, enums, true)}); }`;
+}
+
 function rustUrl(path, pathParameters, enums) {
   if (pathParameters.length === 0) return `self.base_url.clone() + ${JSON.stringify(path)}`;
   const parameters = new Map(pathParameters.map(parameter => [parameter.name, parameter]));
@@ -269,9 +283,7 @@ function rustVariantRequest(path, method, op, variant, operation, enums) {
   const changesRequest = queryParameters.length > 0 || headerParameters.length > 0;
   setup += `\n                let ${changesRequest ? 'mut ' : ''}request = self.http.${method}(url);`;
   for (const parameter of queryParameters) setup += `\n                ${rustQueryStatement(parameter, enums)}`;
-  for (const parameter of headerParameters) {
-    setup += `\n                request = request.header(${JSON.stringify(parameter.name)}, ${wireValue(parameter, enums)});`;
-  }
+  for (const parameter of headerParameters) setup += `\n                ${rustHeaderStatement(parameter, enums)}`;
   return `${setup}
                 let response = request.send().await.map_err(|cause| runtime::connection("${operation}", false, cause))?;`;
 }
@@ -367,9 +379,7 @@ function rustRequest(path, method, op, operation, enums) {
   for (const parameter of queryParameters) {
     setup += `\n        ${rustQueryStatement(parameter, enums)}`;
   }
-  for (const parameter of headerParameters) {
-    setup += `\n        request = request.header(${JSON.stringify(parameter.name)}, ${wireValue(parameter, enums)});`;
-  }
+  for (const parameter of headerParameters) setup += `\n        ${rustHeaderStatement(parameter, enums)}`;
   if (op.requestBody) setup += `\n        request = request.json(call);`;
   return `${setup}
         let response = request.send().await.map_err(|cause| runtime::connection("${operation}", false, cause))?;`;

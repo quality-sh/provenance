@@ -2,6 +2,10 @@
 # Bound process concurrency even when the runner receives extra CPUs.
 test-threads = 8
 
+[profile.ci.junit]
+# target/nextest/ci/junit.xml; CI uploads it for TAG, the test aggregator.
+path = "junit.xml"
+
 [test-groups.cargo]
 max-threads = 1
 
@@ -26,3 +30,18 @@ filter = 'binary(cargo_nested_sdk) | binary(compile_fail) | binary(relation_deri
 test-group = "cargo"
 threads-required = 4
 priority = 90
+
+[[profile.default.overrides]]
+# Real host event tests must fail within minutes if an operation stops.
+filter = 'binary(/^cli_review_events/) & !test(repeat_kernel_queue_loss_thirty_times)'
+slow-timeout = { period = "60s", terminate-after = 3 }
+
+[[profile.default.overrides]]
+# The manual stress check includes 30 repetitions but also has a process limit.
+filter = 'binary(cli_review_events_recovery) & test(repeat_kernel_queue_loss_thirty_times)'
+slow-timeout = { period = "60s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+# A blocked OS lock cannot be cancelled by an async timeout.
+filter = 'binary(page_write_response)'
+slow-timeout = { period = "30s", terminate-after = 2 }

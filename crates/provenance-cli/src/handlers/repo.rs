@@ -3,7 +3,7 @@ use crate::init_summary::{scope_phrase, InitEnding, InitSummary};
 use crate::skills::{FileStatus, InstallReport};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{Manifest, RepoPathPrefix, Scope, ScopeId};
+use provenance_core::{Manifest, ScopeId};
 use provenance_macros::rule;
 use provenance_store::layout::ProvenanceLayout;
 
@@ -56,52 +56,38 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
     let layout = ProvenanceLayout::new(path.to_path_buf());
     let manifest_before = FileSnapshot::read(layout.manifest_path().as_std_path())?;
     let manifest_exists = manifest_before.bytes().is_some();
-    anyhow::ensure!(
-        disposition_actor_ids.iter().all(|id| !id.trim().is_empty()),
-        "disposition actor IDs must not be empty"
-    );
-    let mut manifest = if manifest_exists {
-        parse_manifest(
-            manifest_before
-                .bytes()
-                .ok_or_else(|| anyhow::anyhow!("manifest disappeared during init"))?,
-            layout.manifest_path().as_std_path(),
-        )?
-    } else {
-        let scope = scope.as_deref().unwrap_or("default");
-        Manifest::default_with_scope(
-            ScopeId::new(scope)?,
-            RepoPathPrefix::new(
-                path_prefix
-                    .clone()
-                    .unwrap_or_else(|| Utf8PathBuf::from(".")),
-            ),
-        )
-    };
-
-    let reviewer_notice =
+    let reviewer =
         if !manifest_exists && disposition_actor_ids.is_empty() && !clear_disposition_actors {
-            let reviewer = crate::reviewer::select(path)?;
-            if let Some(actor_id) = reviewer.actor_id {
-                manifest.disposition_actor_ids.push(actor_id);
-            }
-            Some(reviewer.notice)
+            Some(crate::reviewer::select(path)?)
         } else {
             None
         };
-
-    if manifest_exists {
-        update_scope(&mut manifest, scope, path_prefix)?;
-    }
-    if clear_disposition_actors {
-        manifest.disposition_actor_ids.clear();
-    } else if !disposition_actor_ids.is_empty() {
-        manifest.disposition_actor_ids = disposition_actor_ids;
-    }
+    let existing = manifest_before
+        .bytes()
+        .map(|bytes| parse_manifest(bytes, layout.manifest_path().as_std_path()))
+        .transpose()?;
+    let manifest = provenance_store::repository_init::plan_manifest(
+        existing,
+        scope.as_deref(),
+        path_prefix,
+        disposition_actor_ids,
+        clear_disposition_actors,
+        reviewer
+            .as_ref()
+            .and_then(|reviewer| reviewer.actor_id.clone()),
+    )?;
+    let reviewer_notice = reviewer.map(|reviewer| reviewer.notice);
     let manifest_bytes = format!("{}\n", serde_json::to_string_pretty(&manifest)?).into_bytes();
     let skills = crate::skills::plan_init_at(path.as_std_path())
         .context("failed to plan the bundled Provenance skills")?;
-    let planned = PlannedFiles::plan(path, &invocation, manifest_before, manifest_bytes)?;
+    let guidance_scope = crate::onboarding::guidance_scope(path, scope.as_deref(), &manifest)?;
+    let planned = PlannedFiles::plan(
+        path,
+        &invocation,
+        &guidance_scope,
+        manifest_before,
+        manifest_bytes,
+    )?;
     super::check::validate_repository_with_manifest(path, &manifest)
         .context("the planned Provenance state is not valid")?;
     let dictionary = crate::ste_onboarding::prepare(path, ste_pdf.as_deref())?;
@@ -136,13 +122,14 @@ impl PlannedFiles {
     fn plan(
         path: &Utf8Path,
         invocation: &crate::onboarding::Invocation,
+        scope: &str,
         manifest_before: FileSnapshot,
         manifest_bytes: Vec<u8>,
     ) -> anyhow::Result<Self> {
         let agents_before = FileSnapshot::read(path.join("AGENTS.md").as_std_path())?;
         let without_legacy =
             crate::legacy_cleanup::project_agents(agents_before.bytes().unwrap_or_default());
-        let agents_bytes = crate::onboarding::project(&without_legacy, invocation)?;
+        let agents_bytes = crate::onboarding::project(&without_legacy, invocation, scope)?;
         let agents_had_section = String::from_utf8(without_legacy)
             .is_ok_and(|text| crate::onboarding::owns_section(&text));
         let gitignore_before = FileSnapshot::read(path.join(".gitignore").as_std_path())?;
@@ -375,28 +362,6 @@ fn parse_manifest(bytes: &[u8], path: &std::path::Path) -> anyhow::Result<Manife
         .with_context(|| format!("failed to parse manifest {}", path.display()))?;
     provenance_core::ensure_supported_schema_version("manifest", manifest.schema_version)?;
     Ok(manifest)
-}
-
-fn update_scope(
-    manifest: &mut Manifest,
-    scope: Option<String>,
-    path_prefix: Option<Utf8PathBuf>,
-) -> anyhow::Result<()> {
-    let Some(scope) = scope else {
-        return Ok(());
-    };
-    let scope_id = ScopeId::new(scope)?;
-    if let Some(existing) = manifest.scopes.iter_mut().find(|item| item.id == scope_id) {
-        if let Some(path_prefix) = path_prefix {
-            existing.path_prefix = RepoPathPrefix::new(path_prefix);
-        }
-    } else {
-        manifest.scopes.push(Scope {
-            id: scope_id,
-            path_prefix: RepoPathPrefix::new(path_prefix.unwrap_or_else(|| Utf8PathBuf::from("."))),
-        });
-    }
-    Ok(())
 }
 
 #[cfg(test)]

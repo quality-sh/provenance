@@ -179,13 +179,17 @@ macro_rules! review_resource {
             concat!("update", $singular_id),
             HttpMethod::Patch,
             concat!("/", $plural, "/{id}"),
-            concat!("Apply a partial change to one ", $singular, "."),
+            concat!(
+                "Apply a partial change to one ",
+                $singular,
+                ". After rejection, this guarded update opens the new submission."
+            ),
             ResponseKind::Resource,
             vec![schema::path("id")],
         )
         .scope("scope_id");
-        let update = if matches!($target_kind, Some(NodeType::Topic | NodeType::Question)) {
-            update.header("If-Match", "expected_etag", true)
+        let update = if let Some(kind) = $target_kind {
+            update.review_update_guard(kind)
         } else {
             update
         };

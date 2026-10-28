@@ -268,7 +268,7 @@ async fn reply_grant_does_not_admit_start() {
     let repository = Repository::new("A requirement has discussions.");
     let store = provenance_store::state_store::StateStore::new(repository.layout.clone());
     let request = serde_json::from_value(json!({
-        "scope_id":"default", "request_id":"initial_start", "actor":"ben",
+        "scope_id":"default", "actor":"ben",
         "declared_by":null,
         "parent":{"node_type":"requirement","node_id":"req_shared"},
         "action":{"kind":"start","role":"user","body":"Opening text"}
@@ -324,15 +324,15 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
     repository.all_kinds();
     let store = provenance_store::state_store::StateStore::new(repository.layout.clone());
     let mut source = None;
-    for (request_id, node_type, node_id) in [
+    for (body, node_type, node_id) in [
         ("req_start", "requirement", "req_shared"),
         ("source_start", "source", "source_shared"),
     ] {
         let request = serde_json::from_value(json!({
-            "scope_id":"default", "request_id":request_id, "actor":"ben",
+            "scope_id":"default", "actor":"ben",
             "declared_by":null,
             "parent":{"node_type":node_type,"node_id":node_id},
-            "action":{"kind":"start","role":"user","body":request_id}
+            "action":{"kind":"start","role":"user","body":body}
         }))
         .unwrap();
         let receipt = store.write_discussion(request).unwrap();

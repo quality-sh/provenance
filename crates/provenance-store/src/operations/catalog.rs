@@ -44,7 +44,7 @@ pub use discussion_discovery::*;
 pub use discussion_reads::*;
 pub use discussion_writes::*;
 pub use requirement_review::*;
-pub use resource_members::GetReviewedResource;
+pub use resource_members::{GetReviewedResource, ReviewResource, ReviewedResourceRequest};
 pub use review_reads::*;
 pub use updates::*;
 
@@ -66,28 +66,27 @@ pub use creation::{
     PostThreadMessage,
 };
 pub use discussions::{ListMessages, ListThreads};
-pub use entry::{Operation, OperationFuture, WireSchema};
+pub use entry::{Invoke, Operation, OperationFuture, WireSchema};
 pub use ideation::{
     CreateAssertion, CreateDisposition, CreateProposal, ListAssertions, ListDispositions,
     ListProposals,
 };
-pub use invoke::{
-    invoke, invoke_authorized_native_typed, invoke_authorized_typed, invoke_typed, invoke_with,
-};
+#[cfg(test)]
+pub use invoke::invoke;
+#[cfg(any(test, feature = "test-fixture"))]
+pub use invoke::Direct;
+pub use invoke::{invoke_authorized_typed, invoke_typed, invoke_with};
 
 #[cfg(test)]
 pub(crate) fn registered_operation_names_for_test() -> Vec<&'static str> {
-    entry::entries()
-        .into_iter()
-        .map(|entry| entry.name)
-        .collect()
+    entry::names().map(|(name, _)| name).collect()
 }
 #[cfg(feature = "schema")]
 pub use schema::{
-    definitions, operation_request_schema, operation_success_schema, parse_parameter_value,
-    parse_schema_value, parse_schema_value_in, serialize_parameter_value, target_definition,
-    target_definitions, Definition, HttpMethod, Parameter, ParseValueError, QueryVariant,
-    ResponseKind,
+    cli_name, definitions, json_flag, operation_request_schema, operation_success_schema,
+    parse_parameter_value, parse_schema_value, parse_schema_value_in, serialize_parameter_value,
+    target_definition, target_definitions, Definition, HttpMethod, Parameter, ParseValueError,
+    QueryVariant, ResponseKind,
 };
 pub use statement::CheckStatement;
 pub use target_discussion_writes::{WriteTargetDiscussion, WriteTargetDiscussionRequest};
@@ -99,7 +98,7 @@ pub use records::{Get, Info, Neighbors, ReadDocument, ResolveRecord, Search, Tra
 
 /// Lookup uses registry identities without deriving or cloning wire schemas.
 pub fn contains(operation: &str) -> bool {
-    entry::entries().iter().any(|entry| entry.name == operation)
+    entry::names().any(|(name, _)| name == operation)
 }
 
 pub use evidence::{
@@ -107,7 +106,5 @@ pub use evidence::{
 };
 
 pub fn mutates(operation: &str) -> bool {
-    entry::entries()
-        .iter()
-        .any(|entry| entry.name == operation && entry.mutates)
+    entry::names().any(|(name, mutates)| name == operation && mutates)
 }

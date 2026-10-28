@@ -69,6 +69,7 @@ pub async fn dispatch_target(
             input.entry(field).or_insert_with(|| json!(value));
         }
     }
+    ensure_required_flags(&schema, action, &input);
     let outcome = service
         .execute_discussion(action, Value::Object(input))
         .await?;
@@ -88,4 +89,19 @@ fn print(
         );
     }
     Ok(())
+}
+
+/// A Discussion action that lacks a required option is a usage error, so
+/// the shell sees exit code 2 and the flag name, not a host refusal.
+fn ensure_required_flags(schema: &Value, action: Action, input: &serde_json::Map<String, Value>) {
+    let missing = crate::catalog_cli::required_discussion_flags(schema, action)
+        .into_iter()
+        .filter(|flag| !input.contains_key(&flag.replace('-', "_")))
+        .collect::<Vec<_>>();
+    if let Some(first) = missing.first() {
+        crate::catalog_cli::usage_error(anyhow::anyhow!(
+            "--{first} is required for {}",
+            action.as_str()
+        ));
+    }
 }

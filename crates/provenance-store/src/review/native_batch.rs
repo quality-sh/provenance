@@ -1,8 +1,8 @@
 //! Canonical staged writer for one or more native graph record changes.
 
-use super::{guard, journal};
+use super::guard;
 use crate::{
-    publication::with_staged_state,
+    review::publication::with_record_state,
     state_store::{
         read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, StateStore,
     },
@@ -21,7 +21,7 @@ impl StateStore {
         write: impl FnOnce(&NativeRecordBatch<'_>) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         let stamp = self.current_record_stamp()?;
-        with_staged_state(&self.layout, false, |layout| {
+        with_record_state(&self.layout, |layout| {
             let staged = Self::staged(layout.clone(), stamp);
             write(&NativeRecordBatch { store: &staged })
         })
@@ -85,7 +85,7 @@ impl NativeRecordBatch<'_> {
         T: GraphRecord,
     {
         guard::with_writer(path, "*", || {
-            let (result, mut changes) =
+            let (result, changes) =
                 self.store
                     .mutate_jsonl_records(path, |records: &mut Vec<T>| {
                         let before = records.clone();
@@ -93,7 +93,7 @@ impl NativeRecordBatch<'_> {
                         self.store.stamp_records(&before, records)?;
                         ensure_slice_within_read_budget(records)?;
                         if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
-                            check_etag(self.store, &before, id, expected)?;
+                            check_etag(&before, id, expected)?;
                         }
                         let changes = records
                             .iter()
@@ -105,59 +105,22 @@ impl NativeRecordBatch<'_> {
                             .collect::<Vec<_>>();
                         Ok((result, changes))
                     })?;
-            for (_, after) in &mut changes {
-                if native_record_is_closed(path, T::KIND, after.id())? {
-                    *after = self.store.enroll_graph_record::<T>(path, after.id())?;
-                }
-            }
-            for (before, after) in &changes {
-                let before: ReviewRecord = before.clone().into();
-                let after: ReviewRecord = after.clone().into();
-                self.store.commit_native_occurrence(Some(&before), &after)?;
-            }
             if let Some((_, after)) = changes.first() {
                 let review: ReviewRecord = after.clone().into();
                 self.store.validate_graph_scope(review.scope_id())?;
-                self.store.enroll_review_manifest()?;
             }
             Ok((result, changes))
         })
     }
 }
 
-fn native_record_is_closed(
-    path: &Utf8Path,
-    kind: provenance_core::NodeType,
-    id: &StableId,
-) -> anyhow::Result<bool> {
-    let contents = std::fs::read_to_string(path)?;
-    let mut matched = None;
-    for line in contents.lines() {
-        let value: serde_json::Value = serde_json::from_str(line)?;
-        if value["id"].as_str() == Some(id.as_str()) {
-            matched = Some(value);
-            break;
-        }
-    }
-    let value = matched.ok_or_else(|| anyhow::anyhow!("updated graph record is missing"))?;
-    Ok(ReviewRecord::deserialize_closed(kind, &value).is_ok())
-}
-
-fn check_etag<T: GraphRecord>(
-    store: &StateStore,
-    before: &[T],
-    id: &StableId,
-    expected: &str,
-) -> anyhow::Result<()> {
+fn check_etag<T: GraphRecord>(before: &[T], id: &StableId, expected: &str) -> anyhow::Result<()> {
     let record = before
         .iter()
         .find(|record| record.id() == id)
         .ok_or_else(|| anyhow::anyhow!("native update cannot create a graph record"))?;
     let record: ReviewRecord = record.clone().into();
-    let current_etag = store
-        .head(&record)?
-        .map(|entry| entry.etag)
-        .unwrap_or(journal::etag(&record, None)?);
+    let current_etag = super::save::etag(&record)?;
     if expected != current_etag {
         return Err(SourceFailure::wrap(
             WriteFailure::RecordEditConflict {

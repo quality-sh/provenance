@@ -4,7 +4,7 @@ use crate::action::{Action, ActionError};
 use provenance_core::{
     protocol::{Stamp, Stamped},
     threads::{
-        DiscussionConversationResult, DiscussionEntry, DiscussionResultPage, DiscussionStatus,
+        Discussion, DiscussionConversationResult, DiscussionResultPage, DiscussionStatus,
         DiscussionStatusFilter, DiscussionSummary,
     },
     MessageRole, ScopeId, StableId, ThreadParent,
@@ -107,7 +107,7 @@ pub enum DiscussionOutcome {
         freshness_error: Option<String>,
     },
     Written {
-        receipt: DiscussionEntry,
+        receipt: Discussion,
     },
 }
 
@@ -127,8 +127,8 @@ pub trait DiscussionPort: Send + Sync {
         &self,
         input: ConversationInput,
     ) -> PortFuture<'_, Stamped<DiscussionConversationResult>>;
-    fn start(&self, input: StartInput) -> PortFuture<'_, DiscussionEntry>;
-    fn reply(&self, input: ReplyInput) -> PortFuture<'_, DiscussionEntry>;
+    fn start(&self, input: StartInput) -> PortFuture<'_, Discussion>;
+    fn reply(&self, input: ReplyInput) -> PortFuture<'_, Discussion>;
 }
 
 impl<P: DiscussionPort> crate::Porcelain<P> {
@@ -270,12 +270,14 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
             ..
         } => {
             let head = &result.head;
-            let mut lines =
-                vec![format!(
-                "discussion {} parent={} {} status={} version={} thread={} request={} digest={}",
-                head.discussion_id.as_str(), head.parent.node_type.as_str(),
-                head.parent.node_id.as_str(), status_word(head.status), head.version,
-                head.thread_id.as_str(), head.request_id.as_str(), head.intent_digest
+            let mut lines = vec![format!(
+                "discussion {} parent={} {} status={} version={} thread={}",
+                head.discussion_id.as_str(),
+                head.parent.node_type.as_str(),
+                head.parent.node_id.as_str(),
+                status_word(head.status),
+                head.version,
+                head.thread_id.as_str()
             )];
             for message in &result.messages.entries {
                 lines.push(format!(
@@ -296,15 +298,13 @@ pub fn render_readable(outcome: &DiscussionOutcome) -> String {
             lines.join("\n")
         }
         DiscussionOutcome::Written { receipt } => format!(
-            "discussion {} parent={} {} status={} version={} message={} request={} digest={}",
+            "discussion {} parent={} {} status={} version={} message={}",
             receipt.discussion_id.as_str(),
             receipt.parent.node_type.as_str(),
             receipt.parent.node_id.as_str(),
             status_word(receipt.status),
             receipt.version,
-            receipt.message_id.as_ref().map_or("none", StableId::as_str),
-            receipt.request_id.as_str(),
-            receipt.intent_digest
+            receipt.message_ids.last().map_or("none", StableId::as_str),
         ),
     }
 }

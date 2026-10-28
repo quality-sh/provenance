@@ -2,15 +2,7 @@
 name: provenance-fork-tournament
 description: Run a fork tournament when a shaping session hits a genuine design fork — mutually exclusive directions, expensive to reverse, and the human's preference unknowable without concrete artifacts to react to. Implements the `prototype` resolution method from docs/shaping.md - spawn stance-based agents producing competing artifacts as proposals (phase 1, end session), then present them for human disposal and land the decision as a Resolution (phase 2).
 ---
-<!-- Installed by provenance 0.2.3; content hash fnv1a64:0f8ec34a6519166a -->
-
-## Human review links
-
-Before you ask a person to review a record, start the review host if it is not
-running: `provenance review --repo . --repository-id local --scope default`.
-Get the review URL with
-`provenance <record-id> get --review-link --format json`. Give the person the
-review URL. Never give the person a record ID.
+<!-- Installed by provenance 0.3.0; content hash fnv1a64:e8f8197c8a760c8b -->
 
 # Fork tournament (`prototype`)
 
@@ -112,10 +104,13 @@ provenance questions <question_id> claim --scope <scope> \
     Include one exact `suggested_artifacts` entry for every competing proposal. Each
     entry's `proposal_id`, key, and type must match its proposal definition.
 
-4. **Mark the Question `blocked_on_human`** and post the Proposal IDs to a Discussion:
+4. **Mark the Question `blocked_on_human`** and post the Proposal IDs to a Discussion.
+   A Question update needs the current etag from `data.edit.etag` of the read:
 
     ```sh
+    provenance questions <question_id> get --scope <scope> --format json
     provenance questions <question_id> update --scope <scope> \
+      --if-match <etag> \
       --status blocked_on_human
 
     provenance questions <question_id> discussions create --scope <scope> \
@@ -222,10 +217,11 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
 
 ## CLI gaps and conventions (as of this writing)
 
-- **Question status and method are first-class** — use `questions <id> update --status
-  blocked_on_human` for the phase boundary, and `questions <id> update --method prototype`
-  if an existing Question has the wrong method. Keep the Discussion Message because the
-  Proposal IDs are not Question link targets.
+- **Question status and method are first-class** — use `questions <id> update --if-match
+  <etag> --status blocked_on_human` for the phase boundary, and `questions <id> update
+  --if-match <etag> --method prototype` if an existing Question has the wrong method. Every
+  Question update carries the current `data.edit.etag` from `questions <id> get`. Keep the
+  Discussion Message because the Proposal IDs are not Question link targets.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an
   assertion only when the exact proposal suggestion has positive owned evidence and no
   contested claim or blocking adjudication. `dispositions` is the sole authority for

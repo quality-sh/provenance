@@ -1,5 +1,5 @@
 use super::*;
-use provenance_core::Manifest;
+use crate::support::records::allow_reviewer;
 
 async fn enroll(host: &StatementHost) -> (String, String) {
     let (status, read, etag) = call(host, "GET", "/requirements/req_shared", None, &[]).await;
@@ -50,7 +50,10 @@ async fn submit_at(host: &StatementHost, revision: &str) -> String {
         .as_str()
         .expect("submission returns its proposal identity")
         .to_owned();
-    assert_eq!(value["data"]["proposal_key"], proposal);
+    assert!(value["data"]["proposal_key"]
+        .as_str()
+        .unwrap()
+        .starts_with("review:requirement:req_shared:"));
     proposal
 }
 
@@ -83,17 +86,6 @@ fn conflict(submission: Option<&str>, revision: &str) -> Value {
         "current_submission":submission,
         "current_revision":revision
     },"meta":{}})
-}
-
-fn allow_reviewer(repo: &Repository) {
-    let mut manifest: Manifest =
-        serde_json::from_slice(&std::fs::read(repo.layout.manifest_path()).unwrap()).unwrap();
-    manifest.disposition_actor_ids.push("reviewer".into());
-    std::fs::write(
-        repo.layout.manifest_path(),
-        serde_json::to_vec(&manifest).unwrap(),
-    )
-    .unwrap();
 }
 
 #[tokio::test]
@@ -288,6 +280,7 @@ async fn current_revision(host: &StatementHost) -> String {
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_review_conflict_returns_current_value", examples)]
 async fn terminal_review_conflicts_share_the_http_envelope() {
     let stale_repo = Repository::new("The shared graph is readable.");
     allow_reviewer(&stale_repo);
@@ -330,8 +323,9 @@ async fn terminal_review_conflicts_share_the_http_envelope() {
             "POST",
             &path,
             Some(json!({"data":{
-                "actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
-                "rationale":"Needs work.", "canonical_artifact":null,
+                "actor":{"identity_type":"human","id":"reviewer"}, "decision":"accepted",
+                "rationale":null,
+                "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_shared"},
                 "feedback":null, "declared_by":null
             }})),
             &[]

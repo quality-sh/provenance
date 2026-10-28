@@ -41,11 +41,7 @@ fn seed() -> (tempfile::TempDir, StateStore, ScopeId) {
 
 fn etag(store: &StateStore, scope: &ScopeId, kind: NodeType, record_id: &str) -> String {
     store
-        .review_entries(scope)
-        .unwrap()
-        .into_iter()
-        .filter(|entry| entry.record_kind == kind && entry.record_id.as_str() == record_id)
-        .max_by_key(|entry| entry.sequence)
+        .record_edit_state(scope, kind, &StableId::new(record_id).unwrap())
         .unwrap()
         .etag
 }

@@ -1,4 +1,4 @@
-import { buildBinary } from './cargo.mjs';
+import { buildBinary, workspaceDependencyVersions } from './cargo.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cp, mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
@@ -70,7 +70,11 @@ const name: string = source.name;
     await mkdir(join(temporary, 'src'), { recursive: true });
     run(buildBinary(root, ['--locked', '-p', 'provenance-codegen', '--bin', 'provenance-codegen'], 'provenance-codegen'), ['rust', join(root, 'contracts/operations/fixtures.openapi.json'), join(temporary, 'src/generated')]);
     await writeFile(join(temporary, 'fixtures.json'), JSON.stringify(document['x-wire-fixtures']));
-    await writeFile(join(temporary, 'Cargo.toml'), `[package]\nname="operation-generator-candidate"\nversion="0.0.0"\nedition="2021"\n[workspace]\n[dependencies]\nserde={version="=1.0.228",features=["derive"]}\nserde_json="=1.0.150"\nchrono={version="=0.4.45",features=["serde"]}\nuuid={version="=1.24.0",features=["serde"]}\nregress="=0.11.1"\n`);
+    // Read the root lockfile through Cargo so duplicate package names use workspace edges.
+    const metadata = spawnSync('cargo', ['metadata', '--locked', '--format-version', '1'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+    assert.equal(metadata.status, 0, metadata.stdout + metadata.stderr);
+    const versions = workspaceDependencyVersions(JSON.parse(metadata.stdout), ['serde', 'serde_json', 'chrono', 'uuid', 'regress']);
+    await writeFile(join(temporary, 'Cargo.toml'), `[package]\nname="operation-generator-candidate"\nversion="0.0.0"\nedition="2021"\n[workspace]\n[dependencies]\nserde={version="=${versions.serde}",features=["derive"]}\nserde_json="=${versions.serde_json}"\nchrono={version="=${versions.chrono}",features=["serde"]}\nuuid={version="=${versions.uuid}",features=["serde"]}\nregress="=${versions.regress}"\n`);
     await writeFile(join(temporary, 'Cargo.lock'), await readFile(join(root, 'Cargo.lock')));
     const roundtrips = Object.keys(document['x-wire-fixtures']).map(name => `let decoded: ${name} = serde_json::from_value(fixtures["${name}"].clone()).unwrap(); assert_eq!(serde_json::to_value(decoded).unwrap(), fixtures["${name}"], "${name}");`).join('\n');
     await writeFile(join(temporary, 'src/lib.rs'), `#![allow(dead_code)]\ninclude!("generated/types.rs");\n#[test] fn actual_wire_values_round_trip() { let fixtures: serde_json::Value = serde_json::from_str(include_str!("../fixtures.json")).unwrap(); ${roundtrips} }\n#[test] fn numeric_issue_is_closed() { let mut report: serde_json::Value = serde_json::from_str(include_str!("../fixtures.json")).unwrap(); report["ReportOutput"]["issue"] = serde_json::json!(8); assert!(serde_json::from_value::<ReportOutput>(report["ReportOutput"].clone()).is_err()); }\n#[test] fn query_default_and_wire_types_survive_generation() { let search: SearchInput = serde_json::from_value(serde_json::json!({"text":"x"})).unwrap(); assert_eq!(serde_json::to_value(search.limit).unwrap(), serde_json::json!(50)); let filter_only: SearchInput = serde_json::from_value(serde_json::json!({"node_types":["requirement"]})).unwrap(); assert_eq!(serde_json::to_value(filter_only.text).unwrap(), serde_json::Value::Null); for limit in [serde_json::Value::Null,serde_json::json!("50")] { assert!(serde_json::from_value::<SearchInput>(serde_json::json!({"text":"x","limit":limit})).is_err(), "accepted limit {limit}"); } for limit in [1,200] { assert!(serde_json::from_value::<SearchInput>(serde_json::json!({"text":"x","limit":limit})).is_ok()); } assert!(serde_json::from_value::<SearchInput>(serde_json::json!({"text":"x","node_types":null})).is_err()); }`);

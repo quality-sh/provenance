@@ -14,13 +14,19 @@ pub mod layout;
 pub mod merge;
 pub mod operations;
 pub mod publication;
+pub mod repository_init;
 pub mod review;
+pub mod review_changes;
 pub mod settings;
 pub mod shards;
 pub mod stale;
 pub mod state_store;
 pub mod statement_analysis;
 mod test_probes;
+#[cfg(test)]
+extern crate self as provenance_store;
+#[cfg(test)]
+mod test_support;
 
 /// The validator version that a completed projection rebuild records.
 ///

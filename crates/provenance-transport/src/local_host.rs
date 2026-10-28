@@ -15,6 +15,10 @@ use std::{
 use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 
 pub const IDENTITY_ROUTE: &str = "/local-host-identity";
+/// Issues a review launch code to a caller that sends the launch key.
+pub const LAUNCH_CODE_ROUTE: &str = "/review-launch/code";
+/// Exchanges a review launch code for the page session one time.
+pub const LAUNCH_SESSION_ROUTE: &str = "/review-launch/session";
 const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -51,12 +55,13 @@ impl RegistryRecord {
 pub struct LocalHostRegistration {
     path: PathBuf,
     lock_path: PathBuf,
-    identity: LocalHostIdentity,
+    record: RegistryRecord,
 }
 
 impl LocalHostRegistration {
-    #[rule("rule_single_local_host_per_repository_scope")]
-    pub fn publish(
+    /// Names a new host instance for the location without publishing it, so the host can
+    /// answer before clients can discover it.
+    pub fn prepare(
         root: &Path,
         scope: &str,
         endpoint: &str,
@@ -65,45 +70,63 @@ impl LocalHostRegistration {
         let root = canonical_root(root)?;
         validate_scope(scope)?;
         validate_endpoint(endpoint).context("local host endpoint is not a loopback base URL")?;
-        let path = registry_path(&root, scope);
-        let directory = path.parent().expect("registry file has a parent");
+        Ok(Self {
+            path: registry_path(&root, scope),
+            lock_path: lock_path(&root, scope),
+            record: RegistryRecord {
+                schema_version: SCHEMA_VERSION,
+                endpoint: endpoint.to_owned(),
+                repository_id: repository_id.to_owned(),
+                scope: scope.to_owned(),
+                instance_nonce: uuid::Uuid::new_v4().simple().to_string(),
+            },
+        })
+    }
+
+    /// Publishes the prepared record. Refuses while another live host owns the slot.
+    #[rule("rule_single_local_host_per_repository_scope")]
+    #[rule("rule_local_host_registry_owner_only")]
+    pub fn announce(&self) -> anyhow::Result<()> {
+        let directory = self.path.parent().expect("registry file has a parent");
         secure_directory(directory)?;
-        let lock_path = lock_path(&root, scope);
-        let lock = lock(&lock_path)?;
-        if let Some(existing) = read_secure(&path) {
+        let lock = lock(&self.lock_path)?;
+        if let Some(existing) = read_secure(&self.path) {
             anyhow::ensure!(
                 !verified(&existing),
                 "repository and scope already has a running local host"
             );
         }
-        let record = RegistryRecord {
-            schema_version: SCHEMA_VERSION,
-            endpoint: endpoint.to_owned(),
-            repository_id: repository_id.to_owned(),
-            scope: scope.to_owned(),
-            instance_nonce: uuid::Uuid::new_v4().simple().to_string(),
-        };
-        replace(&path, &record)?;
+        replace(&self.path, &self.record)?;
         fs2::FileExt::unlock(&lock)?;
-        Ok(Self {
-            path,
-            lock_path,
-            identity: record.identity(),
-        })
+        Ok(())
+    }
+
+    /// Names and publishes a host instance in one step.
+    pub fn publish(
+        root: &Path,
+        scope: &str,
+        endpoint: &str,
+        repository_id: &str,
+    ) -> anyhow::Result<Self> {
+        let registration = Self::prepare(root, scope, endpoint, repository_id)?;
+        registration.announce()?;
+        Ok(registration)
     }
 
     pub fn identity(&self) -> LocalHostIdentity {
-        self.identity.clone()
+        self.record.identity()
     }
 }
 
 impl Drop for LocalHostRegistration {
+    /// Removes the registration only while it still names this host instance.
+    #[rule("rule_local_host_stop_removes_own_registry")]
     fn drop(&mut self) {
         let Ok(lock) = lock(&self.lock_path) else {
             return;
         };
         if read_record(&self.path)
-            .is_some_and(|record| record.instance_nonce == self.identity.instance_nonce)
+            .is_some_and(|record| record.instance_nonce == self.record.instance_nonce)
         {
             let _ = std::fs::remove_file(&self.path);
         }
@@ -114,11 +137,23 @@ impl Drop for LocalHostRegistration {
 #[derive(Clone, Debug)]
 pub struct DiscoveredLocalHost {
     endpoint: url::Url,
+    repository_id: String,
+    instance_nonce: String,
 }
 
 impl DiscoveredLocalHost {
     pub const fn endpoint(&self) -> &url::Url {
         &self.endpoint
+    }
+
+    /// The repository ID that the verified host serves.
+    pub fn repository_id(&self) -> &str {
+        &self.repository_id
+    }
+
+    /// Names the verified host instance.
+    pub fn instance_nonce(&self) -> &str {
+        &self.instance_nonce
     }
 }
 
@@ -134,6 +169,8 @@ pub fn discover(root: &Path, scope: &str) -> anyhow::Result<Option<DiscoveredLoc
     if record.schema_version == SCHEMA_VERSION && record.scope == scope && verified(&record) {
         return Ok(Some(DiscoveredLocalHost {
             endpoint: validate_endpoint(&record.endpoint)?,
+            repository_id: record.repository_id,
+            instance_nonce: record.instance_nonce,
         }));
     }
     remove_stale(&root, scope, &record.instance_nonce)?;
@@ -251,6 +288,8 @@ fn replace(path: &Path, record: &RegistryRecord) -> anyhow::Result<()> {
     result
 }
 
+/// Removes the registry record only if it still names the stale host.
+#[rule("rule_local_host_discovery_removes_stale_registry")]
 fn remove_stale(root: &Path, scope: &str, nonce: &str) -> anyhow::Result<()> {
     let path = registry_path(root, scope);
     let lock = lock(&lock_path(root, scope))?;

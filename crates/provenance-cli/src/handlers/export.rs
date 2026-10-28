@@ -63,21 +63,16 @@ impl ScopeExport {
     }
 }
 
-pub fn export_scope(repo: Utf8PathBuf, scope: String) -> anyhow::Result<ScopeExport> {
-    export_context(&RepoContext::new(repo, scope))
-}
-
 fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
     let scope_id = context.scope_id()?;
+    context.declared_scope()?;
     let store = context.open_graph()?;
     store.with_repository_publication(|| {
+        let snapshot = store.snapshot(&scope_id)?;
         store.ensure_review_portable(&scope_id)?;
         store.validate_ideation_scope(&scope_id)?;
         store.validate_graph_scope(&scope_id)?;
-        Ok(ScopeExport::from_snapshot(
-            context.scope.clone(),
-            store.snapshot(&scope_id)?,
-        ))
+        Ok(ScopeExport::from_snapshot(context.scope.clone(), snapshot))
     })
 }
 

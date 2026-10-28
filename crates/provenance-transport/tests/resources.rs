@@ -89,7 +89,7 @@ async fn all_addressed_discussion_routes_work_for_questions() {
     let (status, started) = call_with_headers(&host, "POST", parent, Some(start), &[]).await;
     assert_eq!(status, 200, "{started}");
     let discussion_id = started["data"]["discussion_id"].as_str().unwrap();
-    let root_message_id = started["data"]["message_id"].as_str().unwrap();
+    let root_message_id = started["data"]["root_message_id"].as_str().unwrap();
 
     let (status, listed) = call(&host, "GET", parent, None).await;
     assert_eq!(status, 200, "{listed}");

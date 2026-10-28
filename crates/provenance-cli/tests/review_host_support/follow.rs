@@ -1,0 +1,155 @@
+//! Public CLI stream fixture with bounded waits and child cleanup.
+use super::{waits, Host};
+use serde_json::Value;
+use std::{
+    io::{BufRead, BufReader},
+    path::Path,
+    process::{Child, Stdio},
+    sync::mpsc,
+    time::Duration,
+};
+
+/// Starts a public subscription and consumes its initial document.
+pub fn setup() -> (tempfile::TempDir, Host, Follow, Value) {
+    let repo = super::repository_with_actors(&["reviewer"]);
+    create(repo.path(), "req_follow", "requirement", &[]);
+    let host = super::start(repo.path());
+    let follow = Follow::start(&host, repo.path(), "req_follow");
+    let initial = follow.frame();
+    (repo, host, follow, initial)
+}
+
+pub struct Follow {
+    pub child: Child,
+    lines: mpsc::Receiver<String>,
+}
+impl Follow {
+    pub fn start(host: &Host, root: &Path, id: &str) -> Self {
+        Self::with_options(host, root, id, &[])
+    }
+    pub fn with_options(host: &Host, root: &Path, id: &str, options: &[&str]) -> Self {
+        let mut command = host.cli();
+        command
+            .args([
+                id,
+                "get",
+                "--view",
+                "review",
+                "--follow",
+                "--format",
+                "json",
+                "--repo",
+                root.to_str().unwrap(),
+            ])
+            .args(options);
+        Self::spawn(command)
+    }
+    pub fn spawn(mut command: std::process::Command) -> Self {
+        let mut child = command
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap();
+        let stdout = child.stdout.take().unwrap();
+        let (send, lines) = mpsc::channel();
+        std::thread::spawn(move || {
+            for line in BufReader::new(stdout).lines() {
+                if send.send(line.unwrap()).is_err() {
+                    break;
+                }
+            }
+        });
+        Self { child, lines }
+    }
+    pub fn frame(&self) -> Value {
+        serde_json::from_str(
+            &self
+                .lines
+                .recv_timeout(Duration::from_secs(15))
+                .expect("follow must flush a state frame"),
+        )
+        .unwrap()
+    }
+    pub fn until(&self, text: &str) -> Value {
+        self.until_all(&[text])
+    }
+    pub fn until_all(&self, texts: &[&str]) -> Value {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        loop {
+            let line = self
+                .lines
+                .recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()))
+                .expect("saved change must reach follow");
+            if texts.iter().all(|text| line.contains(text)) {
+                return serde_json::from_str(&line).unwrap();
+            }
+        }
+    }
+    pub fn quiet(&self) {
+        assert!(matches!(
+            self.lines.recv_timeout(Duration::from_millis(250)),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ));
+    }
+}
+impl Drop for Follow {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+pub fn create(root: &Path, id: &str, kind: &str, extra: &[&str]) {
+    let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"));
+    cmd.args([
+        id,
+        "create",
+        "--type",
+        kind,
+        "--statement",
+        "The agent receives saved changes.",
+        "--repo",
+        root.to_str().unwrap(),
+    ])
+    .args(extra);
+    let result = waits::output(&mut cmd);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
+/// Uses the authenticated page session, without native bearer credentials.
+pub fn page_request(host: &Host, method: &str, path: &str) -> ureq::Request {
+    super::request(host, method, path, false)
+        .set("Cookie", &super::events::cookie(host))
+        .set("Origin", host.config["endpoint"].as_str().unwrap())
+        .set("Content-Type", "application/json")
+}
+
+pub fn page_rule(host: &Host, id: &str, requirement: &str) {
+    let saved = super::response(
+        page_request(host, "POST", "/rules").send_string(
+            &serde_json::json!({"data":{
+                "id":id, "statement":"The agent receives saved changes.",
+                "status":"draft", "severity":"high", "requirement_ids":[requirement],
+                "resolution_ids":[]
+            }})
+            .to_string(),
+        ),
+    );
+    assert_eq!(saved.status(), 200, "{}", saved.into_string().unwrap());
+}
+
+pub fn pending_proposal(host: &Host, id: &str) -> String {
+    let root: Value = serde_json::from_str(
+        &super::response(super::request(host, "GET", &format!("/requirements/{id}"), true).call())
+            .into_string()
+            .unwrap(),
+    )
+    .unwrap();
+    root["data"]["decision"]["pending"]["proposal_id"]
+        .as_str()
+        .unwrap()
+        .to_owned()
+}

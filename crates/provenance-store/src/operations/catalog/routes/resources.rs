@@ -466,7 +466,7 @@ fn requirements(out: &mut Vec<Definition>) {
             "createRequirement",
             HttpMethod::Post,
             "/requirements",
-            "Create one Requirement through the guarded review journal.",
+            "Create one Requirement and open its review submission.",
             ResponseKind::Resource,
             Vec::new(),
         )
@@ -481,11 +481,11 @@ fn requirements(out: &mut Vec<Definition>) {
             "updateRequirement",
             HttpMethod::Patch,
             "/requirements/{id}",
-            "Apply one guarded Requirement text and relationship delta.",
+            "Apply one guarded Requirement text and relationship delta. After rejection, this guarded update opens the new submission.",
             ResponseKind::Resource,
             vec![schema::path("id")],
         )
-        .header("If-Match", "expected_etag", true)
+        .review_update_guard(NodeType::Requirement)
         .cli_defaults(UPDATE_REQUIREMENT_DEFAULTS)
         .public_patch(&[
             ("description", "description"),

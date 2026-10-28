@@ -268,9 +268,10 @@ Planned Change. Approval is policy over a transaction, not the transaction mecha
 
 ## Fog as working state
 
-The current `Requirement` record has an optional `fog` string. `requirements fog set` and
-`requirements fog clear` rewrite that Requirement in the JSONL store. Materialization copies the
-value into `requirements.fog` in SQLite, and the wiki can render it.
+The current `Requirement` record has an optional `fog` string. Use `provenance requirements
+<id> update --if-match <etag> --fog <text>` to set it. Use `--fog-json null` to clear it.
+These commands rewrite that Requirement in the JSONL store. Materialization copies the value into
+`requirements.fog` in SQLite, and the wiki can render it.
 
 The shaping model defines fog as deliberately unstructured text for decisions and investigations
 that cannot yet be stated as Questions. It prevents premature graph records. It must persist across

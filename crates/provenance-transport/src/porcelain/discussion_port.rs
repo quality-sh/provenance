@@ -1,8 +1,7 @@
 use provenance_core::{
     protocol::{failure::OperationError, Stamped},
     threads::{
-        DiscussionConversationQuery, DiscussionConversationResult, DiscussionEntry,
-        DiscussionListQuery,
+        Discussion, DiscussionConversationQuery, DiscussionConversationResult, DiscussionListQuery,
     },
     NodeType, ScopeId,
 };
@@ -92,13 +91,16 @@ impl DiscussionPort for HostDiscussionPort {
             }
             let response = self
                 .host
-                .invoke_scoped_typed::<catalog::ListDiscussions>(DiscussionListQuery {
-                    parent: input.parent,
-                    allowed_parent_kinds: kinds,
-                    status: input.status,
-                    limit: input.limit.unwrap_or(50),
-                    cursor: input.cursor,
-                })
+                .invoke::<catalog::ListDiscussions>(
+                    DiscussionListQuery {
+                        parent: input.parent,
+                        allowed_parent_kinds: kinds,
+                        status: input.status,
+                        limit: input.limit.unwrap_or(50),
+                        cursor: input.cursor,
+                    },
+                    crate::Invocation::native(),
+                )
                 .await
                 .map_err(|error| operation_error(&error))?;
             let page = Stamped {
@@ -124,13 +126,14 @@ impl DiscussionPort for HostDiscussionPort {
             }
             let response = self
                 .host
-                .invoke_scoped_typed::<catalog::GetDiscussionConversation>(
+                .invoke::<catalog::GetDiscussionConversation>(
                     DiscussionConversationQuery {
                         discussion_id: input.discussion_id,
                         allowed_parent_kinds: kinds,
                         limit: input.limit.unwrap_or(50),
                         cursor: input.cursor,
                     },
+                    crate::Invocation::native(),
                 )
                 .await
                 .map_err(|error| operation_error(&error))?;
@@ -142,36 +145,39 @@ impl DiscussionPort for HostDiscussionPort {
         })
     }
 
-    fn start(&self, input: StartInput) -> PortFuture<'_, DiscussionEntry> {
+    fn start(&self, input: StartInput) -> PortFuture<'_, Discussion> {
         Box::pin(async move {
             let kinds = self.permitted_write_parent_kinds(Action::Discuss);
             if !kinds.contains(&input.parent.node_type) {
                 return Err(ActionError::AccessDenied);
             }
             self.host
-                .invoke_scope_typed::<catalog::WriteDiscussion>(catalog::WriteDiscussionRequest {
-                    scope_id: self.scope()?,
-                    parent: input.parent,
-                    actor: input.actor,
-                    declared_by: input.declared_by,
-                    action: DiscussionAction::Start {
-                        role: input.role,
-                        body: input.body,
+                .invoke::<catalog::WriteDiscussion>(
+                    catalog::WriteDiscussionRequest {
+                        scope_id: self.scope()?,
+                        parent: input.parent,
+                        actor: input.actor,
+                        declared_by: input.declared_by,
+                        action: DiscussionAction::Start {
+                            role: input.role,
+                            body: input.body,
+                        },
                     },
-                })
+                    crate::Invocation::native(),
+                )
                 .await
                 .map_err(|error| operation_error(&error))
         })
     }
 
-    fn reply(&self, input: ReplyInput) -> PortFuture<'_, DiscussionEntry> {
+    fn reply(&self, input: ReplyInput) -> PortFuture<'_, Discussion> {
         Box::pin(async move {
             let kinds = self.permitted_write_parent_kinds(Action::Reply);
             if kinds.is_empty() {
                 return Err(ActionError::AccessDenied);
             }
             self.host
-                .invoke_scope_typed::<catalog::WriteTargetDiscussion>(
+                .invoke::<catalog::WriteTargetDiscussion>(
                     catalog::WriteTargetDiscussionRequest {
                         scope_id: self.scope()?,
                         actor: input.actor,
@@ -182,6 +188,7 @@ impl DiscussionPort for HostDiscussionPort {
                         role: input.role,
                         body: input.body,
                     },
+                    crate::Invocation::native(),
                 )
                 .await
                 .map_err(|error| operation_error(&error))

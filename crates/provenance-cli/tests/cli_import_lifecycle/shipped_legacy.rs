@@ -14,9 +14,20 @@ fn shipped_legacy_export_imports_when_legacy_statements_are_already_canonical() 
     let export = dir.path().join("shipped.json");
     crate::export_fixture_support::copy_portable_state(shipped_repo(), &shipped);
     export_scope(&shipped, &export).success();
+    let mut document = serde_json::from_slice(&std::fs::read(&export).unwrap()).unwrap();
+    crate::export_fixture_support::keep_decision_links_pending(&mut document);
+    write_json(&export, &document);
     init_repo_with_actors(&fresh, &["codex-review-panel-gpt55-medium", "ben_nasraoui"]);
     seed_statement_shards(&shipped, &fresh);
     import_scope(&fresh, &export).success();
+    let imported = dir.path().join("imported.json");
+    export_scope(&fresh, &imported).success();
+    let original: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&export).unwrap()).unwrap();
+    let imported: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&imported).unwrap()).unwrap();
+    assert_eq!(imported["proposal_cards"], original["proposal_cards"]);
+    assert_eq!(imported["dispositions"], original["dispositions"]);
     for command in ["check", "materialize"] {
         run_repo_command(command, &fresh);
     }
@@ -32,7 +43,7 @@ fn seed_statement_shards(source: &std::path::Path, destination: &std::path::Path
 }
 
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
+#[verifies("rule_legacy_terminal_proposals_frozen", examples)]
 /// This test covers the export, modification, and rejected import flow.
 fn one_byte_change_to_shipped_legacy_terminal_is_rejected() {
     let dir = tempfile::tempdir().unwrap();

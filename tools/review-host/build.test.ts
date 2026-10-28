@@ -18,9 +18,14 @@ test('composition needs only the renderer and output paths', async t => {
   await writeFile(join(renderer, 'types/browser/main.d.ts'), [
     'export interface ReviewMountOptions { endpoint: string; repositoryId: string; scope: string;',
     'dispositionActorIds: ReadonlyArray<string>; bearer: string; rootId: string }',
-    'export declare function mountReview(element: Element, options: ReviewMountOptions): () => void;',
+    'export type ReviewChange = { readonly _tag: "Everything"; readonly reason: string }',
+    '  | { readonly _tag: "Records"; readonly records: ReadonlyArray<{ kind: string; id: string }> };',
+    'export interface ReviewHandle { dispose(): void; refresh(change: ReviewChange): void;',
+    'showRecord(rootId: string, focusId?: string): Promise<void> }',
+    'export declare function mountReview(element: Element, options: ReviewMountOptions): ReviewHandle;',
   ].join('\n'));
-  await writeFile(join(renderer, 'review.js'), 'export function mountReview() { return () => {}; }');
+  await writeFile(join(renderer, 'review.js'),
+    'export function mountReview() { return { dispose() {}, refresh() {}, showRecord: async () => {} }; }');
   await writeFile(join(renderer, 'build-info.json'), JSON.stringify({
     formatVersion: 1, commit: pin.commit, dirty: false,
   }));

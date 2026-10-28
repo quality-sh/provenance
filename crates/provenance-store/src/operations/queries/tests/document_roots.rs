@@ -9,7 +9,7 @@ use provenance_macros::verifies;
 use serde_json::json;
 
 #[tokio::test]
-#[verifies("rule_requirement_document_canonical_membership", conformance)]
+#[verifies("rule_requirement_document_canonical_membership", examples)]
 async fn inverse_document_read_follows_each_canonical_membership_rule() {
     let (dir, store, scope) = seeded_store();
     store
@@ -56,7 +56,7 @@ async fn inverse_document_read_follows_each_canonical_membership_rule() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

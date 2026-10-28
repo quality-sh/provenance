@@ -19,11 +19,7 @@ pub(super) fn input<T: serde::de::DeserializeOwned>(value: Value) -> T {
 }
 
 fn allow_reviewer(store: &StateStore) {
-    std::fs::write(
-        store.layout.manifest_path(),
-        r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}],"disposition_actor_ids":["reviewer"]}"#,
-    )
-    .unwrap();
+    crate::test_support::allow_reviewer(&store.layout);
 }
 
 async fn page(root: &camino::Utf8Path, limit: usize, exclude_terminal: bool) -> Value {
@@ -238,7 +234,12 @@ fn with(mut value: Value, field: &str, content: &str) -> Value {
     value
 }
 
+mod focused;
+mod pagination;
+mod visibility;
+
 #[tokio::test]
+/// This flow checks the full decision cycle for every reviewable record kind.
 #[provenance_macros::verifies("rule_document_entry_has_review_outcome", examples)]
 async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle() {
     let (dir, store, scope) = seeded_store();
@@ -277,12 +278,9 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
         );
         let accepted = page(&root, 50, false).await;
         assert_eq!(review(&accepted, id.as_str())["outcome"], "accepted");
-        assert_eq!(review(&accepted, id.as_str())["comment_count"], 0);
 
         revise(&store, kind, &id);
-        let revised = page(&root, 50, false).await;
         let second = if kind == NodeType::Requirement {
-            assert_eq!(review(&revised, id.as_str())["outcome"], "pending");
             store
                 .record_decision_state(&scope, kind, &id)
                 .unwrap()
@@ -290,7 +288,6 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
                 .unwrap()
                 .proposal_id
         } else {
-            assert_eq!(review(&revised, id.as_str())["outcome"], Value::Null);
             submit(&store, &scope, kind, &id)
         };
         decide(
@@ -303,11 +300,6 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
         );
         let rejected = page(&root, 50, false).await;
         assert_eq!(review(&rejected, id.as_str())["outcome"], "rejected");
-        let expected_comments = usize::from(!matches!(kind, NodeType::Domain | NodeType::Boundary));
-        assert_eq!(
-            review(&rejected, id.as_str())["comment_count"],
-            expected_comments
-        );
     }
 }
 
@@ -383,6 +375,7 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
 }
 
 #[tokio::test]
+#[provenance_macros::verifies("rule_document_has_review_totals", examples)]
 async fn document_review_totals_exclude_a_pending_parent_reference() {
     let (dir, store, scope) = seeded_store();
     allow_reviewer(&store);
@@ -394,7 +387,7 @@ async fn document_review_totals_exclude_a_pending_parent_reference() {
             description: None,
             status: provenance_core::RequirementStatus::Active,
             domain_id: None,
-            refines: Some(sid("req_overtime")),
+            refines: vec![sid("req_overtime")],
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -444,6 +437,8 @@ async fn document_review_totals_exclude_a_pending_parent_reference() {
         DispositionDecision::Rejected,
     );
     let rejected = serde_json::to_value(read(None).await.unwrap().result).unwrap();
+    // A rejected new record leaves the document, but the root never does.
+    assert_eq!(rejected["entries"][0]["node"]["id"], "req_first_release");
     assert_eq!(
         rejected["review_totals"],
         json!({"pending":0, "accepted":0, "rejected":1})

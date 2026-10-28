@@ -48,7 +48,9 @@ fn scope_import_writes_only_the_imported_shards() {
         let path = family.shard_path(&staged_store.layout, &scope);
         if matches!(
             family,
-            ProjectionFamily::RequirementReviews | ProjectionFamily::ReviewJournal
+            ProjectionFamily::RequirementReviews
+                | ProjectionFamily::Discussions
+                | ProjectionFamily::Withdrawals
         ) {
             assert!(!path.exists(), "{path} must stay outside scope import");
         } else {
@@ -103,7 +105,7 @@ fn scope_import_rejects_an_id_shared_by_two_canonical_kinds() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

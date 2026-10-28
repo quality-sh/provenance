@@ -9,6 +9,7 @@ use provenance_core::{
     CanonicalArtifact, DispositionActor, DispositionDecision, Requirement, RequirementStatus,
     ScopeId, StableId,
 };
+use provenance_macros::verifies;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -38,7 +39,8 @@ pub struct CreateRequirementRequest {
     pub description: Option<String>,
     pub status: RequirementStatus,
     pub domain_id: Option<StableId>,
-    pub refines: Option<StableId>,
+    #[serde(default)]
+    pub refines: Vec<StableId>,
     pub depends_on: Vec<StableId>,
     pub supersedes: Vec<StableId>,
     pub spawned_by: Option<StableId>,
@@ -58,7 +60,6 @@ scoped_write_operation!(
     |store, scope, request| {
         let snapshot = store.create_review_requirement_resource(
             review::CreateReviewRequirement {
-                request_id: review::new_request_id(),
                 actor: request.actor,
                 origin: request.origin,
                 create: CreateRequirementInput {
@@ -92,6 +93,7 @@ pub struct UpdateRequirementRequest {
     pub description: Option<String>,
     pub fog: Option<String>,
     pub status: Option<RequirementStatus>,
+    pub archived_in_commit: Option<provenance_core::ArchivedStamp>,
     pub domain_id: Option<StableId>,
     #[serde(default)]
     pub clear_fields: Vec<RequirementClearField>,
@@ -109,11 +111,11 @@ scoped_write_operation!(
     scope = none,
     |store, scope, request| {
         let snapshot = store.save_requirement_resource(review::SaveRequirement {
-                request_id: review::new_request_id(),
                 actor: request.actor,
                 expected_etag: request.expected_etag,
                 relationships: request.relationships,
                 update: UpdateRequirementInput {
+                    archived_in_commit: request.archived_in_commit,
                     scope_id: scope,
                     id: request.id,
                     expected_etag: None,
@@ -148,6 +150,7 @@ decision!(
 
 #[derive(Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[verifies("rule_review_disposition_identity_server_created", construction)]
 #[serde(deny_unknown_fields)]
 pub struct DecideRecordReviewRequest {
     pub scope_id: ScopeId,
@@ -157,6 +160,8 @@ pub struct DecideRecordReviewRequest {
     pub proposal_id: StableId,
     pub decision: DispositionDecision,
     pub rationale: Option<String>,
+    /// An approval requires a prior assertion. A human can instead name an
+    /// existing canonical artifact.
     pub canonical_artifact: Option<CanonicalArtifact>,
     pub feedback: Option<review::ReviewFeedback>,
     pub declared_by: Option<String>,

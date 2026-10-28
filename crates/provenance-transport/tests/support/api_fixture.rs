@@ -28,6 +28,12 @@ pub fn host(repository: &Repository) -> StatementHost {
     StatementHost::with_fixture_access(access(repository))
 }
 
+/// One fixture host that permits record writes.
+#[allow(dead_code)]
+pub fn write_host(repository: &Repository) -> StatementHost {
+    StatementHost::with_fixture_access(access(repository).allow_writes())
+}
+
 /// The canonical failure kind of one refused tool result.
 pub fn error_kind(result: &CallToolResult) -> String {
     result.structured_content.as_ref().unwrap()["error"]["kind"]

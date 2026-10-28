@@ -136,12 +136,8 @@ fn parse<T: serde::de::DeserializeOwned>(value: Value) -> anyhow::Result<T> {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RequirementRelations {
-    #[serde(
-        default,
-        deserialize_with = "single_edit_field",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub refines: Option<SingleEdit>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refines: Option<ListEdit>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub depends_on: Option<ListEdit>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -160,7 +156,6 @@ pub struct RequirementRelations {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SaveRequirement {
-    pub request_id: StableId,
     pub actor: String,
     pub expected_etag: String,
     pub update: UpdateRequirementInput,

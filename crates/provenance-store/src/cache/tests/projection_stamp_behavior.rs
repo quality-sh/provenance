@@ -6,7 +6,7 @@ const PROJECTION_TABLES: [&str; 8] = [
     "implementation_bindings",
     "verification_bindings",
     "requirement_reviews",
-    "review_journal",
+    "withdrawals",
     "projection_instance",
     "projection_revision",
     "projection_family_digests",
@@ -42,11 +42,11 @@ fn projection_family_table_names_every_stored_family_once() {
         .iter()
         .map(|family| family.family_name())
         .collect();
-    assert_eq!(names.len(), 19);
+    assert_eq!(names.len(), 20);
     let mut unique = names.clone();
     unique.sort_unstable();
     unique.dedup();
-    assert_eq!(unique.len(), 19, "family names must be unique");
+    assert_eq!(unique.len(), 20, "family names must be unique");
     for expected in [
         "sources",
         "domains",
@@ -66,7 +66,8 @@ fn projection_family_table_names_every_stored_family_once() {
         "implementation_bindings",
         "verification_bindings",
         "requirement_reviews",
-        "review_journal",
+        "discussions",
+        "withdrawals",
     ] {
         assert!(names.contains(&expected), "missing family {expected}");
     }
@@ -162,7 +163,7 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
     .fetch_all(pool.pool())
     .await
     .unwrap();
-    assert_eq!(rows.len(), 19, "one row per family for the one scope");
+    assert_eq!(rows.len(), 20, "one row per family for the one scope");
     for (scope_id, family, digest, count) in &rows {
         assert_eq!(scope_id, scope.as_str(), "scope for {family}");
         assert!(digest.starts_with("sha256:"), "digest for {family}");
@@ -175,7 +176,6 @@ async fn materialization_stores_a_revision_stamp_with_instance_identity() {
             | "implementation_bindings"
             | "verification_bindings"
             | "requirement_reviews" => 1,
-            "review_journal" => 4,
             _ => 0,
         };
         assert_eq!(*count, expected_count, "count for {family}");
@@ -211,9 +211,6 @@ fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
     let mut walked = Vec::new();
     for family in ProjectionFamily::ALL {
         let (bytes, record_count) = family.canonical_records(&store, &scope).unwrap();
-        if family.family_name() == "review_journal" && record_count == 0 {
-            continue;
-        }
         walked.push(serde_json::json!({
             "family": family.family_name(),
             "scope_id": scope.as_str(),
@@ -231,7 +228,7 @@ fn revision_digest_reproduces_from_a_walk_of_the_family_table() {
 }
 
 #[tokio::test]
-async fn distinct_review_occurrences_move_digest_and_instance() {
+async fn separate_databases_have_separate_instances() {
     let (_dir_a, layout_a, scope_a) = seeded_layout();
     let (_dir_b, layout_b, scope_b) = seeded_layout();
     seed_integration_shards(&layout_a, scope_a.as_str());
@@ -241,10 +238,9 @@ async fn distinct_review_occurrences_move_digest_and_instance() {
 
     let pool_a = open_cache(&layout_a).await.unwrap();
     let pool_b = open_cache(&layout_b).await.unwrap();
-    let (_, digest_a, instance_a) = stamp(pool_a.pool()).await;
-    let (_, digest_b, instance_b) = stamp(pool_b.pool()).await;
+    let (_, _, instance_a) = stamp(pool_a.pool()).await;
+    let (_, _, instance_b) = stamp(pool_b.pool()).await;
 
-    assert_ne!(digest_a, digest_b, "review occurrences are canonical state");
     assert_ne!(instance_a, instance_b, "each database is its own instance");
 }
 

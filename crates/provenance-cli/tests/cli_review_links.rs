@@ -1,8 +1,9 @@
 mod porcelain_authoring_support;
+mod review_host_support;
 
 use porcelain_authoring_support::{
-    allow_reviewer, initialized_repo, json_output, json_stdin_output, local_host,
-    local_host_with_identity,
+    initialized_repo, json_output, json_stdin_output, local_host, local_host_with_identity,
+    provenance,
 };
 use provenance_macros::verifies;
 use provenance_transport::local_host::LocalHostRegistration;
@@ -10,7 +11,7 @@ use serde_json::json;
 use std::net::TcpListener;
 
 #[test]
-#[verifies("rule_cli_record_review_action_returns_url", examples)]
+#[verifies("rule_review_link_needs_no_record_id", examples)]
 fn write_output_links_to_the_containing_requirement() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
@@ -46,7 +47,7 @@ fn write_output_links_to_the_containing_requirement() {
 }
 
 #[test]
-#[verifies("rule_cli_record_review_action_returns_url", examples)]
+#[verifies("rule_agent_review_request_includes_link", examples)]
 fn explicit_read_links_to_the_containing_requirement() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
@@ -75,19 +76,32 @@ fn explicit_read_links_to_the_containing_requirement() {
         "--format",
         "json",
     ]);
-    let host = local_host(&repo);
-    let expected = format!("{}/?root=req_link&focus=rule_link", host.endpoint);
+    let host = review_host_support::start(std::path::Path::new(&repo));
+    let expected = format!(
+        "{}/?root=req_link&focus=rule_link#launch=",
+        host.config["endpoint"].as_str().unwrap()
+    );
 
-    let link = json_output(&[
-        "rule_link",
-        "get",
-        "--repo",
-        &repo,
-        "--review-link",
-        "--format",
-        "json",
-    ]);
-    assert_eq!(link["review_url"], expected);
+    let output = host
+        .cli()
+        .args([
+            "rule_link",
+            "--repo",
+            &repo,
+            "--review-link",
+            "--no-open",
+            "--format",
+            "json",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let link: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(link["review_url"].as_str().unwrap().starts_with(&expected));
 }
 
 #[test]
@@ -315,7 +329,16 @@ fn submit_returns_the_review_link() {
 #[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn decide_returns_the_review_link() {
     let (_directory, repo) = initialized_repo();
-    allow_reviewer(&repo);
+    provenance()
+        .args([
+            "init",
+            "--path",
+            &repo,
+            "--disposition-actor-id",
+            "reviewer",
+        ])
+        .assert()
+        .success();
     let (_, proposal) = pending_submission(&repo);
     let host = local_host(&repo);
     let decided = json_stdin_output(

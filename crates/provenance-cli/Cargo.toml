@@ -25,10 +25,11 @@ path = "src/bin/cargo-provenance.rs"
 
 [dependencies]
 anyhow.workspace = true
-axum.workspace = true
+futures-util = "0.3"
+tokio-tungstenite = "0.24"
+axum = { workspace = true, features = ["ws"] }
 camino.workspace = true
 clap.workspace = true
-fs_at.workspace = true
 fs2.workspace = true
 jsonschema.workspace = true
 pulldown-cmark.workspace = true
@@ -39,22 +40,27 @@ provenance-report.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
 provenance-store.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.2.3" }
+provenance-transport = { path = "../provenance-transport", version = "0.3.0" }
 remove_dir_all.workspace = true
 rustix.workspace = true
-same-file.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_ignored.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["signal"] }
+sha2.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["signal", "io-std", "io-util"] }
 uuid.workspace = true
 ureq.workspace = true
 url.workspace = true
 walkdir.workspace = true
+notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
+
+[target.'cfg(not(windows))'.dependencies]
+open.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys.workspace = true
+windows-sys = { workspace = true, features = ["Win32_System_Threading", "Win32_System_SystemServices"] }
 
 [features]
 default = []
@@ -65,12 +71,10 @@ dogfood = []
 [dev-dependencies]
 assert_cmd.workspace = true
 flate2.workspace = true
-insta.workspace = true
-pdf_oxide = { version = "=0.3.77", default-features = false, features = ["legacy-crypto"] }
+pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy-crypto"] }
 jsonschema.workspace = true
 tempfile.workspace = true
 predicates.workspace = true
 rmcp = { version = "=1.4.0", default-features = false, features = ["client"] }
-sha2.workspace = true
 tar.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.2.3", features = ["test-fixture"] }
+provenance-transport = { path = "../provenance-transport", version = "0.3.0", features = ["test-fixture"] }

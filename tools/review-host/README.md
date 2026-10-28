@@ -2,13 +2,18 @@
 
 This directory supplies the application that the Provenance CLI embeds. The web
 repository supplies `mountReview`, its emitted declarations, and renderer
-assets. This application owns the credential form, explicit Requirement
+assets. This application owns the launch code exchange, explicit Requirement
 selection, configuration read, and connection error display.
 
-The access token stays in page memory. It is sent only in an Authorization
-header to the current origin. The token input is cleared on every connection
-attempt. The application does not store the token or put it in a URL. The host's
-existing origin, repository, scope, and file-access checks remain in effect.
+The page has no credential field. It reads a single-use launch code from the
+`#launch=` URL fragment and removes the fragment from the address bar. It then
+exchanges the code one time at `POST /review-launch/session` for the access
+token. The access token stays in page memory. It is sent only in an
+Authorization header to the current origin. The application does not store the
+token or put it in a URL. The host also sets a session cookie. With no launch
+code, the application tries the cookie session. A used, expired, or foreign
+code, or a refused session, shows how to get a new link. The host's existing origin, repository, scope, and file-access
+checks remain in effect.
 The renderer owns the generated Effect client and its reads and writes.
 
 The renderer pin uses the successful main build from web PR 23 and SDK 0.2.3.
@@ -41,8 +46,9 @@ the renderer module unchanged and adds `host.js`, `host.css`, and the host HTML.
 The generated Effect client is part of `review.js`. No Node runtime enters the page.
 
 Run the host with explicit repository and scope options from `docs/review-host.md`.
-Open the printed credential-free URL. Enter the session token, then enter a
-Requirement ID. `Open / Refresh` mounts the selected Requirement. A new
+The host opens the page signed in. `provenance <record-id> --review-link` opens
+a record. Without `root`, enter a Requirement ID. `Open / Refresh` mounts the
+selected Requirement. A new
 connection removes the old page. A later connection attempt supersedes an
 earlier attempt, even when the earlier response arrives last.
 
@@ -71,12 +77,20 @@ repository and scope access. Release validation runs this check on executables
 extracted from both native archives and npm engine packages. It does not
 publish a release during a manual run.
 
+The review write check starts a new review host for each step on one
+repository. The generated client starts, replies to and resolves Discussions,
+rejects with feedback, and revises a Requirement. Each step reads the result
+through the next host. The check also closes one write response before its body
+arrives. The client must report a connection error, send the write only once,
+and the repository must hold one result. CI runs this check on the Linux CLI.
+
 ```sh
 node --test tools/review-host/*.test.ts
 node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
+node tools/review-host/verify-review-writes.ts /absolute/provenance packages/provenance
 ```
 
-The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-f9e60a1c9523/provenance-review.tar.gz)
+The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-13d51d69ae34/provenance-review.tar.gz)
 contains the exact bytes from the pinned upstream build. The release contains
 only the renderer. It is separate from the CLI releases and is not the latest
 CLI release. CI and release preparation use this archive without access to the

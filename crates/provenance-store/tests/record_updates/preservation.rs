@@ -1,25 +1,10 @@
-use super::support::Fixture;
+use super::support::{raw_rows, shard_path, Fixture};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const AT: &str = "2026-09-01T00:00:00Z";
-
-fn shard_path(fixture: &Fixture, family: &str, file: &str) -> PathBuf {
-    fixture
-        .dir
-        .path()
-        .join(format!(".provenance/state/scopes/default/{family}/{file}"))
-}
-
-fn raw_rows(fixture: &Fixture, family: &str, file: &str) -> Vec<String> {
-    std::fs::read_to_string(shard_path(fixture, family, file))
-        .unwrap()
-        .lines()
-        .map(str::to_owned)
-        .collect()
-}
 
 fn parsed_rows(fixture: &Fixture, family: &str, file: &str) -> Vec<Value> {
     raw_rows(fixture, family, file)
@@ -271,13 +256,13 @@ async fn target_edit_keeps_top_level_unknown_data_and_accepts_aliases() {
         .unwrap();
     record["extension"] = json!({"owner":"newer-tool","nested":{"value":7}});
     write_rows(&fixture, "sources", "source.jsonl", &[padded(&record)]);
-    std::fs::remove_dir_all(
-        fixture
-            .dir
-            .path()
-            .join(".provenance/state/scopes/default/review"),
-    )
-    .unwrap();
+    let review = fixture
+        .dir
+        .path()
+        .join(".provenance/state/scopes/default/review");
+    if review.exists() {
+        std::fs::remove_dir_all(review).unwrap();
+    }
 
     let updated = fixture
         .call(
@@ -317,13 +302,13 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
     let mut clean = record.clone();
     clean["sourceRef"] = json!({"sourceId":"source_one","clause":"section 1"});
     write_rows(&fixture, "boundaries", "boundary.jsonl", &[padded(&clean)]);
-    std::fs::remove_dir_all(
-        fixture
-            .dir
-            .path()
-            .join(".provenance/state/scopes/default/review"),
-    )
-    .unwrap();
+    let review = fixture
+        .dir
+        .path()
+        .join(".provenance/state/scopes/default/review");
+    if review.exists() {
+        std::fs::remove_dir_all(review).unwrap();
+    }
     fixture
         .call(
             "update-boundary",

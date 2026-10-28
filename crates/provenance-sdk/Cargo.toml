@@ -20,6 +20,7 @@ provenance-macros.workspace = true
 provenance-store.workspace = true
 
 [dev-dependencies]
+tokio.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 trybuild.workspace = true

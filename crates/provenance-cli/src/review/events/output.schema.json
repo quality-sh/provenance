@@ -1,0 +1,20 @@
+{
+  "title": "Provenance follow frame",
+  "type": "object",
+  "required": ["type", "epoch", "sequence", "continuity"],
+  "properties": {
+    "type": {"enum": ["state", "reset", "disconnected", "read-error"]},
+    "epoch": {"type": "string"},
+    "sequence": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "continuity": {"enum": ["current", "unknown"]},
+    "records": {"type": "array"},
+    "removedIds": {"type": "array", "items": {"type": "string"}},
+    "reason": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false,
+  "oneOf": [
+    {"properties": {"type": {"enum": ["state", "reset"]}}, "required": ["records", "removedIds"], "not": {"required": ["reason"]}},
+    {"properties": {"type": {"const": "disconnected"}, "continuity": {"const": "unknown"}, "records": {"maxItems": 0}, "removedIds": {"maxItems": 0}}, "required": ["records", "removedIds"], "not": {"required": ["reason"]}},
+    {"properties": {"type": {"const": "read-error"}, "continuity": {"const": "unknown"}}, "required": ["reason"], "not": {"anyOf": [{"required": ["records"]}, {"required": ["removedIds"]}]}}
+  ]
+}

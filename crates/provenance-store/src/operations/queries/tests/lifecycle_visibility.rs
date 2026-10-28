@@ -12,12 +12,17 @@ use provenance_core::protocol::failure::OperationFailure;
 use provenance_core::{
     ArchivedStamp, NodeType, ResolutionMethod, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
 };
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
 struct Target(camino::Utf8PathBuf);
 
 impl ContextResolver for Target {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,
@@ -112,7 +117,7 @@ async fn list_family(
             "context":{"repository":"test","scope":"default"},
             "request": request,
         }),
-        Arc::new(Target(root.to_owned())),
+        catalog::Direct(Arc::new(Target(root.to_owned()))),
     )
     .await
     .map_err(|error| anyhow::anyhow!(serde_json::to_string(&error).unwrap()))
@@ -197,6 +202,7 @@ async fn search(root: &camino::Utf8Path, request: Value) -> anyhow::Result<Value
 }
 
 #[tokio::test]
+/// Implementation aid: this checks the shared explicit terminal filter across native reads.
 async fn lifecycle_filter_hides_only_terminal_records_from_lists_and_search() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
@@ -224,7 +230,36 @@ async fn lifecycle_filter_hides_only_terminal_records_from_lists_and_search() {
 }
 
 #[tokio::test]
-async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
+/// Implementation aid: this pins the native list default below the CLI policy seam.
+async fn omitted_native_list_filter_includes_terminal_records() {
+    let (dir, store, scope) = seeded_store();
+    seed_lifecycle_records(&store, &scope);
+    let root = root_of(&dir);
+
+    let rules = list_rules(&root, json!({"limit":50})).await.unwrap();
+    let listed = serde_json::to_string(&rules["result"]["items"]).unwrap();
+    assert!(listed.contains("rule_a_archived"));
+}
+
+#[tokio::test]
+/// Implementation aid: this pins the native search default below the CLI policy seam.
+async fn omitted_native_search_filter_includes_terminal_records() {
+    let (dir, store, scope) = seeded_store();
+    seed_lifecycle_records(&store, &scope);
+    let root = root_of(&dir);
+    let found = search(
+        &root,
+        json!({"text":"lifecycle search", "node_types":[NodeType::Rule], "limit":50}),
+    )
+    .await
+    .unwrap();
+    let found = serde_json::to_string(&found["nodes"]).unwrap();
+    assert!(found.contains("rule_a_archived"));
+}
+
+#[tokio::test]
+#[verifies("rule_cursor_binds_query_identity", examples)]
+async fn list_cursor_binds_the_terminal_filter() {
     let (dir, store, scope) = seeded_store();
     seed_lifecycle_records(&store, &scope);
     let root = root_of(&dir);
@@ -243,12 +278,22 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
     .unwrap();
     assert_eq!(second["result"]["items"][0]["id"], "rule_c_active");
     assert_eq!(second["result"]["has_more"], false);
-    assert!(list_rules(&root, json!({"limit":1,"cursor":cursor}))
-        .await
-        .unwrap_err()
-        .to_string()
-        .contains("cursor"));
+    assert!(list_rules(
+        &root,
+        json!({"exclude_terminal":false,"limit":1,"cursor":cursor}),
+    )
+    .await
+    .unwrap_err()
+    .to_string()
+    .contains("cursor"));
+}
 
+#[tokio::test]
+#[verifies("rule_cursor_binds_query_identity", examples)]
+async fn search_cursor_binds_the_terminal_filter() {
+    let (dir, store, scope) = seeded_store();
+    seed_lifecycle_records(&store, &scope);
+    let root = root_of(&dir);
     let first = search(
         &root,
         json!({
@@ -276,7 +321,7 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
         &root,
         json!({
             "text":"lifecycle search", "node_types":[NodeType::Rule],
-            "limit":1, "cursor":cursor
+            "exclude_terminal":false, "limit":1, "cursor":cursor
         }),
     )
     .await
@@ -286,6 +331,7 @@ async fn lifecycle_filter_precedes_page_counts_and_binds_each_cursor() {
 }
 
 #[tokio::test]
+/// Implementation aid: this checks filtered aggregate totals for archived shaping records.
 async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals() {
     let (dir, store, scope) = seeded_store();
     seed_archived_shaping_records(&store, &scope);
@@ -368,6 +414,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
 }
 
 #[test]
+#[provenance_macros::verifies("rule_archive_is_terminal_for_each_record", examples)]
 fn archived_question_cannot_return_to_an_active_status() {
     let (_dir, store, scope) = seeded_store();
     seed_archived_shaping_records(&store, &scope);

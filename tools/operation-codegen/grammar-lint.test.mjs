@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { documentGrammarErrors, routeGrammarErrors } from './grammar-lint.mjs';
+import { documentGrammarErrors, routeGrammarErrors, FAILURE_STATUS } from './grammar-lint.mjs';
 
 const successEnvelope = data => ({
   type: 'object',
@@ -270,4 +270,9 @@ test('undeclared root segments and methods are rejected', () => {
   assert.ok(errorsFor('/gadgets').some(error => /root segment 'gadgets' is not a declared collection/.test(error)));
   const doc = { paths: { '/requirements/{id}': { delete: {} } } };
   assert.ok(routeGrammarErrors(doc).some(error => /method is not GET, POST, or PATCH/.test(error)));
+});
+
+// Implementation aid: checks the grammar linter's status table against the contract.
+test('host_busy is a declared 503 failure kind', () => {
+  assert.equal(FAILURE_STATUS.get('host_busy'), 503);
 });

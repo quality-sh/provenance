@@ -1,44 +1,43 @@
-//! Recoverable Requirement edits and immutable evidence.
+//! Guarded graph record edits and their review state.
 mod classifier;
 pub(crate) mod guard;
 mod input;
-mod journal;
+mod publication;
 pub(crate) mod relationships;
 mod resource_read;
 pub(crate) use resource_read::RequirementResourceSnapshot;
 mod save;
 pub use input::{ListEdit, RequirementRelations, SaveRequirement};
 
-pub(crate) fn new_request_id() -> provenance_core::StableId {
-    journal::new_id()
+/// Creates the identity of a review record.
+fn new_id() -> provenance_core::StableId {
+    provenance_core::StableId::new(uuid::Uuid::new_v4().to_string())
+        .expect("UUID uses valid stable ID characters")
 }
 
 fn owner_matches(record: &impl serde::Serialize, owner: Option<&str>) -> anyhow::Result<()> {
     let value = serde_json::to_value(record)?;
-    let declared_by = value.get("declared_by").and_then(serde_json::Value::as_str);
-    if declared_by != owner {
+    let saved_owner = value
+        .get("declared_by")
+        .or_else(|| value.get("made_by"))
+        .and_then(serde_json::Value::as_str);
+    if saved_owner != owner {
         return Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::RecordOwnershipConflict,
+            crate::write_error::WriteFailure::record_ownership_conflict(saved_owner),
             anyhow::anyhow!("declared_by must match the existing owner"),
         ));
     }
     Ok(())
 }
 
-pub(crate) mod cache;
-
+mod history;
 mod reads;
 pub use reads::{read_evidence, read_history};
-
-mod snapshot;
 
 #[cfg(test)]
 mod concurrency_tests;
 #[cfg(test)]
 mod recovery_tests;
-
-#[cfg(all(test, any(unix, windows)))]
-mod path_tests;
 
 mod discussion_input;
 pub use discussion_input::{DiscussionAction, WriteDiscussion};
@@ -56,6 +55,7 @@ mod discussion_discovery;
 mod discussion_messages;
 mod discussion_page;
 mod discussion_reads;
+mod discussion_removal;
 mod typed_adoption;
 #[cfg(test)]
 mod typed_adoption_tests;

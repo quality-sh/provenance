@@ -4,15 +4,17 @@ use provenance_cli::porcelain;
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::protocol::{SearchQuery, QUERY_DEFAULT_LIMIT};
 use provenance_core::{NodeType, SDK_PROTOCOL_VERSION};
+use provenance_macros::rule;
 use provenance_porcelain::action::{validate_target, Action};
 use provenance_porcelain::get::View;
 
 mod api;
 mod discussion;
 pub mod grammar;
+mod help_kind;
 use grammar::{
-    ApiArgs, ApiCommand, CatalogArgs, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute,
-    RootWord, SearchArgs, SearchCommand, TargetArgs, TargetVerb,
+    ApiArgs, ApiCommand, CatalogArgs, Delivery, DiscussionsArgs, DiscussionsCommand,
+    DiscussionsRoute, RootWord, SearchArgs, SearchCommand, TargetArgs, TargetVerb,
 };
 
 #[cfg(test)]
@@ -39,7 +41,7 @@ pub struct GetInvocation {
     context: GlobalContext,
     format: Option<porcelain::OutputFormat>,
     input: provenance_porcelain::get::GetInput,
-    review_link: bool,
+    delivery: Delivery,
 }
 
 pub struct TargetInvocation {
@@ -52,6 +54,8 @@ pub struct TargetInvocation {
 }
 
 impl Invocation {
+    /// Uses get for an omitted action after excluding reserved command words.
+    #[rule("rule_porcelain_get_is_default_action")]
     pub fn parse(arguments: Vec<String>) -> anyhow::Result<Self> {
         let Some(word) = grammar::command_word(&arguments) else {
             return Ok(Self::Builtin(
@@ -104,10 +108,40 @@ impl Invocation {
             return Ok(Self::Catalog(catalog_cli::Invocation::new(&args, &matches)));
         }
 
+        Self::parse_target(arguments)
+    }
+
+    /// Parses the target before its action, defaults to get, and handles help before validation.
+    #[provenance_macros::rule("rule_record_help_exits_before_validation")]
+    #[rule("rule_porcelain_cli_target_action_order")]
+    fn parse_target(arguments: Vec<String>) -> anyhow::Result<Self> {
         let command = catalog_cli::target_command()?;
-        let matches = command
-            .try_get_matches_from(arguments)
-            .unwrap_or_else(|error| error.exit());
+        let help_command = command.clone().mut_arg("record_type", |arg| {
+            arg.value_parser(clap::builder::StringValueParser::new())
+        });
+        let matches = match help_command.clone().try_get_matches_from(arguments.clone()) {
+            Ok(_) => command
+                .try_get_matches_from(arguments)
+                .unwrap_or_else(|error| error.exit()),
+            Err(error) if error.kind() == clap::error::ErrorKind::DisplayHelp => {
+                let selection = help_command
+                    .disable_help_flag(true)
+                    .ignore_errors(true)
+                    .get_matches_from(
+                        arguments
+                            .into_iter()
+                            .filter(|arg| arg != "--help" && arg != "-h"),
+                    );
+                let action = selection.get_one::<TargetVerb>("action").copied();
+                let kind = selection
+                    .get_one::<String>("record_type")
+                    .and_then(|kind| NodeType::parse(kind).ok())
+                    .or_else(|| help_kind::resolve_record_kind(&selection, action));
+                catalog_cli::print_target_help(command, action, kind)?;
+                std::process::exit(0);
+            }
+            Err(error) => error.exit(),
+        };
         let args = TargetArgs::from_matches(&matches);
         if let Some(TargetVerb::Action(action)) = args.action {
             if Action::DISCUSSION.contains(&action) {
@@ -119,7 +153,15 @@ impl Invocation {
         if matches!(args.action, None | Some(TargetVerb::Get)) {
             catalog_cli::ensure_only_fields(
                 &matches,
-                &["kind", "view", "depth", "limit", "review-link"],
+                &[
+                    "kind",
+                    "view",
+                    "depth",
+                    "limit",
+                    "review-link",
+                    "no-open",
+                    "follow",
+                ],
             );
             let mut input = provenance_porcelain::get::GetInput::new(
                 args.target,
@@ -135,7 +177,7 @@ impl Invocation {
                 context,
                 format,
                 input,
-                review_link: args.review_link,
+                delivery: args.delivery,
             }));
         }
         let Some(TargetVerb::Action(action)) = args.action else {
@@ -154,17 +196,43 @@ impl Invocation {
         }))
     }
 
+    /// Whether the caller asked for JSON, so a refusal prints as one
+    /// `{error,meta}` object instead of text.
+    pub fn json_output(&self) -> bool {
+        let format = match self {
+            Self::Builtin(_) => None,
+            Self::Api(args) => args.common.format(),
+            Self::Catalog(invocation) => return invocation.json_output(),
+            Self::Get(invocation) => invocation.format,
+            Self::Search(args) => args.common.format(),
+            Self::DiscussionRoot(args, _) => args.common.format(),
+            Self::DiscussionTarget(args, _, _) => args.common.format(),
+            Self::Target(invocation) => invocation.format,
+        };
+        format == Some(porcelain::OutputFormat::Json)
+    }
+
     pub async fn dispatch(self) -> anyhow::Result<()> {
         match self {
             Self::Builtin(cli) => handlers::dispatch(cli.command, cli.quiet).await,
             Self::Api(args) => api::dispatch(args).await,
             Self::Catalog(invocation) => catalog_cli::dispatch(invocation).await,
             Self::Get(invocation) => {
-                if invocation.review_link {
+                if invocation.delivery == Delivery::Follow {
+                    anyhow::ensure!(
+                        invocation.input.view == View::Review
+                            && invocation.format == Some(porcelain::OutputFormat::Json),
+                        "--follow requires --view review --format json"
+                    );
+                    return crate::review::follow::run(&invocation.context.repo, invocation.input)
+                        .await;
+                }
+                if let Delivery::ReviewLink { open } = invocation.delivery {
                     return crate::review_link::print(
                         &invocation.context.repo,
                         &invocation.input.target,
                         invocation.format,
+                        !open,
                     )
                     .await;
                 }
@@ -188,10 +256,29 @@ impl Invocation {
 
 impl SearchArgs {
     pub(crate) async fn dispatch(self) -> anyhow::Result<()> {
+        let parameters = provenance_store::operations::catalog::definitions()
+            .iter()
+            .find_map(|definition| {
+                definition
+                    .registration
+                    .queries
+                    .iter()
+                    .find(|query| query.name == "search")
+                    .map(|query| query.parameters.as_slice())
+            })
+            .ok_or_else(|| anyhow::anyhow!("the operation catalog does not declare root search"))?;
+        let default_exclude_terminal = crate::read_policy::default_exclude_terminal(parameters)
+            .ok_or_else(|| {
+                anyhow::anyhow!("the root search query does not declare exclude_terminal")
+            })?;
         let query = SearchQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
             cursor: self.cursor,
-            exclude_terminal: false,
+            exclude_terminal: if self.include_terminal {
+                crate::read_policy::exclude_terminal(true)
+            } else {
+                default_exclude_terminal
+            },
             text: self.text,
             node_types: self.kind,
             limit: self.limit.unwrap_or(QUERY_DEFAULT_LIMIT),

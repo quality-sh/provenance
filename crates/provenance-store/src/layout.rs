@@ -28,11 +28,6 @@ impl ProvenanceLayout {
     pub fn cache_dir(&self) -> Utf8PathBuf {
         self.provenance_dir().join("cache")
     }
-    /// Default output directory for the generated wiki: a derived artifact,
-    /// gitignored the same way `cache_dir` is.
-    pub fn wiki_dir(&self) -> Utf8PathBuf {
-        self.provenance_dir().join("wiki")
-    }
     pub fn cache_db_path(&self) -> Utf8PathBuf {
         self.cache_dir().join("provenance.db")
     }
@@ -176,7 +171,6 @@ mod tests {
             layout.cache_db_path(),
             root.join(".provenance/cache/provenance.db")
         );
-        assert_eq!(layout.wiki_dir(), root.join(".provenance/wiki"));
         assert_eq!(
             layout.source_edit_marker_path(),
             root.join(".provenance/cache/source-edit-publication.json")

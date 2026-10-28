@@ -1,3 +1,4 @@
+// Release-check aid: this flow checks the native bundle and SDK against a running host.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
@@ -43,11 +44,11 @@ try {
       cwd: work, encoding: 'utf8', timeout: 30_000,
       input: JSON.stringify({
         actor: 'review-test', id, statement: 'The record is readable.', status: 'discovery',
-        depends_on: [], supersedes: [], ...(parent ? { refines: parent } : {}),
+        depends_on: [], supersedes: [], ...(parent ? { refines: [parent] } : {}),
       }),
     });
   }
-  host = spawn(binary, ['review', '--repo', repository, '--repository-id', 'fixture', '--scope', 'default'], {
+  host = spawn(binary, ['review', '--repo', repository, '--repository-id', 'fixture', '--scope', 'default', '--no-open'], {
     cwd: work, env: { ...process.env, PATH: work }, stdio: ['ignore', 'pipe', 'inherit'],
   });
   const exited = once(host, 'exit');

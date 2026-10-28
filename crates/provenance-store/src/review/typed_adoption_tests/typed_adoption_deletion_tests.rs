@@ -23,7 +23,7 @@ fn typed_omission_of_only_an_enrolled_rule_returns_a_public_conflict() {
     );
     store.apply_typed_spec(&scope, input.clone()).unwrap();
     let rule_id = store.list_rules(&scope).unwrap()[0].id.clone();
-    enroll(&store, &scope, NodeType::Rule, &rule_id);
+    submit_for_review(&store, &scope, NodeType::Rule, &rule_id);
     input.rules.clear();
 
     let error = store.apply_typed_spec(&scope, input).unwrap_err();
@@ -66,7 +66,7 @@ fn typed_cascade_refuses_enrolled_deletion_before_publication() {
             origin_message: None,
         })
         .unwrap();
-    enroll(&store, &scope, NodeType::Resolution, &resolution_id);
+    submit_for_review(&store, &scope, NodeType::Resolution, &resolution_id);
     let requirement_path = shards::requirements_path(&store.layout, &scope);
     let resolution_path = shards::resolutions_path(&store.layout, &scope);
     let requirements_before = std::fs::read(&requirement_path).unwrap();
@@ -108,7 +108,7 @@ fn typed_cascade_deletion_of_an_enrolled_topic_returns_a_public_conflict() {
             links: Vec::new(),
         })
         .unwrap();
-    enroll(&store, &scope, NodeType::Topic, &topic_id);
+    submit_for_review(&store, &scope, NodeType::Topic, &topic_id);
 
     let error = store
         .apply_typed_spec(&scope, cascade_document(false))

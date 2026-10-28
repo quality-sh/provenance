@@ -110,7 +110,7 @@ fn exact_shipped_promotion_decisions_export_is_accepted() {
 }
 
 #[test]
-#[verifies("rule_legacy_shard_frozen", examples)]
+#[verifies("rule_legacy_terminal_proposals_frozen", examples)]
 fn import_cannot_omit_entire_existing_shipped_legacy_terminal_set() {
     let dir = tempfile::tempdir().unwrap();
     let mut shipped = export_shipped(&dir);
@@ -195,7 +195,9 @@ fn export_shipped(dir: &tempfile::TempDir) -> serde_json::Value {
         ])
         .assert()
         .success();
-    serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap()
+    let mut document = serde_json::from_slice(&std::fs::read(output).unwrap()).unwrap();
+    export_fixture_support::keep_decision_links_pending(&mut document);
+    document
 }
 
 fn init(repo: &std::path::Path) {
