@@ -1,6 +1,7 @@
 import { connectEvents, type EventSocket } from './events.ts';
 import {
-  CONNECTION_REFUSED, createSession, type ReviewConfig, type ReviewHandle, type ReviewMountOptions,
+  CONNECTION_REFUSED, createSession, type ConfigReviewer, type ReviewConfig, type ReviewHandle,
+  type ReviewMountOptions,
 } from './session.ts';
 
 const LAUNCH_SESSION_ROUTE = '/review-launch/session';
@@ -77,6 +78,15 @@ function element(document: BrowserDocument, id: string): BrowserElement {
   return found;
 }
 
+function configReviewer(value: unknown): ConfigReviewer {
+  if (typeof value !== 'object' || value === null ||
+    !('actorId' in value) || typeof value.actorId !== 'string' ||
+    !('allowed' in value) || typeof value.allowed !== 'boolean') {
+    throw new Error('Invalid reviewer');
+  }
+  return { actorId: value.actorId, allowed: value.allowed };
+}
+
 function reviewConfig(value: unknown, origin: string): ReviewConfig {
   if (typeof value !== 'object' || value === null ||
     !('endpoint' in value) || typeof value.endpoint !== 'string' || value.endpoint !== origin ||
@@ -91,6 +101,8 @@ function reviewConfig(value: unknown, origin: string): ReviewConfig {
     repositoryId: value.repositoryId,
     scope: value.scope,
     dispositionActorIds: value.dispositionActorIds,
+    // The page decides only as the reviewer that the host reports, so the app never invents one.
+    ...('reviewer' in value && value.reviewer !== undefined ? { reviewer: configReviewer(value.reviewer) } : {}),
   };
 }
 

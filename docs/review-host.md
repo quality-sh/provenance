@@ -309,7 +309,12 @@ credential. After the page exchanges the launch code, the application opens
 available when `root` is absent. The application reads `/review-config` with the
 page session in the Authorization header. It then
 calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
-`dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. The
+`dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. When
+`/review-config` contains `reviewer`, the application passes it unchanged as
+the `reviewer` option. When it does not, the option is absent. The page decides
+only as `reviewer.actorId` and only when `reviewer.allowed` is `true`. In all
+other cases the page is read-only and tells why. The application refuses a
+`reviewer` that does not have a string `actorId` and a boolean `allowed`. The
 renderer creates and owns the generated Effect client. The application passes
 the page session as `bearer`, so the renderer sends it in the Authorization
 header. The host exchanges it for the bearer before the operation routes

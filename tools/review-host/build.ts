@@ -33,6 +33,8 @@ if (pinArg) {
 const options: ts.CompilerOptions = {
   noEmit: true, strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
   moduleResolution: ts.ModuleResolutionKind.Bundler, allowImportingTsExtensions: true,
+  // The renderer's declarations import its own dependencies, which provenance-web checks.
+  skipLibCheck: true,
   types: [], paths: {
     'review-renderer': [declarations],
   },

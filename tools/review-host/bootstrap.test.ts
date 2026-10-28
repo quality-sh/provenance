@@ -97,7 +97,8 @@ test('the renderer gets no reviewer when the host reports none', async function 
 
 test('a malformed reviewer refuses the configuration', async function refusesAMalformedReviewer() {
   verifies('rule_review_host_reports_reviewer', 'examples');
-  const page = launchPage(undefined, undefined, undefined, { ...config, reviewer: { actorId: 'maintainer' } });
+  const reviewer = { actorId: 'maintainer' };
+  const page = launchPage(undefined, undefined, undefined, { ...config, reviewer });
   await settle();
   await settle();
   assert.deepEqual(page.mounted, []);

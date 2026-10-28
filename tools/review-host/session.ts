@@ -1,8 +1,16 @@
+/** `/review-config` `reviewer`: the person who runs the host, and whether they can decide. */
+export interface ConfigReviewer {
+  readonly actorId: string;
+  readonly allowed: boolean;
+}
+
 export interface ReviewConfig {
   readonly endpoint: string;
   readonly repositoryId: string;
   readonly scope: string;
   readonly dispositionActorIds: ReadonlyArray<string>;
+  /** Absent when the host finds no reviewer; the page is then read-only. */
+  readonly reviewer?: ConfigReviewer;
 }
 
 export interface ReviewMountOptions extends ReviewConfig {
