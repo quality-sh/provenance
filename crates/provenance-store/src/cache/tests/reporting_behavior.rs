@@ -135,7 +135,7 @@ fn requirement_produced_rule_does_not_need_a_resolution() {
     store
         .create_rule(CreateRuleInput {
             archived_in_commit: None,
-            scope_id: scope.clone(),
+            scope_id: scope,
             id: sid("rule_half"),
             name: None,
             description: None,
@@ -334,7 +334,7 @@ fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
     let (_dir, layout, scope) = seeded_layout();
     StateStore::new(layout.clone())
         .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
+            scope_id: scope,
             id: sid("req_missing_domain"),
             statement: "Rostering rules need a domain".into(),
             description: None,

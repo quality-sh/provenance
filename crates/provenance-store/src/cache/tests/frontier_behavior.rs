@@ -94,7 +94,7 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
     let store = StateStore::new(layout.clone());
     store
         .create_proposal_card(CreateProposalCardInput {
-            scope_id: scope.clone(),
+            scope_id: scope,
             id: sid("proposal_demand_only"),
             proposal_key: "demand-only".into(),
             proposal_type: ProposalType::RequirementCandidate,
