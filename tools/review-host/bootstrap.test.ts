@@ -24,7 +24,9 @@ function fakeStorage(initial: Record<string, string> = {}) {
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-function launchPage(hash = '#launch=code-1', storage = fakeStorage(), accepted = 'page-session') {
+function launchPage(
+  hash = '#launch=code-1', storage = fakeStorage(), accepted = 'page-session', served: object = config,
+) {
   const events: string[] = [];
   const receivers: unknown[] = [];
   const mounted: ReviewMountOptions[] = [];
@@ -41,7 +43,7 @@ function launchPage(hash = '#launch=code-1', storage = fakeStorage(), accepted =
       const authorization = init.headers.authorization;
       events.push(`fetch ${path} ${init.body ?? authorization ?? ''}`.trim());
       if (path === '/review-launch/session') return { ok: true, json: async () => ({ session: 'page-session' }) };
-      return { ok: authorization === `Bearer ${accepted}`, json: async () => config };
+      return { ok: authorization === `Bearer ${accepted}`, json: async () => served };
     },
     storage,
     mount(_root, options) {
@@ -65,6 +67,41 @@ test('a launch link mounts the record with the redeemed session', async () => {
   assert.deepEqual(page.mounted, [
     { ...config, bearer: 'page-session', rootId: 'req_root', focusId: 'rule_child' },
   ]);
+});
+
+// The page decides as the reviewer that the host reports, so the host app passes it as is.
+test('the reviewer that the host reports reaches the renderer', async function passesTheReviewer() {
+  verifies('rule_review_host_reports_reviewer', 'examples');
+  const reviewer = { actorId: 'maintainer', allowed: true };
+  const page = launchPage(undefined, undefined, undefined, { ...config, reviewer });
+  await page.mounting;
+  assert.deepEqual(page.mounted, [
+    { ...config, reviewer, bearer: 'page-session', rootId: 'req_root', focusId: 'rule_child' },
+  ]);
+});
+
+test('a reviewer that the host does not allow reaches the renderer as is', async function passesARefusedReviewer() {
+  verifies('rule_review_host_reports_reviewer', 'examples');
+  const reviewer = { actorId: 'guest', allowed: false };
+  const page = launchPage(undefined, undefined, undefined, { ...config, reviewer });
+  await page.mounting;
+  assert.deepEqual(page.mounted[0]?.reviewer, reviewer);
+});
+
+test('the renderer gets no reviewer when the host reports none', async function inventsNoReviewer() {
+  verifies('rule_review_host_reports_reviewer', 'examples');
+  const page = launchPage();
+  await page.mounting;
+  assert.equal('reviewer' in page.mounted[0]!, false);
+});
+
+test('a malformed reviewer refuses the configuration', async function refusesAMalformedReviewer() {
+  verifies('rule_review_host_reports_reviewer', 'examples');
+  const page = launchPage(undefined, undefined, undefined, { ...config, reviewer: { actorId: 'maintainer' } });
+  await settle();
+  await settle();
+  assert.deepEqual(page.mounted, []);
+  assert.equal(page.status.textContent, CONNECTION_REFUSED);
 });
 
 test('a launch link stores the session on its origin and opens events with it', async function storesTheLaunchSession() {
