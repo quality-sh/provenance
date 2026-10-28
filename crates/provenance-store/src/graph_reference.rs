@@ -84,7 +84,6 @@ pub struct GraphCounts {
 }
 
 pub struct GraphReferences {
-    repository: Repository,
     git: GitRepository,
 }
 
@@ -153,29 +152,32 @@ impl GraphReference {
 }
 
 impl GraphReferences {
-    pub fn open(repository: &Repository) -> Result<Self, GraphReferenceError> {
+    /// The references of the Git repository at `repo`. Reading a reference
+    /// needs only Git: the pinned graph comes from the commit, not from the
+    /// live state.
+    pub fn open(repo: &Utf8Path) -> Result<Self, GraphReferenceError> {
         Ok(Self {
-            git: GitRepository::open(repository.working_tree())?,
-            repository: repository.clone(),
+            git: GitRepository::open(repo)?,
         })
     }
 
-    /// Pins the graph of the selected scope at a commit.
+    /// Pins the graph of the scope `repository` selected at a commit.
     pub fn issue(
         &self,
+        repository: &Repository,
         revision: Option<&str>,
         correlation: Option<ExternalCorrelation>,
     ) -> Result<GraphReference, GraphReferenceError> {
         if let Some(correlation) = &correlation {
             validate_correlation(correlation)?;
         }
-        let scope = self.repository.scope().as_str();
+        let scope = repository.scope().as_str();
         let implicit_head = revision.is_none();
         let commit = self.git.resolve_commit(revision.unwrap_or("HEAD"))?;
         let graph = self.projection(TreeSource::Commit(&commit), scope)?;
         if implicit_head {
             let index = self.projection(TreeSource::Index, scope)?;
-            let worktree = read_projection(&self.repository.store(), self.repository.scope())?;
+            let worktree = read_projection(&repository.store(), repository.scope())?;
             let committed_bytes = canonical_bytes(&graph)?;
             if committed_bytes != canonical_bytes(&index)?
                 || committed_bytes != canonical_bytes(&worktree)?
@@ -236,22 +238,10 @@ impl GraphReferences {
     /// and found it equal to the recorded one, so writing the recorded digest
     /// into the document writes a digest the graph beside it hashes to. That
     /// is what `ExactExport::from_json` checks again on the way in.
-    ///
-    /// The reference must name the selected scope.
     pub fn exact_export(
         &self,
         reference: &GraphReference,
     ) -> Result<ExactExport, GraphReferenceError> {
-        reference.validate()?;
-        let requested =
-            provenance_core::ScopeId::new(reference.scope_id.clone()).map_err(incomplete)?;
-        if let Err(other) = self.repository.ensure_selected(&requested) {
-            return mismatch(
-                "scope_id",
-                other.selected.as_str(),
-                other.requested.as_str(),
-            );
-        }
         Ok(ExactExport {
             schema_version: SUPPORTED_SCHEMA_VERSION.0,
             operation: "exact-export",

@@ -245,8 +245,9 @@ fn store_api_rejects_invalid_reference_contract() {
     let temp = committed_store();
     let repository =
         provenance_store::repository::Repository::open(temp.path(), "default").unwrap();
-    let references = GraphReferences::open(&repository).unwrap();
-    let reference = references.issue(None, None).unwrap();
+    let references =
+        GraphReferences::open(camino::Utf8Path::from_path(temp.path()).unwrap()).unwrap();
+    let reference = references.issue(&repository, None, None).unwrap();
 
     let mut unsupported = reference.clone();
     unsupported.schema_version = SUPPORTED_SCHEMA_VERSION.0 + 1;
