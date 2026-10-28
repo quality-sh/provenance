@@ -9,6 +9,7 @@
 
 use anyhow::Context;
 use fs2::FileExt;
+use provenance_core::protocol::read_failure::CacheCloseStage;
 use provenance_macros::rule;
 use sqlx::SqlitePool;
 use std::fmt;
@@ -23,7 +24,7 @@ const CLOSE_LOCK_RETRY: Duration = Duration::from_millis(1);
 
 /// What one completion is waiting for.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum Stage {
+pub(crate) enum Stage {
     CloseLock(PathBuf),
     Teardown { connections: u32 },
 }
@@ -36,6 +37,22 @@ impl Stage {
             connections: pool.size(),
         }))
     }
+
+    /// The stage without its local facts, for a public failure.
+    pub(crate) const fn public(&self) -> CacheCloseStage {
+        match self {
+            Self::CloseLock(_) => CacheCloseStage::CloseLock,
+            Self::Teardown { .. } => CacheCloseStage::Teardown,
+        }
+    }
+}
+
+/// A completion that had not finished when its caller's deadline passed.
+#[derive(Debug, thiserror::Error)]
+#[error("cache close did not finish within {deadline:?}: {stage}")]
+pub(crate) struct CompletionTimedOut {
+    pub(crate) deadline: Duration,
+    pub(crate) stage: Stage,
 }
 
 impl fmt::Display for Stage {
@@ -143,8 +160,8 @@ async fn close_until_empty(pool: &SqlitePool, stage: &Mutex<Stage>) {
 }
 
 /// Waits for the completion `task` until `deadline`. Past the deadline the
-/// wait fails with the stage the completion is in; the task keeps the
-/// close lock and the pool and goes on.
+/// wait fails with a [`CompletionTimedOut`] that names the stage the
+/// completion is in; the task keeps the close lock and the pool and goes on.
 #[rule("rule_cache_completion_names_its_stage_at_the_deadline")]
 pub(super) async fn within_deadline(
     task: JoinHandle<anyhow::Result<()>>,
@@ -158,5 +175,5 @@ pub(super) async fn within_deadline(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clone();
-    anyhow::bail!("cache close did not finish within {deadline:?}: {stage}")
+    Err(CompletionTimedOut { deadline, stage }.into())
 }

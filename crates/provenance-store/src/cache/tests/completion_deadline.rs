@@ -1,8 +1,9 @@
-//! A close that is not complete at its deadline fails and names the stage
-//! of the wait. The completion keeps the close lock and goes on.
+//! A close that is not complete at its deadline fails with a typed
+//! `CompletionTimedOut` that names the stage of the wait. The completion
+//! keeps the close lock and goes on.
 use super::close_cancellation::pause_physical_close;
 use super::wal_behavior::wal_files;
-use crate::cache::{open_cache, CacheConnection};
+use crate::cache::{open_cache, CacheConnection, CompletionStage, CompletionTimedOut};
 use crate::layout::ProvenanceLayout;
 use fs2::FileExt;
 use provenance_macros::verifies;
@@ -65,7 +66,7 @@ fn temporary_layout() -> (tempfile::TempDir, ProvenanceLayout) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[verifies("rule_cache_completion_names_its_stage_at_the_deadline", examples)]
-async fn a_paused_teardown_fails_the_close_naming_the_pool() {
+async fn a_paused_teardown_fails_the_close_with_the_teardown_stage() {
     let (_dir, layout) = temporary_layout();
     let connection = written(&layout).await;
     let (release, _started) = pause_physical_close(&connection).await;
@@ -79,6 +80,15 @@ async fn a_paused_teardown_fails_the_close_naming_the_pool() {
         message.contains("cache close did not finish within 300ms: the pool still holds"),
         "{message}"
     );
+    let timed_out = error
+        .downcast_ref::<CompletionTimedOut>()
+        .expect("the close fails with a typed timeout");
+    assert_eq!(timed_out.deadline, DEADLINE);
+    assert!(
+        matches!(timed_out.stage, CompletionStage::Teardown { .. }),
+        "{:?}",
+        timed_out.stage
+    );
 
     let lock = close_lock(&layout);
     assert!(
@@ -91,7 +101,7 @@ async fn a_paused_teardown_fails_the_close_naming_the_pool() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[verifies("rule_cache_completion_names_its_stage_at_the_deadline", examples)]
-async fn a_held_close_lock_fails_the_close_naming_the_lock() {
+async fn a_held_close_lock_fails_the_close_with_the_close_lock_stage() {
     let (_dir, layout) = temporary_layout();
     let connection = written(&layout).await;
     let lock = close_lock(&layout);
@@ -105,6 +115,13 @@ async fn a_held_close_lock_fails_the_close_naming_the_lock() {
     assert_eq!(
         format!("{error:#}"),
         format!("cache close did not finish within 300ms: waiting for the close lock {path}")
+    );
+    let timed_out = error
+        .downcast_ref::<CompletionTimedOut>()
+        .expect("the close fails with a typed timeout");
+    assert_eq!(
+        timed_out.stage,
+        CompletionStage::CloseLock(path.into_std_path_buf())
     );
 
     FileExt::unlock(&lock).unwrap();
