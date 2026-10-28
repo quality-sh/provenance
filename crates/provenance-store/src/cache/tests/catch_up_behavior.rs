@@ -43,14 +43,14 @@ async fn stored_digest(pool: &sqlx::SqlitePool) -> String {
 
 /// Catch-up output must equal a fresh rebuild, rows and digest.
 pub(super) async fn assert_catch_up_equals_rebuild(layout: &crate::layout::ProvenanceLayout) {
-    let report = catch_up_state(layout).await.unwrap();
+    let report = catch_up_state(&open(layout)).await.unwrap();
     let pool = open_cache(layout).await.unwrap();
     let caught_up_rows = dump_family_tables(pool.pool()).await;
     let caught_up_digest = stored_digest(pool.pool()).await;
     assert_eq!(report.digest, caught_up_digest);
     drop(pool);
 
-    materialize_state(layout).await.unwrap();
+    materialize_state(&open(layout)).await.unwrap();
     let pool = open_cache(layout).await.unwrap();
     assert_eq!(caught_up_rows, dump_family_tables(pool.pool()).await);
     assert_eq!(caught_up_digest, stored_digest(pool.pool()).await);

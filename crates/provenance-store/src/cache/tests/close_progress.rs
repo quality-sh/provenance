@@ -27,7 +27,6 @@ fn failed_freshness_close(setup_delay: Duration) {
         let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
         let layout = ProvenanceLayout::new(root.clone());
         let repository = super::fixtures::initialized(dir.path());
-        let scope = provenance_core::ScopeId::new("default").unwrap();
         let guard = tokio::time::timeout(
             SETUP_LIMIT,
             crate::publication::publication_guard(&repository),
@@ -64,8 +63,7 @@ fn failed_freshness_close(setup_delay: Duration) {
         let result = tokio::time::timeout(SETUP_LIMIT, async {
             let read = async {
                 let answer = crate::operations::reader::answer(
-                    &root,
-                    &scope,
+                    &repository,
                     crate::operations::read_policy::ReadPolicy::default(),
                     |_| Box::pin(async { Ok(1usize) }),
                 )

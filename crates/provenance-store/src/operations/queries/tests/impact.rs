@@ -119,7 +119,8 @@ async fn direct_reader_accepts_an_alias_of_the_repository_root() {
     let alias = alias_dir.path().join("repository");
     std::os::unix::fs::symlink(&store.root, &alias).unwrap();
     let alias = camino::Utf8PathBuf::from_path_buf(alias).unwrap();
-    let answer = reader::answer(&alias, &store.scope, ReadPolicy::default(), |ctx| {
+    let aliased = crate::repository::Repository::open(&alias, store.scope.as_str()).unwrap();
+    let answer = reader::answer(&aliased, ReadPolicy::default(), |ctx| {
         Box::pin(async move { impact::impact(ctx, query("req_overtime")).await })
     })
     .await

@@ -99,8 +99,7 @@ async fn a_refused_stale_read_completes_its_connection() {
     let path = crate::shards::requirements_path(&layout, &scope);
     std::fs::write(&path, b"not JSON\n").unwrap();
     let error = crate::operations::reader::answer(
-        layout.root(),
-        &scope,
+        &open(&layout),
         ReadPolicy::with_freshness(FreshnessPolicy::RefuseStale),
         |_| Box::pin(async { Ok(1usize) }),
     )
@@ -129,8 +128,7 @@ async fn a_refused_schema_behind_read_completes_its_connection() {
         .unwrap();
     cache.close().await.unwrap();
     let error = crate::operations::reader::answer(
-        layout.root(),
-        &scope,
+        &open(&layout),
         ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
         |_| Box::pin(async { Ok(1usize) }),
     )
@@ -152,21 +150,19 @@ async fn a_refused_schema_behind_read_completes_its_connection() {
 #[tokio::test]
 async fn a_failed_catch_up_step_completes_its_connection() {
     let (_dir, layout, scope) = fixtures::seeded_layout();
-    let healthy =
-        crate::operations::reader::answer(layout.root(), &scope, ReadPolicy::default(), |_| {
-            Box::pin(async { Ok(1usize) })
-        })
-        .await
-        .unwrap();
+    let healthy = crate::operations::reader::answer(&open(&layout), ReadPolicy::default(), |_| {
+        Box::pin(async { Ok(1usize) })
+    })
+    .await
+    .unwrap();
     crate::test_probes::arm("prepare_current_schema_under_guard", || {
         anyhow::bail!("injected catch-up failure")
     });
-    let stamped =
-        crate::operations::reader::answer(layout.root(), &scope, ReadPolicy::default(), |_| {
-            Box::pin(async { Ok(1usize) })
-        })
-        .await
-        .unwrap();
+    let stamped = crate::operations::reader::answer(&open(&layout), ReadPolicy::default(), |_| {
+        Box::pin(async { Ok(1usize) })
+    })
+    .await
+    .unwrap();
     crate::test_probes::disarm("prepare_current_schema_under_guard");
     assert_eq!(
         stamped.stamp.policy,

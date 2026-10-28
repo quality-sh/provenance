@@ -393,10 +393,10 @@ async fn document_review_totals_exclude_a_pending_parent_reference() {
             origin_message: None,
         })
         .unwrap();
-    let root = root_of(&dir);
+    let repository = repository_at(&root_of(&dir));
     let read = |cursor| {
         queries::read_document(
-            &repository_at(&root),
+            &repository,
             ReadPolicy::default(),
             ReadDocumentQuery {
                 id: "req_first_release".into(),

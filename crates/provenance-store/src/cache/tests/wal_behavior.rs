@@ -32,12 +32,11 @@ pub fn wal_files(layout: &ProvenanceLayout) -> Vec<String> {
 #[tokio::test]
 #[verifies("rule_completed_read_leaves_no_wal_files", examples)]
 async fn a_completed_read_leaves_no_wal_files() {
-    let (_dir, layout, scope) = seeded_layout();
-    let root = Some(layout.root().to_path_buf());
+    let (_dir, layout, _scope) = seeded_layout();
+    let repository = super::fixtures::open(&layout);
     for round in 0..20 {
         let answer = crate::operations::queries::get(
-            root.clone(),
-            &scope,
+            &repository,
             ReadPolicy::default(),
             GetQuery {
                 protocol_version: Some(SDK_PROTOCOL_VERSION),

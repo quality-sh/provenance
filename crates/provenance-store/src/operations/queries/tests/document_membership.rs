@@ -1,7 +1,7 @@
 use super::{repository_at, root_of, seeded_store};
 use crate::cache::tests::fixtures::append_record;
 use crate::operations::{queries, read_policy::ReadPolicy};
-use provenance_core::{protocol::ReadDocumentQuery, ScopeId};
+use provenance_core::protocol::ReadDocumentQuery;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 

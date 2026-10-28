@@ -11,7 +11,7 @@
 use super::hydration_support::{
     append_binding, append_review, counted, evidence_query, resolve_query, OVERSIZED_BYTES,
 };
-use super::{repository_of, root_of, seeded_store};
+use super::{repository_of, seeded_store};
 use crate::cache::tests::fixtures::create_rule_of;
 use crate::operations::queries;
 use crate::operations::read_policy::ReadPolicy;

@@ -194,7 +194,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
 async fn document_valid_freshness_preserves_page_refusals() {
     use crate::operations::read_policy::FreshnessPolicy;
 
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     read(root_of(&dir)).await;
     for freshness in [
         FreshnessPolicy::CatchUp,

@@ -26,13 +26,12 @@ async fn answers_that_close_together_remove_the_wal_files() {
 #[verifies("rule_completed_read_leaves_no_wal_files", examples)]
 async fn eight_answers_that_close_together_remove_the_wal_files() {
     const READERS: usize = 8;
-    let (dir, store, scope) = seeded_store();
+    let (dir, store, _scope) = seeded_store();
     let root = root_of(&dir);
     let barrier = Arc::new(Barrier::new(READERS));
     let readers = (0..READERS)
         .map(|_| {
             let root = root.clone();
-            let scope = scope.clone();
             let barrier = Arc::clone(&barrier);
             tokio::spawn(async move {
                 answer(&repository_at(&root), ReadPolicy::default(), move |ctx| {
@@ -97,13 +96,12 @@ async fn eight_answers_that_close_together_remove_the_wal_files() {
 }
 
 async fn assert_concurrent_answers(close_together: bool) {
-    let (dir, store, scope) = seeded_store();
+    let (dir, store, _scope) = seeded_store();
     let root = root_of(&dir);
     let barrier = Arc::new(Barrier::new(2));
     let first_closed = Arc::new(Notify::new());
     let start = |wait_for_first| {
         let root = root.clone();
-        let scope = scope.clone();
         let barrier = Arc::clone(&barrier);
         let first_closed = Arc::clone(&first_closed);
         tokio::spawn(async move {

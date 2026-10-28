@@ -119,8 +119,7 @@ async fn get_answers_a_domain_and_a_boundary_by_id() {
         (NodeType::Boundary, "boundary_no_backpay", "boundary"),
     ] {
         let answer = super::get(
-            Some(root_of(&dir)),
-            &scope,
+            &repository_of(&dir),
             ReadPolicy::default(),
             GetQuery {
                 protocol_version: Some(SDK_PROTOCOL_VERSION),
@@ -143,8 +142,7 @@ async fn get_answers_a_domain_and_a_boundary_by_id() {
 async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
     let (dir, _store, scope) = seeded_store();
     let answer = super::search(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         SearchQuery {
             cursor: None,
@@ -175,8 +173,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
 async fn filter_only_search_reaches_each_selected_kind() {
     let (dir, _store, scope) = seeded_store();
     let answer = super::search(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         serde_json::from_value(serde_json::json!({
             "node_types":["requirement", "boundary"],
@@ -205,8 +202,7 @@ async fn filter_only_search_reaches_each_selected_kind() {
 async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
     let (dir, _store, scope) = seeded_store();
     let answer = super::search(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         SearchQuery {
             cursor: None,
@@ -253,8 +249,7 @@ fn rank_appends_the_new_kinds_after_the_six_settled_positions() {
 async fn search_answers_new_kinds_after_every_settled_kind() {
     let (dir, _store, scope) = seeded_store();
     let answer = super::search(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         SearchQuery {
             cursor: None,

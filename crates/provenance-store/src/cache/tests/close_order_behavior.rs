@@ -90,7 +90,7 @@ fn a_read_closes_while_the_only_blocking_worker_waits_for_its_guard() {
         });
         let answer = tokio::time::timeout(
             CLOSE_LIMIT,
-            crate::operations::reader::answer(layout.root(), &scope, ReadPolicy::default(), |_| {
+            crate::operations::reader::answer(&open(&layout), ReadPolicy::default(), |_| {
                 Box::pin(async { Ok(1usize) })
             }),
         )

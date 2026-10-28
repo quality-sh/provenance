@@ -29,9 +29,11 @@ struct Inner {
     layout: ProvenanceLayout,
 }
 
-/// What a repository is, apart from where its state lives: the working tree,
-/// the selected scope and the settings read at open. The identity has no
-/// store constructor, so a holder cannot reach canonical state through it.
+/// What a repository is, apart from where its state lives.
+///
+/// The working tree, the selected scope and the settings read at open. The
+/// identity has no store constructor, so a holder cannot reach canonical
+/// state through it.
 #[derive(Clone, Debug)]
 pub struct RepositoryIdentity {
     root: Utf8PathBuf,

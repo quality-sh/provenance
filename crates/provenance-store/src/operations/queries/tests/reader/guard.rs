@@ -29,25 +29,20 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
         Ok(())
     });
     let run_layout = layout.clone();
-    let stamped = answer(
-        &store.root,
-        &store.scope,
-        ReadPolicy::default(),
-        move |ctx| {
-            Box::pin(async move {
-                anyhow::ensure!(
-                    !publication_lock_is_held(&run_layout),
-                    "the lock must be free while the read answers"
-                );
-                let found = records::get(ctx, get_query("req_overtime")).await?;
-                anyhow::ensure!(
-                    !publication_lock_is_held(&run_layout),
-                    "the lock must be free after the operation read canonical state"
-                );
-                Ok(found)
-            })
-        },
-    )
+    let stamped = answer(&store.repository(), ReadPolicy::default(), move |ctx| {
+        Box::pin(async move {
+            anyhow::ensure!(
+                !publication_lock_is_held(&run_layout),
+                "the lock must be free while the read answers"
+            );
+            let found = records::get(ctx, get_query("req_overtime")).await?;
+            anyhow::ensure!(
+                !publication_lock_is_held(&run_layout),
+                "the lock must be free after the operation read canonical state"
+            );
+            Ok(found)
+        })
+    })
     .await
     .unwrap();
     crate::test_probes::disarm("prepare_current_schema_under_guard");
@@ -62,28 +57,23 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
 async fn a_canonical_write_does_not_wait_for_a_read() {
     let store = test_stores::seeded_queries();
     let layout = store.layout();
-    let stamped = answer(
-        &store.root,
-        &store.scope,
-        ReadPolicy::default(),
-        move |ctx| {
-            Box::pin(async move {
-                let (sender, receiver) = mpsc::channel();
-                let writer_layout = layout.clone();
-                let writer = std::thread::spawn(move || {
-                    with_repository_publication(&writer_layout, || {
-                        sender.send(()).unwrap();
-                        Ok(())
-                    })
-                });
-                receiver
-                    .recv_timeout(Duration::from_secs(5))
-                    .expect("a canonical write must not wait on an open read");
-                writer.join().unwrap()?;
-                records::get(ctx, get_query("req_overtime")).await
-            })
-        },
-    )
+    let stamped = answer(&store.repository(), ReadPolicy::default(), move |ctx| {
+        Box::pin(async move {
+            let (sender, receiver) = mpsc::channel();
+            let writer_layout = layout.clone();
+            let writer = std::thread::spawn(move || {
+                with_repository_publication(&writer_layout, || {
+                    sender.send(()).unwrap();
+                    Ok(())
+                })
+            });
+            receiver
+                .recv_timeout(Duration::from_secs(5))
+                .expect("a canonical write must not wait on an open read");
+            writer.join().unwrap()?;
+            records::get(ctx, get_query("req_overtime")).await
+        })
+    })
     .await
     .unwrap();
     assert!(stamped.result.found);

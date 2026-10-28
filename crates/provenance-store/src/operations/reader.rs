@@ -92,7 +92,7 @@ pub struct ReadContext {
 }
 
 impl ReadContext {
-    fn new(snapshot: ReadSnapshot, repository: Repository, scan_limit: usize) -> Self {
+    const fn new(snapshot: ReadSnapshot, repository: Repository, scan_limit: usize) -> Self {
         Self {
             snapshot,
             live: Mutex::new(BTreeSet::new()),

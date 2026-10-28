@@ -7,13 +7,12 @@ use tokio::sync::Barrier;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn many_readers_close_together() {
-    let (dir, store, scope) = seeded_store();
+    let (dir, store, _scope) = seeded_store();
     let n = 8;
     let barrier = Arc::new(Barrier::new(n));
     let mut tasks = Vec::new();
     for _ in 0..n {
         let root = root_of(&dir);
-        let scope = scope.clone();
         let barrier = barrier.clone();
         tasks.push(tokio::spawn(async move {
             answer(&repository_at(&root), ReadPolicy::default(), move |ctx| {
