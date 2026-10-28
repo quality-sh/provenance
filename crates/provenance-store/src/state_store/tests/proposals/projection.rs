@@ -44,6 +44,7 @@ fn proposal_projection_rejects_unlisted_disposition_actor() {
 #[test]
 fn proposal_projection_uses_one_publication_snapshot() {
     let (_dir, store, scope) = initialized_store();
+    let repository = crate::test_support::repository(&store.layout);
     store
         .create_proposal_card(proposal_input(
             &scope,
@@ -55,7 +56,7 @@ fn proposal_projection_uses_one_publication_snapshot() {
     let (validated_tx, validated_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let reader = {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         std::thread::spawn(move || {
             store.project_proposal_cards(&scope, None, || {
@@ -69,7 +70,7 @@ fn proposal_projection_uses_one_publication_snapshot() {
 
     let (published_tx, published_rx) = std::sync::mpsc::channel();
     let publisher = {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
@@ -126,6 +127,7 @@ fn modern_proposal_rejects_duplicate_create() {
 #[verifies("rule_proposal_surfacing", examples)]
 fn ratification_records_a_disposition_without_mutating_proposal_definition() {
     let (_dir, store, scope) = initialized_store();
+    let repository = crate::test_support::repository(&store.layout);
     seed_proposal_ready_for_disposition(&store, &scope);
     let demand = ProposalDemand::for_target(IdeationTarget {
         artifact_type: IdeationTargetType::Requirement,
@@ -140,7 +142,7 @@ fn ratification_records_a_disposition_without_mutating_proposal_definition() {
     let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
     let mut threads = Vec::new();
     for id in ["disposition_overtime_a", "disposition_overtime_b"] {
-        let store = store.clone();
+        let store = repository.store();
         let scope = scope.clone();
         let barrier = barrier.clone();
         threads.push(std::thread::spawn(move || {

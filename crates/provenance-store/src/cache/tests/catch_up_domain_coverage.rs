@@ -9,7 +9,7 @@ use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::fixtures::open;
 use super::fixtures::*;
 use super::projection_digest_sensitivity::{aggregate_layout, change_one_record};
-use crate::state_store::{IdeationLandingBatch, StateStore};
+use crate::state_store::IdeationLandingBatch;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 /// Every family gets its own invalidation between materialize and catch-up,
@@ -76,7 +76,7 @@ async fn a_landed_ideation_batch_reaches_the_projection_through_catch_up() {
     let (_dir, layout, scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
 
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     let batch: IdeationLandingBatch = serde_json::from_value(serde_json::json!({
         "contributions": [{
             "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(), "id": "contribution_landed",

@@ -1,7 +1,5 @@
 use crate::output;
-use crate::repo_context::{
-    declared_scope_in, initialization_hint, is_not_initialized, RepoContext,
-};
+use crate::repo_context::{initialization_hint, is_not_initialized, RepoContext};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::{ensure_supported_schema_version, Manifest};
 use provenance_macros::rule;
@@ -11,6 +9,7 @@ use provenance_porcelain::check::{
 };
 use provenance_store::dictionary_reference::{resolve_project_dictionary, DictionaryResolution};
 use provenance_store::layout::ProvenanceLayout;
+use provenance_store::repository::declared_scope;
 use provenance_store::settings::BindingFindingsSeverity;
 use provenance_store::state_store::StateStore;
 use std::collections::BTreeSet;
@@ -67,26 +66,21 @@ impl RepositoryCheckPort {
         }
     }
 
-    /// The store for a run over the manifest's scopes. A repository-wide run
-    /// has no scope to open a repository with, so it reads through the layout.
-    fn repository_wide_store(&self) -> (ProvenanceLayout, StateStore) {
-        let layout = ProvenanceLayout::new(&self.context.repo);
-        let store = StateStore::new(layout.clone());
-        (layout, store)
-    }
-
     fn graph_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
-        let (layout, store) = self.repository_wide_store();
-        let result = provenance_store::layout::with_initialized_graph(&layout, |mut manifest| {
-            if let Some(scope) = scope {
-                declared_scope_in(&manifest, scope)?;
-                manifest
-                    .scopes
-                    .retain(|candidate| candidate.id.as_str() == scope);
-            }
-            validate_locked(&store, &manifest, scope.is_none())
-        })
-        .map_err(|error| initialization_hint(&self.context.repo, error));
+        // A run over the manifest's scopes has no scope to open a repository
+        // with, so it reads through the layout.
+        let layout = ProvenanceLayout::new(&self.context.repo);
+        let result =
+            provenance_store::layout::with_initialized_state(&layout, |mut manifest, store| {
+                if let Some(scope) = scope {
+                    declared_scope(&manifest, scope)?;
+                    manifest
+                        .scopes
+                        .retain(|candidate| candidate.id.as_str() == scope);
+                }
+                validate_locked(store, &manifest, scope.is_none())
+            })
+            .map_err(|error| initialization_hint(&self.context.repo, error));
         let findings = match result {
             Ok(()) => Vec::new(),
             Err(error)
@@ -106,11 +100,11 @@ impl RepositoryCheckPort {
     }
 
     fn statement_run(&self, scope: Option<&str>) -> Result<CategoryRun, String> {
-        let (layout, store) = self.repository_wide_store();
+        let layout = ProvenanceLayout::new(&self.context.repo);
         let (diagnostics, context) =
-            provenance_store::layout::with_initialized_graph(&layout, |mut manifest| {
+            provenance_store::layout::with_initialized_state(&layout, |mut manifest, store| {
                 if let Some(scope) = scope {
-                    declared_scope_in(&manifest, scope)?;
+                    declared_scope(&manifest, scope)?;
                     manifest
                         .scopes
                         .retain(|candidate| candidate.id.as_str() == scope);
@@ -125,7 +119,7 @@ impl RepositoryCheckPort {
                     Ok((analysis.diagnostics, Some(analysis.context)))
                 } else {
                     statement_report::changed_statements_from_head(
-                        &store,
+                        store,
                         &self.context.repo,
                         &manifest,
                     )
@@ -225,7 +219,7 @@ impl RepositoryCheckPort {
             Ok,
         )?;
         let scopes = match selected_scope {
-            Some(selected) => vec![declared_scope_in(&manifest, selected)?],
+            Some(selected) => vec![declared_scope(&manifest, selected)?],
             None => manifest.scopes.iter().collect(),
         };
         let mut warnings = Vec::new();

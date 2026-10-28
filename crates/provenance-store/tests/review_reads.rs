@@ -135,11 +135,9 @@ fn saves_stay_authoritative_after_reopen() {
     let (temp, store) = fixture();
     let first = store.save_requirement(save(&store, json!({}))).unwrap();
     drop(store);
-    let store = provenance_store::state_store::StateStore::new(
-        provenance_store::layout::ProvenanceLayout::new(
-            camino::Utf8Path::from_path(temp.path()).unwrap(),
-        ),
-    );
+    let store = provenance_store::repository::Repository::open(temp.path(), "default")
+        .unwrap()
+        .store();
     let repeat: SaveRequirement =
         serde_json::from_value(serde_json::to_value(save(&store, json!({}))).unwrap()).unwrap();
     assert_eq!(store.save_requirement(repeat).unwrap(), first);

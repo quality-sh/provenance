@@ -140,9 +140,13 @@ impl StateStore {
             RecordStamp::Fixed(stamp) => return Ok(Some(stamp.clone())),
             RecordStamp::ResolveFromRepository => {}
         }
+        // A staged store reads the commit of its live working tree.
+        let working_tree = self
+            .repository()
+            .map_or_else(|| self.layout.root(), |identity| identity.working_tree());
         let output = std::process::Command::new("git")
             .args(["rev-parse", "HEAD"])
-            .current_dir(self.layout.root())
+            .current_dir(working_tree)
             .output();
         // A new repository without a commit can still accept its first graph.
         let Ok(output) = output else {

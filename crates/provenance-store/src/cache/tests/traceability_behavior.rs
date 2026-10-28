@@ -8,14 +8,14 @@
 use super::super::*;
 use super::fixtures::*;
 use crate::layout::ProvenanceLayout;
-use crate::state_store::{CreateResolutionInput, CreateRuleInput, StateStore};
+use crate::state_store::{CreateResolutionInput, CreateRuleInput};
 use provenance_core::{RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId};
 
 /// A rule with both kinds of producer: `req_direct` names it outright, and
 /// `res_indirect` produces it while resolving `req_resolved`. Each
 /// requirement cites its own source.
 fn seed_two_producers(layout: &ProvenanceLayout, scope: &ScopeId) {
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout);
     create_requirement(&store, scope, "req_direct", RequirementStatus::Active);
     create_requirement(&store, scope, "req_resolved", RequirementStatus::Active);
     create_source(&store, scope, "source_direct");

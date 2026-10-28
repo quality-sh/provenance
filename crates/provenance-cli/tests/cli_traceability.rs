@@ -70,9 +70,9 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
         ])
         .assert()
         .success();
-    let store = provenance_store::state_store::StateStore::new(
-        provenance_store::layout::ProvenanceLayout::new(&repo),
-    );
+    let store = provenance_store::repository::Repository::open(&repo, "default")
+        .unwrap()
+        .store();
     let etag = store
         .requirement_edit_state(
             &provenance_core::ScopeId::new("default").unwrap(),
@@ -179,9 +179,9 @@ fn cli_traceability_chain_reports_rule_upstream_nodes_and_gaps() {
         ])
         .assert()
         .success();
-    let store = provenance_store::state_store::StateStore::new(
-        provenance_store::layout::ProvenanceLayout::new(&repo),
-    );
+    let store = provenance_store::repository::Repository::open(&repo, "default")
+        .unwrap()
+        .store();
     let etag = store
         .requirement_edit_state(
             &provenance_core::ScopeId::new("default").unwrap(),

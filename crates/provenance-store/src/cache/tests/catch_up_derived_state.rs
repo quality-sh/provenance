@@ -9,7 +9,6 @@ use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
 use super::fixtures::open;
 use super::projection_digest_sensitivity::aggregate_layout;
-use crate::state_store::StateStore;
 use provenance_core::ScopeId;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
@@ -55,7 +54,7 @@ async fn a_writer_path_disposition_moves_the_cards_effective_state() {
     materialize_state(&open(&layout)).await.unwrap();
     assert_eq!(effective_state(&layout).await, "asserted");
 
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     store
         .create_disposition(crate::state_store::CreateDispositionInput {
             scope_id: scope.clone(),

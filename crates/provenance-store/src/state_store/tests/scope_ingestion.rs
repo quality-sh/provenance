@@ -21,7 +21,11 @@ fn staged_store() -> (
     let staged_layout = ProvenanceLayout::new(staged_root);
     std::fs::create_dir_all(staged_layout.state_dir()).unwrap();
     std::fs::write(staged_layout.manifest_path(), &manifest_before).unwrap();
-    let staged_store = StateStore::new(staged_layout);
+    let staged_store = StateStore::staged_view(
+        None,
+        staged_layout,
+        crate::state_store::RecordStamp::ResolveFromRepository,
+    );
     (dir, live_store, staged_store, scope, manifest_before)
 }
 

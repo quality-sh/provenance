@@ -27,14 +27,15 @@ async fn answers_that_close_together_remove_the_wal_files() {
 async fn eight_answers_that_close_together_remove_the_wal_files() {
     const READERS: usize = 8;
     let (dir, store, _scope) = seeded_store();
-    let root = root_of(&dir);
+    // Open once: an open inside a task would wait for the lock on a worker.
+    let repository = repository_at(&root_of(&dir));
     let barrier = Arc::new(Barrier::new(READERS));
     let readers = (0..READERS)
         .map(|_| {
-            let root = root.clone();
+            let repository = repository.clone();
             let barrier = Arc::clone(&barrier);
             tokio::spawn(async move {
-                answer(&repository_at(&root), ReadPolicy::default(), move |ctx| {
+                answer(&repository, ReadPolicy::default(), move |ctx| {
                     Box::pin(async move {
                         let count = ctx.snapshot().table::<Requirement>().count().await?;
                         // All eight snapshots must be open before any answer
@@ -97,15 +98,16 @@ async fn eight_answers_that_close_together_remove_the_wal_files() {
 
 async fn assert_concurrent_answers(close_together: bool) {
     let (dir, store, _scope) = seeded_store();
-    let root = root_of(&dir);
+    // Open once: an open inside a task would wait for the lock on a worker.
+    let repository = repository_at(&root_of(&dir));
     let barrier = Arc::new(Barrier::new(2));
     let first_closed = Arc::new(Notify::new());
     let start = |wait_for_first| {
-        let root = root.clone();
+        let repository = repository.clone();
         let barrier = Arc::clone(&barrier);
         let first_closed = Arc::clone(&first_closed);
         tokio::spawn(async move {
-            answer(&repository_at(&root), ReadPolicy::default(), move |ctx| {
+            answer(&repository, ReadPolicy::default(), move |ctx| {
                 Box::pin(async move {
                     let count = ctx.snapshot().table::<Requirement>().count().await?;
                     // Both snapshots must be open before either answer can finish.

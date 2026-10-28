@@ -61,11 +61,10 @@ impl Fixture {
             .unwrap(),
         )
         .unwrap();
-        Self {
-            dir,
-            store: StateStore::new(layout),
-            scope,
-        }
+        let store = provenance_store::repository::Repository::open(dir.path(), "default")
+            .unwrap()
+            .store();
+        Self { dir, store, scope }
     }
     pub async fn call(&self, operation: &str, request: Value) -> Result<Value, Value> {
         struct Resolver(PreparedScope);
