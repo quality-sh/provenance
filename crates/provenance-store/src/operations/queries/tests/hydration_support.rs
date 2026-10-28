@@ -141,6 +141,7 @@ pub fn resolve_query(symbol: Option<&str>, limit: usize) -> ResolveSymbolQuery {
         file: "src/pay.rs".into(),
         symbol: symbol.map(str::to_string),
         line: None,
+        cursor: None,
         limit,
     }
 }
