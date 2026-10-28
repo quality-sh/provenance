@@ -7,12 +7,15 @@ selection, configuration read, and connection error display.
 
 The page has no credential field. It reads a single-use launch code from the
 `#launch=` URL fragment and removes the fragment from the address bar. It then
-exchanges the code one time at `POST /review-launch/session` for the access
-token. The access token stays in page memory. It is sent only in an
-Authorization header to the current origin. The application does not store the
-token or put it in a URL. The host also sets a session cookie. With no launch
-code, the application tries the cookie session. A used, expired, or foreign
-code, or a refused session, shows how to get a new link. The host's existing origin, repository, scope, and file-access
+exchanges the code one time at `POST /review-launch/session` for the page
+session. The application keeps the session under `provenance-review-session` in
+the local storage of its origin, which includes the port, so no other local
+server can read it. It sends the session only in an Authorization header to the
+current origin and as a WebSocket subprotocol beside `provenance-review` on the
+event socket. It never puts the session in a URL or a cookie. With no launch
+code, a reload or a new tab uses the stored session. A used, expired, or foreign
+code, or a refused session, shows how to get a new link; a refused session is
+removed from storage. The host's existing origin, repository, scope, and file-access
 checks remain in effect.
 The renderer owns the generated Effect client and its reads and writes.
 
@@ -88,7 +91,13 @@ and the repository must hold one result. CI runs this check on the Linux CLI.
 node --test tools/review-host/*.test.ts
 node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
 node tools/review-host/verify-review-writes.ts /absolute/provenance packages/provenance
+node tools/review-host/verify-page-session.ts /absolute/provenance
 ```
+
+`verify-page-session.ts` runs the page bootstrap against a real host with Node's
+fetch and WebSocket: a launch link stores the session and opens the event
+socket, a reload mounts with the stored session, and a changed session is
+refused and removed.
 
 The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-13d51d69ae34/provenance-review.tar.gz)
 contains the exact bytes from the pinned upstream build. The release contains

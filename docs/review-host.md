@@ -200,10 +200,13 @@ refuse a wrong key or code with 401 and the standard failure envelope. Both
 routes retain the full Host and Origin checks, including cross-site refusal.
 
 The page removes the fragment from the address bar before it exchanges the
-code. It keeps the bearer only in page memory. When a page has no launch code,
-it reads configuration through the cookie. Reloads and new tabs can thus keep
-access while the browser session and host run continue. A used, expired, or
-foreign code, or a page without a valid session, shows "Connection refused".
+code. It stores the session under `provenance-review-session` in the local
+storage of its origin. The origin includes the port, so another local server
+cannot read it. When a page has no launch code, it reads configuration with the
+stored session. Reloads and new tabs on the same origin can thus keep access
+while the host run continues. A used, expired, or foreign code, or a page
+without a valid session, shows "Connection refused"; a refused stored session
+is removed.
 It tells the person to
 get a new link with `provenance <record-id> --review-link`.
 
@@ -292,13 +295,13 @@ an optional `focus=RECORD_ID` query parameter. The URL never contains the
 credential. After the page exchanges the launch code, the application opens
 `root` directly and hides the manual Requirement ID field. The field remains
 available when `root` is absent. The application reads `/review-config` with the
-credential or the session cookie. It then
+page session in the Authorization header. It then
 calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
 `dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. The
-renderer creates and owns the generated Effect client. With no bearer in
-page memory, the application passes an empty bearer. Same-origin browser
-requests carry the session cookie, which the host checks before the operation
-routes authenticate the request.
+renderer creates and owns the generated Effect client. The application passes
+the page session as `bearer`, so the renderer sends it in the Authorization
+header. The host exchanges it for the bearer before the operation routes
+authenticate the request.
 
 The pinned renderer reads documents with `exclude_terminal=true`. A refresh
 reloads the current search and the document text, submissions, review outcomes,
@@ -307,9 +310,10 @@ supported record kind. If the repository has no disposition actors, the
 renderer identifies the review as read-only.
 
 Build that application with the matching renderer to replace the shell with the
-local host entry. The bearer stays in page memory and is sent only in the
-Authorization header to the current origin. It does not enter URLs, logs,
-assets, or browser storage. The browser manages the separate session cookie. The page has no credential field. A new
+local host entry. The host bearer never reaches the page. The page session is
+sent only in the Authorization header to the current origin and as a WebSocket
+subprotocol on the event socket. It does not enter URLs, logs, assets, or
+cookies; its only storage is the origin's local storage. The page has no credential field. A new
 connection removes the previous page. A superseded connection result cannot
 replace a later result.
 
@@ -375,6 +379,8 @@ authorization, repository and scope access, embedded assets, and shutdown.
 Run `cargo test -p provenance-cli --test cli_review_host --test cli_review_refusal_connections --test review_asset_build --test review_archive`
 and `cargo test -p provenance-transport --features test-fixture` after generation.
 Run `node --test tools/review-host/*.test.ts` for composition and session checks.
+Run `node tools/review-host/verify-page-session.ts BINARY` to run the page
+bootstrap against a real host through a launch link, a reload, and a refusal.
 Run `node tools/review-host/verify-native.ts BINARY COMPOSED_ASSETS SDK_PACKAGE`
 to check a built executable. Release validation runs this check on executables
 extracted from each native archive and npm engine package.
