@@ -67,6 +67,10 @@ fn shared_response_check_counts_the_exact_serialized_query_envelope() {
 struct Target(camino::Utf8PathBuf, bool);
 
 impl ContextResolver for Target {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,
@@ -91,7 +95,7 @@ fn append_large_children(
     let path = crate::shards::requirements_path(&store.layout, scope);
     let mut record = json!(store.list_requirements(scope).unwrap()[0]);
     record["description"] = json!("x".repeat(LARGE_FIELD_BYTES));
-    record["refines"] = json!("req_overtime");
+    record["refines"] = json!(["req_overtime"]);
     for index in 0..count {
         record["id"] = json!(format!("req_large_{index:03}"));
         crate::cache::tests::fixtures::append_record(&path, &record);
@@ -163,7 +167,7 @@ async fn neighbors_refuses_an_oversized_response_through_native_and_registered_c
                 "limit": 200
             }
         }),
-        Arc::new(Target(root, false)),
+        catalog::Direct(Arc::new(Target(root, false))),
     )
     .await
     .unwrap_err();
@@ -280,7 +284,7 @@ async fn get_rule_member(root: camino::Utf8PathBuf) -> serde_json::Value {
             "context": {"repository": "test", "scope": "default"},
             "request": {"id": "rule_overtime"}
         }),
-        Arc::new(Target(root, true)),
+        catalog::Direct(Arc::new(Target(root, true))),
     )
     .await
     .unwrap_or_else(|failure| {

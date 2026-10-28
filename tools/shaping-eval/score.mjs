@@ -12,8 +12,8 @@ export function score(graph) {
   for (let i = 0; i < records.length; i++) {
     for (const b of records.slice(i + 1)) {
       const a = records[i];
-      const linked = [a.refines, ...requirements(a), ...resolutions(a)].includes(b.id)
-        || [b.refines, ...requirements(b), ...resolutions(b)].includes(a.id);
+      const linked = [...(a.refines ?? []), ...requirements(a), ...resolutions(a)].includes(b.id)
+        || [...(b.refines ?? []), ...requirements(b), ...resolutions(b)].includes(a.id);
       if (linked && text(a) && text(a) === text(b)) findings.push({
         category: 'duplicate', recordIds: [a.id, b.id],
         evidenceLocator: `graph.json:${a.id},${b.id}`, reviewerAssessment: null,

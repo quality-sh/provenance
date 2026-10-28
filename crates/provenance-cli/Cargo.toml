@@ -30,7 +30,6 @@ tokio-tungstenite = "0.24"
 axum = { workspace = true, features = ["ws"] }
 camino.workspace = true
 clap.workspace = true
-fs_at.workspace = true
 fs2.workspace = true
 jsonschema.workspace = true
 pulldown-cmark.workspace = true
@@ -41,10 +40,9 @@ provenance-report.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
 provenance-store.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.2.3" }
+provenance-transport = { path = "../provenance-transport", version = "0.3.0" }
 remove_dir_all.workspace = true
 rustix.workspace = true
-same-file.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_ignored.workspace = true
@@ -73,11 +71,10 @@ dogfood = []
 [dev-dependencies]
 assert_cmd.workspace = true
 flate2.workspace = true
-insta.workspace = true
 pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy-crypto"] }
 jsonschema.workspace = true
 tempfile.workspace = true
 predicates.workspace = true
 rmcp = { version = "=1.4.0", default-features = false, features = ["client"] }
 tar.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.2.3", features = ["test-fixture"] }
+provenance-transport = { path = "../provenance-transport", version = "0.3.0", features = ["test-fixture"] }

@@ -1,5 +1,9 @@
-use super::{ExecutionNeeds, PreparedContext};
-use provenance_core::protocol::failure::ErasedFailure as FailureEnvelope;
+//! Contract code: this module later leaves the store as one unit with entry, invoke, routes
+//! and schema. Add no store state here.
+use super::{ExecutionNeeds, PreparedContext, RequestedContext};
+use provenance_core::protocol::failure::{
+    ErasedFailure as FailureEnvelope, OperationError, OperationFailure,
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::{future::Future, pin::Pin};
@@ -54,21 +58,48 @@ pub(super) struct RepositoryCall<R, C> {
     pub request: R,
 }
 
-pub(super) struct Entry {
-    pub name: &'static str,
-    pub mutates: bool,
-    pub invoke: fn(
-        Value,
-        std::sync::Arc<dyn super::ContextResolver>,
-    ) -> OperationFuture<Value, FailureEnvelope>,
+/// A host that runs one typed operation; the catalog entry decodes and encodes JSON.
+pub trait Invoke: Clone + Send + Sync + 'static {
+    fn invoke<O: Operation>(
+        self,
+        selected: Option<RequestedContext>,
+        request: O::Request,
+    ) -> OperationFuture<O::Success, OperationError<O::Failure>>;
 }
 
-fn register<O: Operation>() -> Entry {
+pub(super) struct Entry<H: Invoke> {
+    pub name: &'static str,
+    pub mutates: bool,
+    pub invoke: fn(Value, H) -> OperationFuture<Value, FailureEnvelope>,
+}
+
+fn register<O: Operation, H: Invoke>() -> Entry<H> {
     Entry {
         name: O::NAME,
         mutates: O::MUTATES,
-        invoke: super::invoke::invoke_resolved::<O>,
+        invoke: super::invoke::invoke_resolved::<O, H>,
     }
+}
+
+/// Name-only lookups instantiate the table with a host that runs nothing.
+#[derive(Clone)]
+struct Unhosted;
+
+impl Invoke for Unhosted {
+    fn invoke<O: Operation>(
+        self,
+        _: Option<RequestedContext>,
+        _: O::Request,
+    ) -> OperationFuture<O::Success, OperationError<O::Failure>> {
+        Box::pin(async { Err(OperationError::Common(OperationFailure::UnavailableNeeds)) })
+    }
+}
+
+/// Every registered operation name with its mutation flag.
+pub(super) fn names() -> impl Iterator<Item = (&'static str, bool)> {
+    entries::<Unhosted>()
+        .into_iter()
+        .map(|entry| (entry.name, entry.mutates))
 }
 
 macro_rules! register_family_catalog {
@@ -78,8 +109,8 @@ macro_rules! register_family_catalog {
         [projection($list:ident, $list_wire:literal, $page:ident, $page_wire:literal, none)],
         [$($review:tt)*]
     ) => {
-        $entries.push(register::<super::resource_lists::$list>());
-        $entries.push(register::<super::resource_pages::$page>());
+        $entries.push(register::<super::resource_lists::$list, H>());
+        $entries.push(register::<super::resource_pages::$page, H>());
     };
     (
         $entries:ident,
@@ -93,9 +124,9 @@ macro_rules! register_family_catalog {
         )],
         [$review:ident]
     ) => {
-        $entries.push(register::<super::resource_lists::$list>());
-        $entries.push(register::<super::resource_pages::$page>());
-        $entries.push(register::<super::resource_members::$member>());
+        $entries.push(register::<super::resource_lists::$list, H>());
+        $entries.push(register::<super::resource_pages::$page, H>());
+        $entries.push(register::<super::resource_members::$member, H>());
     };
     (
         $entries:ident,
@@ -109,9 +140,9 @@ macro_rules! register_family_catalog {
         )],
         []
     ) => {
-        $entries.push(register::<super::resource_lists::$list>());
-        $entries.push(register::<super::resource_pages::$page>());
-        $entries.push(register::<super::resource_members::$member>());
+        $entries.push(register::<super::resource_lists::$list, H>());
+        $entries.push(register::<super::resource_pages::$page, H>());
+        $entries.push(register::<super::resource_members::$member, H>());
     };
 }
 
@@ -147,103 +178,103 @@ macro_rules! register_family_entries {
 }
 
 #[allow(clippy::too_many_lines)]
-pub(super) fn entries() -> Vec<Entry> {
+pub(super) fn entries<H: Invoke>() -> Vec<Entry<H>> {
     let mut entries = vec![
-        register::<super::CheckStatement>(),
-        register::<super::CreateContribution>(),
-        register::<super::UpsertContribution>(),
-        register::<super::CreateSynthesisPacket>(),
-        register::<super::UpsertSynthesisPacket>(),
+        register::<super::CheckStatement, H>(),
+        register::<super::CreateContribution, H>(),
+        register::<super::UpsertContribution, H>(),
+        register::<super::CreateSynthesisPacket, H>(),
+        register::<super::UpsertSynthesisPacket, H>(),
         // Phase 2b replaces these legacy registrations with resource routes.
-        register::<super::SetRequirementRefines>(),
-        register::<super::ClearRequirementRefines>(),
-        register::<super::AddRequirementDependsOn>(),
-        register::<super::ClearRequirementDependsOn>(),
-        register::<super::AddRequirementSupersedes>(),
-        register::<super::ClearRequirementSupersedes>(),
-        register::<super::SetRequirementSpawnedBy>(),
-        register::<super::ClearRequirementSpawnedBy>(),
-        register::<super::AddRuleRequirement>(),
-        register::<super::ClearRuleRequirement>(),
-        register::<super::AddRuleResolution>(),
-        register::<super::ClearRuleResolution>(),
-        register::<super::AddResolutionRequirement>(),
-        register::<super::ClearResolutionRequirement>(),
-        register::<super::AddResolutionSupersedes>(),
-        register::<super::ClearResolutionSupersedes>(),
-        register::<super::AddSourceSupersedes>(),
-        register::<super::ClearSourceSupersedes>(),
-        register::<super::SetQuestionContradicts>(),
-        register::<super::ClearQuestionContradicts>(),
-        register::<super::ClearSourceReference>(),
-        register::<super::ClaimTopic>(),
-        register::<super::ReleaseTopic>(),
-        register::<super::CloseTopic>(),
-        register::<super::ClaimQuestion>(),
-        register::<super::ReleaseQuestion>(),
-        register::<super::AnswerQuestion>(),
-        register::<super::UpdateSource>(),
-        register::<super::UpdateResolution>(),
-        register::<super::UpdateRequirementNative>(),
-        register::<super::UpdateRule>(),
-        register::<super::UpdateDomain>(),
-        register::<super::UpdateBoundary>(),
-        register::<super::UpdateTopic>(),
-        register::<super::UpdateQuestion>(),
-        register::<super::CreateDomain>(),
-        register::<super::CreateBoundary>(),
-        register::<super::CreateTopic>(),
-        register::<super::CreateQuestion>(),
-        register::<super::CreateSource>(),
-        register::<super::CreateRequirementNative>(),
-        register::<super::CreateRule>(),
-        register::<super::CreateResolution>(),
-        register::<super::AddSourceReference>(),
-        register::<super::Plan>(),
-        register::<super::Apply>(),
-        register::<super::BeginVerification>(),
-        register::<super::CompleteVerification>(),
-        register::<super::Info>(),
-        register::<super::Get>(),
-        register::<super::ReadDocument>(),
-        register::<super::Search>(),
-        register::<super::Neighbors>(),
-        register::<super::Trace>(),
-        register::<super::Impact>(),
-        register::<super::ResolveSymbol>(),
-        register::<super::Evidence>(),
-        register::<super::Stale>(),
-        register::<super::VerificationRuns>(),
-        register::<super::VerificationBindings>(),
-        register::<super::ListThreads>(),
-        register::<super::PostThreadMessage>(),
-        register::<super::CreateProposal>(),
-        register::<super::CreateAssertion>(),
-        register::<super::CreateDisposition>(),
-        register::<super::resource_pages::PageProposalAssertions>(),
-        register::<super::resource_pages::PageProposalDispositions>(),
-        register::<super::verification_resources::PageVerificationRuns>(),
-        register::<super::verification_resources::GetVerificationRun>(),
-        register::<super::resource_members::GetProposalAssertion>(),
-        register::<super::resource_members::GetProposalDisposition>(),
-        register::<super::resource_members::GetReviewedResource>(),
-        register::<super::resource_lists::ListVerificationRuns>(),
-        register::<super::CreateRequirementResource>(),
-        register::<super::UpdateRequirementResource>(),
-        register::<super::SubmitRecordReview>(),
-        register::<super::DecideRecordReview>(),
-        register::<super::WithdrawRecordReview>(),
-        register::<super::ReviewHistory>(),
-        register::<super::ReviewHistoryEntry>(),
-        register::<super::ReviewEvidence>(),
-        register::<super::ReviewDiscussions>(),
-        register::<super::ReviewDiscussion>(),
-        register::<super::ReviewDiscussionMessages>(),
-        register::<super::ReviewDiscussionMessage>(),
-        register::<super::ListDiscussions>(),
-        register::<super::GetDiscussionConversation>(),
-        register::<super::WriteDiscussion>(),
-        register::<super::WriteTargetDiscussion>(),
+        register::<super::AddRequirementRefines, H>(),
+        register::<super::ClearRequirementRefines, H>(),
+        register::<super::AddRequirementDependsOn, H>(),
+        register::<super::ClearRequirementDependsOn, H>(),
+        register::<super::AddRequirementSupersedes, H>(),
+        register::<super::ClearRequirementSupersedes, H>(),
+        register::<super::SetRequirementSpawnedBy, H>(),
+        register::<super::ClearRequirementSpawnedBy, H>(),
+        register::<super::AddRuleRequirement, H>(),
+        register::<super::ClearRuleRequirement, H>(),
+        register::<super::AddRuleResolution, H>(),
+        register::<super::ClearRuleResolution, H>(),
+        register::<super::AddResolutionRequirement, H>(),
+        register::<super::ClearResolutionRequirement, H>(),
+        register::<super::AddResolutionSupersedes, H>(),
+        register::<super::ClearResolutionSupersedes, H>(),
+        register::<super::AddSourceSupersedes, H>(),
+        register::<super::ClearSourceSupersedes, H>(),
+        register::<super::SetQuestionContradicts, H>(),
+        register::<super::ClearQuestionContradicts, H>(),
+        register::<super::ClearSourceReference, H>(),
+        register::<super::ClaimTopic, H>(),
+        register::<super::ReleaseTopic, H>(),
+        register::<super::CloseTopic, H>(),
+        register::<super::ClaimQuestion, H>(),
+        register::<super::ReleaseQuestion, H>(),
+        register::<super::AnswerQuestion, H>(),
+        register::<super::UpdateSource, H>(),
+        register::<super::UpdateResolution, H>(),
+        register::<super::UpdateRequirementNative, H>(),
+        register::<super::UpdateRule, H>(),
+        register::<super::UpdateDomain, H>(),
+        register::<super::UpdateBoundary, H>(),
+        register::<super::UpdateTopic, H>(),
+        register::<super::UpdateQuestion, H>(),
+        register::<super::CreateDomain, H>(),
+        register::<super::CreateBoundary, H>(),
+        register::<super::CreateTopic, H>(),
+        register::<super::CreateQuestion, H>(),
+        register::<super::CreateSource, H>(),
+        register::<super::CreateRequirementNative, H>(),
+        register::<super::CreateRule, H>(),
+        register::<super::CreateResolution, H>(),
+        register::<super::AddSourceReference, H>(),
+        register::<super::Plan, H>(),
+        register::<super::Apply, H>(),
+        register::<super::BeginVerification, H>(),
+        register::<super::CompleteVerification, H>(),
+        register::<super::Info, H>(),
+        register::<super::Get, H>(),
+        register::<super::ReadDocument, H>(),
+        register::<super::Search, H>(),
+        register::<super::Neighbors, H>(),
+        register::<super::Trace, H>(),
+        register::<super::Impact, H>(),
+        register::<super::ResolveSymbol, H>(),
+        register::<super::Evidence, H>(),
+        register::<super::Stale, H>(),
+        register::<super::VerificationRuns, H>(),
+        register::<super::VerificationBindings, H>(),
+        register::<super::ListThreads, H>(),
+        register::<super::PostThreadMessage, H>(),
+        register::<super::CreateProposal, H>(),
+        register::<super::CreateAssertion, H>(),
+        register::<super::CreateDisposition, H>(),
+        register::<super::resource_pages::PageProposalAssertions, H>(),
+        register::<super::resource_pages::PageProposalDispositions, H>(),
+        register::<super::verification_resources::PageVerificationRuns, H>(),
+        register::<super::verification_resources::GetVerificationRun, H>(),
+        register::<super::resource_members::GetProposalAssertion, H>(),
+        register::<super::resource_members::GetProposalDisposition, H>(),
+        register::<super::resource_members::GetReviewedResource, H>(),
+        register::<super::resource_lists::ListVerificationRuns, H>(),
+        register::<super::CreateRequirementResource, H>(),
+        register::<super::UpdateRequirementResource, H>(),
+        register::<super::SubmitRecordReview, H>(),
+        register::<super::DecideRecordReview, H>(),
+        register::<super::WithdrawRecordReview, H>(),
+        register::<super::ReviewHistory, H>(),
+        register::<super::ReviewHistoryEntry, H>(),
+        register::<super::ReviewEvidence, H>(),
+        register::<super::ReviewDiscussions, H>(),
+        register::<super::ReviewDiscussion, H>(),
+        register::<super::ReviewDiscussionMessages, H>(),
+        register::<super::ReviewDiscussionMessage, H>(),
+        register::<super::ListDiscussions, H>(),
+        register::<super::GetDiscussionConversation, H>(),
+        register::<super::WriteDiscussion, H>(),
+        register::<super::WriteTargetDiscussion, H>(),
     ];
     crate::cache::family_table::record_family_rows!(register_family_entries, entries);
     entries

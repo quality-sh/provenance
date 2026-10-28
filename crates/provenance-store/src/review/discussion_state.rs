@@ -4,6 +4,7 @@ use provenance_core::{
     Message, NodeType, Question, Requirement, Resolution, Rule, ScopeId, Source, StableId, Thread,
     ThreadParent, Topic,
 };
+use provenance_macros::rule;
 use std::collections::{BTreeMap, BTreeSet};
 
 trait DiscussionParent {
@@ -278,6 +279,8 @@ pub(super) const fn parent_table(kind: NodeType) -> Option<&'static str> {
 }
 
 impl StateStore {
+    /// Refuses Discussions on Domain and Boundary records.
+    #[rule("rule_domain_boundary_accept_no_discussions")]
     pub(super) fn resolve_discussion_parent(
         &self,
         scope: &ScopeId,

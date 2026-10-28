@@ -93,7 +93,7 @@ fn review_link_opens_the_page_signed_in() {
 }
 
 #[test]
-/// Implementation aid: security hardening lets a launch code open one page session only.
+#[verifies("rule_review_launch_code_lifetime", examples)]
 fn a_launch_code_works_once() {
     let (_repo, host, link) = started_review();
     let code = launch_code(&link);
@@ -170,7 +170,7 @@ fn a_missing_launch_key_prints_the_plain_link() {
         .env("LOCALAPPDATA", other_cache.path().join("cache"))
         .env(
             "PROVENANCE_TEST_STE100_ASSET_URL",
-            "http://127.0.0.1:9/unavailable",
+            env!("PROVENANCE_TEST_STE100_ASSET_URL"),
         )
         .args([
             "req_launch",

@@ -1,5 +1,6 @@
 use super::super::{
-    invoke_with, ContextResolver, ExecutionNeeds, PreparedContext, PreparedScope, RequestedContext,
+    invoke_with, ContextResolver, Direct, ExecutionNeeds, PreparedContext, PreparedScope,
+    RequestedContext,
 };
 use crate::layout::ProvenanceLayout;
 use provenance_core::{
@@ -12,6 +13,10 @@ use std::sync::Arc;
 struct Resolver(PreparedScope);
 
 impl ContextResolver for Resolver {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,
@@ -38,11 +43,11 @@ async fn discussion_write_scope_mismatch_keeps_its_safe_status() {
                 "action": {"kind": "start", "role": "user", "body": "Concern"}
             }
         }),
-        Arc::new(Resolver(PreparedScope {
+        Direct(Arc::new(Resolver(PreparedScope {
             root: camino::Utf8PathBuf::from_path_buf(directory.path().into()).unwrap(),
             scope: ScopeId::new("selected").unwrap(),
             requested_target: "fixture".into(),
-        })),
+        }))),
     )
     .await
     .unwrap_err();
@@ -84,7 +89,7 @@ async fn assert_review_scope_mismatch(operation: &str, request: Value) {
             "context": {"repository": "fixture", "scope": "selected"},
             "request": request,
         }),
-        resolver,
+        Direct(resolver),
     )
     .await
     .unwrap_err();

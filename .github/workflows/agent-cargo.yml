@@ -225,6 +225,8 @@ jobs:
       - run: node tools/operation-codegen/ensure-generated.mjs
       - name: Run requested Cargo check
         env:
+          # Limit parallel builds to keep package verification within runner memory.
+          CARGO_BUILD_JOBS: 3
           CARGO_ARGS_JSON: ${{ inputs.command_json }}
         run: |
           python3 - <<'PY'
@@ -234,7 +236,7 @@ jobs:
           import sys
 
           args = json.loads(os.environ["CARGO_ARGS_JSON"])
-          allowed = {"build", "check", "clippy", "test"}
+          allowed = {"build", "check", "clippy", "test", "package"}
           if not isinstance(args, list) or not args or args[0] not in allowed:
               sys.exit("Unsupported Cargo command")
           if not all(isinstance(arg, str) and "\x00" not in arg for arg in args):

@@ -9,19 +9,20 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::OperationFailure;
+use provenance_macros::rule;
 use provenance_transport::constant_time_eq;
 use serde::Deserialize;
 use serde_json::json;
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt as _;
 
-const CODE_LIFETIME: Duration = Duration::from_secs(120);
+const CODE_LIFETIME: Duration = Duration::from_hours(24);
 const MAX_LIVE_CODES: usize = 64;
 
 /// The secret that a local CLI sends to get a launch code. Only the per-user cache holds it.
@@ -126,6 +127,7 @@ struct Inner {
 struct IssuedCode {
     value: String,
     expires_at: Instant,
+    issued_at_wall: SystemTime,
 }
 
 impl LaunchCodes {
@@ -149,9 +151,15 @@ impl LaunchCodes {
     }
 
     /// Issues a code that is valid for one exchange during the code lifetime.
-    pub fn issue(&self, now: Instant) -> String {
+    pub fn issue(&self, now: Instant, wall_now: SystemTime) -> String {
         let mut live = self.inner.live.lock().expect("launch code lock");
-        live.retain(|code| code.expires_at > now);
+        live.retain(|code| {
+            code.expires_at > now
+                && wall_now
+                    .duration_since(code.issued_at_wall)
+                    .unwrap_or_default()
+                    < CODE_LIFETIME
+        });
         if live.len() >= MAX_LIVE_CODES {
             live.remove(0);
         }
@@ -159,14 +167,22 @@ impl LaunchCodes {
         live.push(IssuedCode {
             value: value.clone(),
             expires_at: now + CODE_LIFETIME,
+            issued_at_wall: wall_now,
         });
         value
     }
 
-    /// Returns the bearer for a live code and removes the code.
-    pub fn redeem(&self, code: &str, now: Instant) -> Option<String> {
+    /// Refuses a code after 24 hours on either clock and removes a code after its first use.
+    #[rule("rule_review_launch_code_lifetime")]
+    pub fn redeem(&self, code: &str, now: Instant, wall_now: SystemTime) -> Option<String> {
         let mut live = self.inner.live.lock().expect("launch code lock");
-        live.retain(|issued| issued.expires_at > now);
+        live.retain(|issued| {
+            issued.expires_at > now
+                && wall_now
+                    .duration_since(issued.issued_at_wall)
+                    .unwrap_or_default()
+                    < CODE_LIFETIME
+        });
         let mut found = None;
         for (index, issued) in live.iter().enumerate() {
             if constant_time_eq(issued.value.as_bytes(), code.as_bytes()) {
@@ -232,7 +248,7 @@ struct SessionRequest {
 pub(super) async fn issue_code(State(codes): State<LaunchCodes>, body: Bytes) -> Response {
     match serde_json::from_slice::<CodeRequest>(&body) {
         Ok(request) if codes.holds_key(&request.launch_key) => {
-            Json(json!({ "code": codes.issue(Instant::now()) })).into_response()
+            Json(json!({ "code": codes.issue(Instant::now(), SystemTime::now()) })).into_response()
         }
         _ => super::refusal(OperationFailure::Unauthenticated),
     }
@@ -241,7 +257,7 @@ pub(super) async fn issue_code(State(codes): State<LaunchCodes>, body: Bytes) ->
 pub(super) async fn open_session(State(codes): State<LaunchCodes>, body: Bytes) -> Response {
     let bearer = serde_json::from_slice::<SessionRequest>(&body)
         .ok()
-        .and_then(|request| codes.redeem(&request.code, Instant::now()));
+        .and_then(|request| codes.redeem(&request.code, Instant::now(), SystemTime::now()));
     bearer.map_or_else(
         || super::refusal(OperationFailure::Unauthenticated),
         |bearer| {

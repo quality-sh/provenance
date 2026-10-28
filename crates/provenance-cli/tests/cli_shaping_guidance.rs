@@ -125,7 +125,7 @@ fn shaping_guidance_puts_the_review_link_in_the_first_reply() {
         "One host serves the repository and scope for all sessions, so leave it running.",
         "Opening the page in a browser or in the app that shows your chat is extra. Always \
          give the link in chat too.",
-        "A link works once and expires after 120 seconds;",
+        "A link works once and expires after 24 hours;",
         "The page is served on the machine that runs the host. If that is not the person's \
          machine, say so, and give the person the command from `AGENTS.md` that starts the \
          host on their own machine.",

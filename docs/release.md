@@ -21,17 +21,10 @@ publishing must trust `quality-sh/provenance`, the `release.yml` workflow, and
 the `npm` GitHub environment for each package. The workflow uses GitHub OIDC
 and does not store an npm registry token.
 
-The workflow publishes these Rust crates to crates.io:
-
-- `provenance-macros`
-- `provenance-core`
-- `provenance-scanner`
-- `provenance-ste100`
-- `provenance-store`
-- `provenance-sdk`
-- `provenance-http-client`
-- `provenance-transport`
-- `provenance-cli`
+The workflow publishes the Rust crates in
+[the release crate list](../.github/release-crates.txt), in the listed order.
+Preflight and the registry smoke check use the same list. Preflight requires
+HTTP 200 from crates.io for each crate before a publish job can start.
 
 The `crates-io` GitHub environment protects publication. Each crate must trust
 `quality-sh/provenance`, the `release.yml` workflow, and that environment on
@@ -52,8 +45,13 @@ tag the release:
 ```sh
 git diff --exit-code HEAD --
 test -z "$(git ls-files --others --exclude-standard)"
-cargo package --workspace --locked --allow-dirty
+cargo package --workspace --locked --allow-dirty --registry crates-io
 ```
+
+The explicit registry selects crates.io for the package check. Keep test-only
+workspace dependencies unversioned when a version would create a package
+dependency cycle. Cargo omits unversioned path test dependencies from the
+published manifest.
 
 Generated client source stays outside Git and enters the crate archives. Cargo
 requires `--allow-dirty` for those files. The preceding checks reject changes to
@@ -119,8 +117,8 @@ rows and any cause explanation to the GitHub Release body under
 Tag and push the release commit:
 
 ```sh
-git tag v0.2.3
-git push origin v0.2.3
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 The `Release` workflow creates the GitHub Release, attaches archives, and generates release notes.
@@ -153,7 +151,7 @@ The release rejects a tag unless all versions equal the tag without its `v`
 prefix.
 
 A tag with a SemVer prerelease component is published as a prerelease, so
-`v0.2.3-rc.1` is the way to rehearse a release without announcing one. npm
+`v0.3.0-rc.1` is the way to rehearse a release without announcing one. npm
 publishes that version under the `next` tag; stable versions use `latest`.
 
 ## Never `--all-features`

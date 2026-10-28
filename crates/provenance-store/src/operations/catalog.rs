@@ -66,21 +66,20 @@ pub use creation::{
     PostThreadMessage,
 };
 pub use discussions::{ListMessages, ListThreads};
-pub use entry::{Operation, OperationFuture, WireSchema};
+pub use entry::{Invoke, Operation, OperationFuture, WireSchema};
 pub use ideation::{
     CreateAssertion, CreateDisposition, CreateProposal, ListAssertions, ListDispositions,
     ListProposals,
 };
-pub use invoke::{
-    invoke, invoke_authorized_native_typed, invoke_authorized_typed, invoke_typed, invoke_with,
-};
+#[cfg(test)]
+pub use invoke::invoke;
+#[cfg(any(test, feature = "test-fixture"))]
+pub use invoke::Direct;
+pub use invoke::{invoke_authorized_typed, invoke_typed, invoke_with};
 
 #[cfg(test)]
 pub(crate) fn registered_operation_names_for_test() -> Vec<&'static str> {
-    entry::entries()
-        .into_iter()
-        .map(|entry| entry.name)
-        .collect()
+    entry::names().map(|(name, _)| name).collect()
 }
 #[cfg(feature = "schema")]
 pub use schema::{
@@ -99,7 +98,7 @@ pub use records::{Get, Info, Neighbors, ReadDocument, ResolveRecord, Search, Tra
 
 /// Lookup uses registry identities without deriving or cloning wire schemas.
 pub fn contains(operation: &str) -> bool {
-    entry::entries().iter().any(|entry| entry.name == operation)
+    entry::names().any(|(name, _)| name == operation)
 }
 
 pub use evidence::{
@@ -107,7 +106,5 @@ pub use evidence::{
 };
 
 pub fn mutates(operation: &str) -> bool {
-    entry::entries()
-        .iter()
-        .any(|entry| entry.name == operation && entry.mutates)
+    entry::names().any(|(name, mutates)| name == operation && mutates)
 }

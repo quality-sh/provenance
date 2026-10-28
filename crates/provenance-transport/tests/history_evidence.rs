@@ -83,7 +83,6 @@ fn repository_with_domain_change() -> (Repository, String, String) {
 
 #[tokio::test]
 #[verifies("rule_evidence_read_states_absent_fields", examples)]
-#[verifies("rule_change_view_has_before_and_after_states", examples)]
 async fn before_evidence_of_an_added_field_is_null() {
     let (repo, created, assigned) = repository_with_domain_change();
     let host = host(&repo, false);
@@ -179,7 +178,7 @@ async fn native_review_reads_refuse_an_out_of_range_limit() {
                 operation,
                 provenance_core::SDK_PROTOCOL_VERSION,
                 call,
-                std::sync::Arc::new(access(&repo)),
+                provenance_store::operations::catalog::Direct(std::sync::Arc::new(access(&repo))),
             )
             .await
             .unwrap_err();

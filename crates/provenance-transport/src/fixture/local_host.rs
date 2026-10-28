@@ -110,6 +110,10 @@ fn serve(listener: TcpListener, body: String) -> (Arc<AtomicBool>, JoinHandle<()
             stream.set_nonblocking(false).unwrap();
             let mut request = [0_u8; 2048];
             let count = stream.read(&mut request).unwrap_or(0);
+            // The shutdown wakeup has no HTTP request.
+            if count == 0 {
+                continue;
+            }
             let path_matches = String::from_utf8_lossy(&request[..count])
                 .starts_with(&format!("GET {IDENTITY_ROUTE} HTTP/1.1"));
             let (status, response) = if path_matches {

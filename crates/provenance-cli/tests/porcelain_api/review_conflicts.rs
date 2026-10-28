@@ -167,8 +167,9 @@ fn prepared(state: &str) -> (tempfile::TempDir, String, String, String, Option<S
         successful(&api(
             &repo,
             &format!("requirements/req_review/submissions/{proposal}/decide"),
-            &json!({"actor":{"identity_type":"human","id":"reviewer"}, "decision":"rejected",
-                "rationale":"Needs work.", "canonical_artifact":null,
+            &json!({"actor":{"identity_type":"human","id":"reviewer"}, "decision":"accepted",
+                "rationale":null,
+                "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_review"},
                 "feedback":null, "declared_by":null}),
         ));
     }

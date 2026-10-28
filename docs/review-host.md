@@ -165,8 +165,13 @@ Removal of the selected scope therefore does not disable `info`.
 A launch link has the form
 `http://127.0.0.1:PORT/?root=REQUIREMENT_ID&focus=RECORD_ID#launch=CODE`. The
 code is in the URL fragment, so the browser does not send it in a request line
-or a Referer header. A code works one time and expires after 120 seconds. Only
-the host that issued it accepts it.
+or a Referer header. A code works one time and expires after 24 hours on
+either the monotonic clock or the wall clock. Time while the machine sleeps
+counts toward the wall-clock limit. Only
+the host that issued it accepts it. The host keeps at most 64 live codes.
+When it issues a code at this limit, it removes the oldest live code.
+A host restart clears all codes. If the host starts on a different port,
+the old link cannot reach it. Get a new link from the running host.
 
 At startup the host writes a launch key to
 `<user cache>/provenance/review-launch/<instance nonce>.key`. The user cache is
@@ -228,7 +233,7 @@ The browser does not get the launch link as an argument, because other users
 can read process arguments. The CLI writes an owner-only redirect page to the
 temporary directory and gives the browser the path of that page. The page sends
 the browser to the launch link. The page stays in the temporary directory; its
-code works one time and expires after 120 seconds.
+code works one time and expires after 24 hours.
 
 ## Browser integration contract
 
@@ -273,7 +278,7 @@ unknown path gets 404 `unknown_operation`, and another method on an asset gets
 The host reserves `/review-config` for authenticated runtime configuration:
 
 ```json
-{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","dispositionActorIds":["maintainer"],"compatibility":{"wire":9,"state":2,"review_journal":3,"read_derivation":3},"sdkVersion":"0.2.3"}
+{"endpoint":"http://127.0.0.1:PORT","repositoryId":"A","scope":"default","dispositionActorIds":["maintainer"],"compatibility":{"wire":9,"state":2,"review_journal":3,"read_derivation":3},"sdkVersion":"0.3.0"}
 ```
 
 The host reads `dispositionActorIds` from the repository manifest for each
@@ -319,8 +324,9 @@ This host can serve assets and existing reads before additional review writes
 exist. It adds no approval mapping or review operation. Approval into the system
 description and lifecycle changes remain separate. Discussion `created_at`
 values remain logical counters. Declaration `apply` can retire omitted owned
-declarations; it is not a field patch. Wiki removal remains a separate ticket;
-this host has no dependency on provenance-boc5.6.
+declarations; it is not a field patch. The review page is the only browser view
+of the graph; provenance-boc5.6 removed the old Wiki. `docs serve` also serves
+pages over local HTTP, but it renders the Markdown in `docs/`, not the graph.
 
 ## Pinned renderer input
 

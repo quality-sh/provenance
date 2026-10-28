@@ -1,5 +1,5 @@
 //! The generated AGENTS.md tells an agent when to start the review host, how to hand the
-//! person its link, and what a description holds.
+//! person its link, what a description holds, and how to write graph state.
 
 use assert_cmd::Command;
 use provenance_macros::verifies;
@@ -26,6 +26,22 @@ fn agents_after_init() -> String {
 
 fn normalized(text: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[test]
+#[verifies("rule_init_canonical_write_path", examples)]
+fn init_guidance_requires_cli_or_sdk_writes_and_forbids_direct_state_edits() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        prose.contains("Write graph state only through the Provenance CLI or SDK."),
+        "{agents}"
+    );
+    assert!(
+        prose.contains("Do not edit `.provenance/state` directly."),
+        "{agents}"
+    );
 }
 
 #[test]
@@ -62,7 +78,7 @@ fn init_guidance_starts_the_host_early_and_hands_the_link_over_as_text() {
         "{agents}"
     );
     assert!(
-        prose.contains("A link works once and expires after 120 seconds."),
+        prose.contains("A link works once and expires after 24 hours."),
         "{agents}"
     );
     assert!(

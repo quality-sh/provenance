@@ -1,0 +1,5 @@
+authorized-by: Ben Nasraoui
+date: 2026-10-26
+pull-request: 465
+commit: 01dc4f36
+reason: The owner requests release 0.3.0 instead of 0.2.4. Change all published crate and npm package versions from 0.2.3 to 0.3.0. Keep the renderer pin unchanged.

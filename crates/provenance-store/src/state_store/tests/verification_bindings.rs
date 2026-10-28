@@ -45,6 +45,7 @@ fn input(scope: &provenance_core::ScopeId) -> MaterializeVerificationBindingInpu
 }
 
 #[test]
+#[verifies("rule_verification_binding_identity", examples)]
 fn repeated_materialization_updates_one_binding_with_stable_identity() {
     let (_directory, store, scope) = seeded_rule_store();
     let first = store
@@ -68,6 +69,7 @@ fn repeated_materialization_updates_one_binding_with_stable_identity() {
 }
 
 #[test]
+#[verifies("rule_verification_binding_identity", examples)]
 fn identity_changes_with_owner_rule_or_explicit_key() {
     let (_directory, store, scope) = seeded_rule_store();
     let first = store
@@ -110,7 +112,7 @@ fn canonical_identity_cannot_be_reused_in_another_scope() {
             description: None,
             status: provenance_core::RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

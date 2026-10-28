@@ -1,3 +1,4 @@
+import { offlineDictionaryUrl } from "../../test-dictionary-url.js";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -6,6 +7,7 @@ import { createInterface } from "node:readline";
 import type { Subprocess } from "bun";
 
 export const binary = process.env.PROVENANCE_TEST_BIN ?? join(import.meta.dir, "../../../target/debug/provenance");
+
 const limit = 20000;
 export function deadline<T>(promise: Promise<T>, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -88,7 +90,7 @@ export class Harness {
   repository = join(this.directory, "repository");
   env = { ...process.env,
     // Delivery tests use the public dictionary-unavailable initialization path.
-    PROVENANCE_TEST_STE100_ASSET_URL: "http://127.0.0.1:9/unavailable",
+    PROVENANCE_TEST_STE100_ASSET_URL: offlineDictionaryUrl,
     PROVENANCE_STE100_ASSET_DIR: join(this.directory, "assets"),
     PROVENANCE_STE100_INDEX_DIR: join(this.directory, "indexes"),
     XDG_CACHE_HOME: join(this.directory, "cache"), PATH: `${dirname(binary)}:${process.env.PATH}` };

@@ -1,4 +1,5 @@
 use camino::Utf8Path;
+use provenance_macros::verifies;
 use provenance_scanner::scan_path;
 
 fn write_source(root: &Utf8Path, relative: &str) {
@@ -24,6 +25,7 @@ fn scanned_relative_paths(root: &Utf8Path) -> Vec<String> {
 }
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn repository_scan_excludes_dependency_build_and_metadata_trees() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -36,6 +38,7 @@ fn repository_scan_excludes_dependency_build_and_metadata_trees() {
 }
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn repository_scan_excludes_nested_dependency_boundaries() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -50,6 +53,7 @@ fn repository_scan_excludes_nested_dependency_boundaries() {
 }
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn similarly_named_directories_remain_scannable() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -68,6 +72,7 @@ fn similarly_named_directories_remain_scannable() {
 }
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn explicitly_selected_excluded_directory_remains_scannable() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -87,6 +92,7 @@ const GENERATED_ANNOTATION: &str =
     "// @provenance rule: rule_generated_output\nexport function generated() {}\n";
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn repository_scan_excludes_ignored_generated_output() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -105,6 +111,7 @@ fn repository_scan_excludes_ignored_generated_output() {
 }
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn similarly_named_unignored_output_directories_remain_scannable() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -121,6 +128,7 @@ fn similarly_named_unignored_output_directories_remain_scannable() {
 }
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn anchored_and_glob_ignore_patterns_prune_output_trees() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -143,6 +151,7 @@ fn anchored_and_glob_ignore_patterns_prune_output_trees() {
 }
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn negated_ignore_pattern_keeps_the_directory() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -154,6 +163,7 @@ fn negated_ignore_pattern_keeps_the_directory() {
 }
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn nested_gitignore_prunes_only_its_own_tree() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();
@@ -169,6 +179,7 @@ fn nested_gitignore_prunes_only_its_own_tree() {
 }
 
 #[test]
+#[verifies("rule_repository_scan_exclusions", examples)]
 fn explicitly_requested_ignored_output_remains_scannable() {
     let temp = tempfile::tempdir().unwrap();
     let root = Utf8Path::from_path(temp.path()).unwrap();

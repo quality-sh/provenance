@@ -17,11 +17,6 @@ JSONL under `.provenance/state/` with a derived SQLite cache.
 - `crates/provenance-scanner` — reads those markers, and legacy `@provenance` comments, and reports rule coverage
 - `crates/provenance-cli` — CLI; integration tests in `crates/provenance-cli/tests/`
 
-Schema-porting beads reference the original Convex schema as source of truth:
-`~/Documents/repos/statesman/provenance/convex/schema.ts` and `convex/lib/validators.ts`.
-Port domain state only — do not port hosted-server machinery (auth, user tables, work queues,
-run-status state machines).
-
 ## Workflow
 
 You MUST follow this workflow. Work one bead at a time.

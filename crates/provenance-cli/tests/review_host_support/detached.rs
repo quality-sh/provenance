@@ -47,7 +47,7 @@ impl UserCache {
             .env("LOCALAPPDATA", &caches)
             .env(
                 "PROVENANCE_TEST_STE100_ASSET_URL",
-                "http://127.0.0.1:9/unavailable",
+                env!("PROVENANCE_TEST_STE100_ASSET_URL"),
             );
     }
 }

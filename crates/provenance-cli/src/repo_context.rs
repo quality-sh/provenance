@@ -2,7 +2,6 @@ use crate::store::Store;
 use camino::Utf8PathBuf;
 use clap::Args;
 use provenance_core::ScopeId;
-use std::net::{Ipv4Addr, SocketAddr};
 
 #[derive(Clone, Debug, Args)]
 pub struct RepoContext {
@@ -49,16 +48,11 @@ impl RepoContext {
     pub fn local_host(&self) -> anyhow::Result<provenance_transport::StatementHost> {
         self.open_graph()?;
         let root = std::fs::canonicalize(&self.repo)?;
-        let access = provenance_transport::LocalAccess::new(
-            &root,
-            "native",
-            &self.scope,
-            &"0".repeat(64),
-            SocketAddr::from((Ipv4Addr::LOCALHOST, 1)),
-        )
-        .map_err(|failure| anyhow::anyhow!(failure))?;
+        let repository =
+            provenance_store::operations::LocalRepository::new(&root, "native", &self.scope)
+                .map_err(|failure| anyhow::anyhow!(failure))?;
         Ok(provenance_transport::StatementHost::with_access(
-            std::sync::Arc::new(access),
+            std::sync::Arc::new(repository),
         ))
     }
 }

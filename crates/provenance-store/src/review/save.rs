@@ -145,9 +145,8 @@ impl StateStore {
         })
     }
 
-    /// Applies one save. A save that would leave the record as it is returns
-    /// it unchanged, even with a stale etag; any other save with a stale etag
-    /// is refused.
+    /// A change to review content creates a new review submission.
+    #[rule("rule_content_change_requires_new_review")]
     fn commit_requirement(
         &self,
         input: SaveRequirement,
