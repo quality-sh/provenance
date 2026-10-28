@@ -10,7 +10,6 @@
 use anyhow::Context;
 use fs2::FileExt;
 use provenance_core::protocol::read_failure::CacheCloseStage;
-use provenance_macros::rule;
 use sqlx::SqlitePool;
 use std::fmt;
 use std::fs::{File, OpenOptions};
@@ -162,7 +161,6 @@ async fn close_until_empty(pool: &SqlitePool, stage: &Mutex<Stage>) {
 /// Waits for the completion `task` until `deadline`. Past the deadline the
 /// wait fails with a [`CompletionTimedOut`] that names the stage the
 /// completion is in; the task keeps the close lock and the pool and goes on.
-#[rule("rule_cache_completion_names_its_stage_at_the_deadline")]
 pub(super) async fn within_deadline(
     task: JoinHandle<anyhow::Result<()>>,
     deadline: Duration,
