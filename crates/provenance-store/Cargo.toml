@@ -50,6 +50,6 @@ windows-sys.workspace = true
 
 [dev-dependencies]
 fs_at.workspace = true
-jsonschema = { workspace = true, features = ["draft202012"] }
+jsonschema.workspace = true
 filetime.workspace = true
 trybuild.workspace = true

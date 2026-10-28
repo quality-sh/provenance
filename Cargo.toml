@@ -60,7 +60,7 @@ flate2 = "1"
 fs2 = "0.4"
 fs_at = "0.2"
 hex = "0.4"
-jsonschema = { version = "0.18", features = ["draft202012"] }
+jsonschema = { version = "0.60", default-features = false, features = ["idna", "resolve-file", "resolve-http", "tls-ring"] }
 open = "5.4"
 proc-macro2 = "1.0"
 pulldown-cmark = "0.10"

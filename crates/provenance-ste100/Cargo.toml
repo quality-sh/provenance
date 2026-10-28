@@ -29,4 +29,4 @@ serde_json.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
-jsonschema = { workspace = true, features = ["draft202012"] }
+jsonschema.workspace = true
