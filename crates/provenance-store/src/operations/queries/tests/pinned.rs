@@ -262,7 +262,7 @@ fn normalize_revision_digest(value: &mut Value) {
 
 fn digest(answers: &[Value]) -> String {
     let bytes = serde_json::to_vec(answers).unwrap();
-    format!("sha256:{:x}", Sha256::digest(bytes))
+    format!("sha256:{}", hex::encode(Sha256::digest(bytes)))
 }
 
 /// The file: one header line, then one compact line per answer.

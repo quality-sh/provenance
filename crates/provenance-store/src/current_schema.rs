@@ -85,7 +85,7 @@ impl SchemaCatalog {
                 hash.update([0]);
             }
         }
-        format!("sha256:{:x}", hash.finalize())
+        format!("sha256:{}", hex::encode(hash.finalize()))
     }
 }
 
