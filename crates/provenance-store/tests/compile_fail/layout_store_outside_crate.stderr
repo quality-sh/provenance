@@ -4,7 +4,7 @@ error[E0624]: associated function `new` is private
 5 |     let _ = StateStore::new(ProvenanceLayout::new("repo"));
   |                         ^^^ private associated function
   |
- ::: src/state_store.rs
+ ::: src/state_store/access.rs
   |
   |     pub(crate) const fn new(layout: ProvenanceLayout) -> Self {
   |     --------------------------------------------------------- private associated function defined here

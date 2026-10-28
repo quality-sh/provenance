@@ -1,6 +1,7 @@
-use super::{Access, StateStore};
+use super::{Access, RecordStamp, StateStore};
 use crate::layout::ProvenanceLayout;
 use crate::publication::{with_repository_publication, PublicationGuard};
+use crate::repository::RepositoryIdentity;
 use camino::Utf8Path;
 use provenance_macros::{rule, verifies};
 use std::marker::PhantomData;
@@ -9,6 +10,54 @@ mod guarded_readers;
 
 #[cfg(test)]
 mod tests;
+
+impl StateStore {
+    /// A layout-level store with no repository identity.
+    pub(crate) const fn new(layout: ProvenanceLayout) -> Self {
+        Self {
+            identity: None,
+            layout,
+            access: Access::Lock,
+            record_stamp: RecordStamp::ResolveFromRepository,
+        }
+    }
+
+    /// A store over the live state of an opened repository.
+    pub(crate) const fn live(identity: RepositoryIdentity, layout: ProvenanceLayout) -> Self {
+        Self {
+            identity: Some(identity),
+            layout,
+            access: Access::Lock,
+            record_stamp: RecordStamp::ResolveFromRepository,
+        }
+    }
+
+    /// A store over a staged state root. It keeps the identity of the live
+    /// store and takes no lock, because the live publication section holds it.
+    pub(crate) const fn staged_view(
+        identity: Option<RepositoryIdentity>,
+        layout: ProvenanceLayout,
+        record_stamp: RecordStamp,
+    ) -> Self {
+        Self {
+            identity,
+            layout,
+            access: Access::Held,
+            record_stamp,
+        }
+    }
+
+    /// The identity of the repository the store belongs to. A layout-level
+    /// store has none.
+    pub const fn repository(&self) -> Option<&RepositoryIdentity> {
+        self.identity.as_ref()
+    }
+
+    /// The identity, for a staged view of this store.
+    pub(crate) fn identity_for_stage(&self) -> Option<RepositoryIdentity> {
+        self.identity.clone()
+    }
+}
 
 /// A read-only store that borrows its repository publication guard.
 #[verifies("rule_store_under_guard_takes_no_second_lock", construction)]
