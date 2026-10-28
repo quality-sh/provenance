@@ -1,6 +1,6 @@
 //! A read whose cache close cannot take the close lock fails at the
-//! completion deadline and names the lock, instead of running until the
-//! process is killed.
+//! completion deadline with the kind `cache_close_timed_out` and the stage
+//! `close_lock`, instead of running until the process is killed.
 
 use fs2::FileExt;
 use provenance_macros::verifies;
@@ -14,7 +14,7 @@ use support::review_paths::{init, provenance};
 
 #[test]
 #[verifies("rule_cache_completion_names_its_stage_at_the_deadline", examples)]
-fn a_held_close_lock_fails_the_read_naming_the_lock() {
+fn a_held_close_lock_fails_the_read_naming_the_stage() {
     let (directory, repo) = init();
     for (collection, body) in [
         (
@@ -56,8 +56,11 @@ fn a_held_close_lock_fails_the_read_naming_the_lock() {
         output.status
     );
     assert!(!output.status.success(), "the read succeeded: {stderr}");
-    assert!(
-        stderr.contains(&format!("waiting for the close lock {}", path.display())),
+    let failure: serde_json::Value = serde_json::from_str(stderr.trim())
+        .unwrap_or_else(|error| panic!("stderr is not one failure: {error}: {stderr}"));
+    assert_eq!(
+        failure["error"],
+        json!({"kind": "cache_close_timed_out", "stage": "close_lock"}),
         "{stderr}"
     );
     FileExt::unlock(&lock).unwrap();
