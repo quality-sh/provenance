@@ -384,7 +384,9 @@ pub(super) fn property_schema(root: &Value, path: &[&str]) -> Value {
     selected
 }
 
-pub(super) fn renamed_items_schema(root: &Value, path: &[&str], field: &str) -> Value {
+/// The Result envelope for the object at `path` with its `field` collection
+/// renamed to `items`. The other properties of that object stay in `data`.
+pub(super) fn items_response_schema(root: &Value, path: &[&str], field: &str) -> Value {
     let selected = path.iter().fold(root, |current, name| {
         let resolved = resolve_schema(root, current);
         resolved
@@ -411,7 +413,7 @@ pub(super) fn renamed_items_schema(root: &Value, path: &[&str], field: &str) -> 
     if let Some(defs) = root.get("$defs") {
         selected["$defs"] = defs.clone();
     }
-    selected
+    response_envelope(selected, super::ResponseKind::Result)
 }
 
 pub(super) fn resolve_schema<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {

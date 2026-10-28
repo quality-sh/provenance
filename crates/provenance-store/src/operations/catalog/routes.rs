@@ -246,13 +246,11 @@ impl Definition {
 
     fn items_field(mut self, field: &'static str) -> Self {
         self.registration.response.adapter = ResponseAdapter::ResultItems(field);
-        let payload = schema::renamed_items_schema(
+        self.registration.response.schema = schema::items_response_schema(
             &self.registration.response.raw_schema,
             &["result"],
             field,
         );
-        self.registration.response.schema =
-            schema::response_envelope(payload, ResponseKind::Result);
         self
     }
 
@@ -419,12 +417,10 @@ fn query_route<O: Operation>(
     );
     let schema = match adapter {
         ResponseAdapter::ObjectItems(field) => {
-            let payload = schema::renamed_items_schema(&raw.success_schema, &[], field);
-            schema::response_envelope(payload, ResponseKind::Result)
+            schema::items_response_schema(&raw.success_schema, &[], field)
         }
         ResponseAdapter::ResultItems(field) => {
-            let payload = schema::renamed_items_schema(&raw.success_schema, &["result"], field);
-            schema::response_envelope(payload, ResponseKind::Result)
+            schema::items_response_schema(&raw.success_schema, &["result"], field)
         }
         _ => schema::response_envelope(raw.success_schema.clone(), kind),
     };
