@@ -207,10 +207,11 @@ fn read_blobs(
         .spawn()
         .context("run git cat-file --batch")?;
     let mut stdin = child.stdin.take().context("open git cat-file input")?;
-    let request: String = blobs
-        .iter()
-        .map(|(object, _)| format!("{object}\n"))
-        .collect();
+    let mut request = String::new();
+    for (object, _) in &blobs {
+        request.push_str(object);
+        request.push('\n');
+    }
     let writer = std::thread::spawn(move || stdin.write_all(request.as_bytes()));
     let output = child
         .wait_with_output()
