@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bootstrapReviewPage, type BrowserElement } from './bootstrap.ts';
-import type { ReviewMountOptions } from './session.ts';
+import { verifies } from '../../packages/provenance/src/rules.ts';
+import { bootstrapReviewPage, SESSION_KEY, type BrowserElement } from './bootstrap.ts';
+import { CONNECTION_REFUSED, type ReviewMountOptions } from './session.ts';
 
 const origin = 'http://127.0.0.1:1234';
 const config = { endpoint: origin, repositoryId: 'repo', scope: 'default', dispositionActorIds: ['maintainer'] };
@@ -10,10 +11,24 @@ function fakeElement(): BrowserElement {
   return { hidden: false, textContent: null, value: '', addEventListener() {}, focus() {} };
 }
 
-function launchPage(hash = '#launch=code-1') {
+/** A fake of the page's own-origin local storage. */
+function fakeStorage(initial: Record<string, string> = {}) {
+  const items = new Map(Object.entries(initial));
+  return {
+    items,
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => { items.set(key, value); },
+    removeItem: (key: string) => { items.delete(key); },
+  };
+}
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+function launchPage(hash = '#launch=code-1', storage = fakeStorage(), accepted = 'page-session') {
   const events: string[] = [];
   const receivers: unknown[] = [];
   const mounted: ReviewMountOptions[] = [];
+  const sockets: string[] = [];
   const elements = new Map(['root', 'selection', 'requirement', 'status'].map(id => [id, fakeElement()]));
   let mountedPage!: () => void;
   const mounting = new Promise<void>(resolve => { mountedPage = resolve; });
@@ -23,19 +38,24 @@ function launchPage(hash = '#launch=code-1') {
     history: { replaceState(_data, _unused, url) { events.push(`address ${url}`); } },
     async fetch(this: unknown, path, init) {
       receivers.push(this);
-      events.push(`fetch ${path} ${init.body ?? ''}`.trim());
-      const body = path === '/review-launch/session' ? { bearer: 'session-bearer' } : config;
-      return { ok: true, json: async () => body };
+      const authorization = init.headers.authorization;
+      events.push(`fetch ${path} ${init.body ?? authorization ?? ''}`.trim());
+      if (path === '/review-launch/session') return { ok: true, json: async () => ({ session: 'page-session' }) };
+      return { ok: authorization === `Bearer ${accepted}`, json: async () => config };
     },
+    storage,
     mount(_root, options) {
       mounted.push(options);
       mountedPage();
       return { dispose() {}, refresh() {}, showRecord: async () => {} };
     },
-    openEvents: () => ({ onmessage: null, onclose: null, send() {}, close() {} }),
+    openEvents: session => {
+      sockets.push(session);
+      return { onmessage: null, onclose: null, send() {}, close() {} };
+    },
     onWake() {},
   });
-  return { events, receivers, mounted, mounting };
+  return { events, receivers, mounted, mounting, sockets, storage, status: elements.get('status')! };
 }
 
 // Implementation aid: fake page boundaries check that bootstrap passes the session to the renderer.
@@ -43,7 +63,19 @@ test('a launch link mounts the record with the redeemed session', async () => {
   const page = launchPage();
   await page.mounting;
   assert.deepEqual(page.mounted, [
-    { ...config, bearer: 'session-bearer', rootId: 'req_root', focusId: 'rule_child' },
+    { ...config, bearer: 'page-session', rootId: 'req_root', focusId: 'rule_child' },
+  ]);
+});
+
+test('a launch link stores the session on its origin and opens events with it', async function storesTheLaunchSession() {
+  verifies('rule_review_page_session_stays_on_its_origin', 'examples');
+  const page = launchPage();
+  await page.mounting;
+  assert.deepEqual([...page.storage.items], [[SESSION_KEY, 'page-session']]);
+  assert.deepEqual(page.sockets, ['page-session']);
+  assert.deepEqual(page.events.slice(1), [
+    'fetch /review-launch/session {"code":"code-1"}',
+    'fetch /review-config Bearer page-session',
   ]);
 });
 
@@ -65,14 +97,34 @@ test('the page loads its configuration with a browser-compatible fetch receiver'
   assert.deepEqual(page.receivers, [undefined, undefined]);
 });
 
-// Implementation aid: a reload has no launch code and must use the host cookie.
-test('a page without a launch code connects through the cookie', async () => {
-  const page = launchPage('');
+test('a page without a launch code connects with the stored session', async function reusesTheStoredSession() {
+  verifies('rule_review_page_session_stays_on_its_origin', 'examples');
+  const page = launchPage('', fakeStorage({ [SESSION_KEY]: 'page-session' }));
   await page.mounting;
-  assert.deepEqual(page.events, ['fetch /review-config']);
+  assert.deepEqual(page.events, ['fetch /review-config Bearer page-session']);
   assert.deepEqual(page.mounted, [
-    { ...config, bearer: '', rootId: 'req_root', focusId: 'rule_child' },
+    { ...config, bearer: 'page-session', rootId: 'req_root', focusId: 'rule_child' },
   ]);
+  assert.deepEqual(page.sockets, ['page-session']);
+});
+
+test('a refused stored session is removed and the page shows the refusal', async function forgetsARefusedSession() {
+  verifies('rule_review_page_session_stays_on_its_origin', 'examples');
+  const page = launchPage('', fakeStorage({ [SESSION_KEY]: 'old-session' }));
+  await settle();
+  await settle();
+  assert.deepEqual(page.mounted, []);
+  assert.deepEqual(page.sockets, []);
+  assert.deepEqual([...page.storage.items], []);
+  assert.equal(page.status.textContent, CONNECTION_REFUSED);
+});
+
+// Implementation aid: a page with neither a code nor a stored session asks for a new link.
+test('a page without a launch code or a stored session shows the refusal', async () => {
+  const page = launchPage('');
+  await settle();
+  assert.deepEqual(page.events, []);
+  assert.equal(page.status.textContent, CONNECTION_REFUSED);
 });
 
 // Implementation aid: the Rule evidence is the real socket flow in cli_review_reuse.rs.
@@ -89,6 +141,7 @@ test('a review link shows its record in the mounted page and acknowledges it', a
     location: { origin, pathname: '/', search: '?root=req_root', hash: '' },
     history: { replaceState(_data, _unused, url) { addresses.push(url); } },
     fetch: async () => ({ ok: true, json: async () => config }),
+    storage: fakeStorage({ [SESSION_KEY]: 'page-session' }),
     mount() {
       mounts++;
       mountedPage();
@@ -131,6 +184,7 @@ function livePage() {
       reads++;
       return { ok: true, json: async () => ({ ...config, dispositionActorIds: actors }) };
     },
+    storage: fakeStorage({ [SESSION_KEY]: 'page-session' }),
     mount() {
       mounts++;
       return { dispose() { disposals++; }, refresh() {}, showRecord: async () => {} };
@@ -148,8 +202,6 @@ function livePage() {
     frame: (type: string) => sockets.at(-1)?.onmessage?.({ data: JSON.stringify({ type, epoch: 'host', sequence: 0, reason: 'observation-recovered' }) }),
   };
 }
-const settle = () => new Promise(resolve => setImmediate(resolve));
-
 test('the first ready reads the page without reading its configuration twice', async () => {
   const page = livePage();
   await settle();

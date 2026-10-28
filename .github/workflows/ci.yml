@@ -224,6 +224,8 @@ jobs:
         run: node tools/review-host/verify-native.ts target/debug/provenance crates/provenance-cli/review-assets-generated target/review-sdk
       - name: Verify review writes through the generated client across host restarts
         run: node tools/review-host/verify-review-writes.ts target/debug/provenance target/review-sdk
+      - name: Verify the page session through a launch link, a reload, and a refusal
+        run: node tools/review-host/verify-page-session.ts target/debug/provenance
       - name: Upload the CLI and isolated test host for the consumer jobs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
