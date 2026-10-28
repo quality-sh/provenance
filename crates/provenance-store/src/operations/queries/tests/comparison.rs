@@ -29,7 +29,7 @@ use test_stores::TestStore;
 
 /// Fields the served answer carries beside the answer bytes; the pinned
 /// answers file holds the answers without them.
-const ADDITIVE_FIELDS: [&str; 7] = [
+const ADDITIVE_FIELDS: [&str; 8] = [
     "stamp",
     "freshness_error",
     "implementation_bindings_has_more",
@@ -37,12 +37,37 @@ const ADDITIVE_FIELDS: [&str; 7] = [
     "verification_runs_has_more",
     "reviews_has_more",
     "scan_cut",
+    "matches",
 ];
 
 pub fn strip_additive(value: &mut Value) {
     if let Some(map) = value.as_object_mut() {
         for field in ADDITIVE_FIELDS {
             map.remove(field);
+        }
+    }
+    strip_scanned_item_names(value);
+}
+
+/// Scanned impact sites now name their item; the pinned answers hold
+/// them without the name.
+fn strip_scanned_item_names(value: &mut Value) {
+    let Some(rules) = value
+        .get_mut("affected_rules")
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+    for rule in rules {
+        for list in ["implementations", "verifications"] {
+            let Some(sites) = rule.get_mut(list).and_then(Value::as_array_mut) else {
+                continue;
+            };
+            for site in sites.iter_mut().filter_map(Value::as_object_mut) {
+                if site.contains_key("line") {
+                    site.remove("symbol");
+                }
+            }
         }
     }
 }

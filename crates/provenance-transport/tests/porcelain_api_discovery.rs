@@ -203,6 +203,7 @@ async fn api_discovery_preserves_query_contracts() {
         .iter()
         .any(|parameter| parameter.name == "file" && parameter.required));
     assert!(symbol_names.contains(&"symbol"));
+    assert!(symbol_names.contains(&"cursor"));
     assert!(
         !symbol_names.contains(&"base"),
         "resolve-symbol must not inherit the stale query parameters"

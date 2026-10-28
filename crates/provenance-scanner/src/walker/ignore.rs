@@ -15,11 +15,25 @@
 //! implement escaped characters, character classes, or exclusion files
 //! outside the scanned root.
 
+use camino::Utf8Path;
 use std::path::Path;
 
 use walkdir::DirEntry;
 
-use super::is_ignored_directory;
+use super::{is_ignored_directory, is_ignored_directory_name};
+
+/// Whether `source_paths(root)` would select the source file at `path`. The
+/// same directory names and `.gitignore` rules apply, but the file need not
+/// exist, so a path from another revision can be checked.
+pub fn selects_source_path(root: &Utf8Path, path: &Utf8Path) -> bool {
+    let Ok(relative) = path.strip_prefix(root) else {
+        return false;
+    };
+    path.extension()
+        .and_then(super::Language::from_extension)
+        .is_some()
+        && RepositoryFilter::admits_file(root.as_std_path(), relative.as_std_path())
+}
 
 /// Decides which walk entries the repository scan admits.
 ///
@@ -59,6 +73,27 @@ impl RepositoryFilter {
                 return false;
             }
             self.push_level(depth, entry.path());
+        }
+        true
+    }
+
+    /// Whether a walk from `root` admits every directory above the file at
+    /// `relative`. The file need not exist; the `.gitignore` files come from
+    /// the directories under `root`.
+    fn admits_file(root: &Path, relative: &Path) -> bool {
+        let mut filter = Self::new();
+        filter.push_level(0, root);
+        let mut directory = root.to_path_buf();
+        let mut components = relative.components().collect::<Vec<_>>();
+        components.pop();
+        for (index, component) in components.into_iter().enumerate() {
+            directory.push(component);
+            if is_ignored_directory_name(component.as_os_str().to_str())
+                || filter.is_ignored(&directory)
+            {
+                return false;
+            }
+            filter.push_level(index + 1, &directory);
         }
         true
     }

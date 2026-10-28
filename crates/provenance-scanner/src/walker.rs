@@ -9,6 +9,7 @@ use crate::{Annotation, ParseWarning};
 use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
 use consumed::{consume_binding_lines, consume_comment_lines};
+pub use ignore::selects_source_path;
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
 mod bindings;
@@ -152,11 +153,11 @@ fn repository_walk(
 /// Whether other output is generated is the repository's own call, made
 /// through its `.gitignore` files.
 fn is_ignored_directory(entry: &walkdir::DirEntry) -> bool {
-    entry.file_type().is_dir()
-        && matches!(
-            entry.file_name().to_str(),
-            Some(".git" | "node_modules" | "target")
-        )
+    entry.file_type().is_dir() && is_ignored_directory_name(entry.file_name().to_str())
+}
+
+fn is_ignored_directory_name(name: Option<&str>) -> bool {
+    matches!(name, Some(".git" | "node_modules" | "target"))
 }
 
 /// Walks a file line by line, feeding two channels: bindings (`#[rule]`,

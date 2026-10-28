@@ -226,6 +226,8 @@ jobs:
         run: node tools/review-host/verify-native.ts target/debug/provenance crates/provenance-cli/review-assets-generated target/review-sdk
       - name: Verify review writes through the generated client across host restarts
         run: node tools/review-host/verify-review-writes.ts target/debug/provenance target/review-sdk
+      - name: Verify the page session through a launch link, a reload, and a refusal
+        run: node tools/review-host/verify-page-session.ts target/debug/provenance
       - name: Upload the CLI and isolated test host for the consumer jobs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -617,6 +619,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: provenance-cli-x86_64-unknown-linux-gnu
@@ -631,27 +635,60 @@ jobs:
       # fails the job after the report is written.
       - name: Scan the whole repository for Rule binding findings
         run: |
-          target/debug/provenance coverage scan --repo . --path . --scope default --validate-rules --format json --output provenance-coverage-report.json
+          target/debug/provenance coverage scan --repo . --path . --scope default --validate-rules --format json --output "$RUNNER_TEMP/provenance-coverage-report.json"
+      - name: Build and render the pull request report
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+        # On pull_request the checkout holds the synthetic merge commit. The
+        # report reads source files and the graph at --head, but it selects
+        # the source paths from the working tree and labels the scan
+        # incomplete when the checked-out commit is not --head. The step
+        # checks out the pull request head first, so the scan is complete.
+        run: |
+          git fetch --no-tags origin "$HEAD_SHA"
+          git checkout --quiet --detach "$HEAD_SHA"
+          REPORT_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          target/debug/provenance report build \
+            --repo . \
+            --base "$REPORT_BASE" \
+            --head "$HEAD_SHA" \
+            --repository "$REPOSITORY" \
+            --output "$RUNNER_TEMP/provenance-report-envelope.json"
+          target/debug/provenance report render \
+            --input "$RUNNER_TEMP/provenance-report-envelope.json" \
+            --format markdown >> "$GITHUB_STEP_SUMMARY"
+          # Workflow commands need %, CR and LF escaped in the message text.
+          jq -r 'def escape: gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A");
+            .findings[]
+            | select(.comparison == "new")
+            | "::warning title=Provenance report finding::" + ("\(.code): \(.subject.id)" | escape)' \
+            "$RUNNER_TEMP/provenance-report-envelope.json"
       - name: Report Rule binding findings
         if: always()
         run: |
-          if [ ! -f provenance-coverage-report.json ]; then
+          if [ ! -f "$RUNNER_TEMP/provenance-coverage-report.json" ]; then
             echo "No coverage report was written; the scan failed before producing one." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          count=$(jq '.warnings | length' provenance-coverage-report.json)
-          governed=$(jq '[.warnings[] | select(.binding_finding)] | length' provenance-coverage-report.json)
+          count=$(jq '.warnings | length' "$RUNNER_TEMP/provenance-coverage-report.json")
+          governed=$(jq '[.warnings[] | select(.binding_finding)] | length' "$RUNNER_TEMP/provenance-coverage-report.json")
           # GitHub renders at most ten warning annotations per step, so the
           # stream stops there; the tail names where every finding lives.
-          jq -r '.warnings
+          # Workflow commands need %, CR and LF escaped in the message text.
+          jq -r 'def escape: gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A");
+            .warnings
             | map(select(.binding_finding))
             | .[:10][]
             | (if .file_path then
                 (if .line then "file=\(.file_path),line=\(.line),"
                  else "file=\(.file_path)," end)
                else "" end) as $location
-            | "::warning \($location)title=Rule binding finding::\(.rule_id): \(.message)"' \
-            provenance-coverage-report.json
+            | "::warning \($location)title=Rule binding finding::" + ("\(.rule_id): \(.message)" | escape)' \
+            "$RUNNER_TEMP/provenance-coverage-report.json"
           if [ "$governed" -gt 10 ]; then
             echo "::warning title=Rule binding finding::$((governed - 10)) more Rule binding finding(s) after the first 10; the job summary and the coverage report artifact list them all"
           fi
@@ -665,14 +702,14 @@ jobs:
               | "- `\(.rule_id)`: \(.message)"
                  + (if .file_path then
                      " (`" + .file_path + "`" + (if .line then ":\(.line)" else "" end) + ")"
-                   else "" end)' provenance-coverage-report.json
+                   else "" end)' "$RUNNER_TEMP/provenance-coverage-report.json"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload the machine-readable coverage report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: provenance-coverage-report
-          path: provenance-coverage-report.json
+          path: ${{ runner.temp }}/provenance-coverage-report.json
           retention-days: 1
           if-no-files-found: warn
 

@@ -2,8 +2,8 @@
 //! serve.
 //!
 //! Both reads answer from tables whose match set can be arbitrarily
-//! wide: the page must be chosen by id, the binding candidates must give
-//! up their rule ids without a decode, and a cleared review must be cut
+//! wide: the page must be chosen by rank and id, the binding rows must
+//! give up their columns without a decode, and a cleared review must be cut
 //! in the candidate query so it neither serves nor consumes a page slot.
 //! Every count here reads the `query_row_hydrated` probe, so a bound is
 //! proved, not inferred from a final answer.
@@ -129,6 +129,7 @@ async fn evidence_pages_only_the_open_reviews() {
 
 #[tokio::test]
 #[verifies("rule_query_pages_bound_shared_reads", examples)]
+#[verifies("rule_resolve_symbol_ranks_symbol_matches_first", examples)]
 async fn resolve_symbol_hydrates_only_the_rule_page() {
     let store = super::comparison::test_stores::seeded_queries();
     let state = store.state_store();
@@ -178,8 +179,11 @@ async fn resolve_symbol_hydrates_only_the_rule_page() {
     assert_eq!(
         rule_ids(&result),
         ["rule_overtime", "rule_site_000"],
-        "the symbol filters"
+        "a symbol match is never hidden by other Rules in the file"
     );
-    assert!(result.has_more, "rule_site_001 remains past the page");
+    assert!(
+        result.has_more,
+        "rule_site_001 and the file match rule_audit remain past the page"
+    );
     assert!(hydrations <= 3, "binding rows must never decode");
 }
