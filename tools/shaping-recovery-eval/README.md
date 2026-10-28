@@ -62,3 +62,14 @@ The mixed set has twelve conversation packets and two separate compaction
 packets. Each packet has a new random ID. Identity fields and local paths are
 removed. The mapping stays outside the packet directory. Stop for blind scoring;
 do not use the structural scorer to judge these sessions.
+
+A guidance revision after the blind review reruns only the candidate trials and
+the compaction counterpart. Omit `--mix-with` to package these seven packets
+without a baseline:
+
+```sh
+node tools/shaping-recovery-eval/run.mjs \
+  --candidate-packets /absolute/path/to/candidate \
+  --compaction-evidence /absolute/path/to/compaction/probe-claude/compaction.json \
+  --output /absolute/path/to/rerun-blind
+```

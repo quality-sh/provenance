@@ -45,7 +45,7 @@ async function probe(adapter, binary) {
   if (adapter.name === 'claude') {
     const compacted = await adapter.invoke({ repo, session: first.session, transcript: join(dir, 'compact.jsonl'), prompt: '/compact' });
     assert.ok(compacted.events.some(event => event.type === 'system' && event.subtype === 'compact_boundary'), 'no real compaction event');
-    cli(binary, repo, ['topics', 'topic_pay', 'release']);
+    cli(binary, repo, ['topics', 'topic_pay', 'release', '--actor', 'eval-writer']);
     cli(binary, repo, ['topics', 'topic_pay', 'claim', '--actor', 'other-worker']);
     const current = cli(binary, repo, ['questions', 'question_threshold', 'get']);
     cli(binary, repo, ['questions', 'question_threshold', 'update', '--if-match', current.data.edit.etag, '--stdin'], { resolution_method: 'verify' });
@@ -88,7 +88,7 @@ async function trial(adapter, build, number, variant) {
   let session = turns.at(-1)?.session;
   for (const [index, turn] of scenario.turns.entries()) {
     if (index < turns.length) continue;
-    const controller_action = turn.release_claim ? cli(build.binary, repo, ['questions', 'question_delivery', 'release']) : undefined;
+    const controller_action = turn.release_claim ? cli(build.binary, repo, ['questions', 'question_delivery', 'release', '--actor', 'other-worker']) : undefined;
     if (turn.restart) {
       if (!existsSync(join(repo, '.scenario/handoff.md'))) throw new Error(`Missing real handoff in ${repo}`);
       session = undefined;
@@ -138,9 +138,11 @@ function packets(reports) {
   return dir;
 }
 
+// Without a baseline, the set holds the candidate trials and the compaction case only.
 function mixedPackets(baseline, candidate, compaction) {
   const entries = [];
-  for (const directory of [baseline, candidate]) {
+  const sources = baseline ? [baseline, candidate] : [candidate];
+  for (const directory of sources) {
     const mapping = JSON.parse(readFileSync(join(directory, 'packet-mapping.json'), 'utf8'));
     for (const key of mapping) {
       entries.push({ key, packet: JSON.parse(readFileSync(join(directory, 'blind-packets', `packet-${key.packet}.json`), 'utf8')) });
@@ -157,7 +159,8 @@ function mixedPackets(baseline, candidate, compaction) {
     turns: [{ index: 0, prompt: 'Resume Topic topic_pay and Question question_threshold from stored state. Establish the stored claim and method before any work. Do not change records. Report the stored Topic actor and Question method.',
       before: evidence.before, after: evidence.after, answer: evidence.answer, tool_events: evidence.tool_events }],
   } });
-  if (entries.length !== 14) throw new Error('Expected twelve trials and two compaction cases');
+  const expected = baseline ? 14 : 7;
+  if (entries.length !== expected) throw new Error(`Expected ${expected} packets, found ${entries.length}`);
   for (let index = entries.length - 1; index > 0; index--) {
     const other = randomInt(index + 1); [entries[index], entries[other]] = [entries[other], entries[index]];
   }
@@ -182,16 +185,19 @@ function mixedPackets(baseline, candidate, compaction) {
     writeFileSync(join(directory, `packet-${id}.json`), `${content}\n`);
   }
   save(join(output, 'packet-mapping.json'), mapping);
-  const rubric = readFileSync(join(baseline, 'blind-packets/rubric.md'), 'utf8')
+  const compactionCases = baseline ? 'the two forced-compaction cases' : 'the forced-compaction case';
+  const rubric = readFileSync(join(sources[0], 'blind-packets/rubric.md'), 'utf8')
     .replace('Reminder and departure thresholds require owner approval after this baseline. Forced compaction is not part of these packets.', 'The owner gate below applies to this mixed set.')
     .replace('Keep its result separate from the six long-conversation trials. Its candidate counterpart remains required.', 'Keep both compaction results separate from the twelve conversation trials.');
-  writeFileSync(join(directory, 'rubric.md'), `${rubric}\nOwner gate, 2026-10-12: require zero missed fresh Topic claim and Question method reads before every work turn, with unfiltered output; zero missing accepted decisions, prerequisite violations, and corrective reminders. Method departures must not increase. A direct owner choice can settle a prototype Question when the stored answer explains why. Compare all anonymous packets with this same rule. Do not infer identities. Report note-only turns separately. Score the two forced-compaction cases separately.\n`);
+  writeFileSync(join(directory, 'rubric.md'), `${rubric}\nOwner gate, 2026-10-12: require zero missed fresh Topic claim and Question method reads before every work turn, with unfiltered output; zero missing accepted decisions, prerequisite violations, and corrective reminders. Method departures must not increase. A direct owner choice can settle a prototype Question when the stored answer explains why. Compare all anonymous packets with this same rule. Do not infer identities. Report note-only turns separately. Score ${compactionCases} separately.\n`);
   console.log(`Mixed blind packets: ${directory}`);
 }
 
 try {
   if (args.includes('--mix-with')) {
     mixedPackets(resolve(option('--mix-with')), resolve(option('--candidate-packets')), resolve(option('--compaction-evidence')));
+  } else if (args.includes('--candidate-packets')) {
+    mixedPackets(undefined, resolve(option('--candidate-packets')), resolve(option('--compaction-evidence')));
   } else if (args.includes('--packets-only')) {
     const reports = readdirSync(output, { withFileTypes: true })
       .filter(entry => entry.isDirectory() && existsSync(join(output, entry.name, 'report.json')))
