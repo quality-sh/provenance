@@ -55,9 +55,9 @@ arrows show build-time generation or packaging.
   it takes the publication lock.
 - The internals of provenance-web are not in this repository. The diagrams show
   only the pin in `tools/review-assets.json` and the `mountReview` entry point.
-- `skills/` and `crates/provenance-cli/skills/` hold the same four SKILL.md
-  files. The code embeds only the crate copy. The test
-  `crates/provenance-cli/tests/cli_skills.rs` checks that
-  `provenance skills show` matches the files in `skills/`.
+- `skills/` holds the only tracked copy of the four bundled SKILL.md files.
+  The build script `crates/provenance-cli/build/skills.rs` copies them into the
+  binary. `node tools/skills/prepare.mjs` writes generated copies to
+  `crates/provenance-cli/skills/` for Cargo packages. Git ignores those copies.
 - No workflow in this repository runs `provenance report build` or
   `provenance report render`.
