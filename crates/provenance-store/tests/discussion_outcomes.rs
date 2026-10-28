@@ -199,8 +199,7 @@ async fn discussion_and_plain_save_in_one_commit_keep_the_commit_origin() {
     commit_state(&temp, "Return to text A");
 
     let history = read_history(
-        camino::Utf8Path::from_path(temp.path()).unwrap(),
-        &scope(),
+        &repository(camino::Utf8Path::from_path(temp.path()).unwrap()),
         ReadPolicy::default(),
         ReviewHistoryQuery {
             record_kind: NodeType::Requirement,
