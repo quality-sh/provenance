@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { verifies } from '../../packages/provenance/src/rules.ts';
-import { bootstrapReviewPage, SESSION_KEY, type BrowserElement } from './bootstrap.ts';
-import { CONNECTION_REFUSED, type ReviewMountOptions } from './session.ts';
+import { bootstrapReviewPage, SESSION_KEY, SETTINGS_CHANGED, type BrowserElement } from './bootstrap.ts';
+import { CONNECTION_REFUSED, INVALID_REVIEWER, type ReviewMountOptions } from './session.ts';
 
 const origin = 'http://127.0.0.1:1234';
 const config = { endpoint: origin, repositoryId: 'repo', scope: 'default', dispositionActorIds: ['maintainer'] };
@@ -24,7 +24,9 @@ function fakeStorage(initial: Record<string, string> = {}) {
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-function launchPage(hash = '#launch=code-1', storage = fakeStorage(), accepted = 'page-session') {
+function launchPage({
+  hash = '#launch=code-1', storage = fakeStorage(), accepted = 'page-session', served = config as object,
+} = {}) {
   const events: string[] = [];
   const receivers: unknown[] = [];
   const mounted: ReviewMountOptions[] = [];
@@ -41,7 +43,7 @@ function launchPage(hash = '#launch=code-1', storage = fakeStorage(), accepted =
       const authorization = init.headers.authorization;
       events.push(`fetch ${path} ${init.body ?? authorization ?? ''}`.trim());
       if (path === '/review-launch/session') return { ok: true, json: async () => ({ session: 'page-session' }) };
-      return { ok: authorization === `Bearer ${accepted}`, json: async () => config };
+      return { ok: authorization === `Bearer ${accepted}`, json: async () => served };
     },
     storage,
     mount(_root, options) {
@@ -65,6 +67,34 @@ test('a launch link mounts the record with the redeemed session', async () => {
   assert.deepEqual(page.mounted, [
     { ...config, bearer: 'page-session', rootId: 'req_root', focusId: 'rule_child' },
   ]);
+});
+
+// The page decides as the reviewer that the host reports, so the host app passes it as is.
+test('the reviewer that the host reports reaches the renderer', async function passesTheReviewer() {
+  verifies('rule_review_host_app_passes_reviewer', 'examples');
+  const reviewer = { actorId: 'maintainer', allowed: true };
+  const page = launchPage({ served: { ...config, reviewer } });
+  await page.mounting;
+  assert.deepEqual(page.mounted, [
+    { ...config, reviewer, bearer: 'page-session', rootId: 'req_root', focusId: 'rule_child' },
+  ]);
+});
+
+test('the renderer gets no reviewer when the host reports none', async function inventsNoReviewer() {
+  verifies('rule_review_host_app_passes_reviewer', 'examples');
+  const page = launchPage();
+  await page.mounting;
+  assert.equal('reviewer' in page.mounted[0]!, false);
+});
+
+test('a malformed reviewer stops the page and says that the host sent it', async function refusesAMalformedReviewer() {
+  verifies('rule_review_host_app_passes_reviewer', 'examples');
+  const reviewer = { actorId: 'maintainer' };
+  const page = launchPage({ served: { ...config, reviewer } });
+  await settle();
+  await settle();
+  assert.deepEqual(page.mounted, []);
+  assert.equal(page.status.textContent, INVALID_REVIEWER);
 });
 
 test('a launch link stores the session on its origin and opens events with it', async function storesTheLaunchSession() {
@@ -99,7 +129,7 @@ test('the page loads its configuration with a browser-compatible fetch receiver'
 
 test('a page without a launch code connects with the stored session', async function reusesTheStoredSession() {
   verifies('rule_review_page_session_stays_on_its_origin', 'examples');
-  const page = launchPage('', fakeStorage({ [SESSION_KEY]: 'page-session' }));
+  const page = launchPage({ hash: '', storage: fakeStorage({ [SESSION_KEY]: 'page-session' }) });
   await page.mounting;
   assert.deepEqual(page.events, ['fetch /review-config Bearer page-session']);
   assert.deepEqual(page.mounted, [
@@ -110,7 +140,7 @@ test('a page without a launch code connects with the stored session', async func
 
 test('a refused stored session is removed and the page shows the refusal', async function forgetsARefusedSession() {
   verifies('rule_review_page_session_stays_on_its_origin', 'examples');
-  const page = launchPage('', fakeStorage({ [SESSION_KEY]: 'old-session' }));
+  const page = launchPage({ hash: '', storage: fakeStorage({ [SESSION_KEY]: 'old-session' }) });
   await settle();
   await settle();
   assert.deepEqual(page.mounted, []);
@@ -121,7 +151,7 @@ test('a refused stored session is removed and the page shows the refusal', async
 
 // Implementation aid: a page with neither a code nor a stored session asks for a new link.
 test('a page without a launch code or a stored session shows the refusal', async () => {
-  const page = launchPage('');
+  const page = launchPage({ hash: '' });
   await settle();
   assert.deepEqual(page.events, []);
   assert.equal(page.status.textContent, CONNECTION_REFUSED);
@@ -168,11 +198,11 @@ test('a review link shows its record in the mounted page and acknowledges it', a
 });
 
 // Regression aid: exercise recovery through the host page without browser UI tests.
-function livePage() {
+function livePage(initial: object = config) {
   const elements = new Map(['root', 'selection', 'requirement', 'status'].map(id => [id, fakeElement()]));
   const sockets: import('./events.ts').EventSocket[] = [];
   let wake!: () => void;
-  let actors = ['maintainer'];
+  let served = initial;
   let reads = 0;
   let mounts = 0;
   let disposals = 0;
@@ -182,7 +212,7 @@ function livePage() {
     history: { replaceState() {} },
     fetch: async () => {
       reads++;
-      return { ok: true, json: async () => ({ ...config, dispositionActorIds: actors }) };
+      return { ok: true, json: async () => served };
     },
     storage: fakeStorage({ [SESSION_KEY]: 'page-session' }),
     mount() {
@@ -197,7 +227,7 @@ function livePage() {
     onWake(listener) { wake = listener; },
   });
   return {
-    elements, sockets, wake: () => wake(), settings: () => { actors = ['other']; },
+    elements, sockets, wake: () => wake(), settings: (change: object = { dispositionActorIds: ['other'] }) => { served = { ...initial, ...change }; },
     state: () => ({ reads, mounts, disposals }),
     frame: (type: string) => sockets.at(-1)?.onmessage?.({ data: JSON.stringify({ type, epoch: 'host', sequence: 0, reason: 'observation-recovered' }) }),
   };
@@ -238,4 +268,22 @@ test('a settings notice gives a visible path after the person saves drafts', asy
   assert.equal(page.elements.get('status')?.textContent,
     'Reviewer settings changed. Save or discard your drafts, then reload this page to apply the settings.');
   assert.equal(page.state().disposals, 0);
+});
+
+test('a changed reviewer gives the settings notice', async () => {
+  const page = livePage({ ...config, reviewer: { actorId: 'maintainer', allowed: true } });
+  await settle();
+  page.settings({ reviewer: { actorId: 'maintainer', allowed: false } });
+  page.frame('reset');
+  await settle();
+  assert.equal(page.elements.get('status')?.textContent, SETTINGS_CHANGED);
+});
+
+test('a reviewer that the host now finds gives the settings notice', async () => {
+  const page = livePage();
+  await settle();
+  page.settings({ reviewer: { actorId: 'maintainer', allowed: true } });
+  page.frame('reset');
+  await settle();
+  assert.equal(page.elements.get('status')?.textContent, SETTINGS_CHANGED);
 });
