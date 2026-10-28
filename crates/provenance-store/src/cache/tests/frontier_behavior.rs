@@ -195,6 +195,21 @@ fn find_gaps_reports_the_frontier_taxonomy() {
         "question_frontier",
         QuestionStatus::Open,
     );
+    // A merge can join an archive on one branch with a new child on the other.
+    let requirements = crate::shards::requirements_path(&layout, &scope);
+    append_record(
+        &requirements,
+        &serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            "id": "req_archived_parent", "statement": "req_archived_parent statement",
+            "status": "archived",
+            "archived_in_commit": {"commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}),
+    );
+    append_record(
+        &requirements,
+        &serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            "id": "req_live_child", "statement": "req_live_child statement",
+            "status": "active", "refines": ["req_archived_parent"]}),
+    );
 
     let gaps = find_gaps(&layout, &scope).unwrap();
     for (kind, node_type, id) in [
@@ -234,6 +249,11 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             "question_frontier",
         ),
         (GapKind::UnexploredTopic, NodeType::Topic, "topic_frontier"),
+        (
+            GapKind::NoLiveParent,
+            NodeType::Requirement,
+            "req_live_child",
+        ),
     ] {
         assert_gap(&gaps, kind, node_type, id);
     }
