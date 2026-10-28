@@ -75,8 +75,10 @@ fn update(repo: &str, collection: &str, id: &str, guard: Option<&str>, change: &
     let output = command.args(change).output().unwrap();
     assert!(
         started.elapsed() < support::review_paths::COMMAND_TIMEOUT,
-        "CLI command timed out after 60 seconds: {command:?}; status: {:?}",
-        output.status
+        "CLI command timed out after 60 seconds: {command:?}; status: {:?}; stdout: {}; stderr: {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
     let stream = if output.status.success() {
         output.stdout
