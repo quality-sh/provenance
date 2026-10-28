@@ -3,6 +3,7 @@ mod dangling;
 mod frontier;
 pub mod graph_query;
 mod ideation_targets;
+mod live_parents;
 mod model;
 mod state_adapter;
 
@@ -31,6 +32,7 @@ pub fn compute_gaps(graph: &GapGraph<'_>) -> Vec<GapItem> {
     contradiction::add_gaps(&query, &mut gaps);
     frontier::add_question_gaps(&query, &mut gaps);
     frontier::add_topic_gaps(&query, &mut gaps);
+    live_parents::add_gaps(&query, &mut gaps);
     gaps
 }
 
