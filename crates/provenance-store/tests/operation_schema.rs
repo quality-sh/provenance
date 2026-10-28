@@ -21,16 +21,15 @@ fn validate<T: JsonSchema>(contract: Contract, value: &Value) {
             .into_root_schema_for::<T>(),
     )
     .unwrap();
-    let compiled = jsonschema::JSONSchema::options()
+    let compiled = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&schema)
+        .build(&schema)
         .unwrap();
-    if let Err(errors) = compiled.validate(value) {
-        panic!(
-            "{}",
-            errors.map(|e| e.to_string()).collect::<Vec<_>>().join("\n")
-        );
-    };
+    let errors = compiled
+        .iter_errors(value)
+        .map(|e| e.to_string())
+        .collect::<Vec<_>>();
+    assert!(errors.is_empty(), "{}", errors.join("\n"));
 }
 fn round_trip<T: JsonSchema + DeserializeOwned + Serialize>(value: &Value) {
     let decoded: T = serde_json::from_value(value.clone()).unwrap();
@@ -118,9 +117,9 @@ fn update_requests_keep_empty_clear_lists_omitted() {
 #[test]
 fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
     let schema = serde_json::to_value(schemars::schema_for!(provenance_core::Rule)).unwrap();
-    let compiled = jsonschema::JSONSchema::options()
+    let compiled = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&schema)
+        .build(&schema)
         .unwrap();
     let mut rule = json!({"schema_version":2,"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"]});
     assert!(compiled.is_valid(&rule));
@@ -143,9 +142,9 @@ fn rule_contract_requires_the_archive_permalink_and_validates_stamps() {
     );
 
     let input_schema = serde_json::to_value(schemars::schema_for!(CreateRuleInput)).unwrap();
-    let input_contract = jsonschema::JSONSchema::options()
+    let input_contract = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&input_schema)
+        .build(&input_schema)
         .unwrap();
     let mut input = json!({"scope_id":"default","id":"rule_one","statement":"The system saves records.","status":"draft","severity":"medium","requirement_ids":["req_one"],"resolution_ids":[]});
     assert!(input_contract.is_valid(&input));

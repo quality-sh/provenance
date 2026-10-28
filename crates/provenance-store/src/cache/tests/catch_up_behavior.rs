@@ -27,7 +27,10 @@ pub(super) async fn dump_family_tables(pool: &sqlx::SqlitePool) -> Vec<String> {
             quoted.join(" || '|' || "),
             columns.join(", ")
         );
-        let rows: Vec<String> = sqlx::query_scalar(&select).fetch_all(pool).await.unwrap();
+        let rows: Vec<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(select))
+            .fetch_all(pool)
+            .await
+            .unwrap();
         dump.push(format!("{name}: {rows:?}"));
     }
     dump

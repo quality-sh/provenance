@@ -181,6 +181,6 @@ fn review_id(input: &RequirementReviewInput) -> anyhow::Result<StableId> {
         input.field,
         input.after
     );
-    let digest = format!("{:x}", Sha256::digest(identity.as_bytes()));
+    let digest = hex::encode(Sha256::digest(identity.as_bytes()));
     StableId::new(format!("requirement_review_{}", &digest[..20]))
 }

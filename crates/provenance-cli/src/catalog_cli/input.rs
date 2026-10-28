@@ -385,9 +385,9 @@ fn validates(root: &Value, schema: &Value, value: &Value) -> anyhow::Result<bool
     if let Some(definitions) = root.get("$defs") {
         object.insert("$defs".into(), definitions.clone());
     }
-    let validator = jsonschema::JSONSchema::options()
+    let validator = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&standalone)
+        .build(&standalone)
         .map_err(|error| anyhow::anyhow!("invalid catalog field schema: {error}"))?;
     Ok(validator.is_valid(value))
 }

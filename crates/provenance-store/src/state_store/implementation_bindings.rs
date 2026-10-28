@@ -265,6 +265,6 @@ fn validate_target(file: &camino::Utf8Path, symbol: &str) -> anyhow::Result<()> 
 }
 
 fn binding_id(rule_id: &StableId) -> anyhow::Result<StableId> {
-    let digest = format!("{:x}", Sha256::digest(rule_id.as_str().as_bytes()));
+    let digest = hex::encode(Sha256::digest(rule_id.as_str().as_bytes()));
     StableId::new(format!("implementation_binding_{}", &digest[..20]))
 }

@@ -2,12 +2,7 @@
 use crate::OperationFailure;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
-use std::{
-    collections::BTreeMap,
-    error::Error as StdError,
-    fmt,
-    sync::{Arc, OnceLock},
-};
+use std::{collections::BTreeMap, error::Error as StdError, fmt, sync::OnceLock};
 
 pub const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 
@@ -126,23 +121,8 @@ pub fn validate(
     }
 }
 
-struct NoExternalSchemas;
-impl jsonschema::SchemaResolver for NoExternalSchemas {
-    fn resolve(
-        &self,
-        _: &Value,
-        _: &reqwest::Url,
-        _: &str,
-    ) -> Result<Arc<Value>, jsonschema::SchemaResolverError> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "external schemas are disabled",
-        )
-        .into())
-    }
-}
-fn validators() -> &'static BTreeMap<String, OnceLock<jsonschema::JSONSchema>> {
-    static VALIDATORS: OnceLock<BTreeMap<String, OnceLock<jsonschema::JSONSchema>>> =
+fn validators() -> &'static BTreeMap<String, OnceLock<jsonschema::Validator>> {
+    static VALIDATORS: OnceLock<BTreeMap<String, OnceLock<jsonschema::Validator>>> =
         OnceLock::new();
     VALIDATORS.get_or_init(|| {
         document()["response_schemas"]
@@ -167,17 +147,17 @@ fn document() -> &'static Value {
     })
 }
 
-fn validator(name: &str) -> &'static jsonschema::JSONSchema {
+fn validator(name: &str) -> &'static jsonschema::Validator {
     validators()[name].get_or_init(|| {
         let document = document();
         let schema = json!({
             "$ref":format!("#/components/schemas/{name}"),
             "components":document["components"]
         });
-        jsonschema::JSONSchema::options()
+        jsonschema::options()
             .with_draft(jsonschema::Draft::Draft202012)
-            .with_resolver(NoExternalSchemas)
-            .compile(&schema)
+            .offline()
+            .build(&schema)
             .expect("generated response schema is valid")
     })
 }

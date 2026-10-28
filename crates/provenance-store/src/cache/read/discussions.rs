@@ -159,11 +159,11 @@ async fn check_size(
     id: &str,
     columns: &[&str],
 ) -> anyhow::Result<()> {
-    let size: Option<i64> = sqlx::query_scalar(&format!(
+    let size: Option<i64> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT {} FROM {} WHERE scope_id = ? AND id = ?",
         super::page::byte_expression(columns),
         crate::cache::quoted(table)
-    ))
+    )))
     .bind(scope)
     .bind(id)
     .fetch_optional(tx)
