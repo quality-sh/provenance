@@ -77,7 +77,8 @@ fn git_config(path: &Utf8Path, key: &str) -> Option<String> {
         .find(|candidate| candidate.exists())
         .unwrap_or(path);
     let output = std::process::Command::new("git")
-        .args(["-C", working_directory.as_str(), "config", "--get", key])
+        .current_dir(working_directory)
+        .args(["config", "--get", key])
         .output()
         .ok()?;
     if !output.status.success() {
