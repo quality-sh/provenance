@@ -93,13 +93,13 @@ impl LocalRepository {
     }
 
     fn manifest(&self) -> Result<Manifest, OperationFailure> {
-        read_published_state(&self.layout, || {
+        (|| {
             let bytes = read_repository_file(
                 Path::new(&self.root),
                 Path::new(".provenance/state/manifest.json"),
             )?;
-            Ok(serde_json::from_slice(&bytes)?)
-        })
+            Ok::<_, anyhow::Error>(serde_json::from_slice(&bytes)?)
+        })()
         .map_err(|_| OperationFailure::Internal)
     }
 }
