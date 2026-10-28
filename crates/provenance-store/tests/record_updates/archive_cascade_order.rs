@@ -57,6 +57,16 @@ fn to_value(record: &impl serde::Serialize) -> Value {
     serde_json::to_value(record).unwrap()
 }
 
+/// The refusal text when `owner` cites the archived `resolution_one`.
+fn archived_citation(owner: &str) -> String {
+    format!(
+        "{owner} cites resolution resolution_one, which is archived. An answered Question or an \
+         active Rule can cite only an approved Resolution. Until a reviewer approves \
+         resolution_one, keep the Rule in draft or review, or leave the Question open, or remove \
+         the citation and name resolution_one in the text."
+    )
+}
+
 /// The Resolution and the Question that it answers are in the same cascade, so
 /// one archive command archives both.
 #[tokio::test]
@@ -90,7 +100,7 @@ async fn archive_cascade_archives_a_resolution_and_the_rule_it_produces() {
 
 /// A live answered Question outside the cascade still cannot cite a Resolution
 /// that the cascade archives, and the refusal changes no record.
-// Implementation aid: this shows that the new write order keeps the refusal.
+// Implementation aid: this shows that the write order keeps the refusal.
 // No Rule states the refusal of a live citation in an archive cascade.
 #[tokio::test]
 async fn archive_cascade_still_refuses_a_live_question_that_cites_an_archived_resolution() {
@@ -98,8 +108,25 @@ async fn archive_cascade_still_refuses_a_live_question_that_cites_an_archived_re
     answered_graph(&fixture, "req_two").await;
     let error = archive_req_one(&fixture).await.unwrap_err();
     assert_eq!(error["kind"], "resolution_not_approved", "{error}");
+    assert_eq!(error["message"], archived_citation("question question_one"));
     assert_eq!(
         statuses(&fixture, &["req_one", "resolution_one", "question_one"]),
         ["active", "approved", "answered"]
+    );
+}
+
+/// An active Rule outside the cascade still cannot cite a Resolution that the
+/// cascade archives, and the refusal changes no record.
+// Implementation aid, as above.
+#[tokio::test]
+async fn archive_cascade_still_refuses_a_live_rule_that_cites_an_archived_resolution() {
+    let fixture = Fixture::new();
+    ruled_graph(&fixture, "req_two").await;
+    let error = archive_req_one(&fixture).await.unwrap_err();
+    assert_eq!(error["kind"], "resolution_not_approved", "{error}");
+    assert_eq!(error["message"], archived_citation("rule rule_one"));
+    assert_eq!(
+        statuses(&fixture, &["req_one", "resolution_one", "rule_one"]),
+        ["active", "approved", "active"]
     );
 }
