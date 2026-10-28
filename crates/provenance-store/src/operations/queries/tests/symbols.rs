@@ -12,20 +12,19 @@ use provenance_core::protocol::{ImpactQuery, ResolveSymbolQuery, SDK_PROTOCOL_VE
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use serde_json::json;
-use std::fmt::Write as _;
 
-fn resolve(file: &str, line: Option<usize>) -> ResolveSymbolQuery {
+pub(super) fn resolve(file: &str, line: Option<usize>) -> ResolveSymbolQuery {
     ResolveSymbolQuery {
         protocol_version: Some(SDK_PROTOCOL_VERSION),
         file: file.into(),
         symbol: None,
         line,
-
+        cursor: None,
         limit: 50,
     }
 }
 
-fn resolve_named(file: &str, symbol: &str) -> ResolveSymbolQuery {
+pub(super) fn resolve_named(file: &str, symbol: &str) -> ResolveSymbolQuery {
     ResolveSymbolQuery {
         symbol: Some(symbol.to_string()),
         ..resolve(file, None)
@@ -33,7 +32,7 @@ fn resolve_named(file: &str, symbol: &str) -> ResolveSymbolQuery {
 }
 
 /// The seeded store with a rule record behind the source file's site.
-fn store_with_rule() -> TestStore {
+pub(super) fn store_with_rule() -> TestStore {
     let store = test_stores::seeded_queries();
     create_rule_of(
         &store.state_store(),
@@ -76,7 +75,7 @@ fn verify(store: &TestStore, id: &str, file: &str) {
     );
 }
 
-fn rule_ids(rules: &[provenance_core::protocol::GraphNode]) -> Vec<&str> {
+pub(super) fn rule_ids(rules: &[provenance_core::protocol::GraphNode]) -> Vec<&str> {
     rules.iter().map(|node| node.id().as_str()).collect()
 }
 
@@ -123,7 +122,7 @@ async fn resolve_symbol_reads_the_named_file_only() {
 }
 
 #[tokio::test]
-#[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
+#[verifies("rule_resolve_symbol_marks_symbol_matches", examples)]
 async fn a_symbol_miss_keeps_the_named_files_rules_and_sites() {
     let store = store_with_rule();
     create_rule_of(
@@ -178,7 +177,7 @@ async fn a_symbol_miss_keeps_the_named_files_rules_and_sites() {
 }
 
 #[tokio::test]
-#[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
+#[verifies("rule_resolve_symbol_marks_symbol_matches", examples)]
 async fn an_exact_item_name_marks_the_symbol_match() {
     let store = store_with_rule();
     let answer = queries::resolve_symbol(
@@ -307,39 +306,4 @@ async fn resolve_symbol_scans_only_a_repository_relative_path() {
             ));
         }
     }
-}
-
-#[tokio::test]
-#[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
-async fn one_rule_with_more_sites_than_a_page_holds_answers_a_partial_page() {
-    let store = store_with_rule();
-    let name = "x".repeat(400);
-    let mut source = String::new();
-    for index in 0..2_500 {
-        writeln!(
-            source,
-            "#[verifies(\"rule_overtime\", examples)]\nfn checks_{index}_{name}() {{}}"
-        )
-        .unwrap();
-    }
-    std::fs::write(store.root.join("src/many.rs"), source).unwrap();
-    let answer = queries::resolve_symbol(
-        Some(store.root.clone()),
-        &store.scope,
-        ReadPolicy::default(),
-        ResolveSymbolQuery {
-            limit: 1,
-            ..resolve("src/many.rs", None)
-        },
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(rule_ids(&answer.result.rules), ["rule_overtime"]);
-    assert!(answer.result.has_more);
-    assert!((1..2_500).contains(&answer.result.matches.len()));
-    assert!(
-        serde_json::to_vec(&answer.result).unwrap().len()
-            <= provenance_core::protocol::QUERY_RESPONSE_BYTES
-    );
 }

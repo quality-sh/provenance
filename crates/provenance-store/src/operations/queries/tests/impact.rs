@@ -111,6 +111,7 @@ async fn impact_says_when_the_scan_was_cut() {
 }
 
 #[tokio::test]
+#[verifies("rule_impact_scanned_sites_name_their_items", examples)]
 async fn scanned_impact_sites_name_their_items() {
     let store = test_stores::seeded_queries();
     crate::cache::tests::fixtures::create_rule_of(
