@@ -328,10 +328,14 @@ async fn configuration(
     if let Err(error) = config.credential.authenticate(request.headers()) {
         return refusal(error);
     }
-    let actor_ids = match config.repository.disposition_actor_ids() {
-        Ok(actor_ids) => actor_ids,
-        Err(error) => return refusal(error),
-    };
+    // The manifest read can wait for the publication lock, so it runs off the runtime workers.
+    let repository = config.repository.clone();
+    let actor_ids =
+        match tokio::task::spawn_blocking(move || repository.disposition_actor_ids()).await {
+            Ok(Ok(actor_ids)) => actor_ids,
+            Ok(Err(error)) => return refusal(error),
+            Err(_) => return refusal(OperationFailure::Internal),
+        };
     let path = config.path.clone();
     let reviewer = tokio::task::spawn_blocking(move || crate::reviewer::review_actor_id(&path))
         .await
