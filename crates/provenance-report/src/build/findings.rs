@@ -13,8 +13,10 @@ use crate::envelope::{
     Relevance, Severity, Site, SiteRole, Subject, SubjectKind,
 };
 use camino::Utf8Path;
-use provenance_core::coverage::{EvidenceDiffReport, EvidenceDiffState, EvidenceSiteKind};
-use provenance_core::{Requirement, Rule};
+use provenance_core::coverage::{
+    EvidenceDiffReport, EvidenceDiffSite, EvidenceDiffState, EvidenceSiteKind,
+};
+use provenance_core::{ImplementationBinding, Requirement, Rule};
 use provenance_scanner::{
     source_sites, FileScan, InactiveBindingOrigin, InactiveBindingRole, RuleEvidenceFacts,
     SourceSiteRole,
@@ -235,10 +237,14 @@ fn inactive_current_findings(
 /// Site findings from the evidence diff. Removed implementation and
 /// verification sites are findings. A moved verification site is also a
 /// finding. These facts need a compatible baseline.
-pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding> {
+pub(super) fn evidence_site_findings(
+    report: &EvidenceDiffReport,
+    head_implementations: &[ImplementationBinding],
+) -> Vec<Finding> {
     report
         .sites
         .iter()
+        .filter(|site| !replaced_by_typed_binding(site, head_implementations))
         .filter(|site| {
             matches!(
                 (site.kind, site.state),
@@ -288,6 +294,21 @@ pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding
             finding
         })
         .collect()
+}
+
+/// A removed scanned implementation site is replaced, not removed, when a
+/// typed implementation binding at head names the same Rule in the same file.
+fn replaced_by_typed_binding(
+    site: &EvidenceDiffSite,
+    head_implementations: &[ImplementationBinding],
+) -> bool {
+    site.kind == EvidenceSiteKind::RuleBinding
+        && site.state == EvidenceDiffState::Gone
+        && head_implementations.iter().any(|binding| {
+            binding.rule_id.as_str() == site.subject_id
+                && (binding.file == site.file_path
+                    || site.original_file_path.as_ref() == Some(&binding.file))
+        })
 }
 
 fn site_at(

@@ -11,8 +11,8 @@
 //! envelope says incomplete or incompatible and states the reason.
 
 use crate::envelope::{
-    BaselineCompatibility, CommitRole, Completeness, PolicyMode, PolicyResult, ReportEnvelope,
-    ScanFacts, SUPPORTED_SCHEMA_VERSION,
+    BaselineCompatibility, CommitRole, Comparison, Completeness, PolicyMode, PolicyResult,
+    ReportEnvelope, ScanFacts, SUPPORTED_SCHEMA_VERSION,
 };
 use crate::render;
 use anyhow::Context;
@@ -22,6 +22,8 @@ use provenance_macros::rule;
 use provenance_store::stale::git;
 use provenance_store::{cache, layout::ProvenanceLayout, settings};
 
+#[cfg(test)]
+mod baseline_tests;
 mod findings;
 mod graph_snapshots;
 #[cfg(test)]
@@ -73,19 +75,21 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
     let (completeness, incompleteness_reason) =
         scan_completeness(input.repo, input.scan_path, scan_covers, &head)?;
 
-    let (mut baseline, mut baseline_reason, base_snapshot, head_snapshot) =
+    // The graph baseline decides the graph and source comparisons. Base
+    // evidence that cannot be read makes only the evidence comparisons
+    // uncertain.
+    let (graph_baseline, mut baseline_reason, base_snapshot, head_snapshot) =
         read_snapshots(input.repo, &base, &head, &scope)?;
+    let mut baseline = graph_baseline;
     let (verifications, implementations) =
         graph_snapshots::read_bindings(input.repo, &head, &scope, CommitRole::Head)?;
     let mut base_evidence = BaselineEvidence::default();
-    if baseline == BaselineCompatibility::Compatible {
-        match read_baseline_evidence(input.repo, &base, &scope)? {
+    if graph_baseline == BaselineCompatibility::Compatible {
+        match read_baseline_evidence(input.repo, &base, &scope) {
             BaselineEvidenceRead::Present(evidence) => base_evidence = evidence,
             BaselineEvidenceRead::Incompatible(reason) => {
                 baseline = BaselineCompatibility::Incompatible;
-                baseline_reason = Some(format!(
-                    "binding records at base commit {base} do not parse: {reason}"
-                ));
+                baseline_reason = Some(reason);
             }
         }
     }
@@ -108,12 +112,22 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
         implementations: &implementations,
         base_snapshot: &base_snapshot,
         head_snapshot: &head_snapshot,
-        baseline,
+        graph_baseline,
         baseline_view: &baseline_view,
         binding_severity: binding_severity(configured),
         completeness,
     })?;
-    let graph_changes = if baseline == BaselineCompatibility::Compatible {
+    let mut finding_records = collected.records;
+    if baseline != BaselineCompatibility::Compatible {
+        // An incompatible baseline cannot label a finding new. The graph and
+        // source findings kept from a readable graph baseline are uncertain.
+        for finding in &mut finding_records {
+            if matches!(finding.comparison, Comparison::New | Comparison::Resolved) {
+                finding.comparison = Comparison::Uncertain;
+            }
+        }
+    }
+    let graph_changes = if graph_baseline == BaselineCompatibility::Compatible {
         graph_snapshots::diff_snapshots(&base_snapshot, &head_snapshot)
     } else {
         Vec::new()
@@ -138,7 +152,7 @@ pub fn build_envelope(input: &BuildInput<'_>) -> anyhow::Result<ReportEnvelope> 
             result: policy_result(configured, collected.governed_finding_count),
         }),
         graph_changes,
-        findings: collected.records,
+        findings: finding_records,
         // Verification-run facts are out of scope for this producer. A run
         // the layers cannot supply stays absent; it is never invented.
         verification_runs: Vec::new(),
@@ -158,12 +172,16 @@ enum BaselineEvidenceRead {
     Incompatible(String),
 }
 
-fn read_baseline_evidence(
-    repo: &Utf8Path,
-    base: &str,
-    scope: &ScopeId,
-) -> anyhow::Result<BaselineEvidenceRead> {
-    let scans = git::revision_files(repo, base)?
+fn read_baseline_evidence(repo: &Utf8Path, base: &str, scope: &ScopeId) -> BaselineEvidenceRead {
+    let files = match git::revision_files(repo, base) {
+        Ok(files) => files,
+        Err(error) => {
+            return BaselineEvidenceRead::Incompatible(format!(
+                "source files at base commit {base} cannot be read: {error:#}"
+            ))
+        }
+    };
+    let scans = files
         .into_iter()
         .map(|file| {
             let language = file
@@ -177,13 +195,17 @@ fn read_baseline_evidence(
     let (verifications, implementations) =
         match graph_snapshots::read_bindings(repo, base, scope, CommitRole::Base) {
             Ok(bindings) => bindings,
-            Err(error) => return Ok(BaselineEvidenceRead::Incompatible(format!("{error:#}"))),
+            Err(error) => {
+                return BaselineEvidenceRead::Incompatible(format!(
+                    "binding records at base commit {base} do not parse: {error:#}"
+                ))
+            }
         };
-    Ok(BaselineEvidenceRead::Present(BaselineEvidence {
+    BaselineEvidenceRead::Present(BaselineEvidence {
         scans,
         verifications,
         implementations,
-    }))
+    })
 }
 
 /// Read both committed snapshots. The head must parse: the report describes
@@ -232,8 +254,8 @@ fn read_snapshots(
 
 /// Gather every finding the layers support under the current scan and
 /// baseline facts. Absence needs a complete scan: an incomplete scan cannot
-/// clear an absence, so it never reports one. Comparative findings need a
-/// compatible baseline.
+/// clear an absence, so it never reports one. Statement and site findings
+/// need a compatible graph baseline.
 fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<CollectedFindings> {
     let rules = &input.head_snapshot.rules;
     let mut finding_records = Vec::new();
@@ -255,7 +277,7 @@ fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<CollectedFinding
         input.binding_severity,
         input.repo,
     ));
-    if input.baseline == BaselineCompatibility::Compatible {
+    if input.graph_baseline == BaselineCompatibility::Compatible {
         finding_records.extend(findings::statement_change_findings(
             &input.base_snapshot.requirements,
             &input.head_snapshot.requirements,
@@ -269,6 +291,7 @@ fn collect_findings(input: &FindingInput<'_>) -> anyhow::Result<CollectedFinding
                 input.head,
                 input.scope,
                 input.layout,
+                input.implementations,
             )?);
         }
     }
@@ -295,7 +318,7 @@ struct FindingInput<'a> {
     implementations: &'a [provenance_core::ImplementationBinding],
     base_snapshot: &'a GraphSnapshot,
     head_snapshot: &'a GraphSnapshot,
-    baseline: BaselineCompatibility,
+    graph_baseline: BaselineCompatibility,
     baseline_view: &'a BaselineView,
     binding_severity: crate::envelope::Severity,
     completeness: Completeness,
@@ -343,6 +366,7 @@ fn evidence_site_findings(
     head: &str,
     scope: &ScopeId,
     layout: &ProvenanceLayout,
+    head_implementations: &[provenance_core::ImplementationBinding],
 ) -> anyhow::Result<Vec<crate::envelope::Finding>> {
     let graph = cache::graph_evidence(layout, scope)?;
     let base_files = git::revision_files(repo, base)?;
@@ -357,7 +381,10 @@ fn evidence_site_findings(
         &changes,
         &graph,
     );
-    Ok(findings::evidence_site_findings(&report))
+    Ok(findings::evidence_site_findings(
+        &report,
+        head_implementations,
+    ))
 }
 
 /// Whether the working tree matches the head commit. Scanned source facts

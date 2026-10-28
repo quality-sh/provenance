@@ -81,6 +81,11 @@ fn read_shard<T: serde::de::DeserializeOwned>(
         let context =
             || format!("record in {path} line {line_number} at commit {commit} does not parse");
         let value: serde_json::Value = serde_json::from_str(line).with_context(context)?;
+        // Migration 026 deletes a retired row, so a base reads it as absent.
+        if role == CommitRole::Base && value.get("retired") == Some(&serde_json::Value::Bool(true))
+        {
+            continue;
+        }
         // Mirror the store reader's admission check. Historical bases stay readable.
         if role == CommitRole::Head && value.get("retired").is_some() {
             let name = value

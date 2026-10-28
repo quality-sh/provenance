@@ -19,7 +19,7 @@ fn git(repo: &Utf8Path, args: &[&str]) -> String {
     String::from_utf8(output.stdout).unwrap().trim().to_string()
 }
 
-fn write(repo: &Utf8Path, relative: &str, contents: &str) {
+pub(super) fn write(repo: &Utf8Path, relative: &str, contents: &str) {
     let path = repo.join(relative);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, contents).unwrap();
@@ -79,7 +79,7 @@ fn write_graph_with_statuses(repo: &Utf8Path, rules: &[(&str, &str)]) {
     );
 }
 
-fn write_implementation_binding(repo: &Utf8Path, retired: Option<bool>) {
+pub(super) fn write_implementation_binding(repo: &Utf8Path, retired: Option<bool>) {
     let mut binding = json!({
         "schema_version": SUPPORTED_SCHEMA_VERSION,
         "scope_id": "default",
@@ -99,14 +99,14 @@ fn write_implementation_binding(repo: &Utf8Path, retired: Option<bool>) {
     );
 }
 
-fn remove_implementation_bindings(repo: &Utf8Path) {
+pub(super) fn remove_implementation_bindings(repo: &Utf8Path) {
     std::fs::remove_file(
         repo.join(".provenance/state/scopes/default/implementations/binding.jsonl"),
     )
     .unwrap();
 }
 
-fn repository(rule_ids: &[&str], source: &str) -> (tempfile::TempDir, Utf8PathBuf) {
+pub(super) fn repository(rule_ids: &[&str], source: &str) -> (tempfile::TempDir, Utf8PathBuf) {
     let directory = tempfile::tempdir().unwrap();
     let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
     git(&repo, &["init", "-q"]);
@@ -117,7 +117,7 @@ fn repository(rule_ids: &[&str], source: &str) -> (tempfile::TempDir, Utf8PathBu
     (directory, repo)
 }
 
-fn commit(repo: &Utf8Path, message: &str) -> String {
+pub(super) fn commit(repo: &Utf8Path, message: &str) -> String {
     git(repo, &["add", "."]);
     git(
         repo,
@@ -126,7 +126,7 @@ fn commit(repo: &Utf8Path, message: &str) -> String {
     git(repo, &["rev-parse", "HEAD"])
 }
 
-fn envelope(repo: &Utf8Path, base: &str, head: &str) -> super::ReportEnvelope {
+pub(super) fn envelope(repo: &Utf8Path, base: &str, head: &str) -> super::ReportEnvelope {
     build_envelope(&BuildInput {
         repo,
         scan_path: repo,
@@ -138,7 +138,7 @@ fn envelope(repo: &Utf8Path, base: &str, head: &str) -> super::ReportEnvelope {
     .unwrap()
 }
 
-fn comparison(envelope: &super::ReportEnvelope, code: &str, rule_id: &str) -> Value {
+pub(super) fn comparison(envelope: &super::ReportEnvelope, code: &str, rule_id: &str) -> Value {
     let finding = envelope
         .findings
         .iter()
@@ -147,7 +147,7 @@ fn comparison(envelope: &super::ReportEnvelope, code: &str, rule_id: &str) -> Va
     serde_json::to_value(finding.comparison).unwrap()
 }
 
-fn has_finding(envelope: &super::ReportEnvelope, code: &str, rule_id: &str) -> bool {
+pub(super) fn has_finding(envelope: &super::ReportEnvelope, code: &str, rule_id: &str) -> bool {
     envelope
         .findings
         .iter()
