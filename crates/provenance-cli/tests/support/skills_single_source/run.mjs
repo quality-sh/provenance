@@ -21,8 +21,6 @@ function run(command, args, cwd = checkout, extra = {}) {
 const firewall = spawnSync('sfw', ['--version'], { encoding: 'utf8' }).error ? null : 'sfw';
 assert.ok(firewall || !process.env.GITHUB_ACTIONS, 'CI registry fetches must go through Socket Firewall');
 function firewalled(command, args, cwd = checkout, extra = {}) {
-  // Cargo on Windows cannot check revocation for the firewall's TLS chain; see the CI fetch steps.
-  if (process.platform === 'win32') extra = { ...extra, CARGO_HTTP_CHECK_REVOKE: 'false' };
   return firewall ? run(firewall, [command, ...args], cwd, extra) : run(command, args, cwd, extra);
 }
 function fixture() {
@@ -66,7 +64,7 @@ function prepare() {
   run('node', ['tools/skills/prepare.mjs']);
 }
 function build(directory = checkout) {
-  run(cargo, ['build', '--locked', '-p', 'provenance-cli', '--bin', 'provenance'], directory);
+  run(cargo, ['build', '--locked', '--offline', '-p', 'provenance-cli', '--bin', 'provenance'], directory);
   return join(target, 'debug', process.platform === 'win32' ? 'provenance.exe' : 'provenance');
 }
 function checkCli(binary, expected) {
@@ -120,7 +118,7 @@ try {
       firewalled(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['--yes', 'skills@1.7.2', 'add', checkout, '--skill', name, '--agent', 'codex', '--copy', '--yes'], install, { HOME: home, USERPROFILE: home });
       assert.equal(readFileSync(join(install, '.agents/skills', name, 'SKILL.md'), 'utf8'), expected[name]);
     }
-    await import('./package.mjs').then(module => module.checkPackage({ checkout, temporary, target, cargo, expected, run, firewalled, prepare, checkCli, names }));
+    await import('./package.mjs').then(module => module.checkPackage({ checkout, temporary, target, cargo, expected, run, prepare, checkCli, names }));
   }
 } finally {
   rmSync(temporary, { recursive: true, force: true });
