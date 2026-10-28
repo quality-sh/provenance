@@ -54,8 +54,8 @@ fn assert_tools(tools: &[rmcp::model::Tool]) {
         .filter(|tool| names.iter().any(|name| name == tool.name.as_ref()))
     {
         if ["discussions", "discussion", "discuss", "reply"].contains(&tool.name.as_ref()) {
-            jsonschema::JSONSchema::compile(&json!(tool.input_schema)).unwrap();
-            jsonschema::JSONSchema::compile(&json!(tool.output_schema.as_ref().unwrap())).unwrap();
+            compile(&json!(tool.input_schema)).unwrap();
+            compile(&json!(tool.output_schema.as_ref().unwrap())).unwrap();
         }
     }
 }
@@ -187,11 +187,9 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
     assert_ne!(started.is_error, Some(true), "{started:?}");
     let receipt = &started.structured_content.as_ref().unwrap()["receipt"];
     let write_tool = tools.iter().find(|tool| tool.name == "discuss").unwrap();
-    assert!(
-        jsonschema::JSONSchema::compile(&json!(write_tool.output_schema.as_ref().unwrap()))
-            .unwrap()
-            .is_valid(started.structured_content.as_ref().unwrap())
-    );
+    assert!(compile(&json!(write_tool.output_schema.as_ref().unwrap()))
+        .unwrap()
+        .is_valid(started.structured_content.as_ref().unwrap()));
     let id = receipt["discussion_id"].as_str().unwrap();
     assert_repeated_start_creates_new_discussion(&client, id).await;
     let changed_body = call(
@@ -217,11 +215,9 @@ async fn named_mcp_discussion_actions_share_structured_and_readable_results() {
         .iter()
         .find(|tool| tool.name == "discussions")
         .unwrap();
-    assert!(
-        jsonschema::JSONSchema::compile(&json!(list_tool.output_schema.as_ref().unwrap()))
-            .unwrap()
-            .is_valid(list.structured_content.as_ref().unwrap())
-    );
+    assert!(compile(&json!(list_tool.output_schema.as_ref().unwrap()))
+        .unwrap()
+        .is_valid(list.structured_content.as_ref().unwrap()));
     let entry = list.structured_content.as_ref().unwrap()["result"]["entries"]
         .as_array()
         .unwrap()
@@ -394,4 +390,13 @@ async fn denied_parent_grant_is_applied_before_discussion_page_selection() {
     }
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
+}
+
+/// Read a schema that has no `$schema` keyword as a Draft 7 document.
+fn compile(schema: &Value) -> Result<jsonschema::Validator, jsonschema::ValidationError<'static>> {
+    if schema.get("$schema").is_some() {
+        jsonschema::validator_for(schema)
+    } else {
+        jsonschema::draft7::new(schema)
+    }
 }

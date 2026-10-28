@@ -154,7 +154,7 @@ mod tests {
         second.as_object_mut().unwrap().remove("type");
         let original = json!({"anyOf":[first,second]});
         for branch in original["anyOf"].as_array().unwrap() {
-            assert!(jsonschema::JSONSchema::compile(branch)
+            assert!(jsonschema::draft7::new(branch)
                 .unwrap()
                 .is_valid(&json!(42)));
         }

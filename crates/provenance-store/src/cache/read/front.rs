@@ -91,7 +91,7 @@ impl SqlFront {
                      ORDER BY target_id, owner_type, owner_id, relation"
                 );
                 for (sql, outward) in [(out, true), (into, false)] {
-                    let mut query = sqlx::query(&sql)
+                    let mut query = sqlx::query(sqlx::AssertSqlSafe(sql))
                         .bind(snapshot.scope().as_str())
                         .bind(word.as_str());
                     for id in chunk {
