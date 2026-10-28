@@ -51,9 +51,18 @@ The writable collections are `sources`, `requirements`, `resolutions`,
 `verification-runs`, `verification-bindings`, `discussion-containers`,
 `messages`, `assertions`, and `dispositions`.
 
-Rule creation defaults to `draft` in the CLI, catalog operations, and typed
-specifications. Pass `--status active` only when a person ratifies the Rule.
-Coverage reports do not produce active-Rule absence findings for a draft Rule.
+Rule creation defaults to `draft` in the CLI and in catalog operations. Pass
+`--status active` only when a person ratifies the Rule. Coverage reports do not
+produce active-Rule absence findings for a draft Rule.
+
+A typed specification cannot set a Rule status, so apply creates each new
+specification Rule as `draft`. To make a specification Rule active, a person
+changes its status with `provenance rules <id> update --status active
+--declared-by <owner> --if-match <etag>`. A later apply keeps that status. If a
+Rule declaration changes its key or moves to a different Requirement, apply
+creates a new `draft` Rule and deletes the old Rule. A move between a
+Requirement and the shared specification context keeps the Rule and its status
+when apply finds one existing Rule.
 
 Collection lists and root search hide archived and other terminal records by
 default. Use `--exclude-terminal false` on a collection list or
