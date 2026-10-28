@@ -156,7 +156,7 @@ fn invalid_sessions_refuse_access() {
     for value in [
         format!("Bearer {session}changed"),
         format!("bearer {session}"),
-        session.clone(),
+        session,
     ] {
         assert_eq!(
             response(
