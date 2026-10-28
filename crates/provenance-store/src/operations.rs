@@ -8,12 +8,14 @@ use anyhow::Context as _;
 use std::str::FromStr as _;
 
 use camino::Utf8Path;
-use provenance_core::{EngineInfo, StableId, SDK_PROTOCOL_VERSION, SUPPORTED_SCHEMA_VERSION};
+use provenance_core::{
+    EngineInfo, ScopeId, StableId, SDK_PROTOCOL_VERSION, SUPPORTED_SCHEMA_VERSION,
+};
 use provenance_macros::rule;
 
 use crate::repository::Repository;
 use crate::state_store::{
-    BeginVerificationInput, CompleteVerificationInput, TypedSpecInput, TypedSpecResult,
+    BeginVerificationInput, CompleteVerificationInput, StateStore, TypedSpecInput, TypedSpecResult,
 };
 
 pub mod catalog;
@@ -95,12 +97,7 @@ pub fn verification_runs(
     repository: &Repository,
     rule: Option<&StableId>,
 ) -> anyhow::Result<Vec<provenance_core::VerificationRun>> {
-    Ok(repository
-        .store()
-        .list_verification_runs(repository.scope())?
-        .into_iter()
-        .filter(|run| rule.is_none_or(|rule| &run.rule_id == rule))
-        .collect())
+    verification_runs_of(&repository.store(), repository.scope(), rule)
 }
 
 /// Lists verification bindings, optionally for one Rule.
@@ -108,9 +105,30 @@ pub fn verification_bindings(
     repository: &Repository,
     rule: Option<&StableId>,
 ) -> anyhow::Result<Vec<provenance_core::VerificationBinding>> {
-    Ok(repository
-        .store()
-        .list_verification_bindings(repository.scope())?
+    verification_bindings_of(&repository.store(), repository.scope(), rule)
+}
+
+/// The runs of one scope through a store the caller holds.
+pub(crate) fn verification_runs_of(
+    store: &StateStore,
+    scope: &ScopeId,
+    rule: Option<&StableId>,
+) -> anyhow::Result<Vec<provenance_core::VerificationRun>> {
+    Ok(store
+        .list_verification_runs(scope)?
+        .into_iter()
+        .filter(|run| rule.is_none_or(|rule| &run.rule_id == rule))
+        .collect())
+}
+
+/// The bindings of one scope through a store the caller holds.
+pub(crate) fn verification_bindings_of(
+    store: &StateStore,
+    scope: &ScopeId,
+    rule: Option<&StableId>,
+) -> anyhow::Result<Vec<provenance_core::VerificationBinding>> {
+    Ok(store
+        .list_verification_bindings(scope)?
         .into_iter()
         .filter(|binding| rule.is_none_or(|rule| &binding.rule_id == rule))
         .collect())

@@ -82,13 +82,7 @@ macro_rules! list {
                 ExecutionNeed::GraphStorage,
                 ExecutionNeed::$need,
             ],
-            |store, scope, request| {
-                crate::operations::$handler(
-                    Some(store.layout.root().to_path_buf()),
-                    scope,
-                    request.rule.as_ref(),
-                )
-            }
+            |store, scope, request| crate::operations::$handler(store, scope, request.rule.as_ref())
         );
     };
 }
@@ -96,13 +90,13 @@ list!(
     VerificationRuns,
     "verification-runs",
     VerificationRun,
-    verification_runs,
+    verification_runs_of,
     RunStorage
 );
 list!(
     VerificationBindings,
     "verification-bindings",
     VerificationBinding,
-    verification_bindings,
+    verification_bindings_of,
     GraphStorage
 );
