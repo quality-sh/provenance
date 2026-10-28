@@ -99,10 +99,10 @@ fn pending_proposal(host: &Host) -> String {
         request(host, "POST", "/requirements", true)
             .set("Content-Type", "application/json")
             .send_string(
-                &json!({
+                &json!({"data": {
                     "actor": "agent", "id": "req_review", "statement": "The record is readable.",
                     "status": "active", "depends_on": [], "supersedes": []
-                })
+                }})
                 .to_string(),
             ),
     );
@@ -125,12 +125,12 @@ fn decide(host: &Host, proposal: &str, actor_id: &str) -> ureq::Response {
         )
         .set("Content-Type", "application/json")
         .send_string(
-            &json!({
+            &json!({"data": {
                 "actor": {"identity_type": "human", "id": actor_id},
                 "decision": "accepted", "rationale": null,
                 "canonical_artifact": {"artifact_type": "requirement", "artifact_id": "req_review"},
                 "feedback": null, "declared_by": null
-            })
+            }})
             .to_string(),
         ),
     )
