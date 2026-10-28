@@ -14,6 +14,7 @@ use provenance_store::{
         },
         read_policy::ReadPolicy,
     },
+    publication::read_published_state,
     settings::Settings,
 };
 use std::{
@@ -194,11 +195,13 @@ impl ContextResolver for FixtureAccess {
             reason: InvalidInputReason::InvalidValue,
         })?;
         let layout = ProvenanceLayout::new(root.to_str().ok_or(OperationFailure::Internal)?);
-        // This policy load does not acquire a publication lock, recover, or open a cache.
-        let bytes =
-            std::fs::read(layout.manifest_path()).map_err(|_| OperationFailure::Internal)?;
-        let manifest: Manifest =
-            serde_json::from_slice(&bytes).map_err(|_| OperationFailure::Internal)?;
+        // This policy load first reads without the lock. Only when that read fails and a
+        // publication lock or marker exists does it read again under the publication lock.
+        let manifest: Manifest = read_published_state(&layout, || {
+            let bytes = std::fs::read(layout.manifest_path())?;
+            Ok(serde_json::from_slice(&bytes)?)
+        })
+        .map_err(|_| OperationFailure::Internal)?;
         if !manifest
             .scopes
             .iter()

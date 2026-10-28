@@ -374,3 +374,41 @@ fn read_only_validation_accepts_a_planned_repository() {
     .unwrap();
     assert!(!root.exists());
 }
+
+/// The probe starts the read while the publication holds its lock with the live state moved away.
+#[test]
+#[verifies("rule_preparation_reads_published_state", examples)]
+fn a_read_in_the_publication_gap_reads_again_after_the_publication() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    let layout = ProvenanceLayout::new(root);
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::write(layout.manifest_path(), "before").unwrap();
+    let reader = std::rc::Rc::new(std::cell::RefCell::new(None));
+    crate::test_probes::arm("state_after_backup_rename", {
+        let layout = layout.clone();
+        let reader = reader.clone();
+        move || {
+            let (attempts, attempted) = std::sync::mpsc::channel();
+            let layout = layout.clone();
+            reader.replace(Some(std::thread::spawn(move || {
+                read_published_state(&layout, || {
+                    let read = std::fs::read_to_string(layout.manifest_path());
+                    // The probe waits for the first read only.
+                    let _ = attempts.send(read.is_ok());
+                    Ok(read?)
+                })
+            })));
+            assert!(!attempted.recv().unwrap(), "the gap hides the live state");
+            Ok(())
+        }
+    });
+    with_staged_state(&layout, false, |staged| {
+        std::fs::write(staged.manifest_path(), "after")?;
+        Ok(())
+    })
+    .unwrap();
+    crate::test_probes::disarm("state_after_backup_rename");
+    let reader = reader.take().expect("the publication reached the gap");
+    assert_eq!(reader.join().unwrap().unwrap(), "after");
+}

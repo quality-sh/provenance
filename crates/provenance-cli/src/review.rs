@@ -328,7 +328,7 @@ async fn configuration(
     if let Err(error) = config.credential.authenticate(request.headers()) {
         return refusal(error);
     }
-    let actor_ids = match config.repository.disposition_actor_ids() {
+    let actor_ids = match disposition_actor_ids(config.repository.clone()).await {
         Ok(actor_ids) => actor_ids,
         Err(error) => return refusal(error),
     };
@@ -343,6 +343,15 @@ async fn configuration(
     }
     config.value["dispositionActorIds"] = json!(actor_ids);
     Json(config.value).into_response()
+}
+
+/// The manifest read can wait for the publication lock, so it runs off the runtime workers.
+async fn disposition_actor_ids(
+    repository: Arc<LocalRepository>,
+) -> Result<Vec<String>, OperationFailure> {
+    tokio::task::spawn_blocking(move || repository.disposition_actor_ids())
+        .await
+        .unwrap_or(Err(OperationFailure::Internal))
 }
 
 async fn protect_origin(

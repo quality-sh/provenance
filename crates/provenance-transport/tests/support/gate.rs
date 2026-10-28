@@ -61,15 +61,28 @@ impl Control {
             .expect("a preparation enters the gate");
     }
 
-    /// Lets every held and later preparation continue.
+    /// Lets every held and later preparation continue. A poisoned lock still opens, so a
+    /// drop during a panic does not panic again.
     pub fn open(&self) {
-        *self.state.open.lock().unwrap() = true;
+        *self
+            .state
+            .open
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
         self.state.opened.notify_all();
     }
 
     /// Makes the identity check refuse every later call with `access_denied`.
     pub fn refuse_identities(&self) {
         self.state.refuse.store(true, Ordering::SeqCst);
+    }
+}
+
+/// A test that fails before `open` still releases the held work. Otherwise the runtime
+/// waits at drop for the blocking threads, and the test does not stop.
+impl Drop for Control {
+    fn drop(&mut self) {
+        self.open();
     }
 }
 

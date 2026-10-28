@@ -48,3 +48,9 @@ slow-timeout = { period = "60s", terminate-after = 4 }
 # A blocked OS lock cannot be cancelled by an async timeout.
 filter = 'binary(page_write_response)'
 slow-timeout = { period = "30s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+# Slot tests hold work until the test releases it. A stuck test must fail in
+# about a minute, not at the job timeout.
+filter = 'package(provenance-transport) & (binary(host_queue) | binary(host_invocation))'
+slow-timeout = { period = "30s", terminate-after = 2 }
