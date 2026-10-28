@@ -1,6 +1,7 @@
 use super::write_error::{WriteError, WriteFailure};
 use crate::{layout::ProvenanceLayout, state_store::StateStore};
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId, VerificationMethod};
+use provenance_macros::verifies;
 use serde_json::json;
 
 fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
@@ -20,14 +21,10 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     (dir, StateStore::new(layout), scope)
 }
 fn document() -> crate::state_store::TypedSpecInput {
-    serde_json::from_value(json!({
-        "schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,
-        "spec":"example","declared_by":"test",
+    serde_json::from_value(json!({"schema_version":provenance_core::SUPPORTED_SCHEMA_VERSION.0,"spec":"example","declared_by":"test",
         "sources":[{"key":"policy","name":"Policy","kind":"document"}],
         "requirements":[{"key":"ready","statement":"The system is ready.","sources":["policy"]}],
-        "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]
-    }))
-    .unwrap()
+        "rules":[{"key":"ready","requirement":"ready","statement":"The system is ready."}]})).unwrap()
 }
 #[test]
 fn missing_references_are_typed_without_changing_the_native_message() {
@@ -75,11 +72,7 @@ fn already_complete_is_typed_and_retains_native_text() {
         .iter()
         .find(|value| value.kind == crate::state_store::TypedResourceKind::Rule)
         .unwrap();
-    let input = serde_json::from_value(json!({
-        "rule":rule.id, "key":"test", "method":"examples", "declared_by":"test",
-        "file":"test.rs"
-    }))
-    .unwrap();
+    let input = serde_json::from_value(json!({"rule":rule.id,"key":"test","method":"examples","declared_by":"test","file":"test.rs"})).unwrap();
     let run = store
         .begin_verification(scope.clone(), input, VerificationMethod::Examples)
         .unwrap();
@@ -91,6 +84,7 @@ fn already_complete_is_typed_and_retains_native_text() {
 }
 
 #[test]
+#[verifies("rule_new_rule_defaults_to_draft", examples)]
 fn typed_rule_creation_defaults_to_draft() {
     let (_dir, store, scope) = fixture();
     store.apply_typed_spec(&scope, document()).unwrap();
@@ -130,11 +124,7 @@ fn begin_keeps_the_publication_lock_and_reports_saved_binding_on_failure() {
     });
     let result = store.begin_verification(
         scope.clone(),
-        serde_json::from_value(json!({
-            "rule":rule.id, "key":"test", "method":"examples", "declared_by":"test",
-            "file":"test.rs"
-        }))
-        .unwrap(),
+        serde_json::from_value(json!({"rule":rule.id,"key":"test","method":"examples","declared_by":"test","file":"test.rs"})).unwrap(),
         VerificationMethod::Examples,
     );
     crate::test_probes::disarm("verification_binding_published");

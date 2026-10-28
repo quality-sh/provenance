@@ -247,8 +247,8 @@ fn active_rule_without_verification_is_reported_and_no_run_is_invented() {
     assert_eq!(anchor_absence["comparison"], "pre_existing");
 }
 
+/// No Rule states that only an active Rule gets absence findings, so this test has no binding.
 #[test]
-#[verifies("rule_report_envelope_states_only_known_facts", examples)]
 fn draft_rule_omits_active_rule_binding_findings() {
     let (dir, base, head) = two_commit_repo_with_added_rule_status(None);
     let envelope = build_envelope(dir.path(), &base, &head);

@@ -142,27 +142,10 @@ pub struct CreateResolutionInput {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(
-    feature = "schema",
-    schemars(extend(
-        "x-provenance-validation-only-any-of" = true,
-        "anyOf" = serde_json::json!([
-            {
-                "properties": {
-                    "status": {"enum": ["draft", "review", "active", "deprecated"]},
-                    "archived_in_commit": {"type": "null"}
-                }
-            },
-            {
-                "properties": {
-                    "status": {"const": "archived"},
-                    "archived_in_commit": {"type": "object"}
-                },
-                "required": ["status", "archived_in_commit"]
-            }
-        ])
-    ))
-)]
+#[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
+    {"properties":{"status":{"enum":["draft","review","active","deprecated"]},"archived_in_commit":{"type":"null"}}},
+    {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}
+]))))]
 pub struct CreateRuleInput {
     pub scope_id: ScopeId,
     pub id: StableId,
@@ -291,8 +274,7 @@ pub struct BeginVerificationInput {
     #[serde(default)]
     pub declaration: Option<DeclarationReferenceInput>,
     pub key: String,
-    /// Semantic validation accepts examples, property, conformance, construction, exhaustion,
-    /// and proof.
+    /// Semantic validation accepts examples, property, conformance, construction, exhaustion, and proof.
     pub method: String,
     pub declared_by: String,
     #[serde(default)]

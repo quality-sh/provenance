@@ -1,6 +1,7 @@
 //! The generated Rule CLI reads the resource catalog.
 use assert_cmd::Command;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
+use provenance_macros::verifies;
 
 fn provenance() -> Command {
     Command::new(assert_cmd::cargo::cargo_bin!("provenance"))
@@ -79,6 +80,7 @@ fn rule_list_and_member_read_use_response_envelopes() {
 }
 
 #[test]
+#[verifies("rule_new_rule_defaults_to_draft", examples)]
 fn rule_create_defaults_to_draft_and_accepts_explicit_active_status() {
     let tmp = repo_with_rule();
     let repo = tmp.path().to_str().unwrap();
@@ -140,8 +142,9 @@ fn catalog_commands_offer_help_at_each_address() {
     }
 }
 
+/// Implementation aid: help text advertises the default but does not create a Rule.
 #[test]
-fn rule_create_help_shows_only_the_new_draft_default() {
+fn rule_create_help_shows_the_draft_status_default() {
     provenance()
         .args(["rules", "create", "--help"])
         .assert()
