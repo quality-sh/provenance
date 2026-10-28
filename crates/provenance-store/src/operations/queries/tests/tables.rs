@@ -115,7 +115,7 @@ async fn assert_rows_read_as_written<K: ProjectionRow + Serialize>(
             .as_str()
             .unwrap()
             .to_string();
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(scope)
             .bind(&id)
             .fetch_one(pool)
