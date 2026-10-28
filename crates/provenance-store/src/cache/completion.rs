@@ -30,11 +30,18 @@ pub enum Stage {
 
 impl Stage {
     /// The stage of a completion that has not started yet, shared between
-    /// the completion task and the caller that waits for it.
-    pub(super) fn shared(pool: &SqlitePool) -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self::Teardown {
-            connections: pool.size(),
-        }))
+    /// the completion task and the caller that waits for it. It names the
+    /// first step of the completion, so a caller whose deadline passes
+    /// before the task starts gets the step that the task waits for.
+    pub(super) fn shared(pool: &SqlitePool, immutable: bool) -> Arc<Mutex<Self>> {
+        let first = if immutable {
+            Self::Teardown {
+                connections: pool.size(),
+            }
+        } else {
+            Self::CloseLock(close_lock_path(pool))
+        };
+        Arc::new(Mutex::new(first))
     }
 
     /// The stage without its local facts, for a public failure.
@@ -93,12 +100,7 @@ pub(super) async fn complete(
         close_until_empty(&pool, &stage).await;
         return Ok(());
     }
-    let path = pool
-        .connect_options()
-        .get_filename()
-        .with_extension("db.close.lock");
-    enter(&stage, Stage::CloseLock(path.clone()));
-    let lock = match acquire_close_lock(&path).await {
+    let lock = match acquire_close_lock(&close_lock_path(&pool)).await {
         Ok(lock) => lock,
         Err(error) => {
             close_until_empty(&pool, &stage).await;
@@ -108,6 +110,12 @@ pub(super) async fn complete(
     close_until_empty(&pool, &stage).await;
     drop(lock);
     Ok(())
+}
+
+fn close_lock_path(pool: &SqlitePool) -> PathBuf {
+    pool.connect_options()
+        .get_filename()
+        .with_extension("db.close.lock")
 }
 
 /// Opens the close lock file and waits until this close holds it.

@@ -123,7 +123,7 @@ impl CacheConnection {
         let immutable = self.immutable;
         let deadline = self.deadline;
         drop(self);
-        let stage = Stage::shared(&pool);
+        let stage = Stage::shared(&pool, immutable);
         let task = tokio::spawn(complete(pool, immutable, Arc::clone(&stage)));
         within_deadline(task, deadline, stage).await
     }
@@ -160,7 +160,7 @@ impl Drop for CacheConnection {
             return;
         };
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            let stage = Stage::shared(&pool);
+            let stage = Stage::shared(&pool, self.immutable);
             handle.spawn(complete(pool, self.immutable, stage));
         }
     }
