@@ -2,7 +2,7 @@
 name: provenance-shaping
 description: Guide turn-based requirement shaping in Provenance. Use when a user brings a loose idea, asks to refine requirements, work through open shaping questions, graduate fog, or run the Chart/Work loop against an anchor requirement. Land every resolved decision immediately into the graph.
 ---
-<!-- Installed by provenance 0.3.0; content hash fnv1a64:1689be72875a1eb4 -->
+<!-- Installed by provenance 0.3.0; content hash fnv1a64:f90b58b25c0f5502 -->
 
 # Shaping
 
@@ -13,6 +13,9 @@ The core discipline is **LAND-AS-YOU-GO**: every resolved decision is written to
 graph before you move on. The graph holds state between turns, not the conversation.
 
 ## Invariants
+
+Before you call code redundant or delete tests, run
+`provenance rules resolve-symbol --file <path>` on the file.
 
 1. **Land every decision as it resolves.** Never carry a resolved-but-unrecorded decision
    in conversation state.
