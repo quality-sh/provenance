@@ -161,7 +161,9 @@ fn unreadable_base_source_on_a_complete_scan_keeps_the_other_findings() {
             "change": "changed",
             "id": "rule_anchor",
             "statement": "The rule_anchor behavior is changed",
-            "statement_before": "The rule_anchor behavior is present"
+            "statement_before": "The rule_anchor behavior is present",
+            "lifecycle_before": "active",
+            "lifecycle_after": "active"
         }])
     );
     assert_eq!(
