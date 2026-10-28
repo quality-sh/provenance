@@ -58,7 +58,7 @@ fn frozen_digest<'a, T: Serialize + 'a>(
         hasher.update(serde_json::to_vec(record).expect("record serialization is infallible"));
         hasher.update(b"\n");
     }
-    format!("{:x}", hasher.finalize())
+    hex::encode(hasher.finalize())
 }
 
 #[cfg(test)]
