@@ -78,7 +78,7 @@ fn unreadable_base_binding_keeps_graph_and_source_findings() {
 }
 
 #[test]
-#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
+#[verifies("rule_report_removed_implementation_site_is_a_finding", examples)]
 fn typed_replacement_of_a_scanned_site_is_not_removed() {
     let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
     let (_directory, repo) = repository(&["rule_anchor"], source);

@@ -193,7 +193,7 @@ fn rule_added_without_evidence_is_new() {
 }
 
 #[test]
-#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
+#[verifies("rule_report_removed_implementation_site_is_a_finding", examples)]
 fn removed_implementation_site_is_reported() {
     let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
     let (_directory, repo) = repository(&["rule_anchor"], source);
@@ -269,7 +269,7 @@ fn missing_base_makes_comparisons_uncertain() {
 }
 
 #[test]
-#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
+#[verifies("rule_report_inactive_binding_compares_with_base", examples)]
 fn rule_made_inactive_in_range_has_a_new_current_binding_finding() {
     for status in ["deprecated", "archived"] {
         let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
@@ -293,7 +293,7 @@ fn rule_made_inactive_in_range_has_a_new_current_binding_finding() {
 }
 
 #[test]
-#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
+#[verifies("rule_report_removed_implementation_site_is_a_finding", examples)]
 fn moved_implementation_anchor_is_not_removed_or_missing() {
     let source = "#[rule(\"rule_anchor\")]\nfn implements() {}\n";
     let (_directory, repo) = repository(&["rule_anchor"], source);
@@ -324,7 +324,7 @@ fn moved_implementation_anchor_is_not_removed_or_missing() {
 }
 
 #[test]
-#[verifies("rule_report_missing_evidence_compares_with_base", examples)]
+#[verifies("rule_report_removed_implementation_site_is_a_finding", examples)]
 fn scanned_replacement_prevents_removed_or_missing_implementation() {
     let (_directory, repo) = repository(&["rule_anchor"], "fn implements() {}\n");
     write_implementation_binding(&repo, None);

@@ -16,7 +16,8 @@ use camino::Utf8Path;
 use provenance_core::coverage::{
     EvidenceDiffReport, EvidenceDiffSite, EvidenceDiffState, EvidenceSiteKind,
 };
-use provenance_core::{ImplementationBinding, Requirement, Rule};
+use provenance_core::{ImplementationBinding, Requirement, Rule, RuleStatus, VerificationBinding};
+use provenance_macros::rule;
 use provenance_scanner::{
     source_sites, FileScan, InactiveBindingOrigin, InactiveBindingRole, RuleEvidenceFacts,
     SourceSiteRole,
@@ -43,6 +44,8 @@ impl BaselineView {
     }
 
     /// Compare an inactive Rule binding with the same condition at the base.
+    /// A Rule that was active at the base has a new finding.
+    #[rule("rule_report_inactive_binding_compares_with_base")]
     fn inactive_binding_comparison(&self, subject_id: &str) -> Comparison {
         match &self.evidence {
             Some(evidence) if !evidence.inactive_bindings.contains(subject_id) => Comparison::New,
@@ -59,6 +62,9 @@ impl BaselineView {
         self.missing_evidence_comparison(rule_id, |evidence| &evidence.verifications)
     }
 
+    /// Compare a missing-evidence finding with the base. The finding is new
+    /// unless the Rule was active at the base and had no evidence of this kind.
+    #[rule("rule_report_missing_evidence_compares_with_base")]
     fn missing_evidence_comparison(
         &self,
         rule_id: &str,
@@ -80,8 +86,8 @@ impl BaselineView {
         compatibility: BaselineCompatibility,
         base_rules: &[Rule],
         base_scans: &[FileScan],
-        base_implementations: &[provenance_core::ImplementationBinding],
-        base_verifications: &[provenance_core::VerificationBinding],
+        base_implementations: &[ImplementationBinding],
+        base_verifications: &[VerificationBinding],
     ) -> Self {
         match compatibility {
             BaselineCompatibility::Compatible => {
@@ -106,12 +112,9 @@ impl BaselineView {
                 let inactive_bindings = base_rules
                     .iter()
                     .filter(|rule| {
-                        matches!(
-                            &rule.status,
-                            provenance_core::RuleStatus::Deprecated
-                                | provenance_core::RuleStatus::Archived
-                        ) && (implementation_rule_ids.contains(rule.id.as_str())
-                            || verification_rule_ids.contains(rule.id.as_str()))
+                        matches!(&rule.status, RuleStatus::Deprecated | RuleStatus::Archived)
+                            && (implementation_rule_ids.contains(rule.id.as_str())
+                                || verification_rule_ids.contains(rule.id.as_str()))
                     })
                     .map(|rule| rule.id.as_str().to_string())
                     .collect();
@@ -119,7 +122,7 @@ impl BaselineView {
                     evidence: Some(BaselineEvidence {
                         active_rules: base_rules
                             .iter()
-                            .filter(|rule| rule.status == provenance_core::RuleStatus::Active)
+                            .filter(|rule| rule.status == RuleStatus::Active)
                             .map(|rule| rule.id.as_str().to_string())
                             .collect(),
                         implementations: implementation_rule_ids,
@@ -239,7 +242,10 @@ fn inactive_current_findings(
 
 /// Site findings from the evidence diff. Removed implementation and
 /// verification sites are findings. A moved verification site is also a
-/// finding. These facts need a compatible baseline.
+/// finding. A moved implementation anchor, or a typed binding in the same
+/// file, is a replacement and not a removal. These facts need a compatible
+/// baseline.
+#[rule("rule_report_removed_implementation_site_is_a_finding")]
 pub(super) fn evidence_site_findings(
     report: &EvidenceDiffReport,
     head_implementations: &[ImplementationBinding],
