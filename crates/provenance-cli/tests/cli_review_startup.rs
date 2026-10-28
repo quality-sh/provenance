@@ -3,7 +3,6 @@
 mod review_host_support;
 
 use provenance_macros::verifies;
-use provenance_store::layout::ProvenanceLayout;
 use provenance_transport::local_host::discover;
 use review_host_support::{repository, review_command, spawn_command, waits};
 use serde_json::Value;
@@ -37,14 +36,13 @@ fn create_requirement(root: &Path) {
 fn the_host_announces_itself_only_when_it_answers() {
     let repo = repository();
     create_requirement(repo.path());
-    let layout = ProvenanceLayout::new(repo.path().to_str().unwrap());
     let registry = repo
         .path()
         .join(".provenance/cache/local-hosts/default.json");
     let mut starting = None;
     // Startup reads the graph under the publication guard, so the host cannot answer while
     // this test holds the guard.
-    waits::publish(&layout, || {
+    waits::publish(&waits::repository(repo.path()), || {
         let mut host = spawn_command(review_command(repo.path()));
         std::thread::sleep(Duration::from_millis(1500));
         assert!(

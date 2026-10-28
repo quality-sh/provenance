@@ -113,7 +113,7 @@ fn repository_at(root: &camino::Utf8Path) -> Repository {
 
 #[tokio::test]
 async fn get_answers_a_domain_and_a_boundary_by_id() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     for (kind, id, wire) in [
         (NodeType::Domain, "domain_payroll", "domain"),
         (NodeType::Boundary, "boundary_no_backpay", "boundary"),
@@ -140,7 +140,7 @@ async fn get_answers_a_domain_and_a_boundary_by_id() {
 #[tokio::test]
 #[verifies("rule_porcelain_search_crosses_kinds", examples)]
 async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
         &repository_of(&dir),
         ReadPolicy::default(),
@@ -171,7 +171,7 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
 
 #[tokio::test]
 async fn filter_only_search_reaches_each_selected_kind() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
         &repository_of(&dir),
         ReadPolicy::default(),
@@ -200,7 +200,7 @@ async fn filter_only_search_reaches_each_selected_kind() {
 
 #[tokio::test]
 async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
         &repository_of(&dir),
         ReadPolicy::default(),
@@ -247,7 +247,7 @@ fn rank_appends_the_new_kinds_after_the_six_settled_positions() {
 /// serves the order the whole-graph load used to pin.
 #[tokio::test]
 async fn search_answers_new_kinds_after_every_settled_kind() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
         &repository_of(&dir),
         ReadPolicy::default(),

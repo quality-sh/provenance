@@ -119,7 +119,7 @@ async fn a_refused_stale_read_completes_its_connection() {
 /// complete its connection before the refusal leaves the reader.
 #[tokio::test]
 async fn a_refused_schema_behind_read_completes_its_connection() {
-    let (_dir, layout, scope) = fixtures::seeded_layout();
+    let (_dir, layout, _scope) = fixtures::seeded_layout();
     catch_up_state(&open(&layout)).await.unwrap();
     let cache = open_existing_cache(&layout).await.unwrap();
     sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
@@ -149,7 +149,7 @@ async fn a_refused_schema_behind_read_completes_its_connection() {
 /// before the answer leaves the reader.
 #[tokio::test]
 async fn a_failed_catch_up_step_completes_its_connection() {
-    let (_dir, layout, scope) = fixtures::seeded_layout();
+    let (_dir, layout, _scope) = fixtures::seeded_layout();
     let healthy = crate::operations::reader::answer(&open(&layout), ReadPolicy::default(), |_| {
         Box::pin(async { Ok(1usize) })
     })

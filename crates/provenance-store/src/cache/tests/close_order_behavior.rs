@@ -75,7 +75,7 @@ async fn join_waiters(waiters: &Mutex<Vec<Waiter>>) {
 fn a_read_closes_while_the_only_blocking_worker_waits_for_its_guard() {
     let runtime = small_blocking_pool(1);
     runtime.block_on(async {
-        let (_dir, layout, scope) = empty_layout();
+        let (_dir, layout, _scope) = empty_layout();
         let waiters = Arc::new(Mutex::new(Vec::new()));
         let waiters_in_probe = Arc::clone(&waiters);
         let waiter_layout = layout.clone();

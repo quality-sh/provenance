@@ -1,7 +1,5 @@
 //! Deadlines for real host test operations.
-use provenance_store::{
-    layout::ProvenanceLayout, publication::PublicationGuard, repository::Repository,
-};
+use provenance_store::{publication::PublicationGuard, repository::Repository};
 use std::{
     io::Read,
     process::{Command, Output, Stdio},
@@ -11,12 +9,10 @@ use std::{
 
 pub const LIMIT: Duration = Duration::from_secs(60);
 
-pub async fn guard(layout: &ProvenanceLayout) -> PublicationGuard {
-    let repository =
-        Repository::open(layout.provenance_dir().parent().unwrap(), "default").unwrap();
+pub async fn guard(repository: &Repository) -> PublicationGuard {
     tokio::time::timeout(
         LIMIT,
-        provenance_store::publication::publication_guard(&repository),
+        provenance_store::publication::publication_guard(repository),
     )
     .await
     .expect("publication lock acquisition exceeded 60 seconds")
@@ -65,16 +61,21 @@ fn capture(mut pipe: impl Read + Send + 'static) -> mpsc::Receiver<Vec<u8>> {
     receive
 }
 
+/// Opens the fixture repository at `root` for the `default` scope.
+pub fn repository(root: &std::path::Path) -> Repository {
+    Repository::open(root, "default").unwrap()
+}
+
 /// Runs a publication with a deadline on lock acquisition.
 pub fn publish(
-    layout: &ProvenanceLayout,
+    repository: &Repository,
     operation: impl FnOnce() -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
-    let guard = runtime.block_on(guard(layout));
+    let guard = runtime.block_on(guard(repository));
     let result = operation();
     drop(guard);
     result

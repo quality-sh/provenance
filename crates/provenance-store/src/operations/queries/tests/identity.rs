@@ -106,7 +106,7 @@ async fn identity_index_rejects_one_id_in_another_scope_and_kind() {
 
 #[tokio::test]
 async fn hidden_duplicate_kind_does_not_change_the_visible_resolution() {
-    let (dir, _store, _scope) = seeded_store();
+    let (dir, _store, scope) = seeded_store();
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
     catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
@@ -140,7 +140,7 @@ async fn hidden_duplicate_kind_does_not_change_the_visible_resolution() {
 
 #[tokio::test]
 async fn identity_resolver_reports_an_ambiguous_visible_index() {
-    let (dir, _store, _scope) = seeded_store();
+    let (dir, _store, scope) = seeded_store();
     let layout = crate::layout::ProvenanceLayout::new(root_of(&dir));
     catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();

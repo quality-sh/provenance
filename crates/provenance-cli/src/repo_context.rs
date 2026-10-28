@@ -1,7 +1,7 @@
 use crate::store::Store;
 use camino::Utf8PathBuf;
 use clap::Args;
-use provenance_core::ScopeId;
+use provenance_core::{protocol::failure::OperationFailure, ScopeId};
 use provenance_store::repository::{OpenFailure, Repository};
 
 #[derive(Clone, Debug, Args)]
@@ -54,9 +54,14 @@ impl RepoContext {
     }
 
     pub fn local_host(&self) -> anyhow::Result<provenance_transport::StatementHost> {
+        // An undeclared scope is a host refusal, so JSON callers get the refusal object.
         let repository =
-            provenance_store::operations::LocalRepository::bind(self.open()?, "native")
-                .map_err(|failure| anyhow::anyhow!(failure))?;
+            Repository::open(&self.repo, &self.scope).map_err(|error| match error {
+                OpenFailure::UnknownScope { .. } => anyhow::anyhow!(OperationFailure::from(error)),
+                other => initialization_hint(&self.repo, open_failure(other)),
+            })?;
+        let repository = provenance_store::operations::LocalRepository::bind(repository, "native")
+            .map_err(|failure| anyhow::anyhow!(failure))?;
         Ok(provenance_transport::StatementHost::with_access(
             std::sync::Arc::new(repository),
         ))
