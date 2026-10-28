@@ -40,6 +40,11 @@ type RelationKey = (String, RecordKind, String);
 
 /// Read one shard file at a commit. `Ok(None)` says the file is absent, the
 /// normal state for a scope that did not exist yet.
+const EVIDENCE_SHARDS: [&str; 2] = [
+    "verifications/binding.jsonl",
+    "implementations/binding.jsonl",
+];
+
 fn read_shard<T: serde::de::DeserializeOwned>(
     repo: &Utf8Path,
     commit: &str,
@@ -81,8 +86,11 @@ fn read_shard<T: serde::de::DeserializeOwned>(
         let context =
             || format!("record in {path} line {line_number} at commit {commit} does not parse");
         let value: serde_json::Value = serde_json::from_str(line).with_context(context)?;
-        // Migration 026 deletes a retired row, so a base reads it as absent.
-        if role == CommitRole::Base && value.get("retired") == Some(&serde_json::Value::Bool(true))
+        // Migration 026 deletes a retired row. A retired base binding is not
+        // evidence; graph records stay readable at base.
+        if role == CommitRole::Base
+            && EVIDENCE_SHARDS.contains(&shard)
+            && value.get("retired") == Some(&serde_json::Value::Bool(true))
         {
             continue;
         }
