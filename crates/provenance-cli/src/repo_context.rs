@@ -81,7 +81,6 @@ fn open_failure(error: OpenFailure) -> anyhow::Error {
 /// The manifest scope with the selected id. A scope that the manifest does
 /// not declare is refused with the declared scopes, so a mistyped scope never
 /// reads as an empty one.
-#[provenance_macros::rule("rule_graph_report_refuses_undeclared_scope")]
 pub fn declared_scope_in<'a>(
     manifest: &'a provenance_core::Manifest,
     selected: &str,

@@ -1,6 +1,6 @@
 mod discussion_support;
 
-use discussion_support::{fixture, repository, scope, write};
+use discussion_support::{fixture, repository, write};
 use provenance_core::{
     threads::{DiscussionConversationQuery, DiscussionListQuery, DiscussionStatusFilter},
     NodeType,
