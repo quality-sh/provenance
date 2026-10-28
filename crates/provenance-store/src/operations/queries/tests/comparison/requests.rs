@@ -164,7 +164,7 @@ pub async fn for_store(store: &TestStore) -> Vec<Request> {
             file: file.into(),
             symbol: None,
             line: None,
-
+            cursor: None,
             limit: 50,
         }));
     }

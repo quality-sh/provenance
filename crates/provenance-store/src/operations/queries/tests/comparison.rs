@@ -49,22 +49,26 @@ pub fn strip_additive(value: &mut Value) {
     strip_scanned_item_names(value);
 }
 
+/// Scanned impact sites now name their item; the pinned answers hold
+/// them without the name.
 fn strip_scanned_item_names(value: &mut Value) {
-    match value {
-        Value::Object(fields) => {
-            if fields.contains_key("line") {
-                fields.remove("symbol");
-            }
-            for child in fields.values_mut() {
-                strip_scanned_item_names(child);
+    let Some(rules) = value
+        .get_mut("affected_rules")
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+    for rule in rules {
+        for list in ["implementations", "verifications"] {
+            let Some(sites) = rule.get_mut(list).and_then(Value::as_array_mut) else {
+                continue;
+            };
+            for site in sites.iter_mut().filter_map(Value::as_object_mut) {
+                if site.contains_key("line") {
+                    site.remove("symbol");
+                }
             }
         }
-        Value::Array(values) => {
-            for child in values {
-                strip_scanned_item_names(child);
-            }
-        }
-        _ => {}
     }
 }
 

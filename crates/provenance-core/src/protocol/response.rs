@@ -165,10 +165,11 @@ pub struct ResolveSymbolResult {
     pub file: Utf8PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
     pub limit: usize,
     pub has_more: bool,
     pub rules: Vec<GraphNode>,
-    #[serde(default)]
     pub matches: Vec<ResolveSymbolMatch>,
 }
 

@@ -177,31 +177,6 @@ impl<K: ProjectionRow> Table<'_, K> {
         self.page_by_field("id", &wanted, "", limit).await
     }
 
-    /// The rule ids named by the rows whose file column holds the file,
-    /// and whose symbol matches when one is named. Only the two columns
-    /// are read, so collecting candidates decodes no record.
-    pub(crate) async fn rule_ids_for_file(
-        &self,
-        file: &str,
-        symbol: Option<&str>,
-    ) -> anyhow::Result<Vec<String>> {
-        let filter = symbol.map_or(String::new(), |_| " AND symbol = ?".to_string());
-        let sql = format!(
-            "SELECT rule_id FROM {} WHERE scope_id = ? AND file = ?{filter} ORDER BY rule_id",
-            quoted(K::TABLE)
-        );
-        let mut query = sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
-            .bind(self.snapshot().scope().as_str())
-            .bind(file);
-        if let Some(symbol) = symbol {
-            query = query.bind(symbol);
-        }
-        let mut tx = self.snapshot().connection().await;
-        let ids: Vec<String> = query.fetch_all(&mut **tx).await?;
-        drop(tx);
-        Ok(ids)
-    }
-
     /// The given ids that count, in id order, each after its stored byte
     /// count passes the cap. The caller bounds the list.
     async fn page_rows(&self, ids: &[String]) -> anyhow::Result<Vec<K>> {
@@ -346,9 +321,8 @@ impl Table<'_, ImplementationBinding> {
     pub(crate) async fn implementation_sites_for_file(
         &self,
         file: &str,
-        rule_ids: &[&str],
     ) -> anyhow::Result<Vec<ImplementationSymbolSite>> {
-        let rows = symbol_rows(self, "rule_id, symbol", file, rule_ids).await?;
+        let rows = symbol_rows(self, "rule_id, symbol", file).await?;
         rows.iter()
             .map(|row| {
                 Ok(ImplementationSymbolSite {
@@ -364,9 +338,8 @@ impl Table<'_, VerificationBinding> {
     pub(crate) async fn verification_sites_for_file(
         &self,
         file: &str,
-        rule_ids: &[&str],
     ) -> anyhow::Result<Vec<VerificationSymbolSite>> {
-        let rows = symbol_rows(self, "rule_id, symbol, method", file, rule_ids).await?;
+        let rows = symbol_rows(self, "rule_id, symbol, method", file).await?;
         rows.iter()
             .map(|row| {
                 Ok(VerificationSymbolSite {
@@ -379,32 +352,25 @@ impl Table<'_, VerificationBinding> {
     }
 }
 
+/// The binding rows whose file column holds the file, with `select` as
+/// the column list. Only the named columns are read, so no binding record
+/// decodes. The callers pass a constant column list.
 async fn symbol_rows<K: ProjectionRow>(
     table: &Table<'_, K>,
-    select: &str,
+    select: &'static str,
     file: &str,
-    rule_ids: &[&str],
 ) -> anyhow::Result<Vec<SqliteRow>> {
-    let mut rows = Vec::new();
-    for chunk in rule_ids.chunks(BIND_CHUNK) {
-        let marks = vec!["?"; chunk.len()].join(", ");
-        let sql = format!(
-            "SELECT {select} FROM {} WHERE scope_id = ? AND file = ? AND rule_id IN ({marks}) \
-             ORDER BY rule_id, id",
-            quoted(K::TABLE)
-        );
-        let mut query = sqlx::query(&sql)
-            .bind(table.snapshot().scope().as_str())
-            .bind(file);
-        for rule_id in chunk {
-            query = query.bind(*rule_id);
-        }
-        let fetched = {
-            let mut tx = table.snapshot().connection().await;
-            query.fetch_all(&mut **tx).await?
-        };
-        rows.extend(fetched);
-    }
+    let sql = format!(
+        "SELECT {select} FROM {} WHERE scope_id = ? AND file = ? ORDER BY rule_id, id",
+        quoted(K::TABLE)
+    );
+    let mut tx = table.snapshot().connection().await;
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sql))
+        .bind(table.snapshot().scope().as_str())
+        .bind(file)
+        .fetch_all(&mut **tx)
+        .await?;
+    drop(tx);
     Ok(rows)
 }
 

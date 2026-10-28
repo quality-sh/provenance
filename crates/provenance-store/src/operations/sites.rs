@@ -1,6 +1,7 @@
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::{AffectedRule, ImplementationSite, VerificationSite};
 use provenance_core::{ImplementationBinding, StableId, VerificationBinding};
+use provenance_macros::rule;
 use provenance_scanner::{source_sites, SourceSiteRole};
 
 /// Everything a reader needs to place one Rule in the code.
@@ -14,6 +15,9 @@ pub(super) struct Evidence<'a> {
 }
 
 impl Evidence<'_> {
+    /// The sites of one Rule. A scanned site names the item that carries its
+    /// attribute, as a bound site names its symbol.
+    #[rule("rule_impact_scanned_sites_name_their_items")]
     pub(super) fn affected_rule(&self, repo: &Utf8Path, id: StableId) -> AffectedRule {
         AffectedRule {
             implementations: self.implementations(repo, &id),
