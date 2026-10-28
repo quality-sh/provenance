@@ -19,7 +19,7 @@ removed from storage. The host's existing origin, repository, scope, and file-ac
 checks remain in effect.
 The renderer owns the generated Effect client and its reads and writes.
 
-The renderer pin uses the successful main build from web PR 23 and SDK 0.2.3.
+The renderer pin uses the successful main build from web PR 74 and SDK 0.3.0.
 The composer checks the archive SHA-256, source commit, and clean build state
 before it creates the output.
 
@@ -100,7 +100,7 @@ fetch and WebSocket: a launch link stores the session and opens the event
 socket, a reload mounts with the stored session, and a changed session is
 refused and removed.
 
-The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-13d51d69ae34/provenance-review.tar.gz)
+The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-377852a18205/provenance-review.tar.gz)
 contains the exact bytes from the pinned upstream build. The release contains
 only the renderer. It is separate from the CLI releases and is not the latest
 CLI release. CI and release preparation use this archive without access to the

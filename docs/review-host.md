@@ -347,14 +347,14 @@ pages over local HTTP, but it renders the Markdown in `docs/`, not the graph.
 The pin in [`tools/review-assets.json`](../tools/review-assets.json) identifies:
 
 - Source repository: `quality-sh/provenance-web`.
-- Merged commit: `13d51d69ae34311ecb7d992d527a1ff4e1f706e8` (PR 68).
-- Validated author commit: `13d51d69ae34311ecb7d992d527a1ff4e1f706e8`.
-- Successful [Review assets run 40204763440](https://github.com/quality-sh/provenance-web/actions/runs/40204763440).
+- Merged commit: `377852a1820e307436d3d600a283567a6d575ad3` (PR 74).
+- Validated author commit: `377852a1820e307436d3d600a283567a6d575ad3`.
+- Successful [Review assets run 40671700515](https://github.com/quality-sh/provenance-web/actions/runs/40671700515).
 - Archive: `provenance-review.tar.gz`.
-- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-13d51d69ae34/provenance-review.tar.gz).
-- SHA-256: `330d1d704accb4931795149398e869cc3510a937ab2a86205a5a805471835465`.
-- Archive size: 2,734,816 bytes.
-- Page JavaScript bundle size: 720,499 bytes.
+- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-377852a18205/provenance-review.tar.gz).
+- SHA-256: `65fd5a09938ad6f0ae105fa5addb474e16776f7cf368a6ce0a04e663591f6d46`.
+- Archive size: 2,887,059 bytes.
+- Page JavaScript bundle size: 726,199 bytes.
 
 The upstream entry is `src/browser/main.tsx`; `vite.review.config.ts` builds
 `dist-review`. `scripts/package-review.mjs` archives that directory with stable
@@ -362,8 +362,8 @@ metadata and emits a checksum sidecar. The archive includes `review.js`,
 `review.css`, local fonts under `assets/`, the empty `index.html`,
 `build-info.json`, and `licenses/provenance.txt`. Its renderer contains the
 generated Effect client, but it does not contain a configured application. See the merged
-[browser contract](https://github.com/quality-sh/provenance-web/blob/13d51d69ae34311ecb7d992d527a1ff4e1f706e8/src/browser/main.tsx)
-and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/13d51d69ae34311ecb7d992d527a1ff4e1f706e8/docs/review-data-layer.md).
+[browser contract](https://github.com/quality-sh/provenance-web/blob/377852a1820e307436d3d600a283567a6d575ad3/src/browser/main.tsx)
+and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/377852a1820e307436d3d600a283567a6d575ad3/docs/review-data-layer.md).
 
 After the build dependencies are ready, prepare the application and build:
 
