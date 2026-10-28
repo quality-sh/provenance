@@ -1,16 +1,11 @@
 // Implementation aid: the pinned renderer ships its own SDK build, so this flow checks the
 // host's read responses against the response validators that the renderer bundles.
-import { execFileSync, spawn } from 'node:child_process';
-import { once } from 'node:events';
-import { chmod, copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { createInterface } from 'node:readline';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { withFixtureHost } from './fixture-host.ts';
+import { refusedFields, type Validator } from './renderer-reads-report.ts';
 
-type Validator = ((body: unknown) => boolean) & { errors?: { instancePath: string; keyword: string; message?: string }[] | null };
-
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const [binaryArg, assetsArg, sdkArg] = process.argv.slice(2);
 if (!binaryArg || !assetsArg || !sdkArg) throw new Error('Usage: node verify-renderer-reads.ts BINARY COMPOSED_ASSETS SDK_PACKAGE');
 const assets = resolve(assetsArg);
@@ -28,60 +23,28 @@ async function rendererValidator(operation: string, name: string): Promise<Valid
   return validator;
 }
 
-// The error names the nearest record id on the path to the field that failed.
-function recordAt(body: unknown, path: string): string {
-  let node = body as Record<string, unknown> | undefined;
-  let id = '(no record)';
-  for (const part of path.split('/').slice(1)) {
-    if (node && typeof node === 'object' && typeof node.id === 'string') id = node.id;
-    node = node?.[part.replaceAll('~1', '/').replaceAll('~0', '~')] as Record<string, unknown> | undefined;
-  }
-  return node && typeof node === 'object' && typeof node.id === 'string' ? node.id : id;
-}
-
-const work = await mkdtemp(join(tmpdir(), 'provenance-renderer-reads-'));
-const binary = join(work, process.platform === 'win32' ? 'provenance.exe' : 'provenance');
-let host: ReturnType<typeof spawn> | undefined;
-try {
-  await copyFile(resolve(binaryArg), binary);
-  await chmod(binary, 0o755);
-  const repository = join(work, 'repository');
-  const steAssets = join(work, 'ste-assets');
-  await mkdir(steAssets);
-  await copyFile(
-    join(root, 'packages/provenance/test/fixtures/synthetic-ste-dictionary.pdf'),
-    join(steAssets, 'ASD-STE100_ISSUE9.pdf'),
-  );
-  execFileSync(binary, ['init', '--path', repository, '--scope', 'default', '--path-prefix', '.'], {
-    cwd: work, encoding: 'utf8', timeout: 180_000, env: {
-      ...process.env,
-      PROVENANCE_STE100_ASSET_DIR: steAssets,
-      PROVENANCE_STE100_INDEX_DIR: join(work, 'ste-indexes'),
-    },
-  });
-  const records: [string, string[]][] = [
-    ['req_root', []], ['req_child', ['req_root']], ['req_joint', ['req_root', 'req_child']],
-  ];
-  for (const [id, refines] of records) {
-    execFileSync(binary, ['requirements', 'create', '--repo', repository, '--scope', 'default', '--stdin'], {
-      cwd: work, encoding: 'utf8', timeout: 30_000,
-      input: JSON.stringify({
-        actor: 'review-test', id, statement: 'The record is readable.', status: 'discovery',
-        depends_on: [], supersedes: [], ...(refines.length ? { refines } : {}),
-      }),
+// Each record type that a document can hold gets a real body: Requirements, a Rule, a
+// Resolution, a Topic, and a Question.
+const requirements: [string, string[]][] = [
+  ['req_root', []], ['req_child', ['req_root']], ['req_joint', ['req_root', 'req_child']],
+];
+const statement = 'The record is readable.';
+const { failures, summary } = await withFixtureHost(binaryArg, repository => {
+  for (const [id, refines] of requirements) {
+    repository.create('requirements', {
+      actor: 'review-test', id, statement, status: 'discovery',
+      depends_on: [], supersedes: [], ...(refines.length ? { refines } : {}),
     });
   }
-  host = spawn(binary, ['review', '--repo', repository, '--repository-id', 'fixture', '--scope', 'default', '--no-open'], {
-    cwd: work, env: { ...process.env, PATH: work }, stdio: ['ignore', 'pipe', 'inherit'],
+  repository.create('rules', { id: 'rule_readable', requirement_ids: ['req_child'], statement, status: 'draft' });
+  repository.create('resolutions', {
+    id: 'res_readable', requirement_ids: ['req_child'], title: 'Readable record', position: statement, rationale: statement,
   });
-  const exited = once(host, 'exit');
-  const lines = createInterface({ input: host.stdout! });
-  const [line] = await Promise.race([
-    once(lines, 'line', { signal: AbortSignal.timeout(30_000) }),
-    exited.then(() => { throw new Error('Review host exited before startup'); }),
-  ]);
-  lines.close();
-  const config = JSON.parse(line);
+  repository.create('topics', { id: 'topic_readable', requirement_id: 'req_child', title: 'Readable record' });
+  repository.create('questions', {
+    id: 'q_readable', topic_id: 'topic_readable', question: 'Is the record readable?', resolution_method: 'research',
+  });
+}, async config => {
   let body: unknown;
   const recording: typeof fetch = async (input, init) => {
     const response = await fetch(input, init);
@@ -101,24 +64,12 @@ try {
     do {
       page += 1;
       await read(cursor);
-      if (!validator(body)) {
-        // A union reports an error for each branch that failed. Only the deepest fields are reported,
-        // so the branch that matched the record type shows its field and the other branches add less noise.
-        const messages = new Map<string, Set<string>>();
-        for (const error of validator.errors ?? []) {
-          if (error.keyword === 'anyOf' || error.keyword === 'oneOf') continue;
-          messages.set(error.instancePath, (messages.get(error.instancePath) ?? new Set()).add(error.message ?? error.keyword));
-        }
-        for (const [path, texts] of messages) {
-          if ([...messages.keys()].some(other => other.startsWith(`${path}/`))) continue;
-          failures.push(`${operation} ${label} page ${page}: record ${recordAt(body, path)} field ${path}: ${[...texts].join('; ')}`);
-        }
-      }
+      for (const field of refusedFields(validator, body)) failures.push(`${operation} ${label} page ${page}: ${field}`);
       counts[operation] = (counts[operation] ?? 0) + 1;
       cursor = (body as { meta?: { next_cursor?: string | null } }).meta?.next_cursor ?? undefined;
     } while (cursor);
   }
-  for (const [id] of records) {
+  for (const [id] of requirements) {
     await check('getRequirementDocument', 'GetRequirementDocumentSuccess', id,
       cursor => client.getRequirementDocument({ id, limit: 1, ...(cursor ? { cursor } : {}) }));
     await check('getRequirement', 'GetRequirementBaseSuccess', id, () => client.getRequirement({ id }));
@@ -129,19 +80,16 @@ try {
     cursor => client.listRequirements({ limit: 1, ...(cursor ? { cursor } : {}) }));
   await check('listRequirements', 'ListRequirementsSearchSuccess', 'search',
     cursor => client.listRequirements({ query: 'search', text: 'readable', limit: 1, ...(cursor ? { cursor } : {}) }));
-  host.kill('SIGTERM');
-  await exited;
-  const summary = Object.entries(counts).map(([operation, count]) => `${operation} ${count}`).join(', ');
-  if (failures.length) {
-    for (const failure of failures) console.error(failure);
-    throw new Error(`The renderer validators refused ${failures.length} host response fields (${summary} pages)`);
-  }
-  console.log(`The renderer validators accepted every host response (${summary} pages): ${binaryArg}`);
-} finally {
-  if (host && host.exitCode === null && host.signalCode === null) {
-    const exited = once(host, 'exit');
-    host.kill();
-    await exited;
-  }
-  await rm(work, { recursive: true, force: true });
+  // The page shows a refusal when a document root is gone, so its failure body is checked too.
+  await check('getRequirementDocument', 'GetRequirementDocumentFailure', 'req_missing',
+    () => client.getRequirementDocument({ id: 'req_missing' }).then(
+      () => { throw new Error('The host read a document for a missing root'); },
+      () => undefined,
+    ));
+  return { failures, summary: Object.entries(counts).map(([operation, count]) => `${operation} ${count}`).join(', ') };
+});
+if (failures.length) {
+  for (const failure of failures) console.error(failure);
+  throw new Error(`The renderer validators refused ${failures.length} host response fields (${summary} pages)`);
 }
+console.log(`The renderer validators accepted every host response (${summary} pages): ${binaryArg}`);
