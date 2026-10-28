@@ -77,7 +77,7 @@ fn assert_matches_output_schema(
     result: &rmcp::model::CallToolResult,
 ) {
     let schema = json!(tool.output_schema.as_ref().unwrap());
-    let validator = jsonschema::JSONSchema::compile(&schema).unwrap();
+    let validator = compile(&schema).unwrap();
     let structured = result.structured_content.as_ref().unwrap();
     assert!(
         validator.is_valid(structured),
@@ -176,4 +176,13 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
+}
+
+/// Read a schema that has no `$schema` keyword as a Draft 7 document.
+fn compile(schema: &Value) -> Result<jsonschema::Validator, jsonschema::ValidationError<'static>> {
+    if schema.get("$schema").is_some() {
+        jsonschema::validator_for(schema)
+    } else {
+        jsonschema::draft7::new(schema)
+    }
 }

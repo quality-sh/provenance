@@ -86,9 +86,9 @@ pub(super) async fn check_parent(ctx: &ReadContext, parent: &ThreadParent) -> an
         .ok_or_else(|| anyhow::anyhow!("thread parent kind does not take Discussions"))?;
     ctx.snapshot().attest(table);
     let mut tx = ctx.snapshot().connection().await;
-    let exists: bool = sqlx::query_scalar(&format!(
+    let exists: bool = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT EXISTS(SELECT 1 FROM {table} WHERE scope_id = ? AND id = ?)"
-    ))
+    )))
     .bind(ctx.snapshot().scope().as_str())
     .bind(parent.node_id.as_str())
     .fetch_one(&mut **tx)
@@ -145,12 +145,12 @@ async fn fill_addressed(
     page: &mut DiscussionPageFill<DiscussionGroup>,
 ) -> anyhow::Result<Fill> {
     let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String, i64, String)> = sqlx::query_as(&format!(
+    let keys: Vec<(String, i64, String)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT d.discussion_id, {DISCUSSION_SIZE}, t.status FROM discussions d \
          JOIN threads t ON t.scope_id=d.scope_id AND t.id=d.thread_id \
          WHERE d.scope_id=? AND {DISCUSSION_PARENT} AND d.discussion_id>? \
          ORDER BY d.discussion_id LIMIT ?"
-    ))
+    )))
     .bind(ctx.snapshot().scope().as_str())
     .bind(super::discussion_state::discussion_kind_word(
         query.parent.node_type,
@@ -183,9 +183,9 @@ async fn discussion_group(
     status: String,
 ) -> anyhow::Result<DiscussionGroup> {
     let mut tx = ctx.snapshot().connection().await;
-    let row: DiscussionRow = sqlx::query_as(&format!(
+    let row: DiscussionRow = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {DISCUSSION_COLUMNS} FROM discussions d WHERE d.scope_id=? AND d.discussion_id=?"
-    ))
+    )))
     .bind(ctx.snapshot().scope().as_str())
     .bind(id)
     .fetch_one(&mut **tx)
@@ -243,11 +243,11 @@ pub(super) async fn group(
         ctx.snapshot().attest(family);
     }
     let mut tx = ctx.snapshot().connection().await;
-    let row: Option<(String, i64)> = sqlx::query_as(&format!(
+    let row: Option<(String, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT t.status,{DISCUSSION_SIZE} FROM discussions d \
          JOIN threads t ON t.scope_id=d.scope_id AND t.id=d.thread_id \
          WHERE d.scope_id=? AND {DISCUSSION_PARENT} AND d.discussion_id=?"
-    ))
+    )))
     .bind(ctx.snapshot().scope().as_str())
     .bind(super::discussion_state::discussion_kind_word(
         parent.node_type,

@@ -28,7 +28,8 @@ pub(super) fn all_gap_kinds() -> Vec<GapKind> {
         GapKind::DanglingReference => Some(GapKind::UnresolvedContradictsPair),
         GapKind::UnresolvedContradictsPair => Some(GapKind::OpenQuestion),
         GapKind::OpenQuestion => Some(GapKind::UnexploredTopic),
-        GapKind::UnexploredTopic => None,
+        GapKind::UnexploredTopic => Some(GapKind::NoLiveParent),
+        GapKind::NoLiveParent => None,
     } {
         all.push(next);
     }
@@ -221,6 +222,18 @@ fn minimal_graph_for(kind: GapKind) -> HandBuiltGraph {
                 "req_open_topic",
                 TopicStatus::Open,
             )],
+            ..HandBuiltGraph::default()
+        },
+        // A merge kept a live child under a parent that the other branch archived.
+        GapKind::NoLiveParent => HandBuiltGraph {
+            sources: vec![records::source(ANCHOR_SOURCE)],
+            requirements: vec![
+                settled_requirement("req_archived", ANCHOR_SOURCE, RequirementStatus::Archived),
+                Requirement {
+                    refines: vec![sid("req_archived")],
+                    ..settled_requirement("req_live", ANCHOR_SOURCE, RequirementStatus::Active)
+                },
+            ],
             ..HandBuiltGraph::default()
         },
     };

@@ -19,7 +19,7 @@ pub(super) fn identity(source: &[u8], entries: &[DictionaryEntry]) -> Dictionary
 }
 
 pub(super) fn source_digest(source: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(source))
+    hex::encode(Sha256::digest(source))
 }
 
 pub(super) fn normalized_data_digest(entries: &[DictionaryEntry]) -> String {
@@ -36,7 +36,7 @@ pub(super) fn normalized_data_digest(entries: &[DictionaryEntry]) -> String {
         put(&mut digest, &entry.ste_example);
         put(&mut digest, entry.non_ste_example.as_deref().unwrap_or(""));
     }
-    format!("{:x}", digest.finalize())
+    hex::encode(digest.finalize())
 }
 
 fn put(digest: &mut Sha256, value: &str) {
@@ -62,5 +62,37 @@ const fn part_label(part: PartOfSpeech) -> &'static str {
         PartOfSpeech::Preposition => "preposition",
         PartOfSpeech::Pronoun => "pronoun",
         PartOfSpeech::Verb => "verb",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // This test has no Rule. It keeps the digest text the same when the hash library changes.
+    #[test]
+    fn source_digest_is_the_lowercase_sha256_hex_of_the_bytes() {
+        assert_eq!(
+            source_digest(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    // This test has no Rule. It keeps the digest text the same when the hash library changes.
+    #[test]
+    fn normalized_data_digest_hashes_length_prefixed_fields() {
+        let entry = DictionaryEntry {
+            headword: "test".to_owned(),
+            word_forms: vec!["test".to_owned(), "tests".to_owned()],
+            part_of_speech: PartOfSpeech::Verb,
+            status: DictionaryStatus::Approved,
+            approved_meaning_or_alternatives: "To examine.".to_owned(),
+            ste_example: "Test the pump.".to_owned(),
+            non_ste_example: None,
+        };
+        assert_eq!(
+            normalized_data_digest(&[entry]),
+            "e655bf7150a2a54afceb231da1cf31af7027fb5b40c4d6f6f94a8fcfee1b2be1"
+        );
     }
 }

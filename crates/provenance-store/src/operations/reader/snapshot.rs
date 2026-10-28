@@ -96,10 +96,10 @@ impl ReadSnapshot {
 
     async fn count_rows(&self, table: &str) -> anyhow::Result<i64> {
         let mut tx = self.connection().await;
-        let count: i64 = sqlx::query_scalar(&format!(
+        let count: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "SELECT COUNT(*) FROM {} WHERE scope_id = ?",
             quoted(table)
-        ))
+        )))
         .bind(self.scope.as_str())
         .fetch_one(&mut **tx)
         .await?;
