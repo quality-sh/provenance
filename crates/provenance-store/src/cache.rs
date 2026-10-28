@@ -14,7 +14,9 @@ mod review_facts;
 pub(crate) mod review_families;
 mod traceability;
 
-pub(crate) use completion::{CompletionTimedOut, Stage as CompletionStage};
+pub(crate) use completion::CompletionTimedOut;
+#[cfg(test)]
+pub(crate) use completion::Stage as CompletionStage;
 pub(crate) use connection::permission_failure;
 pub use connection::{
     open_cache, open_cache_with, open_existing_cache, open_immutable_cache, open_stored_cache,
