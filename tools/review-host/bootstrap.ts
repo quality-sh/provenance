@@ -1,6 +1,6 @@
 import { connectEvents, type EventSocket } from './events.ts';
 import {
-  CONNECTION_REFUSED, createSession, type ConfigReviewer, type ReviewConfig, type ReviewHandle,
+  CONNECTION_REFUSED, createSession, InvalidReviewer, type ConfigReviewer, type ReviewConfig, type ReviewHandle,
   type ReviewMountOptions,
 } from './session.ts';
 
@@ -70,7 +70,8 @@ export const SETTINGS_CHANGED =
 
 const sameActors = (left: ReviewConfig, right: ReviewConfig) =>
   left.dispositionActorIds.length === right.dispositionActorIds.length &&
-  left.dispositionActorIds.every((id, index) => right.dispositionActorIds[index] === id);
+  left.dispositionActorIds.every((id, index) => right.dispositionActorIds[index] === id) &&
+  left.reviewer?.actorId === right.reviewer?.actorId && left.reviewer?.allowed === right.reviewer?.allowed;
 
 function element(document: BrowserDocument, id: string): BrowserElement {
   const found = document.getElementById(id);
@@ -84,7 +85,7 @@ function configReviewer(value: unknown): ConfigReviewer {
   if (typeof value !== 'object' || value === null ||
     !('actorId' in value) || typeof value.actorId !== 'string' ||
     !('allowed' in value) || typeof value.allowed !== 'boolean') {
-    throw new Error('Invalid reviewer');
+    throw new InvalidReviewer('Invalid reviewer');
   }
   return { actorId: value.actorId, allowed: value.allowed };
 }
@@ -104,7 +105,7 @@ function reviewConfig(value: unknown, origin: string): ReviewConfig {
     scope: value.scope,
     dispositionActorIds: value.dispositionActorIds,
     // The page decides only as the reviewer that the host reports, so the app never invents one.
-    ...('reviewer' in value && value.reviewer !== undefined ? { reviewer: configReviewer(value.reviewer) } : {}),
+    ...('reviewer' in value ? { reviewer: configReviewer(value.reviewer) } : {}),
   };
 }
 

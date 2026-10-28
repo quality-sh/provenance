@@ -56,6 +56,14 @@ export const CONNECTION_REFUSED =
   'Connection refused. This review link was used, expired, or is for a different review host. ' +
   'To get a new link, run `provenance <record-id> --review-link`.';
 
+/** Tells the person that the host sent a reviewer that the page cannot read. A new link does not help. */
+export const INVALID_REVIEWER =
+  'The review host sent an invalid reviewer, so the page did not open. ' +
+  'The review host has a problem: report it to the Provenance maintainers.';
+
+/** The host sent a `reviewer` without a string `actorId` and a boolean `allowed`. */
+export class InvalidReviewer extends Error {}
+
 /** Keeps the credential in memory and lets only the latest connection take effect. */
 export function createSession(view: {
   mount(options: ReviewMountOptions): ReviewHandle;
@@ -80,9 +88,9 @@ export function createSession(view: {
         connection = { ...config, bearer };
         view.connected(config);
         view.status(`Connected · ${config.repositoryId} / ${config.scope}`);
-      } catch {
+      } catch (error) {
         if (request !== generation) return;
-        view.status(CONNECTION_REFUSED);
+        view.status(error instanceof InvalidReviewer ? INVALID_REVIEWER : CONNECTION_REFUSED);
       }
     },
     open(rootId: string, focusId?: string) {
