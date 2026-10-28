@@ -1,4 +1,4 @@
-use crate::operations::reader::{Live, ReadContext};
+use crate::operations::reader::{Live, ReadContext, PAGE_BYTES};
 use provenance_core::protocol::{
     GraphNode, ResolveSymbolMatch, ResolveSymbolMatchKind, ResolveSymbolQuery, ResolveSymbolResult,
     ResolveSymbolRole,
@@ -106,14 +106,46 @@ pub(super) async fn resolve(
             .then(left.match_kind.cmp(&right.match_kind))
     });
     sites.dedup();
+    let (rules, matches, has_more) = fit_page(rules, sites, has_more)?;
     Ok(ResolveSymbolResult {
         file: request.file,
         symbol: request.symbol,
         limit: request.limit,
         has_more,
         rules,
-        matches: sites,
+        matches,
     })
+}
+
+/// Keep the answer inside one page. Rules stay in id order while each Rule
+/// and its sites fit, and the sites of a Rule that does not fit stop at the
+/// budget. An answer that leaves out a Rule or a site sets `has_more`.
+fn fit_page(
+    rules: Vec<GraphNode>,
+    matches: Vec<ResolveSymbolMatch>,
+    has_more: bool,
+) -> anyhow::Result<(Vec<GraphNode>, Vec<ResolveSymbolMatch>, bool)> {
+    let mut bytes = 0;
+    let mut kept_rules = Vec::new();
+    let mut kept_matches = Vec::new();
+    for rule in rules {
+        let size = serde_json::to_vec(&rule)?.len();
+        if bytes + size > PAGE_BYTES {
+            return Ok((kept_rules, kept_matches, true));
+        }
+        bytes += size;
+        for site in matches.iter().filter(|site| site.rule_id == *rule.id()) {
+            let size = serde_json::to_vec(site)?.len();
+            if bytes + size > PAGE_BYTES {
+                kept_rules.push(rule);
+                return Ok((kept_rules, kept_matches, true));
+            }
+            bytes += size;
+            kept_matches.push(site.clone());
+        }
+        kept_rules.push(rule);
+    }
+    Ok((kept_rules, kept_matches, has_more))
 }
 
 fn scanned_matches(

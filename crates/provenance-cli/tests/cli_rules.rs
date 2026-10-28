@@ -109,3 +109,45 @@ fn catalog_commands_offer_help_at_each_address() {
             .stdout(contains(usage));
     }
 }
+
+#[test]
+fn resolve_symbol_returns_matched_sites() {
+    let tmp = repo_with_rule();
+    let repo = tmp.path().to_str().unwrap();
+    std::fs::write(
+        tmp.path().join("code.rs"),
+        concat!(
+            "#[rule(\"rule_overtime\")]\n",
+            "fn pay() {}\n",
+            "#[verifies(\"rule_overtime\", examples)]\n",
+            "fn checks_pay() {}\n",
+        ),
+    )
+    .unwrap();
+    let output = provenance()
+        .args([
+            "rules",
+            "resolve-symbol",
+            "--repo",
+            repo,
+            "--file",
+            "code.rs",
+            "--symbol",
+            "pay",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let body: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    let matches = body["data"]["matches"].as_array().unwrap();
+    assert!(matches
+        .iter()
+        .any(|site| site["match_kind"] == "symbol" && site["item_name"] == "pay"));
+    assert!(matches
+        .iter()
+        .any(|site| site["match_kind"] == "file" && site["item_name"] == "checks_pay"));
+}

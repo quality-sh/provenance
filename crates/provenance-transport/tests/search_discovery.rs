@@ -68,3 +68,31 @@ async fn public_collection_search_keeps_authentication() {
     .unwrap();
     assert_eq!(failure["error"]["kind"], "unauthenticated");
 }
+
+#[tokio::test]
+async fn resolve_symbol_returns_matched_sites_over_http() {
+    let repo = Repository::new("The shared graph is readable.");
+    std::fs::write(
+        repo.dir.path().join("code.rs"),
+        concat!(
+            "#[rule(\"rule_shared\")]\n",
+            "fn pay() {}\n",
+            "#[verifies(\"rule_shared\", examples)]\n",
+            "fn checks_pay() {}\n",
+        ),
+    )
+    .unwrap();
+    let host = host(&repo, false);
+
+    let path = "/rules?query=resolve-symbol&file=code.rs&symbol=pay";
+    let (status, body) = call(&host, "GET", path, None).await;
+
+    assert_eq!(status, 200, "{body}");
+    let matches = body["data"]["matches"].as_array().unwrap();
+    assert!(matches
+        .iter()
+        .any(|site| site["match_kind"] == "symbol" && site["item_name"] == "pay"));
+    assert!(matches
+        .iter()
+        .any(|site| site["match_kind"] == "file" && site["item_name"] == "checks_pay"));
+}

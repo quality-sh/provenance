@@ -307,3 +307,35 @@ async fn resolve_symbol_scans_only_a_repository_relative_path() {
         }
     }
 }
+
+#[tokio::test]
+#[verifies("rule_resolve_symbol_reads_the_named_file_only", examples)]
+async fn one_rule_with_more_sites_than_a_page_holds_answers_a_partial_page() {
+    let store = store_with_rule();
+    let source = (0..2_500)
+        .map(|index| {
+            format!(
+                "#[verifies(\"rule_overtime\", examples)]\nfn checks_{index}_{}() {{}}\n",
+                "x".repeat(400)
+            )
+        })
+        .collect::<String>();
+    std::fs::write(store.root.join("src/many.rs"), source).unwrap();
+    let answer = queries::resolve_symbol(
+        Some(store.root.clone()),
+        &store.scope,
+        ReadPolicy::default(),
+        ResolveSymbolQuery {
+            limit: 1,
+            ..resolve("src/many.rs", None)
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(rule_ids(&answer.result.rules), ["rule_overtime"]);
+    assert!(answer.result.has_more);
+    assert!(!answer.result.matches.is_empty());
+    assert!(answer.result.matches.len() < 2_500);
+    assert!(serde_json::to_vec(&answer.result).unwrap().len() <= reader::PAGE_BYTES);
+}

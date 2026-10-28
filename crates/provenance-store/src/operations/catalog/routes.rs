@@ -415,15 +415,7 @@ fn query_route<O: Operation>(
         &definition.registration.request,
         &request,
     );
-    let schema = match adapter {
-        ResponseAdapter::ObjectItems(field) => {
-            schema::items_response_schema(&raw.success_schema, &[], field)
-        }
-        ResponseAdapter::ResultItems(field) => {
-            schema::items_response_schema(&raw.success_schema, &["result"], field)
-        }
-        _ => schema::response_envelope(raw.success_schema.clone(), kind),
-    };
+    let schema = schema::adapted_response_schema(&raw.success_schema, adapter, kind);
     QueryRoute {
         name: O::NAME,
         handler: HandlerBinding {

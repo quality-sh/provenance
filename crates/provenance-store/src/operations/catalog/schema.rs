@@ -384,6 +384,22 @@ pub(super) fn property_schema(root: &Value, path: &[&str]) -> Value {
     selected
 }
 
+/// The response schema that a route adapter publishes for a raw success
+/// schema.
+pub(super) fn adapted_response_schema(
+    raw: &Value,
+    adapter: super::ResponseAdapter,
+    kind: ResponseKind,
+) -> Value {
+    match adapter {
+        super::ResponseAdapter::ObjectItems(field) => items_response_schema(raw, &[], field),
+        super::ResponseAdapter::ResultItems(field) => {
+            items_response_schema(raw, &["result"], field)
+        }
+        _ => response_envelope(raw.clone(), kind),
+    }
+}
+
 /// The Result envelope for the object at `path` with its `field` collection
 /// renamed to `items`. The other properties of that object stay in `data`.
 pub(super) fn items_response_schema(root: &Value, path: &[&str], field: &str) -> Value {
