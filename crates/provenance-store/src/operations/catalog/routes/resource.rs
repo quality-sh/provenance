@@ -15,9 +15,27 @@ macro_rules! collection {
             list_parameters(true, true),
         ).items_field("items").pagination();
         let queries = vec![
-            query_route::<$crate::operations::catalog::Search>(&definition, ResponseKind::Items, Some($singular), true, ResponseAdapter::ObjectItems("nodes"), &["nodes"]),
-            query_route::<$crate::operations::catalog::Stale>(&definition, ResponseKind::Items, None, false, ResponseAdapter::ObjectItems("sites"), &["sites"]),
-            query_route::<$crate::operations::catalog::ResolveSymbol>(&definition, ResponseKind::Items, None, false, ResponseAdapter::ObjectItems("rules"), &["rules"]),
+            query_route::<$crate::operations::catalog::Search>(
+                &definition,
+                ResponseKind::Items,
+                Some($singular),
+                true,
+                ResponseAdapter::ObjectItems("nodes"),
+            ),
+            query_route::<$crate::operations::catalog::Stale>(
+                &definition,
+                ResponseKind::Items,
+                None,
+                false,
+                ResponseAdapter::ObjectItems("sites"),
+            ),
+            query_route::<$crate::operations::catalog::ResolveSymbol>(
+                &definition,
+                ResponseKind::Items,
+                None,
+                false,
+                ResponseAdapter::ObjectItems("rules"),
+            ),
         ];
         with_query_results(definition, queries)
     }};
@@ -72,7 +90,10 @@ macro_rules! registered_member_queries {
 }
 
 macro_rules! resource {
-    ($out:ident, $mode:ident, $ty:ty, $list:ty, $member:ty, $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal) => {{
+    (
+        $out:ident, $mode:ident, $ty:ty, $list:ty, $member:ty,
+        $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal
+    ) => {{
         $out.push(collection!(
             $mode, $ty, $list, $plural, $plural_id, $singular
         ));
@@ -88,7 +109,12 @@ macro_rules! resource {
         let queries = registered_member_queries!($mode, &definition, $singular);
         $out.push(with_query_results(definition, queries));
     }};
-    ($out:ident, $mode:ident, $ty:ty, $list:ty, $member:ty, $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal, $create:ty, $update:ty, $create_defaults:expr, $create_aliases:expr, $update_defaults:expr, $update_aliases:expr, $nullable:expr, $target_kind:expr) => {{
+    (
+        $out:ident, $mode:ident, $ty:ty, $list:ty, $member:ty,
+        $plural:literal, $singular:literal, $singular_id:literal, $plural_id:literal,
+        $create:ty, $update:ty, $create_defaults:expr, $create_aliases:expr,
+        $update_defaults:expr, $update_aliases:expr, $nullable:expr, $target_kind:expr
+    ) => {{
         resource!(
             $out,
             $mode,

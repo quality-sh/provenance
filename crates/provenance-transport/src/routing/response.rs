@@ -50,31 +50,29 @@ pub(super) fn success(
             }
             json!({"items":value})
         }
-        ResponseAdapter::ObjectItems(field) => {
-            let items = value
-                .as_object_mut()
-                .and_then(|object| object.remove(field))
-                .ok_or_else(|| malformed(definition))?;
-            if !items.is_array() {
-                return Err(malformed(definition));
-            }
-            json!({"items":items})
-        }
+        ResponseAdapter::ObjectItems(field) => rename_items(value, field, definition)?,
         ResponseAdapter::ResultItems(field) => {
-            let mut result = take_result(value, definition, &mut meta)?;
-            let items = result
-                .as_object_mut()
-                .and_then(|object| object.remove(field))
-                .ok_or_else(|| malformed(definition))?;
-            if !items.is_array() {
-                return Err(malformed(definition));
-            }
-            json!({"items":items})
+            let result = take_result(value, definition, &mut meta)?;
+            rename_items(result, field, definition)?
         }
     };
     let value = json!({"data":data,"meta":meta});
     let bytes = encode(definition.name, &value, query_response)?;
     Ok(Success { value, bytes })
+}
+
+fn rename_items(
+    mut value: Value,
+    field: &str,
+    definition: &Definition,
+) -> Result<Value, ErasedFailure> {
+    let object = value.as_object_mut().ok_or_else(|| malformed(definition))?;
+    let items = object
+        .remove(field)
+        .filter(Value::is_array)
+        .ok_or_else(|| malformed(definition))?;
+    object.insert("items".into(), items);
+    Ok(value)
 }
 
 fn encode(

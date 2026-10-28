@@ -49,7 +49,7 @@ fn resolve(file: &str, symbol: Option<&str>, line: Option<usize>) -> Request {
         file: file.into(),
         symbol: symbol.map(str::to_string),
         line,
-
+        cursor: None,
         limit: 50,
     })
 }

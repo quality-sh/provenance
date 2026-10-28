@@ -143,9 +143,9 @@ request can load only `/` or `/index.html`, with GET or HEAD,
 contain no graph data and require no credential. All other cross-site requests
 are refused. The Host and Origin checks still apply to page navigation.
 Requests without Origin remain available to authorized non-browser clients.
-The host does not enable CORS. Only the session cookie from a successful launch
-code exchange can grant access. URL parameters and other cookies do not grant
-access. The exact Host check also refuses DNS rebinding through an attacker
+The host does not enable CORS. Only the page session from a successful launch
+code exchange, sent in the Authorization header, can grant a browser access. The
+host reads no Cookie header, and URL parameters do not grant access. The exact Host check also refuses DNS rebinding through an attacker
 hostname, even if that hostname resolves to loopback. Duplicate security headers
 refuse. Assets and protocol metadata contain no graph data and require no bearer
 token. Scripts, styles, and protocol metadata retain the full destination and
@@ -187,25 +187,26 @@ or any response.
 
 `POST /review-launch/code` with `{"launchKey": "..."}` returns `{"code": "..."}`.
 The host compares the key in constant time. `POST /review-launch/session` with
-`{"code": "..."}` returns `{"bearer": "..."}` and removes the code. The response
-also sets `provenance_review_session_<instance nonce>` with `HttpOnly`,
-`SameSite=Strict`, and
-`Path=/`. It has no `Max-Age`, `Expires`, or `Domain`. The cookie contains the
-instance nonce and a separate random secret held only by this host run. It
-contains no bearer. Each host reads only its own cookie name and refuses
-duplicate entries for that name. Concurrent hosts on the same loopback address
-retain separate session cookies. Cookies have no port scope, so another local
-server at that address can still receive them. A new host run refuses the old
-cookie. The host uses HTTP
-on loopback, so the cookie has no `Secure` attribute. Both routes
+`{"code": "..."}` returns `{"session": "<instance nonce>.<64 hex>"}` and removes
+the code. The session holds the instance nonce and a separate random secret held
+only by this host run. It is not the bearer. The response sets no cookie, and
+the host reads no Cookie header on any route: a request whose only credential
+is a cookie gets 401. A cookie has no port scope, so any other server on the
+loopback address would receive it; the session instead stays in the page's own
+origin. A request with `Authorization: Bearer <session>` passes the host routes
+as the bearer does, and a POST or PATCH with it is a page write. Concurrent
+hosts refuse each other's sessions. A new host run refuses the old session. Both routes
 refuse a wrong key or code with 401 and the standard failure envelope. Both
 routes retain the full Host and Origin checks, including cross-site refusal.
 
 The page removes the fragment from the address bar before it exchanges the
-code. It keeps the bearer only in page memory. When a page has no launch code,
-it reads configuration through the cookie. Reloads and new tabs can thus keep
-access while the browser session and host run continue. A used, expired, or
-foreign code, or a page without a valid session, shows "Connection refused".
+code. It stores the session under `provenance-review-session` in the local
+storage of its origin. The origin includes the port, so another local server
+cannot read it. When a page has no launch code, it reads configuration with the
+stored session. Reloads and new tabs on the same origin can thus keep access
+while the host run continues. A used, expired, or foreign code, or a page
+without a valid session, shows "Connection refused"; a refused stored session
+is removed.
 It tells the person to
 get a new link with `provenance <record-id> --review-link`.
 
@@ -270,7 +271,7 @@ The asset entry is `/index.html`, also served at `/`. Relative local dependencie
 retain their paths. No repository file is served. Only `GET` and `HEAD` requests
 for a bundle asset do not need a credential. Every other request, for example a
 missing asset, `/favicon.ico`, or another method on an asset, must authenticate
-first. Without a valid bearer token or session cookie it gets 401. With one, an
+first. Without a valid bearer token or page session it gets 401. With one, an
 unknown path gets 404 `unknown_operation`, and another method on an asset gets
 405 `method_not_allowed`. Both answers use the standard failure envelope.
 `/metadata` reports the complete compatibility tuple. Resource routes use the current
@@ -306,13 +307,13 @@ an optional `focus=RECORD_ID` query parameter. The URL never contains the
 credential. After the page exchanges the launch code, the application opens
 `root` directly and hides the manual Requirement ID field. The field remains
 available when `root` is absent. The application reads `/review-config` with the
-credential or the session cookie. It then
+page session in the Authorization header. It then
 calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
 `dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. The
-renderer creates and owns the generated Effect client. With no bearer in
-page memory, the application passes an empty bearer. Same-origin browser
-requests carry the session cookie, which the host checks before the operation
-routes authenticate the request.
+renderer creates and owns the generated Effect client. The application passes
+the page session as `bearer`, so the renderer sends it in the Authorization
+header. The host exchanges it for the bearer before the operation routes
+authenticate the request.
 
 The pinned renderer reads documents with `exclude_terminal=true`. A refresh
 reloads the current search and the document text, submissions, review outcomes,
@@ -321,9 +322,10 @@ supported record kind. If the repository has no disposition actors, the
 renderer identifies the review as read-only.
 
 Build that application with the matching renderer to replace the shell with the
-local host entry. The bearer stays in page memory and is sent only in the
-Authorization header to the current origin. It does not enter URLs, logs,
-assets, or browser storage. The browser manages the separate session cookie. The page has no credential field. A new
+local host entry. The host bearer never reaches the page. The page session is
+sent only in the Authorization header to the current origin and as a WebSocket
+subprotocol on the event socket. It does not enter URLs, logs, assets, or
+cookies; its only storage is the origin's local storage. The page has no credential field. A new
 connection removes the previous page. A superseded connection result cannot
 replace a later result.
 
@@ -389,6 +391,8 @@ authorization, repository and scope access, embedded assets, and shutdown.
 Run `cargo test -p provenance-cli --test cli_review_host --test cli_review_refusal_connections --test review_asset_build --test review_archive`
 and `cargo test -p provenance-transport --features test-fixture` after generation.
 Run `node --test tools/review-host/*.test.ts` for composition and session checks.
+Run `node tools/review-host/verify-page-session.ts BINARY` to run the page
+bootstrap against a real host through a launch link, a reload, and a refusal.
 Run `node tools/review-host/verify-native.ts BINARY COMPOSED_ASSETS SDK_PACKAGE`
 to check a built executable. Release validation runs this check on executables
 extracted from each native archive and npm engine package.
@@ -416,9 +420,9 @@ path, and checks authenticated reads, target refusal, and listener
 closure. It does not mount a fixture store or claim complete document integration.
 The host tests submit valid denied reads and writes and compare repository bytes
 and directory entries. They also test foreign origins, DNS-rebinding Host values,
-duplicate headers, query and unknown cookie credential refusal, session cookie
-attributes, session access after reload, separate sessions on concurrent hosts,
-cookie refusal after host restart,
+duplicate headers, query and cookie credential refusal, an exchange without a
+cookie, session access after reload, separate sessions on concurrent hosts,
+session refusal after host restart,
 held source-file traversal,
 invalid startup configuration, and shutdown with incomplete HTTP requests.
 
@@ -429,8 +433,10 @@ operation tests continue to use direct calls without a host credential.
 ## Canonical state events
 
 `GET /review-events` opens a WebSocket for the selected repository and scope.
-It requires the host session cookie, one exact Host, and one exact Origin.
-A bearer token alone cannot open this route. Duplicate credentials, cross-site
+A browser offers `Sec-WebSocket-Protocol: provenance-review, <session>` with
+one exact Host and one exact Origin; the host answers with `provenance-review`.
+A bearer token alone cannot open this route, and an Authorization header or a
+cookie is refused. A missing, doubled or changed subprotocol entry, cross-site
 metadata, query credentials, and absolute request URLs are refused before upgrade.
 The content security policy permits the WebSocket at this host's exact port.
 
@@ -558,7 +564,7 @@ A canonical document read failure emits `read-error` with `epoch`, `sequence`,
 `continuity: "unknown"` and the read's `reason`, then exits with failure.
 It does not report a lost host. Transport loss still emits `disconnected`.
 
-The host marks the page session after it authenticates its cookie. It captures changed
+The host marks a page write after it authenticates the page session. It captures changed
 record IDs under the publication lock, then sends a native `reviewed` frame.
 Browser subscribers retain the file-observation feed.
 Browser and native subscribers have separate sequences and in-memory channels.
@@ -572,7 +578,7 @@ The command connects to the verified host for the selected repository and scope.
 It reads the owner-only launch key and sends it in `X-Provenance-Launch-Key` on
 `/review-events`. Native subscriptions refuse Origin, Cookie, Authorization and
 browser fetch metadata. Browser subscriptions still require the exact Origin and
-a valid session cookie. Native subscriptions do not count as connected review pages.
+the page session as a subprotocol. Native subscriptions do not count as connected review pages.
 
 The command flushes one JSON line with the full current document at start and
 after a reset or sequence gap. Later lines contain only records changed by the

@@ -268,7 +268,7 @@ export const FAILURE_STATUS = new Map([
   ['unauthenticated', 401], ['access_denied', 403], ['method_not_allowed', 405],
   ['unavailable_needs', 503], ['host_busy', 503], ['internal', 500],
   ['resource_not_found', 404], ['read_failed', 500], ['file_access_denied', 403],
-  ['file_unavailable', 503], ['git_unavailable', 503],
+  ['file_unavailable', 503], ['git_unavailable', 503], ['cache_close_timed_out', 503],
   ['cursor_invalid', 409], ['cursor_revision_changed', 409], ['page_budget_exceeded', 409],
   ['page_record_too_large', 409], ['document_root_missing', 409],
   ['document_catch_up_failed', 409], ['git_revision_not_found', 409], ['no_projection', 409],
