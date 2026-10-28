@@ -137,7 +137,7 @@ fn get(repo: &str, family: &str, id: &str) -> Value {
     serde_json::from_slice(&output).unwrap()
 }
 
-fn update(repo: &str, family: &str, id: &str, input: Value) -> Value {
+fn update(repo: &str, family: &str, id: &str, input: &Value) -> Value {
     let current = get(repo, family, id);
     let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     let output = provenance_stdin(
@@ -178,7 +178,7 @@ fn dependencies_replace_clear_and_reject_without_publication() {
         get(&repo, "questions", "question_b")["data"]["depends_on"],
         json!(["question_a"])
     );
-    update(&repo, "questions", "question_b", json!({"depends_on":[]}));
+    update(&repo, "questions", "question_b", &json!({"depends_on":[]}));
     assert_eq!(
         get(&repo, "questions", "question_b")["data"]["depends_on"],
         json!([])
@@ -187,7 +187,7 @@ fn dependencies_replace_clear_and_reject_without_publication() {
         &repo,
         "questions",
         "question_a",
-        json!({"depends_on":["question_b"]}),
+        &json!({"depends_on":["question_b"]}),
     );
     let before = state_files(&repo);
     for dependency in ["question_a", "question_b", "question_missing"] {
@@ -225,18 +225,18 @@ fn human_blocked_archived_and_closed_states_are_not_ready() {
         &repo,
         "questions",
         "question_a",
-        json!({"status":"blocked_on_human"}),
+        &json!({"status":"blocked_on_human"}),
     );
     assert_eq!(summary(&repo, &[])["ready_ids"], json!([]));
     update(
         &repo,
         "questions",
         "question_a",
-        json!({"status":"archived",
+        &json!({"status":"archived",
         "archived_in_commit":{"commit":"a".repeat(40)}}),
     );
     assert_eq!(summary(&repo, &[])["ready_ids"], json!([]));
-    update(&repo, "questions", "question_b", json!({"depends_on":[]}));
+    update(&repo, "questions", "question_b", &json!({"depends_on":[]}));
     provenance(&[
         "questions",
         "question_b",
@@ -281,7 +281,7 @@ fn human_blocked_archived_and_closed_states_are_not_ready() {
         &repo,
         "topics",
         "topic_overtime",
-        json!({"status":"closed"}),
+        &json!({"status":"closed"}),
     );
     assert_eq!(summary(&repo, &[])["ready_ids"], json!([]));
 }
