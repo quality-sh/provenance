@@ -125,3 +125,39 @@ async fn a_held_close_lock_fails_the_close_with_the_close_lock_stage() {
     FileExt::unlock(&lock).unwrap();
     late_completion_finishes(&layout, &lock).await;
 }
+
+/// The completion task has not started when the deadline passes: a task
+/// that blocks the only runtime thread runs before it, and the runtime
+/// handles the timer before the next task. The close still names the
+/// close lock, which is the step that the completion waits for.
+#[test]
+#[verifies("rule_cache_completion_names_its_stage_at_the_deadline", examples)]
+fn a_completion_that_did_not_start_names_the_close_lock_stage() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .event_interval(1)
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let (_dir, layout) = temporary_layout();
+        let connection = written(&layout).await;
+        let lock = close_lock(&layout);
+        lock.lock_exclusive().unwrap();
+
+        let blocker = tokio::spawn(async { std::thread::sleep(DEADLINE * 2) });
+        let error = connection
+            .completing_within(DEADLINE)
+            .close()
+            .await
+            .expect_err("a completion that did not start fails the close");
+        let path = layout.cache_db_path().with_extension("db.close.lock");
+        let timed_out = error
+            .downcast_ref::<CompletionTimedOut>()
+            .expect("the close fails with a typed timeout");
+        assert_eq!(timed_out.stage, Stage::CloseLock(path.into_std_path_buf()));
+
+        blocker.await.unwrap();
+        FileExt::unlock(&lock).unwrap();
+        late_completion_finishes(&layout, &lock).await;
+    });
+}
