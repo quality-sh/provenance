@@ -96,13 +96,15 @@ fn repo_with_rule(status: &str) -> tempfile::TempDir {
     directory
 }
 
-fn build_envelope(repo: &Path, base: &str, head: &str, path: Option<&Path>) -> Value {
-    let mut command = provenance(repo);
-    command.args([
-        "report",
-        "build",
-        "--repo",
-        repo.to_str().unwrap(),
+fn report_build(
+    current_dir: &Path,
+    repo: &Path,
+    base: &str,
+    head: &str,
+    path: Option<&Path>,
+) -> std::process::Output {
+    let mut command = provenance(current_dir);
+    command.args(["report", "build", "--repo"]).arg(repo).args([
         "--base",
         base,
         "--head",
@@ -113,13 +115,20 @@ fn build_envelope(repo: &Path, base: &str, head: &str, path: Option<&Path>) -> V
     if let Some(path) = path {
         command.arg("--path").arg(path);
     }
-    let output = command.output().unwrap();
+    command.output().unwrap()
+}
+
+fn envelope_from(output: &std::process::Output) -> Value {
     assert!(
         output.status.success(),
         "report build failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     serde_json::from_slice(&output.stdout).unwrap()
+}
+
+fn build_envelope(repo: &Path, base: &str, head: &str, path: Option<&Path>) -> Value {
+    envelope_from(&report_build(repo, repo, base, head, path))
 }
 
 fn finding<'a>(envelope: &'a Value, code: &str) -> Option<&'a Value> {
@@ -293,4 +302,81 @@ fn clean_source_conversion_keeps_committed_verification() {
         finding(&envelope, "active_rule_missing_verification").is_none(),
         "a clean Git conversion must retain the committed verification"
     );
+}
+
+fn repo_with_committed_verification() -> (tempfile::TempDir, String) {
+    let directory = repo_with_rule("active");
+    let repo = directory.path();
+    write(repo, "src/lib.rs", source_binding(true));
+    let head = commit(repo, "head with a verification");
+    (directory, head)
+}
+
+fn assert_verification_is_scanned(envelope: &Value) {
+    assert_eq!(envelope["scan"]["completeness"], "complete");
+    assert_eq!(envelope["scan"]["files_scanned"], 1);
+    assert!(
+        finding(envelope, "active_rule_missing_verification").is_none(),
+        "the committed verification must be scanned"
+    );
+}
+
+#[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+fn scan_path_in_a_different_form_from_repo_keeps_scanned_files() {
+    let (directory, head) = repo_with_committed_verification();
+    let repo = directory.path();
+
+    let output = report_build(repo, Path::new("."), &head, &head, Some(repo));
+
+    assert_verification_is_scanned(&envelope_from(&output));
+}
+
+#[cfg(unix)]
+#[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+fn symlinked_repo_path_keeps_scanned_files() {
+    let (directory, head) = repo_with_committed_verification();
+    let repo = directory.path();
+    let links = tempfile::tempdir().unwrap();
+    let link = links.path().join("repo");
+    std::os::unix::fs::symlink(repo, &link).unwrap();
+
+    let output = report_build(repo, &link, &head, &head, Some(repo));
+
+    assert_verification_is_scanned(&envelope_from(&output));
+}
+
+#[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+fn scan_path_outside_the_repository_is_refused() {
+    let (directory, head) = repo_with_committed_verification();
+    let repo = directory.path();
+    let outside = tempfile::tempdir().unwrap();
+    write(outside.path(), "src/lib.rs", source_binding(true));
+
+    let output = report_build(repo, repo, &head, &head, Some(outside.path()));
+
+    assert!(
+        !output.status.success(),
+        "a scan path outside the repository must be refused, not dropped"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("outside the repository"),
+        "the refusal must name the cause: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+#[verifies("rule_report_envelope_states_only_known_facts", examples)]
+fn files_scanned_counts_files_at_the_requested_head() {
+    let (directory, head) = repo_with_committed_verification();
+    let repo = directory.path();
+    write(repo, "src/untracked.rs", "pub fn untracked() {}\n");
+
+    let envelope = build_envelope(repo, &head, &head, None);
+
+    assert_eq!(envelope["scan"]["completeness"], "incomplete");
+    assert_eq!(envelope["scan"]["files_scanned"], 1);
 }
