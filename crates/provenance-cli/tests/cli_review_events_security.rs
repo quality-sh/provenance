@@ -55,7 +55,7 @@ fn event_upgrade_requires_the_session_origin_and_destination() {
         format!("Sec-WebSocket-Protocol: provenance-review, {session}changed\r\nOrigin: {origin}\r\n"),
         format!("Sec-WebSocket-Protocol: provenance-review, {session}, {session}\r\nOrigin: {origin}\r\n"),
         format!("{offer}{offer}Origin: {origin}\r\n"),
-        format!("{offer}"),
+        offer.clone(),
         format!("{offer}Origin: {origin}\r\nOrigin: {origin}\r\n"),
         format!("{offer}Origin: http://foreign.test\r\n"),
         format!("{offer}Origin: {origin}\r\nHost: {}\r\n", host.address()),
