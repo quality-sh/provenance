@@ -1,45 +1,18 @@
 use super::{diff_records, read_bindings, relation, RelationKey, ScopeId};
 use crate::build::read_snapshots;
-use crate::envelope::{BaselineCompatibility, RecordKind};
+use crate::build::test_repo::{commit, init};
+use crate::envelope::{BaselineCompatibility, CommitRole, RecordKind};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::Requirement;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
-use std::process::Command;
-
-fn git(repo: &Utf8Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .current_dir(repo)
-        .args(args)
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
 
 fn repository() -> (tempfile::TempDir, Utf8PathBuf, String) {
     let dir = tempfile::tempdir().unwrap();
     let repo = Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
-    git(&repo, &["init", "-q"]);
-    git(&repo, &["config", "user.name", "Test"]);
-    git(&repo, &["config", "user.email", "test@example.com"]);
-    git(
-        &repo,
-        &[
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "--allow-empty",
-            "-qm",
-            "base",
-        ],
-    );
-    let base = git(&repo, &["rev-parse", "HEAD"]);
+    init(&repo);
+    let base = commit(&repo, "base");
     (dir, repo, base)
 }
 
@@ -48,12 +21,7 @@ fn commit_record(repo: &Utf8Path, shard: &str, row: &Value) -> String {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     // Blank lines must not change the line number in the refusal.
     std::fs::write(path, format!("\n{row}\n")).unwrap();
-    git(repo, &["add", "."]);
-    git(
-        repo,
-        &["-c", "commit.gpgsign=false", "commit", "-qm", "record"],
-    );
-    git(repo, &["rev-parse", "HEAD"])
+    commit(repo, "record")
 }
 
 fn graph_records() -> [(&'static str, Value); 3] {
@@ -139,12 +107,23 @@ fn head_bindings_refuse_every_legacy_retired_field() {
         for retired in [json!(true), json!(false), Value::Null] {
             let (_dir, repo, _base) = repository();
             let clean = commit_record(&repo, shard, &row);
-            let (verifications, implementations) =
-                read_bindings(&repo, &clean, &ScopeId::new("default").unwrap()).unwrap();
+            let (verifications, implementations) = read_bindings(
+                &repo,
+                &clean,
+                &ScopeId::new("default").unwrap(),
+                CommitRole::Head,
+            )
+            .unwrap();
             assert_eq!(verifications.len() + implementations.len(), 1);
             row["retired"] = retired;
             let head = commit_record(&repo, shard, &row);
-            let error = read_bindings(&repo, &head, &ScopeId::new("default").unwrap()).unwrap_err();
+            let error = read_bindings(
+                &repo,
+                &head,
+                &ScopeId::new("default").unwrap(),
+                CommitRole::Head,
+            )
+            .unwrap_err();
             assert_migration_refusal(&format!("{error:#}"), shard, &row, &head);
             row.as_object_mut().unwrap().remove("retired");
         }
