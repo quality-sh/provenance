@@ -143,7 +143,7 @@ pub struct CreateResolutionInput {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(extend("x-provenance-validation-only-any-of" = true, "anyOf" = serde_json::json!([
-    {"properties":{"status":{"enum":["draft","review","active","deprecated"]},"archived_in_commit":{"type":"null"}},"required":["status"]},
+    {"properties":{"status":{"enum":["draft","review","active","deprecated"]},"archived_in_commit":{"type":"null"}}},
     {"properties":{"status":{"const":"archived"},"archived_in_commit":{"type":"object"}},"required":["status","archived_in_commit"]}
 ]))))]
 pub struct CreateRuleInput {
@@ -154,6 +154,8 @@ pub struct CreateRuleInput {
     pub requirement_ids: Vec<StableId>,
     pub resolution_ids: Vec<StableId>,
     pub statement: String,
+    #[serde(default = "default_rule_status")]
+    #[cfg_attr(feature = "schema", schemars(default = "default_rule_status"))]
     pub status: RuleStatus,
     #[serde(default)]
     pub archived_in_commit: Option<provenance_core::ArchivedStamp>,
@@ -162,6 +164,10 @@ pub struct CreateRuleInput {
     pub source_section: Option<String>,
     pub origin_thread: Option<StableId>,
     pub origin_message: Option<StableId>,
+}
+
+const fn default_rule_status() -> RuleStatus {
+    RuleStatus::Draft
 }
 
 // The typed-spec input family is wire protocol and lives in core; these
