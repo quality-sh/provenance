@@ -102,6 +102,40 @@ function launchSession(value: unknown): string {
   return value.session;
 }
 
+/** Keeps the page session in this origin's storage and sends it only as a bearer to this origin. */
+// @provenance rule: rule_review_page_session_stays_on_its_origin
+async function startPageSession(
+  page: Pick<BootstrapDependencies, 'fetch' | 'storage'> & { origin: string },
+  code: string | null,
+) {
+  const { fetch, storage } = page;
+  let bearer: string;
+  if (code) {
+    const launch = await fetch(LAUNCH_SESSION_ROUTE, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code }), redirect: 'error', cache: 'no-store',
+    });
+    if (!launch.ok) throw new Error('Launch refused');
+    bearer = launchSession(await launch.json());
+    storage.setItem(SESSION_KEY, bearer);
+  } else {
+    // A reload or a new tab on this origin reuses the stored session.
+    bearer = storage.getItem(SESSION_KEY) ?? '';
+  }
+  const configuration = async () => {
+    const response = await fetch('/review-config', {
+      headers: { authorization: `Bearer ${bearer}` }, redirect: 'error', cache: 'no-store',
+    });
+    if (!response.ok) {
+      // A session from an earlier host run is useless, so the page forgets it.
+      if (storage.getItem(SESSION_KEY) === bearer) storage.removeItem(SESSION_KEY);
+      throw new Error('Access refused');
+    }
+    return reviewConfig(await response.json(), page.origin);
+  };
+  return { bearer, configuration };
+}
+
 /** Takes the launch code out of the address bar and exchanges it once for the page session. */
 export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   // A browser refuses `fetch` when it is called as a method of another object.
@@ -163,31 +197,10 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   });
 
   void (async () => {
-    if (code) {
-      const launch = await fetch(LAUNCH_SESSION_ROUTE, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code }), redirect: 'error', cache: 'no-store',
-      });
-      if (!launch.ok) throw new Error('Launch refused');
-      pageSession = launchSession(await launch.json());
-      storage.setItem(SESSION_KEY, pageSession);
-    } else {
-      // A reload or a new tab on this origin reuses the stored session.
-      pageSession = storage.getItem(SESSION_KEY) ?? '';
-    }
-    const bearer = pageSession;
-    configuration = async () => {
-      const response = await fetch('/review-config', {
-        headers: { authorization: `Bearer ${bearer}` }, redirect: 'error', cache: 'no-store',
-      });
-      if (!response.ok) {
-        // A session from an earlier host run is useless, so the page forgets it.
-        if (storage.getItem(SESSION_KEY) === bearer) storage.removeItem(SESSION_KEY);
-        throw new Error('Access refused');
-      }
-      return reviewConfig(await response.json(), location.origin);
-    };
-    if (bearer === '') throw new Error('No page session');
-    await session.connect(bearer, configuration);
+    const access = await startPageSession({ fetch, storage, origin: location.origin }, code);
+    pageSession = access.bearer;
+    configuration = access.configuration;
+    if (pageSession === '') throw new Error('No page session');
+    await session.connect(pageSession, configuration);
   })().catch(() => { status.textContent = CONNECTION_REFUSED; });
 }
