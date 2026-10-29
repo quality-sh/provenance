@@ -248,15 +248,15 @@ mod tests {
             .enable_all()
             .build()
             .unwrap();
-        let scopes = with_publication_guard(&repository, |guard| {
+        let manifest = with_publication_guard(&repository, |guard| {
             let held = guard.repository();
-            held.stage(false, None, |staged| staged.list_scope_directories())?;
+            held.stage(false, None, |staged| staged.manifest())?;
             with_publication_guard(held, |inner| inner.repository().manifest())?;
             drop(runtime.block_on(publication_guard(held))?);
-            held.store().list_scope_directories()
+            held.store().manifest()
         })
         .unwrap();
-        assert_eq!(scopes, ["default"]);
+        assert_eq!(manifest, repository.manifest().unwrap());
     }
 
     #[test]

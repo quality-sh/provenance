@@ -1,5 +1,4 @@
-use crate::cache::find_gaps;
-use crate::cache::gaps::{GraphQuery, GraphRecords};
+use crate::cache::gaps::{compute_gaps, GraphQuery, GraphRecords};
 use crate::repository::Repository;
 use crate::state_store::StateStore;
 use provenance_core::RequirementStatus;
@@ -124,15 +123,14 @@ fn graph_evidence_locked(
 
 pub fn coverage_health(repository: &Repository) -> anyhow::Result<HealthView> {
     crate::layout::with_initialized_state(repository.layout(), |_, held| {
-        coverage_health_locked(repository, held)
+        coverage_health_locked(repository.scope(), held)
     })
 }
 
 fn coverage_health_locked(
-    repository: &Repository,
+    scope: &provenance_core::ScopeId,
     store: &StateStore,
 ) -> anyhow::Result<HealthView> {
-    let scope = repository.scope();
     let requirements = store
         .list_requirements(scope)?
         .into_iter()
@@ -160,9 +158,9 @@ fn coverage_health_locked(
                 .any(|rule| rule.requirement_ids.contains(&req.id))
         })
         .count();
-    let orphan_count = orphan_rules(repository)?.len();
+    let orphan_count = orphan_rules_locked(scope, store)?.len();
     let with_complete_traceability = rules.len().saturating_sub(orphan_count);
-    let gaps = find_gaps(repository)?.len();
+    let gaps = compute_gaps(&GraphRecords::load(scope, store)?.graph(scope)).len();
     Ok(HealthView {
         requirements: CountMetric {
             total: requirements.len(),

@@ -1,4 +1,5 @@
-use crate::cache::{find_gaps, GapItem};
+use crate::cache::gaps::{compute_gaps, GraphRecords};
+use crate::cache::GapItem;
 use crate::repository::Repository;
 use crate::state_store::StateStore;
 use provenance_core::model::relations::{
@@ -65,7 +66,7 @@ fn prime_context_locked(
     Ok(PrimeContextView {
         scope_id: scope.as_str().to_string(),
         rules: store.list_rules(scope)?.into_iter().collect(),
-        gaps: find_gaps(repository)?,
+        gaps: compute_gaps(&GraphRecords::load(scope, store)?.graph(scope)),
         threads,
     })
 }
