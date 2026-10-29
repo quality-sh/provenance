@@ -1,8 +1,8 @@
 #![allow(clippy::literal_string_with_formatting_args, clippy::wildcard_imports)]
 
 use super::*;
-use crate::operations::catalog as operation;
-use crate::operations::catalog::{resource_members as members, resource_pages as pages};
+use provenance_store::operations::catalog as operation;
+use provenance_store::operations::family_operations as family;
 
 pub(super) fn register(out: &mut Vec<Definition>) {
     history_and_evidence(out);
@@ -73,7 +73,7 @@ fn proposal_facts(out: &mut Vec<Definition>) {
         .path_field("id", "proposal_id")
         .scope("scope_id"),
     );
-    proposal_fact::<pages::PageProposalAssertions, members::GetProposalAssertion>(
+    proposal_fact::<family::PageProposalAssertions, family::GetProposalAssertion>(
         out,
         "assertions",
         "assertion",
@@ -81,7 +81,7 @@ fn proposal_facts(out: &mut Vec<Definition>) {
         "listProposalAssertions",
         "getProposalAssertion",
     );
-    proposal_fact::<pages::PageProposalDispositions, members::GetProposalDisposition>(
+    proposal_fact::<family::PageProposalDispositions, family::GetProposalDisposition>(
         out,
         "dispositions",
         "disposition",

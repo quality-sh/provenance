@@ -41,6 +41,7 @@ provenance-porcelain.workspace = true
 provenance-report.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
+provenance-contract.workspace = true
 provenance-store.workspace = true
 provenance-transport = { path = "../provenance-transport", version = "0.3.0" }
 remove_dir_all.workspace = true

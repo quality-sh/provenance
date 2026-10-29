@@ -1,9 +1,9 @@
 use super::{invalid, malformed_json, missing};
 use axum::http::HeaderMap;
-use provenance_core::protocol::failure::ErasedFailure;
-use provenance_store::operations::catalog::{
-    self, Definition, HandlerBinding, Parameter, QueryRoute, ResponseBinding, SelectorBinding,
+use provenance_contract::{
+    Definition, HandlerBinding, Parameter, QueryRoute, ResponseBinding, SelectorBinding,
 };
+use provenance_core::protocol::failure::ErasedFailure;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
 
@@ -137,8 +137,8 @@ fn parse_query(
             .iter()
             .find(|parameter| parameter.name == name && parameter.location == "query")
             .ok_or_else(|| invalid(Some(name)))?;
-        let value =
-            catalog::parse_parameter_value(parameter, raw).map_err(|_| invalid(Some(name)))?;
+        let value = provenance_contract::parse_parameter_value(parameter, raw)
+            .map_err(|_| invalid(Some(name)))?;
         parsed.insert(name.clone(), value);
     }
     Ok(parsed)

@@ -2,7 +2,6 @@ use crate::cli::Cli;
 use clap::{CommandFactory as _, Parser as _};
 use provenance_core::RESERVED_RECORD_IDS;
 use provenance_porcelain::{action::Action, get::View};
-use provenance_store::operations::catalog;
 
 #[test]
 fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
@@ -24,7 +23,7 @@ fn reserved_ids_cover_declared_root_commands_collections_and_actions() {
     for action in Action::ALL {
         assert!(RESERVED_RECORD_IDS.contains(&action.as_str()));
     }
-    for definition in catalog::definitions() {
+    for definition in provenance_contract::definitions() {
         let collection = definition.path.split('/').nth(1).unwrap();
         assert!(
             RESERVED_RECORD_IDS.contains(&collection),

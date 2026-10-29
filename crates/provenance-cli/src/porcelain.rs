@@ -59,7 +59,7 @@ async fn edit_state(
     host: &provenance_transport::StatementHost,
     outcome: &GetOutcome,
 ) -> Option<serde_json::Value> {
-    use provenance_store::operations::catalog::{target_definitions, TargetAction};
+    use provenance_contract::{target_definitions, TargetAction};
     let kind = outcome.record.node_type();
     let (_, definition) =
         target_definitions(TargetAction::Update).find(|(registered, _)| *registered == kind)?;

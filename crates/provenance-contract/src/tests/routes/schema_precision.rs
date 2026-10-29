@@ -2,19 +2,19 @@
 //! field, so the exported constraints and the runtime deserialization limits
 //! cannot drift apart.
 
-use super::super::schema::type_schema;
+use crate::schema::type_schema;
 use schemars::generate::Contract;
 use serde_json::json;
 
-fn catalog_definition(name: &str) -> super::super::Definition {
-    super::super::definitions()
+fn catalog_definition(name: &str) -> crate::Definition {
+    crate::definitions()
         .iter()
         .find(|definition| definition.name == name)
         .unwrap_or_else(|| panic!("missing definition {name}"))
         .clone()
 }
 
-fn path_parameter(definition: &super::super::Definition, name: &str) -> serde_json::Value {
+fn path_parameter(definition: &crate::Definition, name: &str) -> serde_json::Value {
     definition
         .parameters()
         .into_iter()
@@ -83,9 +83,9 @@ fn the_evidence_side_publishes_its_closed_enum() {
         .into_iter()
         .find(|parameter| parameter.name == "side")
         .unwrap();
-    assert!(super::super::parse_parameter_value(&parameter, "sideways").is_err());
+    assert!(crate::parse_parameter_value(&parameter, "sideways").is_err());
     assert_eq!(
-        super::super::parse_parameter_value(&parameter, "before").unwrap(),
+        crate::parse_parameter_value(&parameter, "before").unwrap(),
         json!("before")
     );
 }
@@ -93,19 +93,19 @@ fn the_evidence_side_publishes_its_closed_enum() {
 #[test]
 fn history_evidence_requests_refuse_invented_sides_at_the_type() {
     for side in ["sideways", "", "BEFORE"] {
-        let request: Result<crate::operations::catalog::HistoryEvidenceRequest, _> =
+        let request: Result<provenance_store::operations::catalog::HistoryEvidenceRequest, _> =
             serde_json::from_value(
                 json!({"record_kind": "requirement", "record_id": "requirement_a", "entry_id": "entry_a", "side": side}),
             );
         assert!(request.is_err(), "side {side} is not a published value");
     }
-    let request: crate::operations::catalog::HistoryEvidenceRequest =
+    let request: provenance_store::operations::catalog::HistoryEvidenceRequest =
         serde_json::from_value(json!({
             "record_kind": "requirement", "record_id": "requirement_a", "entry_id": "entry_a", "side": "after"
         }))
         .unwrap();
     assert_eq!(
         request.side,
-        crate::operations::catalog::ReviewEvidenceSide::After
+        provenance_store::operations::catalog::ReviewEvidenceSide::After
     );
 }

@@ -1,6 +1,4 @@
-#![cfg(feature = "schema")]
-
-use provenance_store::operations::catalog::{self, Definition};
+use provenance_contract::{self as catalog, Definition};
 use serde_json::json;
 
 fn definition(name: &str) -> &'static Definition {

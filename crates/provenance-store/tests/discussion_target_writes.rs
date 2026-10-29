@@ -215,9 +215,6 @@ fn closed_container_refuses_target_reply() {
 async fn catalog_operation_uses_the_target_write_path() {
     let (temp, store) = fixture();
     let started = store.write_discussion(start("a")).unwrap();
-    assert!(provenance_store::operations::catalog::contains(
-        "write-target-discussion"
-    ));
     let context = PreparedContext::for_scope(PreparedScope {
         repository: repository(camino::Utf8Path::from_path(temp.path()).unwrap()),
         requested_target: "selected".into(),

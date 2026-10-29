@@ -19,9 +19,7 @@ pub(super) fn resolve_record_kind(
     let Some(TargetVerb::Action(action)) = action else {
         return None;
     };
-    if action == Action::Create
-        || !provenance_store::operations::catalog::TargetAction::RECORD.contains(&action)
-    {
+    if action == Action::Create || !provenance_contract::TargetAction::RECORD.contains(&action) {
         return None;
     }
     let target = selection.get_one::<String>("target")?;

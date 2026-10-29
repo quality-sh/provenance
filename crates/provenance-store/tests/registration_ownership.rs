@@ -1,7 +1,8 @@
 use std::path::Path;
 
 fn source(path: &str) -> String {
-    std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).unwrap()
+    let contract = Path::new(env!("CARGO_MANIFEST_DIR")).join("../provenance-contract");
+    std::fs::read_to_string(contract.join(path)).unwrap()
 }
 
 fn inference_hits<'a>(text: &str, forbidden: &'a [&str]) -> Vec<&'a str> {
@@ -25,17 +26,17 @@ fn the_registration_boundary_gate_sees_a_planted_bypass() {
 fn route_construction_has_no_name_or_shape_inference() {
     let routes = format!(
         "{}{}",
-        source("src/operations/catalog/routes.rs"),
-        source("src/operations/catalog/routes/resource.rs")
+        source("src/routes.rs"),
+        source("src/routes/resource.rs")
     );
-    let resources = source("src/operations/catalog/routes/resources.rs");
+    let resources = source("src/routes/resources.rs");
     let subresources = format!(
         "{}{}",
-        source("src/operations/catalog/routes/subresources.rs"),
-        source("src/operations/catalog/routes/review_subresources.rs")
+        source("src/routes/subresources.rs"),
+        source("src/routes/review_subresources.rs")
     );
-    let actions = source("src/operations/catalog/routes/actions.rs");
-    let schema = source("src/operations/catalog/schema.rs");
+    let actions = source("src/routes/actions.rs");
+    let schema = source("src/schema.rs");
 
     for (file, text, forbidden) in [
         (

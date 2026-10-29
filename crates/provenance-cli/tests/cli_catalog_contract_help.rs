@@ -1,6 +1,5 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
-use provenance_store::operations::catalog;
 
 fn help(arguments: &[&str]) -> String {
     let empty = tempfile::tempdir().expect("create empty working directory");
@@ -47,7 +46,7 @@ fn immutable_collection_help_lists_only_registered_operations() {
 fn guarded_requirement_update_help_describes_real_inputs_and_controls() {
     let output = help(&["requirements", "--help"]);
     let update = block(&output, "provenance requirements <id> update");
-    let description = catalog::definitions()
+    let description = provenance_contract::definitions()
         .iter()
         .find(|definition| definition.operation_id == "updateRequirement")
         .expect("registered Requirement update")

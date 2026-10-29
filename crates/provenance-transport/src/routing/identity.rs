@@ -1,6 +1,6 @@
 use super::invalid;
+use provenance_contract::Definition;
 use provenance_core::protocol::failure::ErasedFailure;
-use provenance_store::operations::catalog::Definition;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -37,14 +37,8 @@ pub(super) fn reject(
                 .selector
                 .iter()
                 .map(|binding| match binding {
-                    provenance_store::operations::catalog::SelectorBinding::Discussion {
-                        field,
-                        ..
-                    }
-                    | provenance_store::operations::catalog::SelectorBinding::Legacy {
-                        field,
-                        ..
-                    } => *field,
+                    provenance_contract::SelectorBinding::Discussion { field, .. }
+                    | provenance_contract::SelectorBinding::Legacy { field, .. } => *field,
                 }),
         )
         .chain(

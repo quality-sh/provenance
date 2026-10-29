@@ -71,6 +71,7 @@
         "jsonschema",
         "notify",
         "open",
+        "provenance-contract",
         "provenance-core",
         "provenance-macros",
         "provenance-porcelain",
@@ -97,6 +98,7 @@
     },
     "provenance-codegen": {
       "dependencies": [
+        "provenance-contract",
         "provenance-core",
         "provenance-ste100",
         "provenance-store"
@@ -104,6 +106,19 @@
       "dev-dependencies": [
         "jsonschema",
         "tempfile"
+      ]
+    },
+    "provenance-contract": {
+      "dependencies": [
+        "provenance-core",
+        "provenance-macros",
+        "provenance-store"
+      ],
+      "dev-dependencies": [
+        "jsonschema",
+        "provenance-ste100",
+        "provenance-store",
+        "tokio"
       ]
     },
     "provenance-core": {
@@ -213,6 +228,7 @@
         "axum",
         "dunce",
         "fs2",
+        "provenance-contract",
         "provenance-core",
         "provenance-macros",
         "provenance-porcelain",

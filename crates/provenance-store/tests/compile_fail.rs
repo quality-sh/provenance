@@ -27,3 +27,10 @@ fn staged_and_read_only_capabilities_hold_at_compile_time() {
     cases.compile_fail("tests/compile_fail/layout_store_outside_crate.rs");
     cases.compile_fail("tests/compile_fail/read_only_section_outside_crate.rs");
 }
+
+#[test]
+#[verifies("rule_store_has_no_wire_contract", examples)]
+fn store_has_no_wire_contract() {
+    let cases = trybuild::TestCases::new();
+    cases.compile_fail("tests/compile_fail/no_wire_contract.rs");
+}

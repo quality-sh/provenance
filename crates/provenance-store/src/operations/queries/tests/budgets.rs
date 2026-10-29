@@ -272,7 +272,7 @@ fn get_rule_query() -> GetQuery {
 }
 
 async fn get_rule_member(root: camino::Utf8PathBuf) -> serde_json::Value {
-    crate::test_support::call::<catalog::resource_members::GetRule, _>(
+    crate::test_support::call::<crate::operations::family_operations::GetRule, _>(
         json!({
             "context": {"repository": "test", "scope": "default"},
             "request": {"id": "rule_overtime"}

@@ -1,7 +1,6 @@
 //! The ideation contract describes the existing record and input shapes, so
 //! legacy and current JSON keep round-tripping through them unchanged.
-#![cfg(feature = "schema")]
-use provenance_store::operations::catalog;
+use provenance_contract as catalog;
 use schemars::{
     generate::{Contract, SchemaSettings},
     JsonSchema,

@@ -256,7 +256,7 @@ async fn a_request_decode_refusal_does_not_wait_for_a_work_slot() {
     let (host, mut control) = gated_host(&repo, false);
     let held = fill_work_slots(&host, &mut control).await;
     let session = Session::start(host.clone()).await;
-    let submit = catalog::definitions()
+    let submit = provenance_contract::definitions()
         .iter()
         .find(|definition| definition.path == "/requirements/{id}/submit")
         .expect("the review submit route is registered")

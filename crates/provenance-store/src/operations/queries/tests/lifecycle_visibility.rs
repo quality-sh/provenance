@@ -101,7 +101,7 @@ fn seed_lifecycle_records(store: &StateStore, scope: &ScopeId) {
 }
 
 async fn list_rules(root: &camino::Utf8Path, request: Value) -> anyhow::Result<Value> {
-    list_family::<catalog::resource_pages::PageRules>(root, request).await
+    list_family::<crate::operations::family_operations::PageRules>(root, request).await
 }
 
 async fn list_family<O: catalog::Operation>(
@@ -348,8 +348,9 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     seed_archived_shaping_records(&store, &scope);
     let root = root_of(&dir);
 
-    assert_filter_hides_archived::<catalog::resource_pages::PageTopics>(&root).await;
-    assert_filter_hides_archived::<catalog::resource_pages::PageQuestions>(&root).await;
+    assert_filter_hides_archived::<crate::operations::family_operations::PageTopics>(&root).await;
+    assert_filter_hides_archived::<crate::operations::family_operations::PageQuestions>(&root)
+        .await;
 
     let found = search(
         &root,

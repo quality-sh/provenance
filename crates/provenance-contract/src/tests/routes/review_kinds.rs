@@ -1,4 +1,4 @@
-use super::super::{definitions, HttpMethod};
+use crate::{definitions, HttpMethod};
 
 const REVIEW_KINDS: [(&str, &str); 8] = [
     ("sources", "source"),
@@ -35,7 +35,6 @@ fn every_review_kind_has_actions_history_and_evidence() {
     }
 }
 
-#[cfg(feature = "schema")]
 #[test]
 /// Implementation aid: keeps generated member schemas aligned with review resources.
 fn every_review_kind_member_read_carries_edit_and_decision_state() {

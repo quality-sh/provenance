@@ -1,7 +1,7 @@
 #![allow(clippy::wildcard_imports)]
 
 use super::*;
-use crate::operations::catalog as operation;
+use provenance_store::operations::catalog as operation;
 
 fn routes_for_kind(
     out: &mut Vec<Definition>,
@@ -116,15 +116,8 @@ macro_rules! register_review_subresources {
         $($group:ident {
             $($variant:ident {
                 record: $record:ty,
-                field: $field:ident,
-                path: $path:ident,
-                meta: $meta:tt,
+                order: $order:tt,
                 node: [$($node:tt)*],
-                reader: { open: $reader:ident, closed: [$($closed:tt)*], strategy: $strategy:ident },
-                id: $id:ident,
-                loader: [$($loader:tt)*],
-                graph: [$($graph:tt)*],
-                import: [$($import:tt)*],
                 catalog: [$($catalog:tt)*],
                 route: [$($route:tt)*]
                 $(, review: $review:ident)?
@@ -138,7 +131,7 @@ macro_rules! register_review_subresources {
 }
 
 pub(super) fn register(out: &mut Vec<Definition>) {
-    crate::cache::family_table::record_family_rows!(register_review_subresources, out);
+    provenance_store::record_family_catalog!(register_review_subresources, out);
 }
 
 fn limit() -> Parameter {

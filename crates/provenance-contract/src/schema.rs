@@ -1,5 +1,5 @@
-//! Contract code: this module later leaves the store as one unit with entry, invoke, routes
-//! and schema. Add no store state here.
+//! Wire schemas for registered operations: request, success and failure documents, parameters
+//! and value parsing.
 use super::{Operation, TargetAction};
 use provenance_core::protocol::failure::OperationError;
 use provenance_core::NodeType;

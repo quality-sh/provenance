@@ -94,7 +94,7 @@ pub(crate) fn search_is_available(host: &crate::StatementHost) -> bool {
 
 pub(crate) fn search_tool() -> rmcp::model::Tool {
     use provenance_store::operations::catalog;
-    let mut input = catalog::operation_request_schema::<catalog::Search>();
+    let mut input = provenance_contract::operation_request_schema::<catalog::Search>();
     input.as_object_mut().map(|object| object.remove("$schema"));
     if let Some(properties) = input.get_mut("properties").and_then(Value::as_object_mut) {
         properties.remove("protocol_version");
@@ -109,7 +109,7 @@ pub(crate) fn search_tool() -> rmcp::model::Tool {
         "search",
         provenance_porcelain::guidance::SEARCH_DESCRIPTION,
         input,
-        catalog::operation_success_schema::<catalog::Search>(),
+        provenance_contract::operation_success_schema::<catalog::Search>(),
         crate::mcp_surface::SchemaDeclaration::Remove,
     )
 }
