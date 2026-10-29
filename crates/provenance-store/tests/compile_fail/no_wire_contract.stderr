@@ -9,4 +9,3 @@ error[E0425]: cannot find function `definitions` in module `provenance_store::op
   |
 4 |     let _ = provenance_store::operations::catalog::definitions();
   |                                                    ^^^^^^^^^^^ not found in `provenance_store::operations::catalog`
-┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈
