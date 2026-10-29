@@ -34,7 +34,8 @@ pub fn prime_context(
     include_threads: bool,
 ) -> anyhow::Result<PrimeContextView> {
     let store = repository.store();
-    store.with_repository_publication(|| prime_context_locked(repository, include_threads, &store))
+    store
+        .with_repository_publication(|held| prime_context_locked(repository, include_threads, held))
 }
 
 fn prime_context_locked(
@@ -105,8 +106,9 @@ pub fn get_requirement_graph(
 ) -> anyhow::Result<RequirementGraphView> {
     let store = repository.store();
     let scope = repository.scope();
-    store
-        .with_repository_publication(|| get_requirement_graph_locked(scope, requirement_id, &store))
+    store.with_repository_publication(|held| {
+        get_requirement_graph_locked(scope, requirement_id, held)
+    })
 }
 
 fn get_requirement_graph_locked(

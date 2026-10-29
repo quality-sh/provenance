@@ -299,9 +299,9 @@ pub(super) async fn check(
 
 /// Validates every scope of a staged repository.
 pub(super) fn validate_repository(store: &StateStore) -> anyhow::Result<()> {
-    store.with_repository_publication(|| {
-        let manifest = store.manifest()?;
-        validate_locked(store, &manifest, true)
+    store.with_repository_publication(|held| {
+        let manifest = held.manifest()?;
+        validate_locked(held, &manifest, true)
     })
 }
 

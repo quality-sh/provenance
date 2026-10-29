@@ -11,48 +11,59 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Refuses a review write if it changes a file outside the graph record files.
 /// The record files include the Message month shards that already exist.
 ///
-/// `prepare` borrows a staged store with the identity of `live`. The live
-/// manifest and files are read before it runs; while it runs, live access
-/// refuses.
+/// `prepare` borrows a staged store with the identity of `live`. The section
+/// is taken through `live`, and the live manifest and files are read through
+/// the held store before it runs; while it runs, live access refuses.
 #[rule("rule_review_writes_change_only_record_files")]
 pub(super) fn with_record_state<R>(
     live: &StateStore,
     stamp: RecordStamp,
     prepare: impl FnOnce(&StateStore) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let layout = &live.layout;
-    crate::publication::with_staged_state(layout, false, |staged_layout| {
-        let manifest = live.manifest()?;
-        let mut allowed = Vec::new();
-        for scope in &manifest.scopes {
-            allowed.extend(
-                ProjectionFamily::ALL
-                    .into_iter()
-                    .map(|family| family.shard_path(layout, &scope.id)),
-            );
-            // Messages can also be in the month shards that already exist.
-            allowed.extend(readers::message_shard_paths(layout, &scope.id)?);
-        }
-        let allowed = allowed
-            .iter()
-            .map(|path| {
-                path.strip_prefix(layout.state_dir())
-                    .map(Utf8Path::to_owned)
-            })
-            .collect::<Result<BTreeSet<_>, _>>()?;
-        let before = files(&layout.state_dir())?;
-        let staged =
-            StateStore::staged_view(live.identity_for_stage(), staged_layout.clone(), stamp);
-        let result = crate::publication::with_stage_body(layout, || prepare(&staged))?;
-        let after = files(&staged_layout.state_dir())?;
-        for path in before.keys().chain(after.keys()) {
-            anyhow::ensure!(
-                before.get(path) == after.get(path) || allowed.contains(path),
-                "review write changes a non-record file: {path}"
-            );
-        }
-        Ok(result)
+    live.with_repository_publication(|held| {
+        crate::publication::with_staged_state(held, false, |staged_layout| {
+            stage_record_files(held, stamp, staged_layout, prepare)
+        })
     })
+}
+
+fn stage_record_files<R>(
+    held: &StateStore,
+    stamp: RecordStamp,
+    staged_layout: &crate::layout::ProvenanceLayout,
+    prepare: impl FnOnce(&StateStore) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    let layout = &held.layout;
+    let manifest = held.manifest()?;
+    let mut allowed = Vec::new();
+    for scope in &manifest.scopes {
+        allowed.extend(
+            ProjectionFamily::ALL
+                .into_iter()
+                .map(|family| family.shard_path(layout, &scope.id)),
+        );
+        // Messages can also be in the month shards that already exist.
+        allowed.extend(readers::message_shard_paths(layout, &scope.id)?);
+    }
+    let allowed = allowed
+        .iter()
+        .map(|path| {
+            path.strip_prefix(layout.state_dir())
+                .map(Utf8Path::to_owned)
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    let before = files(&layout.state_dir())?;
+    let staged = StateStore::staged_view(held.identity_for_stage(), staged_layout.clone(), stamp);
+    let result = crate::publication::with_stage_body(layout, || prepare(&staged))?;
+    staged.ensure_stage_intact()?;
+    let after = files(&staged_layout.state_dir())?;
+    for path in before.keys().chain(after.keys()) {
+        anyhow::ensure!(
+            before.get(path) == after.get(path) || allowed.contains(path),
+            "review write changes a non-record file: {path}"
+        );
+    }
+    Ok(result)
 }
 
 fn files(root: &Utf8Path) -> anyhow::Result<BTreeMap<Utf8PathBuf, Vec<u8>>> {

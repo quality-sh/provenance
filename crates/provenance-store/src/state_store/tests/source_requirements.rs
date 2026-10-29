@@ -154,10 +154,10 @@ fn repository_publication_cannot_overwrite_a_concurrent_writer() {
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
-                .with_repository_publication(|| {
+                .with_repository_publication(|_| {
                     publication_ready_tx.send(()).unwrap();
                     publish_rx.recv().unwrap();
-                    crate::jsonl::write_jsonl_atomic::<provenance_core::Source>(
+                    crate::jsonl::write_jsonl_atomic_under_publication::<provenance_core::Source>(
                         &crate::shards::sources_path(&store.layout, &scope),
                         &[],
                     )
@@ -214,7 +214,7 @@ fn repository_publication_excludes_an_entire_multi_shard_write() {
         let store = repository.store();
         std::thread::spawn(move || {
             store
-                .with_repository_publication(|| {
+                .with_repository_publication(|_| {
                     publication_ready_tx.send(()).unwrap();
                     release_rx.recv().unwrap();
                     Ok(())

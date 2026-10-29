@@ -68,13 +68,13 @@ fn source_creation_holds_the_lock_and_refuses_a_raw_followup_write() {
         let store = repository.store();
         let scope = scope.clone();
         std::thread::spawn(move || {
-            let result = store.with_repository_publication(|| {
-                let mut sources = store.list_sources(&scope)?;
+            let result = store.with_repository_publication(|held| {
+                let mut sources = held.list_sources(&scope)?;
                 sources.retain(|source| source.id != older_id);
                 for source in &mut sources {
                     source.supersedes.retain(|target| target != &older_id);
                 }
-                crate::jsonl::write_jsonl_atomic(&sources_path, &sources)
+                crate::jsonl::write_jsonl_atomic_under_publication(&sources_path, &sources)
             });
             publisher_done_tx.send(result).unwrap();
         })

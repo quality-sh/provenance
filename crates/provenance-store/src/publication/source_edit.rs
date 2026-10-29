@@ -1,6 +1,6 @@
 use super::{
     staged::{stage_with_hook, InstallState, StagedStateHook},
-    sync_directory, with_repository_publication,
+    sync_directory,
 };
 use crate::{
     layout::ProvenanceLayout,
@@ -56,23 +56,24 @@ pub(super) struct PreparedSourceRecord {
     pub(super) prepared_identity: FileIdentity,
 }
 
+/// Publishes a staged state and one repository file edit under the live
+/// section that `section` holds.
 pub fn with_staged_state_and_source_edit<R>(
-    live: &ProvenanceLayout,
+    section: &crate::state_store::StateStore,
     held: HeldRepositoryFile,
     replacement: &[u8],
     prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    with_repository_publication(live, || {
-        let mut publication = SourceEditPublication {
-            held: Some(held),
-            replacement: replacement.to_vec(),
-            prepared: None,
-            backup: None,
-            marker: None,
-        };
-        stage_with_hook(live, false, prepare, &mut publication)
-    })
-    .map_err(|error| {
+    section.ensure_holds_live_section()?;
+    let live = &section.layout;
+    let mut publication = SourceEditPublication {
+        held: Some(held),
+        replacement: replacement.to_vec(),
+        prepared: None,
+        backup: None,
+        marker: None,
+    };
+    stage_with_hook(live, false, prepare, &mut publication).map_err(|error| {
         if live.source_edit_marker_path().exists() {
             crate::write_error::publication_started(error)
         } else {

@@ -1,12 +1,12 @@
 use crate::layout::ProvenanceLayout;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
+use provenance_macros::rule;
 use serde::{de::DeserializeOwned, Serialize};
-use std::cell::RefCell;
-use std::collections::BTreeSet;
 
 mod durability;
 mod guard;
+mod holders;
 mod read_only;
 mod recovery;
 mod source_edit;
@@ -14,7 +14,10 @@ mod source_edit_recovery;
 mod staged;
 mod write_permission;
 pub use durability::{sync_directory, sync_tree};
+pub(crate) use guard::SectionHandle;
 pub use guard::{publication_guard, with_publication_guard, PublicationGuard};
+pub use holders::PublicationHeld;
+pub(crate) use holders::{enter, refuse_if_held, HolderEntry, HolderKind};
 pub use read_only::read_only_record_kinds;
 pub(crate) use read_only::with_read_only_validation;
 use recovery::{canonical_transactions_dir, create_real_directory};
@@ -27,37 +30,29 @@ use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
 #[cfg(any(unix, windows))]
 pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
 pub use staged::LiveAccessDuringStage;
-pub(crate) use staged::{with_stage_body, with_staged_state};
+pub(crate) use staged::{
+    refuse_held_access_during_stage, with_stage_body, with_staged_state, StageLock,
+};
 pub(crate) use write_permission::{protect_rows, WritePermissions};
 
-thread_local! {
-    static HELD_LOCKS: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
-}
-
-struct HeldPublicationLock {
-    key: String,
-}
-
-impl HeldPublicationLock {
-    fn new(key: String) -> Self {
-        HELD_LOCKS.with(|locks| locks.borrow_mut().insert(key.clone()));
-        Self { key }
-    }
-}
-
-impl Drop for HeldPublicationLock {
-    fn drop(&mut self) {
-        HELD_LOCKS.with(|locks| locks.borrow_mut().remove(&self.key));
-    }
-}
-
+/// Runs `operation` in the publication section of `layout` and hands it a
+/// store that holds the section. The store has no repository identity. A
+/// second entry on a thread that holds the section returns
+/// [`PublicationHeld`].
 pub fn with_repository_publication<R>(
     layout: &ProvenanceLayout,
-    operation: impl FnOnce() -> anyhow::Result<R>,
+    operation: impl FnOnce(&crate::state_store::StateStore) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    with_repository_publication_checked(layout, || Ok(()), operation)
+    with_repository_publication_checked(
+        layout,
+        || Ok(()),
+        || operation(&crate::state_store::StateStore::in_section(layout.clone())),
+    )
 }
 
+/// Takes the publication lock of `layout`, runs `check` and recovery, then
+/// `operation`. Only a store that holds the section may call into it again.
+#[rule("rule_publication_section_is_not_entered_twice")]
 pub(crate) fn with_repository_publication_checked<R>(
     layout: &ProvenanceLayout,
     check: impl FnOnce() -> anyhow::Result<()>,
@@ -69,14 +64,10 @@ pub(crate) fn with_repository_publication_checked<R>(
         check()?;
         return operation();
     }
+    refuse_if_held(&key, HolderKind::Live, layout.root())?;
     prepare_publication_lock(layout)?;
-    let lock_path = layout.publication_lock_path();
-    if HELD_LOCKS.with(|locks| locks.borrow().contains(&key)) {
-        check()?;
-        return operation();
-    }
-    let _lock = guard::LockedPublicationFile::acquire(&lock_path)?;
-    let _held_lock = HeldPublicationLock::new(key);
+    let _lock = guard::LockedPublicationFile::acquire(&layout.publication_lock_path())?;
+    let _holder = enter(key, HolderKind::Live);
     check()?;
     prepare_transaction_dirs(layout)?;
     source_edit_recovery::recover_pending_source_edit(layout)?;
@@ -156,13 +147,13 @@ impl crate::state_store::StateStore {
     where
         T: DeserializeOwned + Serialize,
     {
-        self.with_repository_publication(|| {
-            let lock_path = self.layout.state_shard_lock_path(path)?;
+        self.with_repository_publication(|held| {
+            let lock_path = held.layout.state_shard_lock_path(path)?;
             let mut result = None;
             crate::jsonl::mutate_jsonl_locked_if(
                 path,
                 &lock_path,
-                self.permissions(),
+                held.permissions(),
                 |records| {
                     result = Some(mutate(records)?);
                     Ok(true)
@@ -182,9 +173,9 @@ impl crate::state_store::StateStore {
     where
         T: DeserializeOwned + Serialize,
     {
-        self.with_repository_publication(|| {
-            let lock_path = self.layout.state_shard_lock_path(path)?;
-            crate::jsonl::mutate_jsonl_locked_if(path, &lock_path, self.permissions(), mutate)
+        self.with_repository_publication(|held| {
+            let lock_path = held.layout.state_shard_lock_path(path)?;
+            crate::jsonl::mutate_jsonl_locked_if(path, &lock_path, held.permissions(), mutate)
         })
     }
 }

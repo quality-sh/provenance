@@ -14,15 +14,15 @@ impl StateStore {
         &self,
         input: PostMessageInput,
     ) -> anyhow::Result<PostMessageResult> {
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             anyhow::ensure!(
-                !self
+                !held
                     .list_discussions(&input.scope_id)?
                     .iter()
                     .any(|discussion| discussion.parent == input.parent),
                 "enrolled Thread requires an addressed Discussion write"
             );
-            self.write_thread_message(input)
+            held.write_thread_message(input)
         })
     }
 

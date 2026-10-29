@@ -293,12 +293,12 @@ fn composite_ideation_list_holds_publication_lock_between_reads() {
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
-                .with_repository_publication(|| {
-                    crate::jsonl::write_jsonl_atomic::<Contribution>(
+                .with_repository_publication(|_| {
+                    crate::jsonl::write_jsonl_atomic_under_publication::<Contribution>(
                         &crate::shards::contributions_path(&store.layout, &scope),
                         &[],
                     )?;
-                    crate::jsonl::write_jsonl_atomic(
+                    crate::jsonl::write_jsonl_atomic_under_publication(
                         &crate::shards::ideation_landings_path(&store.layout, &scope),
                         &[IdeationLandingBatch {
                             contributions: vec![contribution(&scope, "landed")],

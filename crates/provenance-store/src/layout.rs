@@ -172,13 +172,18 @@ pub fn with_initialized_graph<R>(
 }
 
 /// Runs a repository-wide operation after the initialized-graph gate, with a
-/// store over every scope of the layout. The store has no repository identity.
+/// store over every scope of the layout that holds the section. The store has
+/// no repository identity.
 pub fn with_initialized_state<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce(Manifest, &crate::state_store::StateStore) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let store = crate::state_store::StateStore::new(layout.clone());
-    with_initialized_graph(layout, |manifest| operation(manifest, &store))
+    with_initialized_graph(layout, |manifest| {
+        operation(
+            manifest,
+            &crate::state_store::StateStore::in_section(layout.clone()),
+        )
+    })
 }
 
 /// Require a valid manifest before a caller opens a graph operation.

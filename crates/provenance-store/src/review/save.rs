@@ -49,8 +49,8 @@ impl StateStore {
         scope: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<RequirementEditState> {
-        self.with_repository_publication(|| {
-            let record = self.requirement(scope, id)?;
+        self.with_repository_publication(|held| {
+            let record = held.requirement(scope, id)?;
             Self::record_edit_state_for_record(&record.into())
         })
     }
@@ -61,8 +61,8 @@ impl StateStore {
         kind: NodeType,
         id: &StableId,
     ) -> anyhow::Result<RequirementEditState> {
-        self.with_repository_publication(|| {
-            let record = crate::cache::review_families::record(self, scope, kind, id)?;
+        self.with_repository_publication(|held| {
+            let record = crate::cache::review_families::record(held, scope, kind, id)?;
             Self::record_edit_state_for_record(&record)
         })
     }
@@ -117,23 +117,23 @@ impl StateStore {
             "review request exceeds the operation byte budget"
         );
         input.normalize();
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             crate::test_probes::at("requirement_save_locked")?;
             let scope_id = input.update.scope_id.clone();
             let scope = &scope_id;
             anyhow::ensure!(
-                self.manifest()?.scopes.iter().any(|s| s.id == *scope),
+                held.manifest()?.scopes.iter().any(|s| s.id == *scope),
                 "review scope is not in the manifest"
             );
-            let record = self.requirement(scope, &input.update.id)?;
+            let record = held.requirement(scope, &input.update.id)?;
             super::owner_matches(&record, input.update.declared_by.as_deref())?;
             if let Some(origin) = origin {
-                self.validate_discussion_origin(scope, origin)?;
+                held.validate_discussion_origin(scope, origin)?;
             }
             let current_etag = etag(&ReviewRecord::from(record.clone()))?;
             let stale = (input.expected_etag != current_etag).then_some(current_etag);
-            let stamp = self.current_record_stamp()?;
-            with_record_state(self, RecordStamp::resolved(stamp), |staged| {
+            let stamp = held.current_record_stamp()?;
+            with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                 let path = shards::requirements_path(&staged.layout, scope);
                 let record_id = record.id.clone();
                 staged.permitting(&[&path], record_id.as_str(), |staged| {

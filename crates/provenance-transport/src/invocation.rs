@@ -49,8 +49,9 @@ impl Invocation {
 impl StatementHost {
     /// Runs one store operation on this host. Advertisement, request validation and the
     /// identity check answer on the runtime thread before the work slot wait; repository
-    /// preparation and the operation run on the tracked blocking pool, inside the page-write
-    /// observer when the call is marked.
+    /// preparation and the operation run on the tracked blocking pool. For a marked call,
+    /// preparation runs first and the operation then runs in the page-write section, through
+    /// the repository of that section.
     #[rule("rule_lock_wait_does_not_delay_host_calls")]
     #[rule("rule_host_refusal_before_slot_wait")]
     pub async fn invoke<O: Operation>(
@@ -81,12 +82,13 @@ impl StatementHost {
         let native = matches!(options.framing, Framing::Native);
         self.execution
             .run(move || {
-                let work = || runtime.block_on(prepared::<O>(&access, selected, request, native));
+                let context = prepare::<O>(&access, selected, &request, native)?;
                 match page_writes {
-                    Some(page) => page.run(work).unwrap_or_else(|_| {
-                        Err(OperationError::Common(OperationFailure::Internal))
+                    Some(page) => page.run(|held| {
+                        let context = context.within(held).map_err(OperationError::Common)?;
+                        runtime.block_on(catalog::invoke_typed::<O>(context, request))
                     }),
-                    None => work(),
+                    None => runtime.block_on(catalog::invoke_typed::<O>(context, request)),
                 }
             })
             .await
@@ -129,23 +131,22 @@ impl StatementHost {
     }
 }
 
-/// Repository preparation and the operation, on the blocking path.
-async fn prepared<O: Operation>(
+/// Repository preparation, on the blocking path before any page-write section.
+fn prepare<O: Operation>(
     access: &Arc<dyn crate::HostAccess>,
     selected: Option<RequestedContext>,
-    request: O::Request,
+    request: &O::Request,
     native: bool,
-) -> Result<O::Success, OperationError<O::Failure>> {
+) -> Result<PreparedContext, OperationError<O::Failure>> {
     let context = match selected {
         Some(selected) => access
-            .prepare(O::NAME, selected, O::needs(&request))
+            .prepare(O::NAME, selected, O::needs(request))
             .map_err(OperationError::Common)?,
         None => PreparedContext::data_free(),
     };
-    let context = if native {
+    Ok(if native {
         context.into_native()
     } else {
         context
-    };
-    catalog::invoke_typed::<O>(context, request).await
+    })
 }

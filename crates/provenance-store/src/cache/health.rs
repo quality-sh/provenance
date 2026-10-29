@@ -57,7 +57,7 @@ pub struct OrphanRuleItem {
 /// Deleted records and bindings do not appear in canonical state.
 pub fn graph_evidence(repository: &Repository) -> anyhow::Result<GraphEvidence> {
     let store = repository.store();
-    store.with_repository_publication(|| graph_evidence_locked(repository.scope(), &store))
+    store.with_repository_publication(|held| graph_evidence_locked(repository.scope(), held))
 }
 
 fn graph_evidence_locked(
@@ -123,9 +123,8 @@ fn graph_evidence_locked(
 }
 
 pub fn coverage_health(repository: &Repository) -> anyhow::Result<HealthView> {
-    let store = repository.store();
-    crate::layout::with_initialized_graph(repository.layout(), |_| {
-        coverage_health_locked(repository, &store)
+    crate::layout::with_initialized_state(repository.layout(), |_, held| {
+        coverage_health_locked(repository, held)
     })
 }
 
@@ -186,7 +185,7 @@ fn coverage_health_locked(
 /// ever names the source.
 pub fn orphan_rules(repository: &Repository) -> anyhow::Result<Vec<OrphanRuleItem>> {
     let store = repository.store();
-    store.with_repository_publication(|| orphan_rules_locked(repository.scope(), &store))
+    store.with_repository_publication(|held| orphan_rules_locked(repository.scope(), held))
 }
 
 fn orphan_rules_locked(

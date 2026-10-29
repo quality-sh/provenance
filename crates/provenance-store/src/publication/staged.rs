@@ -1,13 +1,15 @@
 //! Complete-state publication shared by import and review saves.
 use super::{
-    clear_publication_marker, sync_directory, sync_tree, with_repository_publication,
-    write_publication_marker, PublicationPhase,
+    clear_publication_marker, enter, refuse_if_held, sync_directory, sync_tree,
+    write_publication_marker, HolderKind, PublicationPhase,
 };
 use crate::layout::ProvenanceLayout;
-use camino::Utf8PathBuf;
+use crate::state_store::StateStore;
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 
 thread_local! {
     // Publication lock identity to live repository root, for each running stage body.
@@ -53,6 +55,15 @@ pub fn with_stage_body<R>(
     body()
 }
 
+/// Refuses live access to `live` through a store that holds its section while
+/// a stage body of that repository runs on this thread.
+pub(crate) fn refuse_held_access_during_stage(live: &ProvenanceLayout) -> anyhow::Result<()> {
+    if STAGE_BODIES.with(|bodies| bodies.borrow().is_empty()) {
+        return Ok(());
+    }
+    refuse_during_stage(&super::publication_lock_identity(live)?)
+}
+
 pub(super) fn refuse_during_stage(key: &str) -> anyhow::Result<()> {
     STAGE_BODIES
         .with(|bodies| bodies.borrow().get(key).cloned())
@@ -61,26 +72,73 @@ pub(super) fn refuse_during_stage(key: &str) -> anyhow::Result<()> {
         })
 }
 
-/// Copies the complete state tree and publishes the prepared result under one lock.
-/// Copy cost is proportional to all state bytes, including existing evidence.
+/// The lock that one stage owns. The staged sections of the stage run one at
+/// a time. A panic in a staged section poisons the lock, and the stage then
+/// refuses to publish.
+#[derive(Debug)]
+pub(crate) struct StageLock {
+    identity: String,
+    root: Utf8PathBuf,
+    sections: Mutex<()>,
+}
+
+impl StageLock {
+    pub(crate) fn new(root: &Utf8Path) -> Arc<Self> {
+        Arc::new(Self {
+            identity: root.to_string(),
+            root: root.to_owned(),
+            sections: Mutex::new(()),
+        })
+    }
+
+    /// Runs one staged section. Another thread waits; a second entry on this
+    /// thread returns [`PublicationHeld`](super::PublicationHeld).
+    #[rule("rule_staged_sections_run_one_at_a_time")]
+    pub(crate) fn run<R>(
+        &self,
+        operation: impl FnOnce() -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        refuse_if_held(&self.identity, HolderKind::Stage, &self.root)?;
+        let _section = self
+            .sections
+            .lock()
+            .map_err(|_| anyhow::anyhow!("a staged section of {} panicked", self.root))?;
+        let _holder = enter(self.identity.clone(), HolderKind::Stage);
+        operation()
+    }
+
+    /// Refuses when a staged section panicked.
+    pub(crate) fn ensure_intact(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.sections.is_poisoned(),
+            "a staged section of {} panicked; the stage is not published",
+            self.root
+        );
+        Ok(())
+    }
+}
+
+/// Copies the complete state tree and publishes the prepared result under the
+/// live section that `held` holds. Copy cost is proportional to all state
+/// bytes, including existing evidence.
 pub fn with_staged_state<R>(
-    live_layout: &ProvenanceLayout,
+    held: &StateStore,
     dry_run: bool,
     prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    with_repository_publication(live_layout, || {
-        let mut publication = ImportPublication;
-        stage_with_hook(live_layout, dry_run, prepare, &mut publication).map_err(|error| {
-            if live_layout.publication_marker_path().exists() {
-                crate::write_error::publication_started(error)
-            } else {
-                // A failed staged write or completed rollback did not commit live state.
-                match error.downcast::<crate::write_error::PublicationStarted>() {
-                    Ok(staged) => staged.0,
-                    Err(error) => error,
-                }
+    held.ensure_holds_live_section()?;
+    let live_layout = &held.layout;
+    let mut publication = ImportPublication;
+    stage_with_hook(live_layout, dry_run, prepare, &mut publication).map_err(|error| {
+        if live_layout.publication_marker_path().exists() {
+            crate::write_error::publication_started(error)
+        } else {
+            // A failed staged write or completed rollback did not commit live state.
+            match error.downcast::<crate::write_error::PublicationStarted>() {
+                Ok(staged) => staged.0,
+                Err(error) => error,
             }
-        })
+        }
     })
 }
 

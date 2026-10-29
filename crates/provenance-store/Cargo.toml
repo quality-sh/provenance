@@ -48,6 +48,14 @@ rustix.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
 
+[[test]]
+name = "review_guards"
+required-features = ["test-fixture"]
+
+[[test]]
+name = "discussion_containers"
+required-features = ["test-fixture"]
+
 [dev-dependencies]
 fs_at.workspace = true
 jsonschema.workspace = true

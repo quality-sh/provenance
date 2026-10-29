@@ -23,8 +23,8 @@ impl StateStore {
     ) -> anyhow::Result<TopicClaim> {
         let actor = validated_actor(actor)?;
         let claimed_at = now_ms()?;
-        self.with_repository_publication(|| {
-            let current_topic = self
+        self.with_repository_publication(|held| {
+            let current_topic = held
                 .list_topics(scope_id)?
                 .into_iter()
                 .find(|topic| &topic.id == id)
@@ -46,8 +46,8 @@ impl StateStore {
                 ));
             }
             let surfaced_proposals =
-                self.surface_proposals(scope_id, &ProposalDemand::for_topic(&current_topic))?;
-            let topic = self.update_topic(scope_id, id, |topic| {
+                held.surface_proposals(scope_id, &ProposalDemand::for_topic(&current_topic))?;
+            let topic = held.update_topic(scope_id, id, |topic| {
                 ensure_claim_holder("topic", &topic.id, topic.claimed_by.as_deref(), &actor)?;
                 if topic.claimed_by.is_none() {
                     topic.claimed_by = Some(actor);
@@ -157,8 +157,8 @@ impl StateStore {
         answer: String,
         resolution_id: Option<StableId>,
     ) -> anyhow::Result<Question> {
-        self.with_repository_publication(|| {
-            self.write_question_answer(scope_id, id, answer, resolution_id)
+        self.with_repository_publication(|held| {
+            held.write_question_answer(scope_id, id, answer, resolution_id)
         })
     }
 
@@ -195,7 +195,7 @@ impl StateStore {
     }
 
     pub fn update_question(&self, input: UpdateQuestionInput) -> anyhow::Result<Question> {
-        self.with_repository_publication(|| self.write_question_update(input))
+        self.with_repository_publication(|held| held.write_question_update(input))
     }
 
     fn write_question_update(&self, input: UpdateQuestionInput) -> anyhow::Result<Question> {

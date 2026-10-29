@@ -40,20 +40,20 @@ impl StateStore {
     ) -> anyhow::Result<CycleEntry> {
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
-        self.with_repository_publication(move || {
+        self.with_repository_publication(move |held| {
             anyhow::ensure!(
-                self.manifest()?.scopes.iter().any(|s| s.id == scope),
+                held.manifest()?.scopes.iter().any(|s| s.id == scope),
                 "review scope is not in the manifest"
             );
-            let proposal = review_submission(self, &scope, &input.proposal_id)?;
-            let facts = CycleFacts::validated(self, &scope)?;
+            let proposal = review_submission(held, &scope, &input.proposal_id)?;
+            let facts = CycleFacts::validated(held, &scope)?;
             validate_submission_address(
                 &proposal,
                 addressed.as_ref().map(|(kind, id)| (*kind, id)),
             )?;
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
             let record_id = &proposal.traceability.target.artifact_id;
-            crate::cache::review_families::record(self, &scope, kind, record_id)?;
+            crate::cache::review_families::record(held, &scope, kind, record_id)?;
             validate_decision_input(kind, record_id, &input)?;
             if input.feedback.is_some() && matches!(kind, NodeType::Domain | NodeType::Boundary) {
                 return Err(SourceFailure::wrap(
@@ -63,11 +63,11 @@ impl StateStore {
             }
             if facts.is_withdrawn(&input.proposal_id) || facts.is_decided(&input.proposal_id) {
                 return Err(SourceFailure::wrap(
-                    facts.conflict_failure(self, &scope, kind, record_id)?,
+                    facts.conflict_failure(held, &scope, kind, record_id)?,
                     anyhow::anyhow!("this review submission is no longer pending"),
                 ));
             }
-            with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
+            with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
                 staged.commit_decision(input)
             })
         })

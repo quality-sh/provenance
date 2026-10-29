@@ -26,19 +26,19 @@ impl StateStore {
         crate::write_error::ensure_actor(&input.actor)?;
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
-        self.with_repository_publication(move || {
+        self.with_repository_publication(move |held| {
             anyhow::ensure!(
-                self.manifest()?.scopes.iter().any(|s| s.id == scope),
+                held.manifest()?.scopes.iter().any(|s| s.id == scope),
                 "review scope is not in the manifest"
             );
             let record = crate::cache::review_families::record(
-                self,
+                held,
                 &scope,
                 input.record_kind,
                 &input.record_id,
             )?;
             owner_matches(&record, input.declared_by.as_deref())?;
-            with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
+            with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
                 let path = shards::proposal_cards_path(&staged.layout, &scope);
                 staged.permitting(&[&path], "*", |staged| staged.commit_submission(input))
             })

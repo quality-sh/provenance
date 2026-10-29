@@ -27,8 +27,8 @@ impl StateStore {
         &self,
         input: TargetDiscussionWrite,
     ) -> anyhow::Result<Discussion> {
-        self.with_repository_publication(|| {
-            let head = self
+        self.with_repository_publication(|held| {
+            let head = held
                 .validated_discussions(&input.scope_id)?
                 .into_iter()
                 .find(|discussion| discussion.discussion_id == input.discussion_id)
@@ -44,7 +44,7 @@ impl StateStore {
                 input.allowed_parent_kinds.contains(&parent.node_type),
                 "Discussion parent is not available"
             );
-            self.write_discussion_in_publication(
+            held.write_discussion_in_publication(
                 WriteDiscussion {
                     scope_id: input.scope_id,
                     parent,

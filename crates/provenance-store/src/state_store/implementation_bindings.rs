@@ -149,19 +149,19 @@ impl StateStore {
         &self,
         input: MaterializeImplementationBindingInput,
     ) -> anyhow::Result<ImplementationBinding> {
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             anyhow::ensure!(
                 !input.declared_by.trim().is_empty(),
                 "declared_by must not be empty"
             );
             validate_target(&input.file, &input.symbol)?;
             anyhow::ensure!(
-                self.layout.root().join(&input.file).is_file(),
+                held.layout.root().join(&input.file).is_file(),
                 "implementation file `{}` does not exist",
                 input.file
             );
             anyhow::ensure!(
-                self.list_rules(&input.scope_id)?
+                held.list_rules(&input.scope_id)?
                     .iter()
                     .any(|rule| rule.id == input.rule_id),
                 "rule `{}` does not exist",
@@ -178,8 +178,8 @@ impl StateStore {
                 file: input.file,
                 symbol: input.symbol,
             };
-            let path = shards::implementation_bindings_path(&self.layout, &input.scope_id);
-            self.mutate_jsonl_records(&path, |records: &mut Vec<ImplementationBinding>| {
+            let path = shards::implementation_bindings_path(&held.layout, &input.scope_id);
+            held.mutate_jsonl_records(&path, |records: &mut Vec<ImplementationBinding>| {
                 anyhow::ensure!(
                     !records.iter().any(|record| {
                         record.rule_id == binding.rule_id

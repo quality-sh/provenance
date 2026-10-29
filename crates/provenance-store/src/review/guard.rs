@@ -3,9 +3,9 @@
 impl crate::state_store::StateStore {
     /// Full-scope import and export cannot yet carry review state.
     pub fn ensure_review_portable(&self, scope: &provenance_core::ScopeId) -> anyhow::Result<()> {
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             anyhow::ensure!(
-                !self
+                !held
                     .layout
                     .scopes_dir()
                     .join(scope.as_str())
@@ -13,9 +13,9 @@ impl crate::state_store::StateStore {
                     .try_exists()?,
                 "review-bearing scopes require lossless import/export support"
             );
-            let has_review_state = !self.list_discussions(scope)?.is_empty()
-                || !self.list_withdrawals(scope)?.is_empty()
-                || self
+            let has_review_state = !held.list_discussions(scope)?.is_empty()
+                || !held.list_withdrawals(scope)?.is_empty()
+                || held
                     .list_proposal_definitions(scope)?
                     .iter()
                     .any(|proposal| {

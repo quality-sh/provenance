@@ -50,11 +50,15 @@ pub fn to_stable_json<T: Serialize>(value: &T) -> anyhow::Result<String> {
     Ok(serde_json::to_string(value)?)
 }
 
+/// Writes a test fixture shard in its own publication section. It carries no
+/// write permission, and inside a held section or stage body it refuses.
+#[cfg(any(test, feature = "test-fixture"))]
 pub fn write_jsonl_atomic<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
     with_state_publication(path, || write_jsonl_atomic_under_publication(path, records))
 }
 
-pub fn mutate_jsonl_locked<T, R>(
+/// Mutates one shard under its advisory lock. The caller holds the section.
+pub(crate) fn mutate_jsonl_locked<T, R>(
     path: &Utf8Path,
     lock_path: &Utf8Path,
     mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<R>,
@@ -72,7 +76,8 @@ where
 
 /// Like [`mutate_jsonl_locked`], but writes the shard only when `mutate`
 /// returns `true`. The shard is read once. A change to an enrolled row needs
-/// a grant in `permissions`.
+/// a grant in `permissions`. The caller holds the section, so a staged write
+/// takes no publication lock in the staged state root.
 pub(crate) fn mutate_jsonl_locked_if<T>(
     path: &Utf8Path,
     lock_path: &Utf8Path,
@@ -82,18 +87,16 @@ pub(crate) fn mutate_jsonl_locked_if<T>(
 where
     T: DeserializeOwned + Serialize,
 {
-    with_state_publication(path, || {
-        let _lock = AdvisoryLock::acquire(lock_path)?;
-        let mut loaded = read_jsonl_unlocked(path)?;
-        if !mutate(loaded.records_mut())? {
-            return Ok(false);
-        }
-        let lines = loaded.into_lines(path)?;
-        guard_jsonl_lines(path, &lines, permissions)?;
-        write_jsonl_lines_atomic_unlocked(path, &lines)
-            .map_err(crate::write_error::publication_started)?;
-        Ok(true)
-    })
+    let _lock = AdvisoryLock::acquire(lock_path)?;
+    let mut loaded = read_jsonl_unlocked(path)?;
+    if !mutate(loaded.records_mut())? {
+        return Ok(false);
+    }
+    let lines = loaded.into_lines(path)?;
+    guard_jsonl_lines(path, &lines, permissions)?;
+    write_jsonl_lines_atomic_unlocked(path, &lines)
+        .map_err(crate::write_error::publication_started)?;
+    Ok(true)
 }
 
 /// The read a write is built on, guarded the same way an ordinary read is.
@@ -161,7 +164,8 @@ fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> 
 /// The writer selects one stored line that has the exact value of each merged
 /// record. Callers cannot provide raw lines independently. A mismatch is
 /// refused before the target is replaced. JSON line bytes are preserved; line
-/// terminators are written as `\n`.
+/// terminators are written as `\n`. The write takes its own publication
+/// section, so inside a held section or stage body it refuses.
 pub fn write_preserved_jsonl_atomic(
     path: &Utf8Path,
     ours: &[crate::merge::StoredRow],
@@ -200,6 +204,8 @@ fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyho
     Ok(())
 }
 
+/// Runs a raw write in the publication section of the repository that holds
+/// `path`. The raw writers carry no permission and get no held store.
 fn with_state_publication<R>(
     path: &Utf8Path,
     run: impl FnOnce() -> anyhow::Result<R>,
@@ -211,7 +217,7 @@ fn with_state_publication<R>(
         let layout = crate::layout::ProvenanceLayout::new(
             state.parent().and_then(Utf8Path::parent).unwrap(),
         );
-        crate::publication::with_repository_publication(&layout, run)
+        crate::publication::with_repository_publication(&layout, |_| run())
     } else {
         run()
     }
@@ -267,6 +273,24 @@ mod tests {
         assert!(error.contains("not-stored"), "{error}");
         assert!(error.contains("matches no stored line"), "{error}");
         assert_eq!(std::fs::read(&path).unwrap(), original);
+    }
+
+    #[test]
+    #[provenance_macros::verifies("rule_publication_section_is_not_entered_twice", examples)]
+    fn a_raw_write_inside_a_held_section_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let repository = crate::cache::tests::fixtures::initialized(dir.path());
+        let path = repository.layout().state_dir().join("records.jsonl");
+        std::fs::write(&path, "{\"id\":\"stored\"}\n").unwrap();
+        let error = crate::publication::with_repository_publication(repository.layout(), |_| {
+            write_preserved_jsonl_atomic(&path, &[], &[], &[])
+        })
+        .unwrap_err();
+        assert!(
+            error.is::<crate::publication::PublicationHeld>(),
+            "{error:#}"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"{\"id\":\"stored\"}\n");
     }
 
     #[test]

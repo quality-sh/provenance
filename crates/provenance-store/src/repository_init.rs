@@ -63,7 +63,7 @@ pub fn plan_manifest(
 /// repository. A directory with no `.provenance` has nothing to recover.
 pub fn recover_before_init(layout: &ProvenanceLayout) -> anyhow::Result<()> {
     match std::fs::symlink_metadata(layout.provenance_dir()) {
-        Ok(_) => crate::publication::with_repository_publication(layout, || Ok(())),
+        Ok(_) => crate::publication::with_repository_publication(layout, |_| Ok(())),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
     }
@@ -80,7 +80,7 @@ pub fn validate_planned_manifest<R>(
 ) -> anyhow::Result<R> {
     let store = StateStore::new(layout.clone());
     match std::fs::symlink_metadata(layout.provenance_dir()) {
-        Ok(_) => store.with_repository_publication(|| validate(&store, manifest)),
+        Ok(_) => store.with_repository_publication(|held| validate(held, manifest)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             crate::publication::with_read_only_validation(layout, || validate(&store, manifest))
         }

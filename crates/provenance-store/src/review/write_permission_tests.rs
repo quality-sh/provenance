@@ -50,8 +50,8 @@ fn staged_worker(
     store: &StateStore,
     write: impl FnOnce(&StateStore, &Utf8Path) -> anyhow::Result<()> + Send,
 ) -> anyhow::Result<()> {
-    store.with_repository_publication(|| {
-        with_record_state(store, RecordStamp::Omit, |staged| {
+    store.with_repository_publication(|held| {
+        with_record_state(held, RecordStamp::Omit, |staged| {
             let path = shards::requirements_path(&staged.layout, &scope());
             std::thread::scope(|threads| threads.spawn(|| write(staged, &path)).join().unwrap())
         })

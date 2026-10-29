@@ -50,7 +50,7 @@ fn start_publication_waiter(
         entered
             .send(())
             .expect("the test must still be waiting for this waiter");
-        crate::publication::with_repository_publication(&layout, || Ok(()))
+        crate::publication::with_repository_publication(&layout, |_| Ok(()))
     })
 }
 

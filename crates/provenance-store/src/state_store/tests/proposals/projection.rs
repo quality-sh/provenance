@@ -74,8 +74,8 @@ fn proposal_projection_uses_one_publication_snapshot() {
         let scope = scope.clone();
         std::thread::spawn(move || {
             store
-                .with_repository_publication(|| {
-                    crate::jsonl::write_jsonl_atomic::<ProposalCard>(
+                .with_repository_publication(|_| {
+                    crate::jsonl::write_jsonl_atomic_under_publication::<ProposalCard>(
                         &crate::shards::proposal_cards_path(&store.layout, &scope),
                         &[],
                     )

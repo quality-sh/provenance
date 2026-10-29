@@ -6,6 +6,7 @@
 //! discover, canonicalize or re-read settings itself.
 
 use crate::layout::{with_initialized_graph, GraphNotInitialized, ProvenanceLayout};
+use crate::publication::SectionHandle;
 use crate::settings::{Settings, SettingsError};
 use crate::state_store::StateStore;
 use crate::write_error::{SourceFailure, WriteError, WriteFailure};
@@ -21,6 +22,8 @@ use std::sync::Arc;
 #[verifies("rule_operation_acts_on_opened_repository", construction)]
 pub struct Repository {
     inner: Arc<Inner>,
+    /// Set only on the repository of a section guard.
+    section: Option<SectionHandle>,
 }
 
 #[derive(Debug)]
@@ -132,6 +135,7 @@ impl Repository {
                 },
                 layout,
             }),
+            section: None,
         })
     }
 
@@ -220,16 +224,39 @@ impl Repository {
     /// [`Repository::ensure_selected`] enforce the scope.
     #[rule("rule_operation_acts_on_opened_repository")]
     pub fn store(&self) -> StateStore {
-        StateStore::live(self.inner.identity.clone(), self.inner.layout.clone())
+        match &self.section {
+            Some(section) => StateStore::in_guard_section(
+                self.inner.identity.clone(),
+                self.inner.layout.clone(),
+                section.clone(),
+            ),
+            None => StateStore::live(self.inner.identity.clone(), self.inner.layout.clone()),
+        }
+    }
+
+    /// The section that this handle holds, if it came from a section guard.
+    pub(crate) const fn section(&self) -> Option<&SectionHandle> {
+        self.section.as_ref()
+    }
+
+    /// This repository as a handle that holds `section`.
+    pub(crate) fn within_section(&self, section: SectionHandle) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            section: Some(section),
+        }
     }
 
     /// Runs `prepare` on a staged copy of the live state, then publishes the
     /// copy, or drops it on a dry run or an error.
     ///
     /// The body borrows a store that keeps this repository's identity and
-    /// reads and writes the staged state root. The store takes no lock,
-    /// because the live publication section holds it. While the body runs,
-    /// live access to this repository on the same thread refuses with
+    /// reads and writes the staged state root. The live section holds the
+    /// publication lock; each read and write of the staged store takes the
+    /// lock that the stage owns, so workers of the body run their staged
+    /// sections one at a time. A panic in a staged section stops the
+    /// publication. While the body runs, live access to this repository on
+    /// the same thread refuses with
     /// [`LiveAccessDuringStage`](crate::publication::LiveAccessDuringStage).
     /// Records written in the body carry `stamp`, or the working tree's
     /// commit when it is `None`.
@@ -245,13 +272,17 @@ impl Repository {
             crate::state_store::RecordStamp::ResolveFromRepository,
             crate::state_store::RecordStamp::Fixed,
         );
-        crate::publication::with_staged_state(live, dry_run, |staged| {
-            let store = StateStore::staged_view(
-                Some(self.inner.identity.clone()),
-                staged.clone(),
-                record_stamp,
-            );
-            crate::publication::with_stage_body(live, || prepare(&store))
+        self.store().with_repository_publication(|held| {
+            crate::publication::with_staged_state(held, dry_run, |staged| {
+                let store = StateStore::staged_view(
+                    Some(self.inner.identity.clone()),
+                    staged.clone(),
+                    record_stamp,
+                );
+                let result = crate::publication::with_stage_body(live, || prepare(&store))?;
+                store.ensure_stage_intact()?;
+                Ok(result)
+            })
         })
     }
 }

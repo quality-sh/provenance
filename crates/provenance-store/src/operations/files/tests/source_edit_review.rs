@@ -30,9 +30,11 @@ fn fixture() -> tempfile::TempDir {
 fn try_publish(root: &Utf8Path) -> anyhow::Result<()> {
     let layout = ProvenanceLayout::new(root);
     let held = RepositoryFiles::open(root)?.read_bounded(Utf8Path::new("source.txt"), 1024)?;
-    with_staged_state_and_source_edit(&layout, held, AFTER, |staged| {
-        std::fs::write(staged.state_dir().join("value"), AFTER)?;
-        Ok(())
+    with_repository_publication(&layout, |section| {
+        with_staged_state_and_source_edit(section, held, AFTER, |staged| {
+            std::fs::write(staged.state_dir().join("value"), AFTER)?;
+            Ok(())
+        })
     })
 }
 
@@ -56,7 +58,7 @@ fn crash(root: &Utf8Path, phase: &str) -> std::process::ExitStatus {
 }
 
 fn recover(root: &Utf8Path) -> anyhow::Result<()> {
-    with_repository_publication(&ProvenanceLayout::new(root), || Ok(()))
+    with_repository_publication(&ProvenanceLayout::new(root), |_| Ok(()))
 }
 
 fn assert_bytes(root: &Utf8Path, source: &[u8], state: &[u8]) {
