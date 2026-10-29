@@ -104,3 +104,15 @@ fn catalog_registers_each_family_operation() {
         }
     }
 }
+
+#[tokio::test]
+async fn target_discussion_writes_dispatch_by_name() {
+    assert!(crate::contains("write-target-discussion"));
+    assert!(crate::mutates("write-target-discussion"));
+    // The entry decodes the call, so an empty call is refused as input and not as an
+    // unknown operation.
+    let error = invoke("write-target-discussion", SDK_PROTOCOL_VERSION, json!({}))
+        .await
+        .unwrap_err();
+    assert_eq!(error.error["kind"], "invalid_input");
+}
