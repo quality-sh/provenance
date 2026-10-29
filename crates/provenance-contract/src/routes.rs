@@ -476,14 +476,14 @@ fn member_queries(definition: &Definition, node_type: &'static str) -> Vec<Query
 mod actions;
 mod finalize;
 mod query;
-pub(super) mod request;
+pub mod request;
 #[macro_use]
 mod resource;
 mod resources;
 mod review_subresources;
 mod subresources;
 
-pub(super) fn definitions() -> Vec<Definition> {
+pub fn definitions() -> Vec<Definition> {
     let mut definitions = Vec::new();
     resources::register(&mut definitions);
     subresources::register(&mut definitions);

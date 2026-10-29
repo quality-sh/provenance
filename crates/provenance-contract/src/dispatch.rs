@@ -76,7 +76,7 @@ pub fn mutates(operation: &str) -> bool {
 }
 
 #[cfg(test)]
-pub(crate) fn registered_operation_names_for_test() -> Vec<&'static str> {
+pub fn registered_operation_names_for_test() -> Vec<&'static str> {
     names().map(|(name, _)| name).collect()
 }
 
