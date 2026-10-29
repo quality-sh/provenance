@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// returns the absolute path with that prefix. On other systems it returns
 /// `path` unchanged.
 #[cfg_attr(not(windows), allow(clippy::unnecessary_wraps))]
-pub(crate) fn extended(path: &Utf8Path) -> std::io::Result<PathBuf> {
+pub fn extended(path: &Utf8Path) -> std::io::Result<PathBuf> {
     #[cfg(windows)]
     {
         let absolute = std::path::absolute(path)?;
