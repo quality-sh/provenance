@@ -11,7 +11,7 @@ use serde_json::Value;
 /// The shards a staged store may change enrolled rows in, each for one
 /// record id or for every id (`*`).
 #[derive(Clone, Debug, Default)]
-pub(crate) struct WritePermissions {
+pub struct WritePermissions {
     grants: Vec<(Utf8PathBuf, String)>,
 }
 
@@ -40,7 +40,7 @@ impl WritePermissions {
 }
 
 #[rule("rule_enrolled_record_write_needs_store_permission")]
-pub(crate) fn protect_rows<T: Serialize>(
+pub fn protect_rows<T: Serialize>(
     path: &Utf8Path,
     records: &[T],
     permissions: &WritePermissions,
