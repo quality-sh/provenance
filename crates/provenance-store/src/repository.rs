@@ -280,7 +280,10 @@ pub fn declared_scope<'a>(
 
 /// The resolved root. On Windows the root has no verbatim `\\?\` prefix
 /// where the plain form names the same directory, because the root goes
-/// into paths that a user reads and into the cache connection.
+/// into paths that a user reads. The root keeps the prefix where the plain
+/// form names a different path: a root of 260 characters or more, a
+/// reserved name such as `CON`, or a name that ends with a dot or a space.
+#[rule("rule_opened_root_is_resolved_working_tree")]
 fn canonical_root(path: &Path) -> Result<Utf8PathBuf, OpenFailure> {
     let invalid = |error: std::io::Error| OpenFailure::InvalidRoot {
         path: path.display().to_string(),
