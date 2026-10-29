@@ -403,9 +403,7 @@ async fn refuse_stale_refuses_a_shard_that_vanishes_during_the_hash() {
         panic!("expected UnitUnreadable, got {error:#}");
     };
     assert_eq!(unit, "scope:default");
-    // The paths are equal by component. On Windows the reported path can
-    // use `\` where the shard path has `/`.
-    assert_eq!(unreadable, &path);
-    assert!(error.to_string().contains(unreadable.as_str()), "{error}");
+    assert_eq!(unreadable.as_str(), path.as_str());
+    assert!(error.to_string().contains(path.as_str()), "{error}");
     assert_ne!(cause, "");
 }

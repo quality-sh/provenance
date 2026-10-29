@@ -82,13 +82,9 @@ impl Observation {
             let manifest = StateStore::under_guard(&guard).manifest()?;
             for scope in &manifest.scopes {
                 for family in ProjectionFamily::ALL {
-                    require_regular_file(
-                        layout
-                            .scopes_dir()
-                            .join(scope.id.as_str())
-                            .join(family.shard_suffix())
-                            .as_std_path(),
-                    )?;
+                    let mut shard = layout.scopes_dir().join(scope.id.as_str());
+                    shard.extend(camino::Utf8Path::new(family.shard_suffix()).components());
+                    require_regular_file(shard.as_std_path())?;
                 }
             }
             ReviewStateSnapshot::read(&guard)
