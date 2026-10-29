@@ -12,7 +12,7 @@ const BEFORE: &[u8] = b"before\n";
 const AFTER: &[u8] = b"after\n";
 
 fn canonical_root(temp: &tempfile::TempDir) -> camino::Utf8PathBuf {
-    camino::Utf8PathBuf::from_path_buf(temp.path().canonicalize().unwrap()).unwrap()
+    camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(temp.path()).unwrap()).unwrap()
 }
 
 fn fixture() -> tempfile::TempDir {

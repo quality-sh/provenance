@@ -15,7 +15,8 @@ static ENV_LOCK: Mutex<()> = Mutex::new(());
 fn repository() -> (tempfile::TempDir, MutexGuard<'static, ()>) {
     let guard = ENV_LOCK.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let root = camino::Utf8PathBuf::from_path_buf(dir.path().canonicalize().unwrap()).unwrap();
+    let root =
+        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap();
     let layout = ProvenanceLayout::new(root.clone());
     std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
     std::fs::write(

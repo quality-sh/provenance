@@ -114,7 +114,7 @@ fn recovery_dir_inside_cache(
     let parent = candidate
         .parent()
         .ok_or_else(|| anyhow::anyhow!("publication marker transaction has no parent"))?;
-    let canonical_parent = std::fs::canonicalize(parent)?;
+    let canonical_parent = dunce::canonicalize(parent)?;
     anyhow::ensure!(
         canonical_parent == canonical_container.as_std_path(),
         OUTSIDE_REPOSITORY_CACHE
@@ -154,7 +154,7 @@ fn ensure_written_path_has_no_symlinks(
             candidate
                 .ancestors()
                 .find(|ancestor| {
-                    std::fs::canonicalize(ancestor)
+                    dunce::canonicalize(ancestor)
                         .is_ok_and(|resolved| resolved == canonical_container.as_std_path())
                 })
                 .and_then(|ancestor| {

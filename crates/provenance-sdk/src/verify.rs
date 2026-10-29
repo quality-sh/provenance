@@ -133,7 +133,7 @@ fn caller_file(repository: &camino::Utf8Path, file: &str) -> String {
         if !candidate.is_file() {
             continue;
         }
-        let Ok(canonical) = candidate.canonicalize() else {
+        let Ok(canonical) = dunce::canonicalize(&candidate) else {
             continue;
         };
         if canonical.starts_with(repository.as_std_path()) {

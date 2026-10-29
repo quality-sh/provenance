@@ -351,14 +351,19 @@ struct ScanRoots {
     walk: Utf8PathBuf,
 }
 
+/// The resolved path, without a Windows verbatim prefix where the plain
+/// form names the same file.
+fn resolved(path: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
+    Utf8PathBuf::from_path_buf(dunce::canonicalize(path)?)
+        .map_err(|path| anyhow::anyhow!("path is not UTF-8: {}", path.display()))
+}
+
 impl ScanRoots {
     fn resolve(repo: &Utf8Path, scan_path: &Utf8Path) -> anyhow::Result<Self> {
-        let repository = repo
-            .canonicalize_utf8()
-            .with_context(|| format!("resolve the repository path {repo}"))?;
-        let walk = scan_path
-            .canonicalize_utf8()
-            .with_context(|| format!("resolve the scan path {scan_path}"))?;
+        let repository =
+            resolved(repo).with_context(|| format!("resolve the repository path {repo}"))?;
+        let walk =
+            resolved(scan_path).with_context(|| format!("resolve the scan path {scan_path}"))?;
         anyhow::ensure!(
             walk.starts_with(&repository),
             "the scan path {scan_path} is outside the repository {repo}"

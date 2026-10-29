@@ -85,7 +85,7 @@ pub(crate) fn with_repository_publication_checked<R>(
 fn publication_lock_identity(layout: &ProvenanceLayout) -> anyhow::Result<String> {
     let absolute = std::path::absolute(layout.root())?;
     for ancestor in absolute.ancestors() {
-        match std::fs::canonicalize(ancestor) {
+        match dunce::canonicalize(ancestor) {
             Ok(resolved) => {
                 let root = resolved.join(absolute.strip_prefix(ancestor)?);
                 let root = Utf8PathBuf::from_path_buf(root).map_err(|path| {
@@ -134,7 +134,7 @@ fn prepare_publication_lock(layout: &ProvenanceLayout) -> anyhow::Result<()> {
 /// Resolves `path`, keeping the failure message that names what the path was.
 fn canonical_utf8(path: &Utf8Path, description: &str) -> anyhow::Result<Utf8PathBuf> {
     let resolved =
-        std::fs::canonicalize(path).with_context(|| format!("resolve {description} {path}"))?;
+        dunce::canonicalize(path).with_context(|| format!("resolve {description} {path}"))?;
     Utf8PathBuf::from_path_buf(resolved)
         .map_err(|path| anyhow::anyhow!("{description} is not UTF-8: {}", path.display()))
 }

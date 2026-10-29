@@ -13,13 +13,14 @@ async fn catch_up_reads_the_state_tree_in_place() {
     rewrite_records(&crate::shards::requirements_path(&layout, &scope), |r| {
         r["statement"] = "Changed".into();
     });
+    let repository = open(&layout);
     test_probes::start_recording_reads();
-    catch_up_state(&open(&layout)).await.unwrap();
+    catch_up_state(&repository).await.unwrap();
     let reads = test_probes::take_recorded_reads();
     assert!(!reads.is_empty());
     for path in reads {
         assert!(
-            camino::Utf8Path::new(&path).starts_with(layout.state_dir()),
+            camino::Utf8Path::new(&path).starts_with(repository.layout().state_dir()),
             "read outside repository state: {path}"
         );
     }
@@ -30,11 +31,12 @@ async fn catch_up_reads_the_state_tree_in_place() {
 async fn an_unchanged_pass_parses_no_shard_but_the_manifest() {
     let (_dir, layout, _scope) = seeded_layout();
     materialize_state(&open(&layout)).await.unwrap();
+    let repository = open(&layout);
     test_probes::start_recording_reads();
-    catch_up_state(&open(&layout)).await.unwrap();
+    catch_up_state(&repository).await.unwrap();
     assert_eq!(
         test_probes::take_recorded_reads(),
-        std::iter::once(layout.manifest_path().to_string()).collect()
+        std::iter::once(repository.layout().manifest_path().to_string()).collect()
     );
 }
 

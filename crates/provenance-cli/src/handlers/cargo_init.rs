@@ -118,7 +118,7 @@ fn resolve_scope_path(
     } else {
         workspace_root.join(prefix)
     };
-    std::fs::canonicalize(&path).with_context(|| {
+    dunce::canonicalize(&path).with_context(|| {
         format!("failed to resolve Provenance path prefix '{prefix}' from {workspace_root}")
     })
 }

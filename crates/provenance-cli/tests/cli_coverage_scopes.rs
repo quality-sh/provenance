@@ -279,7 +279,7 @@ fn commands_in_a_subdirectory_name_the_enclosing_repository() {
     init(repo, "default", ".");
     let sub = repo.join("sub/deeper");
     std::fs::create_dir_all(&sub).unwrap();
-    let root = std::fs::canonicalize(repo).unwrap();
+    let root = dunce::canonicalize(repo).unwrap();
     let hint = format!("run the command with --repo {}", root.display());
 
     for args in [
