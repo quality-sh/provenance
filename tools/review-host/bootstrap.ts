@@ -1,6 +1,7 @@
 import { connectEvents, type EventSocket } from './events.ts';
 import {
-  CONNECTION_REFUSED, createSession, type ReviewConfig, type ReviewHandle, type ReviewMountOptions,
+  CONNECTION_REFUSED, createSession, InvalidReviewer, type ConfigReviewer, type ReviewConfig, type ReviewHandle,
+  type ReviewMountOptions,
 } from './session.ts';
 
 const LAUNCH_SESSION_ROUTE = '/review-launch/session';
@@ -69,12 +70,27 @@ export const SETTINGS_CHANGED =
 
 const sameActors = (left: ReviewConfig, right: ReviewConfig) =>
   left.dispositionActorIds.length === right.dispositionActorIds.length &&
-  left.dispositionActorIds.every((id, index) => right.dispositionActorIds[index] === id);
+  left.dispositionActorIds.every((id, index) => right.dispositionActorIds[index] === id) &&
+  left.reviewer?.actorId === right.reviewer?.actorId && left.reviewer?.allowed === right.reviewer?.allowed;
 
 function element(document: BrowserDocument, id: string): BrowserElement {
   const found = document.getElementById(id);
   if (!found) throw new Error(`Missing browser element: ${id}`);
   return found;
+}
+
+/** The reviewer that the host reports, as is; the page decides only as this person. */
+// @provenance rule: rule_review_host_app_passes_reviewer
+function configReviewer(value: object): { reviewer?: ConfigReviewer } {
+  // The app never invents a reviewer: without one from the host, the page is read-only.
+  if (!('reviewer' in value)) return {};
+  const reviewer = value.reviewer;
+  if (typeof reviewer !== 'object' || reviewer === null ||
+    !('actorId' in reviewer) || typeof reviewer.actorId !== 'string' ||
+    !('allowed' in reviewer) || typeof reviewer.allowed !== 'boolean') {
+    throw new InvalidReviewer('Invalid reviewer');
+  }
+  return { reviewer: { actorId: reviewer.actorId, allowed: reviewer.allowed } };
 }
 
 function reviewConfig(value: unknown, origin: string): ReviewConfig {
@@ -91,6 +107,7 @@ function reviewConfig(value: unknown, origin: string): ReviewConfig {
     repositoryId: value.repositoryId,
     scope: value.scope,
     dispositionActorIds: value.dispositionActorIds,
+    ...configReviewer(value),
   };
 }
 

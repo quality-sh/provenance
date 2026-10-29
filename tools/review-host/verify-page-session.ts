@@ -80,10 +80,13 @@ function page(endpoint: string, hash: string, storage: ReturnType<typeof fakeSto
 
 try {
   const repository = join(work, 'repository');
-  const env = { ...process.env, XDG_CACHE_HOME: join(work, 'cache') };
-  execFileSync(binary, ['init', '--path', repository, '--scope', 'default', '--path-prefix', '.'], {
-    cwd: work, encoding: 'utf8', timeout: 180_000, env,
-  });
+  // The host reads the reviewer from the Git configuration; the environment sets it for this run only.
+  const env = {
+    ...process.env, XDG_CACHE_HOME: join(work, 'cache'),
+    GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'provenance.reviewer', GIT_CONFIG_VALUE_0: 'page-reviewer',
+  };
+  execFileSync(binary, ['init', '--path', repository, '--scope', 'default', '--path-prefix', '.',
+    '--disposition-actor-id', 'page-reviewer'], { cwd: work, encoding: 'utf8', timeout: 180_000, env });
   host = spawn(binary, ['review', '--repo', repository, '--repository-id', 'fixture', '--scope', 'default', '--no-open'], {
     cwd: work, env, stdio: ['ignore', 'pipe', 'inherit'],
   });
@@ -112,6 +115,7 @@ try {
   assert.equal(linked.mounted.length, 1);
   assert.equal(linked.mounted[0].bearer, session);
   assert.equal(linked.mounted[0].rootId, 'req_root');
+  assert.deepEqual(linked.mounted[0].reviewer, { actorId: 'page-reviewer', allowed: true });
   assert.deepEqual(linked.offered, [[EVENT_PROTOCOL, session]]);
   assert.equal(linked.protocol(), EVENT_PROTOCOL);
 
@@ -132,7 +136,7 @@ try {
   for (const socket of sockets) socket.close();
   host.kill('SIGTERM');
   await exited;
-  console.log(`Verified the page session through a launch link, a reload, and a refusal: ${binaryArg}`);
+  console.log(`Verified the page session and reviewer through a launch link, a reload, and a refusal: ${binaryArg}`);
 } finally {
   for (const socket of sockets) socket.close();
   if (host && host.exitCode === null && host.signalCode === null) {

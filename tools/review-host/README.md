@@ -19,7 +19,7 @@ removed from storage. The host's existing origin, repository, scope, and file-ac
 checks remain in effect.
 The renderer owns the generated Effect client and its reads and writes.
 
-The renderer pin uses the successful main build from web PR 23 and SDK 0.2.3.
+The renderer pin uses the successful main build from web PR 74 and SDK 0.3.0.
 The composer checks the archive SHA-256, source commit, and clean build state
 before it creates the output.
 
@@ -42,7 +42,10 @@ Set `PROVENANCE_REVIEW_ASSETS_DIR` to that output when building
 the CLI. This override takes precedence over the generated package assets.
 
 The output directory must not exist. The builder checks the host's TypeScript
-against the renderer declarations.
+against the renderer declarations. Those declarations import packages that the
+host does not install, such as `effect`. The builder ignores only that missing
+package error in the renderer `types/` files. A missing renderer declaration
+file or a wrong mount option type still fails the build.
 `host-build-info.json` records the renderer source commit, dirty state, input
 file hashes, and hashes of all served files. The builder keeps
 the renderer module unchanged and adds `host.js`, `host.css`, and the host HTML.
@@ -90,6 +93,7 @@ and the repository must hold one result. CI runs this check on the Linux CLI.
 ```sh
 node --test tools/review-host/*.test.ts
 node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
+node tools/review-host/verify-renderer-reads.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
 node tools/review-host/verify-review-writes.ts /absolute/provenance packages/provenance
 node tools/review-host/verify-page-session.ts /absolute/provenance
 ```
@@ -99,7 +103,7 @@ fetch and WebSocket: a launch link stores the session and opens the event
 socket, a reload mounts with the stored session, and a changed session is
 refused and removed.
 
-The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-13d51d69ae34/provenance-review.tar.gz)
+The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-377852a18205/provenance-review.tar.gz)
 contains the exact bytes from the pinned upstream build. The release contains
 only the renderer. It is separate from the CLI releases and is not the latest
 CLI release. CI and release preparation use this archive without access to the

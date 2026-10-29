@@ -309,7 +309,14 @@ credential. After the page exchanges the launch code, the application opens
 available when `root` is absent. The application reads `/review-config` with the
 page session in the Authorization header. It then
 calls `mountReview` with `endpoint`, `repositoryId`, `scope`,
-`dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. The
+`dispositionActorIds`, `bearer`, `rootId`, and the optional `focusId`. When
+`/review-config` contains `reviewer`, the application passes it unchanged as
+the `reviewer` option. When it does not, the option is absent. The page decides
+only as `reviewer.actorId` and only when `reviewer.allowed` is `true`. In all
+other cases the page is read-only and tells why. A `reviewer` without a string
+`actorId` and a boolean `allowed` stops the page, and the status line tells
+that the review host sent an invalid reviewer. A new review link does not
+help in that case. The
 renderer creates and owns the generated Effect client. The application passes
 the page session as `bearer`, so the renderer sends it in the Authorization
 header. The host exchanges it for the bearer before the operation routes
@@ -347,14 +354,14 @@ pages over local HTTP, but it renders the Markdown in `docs/`, not the graph.
 The pin in [`tools/review-assets.json`](../tools/review-assets.json) identifies:
 
 - Source repository: `quality-sh/provenance-web`.
-- Merged commit: `13d51d69ae34311ecb7d992d527a1ff4e1f706e8` (PR 68).
-- Validated author commit: `13d51d69ae34311ecb7d992d527a1ff4e1f706e8`.
-- Successful [Review assets run 40204763440](https://github.com/quality-sh/provenance-web/actions/runs/40204763440).
+- Merged commit: `377852a1820e307436d3d600a283567a6d575ad3` (PR 74).
+- Validated author commit: `377852a1820e307436d3d600a283567a6d575ad3`.
+- Successful [Review assets run 40671700515](https://github.com/quality-sh/provenance-web/actions/runs/40671700515).
 - Archive: `provenance-review.tar.gz`.
-- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-13d51d69ae34/provenance-review.tar.gz).
-- SHA-256: `330d1d704accb4931795149398e869cc3510a937ab2a86205a5a805471835465`.
-- Archive size: 2,734,816 bytes.
-- Page JavaScript bundle size: 720,499 bytes.
+- Public [archive download](https://github.com/quality-sh/provenance/releases/download/renderer-377852a18205/provenance-review.tar.gz).
+- SHA-256: `65fd5a09938ad6f0ae105fa5addb474e16776f7cf368a6ce0a04e663591f6d46`.
+- Archive size: 2,887,059 bytes.
+- Page JavaScript bundle size: 726,199 bytes.
 
 The upstream entry is `src/browser/main.tsx`; `vite.review.config.ts` builds
 `dist-review`. `scripts/package-review.mjs` archives that directory with stable
@@ -362,8 +369,8 @@ metadata and emits a checksum sidecar. The archive includes `review.js`,
 `review.css`, local fonts under `assets/`, the empty `index.html`,
 `build-info.json`, and `licenses/provenance.txt`. Its renderer contains the
 generated Effect client, but it does not contain a configured application. See the merged
-[browser contract](https://github.com/quality-sh/provenance-web/blob/13d51d69ae34311ecb7d992d527a1ff4e1f706e8/src/browser/main.tsx)
-and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/13d51d69ae34311ecb7d992d527a1ff4e1f706e8/docs/review-data-layer.md).
+[browser contract](https://github.com/quality-sh/provenance-web/blob/377852a1820e307436d3d600a283567a6d575ad3/src/browser/main.tsx)
+and [data-layer contract](https://github.com/quality-sh/provenance-web/blob/377852a1820e307436d3d600a283567a6d575ad3/docs/review-data-layer.md).
 
 After the build dependencies are ready, prepare the application and build:
 
@@ -396,6 +403,24 @@ bootstrap against a real host through a launch link, a reload, and a refusal.
 Run `node tools/review-host/verify-native.ts BINARY COMPOSED_ASSETS SDK_PACKAGE`
 to check a built executable. Release validation runs this check on executables
 extracted from each native archive and npm engine package.
+
+The native check reads through the SDK that this repository generates, so the
+host and that client always agree. The renderer ships its own SDK build. Run
+`node tools/review-host/verify-renderer-reads.ts BINARY COMPOSED_ASSETS SDK_PACKAGE`
+to check the host responses against the response validators that the renderer
+bundles. The check makes a repository with a root Requirement, a child, and a
+Requirement with two parents. The child has a Rule, a Resolution, and a Topic
+with a Question, so each record type of a document has a real response. For
+each Requirement, the check reads all pages of the Requirement document, the
+Requirement, and all pages of its history. It also reads all pages of the
+Requirement list and of a Requirement search. It reads the document of a
+missing root and checks that failure response too. It finds each validator from
+the renderer client method of the operation, not from a file name. A refused
+field names the read, the page, the record id, and the field path. A missing
+field shows as the path of that field. A refused response without a field error
+also fails the check. This check does not run the document model of the
+renderer, so it does not show that the page reads each document correctly.
+CI runs this check on each built CLI.
 
 The separate raw renderer check is
 `cargo test -p provenance-cli --test review_bundle -- --ignored`.
@@ -470,8 +495,9 @@ The page opens `/review-events` after it reads its configuration and before it
 mounts the review document, so a save between the two is not lost. Ready,
 reset, a new epoch, a sequence gap, and a reconnect read all active data again:
 the document, search, opened record details, discussions, and history. The page
-also reads its configuration again. When the reviewer settings changed, the
-status line asks the person to select Open / Refresh.
+also reads its configuration again. When the disposition actor list or the
+reviewer changed, the status line tells the person to save or discard the
+drafts and then reload the page.
 
 A changed frame reads the document and search again, and the details,
 discussions, and history of the changed records. Details of other records are
