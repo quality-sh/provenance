@@ -58,7 +58,7 @@ impl FixtureAccess {
             {
                 return Err(invalid());
             }
-            let root = target.root.canonicalize().map_err(|_| invalid())?;
+            let root = dunce::canonicalize(&target.root).map_err(|_| invalid())?;
             if !root.is_dir() || root.to_str().is_none() || mapped.insert(target.id, root).is_some()
             {
                 return Err(invalid());

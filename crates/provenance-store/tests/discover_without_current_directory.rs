@@ -23,7 +23,8 @@ fn discover_resolves_an_explicit_root_without_reading_the_current_directory() {
         serde_json::to_vec(&manifest).unwrap(),
     )
     .unwrap();
-    let root = camino::Utf8PathBuf::from_path_buf(dir.path().canonicalize().unwrap()).unwrap();
+    let root =
+        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap();
 
     // Windows does not let a process remove its current directory, so only
     // Unix makes the current directory unavailable.

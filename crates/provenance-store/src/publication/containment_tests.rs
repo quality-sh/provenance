@@ -136,7 +136,7 @@ fn plant(
 }
 
 fn canonical(path: &std::path::Path) -> Utf8PathBuf {
-    Utf8PathBuf::from_path_buf(std::fs::canonicalize(path).unwrap()).unwrap()
+    Utf8PathBuf::from_path_buf(dunce::canonicalize(path).unwrap()).unwrap()
 }
 
 /// Independent restatement of the decision, used as the oracle below: walk the

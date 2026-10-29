@@ -28,7 +28,8 @@ fn wait_for(receiver: &mpsc::Receiver<notify::Result<Event>>, path: &Path) {
 #[tokio::test]
 async fn native_events_detect_state_replacement_and_reattached_writes_under_guard() {
     let repo = review_host_support::repository();
-    let root = camino::Utf8PathBuf::from_path_buf(repo.path().canonicalize().unwrap()).unwrap();
+    let root =
+        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(repo.path()).unwrap()).unwrap();
     let layout = ProvenanceLayout::new(root);
     let (sender, receiver) = mpsc::channel();
     let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |event| {

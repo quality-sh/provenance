@@ -797,6 +797,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1276,7 +1282,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash 0.2.0",
+ "foldhash",
 ]
 
 [[package]]
@@ -2426,6 +2432,7 @@ dependencies = [
  "axum",
  "camino",
  "clap",
+ "dunce",
  "flate2",
  "fs2",
  "futures-util",
@@ -2545,6 +2552,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
  "provenance-core",
  "provenance-macros",
  "provenance-scanner",
@@ -2560,6 +2568,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
  "provenance-core",
  "provenance-macros",
  "same-file",
@@ -2574,6 +2583,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
  "provenance-core",
  "provenance-macros",
  "provenance-store",
@@ -2606,6 +2616,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "camino",
+ "dunce",
  "filetime",
  "fs2",
  "fs_at",
@@ -2640,6 +2651,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "axum",
+ "dunce",
  "fs2",
  "futures",
  "jsonschema",

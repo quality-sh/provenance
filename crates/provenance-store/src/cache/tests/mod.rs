@@ -23,6 +23,7 @@ pub mod projection_stamp_behavior;
 mod record_columns;
 mod relation_rows_behavior;
 mod reporting_behavior;
+mod resolved_root_behavior;
 mod scope_locality_guard;
 mod stamp_catch_up;
 mod traceability_behavior;

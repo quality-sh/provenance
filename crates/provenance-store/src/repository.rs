@@ -274,12 +274,15 @@ pub fn declared_scope<'a>(
         })
 }
 
+/// The resolved root. On Windows the root has no verbatim `\\?\` prefix
+/// where the plain form names the same directory, because the root goes
+/// into paths that a user reads and into the cache connection.
 fn canonical_root(path: &Path) -> Result<Utf8PathBuf, OpenFailure> {
     let invalid = |error: std::io::Error| OpenFailure::InvalidRoot {
         path: path.display().to_string(),
         error,
     };
-    let canonical = std::fs::canonicalize(path).map_err(invalid)?;
+    let canonical = dunce::canonicalize(path).map_err(invalid)?;
     if !canonical.is_dir() {
         return Err(invalid(std::io::Error::other("is not a directory")));
     }

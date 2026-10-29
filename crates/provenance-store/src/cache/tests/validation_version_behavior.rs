@@ -64,12 +64,14 @@ async fn a_changed_scope_alone_is_validated() {
     let path = crate::shards::rules_path(&layout, &second);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, "").unwrap();
+    let repository = open(&layout);
     test_probes::start_recording_reads();
-    let result = catch_up_state(&open(&layout)).await;
+    let result = catch_up_state(&repository).await;
     let reads = test_probes::take_recorded_reads();
     assert!(result.is_ok(), "unchanged scope refused: {result:?}");
-    assert!(reads.contains(path.as_str()));
-    assert!(!reads.contains(crate::shards::rules_path(&layout, &scope).as_str()));
+    let opened = repository.layout();
+    assert!(reads.contains(crate::shards::rules_path(opened, &second).as_str()));
+    assert!(!reads.contains(crate::shards::rules_path(opened, &scope).as_str()));
     std::fs::write(&path, "invalid JSON\n").unwrap();
     assert!(catch_up_state(&open(&layout)).await.is_err());
 }
