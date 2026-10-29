@@ -184,15 +184,15 @@ fn add_edge(metadata: &mut Value, package: &str, edge: Value) {
     package["dependencies"].as_array_mut().unwrap().push(edge);
 }
 
-fn refusals(policy: Value, metadata: Value) -> Vec<String> {
-    dependency_refusals(&serde_json::from_value(policy).unwrap(), &metadata)
+fn refusals(policy: Value, metadata: &Value) -> Vec<String> {
+    dependency_refusals(&serde_json::from_value(policy).unwrap(), metadata)
 }
 
 #[test]
 #[verifies("rule_workspace_crate_dependencies_match_policy", examples)]
 fn fixture_workspace_matches_its_policy() {
     assert_eq!(
-        refusals(fixture_policy(), fixture_metadata()),
+        refusals(fixture_policy(), &fixture_metadata()),
         Vec::<String>::new()
     );
 }
@@ -208,7 +208,7 @@ fn new_host_edge_from_core_is_refused() {
     );
 
     assert_eq!(
-        refusals(fixture_policy(), metadata),
+        refusals(fixture_policy(), &metadata),
         ["provenance-core has a normal dependency on tokio that \
           .config/crate-dependencies.json does not allow"]
     );
@@ -225,7 +225,7 @@ fn new_workspace_edge_from_store_is_refused() {
     );
 
     assert_eq!(
-        refusals(fixture_policy(), metadata),
+        refusals(fixture_policy(), &metadata),
         [
             "provenance-store has a normal dependency on provenance-report that \
           .config/crate-dependencies.json does not allow"
@@ -244,7 +244,7 @@ fn renamed_edge_is_refused_by_its_package_name() {
     );
 
     assert_eq!(
-        refusals(fixture_policy(), metadata),
+        refusals(fixture_policy(), &metadata),
         ["provenance-report has a normal dependency on tokio that \
           .config/crate-dependencies.json does not allow"]
     );
@@ -261,7 +261,7 @@ fn target_specific_host_edge_is_refused() {
     );
 
     assert_eq!(
-        refusals(fixture_policy(), metadata),
+        refusals(fixture_policy(), &metadata),
         [
             "provenance-report has a build dependency on windows-sys that \
           .config/crate-dependencies.json does not allow"
@@ -279,7 +279,7 @@ fn dev_edge_allowed_only_in_dependencies_is_refused() {
     });
 
     assert_eq!(
-        refusals(policy, fixture_metadata()),
+        refusals(policy, &fixture_metadata()),
         [
             ".config/crate-dependencies.json allows provenance-store to have tempfile in \
              dependencies, but that edge does not exist",
@@ -299,7 +299,7 @@ fn member_without_an_entry_is_refused() {
         .remove("provenance-report");
 
     assert_eq!(
-        refusals(policy, fixture_metadata()),
+        refusals(policy, &fixture_metadata()),
         ["provenance-report has no entry in .config/crate-dependencies.json"]
     );
 }
@@ -311,7 +311,7 @@ fn entry_for_a_crate_outside_the_workspace_is_refused() {
     policy["crates"]["provenance-contract"] = json!({ "dependencies": [], "dev-dependencies": [] });
 
     assert_eq!(
-        refusals(policy, fixture_metadata()),
+        refusals(policy, &fixture_metadata()),
         [
             ".config/crate-dependencies.json has an entry for provenance-contract, \
           which is not a workspace crate"
@@ -326,7 +326,7 @@ fn allowed_edge_missing_from_metadata_is_refused() {
     policy["crates"]["provenance-core"]["dependencies"] = json!(["provenance-macros", "tokio"]);
 
     assert_eq!(
-        refusals(policy, fixture_metadata()),
+        refusals(policy, &fixture_metadata()),
         [
             ".config/crate-dependencies.json allows provenance-core to have tokio in \
           dependencies, but that edge does not exist"
