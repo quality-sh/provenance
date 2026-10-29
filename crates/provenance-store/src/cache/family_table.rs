@@ -26,10 +26,10 @@ macro_rules! record_family_rows {
 
 pub(crate) use record_family_rows;
 
-/// Defines `record_family_catalog!`, the only view of the family rows that other crates can
-/// expand. Each row keeps its variant, record type, route order, node kind, operations,
-/// routes and review marker. Shards, readers, loaders, graph fields and import rules stay in
-/// this crate.
+// Defines `record_family_catalog!`, the only view of the family rows that other crates can
+// expand. Each row keeps its variant, record type, route order, node kind, operations,
+// routes and review marker. Shards, readers, loaders, graph fields and import rules stay in
+// this crate.
 macro_rules! define_record_family_catalog {
     (
         $d:tt;
@@ -60,9 +60,10 @@ macro_rules! define_record_family_catalog {
             };)*
         })*
     ) => {
-        /// Expands `$consumer!` with one narrow row for each canonical record family:
-        /// `variant { record, order, node, catalog, route, review? }`. An optional
-        /// identifier is passed first, followed by `;`.
+        /// Expands `$consumer!` with one narrow row for each canonical record family.
+        ///
+        /// A row is `variant { record, order, node, catalog, route, review? }`. An optional
+        /// identifier comes first, followed by `;`.
         #[macro_export]
         macro_rules! record_family_catalog {
             ($d consumer:path) => {
