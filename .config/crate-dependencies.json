@@ -101,7 +101,8 @@
     },
     "provenance-core": {
       "dependencies": [
-        "provenance-macros"
+        "provenance-macros",
+        "tokio"
       ],
       "dev-dependencies": []
     },
