@@ -315,7 +315,7 @@ fn workers_of_one_stage_run_their_sections_one_at_a_time() {
             let (release, on_release) = mpsc::channel::<()>();
             let (read, on_read) = mpsc::channel();
             std::thread::scope(|threads| {
-                threads.spawn(|| {
+                threads.spawn(move || {
                     staged.with_repository_publication(|_| {
                         entered.send(()).unwrap();
                         on_release.recv().unwrap();
@@ -323,7 +323,7 @@ fn workers_of_one_stage_run_their_sections_one_at_a_time() {
                     })
                 });
                 on_entry.recv().unwrap();
-                threads.spawn(|| read.send(staged.list_sources(&scope()).is_ok()).unwrap());
+                threads.spawn(move || read.send(staged.list_sources(&scope()).is_ok()).unwrap());
                 assert_eq!(
                     on_read.recv_timeout(Duration::from_millis(300)),
                     Err(mpsc::RecvTimeoutError::Timeout),
