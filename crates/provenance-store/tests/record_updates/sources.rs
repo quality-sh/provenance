@@ -20,6 +20,7 @@ async fn source_update_preserves_omissions_and_clears_nullable_fields() {
 async fn source_update_refusals_do_not_publish_any_field() {
     let fixture = Fixture::new();
     let before = fixture.source().await;
+    let mut kinds = Vec::new();
     for patch in [
         json!({"id":"source_missing","url":"changed"}),
         json!({"id":"source_one","url":"changed","commit_pin":"bad"}),
@@ -30,12 +31,22 @@ async fn source_update_refusals_do_not_publish_any_field() {
         let mut patch = patch;
         patch["scope_id"] = json!("default");
         let error = fixture.call("update-source", patch).await.unwrap_err();
-        assert_ne!(error["kind"], "unknown_operation");
+        kinds.push(error["kind"].clone());
         assert_eq!(
             serde_json::to_value(&fixture.store.list_sources(&fixture.scope).unwrap()[0]).unwrap(),
             before
         );
     }
+    assert_eq!(
+        kinds,
+        [
+            "resource_not_found",
+            "invalid_commit_pin",
+            "invalid_input",
+            "invalid_input",
+            "record_ownership_conflict",
+        ]
+    );
 }
 
 #[tokio::test]
@@ -50,7 +61,7 @@ async fn direct_updates_do_not_take_over_typed_declarations() {
         )
         .await
         .unwrap_err();
-    assert_ne!(error["kind"], "unknown_operation");
+    assert_eq!(error["kind"], "record_ownership_conflict");
     assert_eq!(fixture.store.list_sources(&fixture.scope).unwrap(), before);
 }
 
