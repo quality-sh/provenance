@@ -3,13 +3,18 @@
 
 use super::disposition_write_gate::{allow_actor, rejected_input};
 use super::{super::initialized_store, proposal_input};
+use crate::operations::catalog::resource_pages::{
+    PageProposalAssertions, PageProposalDispositions,
+};
 use provenance_core::PromotionState;
 use serde_json::{json, Value};
 
-async fn fact_page(root: &camino::Utf8Path, operation: &str, proposal_id: &str) -> Value {
-    super::super::read_budget::operation_read(
+async fn fact_page<O: crate::operations::catalog::Operation>(
+    root: &camino::Utf8Path,
+    proposal_id: &str,
+) -> Value {
+    super::super::read_budget::operation_read::<O>(
         root,
-        operation,
         json!({"proposal_id": proposal_id, "limit": 10, "cursor": null}),
     )
     .await
@@ -41,14 +46,14 @@ async fn a_fact_page_lists_the_facts_of_the_named_proposal_only() {
         .unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
 
-    let dispositions = fact_page(&root, "page-proposal-dispositions", "proposal_overtime").await;
+    let dispositions = fact_page::<PageProposalDispositions>(&root, "proposal_overtime").await;
     assert_eq!(items(&dispositions).len(), 1);
     assert_eq!(items(&dispositions)[0]["id"], "disposition_overtime");
     assert_eq!(dispositions["result"]["has_more"], false);
 
-    let other = fact_page(&root, "page-proposal-dispositions", "proposal_leave").await;
+    let other = fact_page::<PageProposalDispositions>(&root, "proposal_leave").await;
     assert_eq!(items(&other).as_slice(), [] as [Value; 0]);
 
-    let assertions = fact_page(&root, "page-proposal-assertions", "proposal_overtime").await;
+    let assertions = fact_page::<PageProposalAssertions>(&root, "proposal_overtime").await;
     assert_eq!(items(&assertions).as_slice(), [] as [Value; 0]);
 }

@@ -104,14 +104,6 @@ pub async fn invoke_with<H: Invoke>(
     (entry.invoke)(call, host).await
 }
 
-#[cfg(test)]
-pub(super) fn invoke_erased<O: Operation>(call: Value) -> OperationFuture<Value, FailureEnvelope> {
-    invoke_resolved::<O, Direct>(
-        call,
-        Direct(std::sync::Arc::new(super::context::NoRepositories)),
-    )
-}
-
 pub(super) fn invoke_resolved<O: Operation, H: Invoke>(
     call: Value,
     host: H,
@@ -227,7 +219,8 @@ fn missing_field(message: &str) -> Option<&str> {
         .and_then(|rest| rest.strip_suffix('`'))
 }
 
-fn frame_failure<O: Operation>(failure: OperationError<O::Failure>) -> FailureEnvelope {
+/// Frames one typed refusal as the failure envelope that the operation declares.
+pub fn frame_failure<O: Operation>(failure: OperationError<O::Failure>) -> FailureEnvelope {
     match failure {
         OperationError::Common(error) => FailureEnvelope::new(Some(O::NAME), error),
         OperationError::Handler(error) => {

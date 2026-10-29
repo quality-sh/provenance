@@ -1,5 +1,5 @@
 use super::invoke;
-use provenance_core::protocol::failure::OperationFailure;
+use provenance_core::protocol::failure::{ErasedFailure, OperationFailure};
 use provenance_core::SDK_PROTOCOL_VERSION;
 use provenance_macros::verifies;
 use serde_json::json;
@@ -176,12 +176,18 @@ impl super::Operation for FailureFixture {
     }
 }
 
+/// The failure that fixture `O` frames for one call on a host with no repositories.
+async fn framed_failure<O: super::Operation>() -> ErasedFailure {
+    let host = super::Direct(std::sync::Arc::new(super::context::NoRepositories));
+    let call = json!({"request":{"statement":"x"}});
+    crate::test_support::call::<O, _>(call, host)
+        .await
+        .unwrap_err()
+}
+
 #[tokio::test]
 async fn handler_failure_cannot_change_its_declared_wire_variant() {
-    let failure =
-        super::invoke::invoke_erased::<FailureFixture>(json!({"request":{"statement":"x"}}))
-            .await
-            .unwrap_err();
+    let failure = framed_failure::<FailureFixture>().await;
     assert_eq!(failure.error, json!({"kind":"access_denied"}));
 }
 
@@ -219,11 +225,7 @@ impl super::Operation for ExtendedFailureFixture {
 }
 #[tokio::test]
 async fn declared_handler_fields_cannot_disappear_during_erasure() {
-    let failure = super::invoke::invoke_erased::<ExtendedFailureFixture>(
-        json!({"request":{"statement":"x"}}),
-    )
-    .await
-    .unwrap_err();
+    let failure = framed_failure::<ExtendedFailureFixture>().await;
     assert_eq!(
         failure.error,
         json!({"kind":"access_denied", "detail":true})

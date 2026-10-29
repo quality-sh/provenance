@@ -31,7 +31,7 @@ impl ContextResolver for Target {
     }
 }
 async fn read(root: camino::Utf8PathBuf) -> Value {
-    catalog::invoke_with("read-document", provenance_core::SDK_PROTOCOL_VERSION,
+    crate::test_support::call::<catalog::ReadDocument, _>(
         json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_overtime"}}),
         catalog::Direct(Arc::new(Target(root)))).await.expect("complete document operation")
 }
@@ -68,7 +68,7 @@ async fn complete(root: camino::Utf8PathBuf) -> Value {
     let mut all = read(root.clone()).await;
     let stamp = all["stamp"].clone();
     while all["next_cursor"].is_string() {
-        let next = catalog::invoke_with("read-document", provenance_core::SDK_PROTOCOL_VERSION,
+        let next = crate::test_support::call::<catalog::ReadDocument, _>(
             json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime","cursor":all["next_cursor"]}}),
             catalog::Direct(Arc::new(Target(root.clone())))).await.unwrap();
         for field in ["serial", "digest", "instance_id", "derivation"] {
@@ -123,9 +123,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
     }
     assert_eq!(next["stamp"]["live"], json!(["canonical"]));
     std::fs::write(path, "invalid JSON\n").unwrap();
-    let failed = catalog::invoke_with(
-        "read-document",
-        provenance_core::SDK_PROTOCOL_VERSION,
+    let failed = crate::test_support::call::<catalog::ReadDocument, _>(
         json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime"}}),
         catalog::Direct(Arc::new(Target(root_of(&dir)))),
     )
@@ -171,8 +169,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
         Some(&ReadFailure::DocumentRootMissing)
     );
 
-    let failed = catalog::invoke_with(
-        "read-document", provenance_core::SDK_PROTOCOL_VERSION,
+    let failed = crate::test_support::call::<catalog::ReadDocument, _>(
         json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_new"}}),
         catalog::Direct(Arc::new(Target(root_of(&dir)))),
     ).await.unwrap_err();
@@ -317,7 +314,7 @@ async fn search_returns_a_revision_bound_cursor() {
         row["id"] = json!(format!("req_search_{i:03}"));
         crate::cache::tests::fixtures::append_record(&path, &row);
     }
-    let first = catalog::invoke_with("search", provenance_core::SDK_PROTOCOL_VERSION,
+    let first = crate::test_support::call::<catalog::Search, _>(
         json!({"context":{"repository":"test","scope":"default"},"request":{"text":"req_","limit":200}}),
         catalog::Direct(Arc::new(Target(root_of(&dir))))).await.unwrap();
     assert_eq!(first["nodes"].as_array().unwrap().len(), 200);
