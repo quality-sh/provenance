@@ -40,7 +40,7 @@ async fn source_update_refusals_do_not_publish_any_field() {
     assert_eq!(
         kinds,
         [
-            "resource_not_found",
+            "missing_reference",
             "invalid_commit_pin",
             "invalid_input",
             "invalid_input",
