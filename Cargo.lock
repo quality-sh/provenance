@@ -2442,6 +2442,7 @@ dependencies = [
  "open",
  "pdf_oxide",
  "predicates",
+ "provenance-contract",
  "provenance-core",
  "provenance-macros",
  "provenance-porcelain",
@@ -2476,6 +2477,7 @@ version = "0.3.0"
 dependencies = [
  "jsonschema",
  "prettyplease",
+ "provenance-contract",
  "provenance-core",
  "provenance-ste100",
  "provenance-store",
@@ -2491,13 +2493,17 @@ dependencies = [
 name = "provenance-contract"
 version = "0.3.0"
 dependencies = [
+ "jsonschema",
  "provenance-core",
  "provenance-macros",
+ "provenance-ste100",
  "provenance-store",
  "schemars 1.2.2",
  "serde",
  "serde_json",
  "serde_path_to_error",
+ "thiserror 2.0.20",
+ "tokio",
 ]
 
 [[package]]
@@ -2668,6 +2674,7 @@ dependencies = [
  "fs2",
  "futures",
  "jsonschema",
+ "provenance-contract",
  "provenance-core",
  "provenance-macros",
  "provenance-porcelain",
