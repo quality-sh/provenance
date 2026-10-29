@@ -24,7 +24,8 @@ pub fn store(layout: &crate::layout::ProvenanceLayout) -> crate::state_store::St
 /// Runs operation `O` on `host` from its JSON call, `{"context": …, "request": …}`, without
 /// lookup by name. A data-free operation has no context. A refusal is framed as the
 /// operation declares it.
-pub(crate) async fn call<O, H>(
+#[allow(clippy::result_large_err)]
+pub async fn call<O, H>(
     call: serde_json::Value,
     host: H,
 ) -> Result<serde_json::Value, provenance_core::protocol::failure::ErasedFailure>
