@@ -15,21 +15,21 @@ macro_rules! collection {
             list_parameters(true, true),
         ).items_field("items").pagination();
         let queries = vec![
-            query_route::<$crate::operations::catalog::Search>(
+            query_route::<provenance_store::operations::catalog::Search>(
                 &definition,
                 ResponseKind::Items,
                 Some($singular),
                 true,
                 ResponseAdapter::ObjectItems("nodes"),
             ),
-            query_route::<$crate::operations::catalog::Stale>(
+            query_route::<provenance_store::operations::catalog::Stale>(
                 &definition,
                 ResponseKind::Items,
                 None,
                 false,
                 ResponseAdapter::ObjectItems("sites"),
             ),
-            query_route::<$crate::operations::catalog::ResolveSymbol>(
+            query_route::<provenance_store::operations::catalog::ResolveSymbol>(
                 &definition,
                 ResponseKind::Items,
                 None,
@@ -167,7 +167,7 @@ macro_rules! review_resource {
         $out.push(collection!(
             $mode, $ty, $list, $plural, $plural_id, $singular
         ));
-        let member = backed::<members::GetReviewedResource>(
+        let member = backed::<family::GetReviewedResource>(
             concat!("get-", $singular),
             concat!("get", $singular_id),
             HttpMethod::Get,

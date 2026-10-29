@@ -9,7 +9,7 @@ export const generatedDirectories = [
 ];
 export const generatedPaths = [...generatedDirectories, 'packages/provenance/src/engine-packages.ts'];
 const receipt = 'contracts/operations/.generation.json';
-const crates = ['provenance-core', 'provenance-store', 'provenance-scanner', 'provenance-ste100', 'provenance-macros', 'provenance-codegen'];
+const crates = ['provenance-core', 'provenance-store', 'provenance-contract', 'provenance-scanner', 'provenance-ste100', 'provenance-macros', 'provenance-codegen'];
 const digest = value => createHash('sha256').update(value).digest('hex');
 
 async function files(root, path) {

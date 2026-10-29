@@ -91,10 +91,10 @@ impl FixtureAccess {
         self
     }
     pub(crate) fn permits_operation(&self, operation: &str) -> bool {
-        let mutates = provenance_store::operations::catalog::definitions()
+        let mutates = provenance_contract::definitions()
             .iter()
             .find(|definition| definition.name == operation)
-            .is_some_and(provenance_store::operations::catalog::Definition::mutates);
+            .is_some_and(provenance_contract::Definition::mutates);
         !self.denied_operations.contains(operation) && (self.writes || !mutates)
     }
     pub(crate) fn bound_identity(&self) -> Option<(String, String)> {

@@ -1,8 +1,9 @@
 use crate::StatementHost;
 use axum::http::{HeaderMap, Method};
+use provenance_contract::{Definition, HttpMethod};
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
 use provenance_core::SDK_PROTOCOL_VERSION;
-use provenance_store::operations::catalog::{self, ContextKind, Definition, HttpMethod};
+use provenance_store::operations::catalog::ContextKind;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, sync::OnceLock};
 
@@ -32,7 +33,7 @@ fn index() -> &'static RouteIndex {
             post: Vec::new(),
             patch: Vec::new(),
         };
-        for definition in catalog::definitions() {
+        for definition in provenance_contract::definitions() {
             match definition.method {
                 HttpMethod::Get => &mut index.get,
                 HttpMethod::Post => &mut index.post,
@@ -58,7 +59,7 @@ pub fn find(method: &Method, path: &str) -> Option<Matched> {
 
 /// Whether any registered route publishes this path under some method.
 pub fn path_is_known(path: &str) -> bool {
-    catalog::definitions()
+    provenance_contract::definitions()
         .iter()
         .any(|definition| match_path(definition.path, path).is_some())
 }
@@ -108,7 +109,7 @@ pub async fn invoke(
         identity.as_ref().map(|(_, scope)| scope.as_str()),
     )?;
     let call = context(identity, bound.handler.context, &bound.data)?;
-    let value = catalog::invoke_with(
+    let value = provenance_contract::invoke_with(
         bound.handler.operation,
         SDK_PROTOCOL_VERSION,
         call,

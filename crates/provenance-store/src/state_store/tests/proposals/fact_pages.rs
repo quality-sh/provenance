@@ -3,9 +3,7 @@
 
 use super::disposition_write_gate::{allow_actor, rejected_input};
 use super::{super::initialized_store, proposal_input};
-use crate::operations::catalog::resource_pages::{
-    PageProposalAssertions, PageProposalDispositions,
-};
+use crate::operations::family_operations::{PageProposalAssertions, PageProposalDispositions};
 use provenance_core::PromotionState;
 use serde_json::{json, Value};
 

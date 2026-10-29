@@ -1,5 +1,4 @@
-#![cfg(feature = "schema")]
-use provenance_store::operations::catalog;
+use provenance_contract as catalog;
 use serde_json::json;
 
 #[test]

@@ -20,7 +20,8 @@ arrows show build-time generation or packaging.
 - `03-store-cache-and-reads.drawio`: provenance-store reads, freshness policy,
   SQLite catch-up, and reads that use git.
 - `04-transport-and-contract.drawio`: provenance-transport, provenance-porcelain,
-  and the `operations::catalog` contract that HTTP, MCP and in-process calls share.
+  and the provenance-contract wire contract and store `operations::catalog` that
+  HTTP, MCP and in-process calls share.
 - `05-cli-dispatch.drawio`: how provenance-cli parses a command and sends it to
   the in-process host or to a built-in handler.
 - `06-agent-surfaces.drawio`: init guidance in AGENTS.md, skill install, prime,

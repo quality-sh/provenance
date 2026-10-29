@@ -171,7 +171,7 @@ async fn native_review_reads_refuse_an_out_of_range_limit() {
                 "context":{"repository":"selected","scope":"default"},
                 "request":request
             });
-            let failure = provenance_store::operations::catalog::invoke_with(
+            let failure = provenance_contract::invoke_with(
                 operation,
                 provenance_core::SDK_PROTOCOL_VERSION,
                 call,

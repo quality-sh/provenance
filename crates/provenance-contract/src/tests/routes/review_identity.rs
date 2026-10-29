@@ -1,4 +1,3 @@
-#[cfg(feature = "schema")]
 #[test]
 fn review_writes_do_not_accept_idempotency_headers() {
     for name in [
@@ -8,7 +7,7 @@ fn review_writes_do_not_accept_idempotency_headers() {
         "decide-requirement-review",
         "withdraw-requirement-review",
     ] {
-        let definition = super::super::definitions()
+        let definition = crate::definitions()
             .iter()
             .find(|entry| entry.name == name)
             .unwrap();
@@ -22,7 +21,7 @@ fn review_writes_do_not_accept_idempotency_headers() {
         assert!(!names.contains(&"Idempotency-Key"), "{name}: {names:?}");
     }
 
-    let discussions = super::super::definitions()
+    let discussions = crate::definitions()
         .iter()
         .filter(|definition| {
             definition.name.ends_with("-create-discussion")

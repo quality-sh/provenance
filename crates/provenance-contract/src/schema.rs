@@ -1,5 +1,5 @@
-//! Contract code: this module later leaves the store as one unit with entry, invoke, routes
-//! and schema. Add no store state here.
+//! Wire schemas for registered operations: request, success and failure documents, parameters
+//! and value parsing.
 use super::{Operation, TargetAction};
 use provenance_core::protocol::failure::OperationError;
 use provenance_core::NodeType;
@@ -10,14 +10,14 @@ use schemars::{
 use serde_json::{json, Value};
 
 mod envelope;
-pub(super) use envelope::{hide_bound_request_field, request_envelope, response_envelope};
+pub use envelope::{hide_bound_request_field, request_envelope, response_envelope};
 
 pub use super::schema_values::{
     parse_parameter_value, parse_schema_value, parse_schema_value_in, serialize_parameter_value,
     ParseValueError,
 };
 
-pub(super) use super::schema_page::stamp_page_metadata;
+pub use super::schema_page::stamp_page_metadata;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HttpMethod {
@@ -86,7 +86,7 @@ pub fn target_definitions(
 }
 
 #[derive(Clone)]
-pub(super) struct RawDefinition {
+pub struct RawDefinition {
     pub request_schema: Value,
     pub success_schema: Value,
     pub failure_schema: Value,
@@ -311,7 +311,7 @@ fn merge_variants(variants: Vec<Value>) -> Value {
 
 // Keeps one schema for each type and contract.
 // Derivation is pure, so a stored schema is always correct.
-pub(super) fn schema<T: JsonSchema + 'static>(contract: Contract) -> Value {
+pub fn schema<T: JsonSchema + 'static>(contract: Contract) -> Value {
     type Key = (std::any::TypeId, bool);
     static SCHEMAS: std::sync::LazyLock<std::sync::Mutex<std::collections::BTreeMap<Key, Value>>> =
         std::sync::LazyLock::new(Default::default);
@@ -345,7 +345,7 @@ fn derive_schema<T: JsonSchema>(contract: Contract) -> Value {
     .expect("schema is JSON")
 }
 
-pub(super) fn raw_definition<O: Operation>() -> RawDefinition {
+pub fn raw_definition<O: Operation>() -> RawDefinition {
     RawDefinition {
         request_schema: schema::<O::Request>(Contract::Deserialize),
         success_schema: schema::<O::Success>(Contract::Serialize),
@@ -368,7 +368,7 @@ fn statuses(mutates: bool, declared: &[u16]) -> Vec<u16> {
         .collect()
 }
 
-pub(super) fn property_schema(root: &Value, path: &[&str]) -> Value {
+pub fn property_schema(root: &Value, path: &[&str]) -> Value {
     let mut current = root;
     for name in path {
         let resolved = resolve_schema(root, current);
@@ -386,7 +386,7 @@ pub(super) fn property_schema(root: &Value, path: &[&str]) -> Value {
 
 /// The response schema that a route adapter publishes for a raw success
 /// schema.
-pub(super) fn adapted_response_schema(
+pub fn adapted_response_schema(
     raw: &Value,
     adapter: super::ResponseAdapter,
     kind: ResponseKind,
@@ -402,7 +402,7 @@ pub(super) fn adapted_response_schema(
 
 /// The Result envelope for the object at `path` with its `field` collection
 /// renamed to `items`. The other properties of that object stay in `data`.
-pub(super) fn items_response_schema(root: &Value, path: &[&str], field: &str) -> Value {
+pub fn items_response_schema(root: &Value, path: &[&str], field: &str) -> Value {
     let selected = path.iter().fold(root, |current, name| {
         let resolved = resolve_schema(root, current);
         resolved
@@ -432,7 +432,7 @@ pub(super) fn items_response_schema(root: &Value, path: &[&str], field: &str) ->
     response_envelope(selected, super::ResponseKind::Result)
 }
 
-pub(super) fn resolve_schema<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
+pub fn resolve_schema<'a>(root: &'a Value, schema: &'a Value) -> &'a Value {
     schema
         .get("$ref")
         .and_then(Value::as_str)
@@ -446,7 +446,7 @@ pub fn definitions() -> &'static [Definition] {
     DEFINITIONS.get_or_init(super::routes::definitions)
 }
 
-pub(super) fn type_schema<T: JsonSchema + 'static>(contract: Contract) -> Value {
+pub fn type_schema<T: JsonSchema + 'static>(contract: Contract) -> Value {
     schema::<T>(contract)
 }
 
@@ -454,7 +454,7 @@ pub(super) fn type_schema<T: JsonSchema + 'static>(contract: Contract) -> Value 
 /// published schema from the parameter's typed request field, so no manual
 /// route-wide placeholder survives into the exported contract.
 #[allow(clippy::missing_const_for_fn)]
-pub(super) fn path(name: &'static str) -> Parameter {
+pub fn path(name: &'static str) -> Parameter {
     Parameter {
         name,
         location: "path",
@@ -462,7 +462,7 @@ pub(super) fn path(name: &'static str) -> Parameter {
         schema: Value::Null,
     }
 }
-pub(super) const fn query(name: &'static str, schema: Value) -> Parameter {
+pub const fn query(name: &'static str, schema: Value) -> Parameter {
     Parameter {
         name,
         location: "query",
@@ -471,7 +471,7 @@ pub(super) const fn query(name: &'static str, schema: Value) -> Parameter {
     }
 }
 #[allow(clippy::missing_const_for_fn)]
-pub(super) fn header(name: &'static str, required: bool) -> Parameter {
+pub fn header(name: &'static str, required: bool) -> Parameter {
     Parameter {
         name,
         location: "header",

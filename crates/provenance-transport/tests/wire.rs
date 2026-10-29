@@ -1,5 +1,4 @@
 use axum::{body::Body, http::Request};
-use provenance_store::operations::catalog;
 use provenance_transport::StatementHost;
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
@@ -86,7 +85,7 @@ async fn mcp_projects_the_same_resource_operation() {
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
     assert!(tools.iter().any(|tool| {
-        catalog::definitions()
+        provenance_contract::definitions()
             .iter()
             .any(|definition| definition.name == tool.name)
     }));

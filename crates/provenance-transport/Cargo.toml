@@ -23,6 +23,7 @@ fs2.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
+provenance-contract.workspace = true
 provenance-store = { workspace = true, features = ["schema"] }
 serde_json.workspace = true
 serde.workspace = true

@@ -1,8 +1,8 @@
+use provenance_contract::{Definition, HttpMethod};
 use provenance_porcelain::api::{
     ApiCatalog, ApiError, ApiErrorKind, ApiMethod, ApiParameter, ApiPort, ApiPortFuture, ApiQuery,
     ApiRoute,
 };
-use provenance_store::operations::catalog::{self, Definition, HttpMethod};
 use serde_json::{json, Value};
 
 /// The canonical public-path routes adapted to the Porcelain api port.
@@ -87,7 +87,7 @@ fn header_map(
 #[provenance_macros::rule("rule_porcelain_api_catalog_discovery")]
 fn routes(host: &crate::StatementHost) -> ApiCatalog {
     ApiCatalog {
-        routes: catalog::definitions()
+        routes: provenance_contract::definitions()
             .iter()
             .filter(|definition| host.advertises(definition.name))
             .map(route)
@@ -139,7 +139,7 @@ fn route(definition: &Definition) -> ApiRoute {
     }
 }
 
-fn parameter(parameter: &catalog::Parameter) -> ApiParameter {
+fn parameter(parameter: &provenance_contract::Parameter) -> ApiParameter {
     ApiParameter {
         name: parameter.name.to_owned(),
         location: parameter.location.to_owned(),
@@ -165,7 +165,7 @@ pub(crate) fn api_error(failure: &provenance_core::protocol::failure::ErasedFail
 }
 
 pub(super) fn is_available(host: &crate::StatementHost) -> bool {
-    catalog::definitions()
+    provenance_contract::definitions()
         .iter()
         .any(|definition| host.advertises(definition.name))
 }

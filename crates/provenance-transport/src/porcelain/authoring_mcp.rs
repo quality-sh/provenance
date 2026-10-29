@@ -1,9 +1,9 @@
 //! MCP schemas and result rendering for target-first authoring.
 
 use super::authoring::{description, render_readable, Action, ActionError};
+use provenance_contract::Definition;
 use provenance_core::NodeType;
 use provenance_macros::rule;
-use provenance_store::operations::catalog::Definition;
 use rmcp::model::{CallToolResult, Content, Tool};
 use serde_json::{json, Map, Value};
 

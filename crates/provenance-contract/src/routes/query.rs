@@ -1,4 +1,4 @@
-use crate::operations::catalog::{Parameter, QueryRequestBinding, RequestBinding};
+use crate::{Parameter, QueryRequestBinding, RequestBinding};
 use serde_json::Value;
 
 pub(super) fn parameters(
@@ -173,7 +173,7 @@ fn is_scalar(schema: &Value) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::operations::catalog::{QueryRequestBinding, RequestBinding};
+    use crate::{QueryRequestBinding, RequestBinding};
     use serde_json::json;
 
     #[test]

@@ -1,5 +1,5 @@
 #![allow(clippy::literal_string_with_formatting_args)]
-//! Contract code: leaves the store with entry, invoke and schema as one unit. No store state here.
+//! Route registrations: every public operation with its method, path, bindings and CLI help.
 
 use super::{
     schema::{self, Definition, HttpMethod, Parameter, ResponseKind},
@@ -9,6 +9,7 @@ use super::{
     TargetAction, TargetBinding,
 };
 use provenance_core::NodeType;
+use provenance_store::operations::catalog as operation;
 use schemars::generate::Contract;
 use serde_json::{json, Value};
 
@@ -437,7 +438,7 @@ fn query_route<O: Operation>(
 }
 
 fn searchable_queries(definition: &Definition, node_type: &'static str) -> Vec<QueryRoute> {
-    vec![query_route::<super::Search>(
+    vec![query_route::<operation::Search>(
         definition,
         ResponseKind::Items,
         Some(node_type),
@@ -448,21 +449,21 @@ fn searchable_queries(definition: &Definition, node_type: &'static str) -> Vec<Q
 
 fn member_queries(definition: &Definition, node_type: &'static str) -> Vec<QueryRoute> {
     vec![
-        query_route::<super::Trace>(
+        query_route::<operation::Trace>(
             definition,
             ResponseKind::Result,
             Some(node_type),
             false,
             ResponseAdapter::Direct,
         ),
-        query_route::<super::Neighbors>(
+        query_route::<operation::Neighbors>(
             definition,
             ResponseKind::Result,
             Some(node_type),
             false,
             ResponseAdapter::Direct,
         ),
-        query_route::<super::Impact>(
+        query_route::<operation::Impact>(
             definition,
             ResponseKind::Result,
             Some(node_type),
@@ -475,14 +476,14 @@ fn member_queries(definition: &Definition, node_type: &'static str) -> Vec<Query
 mod actions;
 mod finalize;
 mod query;
-pub(super) mod request;
+pub mod request;
 #[macro_use]
 mod resource;
 mod resources;
 mod review_subresources;
 mod subresources;
 
-pub(super) fn definitions() -> Vec<Definition> {
+pub fn definitions() -> Vec<Definition> {
     let mut definitions = Vec::new();
     resources::register(&mut definitions);
     subresources::register(&mut definitions);

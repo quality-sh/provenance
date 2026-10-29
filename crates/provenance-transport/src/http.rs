@@ -6,20 +6,20 @@ use axum::{
     routing::{get, patch, post},
     Json, Router,
 };
+use provenance_contract::HttpMethod;
 use provenance_core::protocol::{
     failure::{ErasedFailure, InvalidInputReason, OperationFailure},
     host::HostMetadata,
     ResponseMeta, SuccessEnvelope,
 };
 use provenance_macros::rule;
-use provenance_store::operations::catalog::{self, HttpMethod};
 
 /// Every route authenticates through the host's credential policy before it is classified;
 /// a bound host without a policy refuses each request.
 #[rule("rule_bound_router_requires_credential_policy")]
 pub fn router(host: StatementHost) -> Router {
     let mut router = Router::new().route("/metadata", get(metadata));
-    for definition in catalog::definitions() {
+    for definition in provenance_contract::definitions() {
         let path = axum_path(definition.path);
         router = match definition.method {
             HttpMethod::Get => router.route(&path, get(invoke)),

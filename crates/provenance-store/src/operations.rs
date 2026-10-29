@@ -19,6 +19,7 @@ use crate::state_store::{
 };
 
 pub mod catalog;
+pub mod family_operations;
 pub mod files;
 pub mod local_repository;
 mod plan;

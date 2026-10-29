@@ -337,7 +337,7 @@ async fn target_edit_with_nested_unknown_data_is_refused_without_publication() {
         .await
         .unwrap_err();
 
-    assert_ne!(error["kind"], "unknown_operation");
+    assert_eq!(error["kind"], "write_failed");
     assert_eq!(
         raw_rows(&fixture, "boundaries", "boundary.jsonl"),
         vec![original]
@@ -372,7 +372,7 @@ async fn updating_a_row_with_repeated_unknown_members_is_refused_without_publica
         .await
         .unwrap_err();
 
-    assert_ne!(error["kind"], "unknown_operation");
+    assert_eq!(error["kind"], "write_failed");
     assert_eq!(raw_rows(&fixture, "sources", "source.jsonl"), vec![row]);
     assert_eq!(state_snapshot(&fixture), before);
 }

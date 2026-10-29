@@ -3,7 +3,7 @@ use provenance_core::protocol::ResponseMeta;
 use schemars::generate::Contract;
 use serde_json::{json, Value};
 
-pub(in super::super) fn response_envelope(mut payload: Value, kind: ResponseKind) -> Value {
+pub fn response_envelope(mut payload: Value, kind: ResponseKind) -> Value {
     if kind != ResponseKind::Items {
         remove_response_metadata(
             &mut payload,
@@ -78,7 +78,7 @@ fn namespace_defs(value: &mut Value, prefix: &str) {
     }
 }
 
-pub(in super::super) fn request_envelope(mut request: Value) -> Value {
+pub fn request_envelope(mut request: Value) -> Value {
     let defs = request.as_object_mut().and_then(|o| o.remove("$defs"));
     request.as_object_mut().map(|o| o.remove("$schema"));
     let mut result = json!({"type":"object","additionalProperties":false,"required":["data"],"properties":{"data":request}});
@@ -88,7 +88,7 @@ pub(in super::super) fn request_envelope(mut request: Value) -> Value {
     result
 }
 
-pub(in super::super) fn hide_bound_request_field(request: &mut Option<Value>, field: &str) {
+pub fn hide_bound_request_field(request: &mut Option<Value>, field: &str) {
     let Some(data) = request
         .as_mut()
         .and_then(|schema| schema.pointer_mut("/properties/data"))

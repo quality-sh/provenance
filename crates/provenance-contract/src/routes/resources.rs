@@ -1,9 +1,7 @@
 #![allow(clippy::too_many_lines, clippy::wildcard_imports)]
 
 use super::*;
-use crate::operations::catalog::{
-    resource_members as members, resource_pages as pages, verification_resources as verification,
-};
+use provenance_store::operations::{catalog as operation, family_operations as family};
 
 const NONE: &[CliDefault] = &[];
 const NO_ALIASES: &[ArgumentAlias] = &[];
@@ -186,8 +184,8 @@ macro_rules! family_read_route {
             $out,
             $mode,
             $record,
-            pages::$page,
-            members::$member,
+            family::$page,
+            family::$member,
             $plural,
             $singular,
             $singular_id,
@@ -205,8 +203,8 @@ macro_rules! family_read_route {
             $out,
             $mode,
             $record,
-            pages::$page,
-            members::$member,
+            family::$page,
+            family::$member,
             $plural,
             $singular,
             $singular_id,
@@ -231,14 +229,14 @@ macro_rules! family_write_route {
             $out,
             $mode,
             $record,
-            pages::$page,
-            members::$member,
+            family::$page,
+            family::$member,
             $plural,
             $singular,
             $singular_id,
             $plural_id,
-            super::super::$create,
-            super::super::$update,
+            operation::$create,
+            operation::$update,
             $create_defaults,
             $create_aliases,
             $update_defaults,
@@ -261,15 +259,15 @@ macro_rules! family_proposal_route {
             $out,
             plain,
             $record,
-            pages::$page,
-            members::$member,
+            family::$page,
+            family::$member,
             $plural,
             $singular,
             $singular_id,
             $plural_id
         );
         $out.push(
-            backed::<super::super::CreateProposal>(
+            backed::<operation::CreateProposal>(
                 "create-proposal",
                 "createProposal",
                 HttpMethod::Post,
@@ -284,22 +282,27 @@ macro_rules! family_proposal_route {
 }
 
 macro_rules! family_route {
-    ($out:ident, $variant:ident, $record:ty, [$($catalog:tt)*], [none]) => {};
+    ($out:ident, $order:tt, $record:ty, [$($catalog:tt)*], [none]) => {};
     (
         $out:ident,
-        $variant:ident,
+        $order:tt,
         $record:ty,
         [$($catalog:tt)*],
         [$($route:tt)+]
     ) => {{
         let mut definitions = Vec::new();
         family_route_definitions!(definitions, $record, $($catalog)*, $($route)+);
-        let order = crate::cache::ProjectionFamily::$variant
-            .meta()
-            .route_order
-            .expect("registered resource families have a route order");
-        $out.push((order, definitions));
+        $out.push((route_order!($order), definitions));
     }};
+}
+
+macro_rules! route_order {
+    (none) => {
+        compile_error!("registered resource families have a route order")
+    };
+    ($order:literal) => {
+        $order
+    };
 }
 
 macro_rules! review_family_route_definitions {
@@ -342,14 +345,14 @@ macro_rules! review_family_route_definitions {
             $out,
             $mode,
             $record,
-            pages::$page,
-            members::$member,
+            family::$page,
+            family::$member,
             $plural,
             $singular,
             $singular_id,
             $plural_id,
-            super::super::$create,
-            super::super::$update,
+            operation::$create,
+            operation::$update,
             $create_defaults,
             $create_aliases,
             $update_defaults,
@@ -361,18 +364,14 @@ macro_rules! review_family_route_definitions {
 }
 
 macro_rules! register_family_route {
-    ($out:ident, $variant:ident, $record:ty, [$($catalog:tt)*], [$($route:tt)*],
+    ($out:ident, $order:tt, $record:ty, [$($catalog:tt)*], [$($route:tt)*],
         [$review:ident]) => {{
         let mut definitions = Vec::new();
         review_family_route_definitions!(definitions, $record, $($catalog)*, $($route)*);
-        let order = crate::cache::ProjectionFamily::$variant
-            .meta()
-            .route_order
-            .expect("registered resource families have a route order");
-        $out.push((order, definitions));
+        $out.push((route_order!($order), definitions));
     }};
-    ($out:ident, $variant:ident, $record:ty, [$($catalog:tt)*], [$($route:tt)*], []) => {
-        family_route!($out, $variant, $record, [$($catalog)*], [$($route)*]);
+    ($out:ident, $order:tt, $record:ty, [$($catalog:tt)*], [$($route:tt)*], []) => {
+        family_route!($out, $order, $record, [$($catalog)*], [$($route)*]);
     };
 }
 
@@ -384,19 +383,8 @@ macro_rules! register_family_routes {
                 $(
                     $variant:ident {
                         record: $record:ty,
-                        field: $field:ident,
-                        path: $path:ident,
-                        meta: $meta:tt,
+                        order: $order:tt,
                         node: [$($node:tt)*],
-                        reader: {
-                            open: $reader:ident,
-                            closed: [$($closed:tt)*],
-                            strategy: $strategy:ident
-                        },
-                        id: $id:ident,
-                        loader: [$($loader:tt)*],
-                        graph: [$($graph:tt)*],
-                        import: [$($import:tt)*],
                         catalog: [$($catalog:tt)*],
                         route: [$($route:tt)*]
                         $(, review: $review:ident)?
@@ -406,21 +394,21 @@ macro_rules! register_family_routes {
         )*
     ) => {
         $($(register_family_route!(
-            $out, $variant, $record, [$($catalog)*], [$($route)*], [$($review)?]
+            $out, $order, $record, [$($catalog)*], [$($route)*], [$($review)?]
         );)*)*
     };
 }
 
 pub(super) fn register(out: &mut Vec<Definition>) {
     let mut families = Vec::new();
-    crate::cache::family_table::record_family_rows!(register_family_routes, families);
+    provenance_store::record_family_catalog!(register_family_routes, families);
     let mut verification_runs = Vec::new();
     resource!(
         verification_runs,
         verification,
         provenance_core::VerificationRun,
-        verification::PageVerificationRuns,
-        verification::GetVerificationRun,
+        family::PageVerificationRuns,
+        family::GetVerificationRun,
         "verification-runs",
         "verification-run",
         "VerificationRun",
@@ -434,7 +422,7 @@ pub(super) fn register(out: &mut Vec<Definition>) {
 }
 
 fn requirements(out: &mut Vec<Definition>) {
-    let list = read::<provenance_core::Requirement, pages::PageRequirements>(
+    let list = read::<provenance_core::Requirement, family::PageRequirements>(
         "list-requirements",
         "listRequirements",
         "/requirements",
@@ -446,7 +434,7 @@ fn requirements(out: &mut Vec<Definition>) {
     .pagination();
     let queries = searchable_queries(&list, "requirement");
     out.push(with_query_results(list, queries));
-    let member = backed::<members::GetReviewedResource>(
+    let member = backed::<family::GetReviewedResource>(
         "get-requirement",
         "getRequirement",
         HttpMethod::Get,
@@ -461,7 +449,7 @@ fn requirements(out: &mut Vec<Definition>) {
     let queries = member_queries(&member, "requirement");
     out.push(with_query_results(member, queries));
     out.push(
-        backed::<super::super::CreateRequirementResource>(
+        backed::<operation::CreateRequirementResource>(
             "create-requirement",
             "createRequirement",
             HttpMethod::Post,
@@ -476,7 +464,7 @@ fn requirements(out: &mut Vec<Definition>) {
         .with_etag("/edit/etag", false),
     );
     out.push(
-        backed::<super::super::UpdateRequirementResource>(
+        backed::<operation::UpdateRequirementResource>(
             "update-requirement",
             "updateRequirement",
             HttpMethod::Patch,

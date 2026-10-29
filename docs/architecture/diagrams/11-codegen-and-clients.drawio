@@ -7,7 +7,7 @@
         <mxCell id="11-codegen-and-clients-title" value="&lt;b&gt;Operation contract generation: provenance-codegen, tools/operation-codegen, provenance-http-client&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;align=left;verticalAlign=top;fontSize=18;fontColor=#1a1a1a;" vertex="1" parent="1">
           <mxGeometry x="20" y="10" width="1680" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="i_store" value='&lt;b&gt;provenance-store&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;operations::catalog::definitions();&lt;br&gt;schema feature&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+        <mxCell id="i_store" value='&lt;b&gt;provenance-contract&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;definitions(); uses the&lt;br&gt;provenance-store schema feature&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
           <mxGeometry x="20" y="90" width="280" height="80" as="geometry" />
         </mxCell>
         <mxCell id="i_core" value='&lt;b&gt;provenance-core&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;protocol types; schema feature&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e6d0de;strokeColor=#996185;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">

@@ -2,8 +2,8 @@
 use crate::invocation::{grammar, GlobalContext};
 use axum::http::{HeaderMap, Method};
 use clap::{parser::ValueSource, Arg, ArgAction, ArgMatches, Command};
+use provenance_contract::{Definition, TargetAction};
 use provenance_porcelain::action::Action;
-use provenance_store::operations::catalog::{self, Definition, TargetAction};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -46,7 +46,7 @@ impl Invocation {
             &["stdin"],
         )
         .unwrap_or_else(|error| usage_error(error));
-        if resolved.address.definition.method == catalog::HttpMethod::Post {
+        if resolved.address.definition.method == provenance_contract::HttpMethod::Post {
             if let Some(id) = data.get("id").and_then(Value::as_str) {
                 provenance_core::ensure_record_id_assignable(id)
                     .unwrap_or_else(|error| usage_error(error));
@@ -116,7 +116,7 @@ pub fn command(collection: &str) -> anyhow::Result<Command> {
 pub fn target_command() -> anyhow::Result<Command> {
     let definitions = TargetAction::RECORD
         .into_iter()
-        .flat_map(catalog::target_definitions)
+        .flat_map(provenance_contract::target_definitions)
         .map(|(_, definition)| definition)
         .collect::<Vec<_>>();
     let command = fields::augment_with_overrides(
@@ -180,9 +180,9 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
         affected_review_record,
     } = invocation;
     let method = match definition.method {
-        catalog::HttpMethod::Get => Method::GET,
-        catalog::HttpMethod::Post => Method::POST,
-        catalog::HttpMethod::Patch => Method::PATCH,
+        provenance_contract::HttpMethod::Get => Method::GET,
+        provenance_contract::HttpMethod::Post => Method::POST,
+        provenance_contract::HttpMethod::Patch => Method::PATCH,
     };
     if matches!(
         path.split('/').nth(1),
@@ -194,7 +194,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
     let host = repo.local_host()?;
     if matches!(
         definition.registration.cli.execution,
-        catalog::CliExecution::ProjectStatementCheck
+        provenance_contract::CliExecution::ProjectStatementCheck
     ) {
         let request: provenance_core::protocol::CheckStatementRequest =
             serde_json::from_value(data)?;

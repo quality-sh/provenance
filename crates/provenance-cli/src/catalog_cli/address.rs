@@ -1,4 +1,4 @@
-use provenance_store::operations::catalog::{self, Definition, HttpMethod};
+use provenance_contract::{Definition, HttpMethod};
 use std::{collections::BTreeMap, fmt::Write as _, sync::OnceLock};
 
 pub(super) struct Resolved {
@@ -82,7 +82,7 @@ pub(super) fn registrations(collection: &str) -> Vec<&'static Address> {
 }
 
 fn build() -> Vec<Address> {
-    let definitions = catalog::definitions();
+    let definitions = provenance_contract::definitions();
     let mut addresses = Vec::new();
     for definition in definitions {
         let collection = definition.path.split('/').nth(1).expect("route collection");
@@ -247,7 +247,7 @@ mod tests {
     #[should_panic(expected = "ambiguous CLI registrations")]
     /// Implementation aid: this proves that route grammar categories do not overlap.
     fn construction_rejects_intersecting_address_grammars() {
-        let definition = &catalog::definitions()[0];
+        let definition = &provenance_contract::definitions()[0];
         reject_ambiguous(&[
             Address {
                 collection: "sources",

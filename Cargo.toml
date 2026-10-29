@@ -10,6 +10,7 @@ members = [
     "crates/provenance-store",
     "crates/provenance-transport",
     "crates/provenance-codegen",
+    "crates/provenance-contract",
     "crates/provenance-http-client",
     "crates/provenance-report",
 ]
@@ -87,6 +88,7 @@ uuid = { version = "1.10", features = ["v4"] }
 toml = "0.8"
 trybuild = "1.0"
 predicates = "3.1"
+provenance-contract = { path = "crates/provenance-contract", version = "0.3.0" }
 provenance-core = { path = "crates/provenance-core", version = "0.3.0" }
 provenance-macros = { path = "crates/provenance-macros", version = "0.3.0" }
 provenance-porcelain = { path = "crates/provenance-porcelain", version = "0.3.0" }

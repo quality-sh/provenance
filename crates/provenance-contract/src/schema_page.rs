@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 /// schemas, and `next_cursor` appears only when the operation's page carries
 /// it, with the producer's nullability. Operations whose producers ship no
 /// page facts keep a metadata-free meta.
-pub(super) fn stamp_page_metadata(envelope: &mut Value, raw: &Value) {
+pub fn stamp_page_metadata(envelope: &mut Value, raw: &Value) {
     let Some((limit, has_more, next_cursor)) = page_facts(raw) else {
         return;
     };

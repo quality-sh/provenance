@@ -1,4 +1,4 @@
-use crate::operations::catalog::{
+use crate::{
     DiscussionWriteKind, NullClearBinding, RequestAdapter, RequestAdapterError, RequestBinding,
 };
 use serde_json::{json, Map, Value};

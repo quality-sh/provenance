@@ -122,11 +122,11 @@ pub(super) async fn member_read(
     root: &camino::Utf8Path,
     id: &str,
 ) -> Result<serde_json::Value, String> {
-    operation_read::<catalog::resource_members::GetSource>(root, json!({"id": id})).await
+    operation_read::<crate::operations::family_operations::GetSource>(root, json!({"id": id})).await
 }
 
 pub(super) async fn list_read(root: &camino::Utf8Path) -> Result<serde_json::Value, String> {
-    operation_read::<catalog::resource_pages::PageSources>(
+    operation_read::<crate::operations::family_operations::PageSources>(
         root,
         json!({"limit": 50, "cursor": null}),
     )
@@ -407,7 +407,7 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
         .create_resolution(resolution_input(&scope, "res_base", String::new()))
         .unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
-    crate::test_support::call::<catalog::resource_members::GetResolution, _>(
+    crate::test_support::call::<crate::operations::family_operations::GetResolution, _>(
         wire_call(json!({"id": "res_base"})),
         catalog::Direct(Arc::new(Target(root))),
     )

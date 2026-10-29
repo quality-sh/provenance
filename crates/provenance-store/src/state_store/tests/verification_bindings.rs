@@ -241,7 +241,7 @@ async fn the_verification_page_lists_only_the_bindings_of_the_named_rule() {
 
 async fn verification_page(root: &camino::Utf8Path, rule: &str) -> serde_json::Value {
     super::read_budget::operation_read::<
-        crate::operations::catalog::resource_pages::PageVerificationBindings,
+        crate::operations::family_operations::PageVerificationBindings,
     >(
         root,
         serde_json::json!({"rule": rule, "limit": 10, "cursor": null}),
