@@ -7,7 +7,6 @@
 
 use camino::Utf8PathBuf;
 use provenance_macros::rule;
-use std::collections::BTreeSet;
 use std::sync::{Mutex, PoisonError};
 use std::thread::ThreadId;
 
@@ -19,7 +18,7 @@ pub struct PublicationHeld {
 }
 
 /// The kind of section an entry holds.
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum HolderKind {
     /// A live publication section, under the repository publication lock.
     Live,
@@ -29,7 +28,8 @@ pub(crate) enum HolderKind {
 
 type Key = (String, HolderKind, ThreadId);
 
-static HOLDERS: Mutex<BTreeSet<Key>> = Mutex::new(BTreeSet::new());
+// A thread holds few sections at once, so a list is enough.
+static HOLDERS: Mutex<Vec<Key>> = Mutex::new(Vec::new());
 
 /// Refuses when this thread already holds the section with `identity`.
 #[rule("rule_publication_holders_grant_nothing")]
@@ -52,7 +52,7 @@ pub(crate) fn refuse_if_held(
 /// entry drops, also on unwind.
 pub(crate) fn enter(identity: String, kind: HolderKind) -> HolderEntry {
     let key = (identity, kind, std::thread::current().id());
-    table().insert(key.clone());
+    table().push(key.clone());
     HolderEntry { key }
 }
 
@@ -62,11 +62,14 @@ pub(crate) struct HolderEntry {
 
 impl Drop for HolderEntry {
     fn drop(&mut self) {
-        table().remove(&self.key);
+        let mut table = table();
+        if let Some(at) = table.iter().position(|key| key == &self.key) {
+            table.swap_remove(at);
+        }
     }
 }
 
-fn table() -> std::sync::MutexGuard<'static, BTreeSet<Key>> {
+fn table() -> std::sync::MutexGuard<'static, Vec<Key>> {
     // An entry is inserted or removed in one step, so a poisoned table is intact.
     HOLDERS.lock().unwrap_or_else(PoisonError::into_inner)
 }
