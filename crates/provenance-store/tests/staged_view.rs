@@ -158,6 +158,7 @@ fn the_staged_store_reports_the_live_identity() {
 
 #[test]
 #[verifies("rule_staged_write_keeps_live_repository_identity", examples)]
+#[verifies("rule_live_projection_shows_only_published_state", examples)]
 fn a_write_in_the_body_reaches_live_state_only_when_the_stage_returns() {
     let (_dir, repository) = repository();
     let before = state_bytes(&repository);
@@ -185,6 +186,7 @@ fn a_write_in_the_body_reaches_live_state_only_when_the_stage_returns() {
 
 #[test]
 #[verifies("rule_staged_write_keeps_live_repository_identity", examples)]
+#[verifies("rule_live_projection_shows_only_published_state", examples)]
 fn a_dry_run_leaves_live_state_and_the_projection_unchanged() {
     let (_dir, repository) = repository();
     let serial_before = serial(&repository);
@@ -200,6 +202,7 @@ fn a_dry_run_leaves_live_state_and_the_projection_unchanged() {
 
 #[test]
 #[verifies("rule_staged_write_keeps_live_repository_identity", examples)]
+#[verifies("rule_live_projection_shows_only_published_state", examples)]
 fn a_body_error_after_a_write_leaves_live_state_unchanged() {
     let (_dir, repository) = repository();
     let serial_before = serial(&repository);

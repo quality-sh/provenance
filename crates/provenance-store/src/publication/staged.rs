@@ -119,6 +119,7 @@ pub(super) enum InstallState {
     FileInstalled,
 }
 
+#[rule("rule_live_projection_shows_only_published_state")]
 pub(super) fn stage_with_hook<R>(
     live_layout: &ProvenanceLayout,
     dry_run: bool,
