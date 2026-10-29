@@ -209,6 +209,11 @@ impl Repository {
     }
 
     /// A store over the live state of this repository.
+    ///
+    /// The store is a trusted internal interface. Its public reads and writes
+    /// take a scope id and do not check it against the scope that this handle
+    /// selected. The catalog's `ScopedWrite` operations and
+    /// [`Repository::ensure_selected`] enforce the scope.
     #[rule("rule_operation_acts_on_opened_repository")]
     pub fn store(&self) -> StateStore {
         StateStore::live(self.inner.identity.clone(), self.inner.layout.clone())
