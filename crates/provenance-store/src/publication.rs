@@ -72,6 +72,13 @@ pub(crate) fn with_repository_publication_checked<R>(
     prepare_publication_lock(layout)?;
     let lock_path = layout.publication_lock_path();
     if HELD_LOCKS.with(|locks| locks.borrow().contains(&key)) {
+        eprintln!(
+            "HELD_LOCKS_PROBE re-entry\n{}\nHELD_LOCKS_PROBE end",
+            std::backtrace::Backtrace::force_capture()
+        );
+        if std::env::var_os("HELD_LOCKS_PROBE_OFF").is_none() {
+            panic!("HELD_LOCKS_PROBE re-entry");
+        }
         check()?;
         return operation();
     }
