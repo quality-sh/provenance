@@ -116,7 +116,9 @@ fn resolve_scope_path(
     let path = if prefix.is_absolute() {
         prefix.to_path_buf()
     } else {
-        workspace_root.join(prefix)
+        let mut path = workspace_root.to_path_buf();
+        path.extend(prefix.components());
+        path
     };
     dunce::canonicalize(&path).with_context(|| {
         format!("failed to resolve Provenance path prefix '{prefix}' from {workspace_root}")

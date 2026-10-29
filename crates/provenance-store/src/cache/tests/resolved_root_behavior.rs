@@ -1,27 +1,37 @@
-//! A repository opened through a link reads and caches under its resolved root.
+//! A repository opened through a directory link reads its state under the
+//! resolved root, and the cache that the store opens holds what it read.
 
+use super::super::connection::cache_options;
 use super::fixtures::{rewrite_records, seeded_layout};
 use crate::cache::{catch_up_state, materialize_state};
 use crate::repository::Repository;
 use crate::test_probes;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::verifies;
-use sqlx::sqlite::SqliteConnectOptions;
-use std::str::FromStr as _;
 
 #[cfg(unix)]
 fn link_dir(target: &std::path::Path, link: &std::path::Path) {
     std::os::unix::fs::symlink(target, link).unwrap();
 }
 
+/// A directory junction. Unlike a directory symbolic link, a junction does
+/// not need administrator rights or Developer Mode.
 #[cfg(windows)]
 fn link_dir(target: &std::path::Path, link: &std::path::Path) {
-    std::os::windows::fs::symlink_dir(target, link).unwrap();
+    let status = std::process::Command::new("cmd")
+        .arg("/C")
+        .arg("mklink")
+        .arg("/J")
+        .arg(link)
+        .arg(target)
+        .status()
+        .unwrap();
+    assert!(status.success(), "mklink /J failed: {status}");
 }
 
 #[tokio::test]
-#[verifies("rule_operation_acts_on_opened_repository", examples)]
-async fn a_repository_opened_through_a_link_reads_and_caches_under_its_resolved_root() {
+#[verifies("rule_opened_root_is_resolved_working_tree", examples)]
+async fn a_repository_opened_through_a_link_reads_its_state_under_the_resolved_root() {
     let (dir, layout, scope) = seeded_layout();
     let links = tempfile::tempdir().unwrap();
     let link = links.path().join("repository");
@@ -30,9 +40,16 @@ async fn a_repository_opened_through_a_link_reads_and_caches_under_its_resolved_
 
     let repository = Repository::open(&link, "default").unwrap();
     assert_eq!(repository.working_tree(), resolved);
-    // On Windows the root has no verbatim prefix, so a user reads the plain
-    // path and a connection URL does not take `?` as the query.
     assert!(!repository.working_tree().as_str().starts_with(r"\\?\"));
+    // The Windows runner's TEMP has the short name `RUNNER~1`. The opened
+    // root names the long form.
+    #[cfg(windows)]
+    {
+        if std::env::var_os("GITHUB_ACTIONS").is_some() {
+            assert!(link.to_str().unwrap().contains('~'), "{link:?}");
+        }
+        assert!(!repository.working_tree().as_str().contains('~'));
+    }
 
     materialize_state(&repository).await.unwrap();
     rewrite_records(&crate::shards::requirements_path(&layout, &scope), |r| {
@@ -50,8 +67,7 @@ async fn a_repository_opened_through_a_link_reads_and_caches_under_its_resolved_
         );
     }
 
-    let url = format!("sqlite://{}", repository.layout().cache_db_path());
-    let pool = sqlx::SqlitePool::connect_with(SqliteConnectOptions::from_str(&url).unwrap())
+    let pool = sqlx::SqlitePool::connect_with(cache_options(repository.layout()))
         .await
         .unwrap();
     let statement: String = sqlx::query_scalar("SELECT statement FROM requirements")

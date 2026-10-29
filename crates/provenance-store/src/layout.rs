@@ -39,7 +39,8 @@ impl ProvenanceLayout {
     }
     pub fn verification_runs_lock_path(&self, scope: &provenance_core::ScopeId) -> Utf8PathBuf {
         self.cache_dir()
-            .join("locks/scopes")
+            .join("locks")
+            .join("scopes")
             .join(scope.as_str())
             .join("verification-runs.jsonl.lock")
     }
@@ -55,12 +56,15 @@ impl ProvenanceLayout {
     }
     pub fn lifecycle_lock_path(&self, scope: &provenance_core::ScopeId) -> Utf8PathBuf {
         self.cache_dir()
-            .join("locks/scopes")
+            .join("locks")
+            .join("scopes")
             .join(scope.as_str())
             .join("ideation.lifecycle.lock")
     }
     pub fn publication_lock_path(&self) -> Utf8PathBuf {
-        self.cache_dir().join("locks/repository.publication.lock")
+        self.cache_dir()
+            .join("locks")
+            .join("repository.publication.lock")
     }
     pub fn publication_marker_path(&self) -> Utf8PathBuf {
         self.cache_dir().join("import-publication.json")
@@ -79,7 +83,11 @@ impl ProvenanceLayout {
 pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
     for candidate in start.ancestors() {
         if candidate.join(".git").exists()
-            || candidate.join(".provenance/state/manifest.json").exists()
+            || candidate
+                .join(".provenance")
+                .join("state")
+                .join("manifest.json")
+                .exists()
         {
             return Ok(candidate.to_path_buf());
         }

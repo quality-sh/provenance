@@ -43,8 +43,8 @@ impl InstallPlan {
             } => (global, force, copy, true),
         };
         let guidance = conflict_guidance(base, global, copy);
-        let canonical_dir = base.join(".agents/skills");
-        let claude_dir = base.join(".claude/skills");
+        let canonical_dir = base.join(".agents").join("skills");
+        let claude_dir = base.join(".claude").join("skills");
         ensure_managed_directory(base, &canonical_dir)?;
         ensure_managed_directory(base, &claude_dir)?;
         let mut canonical = Vec::new();

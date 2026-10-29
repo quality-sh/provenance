@@ -367,9 +367,11 @@ pub(super) fn open(
     Ok(HeldRepositoryFile {
         relative: relative.to_owned(),
         parent,
-        parent_path: root_path
-            .join(relative.parent().unwrap_or_else(|| Utf8Path::new("")))
-            .into_std_path_buf(),
+        parent_path: {
+            let mut path = root_path.to_path_buf();
+            path.extend(relative.parent().into_iter().flat_map(Utf8Path::components));
+            path.into_std_path_buf()
+        },
         leaf,
         digest: Sha256::digest(&bytes).into(),
         bytes,
