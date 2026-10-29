@@ -7,7 +7,7 @@ fn main() {
         .stage(
             false,
             None,
-            |staged: &StateStore| -> anyhow::Result<&StateStore> { Ok(staged) },
+            |staged: &StateStore| -> Result<&StateStore, anyhow::Error> { Ok(staged) },
         )
         .unwrap();
     let _ = escaped.manifest();
