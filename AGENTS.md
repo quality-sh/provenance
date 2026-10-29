@@ -35,6 +35,8 @@ Do not add a browser suite here or move a broad suite into `provenance-web`.
 
 Before designing or restructuring modules, use the codebase-design and domain-modeling skills.
 
+Each workspace crate can depend directly only on the crates that `.config/crate-dependencies.json` allows, and the `crate_dependencies` test in `provenance-cli` fails on a new edge until you change that file; do not allow an edge that its `forbidden` list names.
+
 ## No versioning before 1.0
 
 Before Provenance 1.0, nothing is versioned. Do not add a schema version, a version
