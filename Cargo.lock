@@ -2488,6 +2488,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "provenance-contract"
+version = "0.3.0"
+dependencies = [
+ "provenance-core",
+ "provenance-macros",
+ "provenance-store",
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+]
+
+[[package]]
 name = "provenance-core"
 version = "0.3.0"
 dependencies = [

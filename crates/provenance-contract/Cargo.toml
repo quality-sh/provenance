@@ -1,0 +1,22 @@
+[package]
+name = "provenance-contract"
+version.workspace = true
+edition.workspace = true
+description = "Internal part of Provenance for the operation wire contract"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+provenance-core = { workspace = true, features = ["schema"] }
+provenance-macros.workspace = true
+provenance-store = { workspace = true, features = ["schema"] }
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_path_to_error = "=0.1.20"
