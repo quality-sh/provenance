@@ -147,6 +147,19 @@ impl crate::state_store::StateStore {
     where
         T: DeserializeOwned + Serialize,
     {
+        self.mutate_jsonl_records_with_store(path, |_, records| mutate(records))
+    }
+
+    /// Like [`Self::mutate_jsonl_records`], but `mutate` also gets the store
+    /// that holds the section, for the reads the change depends on.
+    pub(crate) fn mutate_jsonl_records_with_store<T, R>(
+        &self,
+        path: &Utf8Path,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R>
+    where
+        T: DeserializeOwned + Serialize,
+    {
         self.with_repository_publication(|held| {
             let lock_path = held.layout.state_shard_lock_path(path)?;
             let mut result = None;
@@ -155,7 +168,7 @@ impl crate::state_store::StateStore {
                 &lock_path,
                 held.permissions(),
                 |records| {
-                    result = Some(mutate(records)?);
+                    result = Some(mutate(held, records)?);
                     Ok(true)
                 },
             )?;

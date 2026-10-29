@@ -87,6 +87,15 @@ impl StateStore {
         }
     }
 
+    /// Whether this store holds the section of a staged state root. Refuses
+    /// a store that holds no section.
+    pub(crate) fn holds_staged_section(&self) -> anyhow::Result<bool> {
+        match &self.access {
+            Access::StagedSection { .. } => Ok(true),
+            _ => self.ensure_holds_live_section().map(|()| false),
+        }
+    }
+
     /// Refuses unless this store holds the live section.
     pub(crate) fn ensure_holds_live_section(&self) -> anyhow::Result<()> {
         anyhow::ensure!(

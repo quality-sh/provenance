@@ -216,19 +216,19 @@ impl StateStore {
         if T::KIND != NodeType::Requirement && !self.permits_path(path) {
             return self.save_native_record(path, expected_etag, mutate);
         }
-        self.mutate_graph_record_guarded(path, |records| mutate(self, records))
+        self.mutate_graph_record_guarded(path, mutate)
             .map(|(_, record)| record)
     }
 
     pub(crate) fn mutate_graph_record_guarded<T: GraphRecord>(
         &self,
         path: &Utf8Path,
-        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<(Option<T>, T)> {
-        self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+        self.mutate_jsonl_records_with_store(path, |held, records: &mut Vec<T>| {
             let before = records.clone();
-            let result = mutate(records)?;
-            self.stamp_records(&before, records)?;
+            let result = mutate(held, records)?;
+            held.stamp_records(&before, records)?;
             let stamped = records
                 .iter()
                 .find(|r| r.id() == result.id())
@@ -260,9 +260,9 @@ impl StateStore {
         path: &Utf8Path,
         mut replacement: Vec<T>,
     ) -> anyhow::Result<Vec<T>> {
-        self.mutate_jsonl_records(path, |records| {
+        self.mutate_jsonl_records_with_store(path, |held, records| {
             let before = records.clone();
-            self.stamp_records(records, &mut replacement)?;
+            held.stamp_records(records, &mut replacement)?;
             ensure_slice_within_read_budget(&replacement)?;
             *records = replacement;
             Ok(before)

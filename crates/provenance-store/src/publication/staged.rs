@@ -119,15 +119,20 @@ impl StageLock {
 }
 
 /// Copies the complete state tree and publishes the prepared result under the
-/// live section that `held` holds. Copy cost is proportional to all state
-/// bytes, including existing evidence.
+/// section that `held` holds: the live section, or the staged section of a
+/// stage that writes in steps. Copy cost is proportional to all state bytes,
+/// including existing evidence.
 pub fn with_staged_state<R>(
     held: &StateStore,
     dry_run: bool,
     prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    held.ensure_holds_live_section()?;
     let live_layout = &held.layout;
+    if held.holds_staged_section()? {
+        // The stage lock holds the staged root, so no publication lock is taken there.
+        super::prepare_publication_lock(live_layout)?;
+        super::prepare_transaction_dirs(live_layout)?;
+    }
     let mut publication = ImportPublication;
     stage_with_hook(live_layout, dry_run, prepare, &mut publication).map_err(|error| {
         if live_layout.publication_marker_path().exists() {
