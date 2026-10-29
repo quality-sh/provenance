@@ -3,11 +3,14 @@
     "axum",
     "clap",
     "dunce",
+    "filetime",
     "fs2",
     "fs_at",
     "hyper",
+    "jsonschema",
     "libsqlite3-sys",
     "notify",
+    "open",
     "remove_dir_all",
     "reqwest",
     "rmcp",
@@ -65,7 +68,9 @@
         "clap",
         "dunce",
         "fs2",
+        "jsonschema",
         "notify",
+        "open",
         "provenance-core",
         "provenance-macros",
         "provenance-porcelain",
@@ -84,6 +89,7 @@
         "windows-sys"
       ],
       "dev-dependencies": [
+        "jsonschema",
         "provenance-transport",
         "rmcp",
         "tempfile"
@@ -96,6 +102,7 @@
         "provenance-store"
       ],
       "dev-dependencies": [
+        "jsonschema",
         "tempfile"
       ]
     },
@@ -103,10 +110,13 @@
       "dependencies": [
         "provenance-macros"
       ],
-      "dev-dependencies": []
+      "dev-dependencies": [
+        "jsonschema"
+      ]
     },
     "provenance-http-client": {
       "dependencies": [
+        "jsonschema",
         "reqwest"
       ],
       "dev-dependencies": [
@@ -172,7 +182,9 @@
         "fs2",
         "provenance-macros"
       ],
-      "dev-dependencies": []
+      "dev-dependencies": [
+        "jsonschema"
+      ]
     },
     "provenance-store": {
       "dependencies": [
@@ -191,7 +203,9 @@
         "windows-sys"
       ],
       "dev-dependencies": [
-        "fs_at"
+        "filetime",
+        "fs_at",
+        "jsonschema"
       ]
     },
     "provenance-transport": {
@@ -210,6 +224,7 @@
         "ureq"
       ],
       "dev-dependencies": [
+        "jsonschema",
         "provenance-macros",
         "provenance-ste100",
         "sqlx",
