@@ -403,7 +403,10 @@ async fn refuse_stale_refuses_a_shard_that_vanishes_during_the_hash() {
         panic!("expected UnitUnreadable, got {error:#}");
     };
     assert_eq!(unit, "scope:default");
-    assert_eq!(unreadable.as_str(), path.as_str());
-    assert!(error.to_string().contains(path.as_str()), "{error}");
+    // The paths are equal by component. The message shows the native
+    // spelling: on Windows the shard path has `/` from its join.
+    assert_eq!(unreadable, &path);
+    let shown: camino::Utf8PathBuf = path.components().collect();
+    assert!(error.to_string().contains(shown.as_str()), "{error}");
     assert_ne!(cause, "");
 }

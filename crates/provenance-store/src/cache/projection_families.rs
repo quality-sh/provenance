@@ -119,9 +119,7 @@ macro_rules! define_projection_families {
                 layout: &ProvenanceLayout,
                 scope: &ScopeId,
             ) -> Utf8PathBuf {
-                let mut path = layout.scopes_dir().join(scope.as_str());
-                path.extend(camino::Utf8Path::new(self.shard_suffix()).components());
-                path
+                layout.scopes_dir().join(scope.as_str()).join(self.shard_suffix())
             }
 
             pub(crate) fn canonical_records(
