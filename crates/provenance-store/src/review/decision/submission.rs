@@ -6,7 +6,7 @@ use crate::{
         decision_state::{
             check_request_size, review_proposal_key, validated_resubmission, CycleFacts, Receipt,
         },
-        guard, new_id, owner_matches,
+        new_id, owner_matches,
     },
     shards,
     state_store::{CreateProposalCardInput, RecordStamp, StateStore},
@@ -39,11 +39,8 @@ impl StateStore {
             )?;
             owner_matches(&record, input.declared_by.as_deref())?;
             with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
-                guard::with_writer(
-                    &shards::proposal_cards_path(&staged.layout, &scope),
-                    "*",
-                    || staged.commit_submission(input),
-                )
+                let path = shards::proposal_cards_path(&staged.layout, &scope);
+                staged.permitting(&[&path], "*", |staged| staged.commit_submission(input))
             })
         })
     }

@@ -1,6 +1,6 @@
 //! Guarded typed-spec changes to enrolled graph records.
 
-use super::{classifier, decision_state::CycleFacts, guard};
+use super::{classifier, decision_state::CycleFacts};
 use crate::{
     cache::review_families,
     review::publication::with_record_state,
@@ -30,7 +30,8 @@ impl StateStore {
             let current = review_families::review_records(staged, scope)?;
             let facts = CycleFacts::validated(staged, scope)?;
             let paths = review_families::review_paths(&staged.layout, scope);
-            let result = guard::with_writers(&paths, "*", || publish(staged))?;
+            let paths = paths.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+            let result = staged.permitting(&paths, "*", publish)?;
             let desired = review_families::review_records(staged, scope)?;
             let (changes, deleted) = typed_changes(&current, &facts, &desired)?;
             staged.delete_record_discussions(scope, &deleted)?;
