@@ -1,6 +1,5 @@
 //! Canonical staged writer for one or more native graph record changes.
 
-use super::guard;
 use crate::{
     review::publication::with_record_state,
     state_store::{
@@ -86,30 +85,27 @@ impl NativeRecordBatch<'_> {
     where
         T: GraphRecord,
     {
-        guard::with_writer(path, "*", || {
-            let (result, changes) =
-                self.store
-                    .mutate_jsonl_records(path, |records: &mut Vec<T>| {
-                        let before = records.clone();
-                        let (result, guarded_id) = mutate(records)?;
-                        self.store.stamp_records(&before, records)?;
-                        ensure_slice_within_read_budget(records)?;
-                        if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
-                            check_etag(&before, id, expected)?;
-                        }
-                        let changes = records
-                            .iter()
-                            .filter_map(|after| {
-                                let previous =
-                                    before.iter().find(|record| record.id() == after.id())?;
-                                (previous != after).then(|| (previous.clone(), after.clone()))
-                            })
-                            .collect::<Vec<_>>();
-                        Ok((result, changes))
-                    })?;
+        self.store.permitting(&[path], "*", |store| {
+            let (result, changes) = store.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+                let before = records.clone();
+                let (result, guarded_id) = mutate(records)?;
+                store.stamp_records(&before, records)?;
+                ensure_slice_within_read_budget(records)?;
+                if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
+                    check_etag(&before, id, expected)?;
+                }
+                let changes = records
+                    .iter()
+                    .filter_map(|after| {
+                        let previous = before.iter().find(|record| record.id() == after.id())?;
+                        (previous != after).then(|| (previous.clone(), after.clone()))
+                    })
+                    .collect::<Vec<_>>();
+                Ok((result, changes))
+            })?;
             if let Some((_, after)) = changes.first() {
                 let review: ReviewRecord = after.clone().into();
-                self.store.validate_graph_scope(review.scope_id())?;
+                store.validate_graph_scope(review.scope_id())?;
             }
             Ok((result, changes))
         })

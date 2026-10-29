@@ -1,4 +1,4 @@
-use super::{classifier, guard};
+use super::classifier;
 use crate::{
     review::publication::with_record_state,
     shards,
@@ -79,14 +79,11 @@ impl StateStore {
             let id = input.create.id.clone();
             let stamp = self.current_record_stamp()?;
             with_record_state(self, RecordStamp::resolved(stamp), |staged| {
-                guard::with_writer(
-                    &shards::requirements_path(&staged.layout, &scope),
-                    id.as_str(),
-                    || {
-                        let created = staged.commit_creation(input)?;
-                        complete(staged, created)
-                    },
-                )
+                let path = shards::requirements_path(&staged.layout, &scope);
+                staged.permitting(&[&path], id.as_str(), |staged| {
+                    let created = staged.commit_creation(input)?;
+                    complete(staged, created)
+                })
             })
         })
     }

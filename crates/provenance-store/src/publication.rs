@@ -12,6 +12,7 @@ mod recovery;
 mod source_edit;
 mod source_edit_recovery;
 mod staged;
+mod write_permission;
 pub use durability::{sync_directory, sync_tree};
 pub use guard::{publication_guard, with_publication_guard, PublicationGuard};
 pub use read_only::read_only_record_kinds;
@@ -27,6 +28,7 @@ use recovery::{validate_missing_transaction_dir, validated_transaction_dir};
 pub use source_edit::{with_staged_state_and_source_edit, SourceEditRecoveryFailure};
 pub use staged::LiveAccessDuringStage;
 pub(crate) use staged::{with_stage_body, with_staged_state};
+pub(crate) use write_permission::{protect_rows, WritePermissions};
 
 thread_local! {
     static HELD_LOCKS: RefCell<BTreeSet<String>> = const { RefCell::new(BTreeSet::new()) };
@@ -156,7 +158,17 @@ impl crate::state_store::StateStore {
     {
         self.with_repository_publication(|| {
             let lock_path = self.layout.state_shard_lock_path(path)?;
-            crate::jsonl::mutate_jsonl_locked(path, &lock_path, mutate)
+            let mut result = None;
+            crate::jsonl::mutate_jsonl_locked_if(
+                path,
+                &lock_path,
+                self.permissions(),
+                |records| {
+                    result = Some(mutate(records)?);
+                    Ok(true)
+                },
+            )?;
+            Ok(result.expect("the mutation ran"))
         })
     }
 
@@ -172,7 +184,7 @@ impl crate::state_store::StateStore {
     {
         self.with_repository_publication(|| {
             let lock_path = self.layout.state_shard_lock_path(path)?;
-            crate::jsonl::mutate_jsonl_locked_if(path, &lock_path, mutate)
+            crate::jsonl::mutate_jsonl_locked_if(path, &lock_path, self.permissions(), mutate)
         })
     }
 }

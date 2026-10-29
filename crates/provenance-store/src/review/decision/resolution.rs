@@ -4,7 +4,7 @@ use crate::{
     review::{
         decision_input::{DecideRecordReview, ReviewFeedback},
         decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
-        guard, new_id,
+        new_id,
     },
     shards,
     state_store::{CreateDispositionInput, RecordStamp, StateStore},
@@ -95,22 +95,19 @@ impl StateStore {
             ));
         }
         let disposition_id = new_id();
-        guard::with_writer(
-            &shards::dispositions_path(&self.layout, &input.scope_id),
-            "*",
-            || {
-                self.create_disposition(CreateDispositionInput {
-                    scope_id: input.scope_id.clone(),
-                    id: disposition_id.clone(),
-                    proposal_id: input.proposal_id.clone(),
-                    decision: input.decision,
-                    rationale: input.rationale.clone().unwrap_or_default(),
-                    actor: input.actor.clone(),
-                    canonical_artifact: input.canonical_artifact.clone(),
-                    external_action: None,
-                })
-            },
-        )?;
+        let path = shards::dispositions_path(&self.layout, &input.scope_id);
+        self.permitting(&[&path], "*", |store| {
+            store.create_disposition(CreateDispositionInput {
+                scope_id: input.scope_id.clone(),
+                id: disposition_id.clone(),
+                proposal_id: input.proposal_id.clone(),
+                decision: input.decision,
+                rationale: input.rationale.clone().unwrap_or_default(),
+                actor: input.actor.clone(),
+                canonical_artifact: input.canonical_artifact.clone(),
+                external_action: None,
+            })
+        })?;
         let feedback_message_id = input
             .feedback
             .map(|feedback| {
@@ -174,10 +171,10 @@ impl StateStore {
         }
         crate::review::discussion_writes::check_size(&discussion)?;
         self.authorize_discussion(&discussion)?;
-        let started = guard::with_writer(&shards::threads_path(&self.layout, scope), "*", || {
-            guard::with_writer(&shards::messages_path(&self.layout, scope), "*", || {
-                self.commit_discussion(discussion, None, Some(disposition_id.clone()))
-            })
+        let threads = shards::threads_path(&self.layout, scope);
+        let messages = shards::messages_path(&self.layout, scope);
+        let started = self.permitting(&[&threads, &messages], "*", |store| {
+            store.commit_discussion(discussion, None, Some(disposition_id.clone()))
         })?;
         Ok(started.root_message_id)
     }

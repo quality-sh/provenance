@@ -4,7 +4,7 @@ use crate::{
     review::{
         decision_input::WithdrawRecordReview,
         decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
-        guard, new_id, owner_matches,
+        new_id, owner_matches,
     },
     shards,
     state_store::{RecordStamp, StateStore},
@@ -102,19 +102,16 @@ impl StateStore {
         let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
         let record_id = proposal.traceability.target.artifact_id.clone();
-        let withdrawal = guard::with_writer(
-            &shards::withdrawals_path(&self.layout, &input.scope_id),
-            "*",
-            || {
-                self.create_withdrawal(Withdrawal {
-                    scope_id: input.scope_id.clone(),
-                    id: new_id(),
-                    proposal_id: input.proposal_id.clone(),
-                    actor: input.actor.clone(),
-                    reason: input.reason.clone(),
-                })
-            },
-        )?;
+        let path = shards::withdrawals_path(&self.layout, &input.scope_id);
+        let withdrawal = self.permitting(&[&path], "*", |store| {
+            store.create_withdrawal(Withdrawal {
+                scope_id: input.scope_id.clone(),
+                id: new_id(),
+                proposal_id: input.proposal_id.clone(),
+                actor: input.actor.clone(),
+                reason: input.reason.clone(),
+            })
+        })?;
         Ok(Receipt {
             id: withdrawal.id,
             record_kind: kind,

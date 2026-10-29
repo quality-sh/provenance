@@ -1,3 +1,4 @@
+use crate::publication::{protect_rows, WritePermissions};
 use crate::state_store::readers::{ensure_supported_record_version, located, parse_line};
 use camino::Utf8Path;
 use fs2::FileExt;
@@ -62,7 +63,7 @@ where
     T: DeserializeOwned + Serialize,
 {
     let mut result = None;
-    mutate_jsonl_locked_if(path, lock_path, |records| {
+    mutate_jsonl_locked_if(path, lock_path, &WritePermissions::none(), |records| {
         result = Some(mutate(records)?);
         Ok(true)
     })?;
@@ -70,10 +71,12 @@ where
 }
 
 /// Like [`mutate_jsonl_locked`], but writes the shard only when `mutate`
-/// returns `true`. The shard is read once.
-pub fn mutate_jsonl_locked_if<T>(
+/// returns `true`. The shard is read once. A change to an enrolled row needs
+/// a grant in `permissions`.
+pub(crate) fn mutate_jsonl_locked_if<T>(
     path: &Utf8Path,
     lock_path: &Utf8Path,
+    permissions: &WritePermissions,
     mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<bool>,
 ) -> anyhow::Result<bool>
 where
@@ -86,7 +89,7 @@ where
             return Ok(false);
         }
         let lines = loaded.into_lines(path)?;
-        guard_jsonl_lines(path, &lines)?;
+        guard_jsonl_lines(path, &lines, permissions)?;
         write_jsonl_lines_atomic_unlocked(path, &lines)
             .map_err(crate::write_error::publication_started)?;
         Ok(true)
@@ -130,12 +133,13 @@ where
     Ok(loaded)
 }
 
-/// Writes one JSONL shard while the caller holds the publication lock.
+/// Writes one JSONL shard while the caller holds the publication lock. It
+/// carries no write permission, so it cannot change an enrolled row.
 pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
     path: &Utf8Path,
     records: &[T],
 ) -> anyhow::Result<()> {
-    crate::review::guard::protect_rows(path, records)?;
+    protect_rows(path, records, &WritePermissions::none())?;
     write_jsonl_atomic_unlocked(path, records)
 }
 
@@ -166,17 +170,21 @@ pub fn write_preserved_jsonl_atomic(
 ) -> anyhow::Result<()> {
     let lines = crate::merge::preserved_lines(ours, theirs, records)?;
     with_state_publication(path, || {
-        guard_jsonl_lines(path, &lines)?;
+        guard_jsonl_lines(path, &lines, &WritePermissions::none())?;
         write_jsonl_lines_atomic_unlocked(path, &lines)
     })
 }
 
-fn guard_jsonl_lines(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
+fn guard_jsonl_lines(
+    path: &Utf8Path,
+    lines: &[String],
+    permissions: &WritePermissions,
+) -> anyhow::Result<()> {
     let records = lines
         .iter()
         .map(|line| serde_json::from_str::<serde_json::Value>(line))
         .collect::<Result<Vec<_>, _>>()?;
-    crate::review::guard::protect_rows(path, &records)
+    protect_rows(path, &records, permissions)
 }
 
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {

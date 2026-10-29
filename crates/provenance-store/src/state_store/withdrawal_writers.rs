@@ -16,7 +16,7 @@ impl StateStore {
         let scope = withdrawal.scope_id.clone();
         let path = shards::withdrawals_path(&self.layout, &scope);
         anyhow::ensure!(
-            crate::review::guard::writer_allows(&path, "*"),
+            self.permits(&path, "*"),
             "withdrawals of review submissions go through the review seam"
         );
         anyhow::ensure!(
