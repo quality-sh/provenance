@@ -22,6 +22,7 @@ fn staged_and_read_only_capabilities_hold_at_compile_time() {
     let cases = trybuild::TestCases::new();
     cases.compile_fail("tests/compile_fail/staged_store_clone.rs");
     cases.compile_fail("tests/compile_fail/staged_store_outlives_stage.rs");
+    cases.compile_fail("tests/compile_fail/staged_store_returned_from_stage.rs");
     cases.compile_fail("tests/compile_fail/staged_store_cannot_open_live.rs");
     cases.compile_fail("tests/compile_fail/layout_store_outside_crate.rs");
     cases.compile_fail("tests/compile_fail/read_only_section_outside_crate.rs");
