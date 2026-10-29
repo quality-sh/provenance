@@ -38,7 +38,7 @@ fn store_has_no_wire_contract() {
 // Accepts only the narrow row, so a store-only column in `record_family_catalog!` does not
 // compile here.
 macro_rules! narrow_rows {
-    ($($group:ident {
+    ($rows:ident; $($group:ident {
         $($variant:ident {
             record: $record:ty,
             order: $order:tt,
@@ -48,13 +48,15 @@ macro_rules! narrow_rows {
             $(, review: $review:ident)?
         };)*
     })*) => {
-        [$($(stringify!($variant $record $order $($node)* $($catalog)* $($route)*),)*)*]
+        let $rows = [$($(
+            stringify!($variant $record $order $($node)* $($catalog)* $($route)*),
+        )*)*];
     };
 }
 
 #[test]
 fn record_family_catalog_leaves_out_store_only_columns() {
-    let rows = provenance_store::record_family_catalog!(narrow_rows);
+    provenance_store::record_family_catalog!(narrow_rows, rows);
     assert!(rows.iter().any(|row| row.starts_with("Sources")));
     for row in rows {
         // Shard files, readers, graph exports and import budgets stay in the store.
