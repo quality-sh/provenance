@@ -1,8 +1,7 @@
 use std::path::Path;
 
 fn source(path: &str) -> String {
-    let contract = Path::new(env!("CARGO_MANIFEST_DIR")).join("../provenance-contract");
-    std::fs::read_to_string(contract.join(path)).unwrap()
+    std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(path)).unwrap()
 }
 
 fn inference_hits<'a>(text: &str, forbidden: &'a [&str]) -> Vec<&'a str> {
