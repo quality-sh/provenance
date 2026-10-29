@@ -153,9 +153,7 @@ async fn neighbors_refuses_an_oversized_response_through_native_and_registered_c
         Some(&ReadFailure::PageBudgetExceeded)
     );
 
-    let failure = catalog::invoke_with(
-        "neighbors",
-        SDK_PROTOCOL_VERSION,
+    let failure = crate::test_support::call::<catalog::Neighbors, _>(
         json!({
             "context": {"repository": "test", "scope": "default"},
             "request": {
@@ -274,9 +272,7 @@ fn get_rule_query() -> GetQuery {
 }
 
 async fn get_rule_member(root: camino::Utf8PathBuf) -> serde_json::Value {
-    catalog::invoke_with(
-        "get-rule",
-        SDK_PROTOCOL_VERSION,
+    crate::test_support::call::<catalog::resource_members::GetRule, _>(
         json!({
             "context": {"repository": "test", "scope": "default"},
             "request": {"id": "rule_overtime"}

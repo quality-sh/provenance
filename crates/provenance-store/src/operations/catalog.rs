@@ -23,8 +23,8 @@ mod invoke;
 mod records;
 mod requirement_review;
 mod resource_lists;
-mod resource_members;
-mod resource_pages;
+pub(crate) mod resource_members;
+pub(crate) mod resource_pages;
 mod review_reads;
 #[cfg(feature = "schema")]
 mod routes;
@@ -75,7 +75,7 @@ pub use ideation::{
 pub use invoke::invoke;
 #[cfg(any(test, feature = "test-fixture"))]
 pub use invoke::Direct;
-pub use invoke::{invoke_authorized_typed, invoke_typed, invoke_with};
+pub use invoke::{frame_failure, invoke_authorized_typed, invoke_typed, invoke_with};
 
 #[cfg(test)]
 pub(crate) fn registered_operation_names_for_test() -> Vec<&'static str> {
