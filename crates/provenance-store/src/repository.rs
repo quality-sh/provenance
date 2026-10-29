@@ -139,6 +139,9 @@ impl Repository {
     /// current directory: the first ancestor with a manifest or a `.git`.
     #[rule("rule_sdk_project_discovery")]
     pub fn discover(root: Option<Utf8PathBuf>, scope: &str) -> Result<Self, OpenFailure> {
+        if let Some(root) = root.as_ref().filter(|root| root.is_absolute()) {
+            return Self::open(root, scope);
+        }
         let cwd = std::env::current_dir().map_err(|error| OpenFailure::Io(error.into()))?;
         let cwd = Utf8PathBuf::from_path_buf(cwd).map_err(|path| {
             OpenFailure::Io(anyhow::anyhow!(
@@ -146,22 +149,18 @@ impl Repository {
                 path.display()
             ))
         })?;
-        let Some(root) = root else {
-            let found = cwd
-                .ancestors()
-                .find(|ancestor| {
-                    ancestor.join(".provenance/state/manifest.json").is_file()
-                        || ancestor.join(".git").exists()
-                })
-                .unwrap_or(cwd.as_path())
-                .to_path_buf();
-            return Self::open(found, scope);
-        };
-        if root.is_relative() {
-            Self::open(cwd.join(root), scope)
-        } else {
-            Self::open(root, scope)
+        if let Some(root) = root {
+            return Self::open(cwd.join(root), scope);
         }
+        let found = cwd
+            .ancestors()
+            .find(|ancestor| {
+                ancestor.join(".provenance/state/manifest.json").is_file()
+                    || ancestor.join(".git").exists()
+            })
+            .unwrap_or(cwd.as_path())
+            .to_path_buf();
+        Self::open(found, scope)
     }
 
     /// The working tree, scope and settings of the open.
