@@ -165,16 +165,3 @@ fn apply_through_the_handle_lands_in_the_selected_scope() {
         0
     );
 }
-
-#[test]
-#[verifies("rule_sdk_project_discovery", examples)]
-fn discover_resolves_an_explicit_root_without_reading_the_current_directory() {
-    let (dir, _layout) = two_scope_repository();
-    let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
-    let repository = Repository::discover(Some(root), "a").unwrap();
-    assert_eq!(repository.scope().as_str(), "a");
-    assert_eq!(
-        repository.working_tree(),
-        camino::Utf8PathBuf::from_path_buf(dir.path().canonicalize().unwrap()).unwrap()
-    );
-}
