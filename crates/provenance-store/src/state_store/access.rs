@@ -1,6 +1,6 @@
 use super::{Access, RecordStamp, StateStore};
 use crate::layout::ProvenanceLayout;
-use crate::publication::{with_repository_publication, PublicationGuard};
+use crate::publication::{with_repository_publication, PublicationGuard, WritePermissions};
 use crate::repository::RepositoryIdentity;
 use camino::Utf8Path;
 use provenance_macros::{rule, verifies};
@@ -42,7 +42,9 @@ impl StateStore {
         Self {
             identity,
             layout,
-            access: Access::Held,
+            access: Access::Held {
+                permissions: WritePermissions::none(),
+            },
             record_stamp,
         }
     }
@@ -56,6 +58,47 @@ impl StateStore {
     /// The identity, for a staged view of this store.
     pub(crate) fn identity_for_stage(&self) -> Option<RepositoryIdentity> {
         self.identity.clone()
+    }
+
+    /// Runs `run` with this staged store and a permission to change the
+    /// enrolled rows of `id` (or of every id, `*`) in `paths`. A store that
+    /// takes its own lock is refused: a review write runs in a stage.
+    pub(crate) fn permitting<R>(
+        &self,
+        paths: &[&Utf8Path],
+        id: &str,
+        run: impl FnOnce(&Self) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        let Access::Held { permissions } = &self.access else {
+            anyhow::bail!("a review write permission needs a staged store");
+        };
+        let permitted = Self {
+            identity: self.identity.clone(),
+            layout: self.layout.clone(),
+            access: Access::Held {
+                permissions: permissions.with(paths, id),
+            },
+            record_stamp: self.record_stamp.clone(),
+        };
+        run(&permitted)
+    }
+
+    /// Whether this store may change the enrolled rows of `id` in `path`.
+    pub(crate) fn permits(&self, path: &Utf8Path, id: &str) -> bool {
+        self.permissions().allows(path, id)
+    }
+
+    /// Whether this store may change enrolled rows of any id in `path`.
+    pub(crate) fn permits_path(&self, path: &Utf8Path) -> bool {
+        self.permissions().allows_path(path)
+    }
+
+    pub(crate) fn permissions(&self) -> &WritePermissions {
+        static NONE: WritePermissions = WritePermissions::none();
+        match &self.access {
+            Access::Lock => &NONE,
+            Access::Held { permissions } => permissions,
+        }
     }
 }
 
@@ -133,7 +176,7 @@ impl StateStore {
     ) -> anyhow::Result<R> {
         match self.access {
             Access::Lock => with_repository_publication(layout, operation),
-            Access::Held => operation(),
+            Access::Held { .. } => operation(),
         }
     }
 }

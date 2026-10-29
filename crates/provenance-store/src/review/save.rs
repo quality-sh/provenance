@@ -1,4 +1,4 @@
-use super::{classifier, guard, SaveRequirement};
+use super::{classifier, SaveRequirement};
 use crate::{
     review::publication::with_record_state,
     shards,
@@ -136,7 +136,7 @@ impl StateStore {
             with_record_state(self, RecordStamp::resolved(stamp), |staged| {
                 let path = shards::requirements_path(&staged.layout, scope);
                 let record_id = record.id.clone();
-                guard::with_writer(&path, record_id.as_str(), || {
+                staged.permitting(&[&path], record_id.as_str(), |staged| {
                     let after = staged.commit_requirement(input, &record, origin, stale)?;
                     complete(staged, after)
                 })

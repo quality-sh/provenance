@@ -76,3 +76,5 @@ mod decision_state;
 
 #[cfg(test)]
 mod decision_tests;
+#[cfg(test)]
+mod write_permission_tests;

@@ -183,7 +183,7 @@ impl StateStore {
         ensure_record_id_assignable(candidate.id.as_str())?;
         anyhow::ensure!(
             candidate.proposal_type != ProposalType::RecordRevision
-                || crate::review::guard::writer_allows(
+                || self.permits(
                     &shards::proposal_cards_path(&self.layout, &candidate.scope_id),
                     "*"
                 ),
@@ -262,10 +262,7 @@ impl StateStore {
         {
             if target.proposal_type == ProposalType::RecordRevision {
                 anyhow::ensure!(
-                    crate::review::guard::writer_allows(
-                        &shards::dispositions_path(&self.layout, &scope_id),
-                        "*"
-                    ),
+                    self.permits(&shards::dispositions_path(&self.layout, &scope_id), "*"),
                     "decisions on review submissions go through the review seam"
                 );
             }

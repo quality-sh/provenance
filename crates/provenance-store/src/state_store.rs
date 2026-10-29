@@ -100,7 +100,11 @@ struct ManifestProjection {
 #[derive(Debug)]
 enum Access {
     Lock,
-    Held,
+    /// Under a held section: a staged view or a guarded store. Only such a
+    /// store carries write permissions.
+    Held {
+        permissions: crate::publication::WritePermissions,
+    },
 }
 
 #[derive(Clone, Debug)]
