@@ -23,7 +23,7 @@ pub struct TestStore {
 
 impl TestStore {
     fn new(name: &'static str, dir: tempfile::TempDir, scope: ScopeId) -> Self {
-        let root = Utf8PathBuf::from_path_buf(dir.path().canonicalize().unwrap()).unwrap();
+        let root = Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap();
         let repository = Repository::open(&root, scope.as_str()).unwrap();
         Self {
             name,
@@ -107,7 +107,7 @@ pub fn repository_state() -> TestStore {
         .canonicalize_utf8()
         .unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let root = Utf8PathBuf::from_path_buf(dir.path().canonicalize().unwrap()).unwrap();
+    let root = Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap();
     copy_tree(
         &workspace.join(".provenance/state"),
         &ProvenanceLayout::new(root).state_dir(),

@@ -394,7 +394,6 @@ async fn refuse_stale_refuses_a_shard_that_vanishes_during_the_hash() {
     let result = get_through(&store, policy()).await;
     crate::test_probes::disarm("unit_files_collected");
     let error = result.unwrap_err();
-    assert!(error.to_string().contains(path.as_str()), "{error}");
     let Some(ReadRefusal::UnitUnreadable {
         unit,
         path: unreadable,
@@ -404,6 +403,9 @@ async fn refuse_stale_refuses_a_shard_that_vanishes_during_the_hash() {
         panic!("expected UnitUnreadable, got {error:#}");
     };
     assert_eq!(unit, "scope:default");
+    // The paths are equal by component. On Windows the reported path can
+    // use `\` where the shard path has `/`.
     assert_eq!(unreadable, &path);
+    assert!(error.to_string().contains(unreadable.as_str()), "{error}");
     assert_ne!(cause, "");
 }

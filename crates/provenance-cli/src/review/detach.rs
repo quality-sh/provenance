@@ -58,9 +58,7 @@ impl Drop for StartedHost {
 /// background, then prints where the review page is served.
 #[rule("rule_review_detach_reuses_running_host")]
 pub fn run(options: &super::Options) -> anyhow::Result<()> {
-    let repo = options
-        .repo
-        .canonicalize()
+    let repo = dunce::canonicalize(&options.repo)
         .with_context(|| format!("cannot find repository {}", options.repo.display()))?;
     let read_only = without_reviewer(&repo)?;
     // Concurrent starts for one repository and scope wait here, so the later one reuses

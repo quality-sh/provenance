@@ -9,7 +9,8 @@ use provenance_store::layout::ProvenanceLayout;
 
 fn repository() -> (tempfile::TempDir, camino::Utf8PathBuf) {
     let dir = tempfile::tempdir().unwrap();
-    let root = camino::Utf8PathBuf::from_path_buf(dir.path().canonicalize().unwrap()).unwrap();
+    let root =
+        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap();
     let layout = ProvenanceLayout::new(root.clone());
     std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
     std::fs::write(

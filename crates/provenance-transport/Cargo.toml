@@ -32,6 +32,7 @@ uuid.workspace = true
 tokio-util = { version = "0.7", features = ["rt"] }
 tokio = { workspace = true, features = ["sync", "io-util", "io-std", "time"] }
 rmcp = { version = "=1.4.0", default-features = false, features = ["server", "client"] }
+dunce.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

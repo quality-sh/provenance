@@ -198,7 +198,7 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
     ) {
         let request: provenance_core::protocol::CheckStatementRequest =
             serde_json::from_value(data)?;
-        let root = std::fs::canonicalize(&context.repo.repo)?;
+        let root = dunce::canonicalize(&context.repo.repo)?;
         let layout = provenance_store::layout::ProvenanceLayout::new(
             camino::Utf8PathBuf::from_path_buf(root)
                 .map_err(|_| anyhow::anyhow!("the repository path is not valid UTF-8"))?,
