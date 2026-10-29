@@ -1,6 +1,6 @@
 use crate::output::OutputFormat;
 use crate::repo_context::RepoContext;
-use crate::store::ScopeSnapshot;
+use crate::store::{ScopeSnapshot, Store};
 use camino::Utf8PathBuf;
 use serde::Serialize;
 
@@ -64,15 +64,17 @@ impl ScopeExport {
 }
 
 fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
-    let scope_id = context.scope_id()?;
-    context.declared_scope()?;
-    let store = context.open_graph()?;
+    let store = Store::new(&context.open()?);
+    let scope_id = store.repository().scope().clone();
     store.with_repository_publication(|| {
-        let snapshot = store.snapshot(&scope_id)?;
+        let snapshot = store.snapshot()?;
         store.ensure_review_portable(&scope_id)?;
         store.validate_ideation_scope(&scope_id)?;
         store.validate_graph_scope(&scope_id)?;
-        Ok(ScopeExport::from_snapshot(context.scope.clone(), snapshot))
+        Ok(ScopeExport::from_snapshot(
+            scope_id.as_str().to_owned(),
+            snapshot,
+        ))
     })
 }
 

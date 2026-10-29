@@ -1,72 +1,57 @@
-//! The binding of one local repository alias and scope to its files.
+//! The binding of one opened repository to its alias.
 use crate::{
-    layout::ProvenanceLayout,
     operations::{
         catalog::{
             ContextResolver, ExecutionNeed, ExecutionNeeds, PreparedContext, PreparedRead,
             PreparedRepository, PreparedScope, RequestedContext,
         },
-        files::read_repository_file,
         read_policy::ReadPolicy,
     },
-    publication::read_published_state,
-    settings::Settings,
+    repository::Repository,
 };
 use provenance_core::{
     protocol::failure::{InvalidInputReason, OperationFailure},
-    Manifest, ScopeId,
+    ScopeId,
 };
-use std::path::Path;
 
-/// One existing repository bound under an alias, with one granted scope.
+/// One opened repository bound under an alias, with its scope as the one grant.
 pub struct LocalRepository {
-    layout: ProvenanceLayout,
-    root: String,
-    repository: String,
-    scope: ScopeId,
+    repository: Repository,
+    alias: String,
 }
 
 impl LocalRepository {
-    /// Bind an alias and scope to one existing repository whose manifest declares the scope.
-    pub fn new(root: &Path, repository: &str, scope: &str) -> Result<Self, OperationFailure> {
-        let invalid = || OperationFailure::InvalidInput {
-            field: None,
-            reason: InvalidInputReason::InvalidValue,
-        };
-        if repository.is_empty()
-            || repository.contains(['/', '\\'])
-            || repository.chars().any(char::is_control)
-        {
-            return Err(invalid());
+    /// Binds an alias to one opened repository.
+    pub fn bind(repository: Repository, alias: &str) -> Result<Self, OperationFailure> {
+        if alias.is_empty() || alias.contains(['/', '\\']) || alias.chars().any(char::is_control) {
+            return Err(OperationFailure::InvalidInput {
+                field: None,
+                reason: InvalidInputReason::InvalidValue,
+            });
         }
-        let root = root.canonicalize().map_err(|_| invalid())?;
-        if !root.is_dir() {
-            return Err(invalid());
-        }
-        let root = root.to_str().ok_or_else(invalid)?.to_owned();
-        let binding = Self {
-            layout: ProvenanceLayout::new(root.as_str()),
-            root,
-            repository: repository.to_owned(),
-            scope: ScopeId::new(scope).map_err(|_| invalid())?,
-        };
-        binding.check_scope()?;
-        Ok(binding)
+        Ok(Self {
+            repository,
+            alias: alias.to_owned(),
+        })
     }
 
     /// The bound alias.
     pub fn repository(&self) -> &str {
-        &self.repository
+        &self.alias
     }
 
     /// The bound scope.
-    pub const fn scope(&self) -> &ScopeId {
-        &self.scope
+    pub fn scope(&self) -> &ScopeId {
+        self.repository.scope()
     }
 
     /// Read disposition actors from the repository bound at startup.
     pub fn disposition_actor_ids(&self) -> Result<Vec<String>, OperationFailure> {
-        Ok(self.manifest()?.disposition_actor_ids)
+        Ok(self
+            .repository
+            .manifest()
+            .map_err(|_| OperationFailure::Internal)?
+            .disposition_actor_ids)
     }
 
     /// The alias and scope compare that both resolver steps apply; no repository read.
@@ -75,32 +60,29 @@ impl LocalRepository {
         repository: &str,
         scope: Option<&str>,
     ) -> Result<(), OperationFailure> {
-        if repository != self.repository {
+        if repository != self.alias {
             return Err(OperationFailure::UnknownTarget);
         }
-        if scope.is_some_and(|scope| scope != self.scope.as_str()) {
+        if scope.is_some_and(|scope| scope != self.scope().as_str()) {
             return Err(OperationFailure::AccessDenied);
         }
         Ok(())
     }
 
+    /// The manifest must still declare the bound scope.
     fn check_scope(&self) -> Result<(), OperationFailure> {
-        let manifest = self.manifest()?;
-        if !manifest.scopes.iter().any(|scope| scope.id == self.scope) {
+        let manifest = self
+            .repository
+            .manifest()
+            .map_err(|_| OperationFailure::Internal)?;
+        if !manifest
+            .scopes
+            .iter()
+            .any(|scope| &scope.id == self.scope())
+        {
             return Err(OperationFailure::UnknownScope);
         }
         Ok(())
-    }
-
-    fn manifest(&self) -> Result<Manifest, OperationFailure> {
-        read_published_state(&self.layout, || {
-            let bytes = read_repository_file(
-                Path::new(&self.root),
-                Path::new(".provenance/state/manifest.json"),
-            )?;
-            Ok(serde_json::from_slice(&bytes)?)
-        })
-        .map_err(|_| OperationFailure::Internal)
     }
 }
 
@@ -132,28 +114,24 @@ impl ContextResolver for LocalRepository {
             }
         };
         self.check_identity(&repository, scope.as_deref())?;
-        let root = self.root.clone().into();
         if scope.is_none() {
             // Repository-only operations do not use the scope grant or scope storage.
             return Ok(PreparedContext::for_repository(PreparedRepository {
-                root,
+                repository: self.repository.clone(),
                 requested_target: repository,
             }));
         }
-        // Validate the grant before settings, recovery, or projection access.
+        // Validate the grant before recovery or projection access.
         self.check_scope()?;
         if !needs.contains(&ExecutionNeed::ProjectionMaintenance) {
             return Ok(PreparedContext::for_scope(PreparedScope {
-                root,
-                scope: self.scope.clone(),
+                repository: self.repository.clone(),
                 requested_target: repository,
             }));
         }
-        let settings = Settings::load(&self.layout).map_err(|_| OperationFailure::Internal)?;
         Ok(PreparedContext::read(PreparedRead {
-            root,
-            scope: self.scope.clone(),
-            policy: ReadPolicy::resolve(&settings, freshness),
+            repository: self.repository.clone(),
+            policy: ReadPolicy::resolve(self.repository.settings(), freshness),
             requested_target: repository,
             external: true,
         }))
@@ -163,9 +141,10 @@ impl ContextResolver for LocalRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::layout::ProvenanceLayout;
     use provenance_core::{
         protocol::repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
-        RepoPathPrefix,
+        Manifest, RepoPathPrefix,
     };
     use provenance_macros::verifies;
 
@@ -182,7 +161,8 @@ mod tests {
             serde_json::to_vec(&manifest).unwrap(),
         )
         .unwrap();
-        let binding = LocalRepository::new(dir.path(), "native", "default").unwrap();
+        let opened = Repository::open(dir.path(), "default").unwrap();
+        let binding = LocalRepository::bind(opened, "native").unwrap();
         (dir, binding)
     }
 
@@ -223,12 +203,9 @@ mod tests {
     }
 
     #[test]
-    fn a_refused_bind_on_a_directory_without_state_creates_nothing() {
+    fn a_refused_open_on_a_directory_without_state_creates_nothing() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(
-            LocalRepository::new(dir.path(), "native", "default").err(),
-            Some(OperationFailure::Internal)
-        );
+        assert!(Repository::open(dir.path(), "default").is_err());
         assert!(!dir.path().join(".provenance").exists());
     }
 
@@ -237,9 +214,8 @@ mod tests {
     #[test]
     #[verifies("rule_preparation_reads_published_state", examples)]
     fn preparation_in_the_publication_gap_succeeds_after_the_publication() {
-        let (dir, _) = repository();
+        let (dir, binding) = repository();
         let layout = ProvenanceLayout::new(dir.path().to_str().unwrap());
-        let binding = LocalRepository::new(dir.path(), "native", "default").unwrap();
         let reader = std::rc::Rc::new(std::cell::RefCell::new(None));
         crate::test_probes::arm("state_after_backup_rename", {
             let reader = reader.clone();

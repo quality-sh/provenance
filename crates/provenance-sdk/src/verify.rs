@@ -7,6 +7,7 @@ use provenance_core::authoring::RuleHandle;
 use provenance_core::DeclarationAddress;
 use provenance_macros::rule;
 use provenance_store::operations;
+use provenance_store::repository::Repository;
 use provenance_store::state_store::{
     BeginVerificationInput, CompleteVerificationInput, DeclarationReferenceInput,
 };
@@ -55,9 +56,11 @@ pub fn verify<'a, E: std::fmt::Display>(
     callback: impl FnOnce() -> Result<(), E>,
 ) -> anyhow::Result<()> {
     let settings = Settings::from_env();
-    let scope = settings.scope_id()?;
-    let repository = operations::discover_repository(settings.repository.clone())?;
-    let file = caller_file(&repository, std::panic::Location::caller().file());
+    let repository = Repository::discover(settings.repository.clone(), &settings.scope)?;
+    let file = caller_file(
+        repository.working_tree(),
+        std::panic::Location::caller().file(),
+    );
     let (rule, declaration) = match target.into() {
         VerifyTarget::Rule(rule) => (Some(rule.to_string()), None),
         VerifyTarget::Declaration(address) => (
@@ -69,8 +72,7 @@ pub fn verify<'a, E: std::fmt::Display>(
         ),
     };
     let run = operations::begin_verification(
-        Some(repository.clone()),
-        scope.clone(),
+        &repository,
         BeginVerificationInput {
             rule,
             declaration,
@@ -84,8 +86,7 @@ pub fn verify<'a, E: std::fmt::Display>(
     )?;
     let complete = |status: &str, error: Option<String>| {
         operations::complete_verification(
-            Some(repository.clone()),
-            &scope,
+            &repository,
             CompleteVerificationInput {
                 run: run.id.as_str().to_string(),
                 status: status.to_string(),

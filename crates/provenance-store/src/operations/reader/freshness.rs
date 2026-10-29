@@ -16,9 +16,8 @@ use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::FreshnessPolicy;
 use crate::operations::stamp;
 use crate::publication::publication_guard;
-use camino::Utf8Path;
+use crate::repository::Repository;
 use provenance_core::protocol::{Stamp, StampPolicy, Stamped};
-use provenance_core::ScopeId;
 use provenance_macros::rule;
 
 pub(super) struct Freshness {
@@ -35,15 +34,11 @@ impl Freshness {
     /// close reports before the answer does.
     pub(super) async fn complete<R: Send>(
         mut self,
-        layout: &ProvenanceLayout,
-        repo: &Utf8Path,
-        scope: &ScopeId,
+        repository: &Repository,
         scan_limit: usize,
         run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
     ) -> anyhow::Result<Stamped<R>> {
-        let outcome = self
-            .answer_at_snapshot(layout, repo, scope, scan_limit, run)
-            .await;
+        let outcome = self.answer_at_snapshot(repository, scan_limit, run).await;
         self.connection.close().await?;
         let (result, stamp) = outcome?;
         Ok(Stamped {
@@ -55,19 +50,17 @@ impl Freshness {
 
     async fn answer_at_snapshot<R: Send>(
         &mut self,
-        layout: &ProvenanceLayout,
-        repo: &Utf8Path,
-        scope: &ScopeId,
+        repository: &Repository,
         scan_limit: usize,
         run: impl for<'c> FnOnce(&'c ReadContext) -> ReadFuture<'c, R> + Send,
     ) -> anyhow::Result<(anyhow::Result<R>, Stamp)> {
         let snapshot = match self.snapshot.take() {
             Some(snapshot) => snapshot,
-            None => match ReadSnapshot::open(self.connection.pool(), scope).await {
+            None => match ReadSnapshot::open(self.connection.pool(), repository.scope()).await {
                 Ok(Some(snapshot)) => snapshot,
                 Ok(None) => {
                     return Err(ReadRefusal::NoProjection {
-                        database: layout.cache_db_path(),
+                        database: repository.layout().cache_db_path(),
                         because: self
                             .error
                             .as_deref()
@@ -79,7 +72,7 @@ impl Freshness {
                 Err(error) => return Err(error),
             },
         };
-        let context = ReadContext::new(snapshot, repo, scan_limit);
+        let context = ReadContext::new(snapshot, repository.clone(), scan_limit);
         let result = run(&context).await;
         let stamp = stamp::seal(context, self.policy);
         Ok((result, stamp))
@@ -87,12 +80,12 @@ impl Freshness {
 }
 
 pub(super) async fn run(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     policy: FreshnessPolicy,
 ) -> anyhow::Result<Freshness> {
+    let layout = repository.layout();
     match policy {
-        FreshnessPolicy::CatchUp => match catch_up(layout).await {
+        FreshnessPolicy::CatchUp => match catch_up(repository).await {
             Ok(fresh) => Ok(fresh),
             Err(error) => stored(layout, error).await,
         },
@@ -110,7 +103,7 @@ pub(super) async fn run(
                 error: None,
             })
         }
-        FreshnessPolicy::RefuseStale => super::refuse_stale::run(layout, scope).await,
+        FreshnessPolicy::RefuseStale => super::refuse_stale::run(repository).await,
     }
 }
 
@@ -120,9 +113,9 @@ pub(super) async fn run(
 /// busy timeout (`cache::WalSwitchRetry`); once the file is WAL the switch
 /// costs nothing.
 #[rule("rule_read_holds_guard_for_freshness_only")]
-async fn catch_up(layout: &ProvenanceLayout) -> anyhow::Result<Freshness> {
-    let guard = publication_guard(layout).await?;
-    let connection = open_cache(layout).await?;
+async fn catch_up(repository: &Repository) -> anyhow::Result<Freshness> {
+    let guard = publication_guard(repository).await?;
+    let connection = open_cache(repository.layout()).await?;
     if let Err(error) = catch_up_with_guard(&guard, connection.pool()).await {
         return Err(connection.close_reporting(error).await);
     }

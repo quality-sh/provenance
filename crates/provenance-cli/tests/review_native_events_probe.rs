@@ -3,7 +3,9 @@
 mod review_host_support;
 
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
-use provenance_store::{layout::ProvenanceLayout, publication::publication_guard};
+use provenance_store::{
+    layout::ProvenanceLayout, publication::publication_guard, repository::Repository,
+};
 use std::{
     path::Path,
     sync::mpsc,
@@ -42,7 +44,8 @@ async fn native_events_detect_state_replacement_and_reattached_writes_under_guar
     watcher
         .watch(layout.state_dir().as_std_path(), RecursiveMode::Recursive)
         .unwrap();
-    let guard = publication_guard(&layout).await.unwrap();
+    let repository = Repository::open(repo.path(), "default").unwrap();
+    let guard = publication_guard(&repository).await.unwrap();
     let manifest = std::fs::read(layout.manifest_path()).unwrap();
     let old = layout.provenance_dir().join("probe-old-state");
     std::fs::rename(layout.state_dir(), &old).unwrap();

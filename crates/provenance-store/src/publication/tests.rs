@@ -344,8 +344,18 @@ fn read_only_validation_through_an_alias_does_not_publish() {
     let alias = temporary.path().join("alias");
     std::os::unix::fs::symlink(&root, &alias).unwrap();
     let layout = ProvenanceLayout::new(root.to_str().unwrap());
-    let alias = ProvenanceLayout::new(alias.to_str().unwrap());
+    let alias_path = alias;
+    let alias = ProvenanceLayout::new(alias_path.to_str().unwrap());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&provenance_core::Manifest::default_with_scope(
+            provenance_core::ScopeId::new("default").unwrap(),
+            provenance_core::RepoPathPrefix::new("."),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -353,7 +363,8 @@ fn read_only_validation_through_an_alias_does_not_publish() {
     with_read_only_validation(&layout, || {
         with_read_only_validation(&alias, || Ok(()))?;
         with_repository_publication(&alias, || Ok(()))?;
-        let _guard = runtime.block_on(publication_guard(&alias))?;
+        let repository = crate::repository::Repository::open(&alias_path, "default")?;
+        let _guard = runtime.block_on(publication_guard(&repository))?;
         assert!(!layout.publication_lock_path().exists());
         assert!(!layout.import_transactions_dir().exists());
         Ok(())
@@ -375,40 +386,95 @@ fn read_only_validation_accepts_a_planned_repository() {
     assert!(!root.exists());
 }
 
-/// The probe starts the read while the publication holds its lock with the live state moved away.
-#[test]
-#[verifies("rule_preparation_reads_published_state", examples)]
-fn a_read_in_the_publication_gap_reads_again_after_the_publication() {
+/// A repository with one Source, and a copy of its state with no cache.
+fn record_kind_repositories() -> (tempfile::TempDir, ProvenanceLayout, ProvenanceLayout) {
     let directory = tempfile::tempdir().unwrap();
     let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
-    let layout = ProvenanceLayout::new(root);
+    let live = ProvenanceLayout::new(root.join("live"));
+    crate::cache::tests::fixtures::initialized(live.root().as_std_path());
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    crate::cache::tests::fixtures::create_source(
+        &crate::test_support::store(&live),
+        &scope,
+        "source_help",
+    );
+    let copy = ProvenanceLayout::new(root.join("copy"));
+    staged::copy_directory(&live.state_dir(), &copy.state_dir()).unwrap();
+    (directory, live, copy)
+}
+
+#[test]
+#[verifies("rule_read_only_section_stays_inside_the_store", examples)]
+fn read_only_record_kinds_answer_while_another_handle_holds_the_lock() {
+    let (_directory, live, _copy) = record_kind_repositories();
+    let _held = guard::LockedPublicationFile::acquire(&live.publication_lock_path()).unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let reader = live;
+    std::thread::spawn(move || {
+        let scope = provenance_core::ScopeId::new("default").unwrap();
+        sender
+            .send(read_only_record_kinds(&reader, &scope, "source_help").unwrap())
+            .unwrap();
+    });
+    let kinds = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("the read takes no publication lock");
+    assert_eq!(kinds, vec![provenance_core::NodeType::Source]);
+}
+
+#[test]
+#[verifies("rule_read_only_section_stays_inside_the_store", examples)]
+fn read_only_record_kinds_create_no_path() {
+    let (_directory, _live, copy) = record_kind_repositories();
+    let scope = provenance_core::ScopeId::new("default").unwrap();
+    assert_eq!(
+        read_only_record_kinds(&copy, &scope, "source_help").unwrap(),
+        vec![provenance_core::NodeType::Source]
+    );
+    assert_eq!(
+        read_only_record_kinds(&copy, &scope, "source_missing").unwrap(),
+        Vec::new()
+    );
+    assert!(!copy.cache_dir().exists(), "the read creates no cache");
+}
+
+/// The probe starts the host read while the publication holds its lock with the live state
+/// moved away, and does not wait for it. The open and the manifest read wait for the publication.
+#[test]
+#[verifies("rule_preparation_reads_published_state", examples)]
+fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    let layout = ProvenanceLayout::new(root.clone());
     std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(layout.manifest_path(), "before").unwrap();
+    let manifest = provenance_core::Manifest::default_with_scope(
+        provenance_core::ScopeId::new("default").unwrap(),
+        provenance_core::RepoPathPrefix::new("."),
+    );
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
     let reader = std::rc::Rc::new(std::cell::RefCell::new(None));
     crate::test_probes::arm("state_after_backup_rename", {
-        let layout = layout.clone();
         let reader = reader.clone();
         move || {
-            let (attempts, attempted) = std::sync::mpsc::channel();
-            let layout = layout.clone();
+            let root = root.clone();
             reader.replace(Some(std::thread::spawn(move || {
-                read_published_state(&layout, || {
-                    let read = std::fs::read_to_string(layout.manifest_path());
-                    // The probe waits for the first read only.
-                    let _ = attempts.send(read.is_ok());
-                    Ok(read?)
-                })
+                crate::repository::Repository::open(root.as_std_path(), "default")?.manifest()
             })));
-            assert!(!attempted.recv().unwrap(), "the gap hides the live state");
             Ok(())
         }
     });
+    let mut published = manifest;
+    published.disposition_actor_ids = vec!["actor_after".to_owned()];
     with_staged_state(&layout, false, |staged| {
-        std::fs::write(staged.manifest_path(), "after")?;
+        std::fs::write(staged.manifest_path(), serde_json::to_vec(&published)?)?;
         Ok(())
     })
     .unwrap();
     crate::test_probes::disarm("state_after_backup_rename");
     let reader = reader.take().expect("the publication reached the gap");
-    assert_eq!(reader.join().unwrap().unwrap(), "after");
+    assert_eq!(reader.join().unwrap().unwrap(), published);
 }

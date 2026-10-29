@@ -89,12 +89,15 @@ impl StatementHost {
     #[must_use]
     pub fn with_page_writes(
         mut self,
-        layout: provenance_store::layout::ProvenanceLayout,
+        repository: provenance_store::repository::Repository,
         observed: Arc<
             dyn Fn(anyhow::Result<provenance_store::review_changes::ReviewChanges>) + Send + Sync,
         >,
     ) -> Self {
-        self.page_writes = Some(review_page::PageWrites { layout, observed });
+        self.page_writes = Some(review_page::PageWrites {
+            repository,
+            observed,
+        });
         self
     }
     /// Inject the repository-aware computations used by the MCP `check` tool.

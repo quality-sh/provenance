@@ -4,8 +4,8 @@
 
 use super::super::{compute_gaps, find_gaps, GapGraph, GapItem, GapKind};
 use super::fixtures::{domain, requirement};
-use crate::cache::tests::fixtures::{append_record, seeded_layout};
-use crate::state_store::{CreateContributionInput, StateStore};
+use crate::cache::tests::fixtures::{append_record, open, seeded_layout};
+use crate::state_store::CreateContributionInput;
 use provenance_core::{
     Boundary, Contribution, ContributionStance, IdeationTarget, IdeationTargetType, NodeType,
     ScopeId, StableId, SynthesisPacket, UncertaintyLevel, UncertaintyRating,
@@ -167,7 +167,7 @@ fn an_existing_dangling_target_is_a_gap_not_a_refusal() {
         &synthesis_json("synth_old", "rule", "rule_gone"),
     );
 
-    let gaps = find_gaps(&layout, &scope).unwrap();
+    let gaps = find_gaps(&open(&layout)).unwrap();
     let reasons: Vec<&str> = dangling(&gaps)
         .iter()
         .map(|gap| gap.reason.as_str())
@@ -180,7 +180,7 @@ fn an_existing_dangling_target_is_a_gap_not_a_refusal() {
         ]
     );
 
-    let store = StateStore::new(layout);
+    let store = crate::test_support::store(&layout);
     store
         .create_contribution(CreateContributionInput {
             scope_id: scope.clone(),

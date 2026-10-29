@@ -78,7 +78,7 @@ fn a_saved_page_write_succeeds_when_the_snapshot_fails() {
             }))
             .with_credential(Arc::new(support::resource_http::access(&repo)))
             .with_page_writes(
-                repo.layout.clone(),
+                repo.open(),
                 Arc::new(move |changes| seen.lock().unwrap().push(changes)),
             );
             let mut request = Request::builder()
@@ -129,7 +129,7 @@ fn saved_page_writes_report_added_changed_and_unchanged_records() {
             let notifications = Arc::new(Mutex::new(Vec::new()));
             let seen = notifications.clone();
             let host = support::resource_http::host(&repo, true).with_page_writes(
-                repo.layout.clone(),
+                repo.open(),
                 Arc::new(move |changes| seen.lock().unwrap().push(changes)),
             );
             let created = page_call(
@@ -180,7 +180,7 @@ fn saved_page_discussion_reports_its_parent_and_message() {
             let notifications = Arc::new(Mutex::new(Vec::new()));
             let seen = notifications.clone();
             let host = support::resource_http::host(&repo, true).with_page_writes(
-                repo.layout.clone(),
+                repo.open(),
                 Arc::new(move |changes| seen.lock().unwrap().push(changes)),
             );
             let created = page_call(
@@ -264,20 +264,21 @@ fn page_changes_report_removed_records_after_scope_replacement() {
     bounded(|| {
         use provenance_core::ScopeId;
         use provenance_store::{
-            publication::{with_publication_guard, with_staged_state},
-            review_changes::ReviewStateSnapshot,
-            state_store::{ScopeShards, StateStore},
+            publication::with_publication_guard, review_changes::ReviewStateSnapshot,
+            state_store::ScopeShards,
         };
         let repo = Repository::new("The graph is readable.");
         let scope = ScopeId::new("default").unwrap();
         let clear = || {
-            with_staged_state(&repo.layout, false, |layout| {
-                StateStore::new(layout.clone()).import_scope(&scope, &ScopeShards::default())
-            })
-            .unwrap();
+            repo.open()
+                .stage(false, None, |staged| {
+                    staged.import_scope(&scope, &ScopeShards::default())
+                })
+                .unwrap();
         };
         clear();
-        StateStore::new(repo.layout.clone())
+        repo.open()
+            .store()
             .create_source(
                 serde_json::from_value(json!({
                     "scope_id":"default", "id":"source_removed", "name":"The removed source",
@@ -286,9 +287,9 @@ fn page_changes_report_removed_records_after_scope_replacement() {
                 .unwrap(),
             )
             .unwrap();
-        let before = with_publication_guard(&repo.layout, ReviewStateSnapshot::read).unwrap();
+        let before = with_publication_guard(&repo.open(), ReviewStateSnapshot::read).unwrap();
         clear();
-        let after = with_publication_guard(&repo.layout, ReviewStateSnapshot::read).unwrap();
+        let after = with_publication_guard(&repo.open(), ReviewStateSnapshot::read).unwrap();
         assert_notification(
             &Mutex::new(vec![Ok(after.page_changes_since(&before))]),
             &[("source", "source_removed")],

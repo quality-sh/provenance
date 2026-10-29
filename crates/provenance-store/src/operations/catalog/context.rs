@@ -1,12 +1,9 @@
 //! Resources required before an operation can run.
 use crate::operations::read_policy::ReadPolicy;
-use camino::Utf8PathBuf;
-use provenance_core::{
-    protocol::{
-        failure::OperationFailure,
-        repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
-    },
-    ScopeId,
+use crate::repository::Repository;
+use provenance_core::protocol::{
+    failure::OperationFailure,
+    repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,19 +26,17 @@ pub struct PreparedContext {
 }
 #[derive(Debug, Clone)]
 pub struct PreparedRepository {
-    pub root: Utf8PathBuf,
+    pub repository: Repository,
     pub requested_target: String,
 }
 #[derive(Debug, Clone)]
 pub struct PreparedScope {
-    pub root: Utf8PathBuf,
-    pub scope: ScopeId,
+    pub repository: Repository,
     pub requested_target: String,
 }
 #[derive(Debug, Clone)]
 pub struct PreparedRead {
-    pub root: Utf8PathBuf,
-    pub scope: ScopeId,
+    pub repository: Repository,
     pub policy: ReadPolicy,
     pub requested_target: String,
     pub external: bool,
@@ -57,12 +52,11 @@ impl PreparedContext {
     pub fn read(read: PreparedRead) -> Self {
         Self {
             repository: Some(PreparedRepository {
-                root: read.root.clone(),
+                repository: read.repository.clone(),
                 requested_target: read.requested_target.clone(),
             }),
             scope: Some(PreparedScope {
-                root: read.root.clone(),
-                scope: read.scope.clone(),
+                repository: read.repository.clone(),
                 requested_target: read.requested_target.clone(),
             }),
             read: Some(read),
@@ -78,7 +72,7 @@ impl PreparedContext {
     pub fn for_scope(scope: PreparedScope) -> Self {
         Self {
             repository: Some(PreparedRepository {
-                root: scope.root.clone(),
+                repository: scope.repository.clone(),
                 requested_target: scope.requested_target.clone(),
             }),
             read: None,

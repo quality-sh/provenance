@@ -1,6 +1,7 @@
 use super::super::comparison::{served_stamped, test_stores};
 use super::super::pinned::request_set;
 use super::get_through;
+use crate::cache::tests::fixtures::open;
 use crate::cache::{catch_up_state, open_cache, unit_stored_digest, Unit};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::reader::ReadRefusal;
@@ -85,7 +86,7 @@ async fn refuse_stale_refuses_and_names_the_moved_unit() {
 #[verifies("rule_refuse_stale_names_the_moved_units", examples)]
 async fn refuse_stale_names_new_and_departed_scopes_in_order() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     replace_scope(&store);
     let error = get_through(&store, policy()).await.unwrap_err();
     let Some(ReadRefusal::Stale { moved, .. }) = error.downcast_ref::<ReadRefusal>() else {
@@ -114,7 +115,7 @@ async fn refuse_stale_names_new_and_departed_scopes_in_order() {
 #[verifies("rule_refuse_stale_writes_no_revision", examples)]
 async fn refuse_stale_writes_no_revision_row() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let before = std::fs::read(store.layout().cache_db_path()).unwrap();
     get_through(&store, policy()).await.unwrap();
     assert_eq!(
@@ -134,7 +135,7 @@ async fn refuse_stale_writes_no_revision_row() {
 async fn refuse_stale_matches_annotate_only_bytes_over_the_pinned_store() {
     let store = TestStore::pinned();
     let base = store.base_commit.as_deref().expect("git on the path");
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     crate::test_probes::set_test_scan(None);
     for request in request_set(base) {
         let mut before = served_stamped(
@@ -173,7 +174,7 @@ async fn refuse_stale_refuses_an_absent_projection() {
 #[tokio::test]
 async fn refuse_stale_refuses_a_projection_without_a_revision() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     sqlx::query("DELETE FROM projection_revision")
         .execute(pool.pool())
@@ -193,7 +194,7 @@ async fn refuse_stale_refuses_a_projection_without_a_revision() {
 #[tokio::test]
 async fn refuse_stale_refuses_a_half_migrated_projection() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     sqlx::query("DELETE FROM projection_family_digests")
         .execute(pool.pool())
@@ -217,7 +218,7 @@ async fn refuse_stale_refuses_an_incompatible_schema_and_old_validation() {
         "UPDATE projection_validation SET version = 0",
     ] {
         let store = test_stores::seeded_queries();
-        catch_up_state(&store.layout()).await.unwrap();
+        catch_up_state(&store.repository()).await.unwrap();
         let pool = open_cache(&store.layout()).await.unwrap();
         sqlx::query(sql).execute(pool.pool()).await.unwrap();
         pool.close().await.unwrap();
@@ -252,11 +253,11 @@ async fn refuse_stale_does_not_change_a_delete_mode_cache_that_it_refuses() {
 #[tokio::test]
 async fn refuse_stale_keeps_other_guard_errors() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let locks = store.layout().cache_dir().join("locks");
     std::fs::remove_dir_all(&locks).unwrap();
     std::fs::write(locks, b"").unwrap();
-    let expected = crate::publication::publication_guard(&store.layout())
+    let expected = crate::publication::publication_guard(&store.repository())
         .await
         .err()
         .unwrap();
@@ -268,7 +269,7 @@ async fn refuse_stale_keeps_other_guard_errors() {
 #[tokio::test]
 async fn refuse_stale_refuses_a_unit_it_cannot_hash() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let path = crate::shards::requirements_path(&store.layout(), &store.scope);
     std::fs::remove_file(&path).unwrap();
     std::os::unix::fs::symlink("missing-shard", &path).unwrap();
@@ -300,7 +301,7 @@ async fn refuse_stale_decides_when_the_lock_cannot_be_taken() {
     let store = test_stores::seeded_queries();
     let before = get_through(&store, ReadPolicy::default()).await.unwrap();
     let _restore = super::read_only::lock_untakeable(&store);
-    let guard = crate::publication::publication_guard(&store.layout()).await;
+    let guard = crate::publication::publication_guard(&store.repository()).await;
     if guard.is_ok() {
         eprintln!("SKIPPED refuse_stale_decides_when_the_lock_cannot_be_taken: this user can open the protected lock");
         return;
@@ -350,7 +351,7 @@ async fn refuse_stale_keeps_the_checked_revision_after_a_publication() {
         std::thread::spawn(move || {
             let result = tokio::runtime::Runtime::new()
                 .unwrap()
-                .block_on(catch_up_state(&layout));
+                .block_on(catch_up_state(&open(&layout)));
             let _ = send.send(result);
         });
         receive.recv_timeout(std::time::Duration::from_secs(10))??;
@@ -377,7 +378,7 @@ async fn refuse_stale_keeps_the_checked_revision_after_a_publication() {
 #[tokio::test]
 async fn refuse_stale_refuses_a_shard_that_vanishes_during_the_hash() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let path = crate::shards::requirements_path(&store.layout(), &store.scope);
     let removed = path.clone();
     let layout = store.layout();

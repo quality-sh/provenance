@@ -1,5 +1,5 @@
 use crate::cache::{find_gaps, GapItem};
-use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use crate::state_store::StateStore;
 use provenance_core::model::relations::{
     related_nodes, RecordFront, RelationDirection, RelationRow,
@@ -30,22 +30,19 @@ pub struct PrimeContextView {
 }
 
 pub fn prime_context(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     include_threads: bool,
 ) -> anyhow::Result<PrimeContextView> {
-    let store = StateStore::new(layout.clone());
-    store.with_repository_publication(|| {
-        prime_context_locked(layout, scope, include_threads, &store)
-    })
+    let store = repository.store();
+    store.with_repository_publication(|| prime_context_locked(repository, include_threads, &store))
 }
 
 fn prime_context_locked(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     include_threads: bool,
     store: &StateStore,
 ) -> anyhow::Result<PrimeContextView> {
+    let scope = repository.scope();
     let threads = if include_threads {
         let messages = store.list_messages(scope)?;
         store
@@ -67,7 +64,7 @@ fn prime_context_locked(
     Ok(PrimeContextView {
         scope_id: scope.as_str().to_string(),
         rules: store.list_rules(scope)?.into_iter().collect(),
-        gaps: find_gaps(layout, scope)?,
+        gaps: find_gaps(repository)?,
         threads,
     })
 }
@@ -103,11 +100,11 @@ pub fn render_prime_markdown(view: &PrimeContextView) -> String {
 }
 
 pub fn get_requirement_graph(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     requirement_id: &provenance_core::StableId,
 ) -> anyhow::Result<RequirementGraphView> {
-    let store = StateStore::new(layout.clone());
+    let store = repository.store();
+    let scope = repository.scope();
     store
         .with_repository_publication(|| get_requirement_graph_locked(scope, requirement_id, &store))
 }

@@ -15,17 +15,16 @@ pub use units::{scope_ids, unit_digest, units_for, Unit, UnitHashError};
 
 use super::{open_cache, MaterializeReport};
 use crate::current_schema::{self, Compatibility};
+use crate::repository::Repository;
 use crate::{layout::ProvenanceLayout, publication};
 use provenance_macros::rule;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-pub async fn materialize_empty_state(
-    layout: &ProvenanceLayout,
-) -> anyhow::Result<MaterializeReport> {
-    let guard = publication::publication_guard(layout).await?;
+pub async fn materialize_empty_state(repository: &Repository) -> anyhow::Result<MaterializeReport> {
+    let guard = publication::publication_guard(repository).await?;
     let _held = &guard;
     crate::test_probes::at("materialize_empty_under_guard")?;
-    let connection = open_cache(layout).await?;
+    let connection = open_cache(repository.layout()).await?;
     // Everything between the open and the settle is part of the settled
     // work: a failure there completes the connection before it reports.
     let applied = initialize_empty(connection.pool()).await;
@@ -50,9 +49,9 @@ async fn initialize_empty(pool: &SqlitePool) -> anyhow::Result<bool> {
     Ok(true)
 }
 
-pub async fn materialize_state(layout: &ProvenanceLayout) -> anyhow::Result<MaterializeReport> {
-    let guard = publication::publication_guard(layout).await?;
-    materialize_with_guard(&guard, layout).await
+pub async fn materialize_state(repository: &Repository) -> anyhow::Result<MaterializeReport> {
+    let guard = publication::publication_guard(repository).await?;
+    materialize_with_guard(&guard, repository.layout()).await
 }
 
 /// The rebuild body for a caller that holds the guard.

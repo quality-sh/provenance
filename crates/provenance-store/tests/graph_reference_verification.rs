@@ -111,7 +111,9 @@ fn references(temp: &tempfile::TempDir) -> GraphReferences {
 }
 
 fn issue(temp: &tempfile::TempDir) -> GraphReference {
-    references(temp).issue("default", None, None).unwrap()
+    let repository =
+        provenance_store::repository::Repository::open(temp.path(), "default").unwrap();
+    references(temp).issue(&repository, None, None).unwrap()
 }
 
 /// Reads a refusal back as the field it named, what the reference claimed, and

@@ -4,7 +4,8 @@ use super::guard;
 use crate::{
     review::publication::with_record_state,
     state_store::{
-        read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, StateStore,
+        read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, RecordStamp,
+        StateStore,
     },
     write_error::{SourceFailure, WriteFailure},
 };
@@ -21,9 +22,8 @@ impl StateStore {
         write: impl FnOnce(&NativeRecordBatch<'_>) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         let stamp = self.current_record_stamp()?;
-        with_record_state(&self.layout, |layout| {
-            let staged = Self::staged(layout.clone(), stamp);
-            write(&NativeRecordBatch { store: &staged })
+        with_record_state(self, RecordStamp::resolved(stamp), |staged| {
+            write(&NativeRecordBatch { store: staged })
         })
     }
 
@@ -31,12 +31,14 @@ impl StateStore {
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
-        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         self.with_native_record_batch(|batch| {
             let staged_path = batch.store.layout.root().join(relative);
-            batch.mutate_one(&staged_path, expected_etag, mutate)
+            batch.mutate_one(&staged_path, expected_etag, |records| {
+                mutate(batch.store, records)
+            })
         })
     }
 }

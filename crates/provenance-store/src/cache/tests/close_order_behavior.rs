@@ -6,6 +6,7 @@
 
 use super::super::*;
 use super::fixtures::empty_layout;
+use super::fixtures::open;
 use super::wal_behavior::wal_files;
 use crate::cache::CacheConnection;
 use crate::layout::ProvenanceLayout;
@@ -74,7 +75,7 @@ async fn join_waiters(waiters: &Mutex<Vec<Waiter>>) {
 fn a_read_closes_while_the_only_blocking_worker_waits_for_its_guard() {
     let runtime = small_blocking_pool(1);
     runtime.block_on(async {
-        let (_dir, layout, scope) = empty_layout();
+        let (_dir, layout, _scope) = empty_layout();
         let waiters = Arc::new(Mutex::new(Vec::new()));
         let waiters_in_probe = Arc::clone(&waiters);
         let waiter_layout = layout.clone();
@@ -89,7 +90,7 @@ fn a_read_closes_while_the_only_blocking_worker_waits_for_its_guard() {
         });
         let answer = tokio::time::timeout(
             CLOSE_LIMIT,
-            crate::operations::reader::answer(layout.root(), &scope, ReadPolicy::default(), |_| {
+            crate::operations::reader::answer(&open(&layout), ReadPolicy::default(), |_| {
                 Box::pin(async { Ok(1usize) })
             }),
         )
@@ -129,7 +130,7 @@ fn a_materialization_closes_while_every_blocking_worker_waits_for_its_guard() {
             }
             Ok(())
         });
-        let report = tokio::time::timeout(CLOSE_LIMIT, materialize_empty_state(&layout))
+        let report = tokio::time::timeout(CLOSE_LIMIT, materialize_empty_state(&open(&layout)))
             .await
             .expect(
                 "the materialization must finish while every blocking worker waits for its guard",

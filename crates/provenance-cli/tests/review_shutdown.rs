@@ -4,7 +4,7 @@
 mod review_host_support;
 
 use provenance_core::ScopeId;
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+use provenance_store::{layout::ProvenanceLayout, repository::Repository};
 use review_host_support::{
     repository as initialized_repository, start_capturing_stderr, start_with, Host,
 };
@@ -25,7 +25,9 @@ fn repository() -> (tempfile::TempDir, ProvenanceLayout, Vec<u8>) {
     let repo = initialized_repository();
     let layout = ProvenanceLayout::new(repo.path().to_str().unwrap());
     let scope = ScopeId::new("default").unwrap();
-    StateStore::new(layout.clone())
+    Repository::open(repo.path(), "default")
+        .unwrap()
+        .store()
         .create_requirement(provenance_store::state_store::CreateRequirementInput {
             scope_id: scope.clone(),
             id: provenance_core::StableId::new("req_example").unwrap(),
@@ -104,7 +106,7 @@ fn first_signal_waits_for_an_active_write_to_finish() {
     request.read_to_string(&mut response).unwrap();
     assert!(response.starts_with("HTTP/1.1 200"), "{response}");
     assert!(host.wait(Duration::from_secs(5)).success());
-    let store = StateStore::new(layout);
+    let store = Repository::open(repo.path(), "default").unwrap().store();
     let scope = ScopeId::new("default").unwrap();
     let threads = store.list_threads(&scope).unwrap();
     assert_eq!(threads.len(), 1);

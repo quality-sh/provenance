@@ -160,7 +160,8 @@ fn crash_child() {
         "state_installed" => "state_installed",
         _ => panic!("unknown crash phase"),
     };
-    let store = StateStore::new(crate::layout::ProvenanceLayout::new(Utf8Path::new(&root)));
+    let store =
+        crate::test_support::store(&crate::layout::ProvenanceLayout::new(Utf8Path::new(&root)));
     let scope = ScopeId::new("default").unwrap();
     test_probes::arm(phase, || std::process::exit(86));
     store.edit_topic(archive_input(&store, &scope)).unwrap();
@@ -185,7 +186,7 @@ fn archive_recovery_restores_complete_old_or_new_state() {
             .status()
             .unwrap();
         assert_eq!(status.code(), Some(86), "{phase}");
-        let reopened = StateStore::new(crate::layout::ProvenanceLayout::new(root));
+        let reopened = crate::test_support::store(&crate::layout::ProvenanceLayout::new(root));
         if committed {
             assert_archived(&reopened, &scope);
         } else {

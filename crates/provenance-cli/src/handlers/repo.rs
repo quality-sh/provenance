@@ -50,7 +50,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         package_manager,
         ..
     } = options;
-    super::check::recover_repository_before_init(path)
+    super::check::recover_before_init(path)
         .context("failed to recover an interrupted repository publication")?;
     let invocation = crate::onboarding::Invocation::from_cli(invocation_channel, package_manager)?;
     let layout = ProvenanceLayout::new(path.to_path_buf());
@@ -88,7 +88,7 @@ pub(super) fn prepare_init(path: &Utf8Path, options: InitOptions) -> anyhow::Res
         manifest_before,
         manifest_bytes,
     )?;
-    super::check::validate_repository_with_manifest(path, &manifest)
+    super::check::validate_planned_manifest(path, &manifest)
         .context("the planned Provenance state is not valid")?;
     let dictionary = crate::ste_onboarding::prepare(path, ste_pdf.as_deref())?;
     let scope_ids: Vec<String> = manifest

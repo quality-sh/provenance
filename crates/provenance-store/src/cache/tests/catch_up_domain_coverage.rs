@@ -6,9 +6,10 @@
 
 use super::super::*;
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
+use super::fixtures::open;
 use super::fixtures::*;
 use super::projection_digest_sensitivity::{aggregate_layout, change_one_record};
-use crate::state_store::{IdeationLandingBatch, StateStore};
+use crate::state_store::IdeationLandingBatch;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
 /// Every family gets its own invalidation between materialize and catch-up,
@@ -18,7 +19,7 @@ async fn every_family_invalidation_reaches_the_projection() {
     for family in ProjectionFamily::ALL {
         println!("invalidating family `{}`", family.family_name());
         let (_dir, layout, scope) = aggregate_layout();
-        materialize_state(&layout).await.unwrap();
+        materialize_state(&open(&layout)).await.unwrap();
         change_one_record(&layout, family, &scope);
         assert_catch_up_equals_rebuild(&layout).await;
     }
@@ -50,7 +51,7 @@ async fn a_second_scope_is_swept_and_stays_equivalent() {
         ),
     )
     .unwrap();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     // Change one record in each scope. Both must reach the projection.
     let rules = crate::shards::rules_path(&layout, &first_scope);
@@ -73,9 +74,9 @@ async fn a_second_scope_is_swept_and_stays_equivalent() {
 #[tokio::test]
 async fn a_landed_ideation_batch_reaches_the_projection_through_catch_up() {
     let (_dir, layout, scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     let batch: IdeationLandingBatch = serde_json::from_value(serde_json::json!({
         "contributions": [{
             "schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(), "id": "contribution_landed",
@@ -113,7 +114,7 @@ async fn a_second_month_message_shard_is_covered_by_the_sweep() {
         ),
     )
     .unwrap();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
 
     std::fs::write(
         threads_dir.join("2026-08.jsonl"),
@@ -144,7 +145,7 @@ async fn a_live_edit_racing_the_rebuild_baseline_is_caught_by_the_next_catch_up(
         std::fs::write(&live_path, &edited).unwrap();
         Ok(())
     });
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     crate::test_probes::disarm("stamp_before_unit_digests");
 
     assert_catch_up_equals_rebuild(&layout).await;

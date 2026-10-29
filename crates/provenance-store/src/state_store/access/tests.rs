@@ -1,4 +1,5 @@
 use super::super::tests::seeded_source_requirement_store;
+use crate::cache::tests::fixtures::open;
 use crate::publication::{publication_guard, PublicationGuard};
 use crate::state_store::StateStore;
 use crate::test_probes::publication_lock_is_held;
@@ -75,7 +76,7 @@ async fn a_store_under_the_guard_takes_no_second_lock() {
     let (_dir, store, scope) = seeded_source_requirement_store();
     let mut expected = read_families!(&store, &scope).unwrap();
     expected.extend(closed_families(&store, &scope).unwrap());
-    let guard = publication_guard(&store.layout).await.unwrap();
+    let guard = publication_guard(&open(&store.layout)).await.unwrap();
     let (sender, receiver) = mpsc::channel();
     let reader = std::thread::spawn(move || {
         let guarded = StateStore::under_guard(&guard);
@@ -125,7 +126,7 @@ fn assert_waits_for_guard(store: StateStore, scope: ScopeId, guard: PublicationG
 #[verifies("rule_store_under_guard_takes_no_second_lock", examples)]
 async fn a_plain_store_still_waits_for_the_lock() {
     let (_dir, store, scope) = seeded_source_requirement_store();
-    let guard = publication_guard(&store.layout).await.unwrap();
+    let guard = publication_guard(&open(&store.layout)).await.unwrap();
     assert!(publication_lock_is_held(&store.layout));
     assert_waits_for_guard(store, scope, guard);
 }
@@ -147,7 +148,7 @@ fn a_plain_write_holds_the_publication_lock() {
 #[tokio::test]
 async fn a_plain_write_waits_for_the_guard() {
     let (_dir, store, scope) = seeded_source_requirement_store();
-    let guard = publication_guard(&store.layout).await.unwrap();
+    let guard = publication_guard(&open(&store.layout)).await.unwrap();
     assert!(publication_lock_is_held(&store.layout));
     let (started, ready) = mpsc::channel();
     let (sender, receiver) = mpsc::channel();

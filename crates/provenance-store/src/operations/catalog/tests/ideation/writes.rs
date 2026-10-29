@@ -279,11 +279,10 @@ async fn concurrent_dispositions_through_the_catalog_exactly_one_wins() {
             tokio::runtime::Runtime::new()
                 .unwrap()
                 .block_on(async move {
-                    let root = camino::Utf8PathBuf::from_path_buf(dir).unwrap();
                     invoke_typed::<CreateDisposition>(
                         PreparedContext::for_scope(PreparedScope {
-                            root,
-                            scope: scope.clone(),
+                            repository: crate::repository::Repository::open(&dir, scope.as_str())
+                                .unwrap(),
                             requested_target: "selected".into(),
                         }),
                         rejected_disposition(&scope, id, "proposal_overtime"),

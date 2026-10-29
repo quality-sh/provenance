@@ -61,7 +61,7 @@ pub use scope_ingestion::ScopeShards;
 pub(crate) use statement_policy::StatementWriteError;
 pub use typed_statement_policy::TypedSpecWriteError;
 
-use crate::{layout::ProvenanceLayout, shards};
+use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
     ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Contribution,
@@ -104,14 +104,29 @@ enum Access {
 }
 
 #[derive(Clone, Debug)]
-enum RecordStamp {
+pub(crate) enum RecordStamp {
     ResolveFromRepository,
     Omit,
     Fixed(provenance_core::Stamp),
 }
 
+impl RecordStamp {
+    /// The stamp a write resolved once before it staged: that stamp, or none.
+    pub(crate) fn resolved(stamp: Option<provenance_core::Stamp>) -> Self {
+        stamp.map_or(Self::Omit, Self::Fixed)
+    }
+}
+
+/// A store over one state root.
+///
+/// A store from [`Repository::store`](crate::repository::Repository::store) or
+/// [`Repository::stage`](crate::repository::Repository::stage) carries the live
+/// identity; a layout-level store from `init` or a repository-wide `check`
+/// has none. A store has no `Clone`, so a staged store exists only as the
+/// stage body's borrow.
 #[derive(Debug)]
 pub struct StateStore {
+    identity: Option<RepositoryIdentity>,
     pub(crate) layout: ProvenanceLayout,
     access: Access,
     record_stamp: RecordStamp,
@@ -296,23 +311,6 @@ macro_rules! define_canonical_readers {
 }
 
 impl StateStore {
-    pub const fn new(layout: ProvenanceLayout) -> Self {
-        Self {
-            layout,
-            access: Access::Lock,
-            record_stamp: RecordStamp::ResolveFromRepository,
-        }
-    }
-
-    pub(crate) fn staged(layout: ProvenanceLayout, stamp: Option<provenance_core::Stamp>) -> Self {
-        let record_stamp = stamp.map_or(RecordStamp::Omit, RecordStamp::Fixed);
-        Self {
-            layout,
-            access: Access::Lock,
-            record_stamp,
-        }
-    }
-
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
         self.with_repository_read(|| {
             let path = self.layout.manifest_path();

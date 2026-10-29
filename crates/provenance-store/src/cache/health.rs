@@ -1,6 +1,6 @@
 use crate::cache::find_gaps;
 use crate::cache::gaps::{GraphQuery, GraphRecords};
-use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use crate::state_store::StateStore;
 use provenance_core::RequirementStatus;
 use std::collections::BTreeSet;
@@ -55,12 +55,9 @@ pub struct OrphanRuleItem {
 /// command layer.
 ///
 /// Deleted records and bindings do not appear in canonical state.
-pub fn graph_evidence(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
-) -> anyhow::Result<GraphEvidence> {
-    let store = StateStore::new(layout.clone());
-    store.with_repository_publication(|| graph_evidence_locked(scope, &store))
+pub fn graph_evidence(repository: &Repository) -> anyhow::Result<GraphEvidence> {
+    let store = repository.store();
+    store.with_repository_publication(|| graph_evidence_locked(repository.scope(), &store))
 }
 
 fn graph_evidence_locked(
@@ -125,19 +122,18 @@ fn graph_evidence_locked(
     })
 }
 
-pub fn coverage_health(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
-) -> anyhow::Result<HealthView> {
-    let store = StateStore::new(layout.clone());
-    crate::layout::with_initialized_graph(layout, |_| coverage_health_locked(layout, scope, &store))
+pub fn coverage_health(repository: &Repository) -> anyhow::Result<HealthView> {
+    let store = repository.store();
+    crate::layout::with_initialized_graph(repository.layout(), |_| {
+        coverage_health_locked(repository, &store)
+    })
 }
 
 fn coverage_health_locked(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     store: &StateStore,
 ) -> anyhow::Result<HealthView> {
+    let scope = repository.scope();
     let requirements = store
         .list_requirements(scope)?
         .into_iter()
@@ -165,9 +161,9 @@ fn coverage_health_locked(
                 .any(|rule| rule.requirement_ids.contains(&req.id))
         })
         .count();
-    let orphan_count = orphan_rules(layout, scope)?.len();
+    let orphan_count = orphan_rules(repository)?.len();
     let with_complete_traceability = rules.len().saturating_sub(orphan_count);
-    let gaps = find_gaps(layout, scope)?.len();
+    let gaps = find_gaps(repository)?.len();
     Ok(HealthView {
         requirements: CountMetric {
             total: requirements.len(),
@@ -188,12 +184,9 @@ fn coverage_health_locked(
 /// No source reaches the rule through a requirement it names. The
 /// requirement itself is required by the record type, so `missing` only
 /// ever names the source.
-pub fn orphan_rules(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
-) -> anyhow::Result<Vec<OrphanRuleItem>> {
-    let store = StateStore::new(layout.clone());
-    store.with_repository_publication(|| orphan_rules_locked(scope, &store))
+pub fn orphan_rules(repository: &Repository) -> anyhow::Result<Vec<OrphanRuleItem>> {
+    let store = repository.store();
+    store.with_repository_publication(|| orphan_rules_locked(repository.scope(), &store))
 }
 
 fn orphan_rules_locked(

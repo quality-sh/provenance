@@ -26,7 +26,9 @@ async fn incompatible_delete_mode_cache(store: &TestStore) -> Vec<u8> {
     use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
     use sqlx::{Connection, SqliteConnection};
 
-    crate::cache::catch_up_state(&store.layout()).await.unwrap();
+    crate::cache::catch_up_state(&store.repository())
+        .await
+        .unwrap();
     let options = SqliteConnectOptions::new()
         .filename(store.layout().cache_db_path())
         .journal_mode(SqliteJournalMode::Delete);
@@ -67,7 +69,7 @@ pub(super) async fn get_through(
     store: &TestStore,
     policy: ReadPolicy,
 ) -> anyhow::Result<Stamped<GetResult>> {
-    answer(&store.root, &store.scope, policy, move |ctx| {
+    answer(&store.repository(), policy, move |ctx| {
         Box::pin(async move { records::get(ctx, get_query("req_overtime")).await })
     })
     .await
@@ -82,14 +84,12 @@ fn words(stamp: &Stamp) -> (Vec<&str>, Vec<&str>) {
 
 /// The stamps of the four graph operations over `req_overtime`.
 async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
-    let repo = || Some(store.root.clone());
-    let scope = &store.scope;
+    let repository = store.repository();
     vec![
         (
             "get",
             queries::get(
-                repo(),
-                scope,
+                &repository,
                 ReadPolicy::default(),
                 get_query("req_overtime"),
             )
@@ -100,8 +100,7 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
         (
             "search",
             queries::search(
-                repo(),
-                scope,
+                &repository,
                 ReadPolicy::default(),
                 requests::search("pay", Vec::new()),
             )
@@ -112,8 +111,7 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
         (
             "neighbors",
             queries::neighbors(
-                repo(),
-                scope,
+                &repository,
                 ReadPolicy::default(),
                 requests::neighbors("req_overtime", 10),
             )
@@ -124,8 +122,7 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
         (
             "trace",
             queries::trace(
-                repo(),
-                scope,
+                &repository,
                 ReadPolicy::default(),
                 requests::trace("req_overtime", 10),
             )
@@ -139,15 +136,13 @@ async fn graph_stamps(store: &TestStore) -> Vec<(&'static str, Stamp)> {
 /// The stamps of the four operations that read a live part beside
 /// canonical state.
 async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, Stamp)> {
-    let repo = || Some(store.root.clone());
-    let scope = &store.scope;
+    let repository = store.repository();
     let version = Some(SDK_PROTOCOL_VERSION);
     vec![
         (
             "impact",
             queries::impact(
-                repo(),
-                scope,
+                &repository,
                 ReadPolicy::default(),
                 ImpactQuery {
                     protocol_version: version,
@@ -164,8 +159,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
         (
             "evidence",
             queries::evidence(
-                repo(),
-                scope,
+                &repository,
                 ReadPolicy::default(),
                 requests::evidence("rule_overtime", Some(base.to_string())),
             )
@@ -176,8 +170,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
         (
             "stale",
             queries::stale(
-                repo(),
-                scope,
+                &repository,
                 ReadPolicy::default(),
                 StaleQuery {
                     protocol_version: version,
@@ -195,8 +188,7 @@ async fn evidence_stamps(store: &TestStore, base: &str) -> Vec<(&'static str, St
         (
             "resolve_symbol",
             queries::resolve_symbol(
-                repo(),
-                scope,
+                &repository,
                 ReadPolicy::default(),
                 ResolveSymbolQuery {
                     protocol_version: version,
@@ -285,8 +277,7 @@ async fn every_answer_carries_a_stamp_at_the_stored_serial() {
 async fn evidence_without_a_base_lists_no_diff() {
     let store = test_stores::seeded_queries();
     let answer = queries::evidence(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         requests::evidence("rule_overtime", None),
     )
@@ -304,8 +295,10 @@ async fn evidence_without_a_base_lists_no_diff() {
 #[verifies("rule_stamp_attests_every_table_read", examples)]
 async fn a_table_handle_puts_its_word_in_attested() {
     let store = test_stores::seeded_queries();
-    crate::cache::catch_up_state(&store.layout()).await.unwrap();
-    let stamped = answer(&store.root, &store.scope, ReadPolicy::default(), |ctx| {
+    crate::cache::catch_up_state(&store.repository())
+        .await
+        .unwrap();
+    let stamped = answer(&store.repository(), ReadPolicy::default(), |ctx| {
         Box::pin(async move {
             let requirements = ctx.snapshot().table::<Requirement>();
             let rows = requirements.count().await?;
@@ -331,7 +324,7 @@ async fn a_table_handle_puts_its_word_in_attested() {
         .unwrap()
         .expect("a revision");
     let _rules = snapshot.table::<Rule>();
-    let context = crate::operations::reader::ReadContext::for_test(snapshot, &store.root);
+    let context = crate::operations::reader::ReadContext::for_test(snapshot, store.repository());
     let _store = context
         .live(crate::operations::reader::Live::Canonical)
         .store();
@@ -368,8 +361,7 @@ async fn a_bad_base_is_refused_before_the_store_is_read() {
     let shard = crate::shards::requirements_path(&store.layout(), &store.scope);
     std::fs::write(&shard, "not a record\n").unwrap();
     let refused = queries::stale(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         StaleQuery {
             protocol_version: Some(SDK_PROTOCOL_VERSION),
@@ -385,8 +377,7 @@ async fn a_bad_base_is_refused_before_the_store_is_read() {
     let text = format!("{refused:#}");
     assert!(text.contains("rev-parse"), "{text}");
     let refused = queries::evidence(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         requests::evidence("rule_overtime", Some("no_such_commit".into())),
     )

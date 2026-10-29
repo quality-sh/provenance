@@ -26,7 +26,10 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     )
     .unwrap();
     let scope = ScopeId::new("default").unwrap();
-    (temp, StateStore::new(layout), scope)
+    let store = provenance_store::repository::Repository::open(root, "default")
+        .unwrap()
+        .store();
+    (temp, store, scope)
 }
 
 fn id(value: &str) -> StableId {

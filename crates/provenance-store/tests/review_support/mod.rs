@@ -1,7 +1,8 @@
 use camino::Utf8Path;
 use provenance_core::{ScopeId, StableId};
 use provenance_store::{
-    layout::ProvenanceLayout, review::SaveRequirement, state_store::StateStore,
+    layout::ProvenanceLayout, repository::Repository, review::SaveRequirement,
+    state_store::StateStore,
 };
 use serde_json::{json, Value};
 
@@ -9,7 +10,7 @@ pub fn fixture() -> (tempfile::TempDir, StateStore) {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
     initialization::initialize(&layout, &[]);
-    let store = StateStore::new(layout);
+    let store = Repository::open(temp.path(), "default").unwrap().store();
     store
         .create_review_requirement(serde_json::from_value(json!({
             "actor":"ben","origin":null,
@@ -22,6 +23,11 @@ pub fn fixture() -> (tempfile::TempDir, StateStore) {
 
 pub fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
+}
+
+/// Opens the fixture repository at `root` for the `default` scope.
+pub fn repository(root: &Utf8Path) -> Repository {
+    Repository::open(root, "default").unwrap()
 }
 pub fn id() -> StableId {
     StableId::new("req_a").unwrap()

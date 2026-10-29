@@ -1,7 +1,6 @@
 use crate::cache::gaps::GraphRecords;
 use crate::cache::serde_name;
-use crate::layout::ProvenanceLayout;
-use crate::state_store::StateStore;
+use crate::repository::Repository;
 use provenance_core::model::relations::{flow_neighbors, RecordFront};
 use provenance_core::{NodeType, StableId};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -42,13 +41,13 @@ pub struct ImpactOptions {
 const INDIRECT: [&str; 4] = ["refines", "depends_on", "supersedes", "spawned_by"];
 
 pub fn analyze_impact(
-    layout: &ProvenanceLayout,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     origin_type: NodeType,
     origin_id: &StableId,
     options: ImpactOptions,
 ) -> anyhow::Result<ImpactView> {
-    let store = StateStore::new(layout.clone());
+    let store = repository.store();
+    let scope = repository.scope();
     let records = store.with_repository_publication(|| GraphRecords::load(scope, &store))?;
     let graph = records.graph(scope);
     let front = graph.front();

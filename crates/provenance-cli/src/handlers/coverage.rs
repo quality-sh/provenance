@@ -4,6 +4,7 @@ use crate::repo_context::RepoContext;
 use anyhow::Context;
 use camino::Utf8PathBuf;
 use provenance_core::{Manifest, Scope};
+use provenance_store::repository::Repository;
 use std::borrow::Cow;
 
 mod render;
@@ -17,6 +18,7 @@ pub(super) struct CoverageScanOutcome {
 }
 
 fn coverage_scan_against(
+    repository: &Repository,
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
     scope: &Scope,
@@ -25,24 +27,34 @@ fn coverage_scan_against(
     baseline: Option<&camino::Utf8Path>,
 ) -> anyhow::Result<CoverageScanOutcome> {
     let scanned = provenance_scanner::scan_path_with_content(path)?;
-    let selection = Selection { scope, manifest };
+    let selection = Selection {
+        repository,
+        scope,
+        manifest,
+    };
     coverage_scan_from_scanned_against(repo, path, &selection, validate_rules, &scanned, baseline)
 }
 
 pub(super) fn coverage_scan_from_scanned(
+    repository: &Repository,
     repo: &camino::Utf8Path,
     path: &Utf8PathBuf,
     scope: &Scope,
     manifest: &Manifest,
     scanned: &[provenance_scanner::FileScanWithContent],
 ) -> anyhow::Result<CoverageScanOutcome> {
-    let selection = Selection { scope, manifest };
+    let selection = Selection {
+        repository,
+        scope,
+        manifest,
+    };
     coverage_scan_from_scanned_against(repo, path, &selection, true, scanned, None)
 }
 
-/// The selected scope and the manifest that declares it. The manifest
-/// decides which scanned files the scope owns.
+/// The repository opened for the selected scope, the scope and the manifest
+/// that declares it. The manifest decides which scanned files the scope owns.
 struct Selection<'a> {
+    repository: &'a Repository,
     scope: &'a Scope,
     manifest: &'a Manifest,
 }
@@ -136,7 +148,7 @@ fn coverage_scan_from_scanned_against(
         .map(|file| file.scan.clone())
         .collect::<Vec<_>>();
     let commit = scan_commit(repo, &scans);
-    let validation = load_validation_state(repo, scope.id.as_str(), &scans, validate_rules)?;
+    let validation = load_validation_state(selection.repository, repo, &scans, validate_rules)?;
     let mut warnings = validation.warnings;
     warnings.extend(missing_scope_directory(repo, scope));
     let mut governed_finding_count = 0;
@@ -311,14 +323,23 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
             format,
             output,
         } => {
-            let (scope, manifest) = RepoContext::new(repo.clone(), scope).declared_scope()?;
-            let policy = provenance_store::settings::Settings::load(
-                &provenance_store::layout::ProvenanceLayout::new(&repo),
-            )?
-            .coverage
-            .binding_findings;
+            let repository = RepoContext::new(repo.clone(), scope).open()?;
+            let manifest = repository.manifest()?;
+            let scope = manifest
+                .scopes
+                .iter()
+                .find(|declared| &declared.id == repository.scope())
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "the manifest no longer declares scope `{}`",
+                        repository.scope().as_str()
+                    )
+                })?;
+            let policy = repository.settings().coverage.binding_findings;
             let outcome = if let Some(baseline) = baseline.as_deref() {
                 coverage_scan_against(
+                    &repository,
                     &repo,
                     &path,
                     &scope,
@@ -327,7 +348,15 @@ pub(super) fn handle(command: CoverageCommand) -> anyhow::Result<()> {
                     Some(baseline),
                 )?
             } else {
-                coverage_scan_against(&repo, &path, &scope, &manifest, validate_rules, None)?
+                coverage_scan_against(
+                    &repository,
+                    &repo,
+                    &path,
+                    &scope,
+                    &manifest,
+                    validate_rules,
+                    None,
+                )?
             };
             if let Some(output_path) = output {
                 let rendered = render_coverage(format, &outcome.scan)?;

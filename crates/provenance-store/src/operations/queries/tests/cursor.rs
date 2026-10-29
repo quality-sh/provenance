@@ -1,4 +1,4 @@
-use super::{root_of, seeded_store};
+use super::{repository_at, root_of, seeded_store};
 use crate::operations::{queries, read_policy::ReadPolicy};
 use provenance_core::protocol::{QueryResponse, SearchQuery};
 use provenance_macros::verifies;
@@ -6,8 +6,7 @@ use serde_json::{json, Value};
 
 async fn search(root: &camino::Utf8Path, request: Value) -> anyhow::Result<Value> {
     let result = queries::search(
-        Some(root.to_owned()),
-        &provenance_core::ScopeId::new("default")?,
+        &repository_at(root),
         ReadPolicy::default(),
         serde_json::from_value::<SearchQuery>(request)?,
     )
@@ -61,8 +60,7 @@ async fn filter_only_cursor_pages_preserve_order_and_refuse_invalid_continuation
     tampered["cursor"] = json!(format!("{cursor}x"));
     assert!(search(&root, tampered).await.is_err());
     let wrong_operation = queries::read_document(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::default(),
         provenance_core::protocol::ReadDocumentQuery {
             id: "req_overtime".into(),
@@ -84,8 +82,7 @@ async fn filter_only_cursor_pages_preserve_order_and_refuse_invalid_continuation
         .push(json!({"id":"other","path_prefix":"."}));
     std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
     let wrong_scope = queries::search(
-        Some(root.clone()),
-        &other_scope,
+        &crate::repository::Repository::open(&root, other_scope.as_str()).unwrap(),
         ReadPolicy::default(),
         serde_json::from_value(json!({
             "node_types":["requirement"], "limit":200, "cursor":cursor
@@ -184,8 +181,7 @@ async fn revision_comparison_checks_digest_and_instance_even_when_serial_matches
         sqlx::query(sql).execute(&pool).await.unwrap();
         pool.close().await;
         let result = queries::search(
-            Some(root),
-            &scope,
+            &repository_at(&root),
             ReadPolicy {
                 freshness: FreshnessPolicy::AnnotateOnly,
                 ..ReadPolicy::default()

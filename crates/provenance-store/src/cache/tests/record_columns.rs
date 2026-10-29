@@ -3,6 +3,7 @@
 //! A struct field with no column fails here until the current schema changes.
 
 use super::catch_up_behavior::assert_catch_up_equals_rebuild;
+use super::fixtures::open;
 use super::fixtures::pinned_store::{pinned_store_layout, LINKED_REQUIREMENT_ID, LINKED_RULE_ID};
 use super::fixtures::seeded_layout;
 use crate::cache::{materialize_state, open_cache};
@@ -45,7 +46,7 @@ async fn assert_mirrors<K: ProjectionRow>(pool: &sqlx::SqlitePool, kind: bool) {
 #[verifies("rule_record_table_has_one_column_per_field", exhaustion)]
 async fn every_kind_table_mirrors_its_record_columns() {
     let (_dir, layout, _scope) = seeded_layout();
-    crate::cache::materialize_empty_state(&layout)
+    crate::cache::materialize_empty_state(&open(&layout))
         .await
         .unwrap();
     let pool = open_cache(&layout).await.unwrap();
@@ -69,7 +70,7 @@ async fn every_kind_table_mirrors_its_record_columns() {
 #[tokio::test]
 async fn materialize_writes_search_text_from_searchable_text() {
     let (_dir, layout, _scope) = pinned_store_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let text: String =
         sqlx::query_scalar("SELECT search_text FROM rules WHERE id = 'rule_overtime_001'")
@@ -88,7 +89,7 @@ async fn materialize_writes_search_text_from_searchable_text() {
 #[tokio::test]
 async fn catch_up_equals_rebuild_over_the_widened_tables() {
     let (_dir, layout, scope) = pinned_store_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     super::fixtures::rewrite_records(&crate::shards::rules_path(&layout, &scope), |record| {
         if record["id"] == "rule_overtime_001" {
             record["name"] = serde_json::Value::String("Overtime cap".into());
@@ -101,7 +102,7 @@ async fn catch_up_equals_rebuild_over_the_widened_tables() {
 #[tokio::test]
 async fn links_to_two_kinds_keep_their_typed_relation_rows() {
     let (_dir, layout, _scope) = pinned_store_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let links: Vec<(String, String)> = sqlx::query_as(
         "SELECT target_id, target_type FROM relations \

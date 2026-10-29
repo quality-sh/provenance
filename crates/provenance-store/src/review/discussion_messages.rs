@@ -3,21 +3,20 @@ use crate::operations::{
     read_policy::ReadPolicy,
     reader::{self, Cursor, Position, ReadContext},
 };
-use camino::Utf8Path;
+use crate::repository::Repository;
 use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
     threads::{DiscussionMessagesPage, DiscussionMessagesQuery, DiscussionSelector},
-    Message, MessageRole, SchemaVersion, ScopeId, StableId,
+    Message, MessageRole, SchemaVersion, StableId,
 };
 
 pub async fn read_discussion_messages(
-    repo: &Utf8Path,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     query: DiscussionMessagesQuery,
 ) -> anyhow::Result<Stamped<DiscussionMessagesPage>> {
     crate::operations::reader::check_limit(query.limit)?;
-    let answer = reader::answer(repo, scope, policy, move |ctx| {
+    let answer = reader::answer(repository, policy, move |ctx| {
         Box::pin(messages(ctx, query, None))
     })
     .await?;
@@ -25,14 +24,13 @@ pub async fn read_discussion_messages(
 }
 
 pub async fn read_discussion_message(
-    repo: &Utf8Path,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     parent: provenance_core::ThreadParent,
     selector: DiscussionSelector,
     message_id: StableId,
 ) -> anyhow::Result<Stamped<Message>> {
-    reader::answer(repo, scope, policy, move |ctx| {
+    reader::answer(repository, policy, move |ctx| {
         Box::pin(message(ctx, parent, selector, message_id))
     })
     .await

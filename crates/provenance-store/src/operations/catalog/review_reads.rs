@@ -106,8 +106,7 @@ review_read!(
     |read, request| async move {
         let limit = request.limit;
         let page = review::read_history(
-            &read.root,
-            &read.scope,
+            &read.repository,
             read.policy,
             ReviewHistoryQuery {
                 record_kind: request.record_kind,
@@ -143,8 +142,7 @@ review_read!(
         let mut cursor = None;
         loop {
             let page = review::read_history(
-                &read.root,
-                &read.scope,
+                &read.repository,
                 read.policy,
                 ReviewHistoryQuery {
                     record_kind: request.record_kind,
@@ -206,8 +204,7 @@ review_read!(
     ReadResult<EvidencePage>,
     |read, request| async move {
         Ok(review::read_evidence(
-            &read.root,
-            &read.scope,
+            &read.repository,
             read.policy,
             EvidenceQuery {
                 record_kind: request.record_kind,
@@ -241,8 +238,7 @@ review_read!(
     |read, request| async move {
         let limit = request.limit;
         let page = review::read_discussions(
-            &read.root,
-            &read.scope,
+            &read.repository,
             read.policy,
             DiscussionQuery {
                 parent: request.parent,
@@ -278,8 +274,7 @@ review_read!(
     |read, request| async move {
         let limit = request.limit;
         let page = review::read_discussion_messages(
-            &read.root,
-            &read.scope,
+            &read.repository,
             read.policy,
             DiscussionMessagesQuery {
                 parent: request.parent,
@@ -313,8 +308,7 @@ review_read!(
     ReadResult<Message>,
     |read, request| async move {
         Ok(review::read_discussion_message(
-            &read.root,
-            &read.scope,
+            &read.repository,
             read.policy,
             request.parent,
             request.selector,

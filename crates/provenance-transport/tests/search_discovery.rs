@@ -8,7 +8,7 @@ mod support {
 use axum::{body::Body, http::Request};
 use provenance_core::{RuleSeverity, RuleStatus, ScopeId, StableId};
 use provenance_macros::verifies;
-use provenance_store::state_store::{CreateRuleInput, StateStore};
+use provenance_store::state_store::CreateRuleInput;
 use serde_json::{json, Value};
 use support::records::Repository;
 use support::resource_http::{call, host};
@@ -88,7 +88,8 @@ fn object_keys(value: &Value) -> Vec<&str> {
 #[verifies("rule_resolve_symbol_cursor_continues_the_page", examples)]
 async fn resolve_symbol_pages_rank_symbol_matches_first_over_http() {
     let repo = Repository::new("The shared graph is readable.");
-    StateStore::new(repo.layout.clone())
+    repo.open()
+        .store()
         .create_rule(CreateRuleInput {
             archived_in_commit: None,
             scope_id: ScopeId::new("default").unwrap(),

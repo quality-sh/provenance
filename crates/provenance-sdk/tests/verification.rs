@@ -6,7 +6,7 @@ use std::sync::{Mutex, MutexGuard};
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{Manifest, RepoPathPrefix, ScopeId, VerificationRunStatus};
 use provenance_macros::verifies;
-use provenance_sdk::{operations, verify};
+use provenance_sdk::{operations, verify, Repository};
 use provenance_store::layout::ProvenanceLayout;
 
 /// Serializes tests that set process environment variables.
@@ -51,7 +51,7 @@ fn seeded_rule(root: &std::path::Path) -> String {
     }))
     .unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
-    let result = operations::apply(Some(root), &ScopeId::new("default").unwrap(), input).unwrap();
+    let result = operations::apply(&Repository::open(&root, "default").unwrap(), input).unwrap();
     result
         .resources
         .iter()
@@ -69,7 +69,7 @@ fn seeded_rule(root: &std::path::Path) -> String {
 
 fn recorded_runs(root: &std::path::Path) -> Vec<provenance_core::VerificationRun> {
     let root = camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap();
-    operations::verification_runs(Some(root), &ScopeId::new("default").unwrap(), None).unwrap()
+    operations::verification_runs(&Repository::open(&root, "default").unwrap(), None).unwrap()
 }
 
 #[test]

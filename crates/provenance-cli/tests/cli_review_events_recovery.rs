@@ -56,23 +56,26 @@ fn real_kernel_queue_loss_sends_reset_and_current_read() {
         "a dedicated overflow runner is required for this queue size"
     );
     // Own the publication lock before suspension, so the observer cannot retain it.
-    review_host_support::waits::publish(&layout(repo.path()), || {
-        host.signal("-STOP");
-        for index in 0..count + 1024 {
-            let path = repo
-                .path()
-                .join(format!(".provenance/state/event-{index}.noise"));
-            std::fs::write(&path, "event")?;
-            std::fs::remove_file(path)?;
-        }
-        // Publish prepared canonical bytes without waiting for a stopped process.
-        let target = repo.path().join(shard);
-        let temporary = target.with_extension("replacement");
-        std::fs::write(&temporary, &bytes)?;
-        std::fs::rename(temporary, target)?;
-        host.signal("-CONT");
-        Ok(())
-    })
+    review_host_support::waits::publish(
+        &review_host_support::waits::repository(repo.path()),
+        || {
+            host.signal("-STOP");
+            for index in 0..count + 1024 {
+                let path = repo
+                    .path()
+                    .join(format!(".provenance/state/event-{index}.noise"));
+                std::fs::write(&path, "event")?;
+                std::fs::remove_file(path)?;
+            }
+            // Publish prepared canonical bytes without waiting for a stopped process.
+            let target = repo.path().join(shard);
+            let temporary = target.with_extension("replacement");
+            std::fs::write(&temporary, &bytes)?;
+            std::fs::rename(temporary, target)?;
+            host.signal("-CONT");
+            Ok(())
+        },
+    )
     .unwrap();
     let deadline = std::time::Instant::now() + review_host_support::waits::LIMIT;
     let reset = loop {
@@ -104,9 +107,10 @@ async fn failed_snapshot_resets_disconnects_and_recovers_on_a_file_event() {
     let mut socket = Socket::connect(&host);
     let ready = socket.frame();
     let layout = layout(repo.path());
+    let repository = review_host_support::waits::repository(repo.path());
     let shard = layout.scopes_dir().join("default/sources/source.jsonl");
     let original = std::fs::read(&shard).unwrap();
-    let guard = review_host_support::waits::guard(&layout).await;
+    let guard = review_host_support::waits::guard(&repository).await;
     let temporary = shard.with_extension("replacement");
     std::fs::write(&temporary, "not JSON\n").unwrap();
     std::fs::rename(&temporary, &shard).unwrap();
@@ -116,7 +120,7 @@ async fn failed_snapshot_resets_disconnects_and_recovers_on_a_file_event() {
     assert_eq!(reset["reason"], "observation-failed");
     assert_eq!(reset["epoch"], ready["epoch"]);
     closes(&mut socket);
-    let guard = review_host_support::waits::guard(&layout).await;
+    let guard = review_host_support::waits::guard(&repository).await;
     std::fs::write(&temporary, original).unwrap();
     std::fs::rename(temporary, shard).unwrap();
     drop(guard);
@@ -146,15 +150,16 @@ async fn removed_state_resets_then_replacement_reattaches_to_current_records() {
     let mut socket = Socket::connect(&host);
     socket.frame();
     let layout = layout(repo.path());
+    let repository = review_host_support::waits::repository(repo.path());
     let old = layout.provenance_dir().join("old-state");
-    let guard = review_host_support::waits::guard(&layout).await;
+    let guard = review_host_support::waits::guard(&repository).await;
     std::fs::rename(layout.state_dir(), &old).unwrap();
     drop(guard);
     let reset = socket.frame();
     assert_eq!(reset["type"], "reset");
     assert_eq!(reset["reason"], "observation-failed");
     closes(&mut socket);
-    let guard = review_host_support::waits::guard(&layout).await;
+    let guard = review_host_support::waits::guard(&repository).await;
     std::fs::rename(
         replacement.path().join(".provenance/state"),
         layout.state_dir(),
@@ -191,15 +196,18 @@ fn a_nonregular_shard_resets_without_waiting_for_fifo_data() {
     let shard = repo
         .path()
         .join(".provenance/state/scopes/default/sources/source.jsonl");
-    review_host_support::waits::publish(&layout(repo.path()), || {
-        std::fs::remove_file(&shard)?;
-        assert!(review_host_support::waits::output(
-            std::process::Command::new("mkfifo").arg(&shard)
-        )
-        .status
-        .success());
-        Ok(())
-    })
+    review_host_support::waits::publish(
+        &review_host_support::waits::repository(repo.path()),
+        || {
+            std::fs::remove_file(&shard)?;
+            assert!(review_host_support::waits::output(
+                std::process::Command::new("mkfifo").arg(&shard)
+            )
+            .status
+            .success());
+            Ok(())
+        },
+    )
     .unwrap();
     let deadline = std::time::Instant::now() + review_host_support::waits::LIMIT;
     let reset = loop {

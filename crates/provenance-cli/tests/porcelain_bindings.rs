@@ -133,9 +133,11 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_source(&repo);
-    let access =
-        provenance_store::operations::LocalRepository::new(directory.path(), "native", "default")
-            .unwrap();
+    let access = provenance_store::operations::LocalRepository::bind(
+        provenance_store::repository::Repository::open(directory.path(), "default").unwrap(),
+        "native",
+    )
+    .unwrap();
     let host = provenance_transport::StatementHost::with_access(Arc::new(access))
         .with_check_port(Arc::new(EmptyCheckPort));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);

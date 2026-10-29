@@ -61,11 +61,10 @@ impl Fixture {
             .unwrap(),
         )
         .unwrap();
-        Self {
-            dir,
-            store: StateStore::new(layout),
-            scope,
-        }
+        let store = provenance_store::repository::Repository::open(dir.path(), "default")
+            .unwrap()
+            .store();
+        Self { dir, store, scope }
     }
     pub async fn call(&self, operation: &str, request: Value) -> Result<Value, Value> {
         struct Resolver(PreparedScope);
@@ -92,8 +91,11 @@ impl Fixture {
             provenance_core::SDK_PROTOCOL_VERSION,
             json!({"context":{"repository":"fixture","scope":"default"},"request":request}),
             Host(Arc::new(Resolver(PreparedScope {
-                root: camino::Utf8PathBuf::from_path_buf(self.dir.path().into()).unwrap(),
-                scope: self.scope.clone(),
+                repository: provenance_store::repository::Repository::open(
+                    self.dir.path(),
+                    self.scope.as_str(),
+                )
+                .unwrap(),
                 requested_target: "fixture".into(),
             }))),
         )

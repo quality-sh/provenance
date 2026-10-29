@@ -1,0 +1,8 @@
+error: lifetime may not live long enough
+  --> tests/compile_fail/staged_store_returned_from_stage.rs:10:75
+   |
+10 |             |staged: &StateStore| -> Result<&StateStore, anyhow::Error> { Ok(staged) },
+   |                      -                      -                             ^^^^^^^^^^ returning this value requires that `'1` must outlive `'2`
+   |                      |                      |
+   |                      |                      let's call the lifetime of this reference `'2`
+   |                      let's call the lifetime of this reference `'1`

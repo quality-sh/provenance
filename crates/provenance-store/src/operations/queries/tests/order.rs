@@ -33,8 +33,7 @@ fn into(relation: &str, id: &str) -> (String, Direction, String) {
 async fn neighbors_keep_the_rank_id_declaration_direction_order() {
     let store = TestStore::pinned();
     let answer = queries::neighbors(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         requests::neighbors("req_penalty", 50),
     )

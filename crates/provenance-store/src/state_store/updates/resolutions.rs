@@ -30,15 +30,15 @@ impl StateStore {
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
         let inputs = validate_inputs(input.inputs)?;
-        let record = self.mutate_graph_record_with_etag(
+        let record = self.mutate_graph_record_with_store(
             &path,
             expected_etag.as_deref(),
-            |records: &mut Vec<Resolution>| {
+            |store, records: &mut Vec<Resolution>| {
                 let position = records
                     .iter()
                     .position(|record| record.id == input.id)
                     .ok_or_else(missing)?;
-                self.validate_relation_targets(
+                store.validate_relation_targets(
                     &scope,
                     records,
                     &input.id,

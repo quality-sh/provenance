@@ -6,8 +6,8 @@
 //! lies inside those units.
 
 use super::super::*;
+use super::fixtures::open;
 use super::fixtures::*;
-use crate::state_store::StateStore;
 use provenance_core::ScopeId;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use std::collections::BTreeSet;
@@ -76,7 +76,7 @@ fn two_scope_layout() -> (
 async fn a_rebuild_reads_only_inside_the_hashed_units() {
     let (_dir, layout, first, second) = two_scope_layout();
     crate::test_probes::start_recording_reads();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let reads = crate::test_probes::take_recorded_reads();
     assert!(!reads.is_empty(), "the loaders must record their reads");
 
@@ -99,7 +99,7 @@ async fn a_rebuild_reads_only_inside_the_hashed_units() {
 #[test]
 fn each_scoped_family_derives_from_its_own_scope_and_the_global_unit_only() {
     let (_dir, layout, first, second) = two_scope_layout();
-    let store = StateStore::new(layout);
+    let store = crate::test_support::store(&layout);
     let mut recorded_any = false;
     for scope in [&first, &second] {
         for family in ProjectionFamily::ALL {

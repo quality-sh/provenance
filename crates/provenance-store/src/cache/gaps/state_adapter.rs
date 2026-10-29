@@ -1,13 +1,13 @@
 use super::{compute_gaps, graph_query::GapGraph, model::GapItem};
-use crate::{layout::ProvenanceLayout, state_store::StateStore};
+use crate::{repository::Repository, state_store::StateStore};
 use provenance_core::{
     Contribution, Question, Requirement, Resolution, Rule, ScopeId, Source, SynthesisPacket,
     Thread, Topic,
 };
 
-pub fn find_gaps(layout: &ProvenanceLayout, scope: &ScopeId) -> anyhow::Result<Vec<GapItem>> {
-    let store = StateStore::new(layout.clone());
-    store.with_repository_publication(|| find_gaps_locked(scope, &store))
+pub fn find_gaps(repository: &Repository) -> anyhow::Result<Vec<GapItem>> {
+    let store = repository.store();
+    store.with_repository_publication(|| find_gaps_locked(repository.scope(), &store))
 }
 
 fn find_gaps_locked(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Vec<GapItem>> {

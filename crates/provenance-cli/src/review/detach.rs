@@ -267,8 +267,8 @@ fn host_directory() -> anyhow::Result<PathBuf> {
 fn without_reviewer(repo: &Path) -> anyhow::Result<bool> {
     let repo = camino::Utf8PathBuf::from_path_buf(repo.to_path_buf())
         .map_err(|path| anyhow::anyhow!("repository path {} is not UTF-8", path.display()))?;
-    let store = crate::store::Store::open_required(&repo)?;
-    provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
+    provenance_store::layout::with_initialized_graph(&layout, |manifest| {
         Ok(manifest.disposition_actor_ids.is_empty())
     })
 }
