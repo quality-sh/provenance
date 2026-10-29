@@ -18,6 +18,9 @@ const POLICY_FILE: &str = ".config/crate-dependencies.json";
 #[serde(deny_unknown_fields)]
 struct Policy {
     host_crates: BTreeSet<String>,
+    /// Normal and build edges that no entry can allow. A row can name a crate
+    /// that is not a member yet.
+    forbidden: BTreeMap<String, BTreeSet<String>>,
     crates: BTreeMap<String, Entry>,
 }
 
@@ -119,6 +122,30 @@ fn dependency_refusals(policy: &Policy, metadata: &Value) -> Vec<String> {
     refusals.into_iter().collect()
 }
 
+/// Returns each normal or build edge that the policy allows although the
+/// forbidden row for the same crate names it.
+#[rule("rule_crate_dependency_policy_keeps_forbidden_edges")]
+fn forbidden_refusals(policy: &Policy) -> Vec<String> {
+    let mut refusals = Vec::new();
+    for (name, forbidden) in &policy.forbidden {
+        let Some(entry) = policy.crates.get(name) else {
+            continue;
+        };
+        for dependency in entry.dependencies.intersection(forbidden) {
+            refusals.push(format!(
+                "{POLICY_FILE} allows {name} to have {dependency} in dependencies, \
+                 but the forbidden row for {name} names {dependency}"
+            ));
+        }
+    }
+    refusals
+}
+
+fn read_policy() -> Policy {
+    let policy = fs::read_to_string(workspace_root().join(POLICY_FILE)).expect("read policy");
+    serde_json::from_str(&policy).expect("parse policy")
+}
+
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -140,10 +167,15 @@ fn workspace_metadata() -> Value {
 #[test]
 #[verifies("rule_workspace_crate_dependencies_match_policy", conformance)]
 fn workspace_crates_depend_only_on_what_the_policy_allows() {
-    let policy = fs::read_to_string(workspace_root().join(POLICY_FILE)).expect("read policy");
-    let policy: Policy = serde_json::from_str(&policy).expect("parse policy");
+    let refusals = dependency_refusals(&read_policy(), &workspace_metadata());
 
-    let refusals = dependency_refusals(&policy, &workspace_metadata());
+    assert!(refusals.is_empty(), "{}", refusals.join("\n"));
+}
+
+#[test]
+#[verifies("rule_crate_dependency_policy_keeps_forbidden_edges", conformance)]
+fn policy_allows_no_forbidden_edge() {
+    let refusals = forbidden_refusals(&read_policy());
 
     assert!(refusals.is_empty(), "{}", refusals.join("\n"));
 }
@@ -151,6 +183,10 @@ fn workspace_crates_depend_only_on_what_the_policy_allows() {
 fn fixture_policy() -> Value {
     json!({
         "host_crates": ["fs2", "rustix", "tempfile", "tokio", "windows-sys"],
+        "forbidden": {
+            "provenance-core": ["provenance-store", "tokio"],
+            "provenance-contract": ["tokio"]
+        },
         "crates": {
             "provenance-macros": { "dependencies": [], "dev-dependencies": [] },
             "provenance-core": {
@@ -332,4 +368,38 @@ fn allowed_edge_missing_from_metadata_is_refused() {
           dependencies, but that edge does not exist"
         ]
     );
+}
+
+fn forbidden(policy: Value) -> Vec<String> {
+    forbidden_refusals(&serde_json::from_value(policy).unwrap())
+}
+
+#[test]
+#[verifies("rule_crate_dependency_policy_keeps_forbidden_edges", examples)]
+fn policy_that_allows_a_forbidden_edge_is_refused() {
+    let mut policy = fixture_policy();
+    policy["crates"]["provenance-core"]["dependencies"] = json!(["provenance-macros", "tokio"]);
+
+    assert_eq!(
+        forbidden(policy),
+        [
+            ".config/crate-dependencies.json allows provenance-core to have tokio in \
+          dependencies, but the forbidden row for provenance-core names tokio"
+        ]
+    );
+}
+
+#[test]
+#[verifies("rule_crate_dependency_policy_keeps_forbidden_edges", examples)]
+fn forbidden_row_for_a_crate_that_is_not_a_member_is_accepted() {
+    assert_eq!(forbidden(fixture_policy()), Vec::<String>::new());
+}
+
+#[test]
+#[verifies("rule_crate_dependency_policy_keeps_forbidden_edges", examples)]
+fn dev_edge_on_a_forbidden_name_is_accepted() {
+    let mut policy = fixture_policy();
+    policy["crates"]["provenance-core"]["dev-dependencies"] = json!(["tokio"]);
+
+    assert_eq!(forbidden(policy), Vec::<String>::new());
 }

@@ -23,6 +23,41 @@
     "walkdir",
     "windows-sys"
   ],
+  "forbidden": {
+    "provenance-core": [
+      "provenance-store",
+      "provenance-contract",
+      "provenance-transport",
+      "provenance-cli",
+      "tokio",
+      "axum"
+    ],
+    "provenance-store": [
+      "provenance-contract",
+      "provenance-transport",
+      "provenance-cli",
+      "axum",
+      "rmcp"
+    ],
+    "provenance-contract": [
+      "provenance-transport",
+      "provenance-cli",
+      "tokio",
+      "axum",
+      "rmcp"
+    ],
+    "provenance-porcelain": [
+      "provenance-store",
+      "provenance-contract",
+      "provenance-transport",
+      "provenance-cli",
+      "clap",
+      "rmcp"
+    ],
+    "provenance-transport": [
+      "provenance-cli"
+    ]
+  },
   "crates": {
     "provenance-cli": {
       "dependencies": [
