@@ -34,3 +34,32 @@ fn store_has_no_wire_contract() {
     let cases = trybuild::TestCases::new();
     cases.compile_fail("tests/compile_fail/no_wire_contract.rs");
 }
+
+// Accepts only the narrow row, so a store-only column in `record_family_catalog!` does not
+// compile here.
+macro_rules! narrow_rows {
+    ($($group:ident {
+        $($variant:ident {
+            record: $record:ty,
+            order: $order:tt,
+            node: [$($node:tt)*],
+            catalog: [$($catalog:tt)*],
+            route: [$($route:tt)*]
+            $(, review: $review:ident)?
+        };)*
+    })*) => {
+        [$($(stringify!($variant $record $order $($node)* $($catalog)* $($route)*),)*)*]
+    };
+}
+
+#[test]
+fn record_family_catalog_leaves_out_store_only_columns() {
+    let rows = provenance_store::record_family_catalog!(narrow_rows);
+    assert!(rows.iter().any(|row| row.starts_with("Sources")));
+    for row in rows {
+        // Shard files, readers, graph exports and import budgets stay in the store.
+        for store_only in [".jsonl", "list_sources", "source_pinned", "node_budget"] {
+            assert!(!row.contains(store_only), "{row} names {store_only}");
+        }
+    }
+}
