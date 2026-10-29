@@ -9,12 +9,18 @@ use std::path::PathBuf;
 /// `std::fs` adds the `\\?\` prefix to a long Windows path itself. Other
 /// calls do not, and Windows refuses a path of 260 characters or more with
 /// "The system cannot find the path specified". On Windows this function
-/// returns the absolute path with that prefix. On other systems it returns
+/// returns the absolute path with that prefix, and an empty path is the
+/// current directory, as it is for `tempfile`. On other systems it returns
 /// `path` unchanged.
 #[cfg_attr(not(windows), allow(clippy::unnecessary_wraps))]
 pub fn extended(path: &Utf8Path) -> std::io::Result<PathBuf> {
     #[cfg(windows)]
     {
+        let path = if path.as_str().is_empty() {
+            Utf8Path::new(".")
+        } else {
+            path
+        };
         let absolute = std::path::absolute(path)?;
         let text = absolute.to_str().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::InvalidInput, "path is not UTF-8")
