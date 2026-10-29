@@ -148,11 +148,11 @@ fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> 
         std::fs::create_dir_all(parent)?;
     }
     let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
-    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
+    let mut temp = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
     for record in records {
         writeln!(temp, "{}", to_stable_json(record)?)?;
     }
-    temp.persist(path)?;
+    temp.persist(crate::long_path::extended(path)?)?;
     Ok(())
 }
 
@@ -192,11 +192,11 @@ fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyho
         std::fs::create_dir_all(parent)?;
     }
     let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
-    let mut temp = tempfile::NamedTempFile::new_in(parent)?;
+    let mut temp = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
     for line in lines {
         writeln!(temp, "{line}")?;
     }
-    temp.persist(path)?;
+    temp.persist(crate::long_path::extended(path)?)?;
     Ok(())
 }
 
