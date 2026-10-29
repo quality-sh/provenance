@@ -6,6 +6,7 @@ mod support {
 }
 use axum::{body::Body, http::Request};
 use provenance_core::protocol::failure::OperationFailure;
+use provenance_macros::verifies;
 use provenance_store::operations::catalog::{
     ContextResolver, ExecutionNeeds, PreparedContext, RequestedContext,
 };
@@ -50,7 +51,10 @@ impl HostAccess for UnreadableSettings {
     }
 }
 
+// The policy corrupts the settings in `prepare`, before the page section, so
+// the first read of the changes fails.
 #[test]
+#[verifies("rule_page_write_keeps_result_when_capture_fails", examples)]
 fn a_saved_page_write_succeeds_when_the_snapshot_fails() {
     bounded(|| {
         tokio::runtime::Runtime::new().unwrap().block_on(async {
@@ -119,9 +123,10 @@ fn a_saved_page_write_succeeds_when_the_snapshot_fails() {
     });
 }
 
-// Implementation aid: pins the observer payload through public HTTP writes.
-// No Rule specifies the internal record-family notification payload.
+// Pins the observer payload through public HTTP writes. The changes come from
+// the section that ran the write.
 #[test]
+#[verifies("rule_page_write_runs_in_its_change_section", examples)]
 fn saved_page_writes_report_added_changed_and_unchanged_records() {
     bounded(|| {
         tokio::runtime::Runtime::new().unwrap().block_on(async {
@@ -171,8 +176,9 @@ fn saved_page_writes_report_added_changed_and_unchanged_records() {
     });
 }
 
-// Implementation aid: a Discussion must also invalidate its parent document.
+// A Discussion must also invalidate its parent document.
 #[test]
+#[verifies("rule_page_write_runs_in_its_change_section", examples)]
 fn saved_page_discussion_reports_its_parent_and_message() {
     bounded(|| {
         tokio::runtime::Runtime::new().unwrap().block_on(async {
