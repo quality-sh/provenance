@@ -110,7 +110,7 @@ fn missing_scope_directory(
     scope: &Scope,
 ) -> Option<provenance_core::coverage::ValidationWarning> {
     let prefix = scope.path_prefix.as_path();
-    (!repo.join(prefix).is_dir()).then(|| provenance_core::coverage::ValidationWarning {
+    (!scope_directory(repo, scope).is_dir()).then(|| provenance_core::coverage::ValidationWarning {
         rule_id: String::new(),
         file_path: Some(prefix.to_path_buf()),
         line: None,
@@ -122,10 +122,18 @@ fn missing_scope_directory(
     })
 }
 
+/// The scope directory, joined one component at a time because a verbatim
+/// Windows root does not take `/` as a separator.
+fn scope_directory(repo: &camino::Utf8Path, scope: &Scope) -> Utf8PathBuf {
+    let mut directory = repo.to_path_buf();
+    directory.extend(scope.path_prefix.as_path().components());
+    directory
+}
+
 /// Whether the scanned path contains every file of the scope, so an active
 /// Rule with no binding in the scan is unimplemented rather than unseen.
 fn scan_covers_scope(repo: &camino::Utf8Path, scope: &Scope, path: &camino::Utf8Path) -> bool {
-    let Ok(root) = dunce::canonicalize(repo.join(scope.path_prefix.as_path())) else {
+    let Ok(root) = dunce::canonicalize(scope_directory(repo, scope)) else {
         // A scope whose directory does not exist has no files to miss.
         return true;
     };

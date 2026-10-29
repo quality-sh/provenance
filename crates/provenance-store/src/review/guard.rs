@@ -155,7 +155,7 @@ fn submitted_ids(
     let Some(scope) = path.parent().and_then(Utf8Path::parent) else {
         return Ok(std::collections::BTreeSet::new());
     };
-    let text = match std::fs::read_to_string(scope.join("ideation/proposal_cards.jsonl")) {
+    let text = match std::fs::read_to_string(scope.join("ideation").join("proposal_cards.jsonl")) {
         Ok(text) => text,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(std::collections::BTreeSet::new())

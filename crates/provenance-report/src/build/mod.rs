@@ -392,12 +392,14 @@ fn scans_at_head(
     let scans = git::revision_files_at_paths(repo, head, &selected)?
         .into_iter()
         .filter_map(|file| {
+            let mut path = repo.to_path_buf();
+            path.extend(file.path.components());
             let language = file
                 .path
                 .extension()
                 .and_then(provenance_scanner::Language::from_extension)?;
             Some(provenance_scanner::scan_file(
-                &repo.join(&file.path),
+                &path,
                 language,
                 &file.content,
             ))

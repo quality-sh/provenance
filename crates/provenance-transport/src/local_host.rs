@@ -229,12 +229,16 @@ fn verified(record: &RegistryRecord) -> bool {
 }
 
 fn registry_path(root: &Path, scope: &str) -> PathBuf {
-    root.join(".provenance/cache/local-hosts")
+    root.join(".provenance")
+        .join("cache")
+        .join("local-hosts")
         .join(format!("{scope}.json"))
 }
 
 fn lock_path(root: &Path, scope: &str) -> PathBuf {
-    root.join(".provenance/cache/local-hosts")
+    root.join(".provenance")
+        .join("cache")
+        .join("local-hosts")
         .join(format!("{scope}.lock"))
 }
 

@@ -113,7 +113,9 @@ fn enclosing_repository(repo: &camino::Utf8Path) -> Option<Utf8PathBuf> {
         .skip(1)
         .find(|ancestor| {
             ancestor
-                .join(".provenance/state/manifest.json")
+                .join(".provenance")
+                .join("state")
+                .join("manifest.json")
                 .as_std_path()
                 .is_file()
         })

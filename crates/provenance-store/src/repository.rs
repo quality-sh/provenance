@@ -155,7 +155,11 @@ impl Repository {
         let found = cwd
             .ancestors()
             .find(|ancestor| {
-                ancestor.join(".provenance/state/manifest.json").is_file()
+                ancestor
+                    .join(".provenance")
+                    .join("state")
+                    .join("manifest.json")
+                    .is_file()
                     || ancestor.join(".git").exists()
             })
             .unwrap_or(cwd.as_path())
