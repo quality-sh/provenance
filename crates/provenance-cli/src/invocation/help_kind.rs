@@ -26,7 +26,8 @@ pub(super) fn resolve_record_kind(
     let repo = selection.get_one::<String>("repo")?;
     let scope = ScopeId::new(selection.get_one::<String>("scope")?).ok()?;
     // Opening a repository takes the publication lock, so help reads the
-    // record kinds through the layout instead.
+    // record kinds through the layout instead. While a publication runs, the
+    // answer is best-effort.
     let layout = ProvenanceLayout::new(repo.as_str());
     provenance_store::publication::read_only_record_kinds(&layout, &scope, target)
         .ok()

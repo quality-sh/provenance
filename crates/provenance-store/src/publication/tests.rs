@@ -1,4 +1,6 @@
+use super::read_only::tests::{record_kind_repositories, scope};
 use super::*;
+use provenance_core::NodeType;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 
@@ -341,110 +343,6 @@ fn a_nested_section_completes_on_the_held_store_and_is_refused_through_an_alias(
     assert_eq!(refused, [true, true]);
 }
 
-// Implementation aid: checks alias identity during validation, without a guarded store.
-#[cfg(unix)]
-#[test]
-fn read_only_validation_through_an_alias_does_not_publish() {
-    let temporary = tempfile::tempdir().unwrap();
-    let root = temporary.path().join("repo");
-    std::fs::create_dir(&root).unwrap();
-    let alias = temporary.path().join("alias");
-    std::os::unix::fs::symlink(&root, &alias).unwrap();
-    let layout = ProvenanceLayout::new(root.to_str().unwrap());
-    let alias_path = alias;
-    let alias = ProvenanceLayout::new(alias_path.to_str().unwrap());
-    std::fs::create_dir_all(layout.state_dir()).unwrap();
-    std::fs::write(
-        layout.manifest_path(),
-        serde_json::to_vec(&provenance_core::Manifest::default_with_scope(
-            provenance_core::ScopeId::new("default").unwrap(),
-            provenance_core::RepoPathPrefix::new("."),
-        ))
-        .unwrap(),
-    )
-    .unwrap();
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    with_read_only_validation(&layout, || {
-        with_read_only_validation(&alias, || Ok(()))?;
-        with_repository_publication(&alias, |_| Ok(()))?;
-        let repository = crate::repository::Repository::open(&alias_path, "default")?;
-        let _guard = runtime.block_on(publication_guard(&repository))?;
-        assert!(!layout.publication_lock_path().exists());
-        assert!(!layout.import_transactions_dir().exists());
-        Ok(())
-    })
-    .unwrap();
-}
-
-// Implementation aid: init validates planned state before its repository exists.
-#[test]
-fn read_only_validation_accepts_a_planned_repository() {
-    let temporary = tempfile::tempdir().unwrap();
-    let root = temporary.path().join("planned/repository");
-    let layout = ProvenanceLayout::new(root.to_str().unwrap());
-    with_read_only_validation(&layout, || {
-        with_repository_publication(&layout, |_| Ok(()))?;
-        Ok(())
-    })
-    .unwrap();
-    assert!(!root.exists());
-}
-
-/// A repository with one Source, and a copy of its state with no cache.
-fn record_kind_repositories() -> (tempfile::TempDir, ProvenanceLayout, ProvenanceLayout) {
-    let directory = tempfile::tempdir().unwrap();
-    let root = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
-    let live = ProvenanceLayout::new(root.join("live"));
-    crate::cache::tests::fixtures::initialized(live.root().as_std_path());
-    let scope = provenance_core::ScopeId::new("default").unwrap();
-    crate::cache::tests::fixtures::create_source(
-        &crate::test_support::store(&live),
-        &scope,
-        "source_help",
-    );
-    let copy = ProvenanceLayout::new(root.join("copy"));
-    staged::copy_directory(&live.state_dir(), &copy.state_dir()).unwrap();
-    (directory, live, copy)
-}
-
-#[test]
-#[verifies("rule_read_only_section_stays_inside_the_store", examples)]
-fn read_only_record_kinds_answer_while_another_handle_holds_the_lock() {
-    let (_directory, live, _copy) = record_kind_repositories();
-    let _held = guard::LockedPublicationFile::acquire(&live.publication_lock_path()).unwrap();
-    let (sender, receiver) = std::sync::mpsc::channel();
-    let reader = live;
-    std::thread::spawn(move || {
-        let scope = provenance_core::ScopeId::new("default").unwrap();
-        sender
-            .send(read_only_record_kinds(&reader, &scope, "source_help").unwrap())
-            .unwrap();
-    });
-    let kinds = receiver
-        .recv_timeout(std::time::Duration::from_secs(5))
-        .expect("the read takes no publication lock");
-    assert_eq!(kinds, vec![provenance_core::NodeType::Source]);
-}
-
-#[test]
-#[verifies("rule_read_only_section_stays_inside_the_store", examples)]
-fn read_only_record_kinds_create_no_path() {
-    let (_directory, _live, copy) = record_kind_repositories();
-    let scope = provenance_core::ScopeId::new("default").unwrap();
-    assert_eq!(
-        read_only_record_kinds(&copy, &scope, "source_help").unwrap(),
-        vec![provenance_core::NodeType::Source]
-    );
-    assert_eq!(
-        read_only_record_kinds(&copy, &scope, "source_missing").unwrap(),
-        Vec::new()
-    );
-    assert!(!copy.cache_dir().exists(), "the read creates no cache");
-}
-
 /// The probe starts the host read while the publication holds its lock with the live state
 /// moved away, and does not wait for it. The open and the manifest read wait for the publication.
 #[test]
@@ -486,4 +384,67 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
     crate::test_probes::disarm("state_after_backup_rename");
     let reader = reader.take().expect("the publication reached the gap");
     assert_eq!(reader.join().unwrap().unwrap(), published);
+}
+
+/// The probe reads the record kinds on another thread while the
+/// publication has moved the live state to its backup. The read takes no
+/// lock, so it does not wait, and it finds no record.
+#[test]
+#[verifies("rule_read_only_section_stays_inside_the_store", examples)]
+fn read_only_record_kinds_in_the_publication_swap_find_no_record() {
+    let (_directory, live, _copy) = record_kind_repositories();
+    let answer = std::rc::Rc::new(std::cell::RefCell::new(None));
+    crate::test_probes::arm("state_after_backup_rename", {
+        let answer = answer.clone();
+        let live = live.clone();
+        move || {
+            let live = live.clone();
+            let reader =
+                std::thread::spawn(move || read_only_record_kinds(&live, &scope(), "source_help"));
+            answer.replace(Some(reader.join().expect("the reader does not panic")));
+            Ok(())
+        }
+    });
+    let published = with_repository_publication(&live, |held| {
+        with_staged_state(held, false, |_staged| Ok(()))
+    });
+    crate::test_probes::disarm("state_after_backup_rename");
+    published.unwrap();
+    let answer = answer.take().expect("the publication reached the swap");
+    assert_eq!(answer.unwrap(), Vec::<NodeType>::new());
+    assert_eq!(
+        read_only_record_kinds(&live, &scope(), "source_help").unwrap(),
+        vec![NodeType::Source],
+        "after the publication the record is found again"
+    );
+}
+
+#[test]
+#[verifies("rule_read_only_store_refuses_writes", examples)]
+fn a_read_only_write_is_refused_and_creates_no_path() {
+    let (_directory, _live, copy) = record_kind_repositories();
+    let shard = crate::shards::path_for(&copy, &scope(), NodeType::Source);
+    let before = std::fs::read(&shard).unwrap();
+    with_read_only_validation(&copy, |store| {
+        assert!(store.with_repository_publication(|_| Ok(())).is_err());
+        assert!(store
+            .mutate_jsonl_records(&shard, |records: &mut Vec<serde_json::Value>| {
+                records.clear();
+                Ok(())
+            })
+            .is_err());
+        assert!(store
+            .mutate_jsonl_records_if(&shard, |_: &mut Vec<serde_json::Value>| Ok(true))
+            .is_err());
+        assert!(store
+            .permitting(&[shard.as_path()], "*", |_| Ok(()))
+            .is_err());
+        assert!(with_staged_state(store, false, |_| Ok(())).is_err());
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(std::fs::read(&shard).unwrap(), before);
+    assert!(!copy.publication_lock_path().exists(), "no lock");
+    assert!(!copy.cache_dir().exists(), "no cache");
+    assert!(!copy.import_transactions_dir().exists(), "no transaction");
 }

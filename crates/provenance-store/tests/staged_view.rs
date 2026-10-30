@@ -5,13 +5,13 @@
 //! live access works again after the stage.
 
 use camino::{Utf8Path, Utf8PathBuf};
-use provenance_core::{Manifest, RepoPathPrefix, ScopeId, Source, StableId};
+use provenance_core::{Manifest, NodeType, RepoPathPrefix, ScopeId, Source, StableId};
 use provenance_macros::verifies;
 use provenance_store::cache::catch_up_state;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use provenance_store::publication::{
-    publication_guard, with_publication_guard, LiveAccessDuringStage,
+    publication_guard, read_only_record_kinds, with_publication_guard, LiveAccessDuringStage,
 };
 use provenance_store::repository::{OpenFailure, Repository};
 use provenance_store::state_store::{CreateSourceInput, ScopeShards, StateStore};
@@ -391,4 +391,59 @@ fn a_panic_in_a_section_or_stage_body_leaves_no_holder() {
         })
         .expect("a stage on this thread proceeds");
     assert!(has_source(&repository, "source_after_panics"));
+}
+
+#[test]
+#[verifies("rule_staged_sections_run_one_at_a_time", examples)]
+#[verifies("rule_staged_write_keeps_live_repository_identity", examples)]
+fn a_worker_import_through_the_staged_store_is_published() {
+    let (_dir, repository) = repository();
+    let (done, on_done) = mpsc::channel();
+    let publisher = repository.clone();
+    let stage = std::thread::spawn(move || {
+        let result = publisher.stage(false, None, |staged| {
+            std::thread::scope(|threads| {
+                threads
+                    .spawn(|| add_source(staged, "source_worker"))
+                    .join()
+                    .expect("the worker does not panic")
+            })
+        });
+        done.send(result.map_err(|error| format!("{error:#}")))
+            .unwrap();
+    });
+    assert_eq!(
+        on_done.recv_timeout(Duration::from_secs(5)),
+        Ok(Ok(())),
+        "the stage publishes within five seconds"
+    );
+    stage.join().unwrap();
+    assert!(has_source(&repository, "source_worker"));
+}
+
+#[test]
+#[verifies("rule_staged_store_lives_only_inside_stage", examples)]
+fn read_only_record_kinds_refuse_in_the_body_and_answer_on_another_thread() {
+    let (_dir, repository) = repository();
+    let layout = repository.layout().clone();
+    repository
+        .stage(true, None, |_staged| {
+            let error = read_only_record_kinds(&layout, &scope(), "source_live").unwrap_err();
+            assert!(refused_during_stage(&error), "in the body: {error:#}");
+            let (sender, receiver) = mpsc::channel();
+            let reader = layout.clone();
+            std::thread::spawn(move || {
+                let kinds = read_only_record_kinds(&reader, &scope(), "source_live");
+                sender
+                    .send(kinds.map_err(|error| format!("{error:#}")))
+                    .unwrap();
+            });
+            assert_eq!(
+                receiver.recv_timeout(Duration::from_secs(5)),
+                Ok(Ok(vec![NodeType::Source])),
+                "another thread answers without waiting for the stage"
+            );
+            Ok(())
+        })
+        .unwrap();
 }

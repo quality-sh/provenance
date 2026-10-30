@@ -17,7 +17,7 @@ pub use durability::{sync_directory, sync_tree};
 pub(crate) use guard::SectionHandle;
 pub use guard::{publication_guard, with_publication_guard, PublicationGuard};
 pub use holders::PublicationHeld;
-pub(crate) use holders::{enter, refuse_if_held, HolderKind};
+pub(crate) use holders::{enter, held_here, refuse_if_held, HolderKind};
 pub use read_only::read_only_record_kinds;
 pub(crate) use read_only::with_read_only_validation;
 use recovery::{canonical_transactions_dir, create_real_directory};
@@ -60,11 +60,7 @@ pub(crate) fn with_repository_publication_checked<R>(
     operation: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
     let key = publication_lock_identity(layout)?;
-    staged::refuse_during_stage(&key)?;
-    if read_only::active(&key) {
-        check()?;
-        return operation();
-    }
+    staged::refuse_during_stage(&key, layout.root())?;
     refuse_if_held(&key, HolderKind::Live, layout.root())?;
     prepare_publication_lock(layout)?;
     let _lock = guard::LockedPublicationFile::acquire(&layout.publication_lock_path())?;

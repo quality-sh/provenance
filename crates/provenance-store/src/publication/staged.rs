@@ -1,39 +1,19 @@
 //! Complete-state publication shared by import and review saves.
 use super::{
-    clear_publication_marker, enter, refuse_if_held, sync_directory, sync_tree,
+    clear_publication_marker, enter, held_here, refuse_if_held, sync_directory, sync_tree,
     write_publication_marker, HolderKind, PublicationPhase,
 };
 use crate::layout::ProvenanceLayout;
 use crate::state_store::StateStore;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
-use std::cell::RefCell;
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
-
-thread_local! {
-    // Publication lock identity to live repository root, for each running stage body.
-    static STAGE_BODIES: RefCell<BTreeMap<String, Utf8PathBuf>> = const { RefCell::new(BTreeMap::new()) };
-}
 
 /// A stage body tried to enter a live publication section of its repository.
 #[derive(Debug, thiserror::Error)]
 #[error("a staged write cannot read or write the live state of {repository}")]
 pub struct LiveAccessDuringStage {
     pub repository: Utf8PathBuf,
-}
-
-struct StageBody {
-    key: String,
-    inserted: bool,
-}
-
-impl Drop for StageBody {
-    fn drop(&mut self) {
-        if self.inserted {
-            STAGE_BODIES.with(|bodies| bodies.borrow_mut().remove(&self.key));
-        }
-    }
 }
 
 /// Runs a stage body. While it runs, a live publication section of the same
@@ -44,32 +24,31 @@ pub fn with_stage_body<R>(
     live: &ProvenanceLayout,
     body: impl FnOnce() -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let key = super::publication_lock_identity(live)?;
-    let inserted = STAGE_BODIES.with(|bodies| {
-        bodies
-            .borrow_mut()
-            .insert(key.clone(), live.root().to_owned())
-            .is_none()
-    });
-    let _body = StageBody { key, inserted };
+    let _body = enter(
+        super::publication_lock_identity(live)?,
+        HolderKind::StageBody,
+    );
     body()
 }
 
-/// Refuses live access to `live` through a store that holds its section while
-/// a stage body of that repository runs on this thread.
+/// Refuses live access to `live` through a store that holds its section, or
+/// through a read-only store, while a stage body of that repository runs on
+/// this thread.
 pub fn refuse_held_access_during_stage(live: &ProvenanceLayout) -> anyhow::Result<()> {
-    if STAGE_BODIES.with(|bodies| bodies.borrow().is_empty()) {
+    if !held_here(None, HolderKind::StageBody) {
         return Ok(());
     }
-    refuse_during_stage(&super::publication_lock_identity(live)?)
+    refuse_during_stage(&super::publication_lock_identity(live)?, live.root())
 }
 
-pub(super) fn refuse_during_stage(key: &str) -> anyhow::Result<()> {
-    STAGE_BODIES
-        .with(|bodies| bodies.borrow().get(key).cloned())
-        .map_or(Ok(()), |repository| {
-            Err(LiveAccessDuringStage { repository }.into())
-        })
+pub(super) fn refuse_during_stage(key: &str, repository: &Utf8Path) -> anyhow::Result<()> {
+    if held_here(Some(key), HolderKind::StageBody) {
+        return Err(LiveAccessDuringStage {
+            repository: repository.to_owned(),
+        }
+        .into());
+    }
+    Ok(())
 }
 
 /// The lock that one stage owns. The staged sections of the stage run one at

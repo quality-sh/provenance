@@ -120,6 +120,8 @@ enum Access {
     StagedSection {
         permissions: crate::publication::WritePermissions,
     },
+    /// Reads with no lock and refuses every write.
+    ReadOnly,
 }
 
 #[derive(Clone, Debug)]
