@@ -1,5 +1,6 @@
 //! The Rust client runs the response policy cases of the shared Promise client harness:
-//! malformed responses, an oversized response stream, and a lost mutation response.
+//! malformed responses, the response size limit, an oversized response stream, and a lost
+//! mutation response.
 use provenance_http_client::{
     types::AnswerQuestionRequest, Error, HttpClient, COMPATIBILITY, MAX_RESPONSE_BYTES,
 };
@@ -103,12 +104,17 @@ fn lost() -> Reply {
 
 struct Host {
     url: String,
-    join: thread::JoinHandle<(TcpListener, Vec<String>)>,
+    stop: Arc<AtomicBool>,
+    join: thread::JoinHandle<(Vec<String>, usize)>,
 }
 
+/// Serves `replies` in order, then accepts and counts each further connection until
+/// `finish` stops it.
 fn host(replies: Vec<Reply>) -> Host {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
+    let stop = Arc::new(AtomicBool::new(false));
+    let stopped = Arc::clone(&stop);
     let join = thread::spawn(move || {
         let requests = replies
             .into_iter()
@@ -125,29 +131,46 @@ fn host(replies: Vec<Reply>) -> Host {
                 request
             })
             .collect();
-        (listener, requests)
+        listener.set_nonblocking(true).unwrap();
+        let mut extra = 0;
+        loop {
+            match listener.accept() {
+                Ok(_) => extra += 1,
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                    if stopped.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("accept failed: {error}"),
+            }
+        }
+        (requests, extra)
     });
-    Host { url, join }
+    Host { url, stop, join }
 }
 
 impl Host {
     /// Returns each request and asserts that the client opened no further connection.
     /// The join runs off the test runtime so the client can still close its connections.
     async fn finish(self) -> Vec<String> {
-        let (listener, requests) = tokio::task::spawn_blocking(move || self.join.join().unwrap())
+        self.stop.store(true, Ordering::SeqCst);
+        let (requests, extra) = tokio::task::spawn_blocking(move || self.join.join().unwrap())
             .await
             .unwrap();
-        listener.set_nonblocking(true).unwrap();
-        assert_eq!(
-            listener.accept().map(drop).unwrap_err().kind(),
-            ErrorKind::WouldBlock,
-            "the client sent a request again"
-        );
+        assert_eq!(extra, 0, "the client sent a request again");
         requests
     }
 }
 
+/// Runs one operation. A call that does not end in time fails the test.
 async fn call(client: &HttpClient, mutates: bool) -> Result<(), Error> {
+    tokio::time::timeout(Duration::from_secs(60), operation(client, mutates))
+        .await
+        .expect("the call did not end in time")
+}
+
+async fn operation(client: &HttpClient, mutates: bool) -> Result<(), Error> {
     if mutates {
         let request: AnswerQuestionRequest =
             serde_json::from_value(json!({"data": {"answer": "Done."}})).unwrap();
@@ -178,6 +201,61 @@ async fn malformed_responses_are_refused_for_reads_and_mutations() {
             assert!(!format!("{error} {error:?}").contains("secret-host-details"));
             assert_eq!(host.finish().await.len(), 2);
         }
+    }
+}
+
+/// Sends `body` with a declared length and ignores a write error, because the client can
+/// close the connection before it reads the last byte.
+fn sized(status: u16, body: Vec<u8>) -> Reply {
+    Box::new(move |stream| {
+        let head = format!(
+            "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        let _ = stream
+            .write_all(head.as_bytes())
+            .and_then(|()| stream.write_all(&body));
+    })
+}
+
+/// A declared failure padded with spaces to `size` bytes.
+fn failure_of_size(size: usize) -> Vec<u8> {
+    let mut body = json!({"error": {"kind": "unauthenticated"}, "meta": {}})
+        .to_string()
+        .into_bytes();
+    body.resize(size, b' ');
+    body
+}
+
+#[tokio::test]
+async fn a_response_at_the_limit_is_read_and_one_byte_more_is_refused() {
+    let policy: Value =
+        serde_json::from_str(include_str!("../src/client-policy-cases.json")).unwrap();
+    let limit = usize::try_from(policy["max_response_bytes"].as_u64().unwrap()).unwrap();
+    for mutates in [false, true] {
+        let at_limit = host(vec![
+            respond(200, metadata()),
+            sized(401, failure_of_size(limit)),
+        ]);
+        let client = HttpClient::connect(&at_limit.url).await.unwrap();
+        let error = call(&client, mutates).await.unwrap_err();
+        assert!(
+            matches!(error, Error::Operation { status: 401, .. }),
+            "mutation {mutates}: {error}"
+        );
+        assert_eq!(at_limit.finish().await.len(), 2);
+
+        let over_limit = host(vec![
+            respond(200, metadata()),
+            sized(401, failure_of_size(limit + 1)),
+        ]);
+        let client = HttpClient::connect(&over_limit.url).await.unwrap();
+        let error = call(&client, mutates).await.unwrap_err();
+        assert!(
+            matches!(error, Error::MalformedResponse(_)),
+            "mutation {mutates}: {error}"
+        );
+        assert_eq!(over_limit.finish().await.len(), 2);
     }
 }
 
