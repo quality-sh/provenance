@@ -78,11 +78,11 @@ pub fn validate_planned_manifest<R>(
     manifest: &Manifest,
     validate: impl FnOnce(&StateStore, &Manifest) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let store = StateStore::new(layout.clone());
     match std::fs::symlink_metadata(layout.provenance_dir()) {
-        Ok(_) => store.with_repository_publication(|held| validate(held, manifest)),
+        Ok(_) => StateStore::new(layout.clone())
+            .with_repository_publication(|held| validate(held, manifest)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            crate::publication::with_read_only_validation(layout, || validate(&store, manifest))
+            crate::publication::with_read_only_validation(layout, |store| validate(store, manifest))
         }
         Err(error) => Err(error.into()),
     }

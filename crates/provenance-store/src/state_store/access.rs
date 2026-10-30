@@ -50,6 +50,19 @@ impl StateStore {
         }
     }
 
+    /// A store over `layout` that takes no lock, runs no recovery and
+    /// creates no path. A record write, a write permission and a staged
+    /// publication through it refuse.
+    #[rule("rule_read_only_store_refuses_writes")]
+    pub(crate) const fn read_only(layout: ProvenanceLayout) -> Self {
+        Self {
+            identity: None,
+            layout,
+            access: Access::ReadOnly,
+            record_stamp: RecordStamp::ResolveFromRepository,
+        }
+    }
+
     /// A store over a staged state root. It keeps the identity of the live
     /// store. Its reads and writes take the lock that the stage owns, not the
     /// publication lock, because the live section holds that.
@@ -96,15 +109,21 @@ impl StateStore {
         self.ensure_section_open()
     }
 
-    /// Refuses when this store holds the live section and a stage body of its
-    /// repository runs on this thread, or when it came from the repository of
-    /// a section guard and that section has ended.
+    /// Refuses when this store holds the live section or reads with no lock
+    /// and a stage body of its repository runs on this thread, or when it came
+    /// from the repository of a section guard and that section has ended.
     fn ensure_section_open(&self) -> anyhow::Result<()> {
-        if let Access::Section { until } = &self.access {
-            crate::publication::refuse_held_access_during_stage(&self.layout)?;
-            if let Some(until) = until {
-                until.ensure_open()?;
+        match &self.access {
+            Access::Section { until } => {
+                crate::publication::refuse_held_access_during_stage(&self.layout)?;
+                if let Some(until) = until {
+                    until.ensure_open()?;
+                }
             }
+            Access::ReadOnly => {
+                crate::publication::refuse_held_access_during_stage(&self.layout)?;
+            }
+            Access::Lock | Access::Staged { .. } | Access::StagedSection { .. } => {}
         }
         Ok(())
     }
@@ -148,7 +167,7 @@ impl StateStore {
             Access::StagedSection { permissions } => Access::StagedSection {
                 permissions: permissions.with(paths, id),
             },
-            Access::Lock | Access::Section { .. } => {
+            Access::Lock | Access::Section { .. } | Access::ReadOnly => {
                 anyhow::bail!("a review write permission needs a staged store")
             }
         };
@@ -168,7 +187,7 @@ impl StateStore {
     pub(crate) fn permissions(&self) -> &WritePermissions {
         static NONE: WritePermissions = WritePermissions::none();
         match &self.access {
-            Access::Lock | Access::Section { .. } => &NONE,
+            Access::Lock | Access::Section { .. } | Access::ReadOnly => &NONE,
             Access::Staged { permissions, .. } | Access::StagedSection { permissions } => {
                 permissions
             }
@@ -233,14 +252,15 @@ impl StateStore {
                 operation,
             ),
             Access::Staged { stage, .. } => stage.run(operation),
-            Access::Section { .. } | Access::StagedSection { .. } => operation(),
+            Access::Section { .. } | Access::StagedSection { .. } | Access::ReadOnly => operation(),
         }
     }
 
     /// Runs `operation` in the section of this store and hands it the store
     /// that holds the section. A live store takes the publication lock; a
     /// staged store takes the lock that its stage owns; a store that holds
-    /// the section hands itself. Another store of the same repository on this
+    /// the section hands itself; a read-only store hands itself and takes no
+    /// lock. Another store of the same repository on this
     /// thread returns [`PublicationHeld`](crate::publication::PublicationHeld).
     #[rule("rule_store_under_guard_takes_no_second_lock")]
     pub fn with_repository_publication<R>(
@@ -258,12 +278,22 @@ impl StateStore {
                     permissions: permissions.clone(),
                 }))
             }),
-            Access::Section { .. } => {
+            Access::Section { .. } | Access::ReadOnly => {
                 self.ensure_section_open()?;
                 operation(self)
             }
             Access::StagedSection { .. } => operation(self),
         }
+    }
+
+    /// Refuses a write through a read-only store.
+    pub(crate) fn ensure_writable(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !matches!(self.access, Access::ReadOnly),
+            "a read-only store of {} cannot write",
+            self.layout.root()
+        );
+        Ok(())
     }
 
     pub(super) fn with_repository_read<R>(

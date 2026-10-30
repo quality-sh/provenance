@@ -12,7 +12,7 @@
 //! to `spawn_blocking` or make them async first.
 
 use super::{
-    prepare_publication_lock, prepare_transaction_dirs, read_only, recover_pending_publication,
+    prepare_publication_lock, prepare_transaction_dirs, recover_pending_publication,
     source_edit_recovery,
 };
 use crate::layout::ProvenanceLayout;
@@ -56,8 +56,8 @@ impl Drop for LockedPublicationFile {
 
 /// A held publication lock.
 ///
-/// Under read-only validation the guard holds no lock. The private fields
-/// restrict construction to this module.
+/// A guard of a repository that already holds a section holds no second
+/// lock. The private fields restrict construction to this module.
 pub struct PublicationGuard {
     _lock: Option<LockedPublicationFile>,
     repository: Repository,
@@ -143,15 +143,9 @@ pub async fn publication_guard(repository: &Repository) -> anyhow::Result<Public
     let key = super::publication_lock_identity(repository.layout())?;
     // The lock waits on the blocking pool, so a stage body that blocks on this guard would
     // wait on its own publication. The refusal runs here, on the calling thread.
-    super::staged::refuse_during_stage(&key)?;
+    super::staged::refuse_during_stage(&key, repository.layout().root())?;
     if let Some(section) = repository.section() {
         section.ensure_open()?;
-        return Ok(PublicationGuard {
-            _lock: None,
-            repository: repository.clone(),
-        });
-    }
-    if read_only::active(&key) {
         return Ok(PublicationGuard {
             _lock: None,
             repository: repository.clone(),
@@ -286,21 +280,17 @@ mod tests {
     }
 
     #[test]
-    fn read_only_validation_bypasses_the_lock() {
+    fn a_read_only_store_reads_with_no_lock() {
         let (_dir, repository) = repo();
         let lock_path = repository.layout().publication_lock_path();
-        // The open took the lock once; the read-only section must not take it again.
+        // The open took the lock once; the read-only store must not take it again.
         std::fs::remove_file(&lock_path).unwrap();
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        with_read_only_validation(repository.layout(), || {
-            let _guard = runtime.block_on(publication_guard(&repository))?;
-            // No lock file means no lock was taken.
-            assert!(!lock_path.exists());
-            Ok(())
+        with_read_only_validation(repository.layout(), |store| {
+            store.manifest()?;
+            store.list_scope_directories()
         })
         .unwrap();
+        // No lock file means no lock was taken.
+        assert!(!lock_path.exists());
     }
 }

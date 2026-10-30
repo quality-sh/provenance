@@ -1,7 +1,8 @@
-//! The holders of publication sections and staged sections.
+//! The holders of publication sections, staged sections and stage bodies.
 //!
-//! An entry records that a thread holds a section. The table only refuses a
-//! second entry on the same thread: a nested entry would wait on its own lock.
+//! An entry records that a thread holds a section or runs a stage body. The
+//! table only refuses: a second section entry on the same thread would wait on
+//! its own lock, and live access in a stage body would read around the stage.
 //! It grants nothing. A section that holds the lock hands its closure a held
 //! store, and only that store reads and writes without a second lock.
 
@@ -24,6 +25,8 @@ pub enum HolderKind {
     Live,
     /// A staged section, under the lock that its stage owns.
     Stage,
+    /// The body of a stage of the live repository.
+    StageBody,
 }
 
 type Key = (String, HolderKind, ThreadId);
@@ -46,6 +49,17 @@ pub fn refuse_if_held(
         .into());
     }
     Ok(())
+}
+
+/// Whether this thread has an entry of `kind` with `identity`, or of `kind`
+/// with any identity when `identity` is `None`.
+pub fn held_here(identity: Option<&str>, kind: HolderKind) -> bool {
+    let thread = std::thread::current().id();
+    table().iter().any(|(held, held_kind, held_thread)| {
+        *held_kind == kind
+            && *held_thread == thread
+            && identity.is_none_or(|identity| held == identity)
+    })
 }
 
 /// Records that this thread holds the section with `identity` until the
