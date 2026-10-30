@@ -14,9 +14,21 @@ const COLLECTIONS = new Set([
 const COMPUTE_COLLECTIONS = new Set([
   'statement-checks', 'authoring-plans', 'authoring-changes',
 ]);
-const ACTIONS = new Set([
-  'claim', 'release', 'close', 'answer', 'submit', 'decide', 'withdraw',
-  'begin-verification', 'complete-verification',
+// Each action and the collections that own it.
+const REVIEWED = [
+  'sources', 'domains', 'requirements', 'boundaries', 'topics', 'questions',
+  'resolutions', 'rules',
+];
+const ACTION_OWNERS = new Map([
+  ['claim', new Set(['topics', 'questions'])],
+  ['release', new Set(['topics', 'questions'])],
+  ['close', new Set(['topics'])],
+  ['answer', new Set(['questions'])],
+  ['submit', new Set(REVIEWED)],
+  ['decide', new Set(REVIEWED)],
+  ['withdraw', new Set(REVIEWED)],
+  ['begin-verification', new Set(['verification-runs'])],
+  ['complete-verification', new Set(['verification-runs'])],
 ]);
 const QUERIES = new Set([
   'search', 'stale', 'impact', 'trace', 'neighbors', 'resolve-symbol',
@@ -135,7 +147,7 @@ function routePathErrors(path) {
   for (const segment of concreteSegments(path).slice(1)) {
     if (COLLECTIONS.has(segment) && !CHILD_SEGMENTS.has(segment)) {
       errors.push(`${where}: collection '${segment}' as a subresource is a relationship route and is rejected`);
-    } else if (!CHILD_SEGMENTS.has(segment) && !ACTIONS.has(segment)) {
+    } else if (!CHILD_SEGMENTS.has(segment) && !ACTION_OWNERS.has(segment)) {
       errors.push(`${where}: subresource segment '${segment}' is not a declared child address or action`);
     }
   }
@@ -178,7 +190,11 @@ function operationShapeErrors(document, path, method, operation, seenIds, seenBi
 
   const segments = path.split('/').filter(Boolean);
   segments.forEach((segment, index) => {
-    if (!ACTIONS.has(segment)) return;
+    const owners = ACTION_OWNERS.get(segment);
+    if (owners === undefined) return;
+    if (!owners.has(segments[0])) {
+      errors.push(`${where}: action '${segment}' does not belong to collection '${segments[0]}'`);
+    }
     if (method !== 'POST') errors.push(`${where}: actions are POSTs`);
     if (index !== segments.length - 1) {
       errors.push(`${where}: action segment '${segment}' must be final`);
