@@ -278,15 +278,11 @@ impl StateStore {
                     permissions: permissions.clone(),
                 }))
             }),
-            Access::Section { .. } => {
+            Access::Section { .. } | Access::ReadOnly => {
                 self.ensure_section_open()?;
                 operation(self)
             }
             Access::StagedSection { .. } => operation(self),
-            Access::ReadOnly => {
-                self.ensure_section_open()?;
-                operation(self)
-            }
         }
     }
 
