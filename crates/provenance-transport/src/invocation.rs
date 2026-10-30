@@ -84,10 +84,12 @@ impl StatementHost {
             .run(move || {
                 let context = prepare::<O>(&access, selected, &request, native)?;
                 match page_writes {
-                    Some(page) => page.run(|held| {
-                        let context = context.within(held).map_err(OperationError::Common)?;
-                        runtime.block_on(catalog::invoke_typed::<O>(context, request))
-                    }),
+                    Some(page) => page
+                        .run(|held| {
+                            let context = context.within(held).map_err(OperationError::Common)?;
+                            runtime.block_on(catalog::invoke_typed::<O>(context, request))
+                        })
+                        .unwrap_or(Err(OperationError::Common(OperationFailure::Internal))),
                     None => runtime.block_on(catalog::invoke_typed::<O>(context, request)),
                 }
             })

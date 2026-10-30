@@ -22,27 +22,21 @@ impl PageWrites {
     /// section, and reads the changes of the page write before and after it.
     /// The observer gets the changes, or the error when a read fails. A failed
     /// read does not change the result. When the section does not start, the
-    /// observer gets that error and `work` runs on the host repository.
+    /// observer gets that error, `work` does not run and `run` returns `None`.
     #[rule("rule_page_write_runs_in_its_change_section")]
     #[rule("rule_page_write_keeps_result_when_capture_fails")]
-    pub fn run<R>(&self, work: impl FnOnce(&Repository) -> R) -> R {
-        let mut work = Some(work);
+    pub fn run<R>(&self, work: impl FnOnce(&Repository) -> R) -> Option<R> {
         let mut result = None;
         let section = with_publication_guard(&self.repository, |guard| {
             let before = ReviewStateSnapshot::read(guard);
-            let run = work.take().expect("the section runs its work once");
-            result = Some(run(guard.repository()));
+            result = Some(work(guard.repository()));
             Ok(before.and_then(|before| {
                 ReviewStateSnapshot::read(guard).map(|after| after.page_changes_since(&before))
             }))
         });
         // Notification work cannot change the result of a completed write.
         (self.observed)(section.and_then(|changes| changes));
-        match (result, work) {
-            (Some(result), _) => result,
-            (None, Some(work)) => work(&self.repository),
-            (None, None) => unreachable!("the work ran and returned"),
-        }
+        result
     }
 }
 
@@ -70,7 +64,7 @@ mod tests {
             std::fs::write(&settings, "invalid read settings").unwrap();
             "the write result"
         });
-        assert_eq!(result, "the write result");
+        assert_eq!(result, Some("the write result"));
         let notifications = std::mem::take(&mut *notifications.lock().unwrap());
         assert_eq!(notifications.len(), 1);
         assert!(notifications[0].is_err());
