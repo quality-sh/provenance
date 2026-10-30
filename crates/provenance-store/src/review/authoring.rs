@@ -25,8 +25,8 @@ impl StateStore {
     ) -> anyhow::Result<()> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
-        self.with_repository_publication(|| {
-            with_record_state(self, RecordStamp::resolved(stamp), |staged| {
+        self.with_repository_publication(|held| {
+            with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                 let staged_path = staged.layout.root().join(&relative);
                 staged.permitting(&[&staged_path], "*", |staged| {
                     let scope = replacement.first().map(|record| {
@@ -58,8 +58,8 @@ impl StateStore {
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
-        self.with_repository_publication(|| {
-            with_record_state(self, RecordStamp::resolved(stamp), |staged| {
+        self.with_repository_publication(|held| {
+            with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                 let staged_path = staged.layout.root().join(&relative);
                 staged.permitting(&[&staged_path], id.as_str(), write)
             })

@@ -48,7 +48,7 @@ impl HeldLock {
         let (release, wait_release) = std::sync::mpsc::channel::<()>();
         let layout = repo.layout.clone();
         let holder = std::thread::spawn(move || {
-            with_repository_publication(&layout, || {
+            with_repository_publication(&layout, |_| {
                 held.send(()).unwrap();
                 let _ = wait_release.recv();
                 Ok(())

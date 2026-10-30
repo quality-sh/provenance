@@ -1,4 +1,5 @@
-use crate::cache::{find_gaps, GapItem};
+use crate::cache::gaps::{compute_gaps, GraphRecords};
+use crate::cache::GapItem;
 use crate::repository::Repository;
 use crate::state_store::StateStore;
 use provenance_core::model::relations::{
@@ -34,7 +35,8 @@ pub fn prime_context(
     include_threads: bool,
 ) -> anyhow::Result<PrimeContextView> {
     let store = repository.store();
-    store.with_repository_publication(|| prime_context_locked(repository, include_threads, &store))
+    store
+        .with_repository_publication(|held| prime_context_locked(repository, include_threads, held))
 }
 
 fn prime_context_locked(
@@ -64,7 +66,7 @@ fn prime_context_locked(
     Ok(PrimeContextView {
         scope_id: scope.as_str().to_string(),
         rules: store.list_rules(scope)?.into_iter().collect(),
-        gaps: find_gaps(repository)?,
+        gaps: compute_gaps(&GraphRecords::load(scope, store)?.graph(scope)),
         threads,
     })
 }
@@ -105,8 +107,9 @@ pub fn get_requirement_graph(
 ) -> anyhow::Result<RequirementGraphView> {
     let store = repository.store();
     let scope = repository.scope();
-    store
-        .with_repository_publication(|| get_requirement_graph_locked(scope, requirement_id, &store))
+    store.with_repository_publication(|held| {
+        get_requirement_graph_locked(scope, requirement_id, held)
+    })
 }
 
 fn get_requirement_graph_locked(

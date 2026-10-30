@@ -13,7 +13,7 @@ fn concurrent_first_access_creates_publication_lock_directories_idempotently() {
             let barrier = barrier.clone();
             std::thread::spawn(move || {
                 barrier.wait();
-                with_repository_publication(&layout, || Ok(()))
+                with_repository_publication(&layout, |_| Ok(()))
             })
         })
         .collect::<Vec<_>>();
@@ -36,7 +36,7 @@ fn source_edit_recovery_runs_before_import_recovery() {
     write_publication_marker(&layout, &transaction, PublicationPhase::Published).unwrap();
     std::fs::remove_dir(transaction).unwrap();
 
-    let error = with_repository_publication(&layout, || Ok(())).unwrap_err();
+    let error = with_repository_publication(&layout, |_| Ok(())).unwrap_err();
 
     assert!(error.to_string().contains("EOF"), "{error:#}");
     assert!(layout.publication_marker_path().exists());
@@ -267,7 +267,7 @@ fn a_symlinked_cache_is_refused_before_recovery_runs() {
     .unwrap();
 
     let mut operation_ran = false;
-    let error = with_repository_publication(&layout, || {
+    let error = with_repository_publication(&layout, |_| {
         operation_ran = true;
         Ok(())
     })
@@ -291,30 +291,29 @@ fn publication_lock_marker_is_cleared_after_panic() {
     std::fs::create_dir_all(layout.import_transactions_dir()).unwrap();
 
     let panic = std::panic::catch_unwind(|| {
-        with_repository_publication(&layout, || -> anyhow::Result<()> {
+        with_repository_publication(&layout, |_| -> anyhow::Result<()> {
             panic!("publication interrupted");
         })
         .unwrap();
     });
     assert!(panic.is_err());
     let key = publication_lock_identity(&layout).unwrap();
-    assert!(!HELD_LOCKS.with(|locks| locks.borrow().contains(&key)));
+    refuse_if_held(&key, HolderKind::Live, layout.root()).expect("the panic left no holder");
 
     let transaction = layout.import_transactions_dir().join("completed");
     std::fs::create_dir(&transaction).unwrap();
     write_publication_marker(&layout, &transaction, PublicationPhase::Published).unwrap();
     std::fs::remove_dir(transaction).unwrap();
 
-    with_repository_publication(&layout, || Ok(())).unwrap();
+    with_repository_publication(&layout, |_| Ok(())).unwrap();
 
     assert!(!layout.publication_marker_path().exists());
 }
 
-// Implementation aid: checks nested publication sections through path aliases.
-// rule_store_under_guard_takes_no_second_lock covers guarded store reads instead.
 #[cfg(unix)]
 #[test]
-fn nested_publication_through_a_repository_alias_completes() {
+#[verifies("rule_publication_section_is_not_entered_twice", examples)]
+fn a_nested_section_completes_on_the_held_store_and_is_refused_through_an_alias() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().join("repo");
     std::fs::create_dir(&root).unwrap();
@@ -324,14 +323,22 @@ fn nested_publication_through_a_repository_alias_completes() {
     let alias = ProvenanceLayout::new(alias.to_str().unwrap());
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let result =
-            with_repository_publication(&layout, || with_repository_publication(&alias, || Ok(())));
+        let result = with_repository_publication(&layout, |held| {
+            held.with_repository_publication(|_| Ok(()))?;
+            let fresh = crate::state_store::StateStore::new(layout.clone());
+            let refusals = [
+                with_repository_publication(&alias, |_| Ok(())).unwrap_err(),
+                fresh.with_repository_publication(|_| Ok(())).unwrap_err(),
+            ];
+            Ok(refusals.map(|error| error.is::<PublicationHeld>()))
+        });
         sender.send(result).unwrap();
     });
-    receiver
+    let refused = receiver
         .recv_timeout(std::time::Duration::from_secs(5))
-        .expect("a nested publication through an alias must complete")
+        .expect("a nested section answers without a wait")
         .unwrap();
+    assert_eq!(refused, [true, true]);
 }
 
 // Implementation aid: checks alias identity during validation, without a guarded store.
@@ -362,7 +369,7 @@ fn read_only_validation_through_an_alias_does_not_publish() {
         .unwrap();
     with_read_only_validation(&layout, || {
         with_read_only_validation(&alias, || Ok(()))?;
-        with_repository_publication(&alias, || Ok(()))?;
+        with_repository_publication(&alias, |_| Ok(()))?;
         let repository = crate::repository::Repository::open(&alias_path, "default")?;
         let _guard = runtime.block_on(publication_guard(&repository))?;
         assert!(!layout.publication_lock_path().exists());
@@ -379,7 +386,7 @@ fn read_only_validation_accepts_a_planned_repository() {
     let root = temporary.path().join("planned/repository");
     let layout = ProvenanceLayout::new(root.to_str().unwrap());
     with_read_only_validation(&layout, || {
-        with_repository_publication(&layout, || Ok(()))?;
+        with_repository_publication(&layout, |_| Ok(()))?;
         Ok(())
     })
     .unwrap();
@@ -469,9 +476,11 @@ fn a_repository_read_in_the_publication_gap_waits_for_the_publication() {
     });
     let mut published = manifest;
     published.disposition_actor_ids = vec!["actor_after".to_owned()];
-    with_staged_state(&layout, false, |staged| {
-        std::fs::write(staged.manifest_path(), serde_json::to_vec(&published)?)?;
-        Ok(())
+    with_repository_publication(&layout, |held| {
+        with_staged_state(held, false, |staged| {
+            std::fs::write(staged.manifest_path(), serde_json::to_vec(&published)?)?;
+            Ok(())
+        })
     })
     .unwrap();
     crate::test_probes::disarm("state_after_backup_rename");

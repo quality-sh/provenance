@@ -10,7 +10,7 @@ impl StateStore {
         &self,
         input: MaterializeVerificationBindingInput,
     ) -> anyhow::Result<VerificationBinding> {
-        self.with_repository_publication(|| self.write_verification_binding(input))
+        self.with_repository_publication(|held| held.write_verification_binding(input))
     }
 
     /// Updates one binding for each owner, Rule, and owner-local key.

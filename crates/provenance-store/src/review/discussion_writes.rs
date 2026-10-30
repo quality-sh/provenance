@@ -30,7 +30,7 @@ impl StateStore {
     /// Creates a distinct Discussion root or changes one addressed Discussion.
     #[rule("rule_record_comments_have_separate_reply_threads")]
     pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<Discussion> {
-        self.with_repository_publication(|| self.write_discussion_in_publication(input, None))
+        self.with_repository_publication(|held| held.write_discussion_in_publication(input, None))
     }
 
     pub(super) fn write_discussion_in_publication(

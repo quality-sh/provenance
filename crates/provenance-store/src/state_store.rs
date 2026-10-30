@@ -101,10 +101,23 @@ struct ManifestProjection {
 
 #[derive(Debug)]
 enum Access {
+    /// Takes the publication lock for each read and write.
     Lock,
-    /// Under a held section: a staged view or a guarded store. Only such a
-    /// store carries write permissions.
-    Held {
+    /// Holds the live section: inside a held section, or under a guard. A
+    /// store from the repository of a section guard keeps `until`, and its
+    /// reads and writes refuse after that section ends.
+    Section {
+        until: Option<crate::publication::SectionHandle>,
+    },
+    /// A store over a staged state root. Each read and write takes the lock
+    /// that the stage owns.
+    Staged {
+        permissions: crate::publication::WritePermissions,
+        stage: std::sync::Arc<crate::publication::StageLock>,
+    },
+    /// The store that a staged section hands its closure. Only a staged store
+    /// carries write permissions.
+    StagedSection {
         permissions: crate::publication::WritePermissions,
     },
 }
@@ -239,9 +252,9 @@ macro_rules! canonical_reader {
     };
     ($record:ty, $path:ident, $list:ident, synthesis_packets) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|| {
-                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
-                for batch in self.list_ideation_landings(scope)? {
+            self.with_repository_read(|held| {
+                let mut records = read_jsonl(held, &shards::$path(&held.layout, scope))?;
+                for batch in held.list_ideation_landings(scope)? {
                     overlay_records(&mut records, batch.synthesis_packets, |record| {
                         record.id.as_str()
                     });
@@ -257,9 +270,9 @@ macro_rules! canonical_reader {
     };
     ($record:ty, $path:ident, $list:ident, assertion_records) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|| {
-                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
-                for batch in self.list_ideation_landings(scope)? {
+            self.with_repository_read(|held| {
+                let mut records = read_jsonl(held, &shards::$path(&held.layout, scope))?;
+                for batch in held.list_ideation_landings(scope)? {
                     overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
                 }
                 Ok(records)
@@ -268,13 +281,13 @@ macro_rules! canonical_reader {
     };
     ($record:ty, $path:ident, $list:ident, dispositions) => {
         pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|| {
-                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
+            self.with_repository_read(|held| {
+                let mut records = read_jsonl(held, &shards::$path(&held.layout, scope))?;
                 records.extend(read_legacy_dispositions(
-                    self,
-                    &shards::legacy_promotion_decisions_path(&self.layout, scope),
+                    held,
+                    &shards::legacy_promotion_decisions_path(&held.layout, scope),
                 )?);
-                for batch in self.list_ideation_landings(scope)? {
+                for batch in held.list_ideation_landings(scope)? {
                     overlay_records(&mut records, batch.dispositions, |record| {
                         record.id.as_str()
                     });
@@ -318,8 +331,8 @@ macro_rules! define_canonical_readers {
 
 impl StateStore {
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
-        self.with_repository_read(|| {
-            let path = self.layout.manifest_path();
+        self.with_repository_read(|held| {
+            let path = held.layout.manifest_path();
             crate::test_probes::record_read(&path);
             manifest_from_bytes(&std::fs::read(&path)?).map_err(|error| {
                 if error.is::<serde_json::Error>() {
@@ -335,9 +348,9 @@ impl StateStore {
         &self,
         scope: &ScopeId,
     ) -> anyhow::Result<(SchemaVersion, Option<Scope>)> {
-        self.with_repository_read(|| {
+        self.with_repository_read(|held| {
             let manifest: ManifestProjection =
-                deserialize_closed(&std::fs::read_to_string(self.layout.manifest_path())?)?;
+                deserialize_closed(&std::fs::read_to_string(held.layout.manifest_path())?)?;
             let selected = manifest
                 .scopes
                 .into_iter()
@@ -351,8 +364,8 @@ impl StateStore {
     }
 
     pub fn list_scope_directories(&self) -> anyhow::Result<Vec<String>> {
-        self.with_repository_read(|| {
-            let scopes_dir = self.layout.scopes_dir();
+        self.with_repository_read(|held| {
+            let scopes_dir = held.layout.scopes_dir();
             if !scopes_dir.exists() {
                 return Ok(Vec::new());
             }
@@ -400,10 +413,10 @@ impl StateStore {
         scope: &ScopeId,
         after_direct_read: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<Contribution>> {
-        self.with_repository_read(|| {
-            let mut records = read_jsonl(self, &shards::contributions_path(&self.layout, scope))?;
+        self.with_repository_read(|held| {
+            let mut records = read_jsonl(held, &shards::contributions_path(&held.layout, scope))?;
             after_direct_read()?;
-            for batch in self.list_ideation_landings(scope)? {
+            for batch in held.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.contributions, |record| {
                     record.id.as_str()
                 });
@@ -424,17 +437,17 @@ impl StateStore {
         disposition_actor_ids: Option<&[String]>,
         after_validation: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_read(|| {
+        self.with_repository_read(|held| {
             if let Some(disposition_actor_ids) = disposition_actor_ids {
-                self.validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)?;
+                held.validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)?;
             } else {
-                self.validate_ideation_scope(scope)?;
+                held.validate_ideation_scope(scope)?;
             }
-            self.validate_graph_scope(scope)?;
+            held.validate_graph_scope(scope)?;
             after_validation()?;
-            let assertions = self.list_assertion_records(scope)?;
-            let dispositions = self.list_dispositions(scope)?;
-            Ok(self
+            let assertions = held.list_assertion_records(scope)?;
+            let dispositions = held.list_dispositions(scope)?;
+            Ok(held
                 .list_proposal_definitions(scope)?
                 .into_iter()
                 .map(|mut proposal| {
@@ -449,9 +462,9 @@ impl StateStore {
         })
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_read(|| {
-            let mut records = read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
-            for batch in self.list_ideation_landings(scope)? {
+        self.with_repository_read(|held| {
+            let mut records = read_jsonl(held, &shards::proposal_cards_path(&held.layout, scope))?;
+            for batch in held.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
             }
             Ok(records)

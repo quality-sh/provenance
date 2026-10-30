@@ -35,10 +35,10 @@ impl StateStore {
         })?;
         let commit = validate_optional_commit_pin(input.commit)
             .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidVerificationTarget, error))?;
-        self.with_repository_publication(|| {
-            let rule_id = verification_rule(self, &scope_id, input.rule, input.declaration)?;
+        self.with_repository_publication(|held| {
+            let rule_id = verification_rule(held, &scope_id, input.rule, input.declaration)?;
             let binding =
-                self.materialize_verification_binding(MaterializeVerificationBindingInput {
+                held.materialize_verification_binding(MaterializeVerificationBindingInput {
                     scope_id: scope_id.clone(),
                     rule_id: rule_id.clone(),
                     key: input.key,
@@ -50,8 +50,8 @@ impl StateStore {
             (|| -> anyhow::Result<VerificationRun> {
                 crate::test_probes::at("verification_binding_published")?;
                 let started_at = now_millis()?;
-                let path = self.layout.verification_runs_path(&scope_id);
-                let lock_path = self.layout.verification_runs_lock_path(&scope_id);
+                let path = held.layout.verification_runs_path(&scope_id);
+                let lock_path = held.layout.verification_runs_lock_path(&scope_id);
                 let run = crate::jsonl::mutate_jsonl_locked(
                     &path,
                     &lock_path,
@@ -82,7 +82,7 @@ impl StateStore {
                         Ok(run)
                     },
                 )?;
-                self.clear_requirement_reviews(
+                held.clear_requirement_reviews(
                     &run.scope_id,
                     &run.rule_id,
                     &run.id,
@@ -109,9 +109,9 @@ impl StateStore {
             "a passed verification cannot carry an error"
         );
         let completed_at = now_millis()?;
-        self.with_repository_publication(|| {
-            let path = self.layout.verification_runs_path(scope_id);
-            let lock_path = self.layout.verification_runs_lock_path(scope_id);
+        self.with_repository_publication(|held| {
+            let path = held.layout.verification_runs_path(scope_id);
+            let lock_path = held.layout.verification_runs_lock_path(scope_id);
             crate::jsonl::mutate_jsonl_locked(
                 &path,
                 &lock_path,

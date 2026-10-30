@@ -145,7 +145,7 @@ fn binding_check_reads_a_scope_published_after_the_code_scan() {
     )
     .unwrap();
     let scanned = provenance_scanner::scan_path_with_content(&repo).unwrap();
-    provenance_store::publication::with_repository_publication(&layout, || {
+    provenance_store::publication::with_repository_publication(&layout, |_| {
         manifest.scopes.push(provenance_core::Scope {
             id: ScopeId::new("second").unwrap(),
             path_prefix: RepoPathPrefix::new("second"),

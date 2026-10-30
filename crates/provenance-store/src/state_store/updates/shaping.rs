@@ -15,7 +15,7 @@ impl StateStore {
             return self
                 .with_native_record_batch(|batch| batch.store().write_topic_archive(batch, input));
         }
-        self.with_repository_publication(|| self.write_topic_update(input))
+        self.with_repository_publication(|held| held.write_topic_update(input))
     }
 
     fn write_topic_archive(
@@ -90,12 +90,12 @@ impl StateStore {
     }
 
     pub fn edit_question(&self, input: EditQuestionInput) -> anyhow::Result<Question> {
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             if let Some(question) = &input.question {
                 required_text(question)?;
             }
             if let Some(id) = &input.resolution_id {
-                self.ensure_node_exists(
+                held.ensure_node_exists(
                     &input.scope_id,
                     NodeType::Resolution,
                     id,
@@ -103,10 +103,10 @@ impl StateStore {
                 )?;
             }
             if let Some(id) = &input.contradicts {
-                self.ensure_node_exists(&input.scope_id, NodeType::Requirement, id, "contradicts")?;
+                held.ensure_node_exists(&input.scope_id, NodeType::Requirement, id, "contradicts")?;
             }
-            let links = self.checked_update_links(&input.scope_id, input.links)?;
-            self.mutate_question_with_etag(
+            let links = held.checked_update_links(&input.scope_id, input.links)?;
+            held.mutate_question_with_etag(
                 &input.scope_id,
                 &input.id,
                 input.expected_etag.as_deref(),

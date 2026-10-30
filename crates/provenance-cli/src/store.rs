@@ -33,25 +33,25 @@ impl Store {
 /// Every family of one scope, read under one publication section. Takes the
 /// scope because repository-wide callers read each manifest scope in turn.
 pub fn snapshot(store: &StateStore, scope: &ScopeId) -> anyhow::Result<ScopeSnapshot> {
-    store.with_repository_publication(|| {
+    store.with_repository_publication(|held| {
         Ok(ScopeSnapshot {
-            sources: store.list_sources(scope)?,
-            domains: store.list_domains(scope)?,
-            requirements: store.list_requirements(scope)?,
-            boundaries: store.list_boundaries(scope)?,
-            topics: store.list_topics(scope)?,
-            questions: store.list_questions(scope)?,
-            resolutions: store.list_resolutions(scope)?,
-            rules: store.list_rules(scope)?,
-            verification_bindings: store.list_verification_bindings(scope)?,
-            implementation_bindings: store.list_implementation_bindings(scope)?,
-            threads: store.list_threads(scope)?,
-            messages: store.list_messages(scope)?,
-            contributions: store.list_contributions(scope)?,
-            synthesis_packets: store.list_synthesis_packets(scope)?,
-            proposal_cards: store.list_proposal_definitions(scope)?,
-            assertion_records: store.list_assertion_records(scope)?,
-            dispositions: store.list_dispositions(scope)?,
+            sources: held.list_sources(scope)?,
+            domains: held.list_domains(scope)?,
+            requirements: held.list_requirements(scope)?,
+            boundaries: held.list_boundaries(scope)?,
+            topics: held.list_topics(scope)?,
+            questions: held.list_questions(scope)?,
+            resolutions: held.list_resolutions(scope)?,
+            rules: held.list_rules(scope)?,
+            verification_bindings: held.list_verification_bindings(scope)?,
+            implementation_bindings: held.list_implementation_bindings(scope)?,
+            threads: held.list_threads(scope)?,
+            messages: held.list_messages(scope)?,
+            contributions: held.list_contributions(scope)?,
+            synthesis_packets: held.list_synthesis_packets(scope)?,
+            proposal_cards: held.list_proposal_definitions(scope)?,
+            assertion_records: held.list_assertion_records(scope)?,
+            dispositions: held.list_dispositions(scope)?,
         })
     })
 }

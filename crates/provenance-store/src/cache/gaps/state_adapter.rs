@@ -7,7 +7,7 @@ use provenance_core::{
 
 pub fn find_gaps(repository: &Repository) -> anyhow::Result<Vec<GapItem>> {
     let store = repository.store();
-    store.with_repository_publication(|| find_gaps_locked(repository.scope(), &store))
+    store.with_repository_publication(|held| find_gaps_locked(repository.scope(), held))
 }
 
 fn find_gaps_locked(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Vec<GapItem>> {

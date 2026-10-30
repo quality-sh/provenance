@@ -1,5 +1,4 @@
-use crate::cache::find_gaps;
-use crate::cache::gaps::{GraphQuery, GraphRecords};
+use crate::cache::gaps::{compute_gaps, GraphQuery, GraphRecords};
 use crate::repository::Repository;
 use crate::state_store::StateStore;
 use provenance_core::RequirementStatus;
@@ -57,7 +56,7 @@ pub struct OrphanRuleItem {
 /// Deleted records and bindings do not appear in canonical state.
 pub fn graph_evidence(repository: &Repository) -> anyhow::Result<GraphEvidence> {
     let store = repository.store();
-    store.with_repository_publication(|| graph_evidence_locked(repository.scope(), &store))
+    store.with_repository_publication(|held| graph_evidence_locked(repository.scope(), held))
 }
 
 fn graph_evidence_locked(
@@ -123,17 +122,15 @@ fn graph_evidence_locked(
 }
 
 pub fn coverage_health(repository: &Repository) -> anyhow::Result<HealthView> {
-    let store = repository.store();
-    crate::layout::with_initialized_graph(repository.layout(), |_| {
-        coverage_health_locked(repository, &store)
+    crate::layout::with_initialized_state(repository.layout(), |_, held| {
+        coverage_health_locked(repository.scope(), held)
     })
 }
 
 fn coverage_health_locked(
-    repository: &Repository,
+    scope: &provenance_core::ScopeId,
     store: &StateStore,
 ) -> anyhow::Result<HealthView> {
-    let scope = repository.scope();
     let requirements = store
         .list_requirements(scope)?
         .into_iter()
@@ -161,9 +158,9 @@ fn coverage_health_locked(
                 .any(|rule| rule.requirement_ids.contains(&req.id))
         })
         .count();
-    let orphan_count = orphan_rules(repository)?.len();
+    let orphan_count = orphan_rules_locked(scope, store)?.len();
     let with_complete_traceability = rules.len().saturating_sub(orphan_count);
-    let gaps = find_gaps(repository)?.len();
+    let gaps = compute_gaps(&GraphRecords::load(scope, store)?.graph(scope)).len();
     Ok(HealthView {
         requirements: CountMetric {
             total: requirements.len(),
@@ -186,7 +183,7 @@ fn coverage_health_locked(
 /// ever names the source.
 pub fn orphan_rules(repository: &Repository) -> anyhow::Result<Vec<OrphanRuleItem>> {
     let store = repository.store();
-    store.with_repository_publication(|| orphan_rules_locked(repository.scope(), &store))
+    store.with_repository_publication(|held| orphan_rules_locked(repository.scope(), held))
 }
 
 fn orphan_rules_locked(

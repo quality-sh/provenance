@@ -66,11 +66,11 @@ impl ScopeExport {
 fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
     let store = Store::new(&context.open()?);
     let scope_id = store.repository().scope().clone();
-    store.with_repository_publication(|| {
-        let snapshot = store.snapshot()?;
-        store.ensure_review_portable(&scope_id)?;
-        store.validate_ideation_scope(&scope_id)?;
-        store.validate_graph_scope(&scope_id)?;
+    store.with_repository_publication(|held| {
+        let snapshot = crate::store::snapshot(held, &scope_id)?;
+        held.ensure_review_portable(&scope_id)?;
+        held.validate_ideation_scope(&scope_id)?;
+        held.validate_graph_scope(&scope_id)?;
         Ok(ScopeExport::from_snapshot(
             scope_id.as_str().to_owned(),
             snapshot,

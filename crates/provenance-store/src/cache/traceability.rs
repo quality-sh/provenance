@@ -22,7 +22,7 @@ pub fn trace_rule(
     rule_id: &provenance_core::StableId,
 ) -> anyhow::Result<TraceabilityView> {
     let store = repository.store();
-    store.with_repository_publication(|| trace_rule_locked(repository.scope(), rule_id, &store))
+    store.with_repository_publication(|held| trace_rule_locked(repository.scope(), rule_id, held))
 }
 
 fn row(owner: (NodeType, &StableId), relation: &str, target: (NodeType, &StableId)) -> RelationRow {

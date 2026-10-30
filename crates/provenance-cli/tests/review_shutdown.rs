@@ -52,7 +52,7 @@ fn repository() -> (tempfile::TempDir, ProvenanceLayout, Vec<u8>) {
 fn block_write(host: &Host, layout: &ProvenanceLayout) -> (File, TcpStream) {
     let path =
         provenance_store::shards::requirements_path(layout, &ScopeId::new("default").unwrap());
-    provenance_store::publication::with_repository_publication(layout, || {
+    provenance_store::publication::with_repository_publication(layout, |_| {
         std::fs::remove_file(&path)?;
         assert!(Command::new("mkfifo").arg(&path).status()?.success());
         Ok(())

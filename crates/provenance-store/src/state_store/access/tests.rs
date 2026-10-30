@@ -175,3 +175,40 @@ async fn a_plain_write_waits_for_the_guard() {
     assert_eq!(requirement.fog.as_deref(), Some("Changed"));
     writer.join().unwrap();
 }
+
+#[test]
+#[verifies("rule_enrolled_record_write_needs_store_permission", examples)]
+fn a_live_store_that_holds_the_section_gets_no_write_permission() {
+    let (_dir, store, scope) = seeded_source_requirement_store();
+    let repository = open(&store.layout);
+    let path = crate::shards::requirements_path(&store.layout, &scope);
+    let before = std::fs::read(&path).unwrap();
+    let restate = |live: &StateStore| {
+        live.mutate_jsonl_records(&path, |records: &mut Vec<provenance_core::Requirement>| {
+            records[0].statement = "The system keeps records.".into();
+            Ok(())
+        })
+    };
+    let refused = |live: &StateStore| {
+        live.permitting(&[&path], "req_overtime", restate)
+            .unwrap_err()
+            .to_string()
+            .contains("needs a staged store")
+    };
+    crate::publication::with_publication_guard(&repository, |guard| {
+        let guarded = guard.repository().store();
+        assert!(refused(&guarded), "the store of the guard repository");
+        guarded.with_repository_publication(|held| {
+            assert!(refused(held), "the store that the section hands");
+            Ok(())
+        })?;
+        assert!(
+            restate(&guarded).is_err(),
+            "no permission, no enrolled write"
+        );
+        Ok(())
+    })
+    .unwrap();
+    assert!(refused(&repository.store()), "a store that takes the lock");
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+}

@@ -95,7 +95,7 @@ fn origin(root: &Discussion) -> provenance_core::threads::DiscussionOrigin {
 /// Reads the Discussions after any interrupted publication recovers.
 fn discussions(store: &StateStore) -> Vec<Discussion> {
     store
-        .with_repository_publication(|| store.list_discussions(&scope()))
+        .with_repository_publication(|held| held.list_discussions(&scope()))
         .unwrap()
 }
 fn edit(store: &StateStore) -> super::SaveRequirement {
