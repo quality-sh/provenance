@@ -68,22 +68,8 @@ export async function effectFiles(document) {
   // Declare each rendered component. Owner-aware substitution keeps identical
   // nested structures in the operation family that owns the declaration. A
   // union without a rendering (an empty projected body) stays inline.
-  const declared = new Set(renderings.keys());
-  const bodies = new Map();
-  const queue = [...declared];
-  while (queue.length > 0) {
-    const name = queue.pop();
-    const rendering = renderings.get(name);
-    if (rendering === undefined) throw new Error(`contract-render: no rendering for declared name ${name}`);
-    const body = substitute(rendering, renderings, rendering, name);
-    bodies.set(name, body.rewritten);
-    for (const referenced of body.used) {
-      if (declared.has(referenced)) continue;
-      if (!renderings.has(referenced)) continue;
-      declared.add(referenced);
-      queue.push(referenced);
-    }
-  }
+  const bodies = new Map([...renderings].map(([name, rendering]) =>
+    [name, substitute(rendering, renderings, rendering, name).rewritten]));
   const declarations = [...bodies.entries()].sort(([a], [b]) => a.localeCompare(b))
     .map(([name, body]) => declaration(name, body))
     .join('\n');
