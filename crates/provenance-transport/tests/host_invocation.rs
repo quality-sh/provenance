@@ -307,8 +307,14 @@ async fn a_request_decode_refusal_does_not_wait_for_a_work_slot() {
     host.shutdown().await;
 }
 
-/// A close lock held over the gate opening makes each held call's cache close wait on a
-/// runtime timer, as two closes that meet do.
+/// A close lock held over the gate opening makes a held call's cache close wait on a runtime
+/// timer, as two closes that meet do. The test holds the store's internal close lock file and
+/// releases it only after a close has opened that file and failed to take the lock.
+///
+/// This test helps the paused-clock cleanup in these tests. It pins an internal failure
+/// mechanism and defines no product obligation, so it has no Rule binding. It reads
+/// `/proc/self/fd` to find the close, so it runs only on Linux.
+#[cfg(target_os = "linux")]
 #[tokio::test(start_paused = true)]
 async fn held_calls_finish_when_their_cache_closes_meet() {
     let repo = Repository::new("The shared graph is readable.");
@@ -318,14 +324,59 @@ async fn held_calls_finish_when_their_cache_closes_meet() {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let lock = std::fs::File::create(&path).unwrap();
     fs2::FileExt::lock_exclusive(&lock).unwrap();
-    let unlock = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(500));
+    let path = path.canonicalize().unwrap();
+    let (opened, close_opened) = tokio::sync::oneshot::channel();
+    std::thread::spawn(move || {
+        while !opened.is_closed() {
+            if handles_to(&path) > 1 {
+                let _ = opened.send(());
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+    });
+    // A close opens the lock file and tries the lock in one poll on this runtime thread, so
+    // when this task runs, the close that opened the file waits on its retry timer.
+    let unlock = tokio::spawn(async move {
+        close_opened.await.unwrap();
         drop(lock);
     });
+    let (stall, stalled) = tokio::sync::oneshot::channel();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(10));
+        let _ = stall.send(());
+    });
 
-    release_held(&control, held).await;
-    unlock.join().unwrap();
+    let release = async {
+        control.open();
+        for call in held {
+            call.await.unwrap().unwrap();
+        }
+    };
+    tokio::pin!(release);
+    let stalled = tokio::select! {
+        () = &mut release => false,
+        _ = stalled => true,
+    };
+    if stalled {
+        tokio::time::resume();
+        release.await;
+    }
+    let close_waited = unlock.is_finished();
+    unlock.abort();
     host.shutdown().await;
+    assert!(!stalled, "the held calls stalled behind the paused clock");
+    assert!(close_waited, "no cache close waited on the close lock");
+}
+
+/// Counts the open file descriptors of this process that refer to `path`.
+#[cfg(target_os = "linux")]
+fn handles_to(path: &std::path::Path) -> usize {
+    std::fs::read_dir("/proc/self/fd")
+        .unwrap()
+        .filter_map(|entry| std::fs::read_link(entry.ok()?.path()).ok())
+        .filter(|target| target == path)
+        .count()
 }
 
 /// A check port for builder-order tests; the MCP `check` tool is not exercised here.
