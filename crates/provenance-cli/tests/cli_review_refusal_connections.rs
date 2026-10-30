@@ -141,10 +141,26 @@ fn the_host_stops_reading_at_the_request_body_limit() {
     assert_full_refusal(&read_refusal(&mut stream));
     let refused = Instant::now();
 
-    // The socket buffers cannot keep 16 times the limit, so the host must read it or reset.
-    let sent = stream.write_all(&vec![b'x'; 16 * MAX_BODY_BYTES]);
+    // The client sends in small writes and counts the bytes that the socket accepts. The host
+    // reads some of these bytes and the socket buffers keep the remainder. When the host has
+    // released the socket, the next write fails. One large write is not a measurement: on
+    // Windows, one send of 16 MiB completes even after the host has released the socket.
+    let chunk = vec![b'x'; 64 * 1024];
+    let mut accepted = 0;
+    let sent = loop {
+        match stream.write(&chunk) {
+            Ok(written) => accepted += written,
+            Err(error) => break Err(error),
+        }
+        if accepted >= 16 * MAX_BODY_BYTES {
+            break Ok(());
+        }
+    };
     let elapsed = refused.elapsed();
-    assert!(sent.is_err(), "the host read more than the limit");
+    assert!(
+        sent.is_err(),
+        "the host read more than the limit: the socket accepted {accepted} bytes"
+    );
     assert!(
         elapsed < Duration::from_millis(1500),
         "the host stopped reading after {elapsed:?}, not at the limit"
