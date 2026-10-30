@@ -128,12 +128,14 @@ pub fn with_staged_state<R>(
     prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
     let live_layout = &held.layout;
+    let mut publication = ImportPublication { transactions: None };
     if held.holds_staged_section()? {
         // The stage lock holds the staged root, so no publication lock is taken there.
         super::prepare_publication_lock(live_layout)?;
-        super::prepare_transaction_dirs(live_layout)?;
+        // The inner transaction goes beside the staged root, in the transaction of the
+        // outer stage. A transaction inside the staged root makes paths too long on Windows.
+        publication.transactions = live_layout.root().parent().map(Utf8Path::to_owned);
     }
-    let mut publication = ImportPublication;
     stage_with_hook(live_layout, dry_run, prepare, &mut publication).map_err(|error| {
         if live_layout.publication_marker_path().exists() {
             crate::write_error::publication_started(error)
@@ -364,11 +366,17 @@ fn rollback_publication(
     sync_directory(&live_layout.provenance_dir())
 }
 
-struct ImportPublication;
+/// The hook of a staged state publication. `transactions` is set for a stage
+/// in a staged section: its transaction then goes in the outer transaction.
+struct ImportPublication {
+    transactions: Option<Utf8PathBuf>,
+}
 
 impl StagedStateHook for ImportPublication {
     fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
-        live.import_transactions_dir()
+        self.transactions
+            .clone()
+            .unwrap_or_else(|| live.import_transactions_dir())
     }
 
     fn marker_path(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
