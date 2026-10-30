@@ -367,9 +367,25 @@ fn rollback_publication(
 }
 
 /// The hook of a staged state publication. `transactions` is set for a stage
-/// in a staged section: its transaction then goes in the outer transaction.
+/// in a staged section: its transaction then goes in the outer transaction,
+/// and it writes no marker, because recovery never runs on a staged root. A
+/// crash leaves the outer transaction, which recovery discards or completes.
 struct ImportPublication {
     transactions: Option<Utf8PathBuf>,
+}
+
+impl ImportPublication {
+    fn mark(
+        &self,
+        live: &ProvenanceLayout,
+        transaction: &camino::Utf8Path,
+        phase: PublicationPhase,
+    ) -> anyhow::Result<()> {
+        if self.transactions.is_some() {
+            return Ok(());
+        }
+        write_publication_marker(live, transaction, phase)
+    }
 }
 
 impl StagedStateHook for ImportPublication {
@@ -388,7 +404,7 @@ impl StagedStateHook for ImportPublication {
         live: &ProvenanceLayout,
         transaction: &camino::Utf8Path,
     ) -> anyhow::Result<()> {
-        write_publication_marker(live, transaction, PublicationPhase::Prepared)?;
+        self.mark(live, transaction, PublicationPhase::Prepared)?;
         crate::test_probes::at("state_marker_prepared")
     }
 
@@ -400,7 +416,7 @@ impl StagedStateHook for ImportPublication {
         sync_directory(transaction)?;
         crate::test_probes::at("state_backup_created")?;
         sync_directory(&live.provenance_dir())?;
-        write_publication_marker(live, transaction, PublicationPhase::BackupCreated)
+        self.mark(live, transaction, PublicationPhase::BackupCreated)
     }
 
     fn state_installed(&mut self, _live: &ProvenanceLayout) -> anyhow::Result<()> {
@@ -415,7 +431,7 @@ impl StagedStateHook for ImportPublication {
         live: &ProvenanceLayout,
         transaction: &camino::Utf8Path,
     ) -> anyhow::Result<()> {
-        write_publication_marker(live, transaction, PublicationPhase::Published)
+        self.mark(live, transaction, PublicationPhase::Published)
     }
 
     fn after_published(&mut self) -> anyhow::Result<()> {
