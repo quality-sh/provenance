@@ -48,16 +48,15 @@ fn located_any(path: &Utf8Path, line_number: usize, error: anyhow::Error) -> any
     }
 }
 
-fn state_relative(path: &Utf8Path) -> &Utf8Path {
+/// The shard path below the state directory, with `/` between its parts on
+/// every platform. A shard path joins native separators to a family suffix
+/// that has `/`, so the plain display mixes the two on Windows.
+fn state_relative(path: &Utf8Path) -> String {
     let components: Vec<&str> = path.iter().collect();
     components
         .windows(2)
         .rposition(|pair| pair == [".provenance", "state"])
-        .and_then(|at| {
-            let prefix: Utf8PathBuf = components[..at + 2].iter().collect();
-            path.strip_prefix(prefix).ok()
-        })
-        .unwrap_or(path)
+        .map_or_else(|| path.to_string(), |at| components[at + 2..].join("/"))
 }
 
 pub fn parse_line(
