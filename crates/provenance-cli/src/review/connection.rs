@@ -46,7 +46,7 @@ impl axum::serve::Listener for Listener {
 pub(super) struct Connection(Option<TcpStream>);
 
 impl Connection {
-    fn stream(&mut self) -> Pin<&mut TcpStream> {
+    const fn stream(&mut self) -> Pin<&mut TcpStream> {
         Pin::new(self.0.as_mut().expect("open connection"))
     }
 }
