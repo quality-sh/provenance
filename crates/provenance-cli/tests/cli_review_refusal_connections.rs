@@ -1,6 +1,7 @@
 #[path = "review_host_support/mod.rs"]
 mod review_host_support;
 
+use provenance_macros::verifies;
 use review_host_support::{repository, request, response, start};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
@@ -51,7 +52,8 @@ fn early_refusals_ask_the_client_to_close_the_connection() {
 }
 
 #[test]
-/// Implementation aid: a refusal sent before the body is read does not reset the connection,
+#[verifies("rule_review_refusal_reaches_client", examples)]
+/// A refusal sent before the body is read does not reset the connection,
 /// so a client that still sends its body gets the response.
 fn a_refusal_before_the_body_does_not_reset_the_connection() {
     let repo = repository();

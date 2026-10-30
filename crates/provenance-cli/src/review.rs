@@ -1,4 +1,5 @@
 mod assets;
+mod connection;
 mod detach;
 mod events;
 pub mod follow;
@@ -123,7 +124,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     let signals = ShutdownSignals::new()?;
     let (stop, stopped) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(
-        axum::serve(listener, router)
+        axum::serve(connection::Listener(listener), router)
             .with_graceful_shutdown(async {
                 let _ = stopped.await;
             })
