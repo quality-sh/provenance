@@ -124,12 +124,13 @@ return the saved result.
 Rule deprecation and archival use the existing `status` values. An archived
 Rule must have `archived_in_commit`; the other Rule statuses must not have it.
 Archived Requirements, Resolutions, Topics and Questions have the same commit
-evidence requirement. An archived status is terminal. Archiving a Topic archives all Questions in that
-Topic in the same publication. Archiving one Question does not change its
-Topic. Discussions on archived records stay readable as history. Updates do
-not delete records or their relationships. A Topic that closes clears its
-claim. A Question status change keeps the native answer requirement and clears
-claims when the question leaves its claimable state.
+evidence requirement. An archived status is terminal. Archiving a Topic
+archives all Questions in that Topic in the same publication. Archiving one
+Question does not change its Topic. Discussions on archived records stay
+readable as history. Updates do not delete records or their relationships. A
+Topic that closes clears its claim. A Question status change keeps the native
+answer requirement and clears claims when the question leaves its claimable
+state.
 
 The archive commit is the commit that contains the change. Merge a pull
 request that archives records with a merge commit. A squash or rebase merge
