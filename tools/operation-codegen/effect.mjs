@@ -188,7 +188,7 @@ export function effectClient(document) {
         const condition = variant.selector === null
           ? 'call.query === undefined'
           : `call.query === ${JSON.stringify(variant.selector)}`;
-        return `    if (${condition}) return Effect.flatMap(Effect.promise(() => import('./validators/${op.operationId}.mjs')), validate => this.runtime.run<${stem}Input, ${stem}Success, ${stem}Failure>('${op.operationId}', false, call, (input, signal) => this.http.${op.operationId}(input, { signal }), (value): value is ${stem}Success => validate.${stem}Success(value), (value): value is ${stem}Failure => validate.${stem}Failure(value)));`;
+        return `    if (${condition}) return Effect.flatMap(Effect.promise(() => import('./validators/${op.operationId}.mjs')), validate => runOperation<${stem}Input, ${stem}Success, ${stem}Failure>(call, (input, signal) => this.http.${op.operationId}(input, { signal }), (value): value is ${stem}Success => validate.${stem}Success(value), (value): value is ${stem}Failure => validate.${stem}Failure(value)));`;
       }).join('\n');
       return `${overloads}
   ${op.operationId}(call: ${inputs}): Effect.Effect<${successes}, ClientFailure<${failures}>> {
@@ -197,7 +197,7 @@ ${branches}
   }`;
     }
     return `  ${op.operationId}(call: Parameters<HttpClient['${op.operationId}']>[0]): Effect.Effect<${success}, ClientFailure<${failure}>> {
-    return Effect.flatMap(Effect.promise(() => import('./validators/${op.operationId}.mjs')), validate => this.runtime.run('${op.operationId}', ${op['x-operation-mutates'] === true}, call, (input, signal) => this.http.${op.operationId}(input, { signal }), (value): value is ${success} => validate.${success}(value), (value): value is ${failure} => validate.${failure}(value)));
+    return Effect.flatMap(Effect.promise(() => import('./validators/${op.operationId}.mjs')), validate => runOperation(call, (input, signal) => this.http.${op.operationId}(input, { signal }), (value): value is ${success} => validate.${success}(value), (value): value is ${failure} => validate.${failure}(value)));
   }`;
   });
   return `// Generated from OpenAPI. Do not edit.
@@ -207,7 +207,7 @@ import * as Layer from 'effect/Layer';
 import { HttpClient${[...queryInputs].map(name => `, type ${name}`).join('')} } from './client.js';
 import type { ${[...contracts].sort().join(', ')} } from './effect-contract.js';
 ${queryInputs.size ? `export type { ${[...queryInputs].join(', ')} } from './client.js';` : ''}
-import { ClientRuntime, requestEffect, connectionFailure, type ClientFailure } from '../effect-runtime.js';
+import { runOperation, requestEffect, connectionFailure, type ClientFailure } from '../effect-runtime.js';
 export interface ClientOptions {
   readonly baseUrl: string;
   readonly bearer?: string;
@@ -216,7 +216,6 @@ export interface ClientOptions {
   readonly scope?: string;
 }
 export class EffectHttpClient {
-  private readonly runtime = new ClientRuntime();
   private constructor(private readonly http: HttpClient) {}
   static connect(options: ClientOptions): Effect.Effect<EffectHttpClient, ClientFailure<MetadataFailure>> {
     return Effect.flatMap(Effect.promise(() => import('./validators/metadata.mjs')), validate =>
