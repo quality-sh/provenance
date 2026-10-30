@@ -6,12 +6,14 @@ mod support {
 
 use axum::{body::Body, http::Request};
 use provenance_core::{MessageRole, NodeType, ScopeId, StableId, ThreadParent};
+use provenance_macros::verifies;
 use provenance_store::{
     review::{DiscussionAction, WriteDiscussion},
     state_store::PostMessageInput,
 };
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
+use std::collections::BTreeSet;
 use support::records::Repository;
 use tower::ServiceExt as _;
 
@@ -71,6 +73,7 @@ fn parent() -> ThreadParent {
 }
 
 #[tokio::test]
+#[verifies("rule_cursor_binds_query_identity", examples)]
 async fn a_message_beyond_the_first_page_reads_directly_and_messages_paginate() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
@@ -158,6 +161,21 @@ async fn a_message_beyond_the_first_page_reads_directly_and_messages_paginate() 
     assert_eq!(default_second["meta"]["limit"], 50);
     assert_eq!(default_second["meta"]["has_more"], false);
     assert_eq!(default_second["data"]["items"].as_array().unwrap().len(), 1);
+
+    let ids = |page: &Value| -> Vec<String> {
+        page["data"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["id"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let default_ids = [ids(&default_page), ids(&default_second)].concat();
+    let distinct: BTreeSet<&String> = default_ids.iter().collect();
+    assert_eq!(distinct.len(), 51, "{default_ids:?}");
+    assert_eq!(default_ids[0], root.root_message_id.as_str());
+    assert_eq!(default_ids[50], last.as_str());
+    assert_eq!([ids(&first), ids(&second)].concat(), default_ids[..2]);
 }
 
 #[tokio::test]
