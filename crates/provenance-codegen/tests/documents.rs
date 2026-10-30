@@ -213,7 +213,7 @@ fn list_envelopes_put_records_in_data_items() {
 }
 
 #[test]
-fn declared_statuses_include_every_runtime_failure_family() {
+fn every_operation_declares_the_base_failure_statuses() {
     let (openapi, _) = provenance_codegen::documents();
     for (path, item) in openapi["paths"].as_object().unwrap() {
         for operation in item.as_object().unwrap().values() {
