@@ -301,6 +301,44 @@ async fn a_request_decode_refusal_does_not_wait_for_a_work_slot() {
     host.shutdown().await;
 }
 
+#[tokio::test(start_paused = true)]
+async fn held_calls_finish_when_their_cache_closes_meet() {
+    use fs2::FileExt as _;
+    let repo = Repository::new("The shared graph is readable.");
+    let (host, mut control) = gated_host(&repo, false);
+    let held = fill_work_slots(&host, &mut control).await;
+    let path = repo.layout.cache_db_path().with_extension("db.close.lock");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lock = std::fs::File::create(&path).unwrap();
+    lock.lock_exclusive().unwrap();
+    let unlock = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(100));
+        drop(lock);
+    });
+    let (stall, stalled) = tokio::sync::oneshot::channel();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(10));
+        let _ = stall.send(());
+    });
+
+    control.open();
+    let release = futures::future::join_all(held);
+    tokio::pin!(release);
+    let stalled = tokio::select! {
+        _ = &mut release => false,
+        _ = stalled => true,
+    };
+    if stalled {
+        tokio::time::resume();
+    }
+    for call in release.await {
+        call.unwrap().unwrap();
+    }
+    unlock.join().unwrap();
+    host.shutdown().await;
+    assert!(!stalled, "the held calls stalled behind the paused clock");
+}
+
 /// A check port for builder-order tests; the MCP `check` tool is not exercised here.
 struct NoCheck;
 
