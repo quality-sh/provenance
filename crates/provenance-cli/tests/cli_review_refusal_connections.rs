@@ -2,6 +2,8 @@
 mod review_host_support;
 
 use review_host_support::{repository, request, response, start};
+use std::io::{Read, Write};
+use std::net::{Shutdown, TcpStream};
 use std::time::Duration;
 
 #[test]
@@ -49,26 +51,44 @@ fn early_refusals_ask_the_client_to_close_the_connection() {
 }
 
 #[test]
-/// Implementation aid: a refused request with a body within the host limit still gets its
-/// response, also when the host refuses before it reads the body.
-fn a_refused_request_with_a_large_body_gets_its_response() {
+/// Implementation aid: a refusal sent before the body is read does not reset the connection,
+/// so a client that still sends its body gets the response.
+fn a_refusal_before_the_body_does_not_reset_the_connection() {
     let repo = repository();
     let host = start(repo.path());
+    let address = host.config["endpoint"]
+        .as_str()
+        .unwrap()
+        .trim_start_matches("http://")
+        .to_owned();
     let body = vec![b'x'; 1024 * 1024];
+    let mut stream = TcpStream::connect(&address).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .unwrap();
+    write!(
+        stream,
+        "POST /requirements/req_example/discussions HTTP/1.1\r\nHost: {address}\r\n\
+         Content-Type: application/json\r\nContent-Length: {}\r\n\r\n",
+        body.len()
+    )
+    .unwrap();
 
-    for (path, auth, expected) in [
-        ("/requirements/req_example/discussions", false, 401),
-        ("/discussion-containers", false, 401),
-        ("/requirements/req_example/discussions", true, 403),
-    ] {
-        let request = request(&host, "POST", path, auth);
-        let request = if auth {
-            request.set("Origin", "https://unrelated.test")
-        } else {
-            request
-        };
-        let refusal = response(request.send_bytes(&body));
-        assert_eq!(refusal.status(), expected, "{path}");
-        refusal.into_string().expect("refusal response body");
-    }
+    // The host refuses and ends its side before it reads the body.
+    let mut refusal = Vec::new();
+    stream.read_to_end(&mut refusal).unwrap();
+    assert!(
+        refusal.starts_with(b"HTTP/1.1 401 "),
+        "{}",
+        String::from_utf8_lossy(&refusal)
+    );
+
+    // The body that follows is read and dropped, not answered with a reset.
+    stream.write_all(&body).expect("body after the refusal");
+    stream.shutdown(Shutdown::Write).unwrap();
+    let mut rest = Vec::new();
+    stream
+        .read_to_end(&mut rest)
+        .expect("the host closes without a reset");
+    assert!(rest.is_empty());
 }
