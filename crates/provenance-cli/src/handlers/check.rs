@@ -79,27 +79,19 @@ impl RepositoryCheckPort {
                         .retain(|candidate| candidate.id.as_str() == scope);
                 }
                 let validation = validate_locked(store, &manifest, scope.is_none());
-                let gaps = match store.archive_commits_outside_history(&self.context.repo) {
-                    Ok(gaps) => gaps,
-                    // The validation finding already names a record that does not load.
-                    Err(_) if validation.is_err() => Vec::new(),
-                    Err(error) => return Err(error),
-                };
+                let gaps =
+                    match store.archive_commits_outside_history(&self.context.repo, &manifest) {
+                        Ok(gaps) => gaps,
+                        // The validation finding already names a record that does not load.
+                        Err(_) if validation.is_err() => Vec::new(),
+                        Err(error) => return Err(error),
+                    };
                 let mut findings = match validation {
                     Ok(()) => Vec::new(),
                     Err(error) if refuses_graph_run(&error) => return Err(error),
                     Err(error) => vec![Finding::new(format!("{error:#}"))],
                 };
-                findings.extend(
-                    gaps.into_iter()
-                        .filter(|gap| {
-                            manifest
-                                .scopes
-                                .iter()
-                                .any(|candidate| candidate.id.as_str() == gap.scope_id)
-                        })
-                        .map(|gap| Finding::new(gap.to_string())),
-                );
+                findings.extend(gaps.into_iter().map(|gap| Finding::new(gap.to_string())));
                 Ok(findings)
             })
             .map_err(|error| initialization_hint(&self.context.repo, error));

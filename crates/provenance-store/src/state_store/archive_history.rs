@@ -8,7 +8,7 @@
 use super::StateStore;
 use crate::stale::git;
 use camino::Utf8Path;
-use provenance_core::ArchivedStamp;
+use provenance_core::{ArchivedStamp, Manifest};
 use provenance_macros::rule;
 use std::collections::btree_map::{BTreeMap, Entry};
 use std::fmt;
@@ -42,19 +42,20 @@ impl fmt::Display for ArchiveCommitGap {
 }
 
 impl StateStore {
-    /// Each archived record whose archive commit is missing or is not an
-    /// ancestor of `HEAD`, in scope and record order.
+    /// Each archived record in the scopes of `manifest` whose archive commit
+    /// is missing or is not an ancestor of `HEAD`, in scope and record order.
     #[rule("rule_archive_commit_in_head_history")]
     pub fn archive_commits_outside_history(
         &self,
         repo: &Utf8Path,
+        manifest: &Manifest,
     ) -> anyhow::Result<Vec<ArchiveCommitGap>> {
         let Some(head) = full_history_head(repo) else {
             return Ok(Vec::new());
         };
         let mut stamps = Vec::new();
-        for scope in self.manifest()?.scopes {
-            let scope = scope.id;
+        for scope in &manifest.scopes {
+            let scope = &scope.id;
             let mut push = |id: &str, stamp: &Option<ArchivedStamp>| {
                 if let Some(stamp) = stamp {
                     stamps.push((
@@ -64,19 +65,19 @@ impl StateStore {
                     ));
                 }
             };
-            for record in self.list_requirements(&scope)? {
+            for record in self.list_requirements(scope)? {
                 push(record.id.as_str(), &record.archived_in_commit);
             }
-            for record in self.list_resolutions(&scope)? {
+            for record in self.list_resolutions(scope)? {
                 push(record.id.as_str(), &record.archived_in_commit);
             }
-            for record in self.list_rules(&scope)? {
+            for record in self.list_rules(scope)? {
                 push(record.id.as_str(), &record.archived_in_commit);
             }
-            for record in self.list_topics(&scope)? {
+            for record in self.list_topics(scope)? {
                 push(record.id.as_str(), &record.archived_in_commit);
             }
-            for record in self.list_questions(&scope)? {
+            for record in self.list_questions(scope)? {
                 push(record.id.as_str(), &record.archived_in_commit);
             }
         }

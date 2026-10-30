@@ -92,7 +92,9 @@ fn reports_dropped_and_unknown_archive_commits_once_each() {
         ],
     );
 
-    let gaps = store.archive_commits_outside_history(repo).unwrap();
+    let gaps = store
+        .archive_commits_outside_history(repo, &store.manifest().unwrap())
+        .unwrap();
 
     assert_eq!(
         gaps,
@@ -124,7 +126,9 @@ fn ancestor_archive_commits_give_no_finding() {
     write_rules(&store, &[("rule_kept", &base)]);
 
     assert_eq!(
-        store.archive_commits_outside_history(repo).unwrap(),
+        store
+            .archive_commits_outside_history(repo, &store.manifest().unwrap())
+            .unwrap(),
         Vec::new()
     );
 }
@@ -136,7 +140,9 @@ fn skips_a_directory_outside_git_and_a_shallow_clone() {
     write_rules(&store, &[("rule_unknown", UNKNOWN_COMMIT)]);
     let plain = Utf8Path::from_path(dir.path()).unwrap();
     assert_eq!(
-        store.archive_commits_outside_history(plain).unwrap(),
+        store
+            .archive_commits_outside_history(plain, &store.manifest().unwrap())
+            .unwrap(),
         Vec::new()
     );
 
@@ -164,7 +170,9 @@ fn skips_a_directory_outside_git_and_a_shallow_clone() {
         "true"
     );
     assert_eq!(
-        store.archive_commits_outside_history(&shallow).unwrap(),
+        store
+            .archive_commits_outside_history(&shallow, &store.manifest().unwrap())
+            .unwrap(),
         Vec::new()
     );
 }
