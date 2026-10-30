@@ -7,6 +7,11 @@ use provenance_core::{Manifest, RepoPathPrefix, RequirementStatus, ScopeId, Sour
 fn initialized_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     let dir = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+    let (store, scope) = initialized_store_in(root);
+    (dir, store, scope)
+}
+
+fn initialized_store_in(root: camino::Utf8PathBuf) -> (StateStore, ScopeId) {
     let layout = ProvenanceLayout::new(root);
     std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
     let scope = ScopeId::new("default").unwrap();
@@ -20,7 +25,7 @@ fn initialized_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     )
     .unwrap();
     let store = crate::test_support::store(&layout);
-    (dir, store, scope)
+    (store, scope)
 }
 
 fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
@@ -100,4 +105,6 @@ mod verification_bindings;
 mod requirement_archive;
 mod requirement_archive_children;
 mod requirement_archive_links;
+#[cfg(windows)]
+mod requirement_archive_long_path;
 mod requirement_archive_parents;

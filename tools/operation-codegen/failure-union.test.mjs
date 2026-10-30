@@ -11,7 +11,8 @@ test('each method preserves its own failure family in both clients', async () =>
   second.operationId = 'readGraph';
   second.responses['400'].content['application/json'].schema.$ref = '#/components/schemas/CheckStatementFailure';
   document.paths['/fixtures/read-graph'] = { post: second };
-  const ts = typescriptClient(document);
+  const ts = typescriptClient(document, compatibility);
+  assert.ok(ts.includes(`export const COMPATIBILITY = ${JSON.stringify(compatibility)} as const;`));
   const rustFiles = rustClientFiles(document, compatibility);
   const rust = Object.values(rustFiles).join('\n');
   assert.match(ts, /export type OperationFailure =[^;]*CheckStatementFailure/s);
@@ -26,7 +27,7 @@ test('metadata uses the declared failure contract in both clients', async () => 
   const ts = typescriptClient(document, compatibility);
   const rust = Object.values(rustClientFiles(document, compatibility)).join('\n');
   assert.match(ts, /export type OperationFailure =[^;]*MetadataFailure/s);
-  assert.match(ts, /checked\(value, validate\.MetadataFailure, 'metadata', false\);[\s\S]*throw new OperationError<components\['schemas'\]\['MetadataFailure'\]>/);
+  assert.match(ts, /checked\(value, validate\.MetadataFailure\);[\s\S]*throw new OperationError<components\['schemas'\]\['MetadataFailure'\]>/);
   assert.match(rust, /Metadata\(Box<crate::types::MetadataFailure>\)/);
-  assert.match(rust, /runtime::validate\(&value, "MetadataFailure", "metadata", false\)\?;[\s\S]*OperationFailure::Metadata/);
+  assert.match(rust, /runtime::validate\(&value, "MetadataFailure"\)\?;[\s\S]*OperationFailure::Metadata/);
 });
