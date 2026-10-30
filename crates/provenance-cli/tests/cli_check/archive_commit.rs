@@ -24,21 +24,21 @@ fn graph_check_reports_an_archive_commit_that_a_squash_merge_dropped() {
     git(repo, &["checkout", "--quiet", "-b", "feature"]);
     let branch = commit(repo, "Archive the rule on the branch");
     archive_rule(repo, "rule_dropped", &branch);
-    let check = |format: &str| run(repo, &format!("check --graph --format {format}"), &[]);
-    let on_branch = check("text");
+    let check = |format: &[&str]| run(repo, "check --graph", format);
+    let on_branch = check(&[]);
     assert!(on_branch.status.success(), "{}", text(&on_branch));
 
     git(repo, &["checkout", "--quiet", "main"]);
     commit(repo, "Squash merge of the branch");
 
     let finding = format!("rule_dropped: archive commit {branch} is not in the history of HEAD");
-    let readable = check("text");
+    let readable = check(&[]);
     assert!(!readable.status.success());
     let readable = text(&readable);
     assert!(readable.contains(&finding), "{readable}");
     assert!(!readable.contains("rule_kept"), "{readable}");
 
-    let json = check("json");
+    let json = check(&["--format", "json"]);
     assert!(!json.status.success());
     let report: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
     let graph = &report["categories"][0];
