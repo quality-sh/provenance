@@ -274,7 +274,7 @@ function rustUrl(path, pathParameters, enums) {
   return `format!(${JSON.stringify(`{}${template}`)}, self.base_url, ${values.join(', ')})`;
 }
 
-function rustVariantRequest(path, method, op, variant, operation, enums) {
+function rustVariantRequest(path, method, op, variant, enums) {
   const parameters = variant.parameters;
   const pathParameters = parameters.filter(parameter => parameter.in === 'path');
   const queryParameters = parameters.filter(parameter => parameter.in === 'query');
@@ -329,7 +329,7 @@ function rustQueryMethod(path, method, op, enums) {
     const success = schemaName(variant.success);
     const failed = schemaName(variant.failure);
     return `    async fn ${helper}(&self${helperArguments.length ? `, ${helperArguments.join(', ')}` : ''}) -> Result<${output}, Error> {
-        ${rustVariantRequest(path, method, op, variant, operation, enums)}
+        ${rustVariantRequest(path, method, op, variant, enums)}
         let status = response.status();
         let value = runtime::read_json(response).await?;
         if !status.is_success() {
@@ -369,7 +369,7 @@ function rustArgs(op, enums) {
   if (op.requestBody) args.push(`call: &crate::types::${ref(op.requestBody.content['application/json'].schema)}`);
   return args.join(', ');
 }
-function rustRequest(path, method, op, operation, enums) {
+function rustRequest(path, method, op, enums) {
   const pathParameters = (op.parameters ?? []).filter(parameter => parameter.in === 'path');
   const queryParameters = (op.parameters ?? []).filter(parameter => parameter.in === 'query');
   const headerParameters = (op.parameters ?? []).filter(parameter => parameter.in === 'header');
@@ -424,7 +424,7 @@ export function rustClientFiles(document, compatibility) {
 #[allow(clippy::too_many_arguments)]
 impl HttpClient {
     pub async fn ${name}(&self, ${rustArgs(op, enums)}) -> Result<crate::types::${success}, Error> {
-        ${rustRequest(path, method, op, name, enums)}
+        ${rustRequest(path, method, op, enums)}
         let status = response.status();
         let value = runtime::read_json(response).await?;
         if !status.is_success() {
