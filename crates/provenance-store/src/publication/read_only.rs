@@ -141,7 +141,7 @@ pub(super) mod tests {
         let root = temporary.path().join("planned/repository");
         let layout = ProvenanceLayout::new(root.to_str().unwrap());
         let sources = with_read_only_validation(&layout, |store| store.list_sources(&scope()));
-        assert!(sources.unwrap().is_empty());
+        assert_eq!(sources.unwrap(), [] as [provenance_core::Source; 0]);
         assert!(!root.exists());
     }
 }

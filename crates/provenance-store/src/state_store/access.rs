@@ -295,7 +295,7 @@ impl StateStore {
         &self,
         operation: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        if let Access::ReadOnly = self.access {
+        if matches!(self.access, Access::ReadOnly) {
             self.ensure_section_open()?;
             return operation(self);
         }
