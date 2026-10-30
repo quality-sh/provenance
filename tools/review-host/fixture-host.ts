@@ -1,7 +1,7 @@
 // Release-check aid: the verify scripts run a real review host on a new fixture repository.
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { chmod, copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -22,9 +22,10 @@ export interface FixtureHost {
 }
 
 /**
- * Copies the CLI into a new directory, makes a repository with the synthetic STE dictionary,
- * writes the seed records, and starts `review` on it. The host stops and the directory goes
- * after `use` completes or fails.
+ * Makes a repository with the synthetic STE dictionary in a new directory, writes the seed
+ * records, and starts `review` on it. The host stops and the directory goes after `use`
+ * completes or fails. The CLI runs from its own path: on Windows, another process can keep a
+ * new copy of an executable open after the host stops, and then the directory cannot go.
  */
 export async function withFixtureHost<T>(
   binaryArg: string,
@@ -32,11 +33,9 @@ export async function withFixtureHost<T>(
   use: (host: FixtureHost) => Promise<T>,
 ): Promise<T> {
   const work = await mkdtemp(join(tmpdir(), 'provenance-review-host-'));
-  const binary = join(work, process.platform === 'win32' ? 'provenance.exe' : 'provenance');
+  const binary = resolve(binaryArg);
   let host: ReturnType<typeof spawn> | undefined;
   try {
-    await copyFile(resolve(binaryArg), binary);
-    await chmod(binary, 0o755);
     const repository = join(work, 'repository');
     const steAssets = join(work, 'ste-assets');
     await mkdir(steAssets);

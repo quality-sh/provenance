@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { chmod, copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -14,7 +14,7 @@ const [binaryArg, sdkArg] = process.argv.slice(2);
 if (!binaryArg || !sdkArg) throw new Error('Usage: node verify-review-writes.ts BINARY SDK_PACKAGE');
 const { HttpClient } = await import(pathToFileURL(join(resolve(sdkArg), 'dist/client.js')).href);
 const work = await mkdtemp(join(tmpdir(), 'provenance-review-writes-'));
-const binary = join(work, process.platform === 'win32' ? 'provenance.exe' : 'provenance');
+const binary = resolve(binaryArg);
 const repository = join(work, 'repository');
 const steAssets = join(work, 'ste-assets');
 const env = {
@@ -184,8 +184,6 @@ async function lostWriteResponseIsReportedAndNotResent(): Promise<void> {
 }
 
 try {
-  await copyFile(resolve(binaryArg), binary);
-  await chmod(binary, 0o755);
   await mkdir(steAssets);
   await copyFile(
     join(root, 'packages/provenance/test/fixtures/synthetic-ste-dictionary.pdf'),
