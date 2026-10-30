@@ -78,7 +78,7 @@ fn gap(id: &str, commit: &str, reason: ArchiveCommitGapReason) -> ArchiveCommitG
 }
 
 #[test]
-#[verifies("rule_archive_commit_in_head_history")]
+#[verifies("rule_archive_commit_in_head_history", examples)]
 fn reports_dropped_and_unknown_archive_commits_once_each() {
     let (dir, store, _) = seeded_requirement_store();
     let repo = Utf8Path::from_path(dir.path()).unwrap();
@@ -116,7 +116,7 @@ fn reports_dropped_and_unknown_archive_commits_once_each() {
 }
 
 #[test]
-#[verifies("rule_archive_commit_in_head_history")]
+#[verifies("rule_archive_commit_in_head_history", examples)]
 fn ancestor_archive_commits_give_no_finding() {
     let (dir, store, _) = seeded_requirement_store();
     let repo = Utf8Path::from_path(dir.path()).unwrap();
@@ -130,7 +130,7 @@ fn ancestor_archive_commits_give_no_finding() {
 }
 
 #[test]
-#[verifies("rule_archive_commit_in_head_history")]
+#[verifies("rule_archive_commit_in_head_history", examples)]
 fn skips_a_directory_outside_git_and_a_shallow_clone() {
     let (dir, store, _) = seeded_requirement_store();
     write_rules(&store, &[("rule_unknown", UNKNOWN_COMMIT)]);

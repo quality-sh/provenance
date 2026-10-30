@@ -7,7 +7,7 @@ use std::process::Output;
 /// A Rule archived on a branch, then the branch lands as a squash commit on
 /// main, so the archive commit is not in the history of HEAD.
 #[test]
-#[verifies("rule_archive_commit_in_head_history")]
+#[verifies("rule_archive_commit_in_head_history", examples)]
 fn graph_check_reports_an_archive_commit_that_a_squash_merge_dropped() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path();
