@@ -91,7 +91,7 @@ fn a_refusal_reaches_a_client_that_sent_part_of_the_body() {
 }
 
 #[test]
-#[verifies("rule_review_refusal_reaches_client", limits)]
+#[verifies("rule_review_refusal_reaches_client", examples)]
 /// A client that sends nothing after the refusal and keeps the socket open
 /// does not keep the connection: the host releases it after about 2 seconds.
 fn the_host_releases_a_silent_connection_after_2_seconds() {
@@ -123,7 +123,7 @@ fn the_host_releases_a_silent_connection_after_2_seconds() {
 }
 
 #[test]
-#[verifies("rule_review_refusal_reaches_client", limits)]
+#[verifies("rule_review_refusal_reaches_client", examples)]
 /// A client that sends more than the request body limit after the refusal does not keep the
 /// connection: the host stops reading at the limit and releases the socket.
 fn the_host_stops_reading_at_the_request_body_limit() {
