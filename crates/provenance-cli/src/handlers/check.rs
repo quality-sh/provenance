@@ -78,17 +78,34 @@ impl RepositoryCheckPort {
                         .scopes
                         .retain(|candidate| candidate.id.as_str() == scope);
                 }
-                validate_locked(store, &manifest, scope.is_none())
+                let validation = validate_locked(store, &manifest, scope.is_none());
+                let gaps = match store.archive_commits_outside_history(&self.context.repo) {
+                    Ok(gaps) => gaps,
+                    // The validation finding already names a record that does not load.
+                    Err(_) if validation.is_err() => Vec::new(),
+                    Err(error) => return Err(error),
+                };
+                let mut findings = match validation {
+                    Ok(()) => Vec::new(),
+                    Err(error) if refuses_graph_run(&error) => return Err(error),
+                    Err(error) => vec![Finding::new(format!("{error:#}"))],
+                };
+                findings.extend(
+                    gaps.into_iter()
+                        .filter(|gap| {
+                            manifest
+                                .scopes
+                                .iter()
+                                .any(|candidate| candidate.id.as_str() == gap.scope_id)
+                        })
+                        .map(|gap| Finding::new(gap.to_string())),
+                );
+                Ok(findings)
             })
             .map_err(|error| initialization_hint(&self.context.repo, error));
         let findings = match result {
-            Ok(()) => Vec::new(),
-            Err(error)
-                if error.downcast_ref::<std::io::Error>().is_some()
-                    || is_not_initialized(&error) =>
-            {
-                return Err(format!("{error:#}"));
-            }
+            Ok(findings) => findings,
+            Err(error) if refuses_graph_run(&error) => return Err(format!("{error:#}")),
             Err(error) => vec![Finding::new(format!("{error:#}"))],
         };
         let refusal = if findings.is_empty() {
@@ -349,6 +366,11 @@ fn ensure_strict_dictionary_index(
 
 /// Validates graph records without treating missing code bindings as graph errors.
 #[rule("rule_porcelain_missing_binding_not_invalid")]
+/// An unreadable or uninitialized graph refuses the run instead of giving a finding.
+fn refuses_graph_run(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<std::io::Error>().is_some() || is_not_initialized(error)
+}
+
 fn validate_locked(
     store: &StateStore,
     manifest: &Manifest,

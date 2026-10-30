@@ -370,6 +370,34 @@ fn resolve_commit(repo: &Utf8Path, revision: &str) -> anyhow::Result<String> {
     Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
+/// Whether the object exists and names a commit.
+pub(crate) fn commit_exists(repo: &Utf8Path, commit: &str) -> anyhow::Result<bool> {
+    let expression = format!("{commit}^{{commit}}");
+    let status = command(repo)
+        .args(["cat-file", "-e", &expression])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("run git cat-file -e")?;
+    Ok(status.success())
+}
+
+/// Whether `commit` is in the history of `head`. Both must name commits.
+pub(crate) fn is_ancestor(repo: &Utf8Path, commit: &str, head: &str) -> anyhow::Result<bool> {
+    let output = command(repo)
+        .args(["merge-base", "--is-ancestor", commit, head])
+        .output()
+        .context("run git merge-base --is-ancestor")?;
+    match output.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        _ => anyhow::bail!(
+            "git merge-base --is-ancestor failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ),
+    }
+}
+
 fn git(repo: &Utf8Path, args: &[&str]) -> anyhow::Result<Output> {
     let output = command(repo)
         .args(args)
