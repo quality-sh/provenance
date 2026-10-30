@@ -4,7 +4,7 @@ use provenance_core::{NodeType, ScopeId};
 use provenance_macros::rule;
 
 /// Runs `operation` with a read-only store over `layout`. The store takes no
-/// lock, runs no recovery, creates no path and refuses every write. Live
+/// lock, runs no recovery, creates no path and refuses record writes. Live
 /// access through it still refuses while a stage body of the repository runs
 /// on this thread.
 pub fn with_read_only_validation<R>(

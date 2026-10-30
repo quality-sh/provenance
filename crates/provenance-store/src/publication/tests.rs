@@ -426,7 +426,6 @@ fn a_read_only_write_is_refused_and_creates_no_path() {
     let shard = crate::shards::path_for(&copy, &scope(), NodeType::Source);
     let before = std::fs::read(&shard).unwrap();
     with_read_only_validation(&copy, |store| {
-        assert!(store.with_repository_publication(|_| Ok(())).is_err());
         assert!(store
             .mutate_jsonl_records(&shard, |records: &mut Vec<serde_json::Value>| {
                 records.clear();

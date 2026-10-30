@@ -157,6 +157,7 @@ impl crate::state_store::StateStore {
     where
         T: DeserializeOwned + Serialize,
     {
+        self.ensure_writable()?;
         self.with_repository_publication(|held| {
             let lock_path = held.layout.state_shard_lock_path(path)?;
             let mut result = None;
@@ -183,6 +184,7 @@ impl crate::state_store::StateStore {
     where
         T: DeserializeOwned + Serialize,
     {
+        self.ensure_writable()?;
         self.with_repository_publication(|held| {
             let lock_path = held.layout.state_shard_lock_path(path)?;
             crate::jsonl::mutate_jsonl_locked_if(path, &lock_path, held.permissions(), mutate)

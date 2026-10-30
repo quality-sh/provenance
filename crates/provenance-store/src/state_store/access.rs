@@ -51,8 +51,8 @@ impl StateStore {
     }
 
     /// A store over `layout` that takes no lock, runs no recovery and
-    /// creates no path. It refuses every write, because a write needs the
-    /// publication section and this store enters none.
+    /// creates no path. A record write, a write permission and a staged
+    /// publication through it refuse.
     #[rule("rule_read_only_store_refuses_writes")]
     pub(crate) const fn read_only(layout: ProvenanceLayout) -> Self {
         Self {
@@ -259,7 +259,8 @@ impl StateStore {
     /// Runs `operation` in the section of this store and hands it the store
     /// that holds the section. A live store takes the publication lock; a
     /// staged store takes the lock that its stage owns; a store that holds
-    /// the section hands itself; a read-only store refuses. Another store of the same repository on this
+    /// the section hands itself; a read-only store hands itself and takes no
+    /// lock. Another store of the same repository on this
     /// thread returns [`PublicationHeld`](crate::publication::PublicationHeld).
     #[rule("rule_store_under_guard_takes_no_second_lock")]
     pub fn with_repository_publication<R>(
@@ -282,23 +283,27 @@ impl StateStore {
                 operation(self)
             }
             Access::StagedSection { .. } => operation(self),
-            Access::ReadOnly => anyhow::bail!(
-                "a read-only store of {} cannot write or hold a publication section",
-                self.layout.root()
-            ),
+            Access::ReadOnly => {
+                self.ensure_section_open()?;
+                operation(self)
+            }
         }
     }
 
-    /// Runs a read in the section of this store. A read-only store reads with
-    /// no section.
+    /// Refuses a write through a read-only store.
+    pub(crate) fn ensure_writable(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !matches!(self.access, Access::ReadOnly),
+            "a read-only store of {} cannot write",
+            self.layout.root()
+        );
+        Ok(())
+    }
+
     pub(super) fn with_repository_read<R>(
         &self,
         operation: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        if matches!(self.access, Access::ReadOnly) {
-            self.ensure_section_open()?;
-            return operation(self);
-        }
         self.with_repository_publication(operation)
     }
 }
