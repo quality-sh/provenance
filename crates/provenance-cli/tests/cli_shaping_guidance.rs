@@ -137,3 +137,23 @@ fn shaping_guidance_puts_the_review_link_in_the_first_reply() {
         assert!(!shaping.contains(command), "{command}\n{shaping}");
     }
 }
+
+/// The skill and the managed `AGENTS.md` lines tell the author to keep the
+/// archive commit on main with a merge commit.
+#[test]
+fn archive_guidance_asks_for_a_merge_commit() {
+    let merge = "Merge a pull request that archives records with a merge commit. A squash or \
+                 rebase merge drops the commit that the archive names.";
+    let shaping = skill("provenance-shaping");
+    assert!(normalized(&shaping).contains(merge), "{shaping}");
+
+    let directory = tempfile::tempdir().unwrap();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["init", "--path", directory.path().to_str().unwrap()])
+        .args(["--scope", "default", "--path-prefix", "."])
+        .assert()
+        .success();
+    let agents = std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap();
+    assert!(normalized(&agents).contains(merge), "{agents}");
+}

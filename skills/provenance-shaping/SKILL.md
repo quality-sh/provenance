@@ -517,7 +517,9 @@ Before final response:
    To archive a Question or Topic, use the commit that contains the
    change. Archiving a Topic also archives all Questions in that Topic.
    Discussions stay readable as history. Read the record first and pass its
-   current ETag to the update.
+   current ETag to the update. Merge a pull request that archives records
+   with a merge commit. A squash or rebase merge drops the commit that the
+   archive names.
 
    ```sh
    printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | \

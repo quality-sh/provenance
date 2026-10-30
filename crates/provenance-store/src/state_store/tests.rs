@@ -70,6 +70,7 @@ pub(super) fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStor
     (dir, store, scope)
 }
 
+mod archive_history;
 mod asserted_evidence;
 mod direct_statement_write_gate;
 mod graph_validation;
