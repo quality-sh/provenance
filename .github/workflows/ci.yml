@@ -640,6 +640,12 @@ jobs:
       - name: Scan the whole repository for Rule binding findings
         run: |
           target/debug/provenance coverage scan --repo . --path . --scope default --validate-rules --format json --output "$RUNNER_TEMP/provenance-coverage-report.json"
+      # The graph check reports an archive commit that is not in the history
+      # of HEAD. This checkout has the full history. On a pull request it is
+      # the synthetic merge commit, which contains the branch commits. On a
+      # push to main it finds an archive commit that a squash merge dropped.
+      - name: Check that archive commits are in the history of HEAD
+        run: target/debug/provenance check --graph --repo .
       - name: Build and render the pull request report
         if: github.event_name == 'pull_request'
         continue-on-error: true
