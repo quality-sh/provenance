@@ -181,3 +181,21 @@ fn schema_version_inside_record_metadata_is_not_treated_as_a_record_version() {
 
     assert!(load(&line, Fields::Open).is_ok());
 }
+
+#[test]
+fn a_located_parse_error_names_the_shard_with_forward_slashes() {
+    let path = Utf8Path::new("repo")
+        .join(".provenance")
+        .join("state")
+        .join("scopes")
+        .join("beta")
+        .join("rules/rule.jsonl");
+    let error = serde_json::from_str::<Value>("{").unwrap_err();
+
+    let message = super::located(&path, 1, &error).to_string();
+
+    assert!(
+        message.starts_with("scopes/beta/rules/rule.jsonl line 1: "),
+        "{message}"
+    );
+}
