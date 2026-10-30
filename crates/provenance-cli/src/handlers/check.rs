@@ -364,13 +364,13 @@ fn ensure_strict_dictionary_index(
     }
 }
 
-/// Validates graph records without treating missing code bindings as graph errors.
-#[rule("rule_porcelain_missing_binding_not_invalid")]
 /// An unreadable or uninitialized graph refuses the run instead of giving a finding.
 fn refuses_graph_run(error: &anyhow::Error) -> bool {
     error.downcast_ref::<std::io::Error>().is_some() || is_not_initialized(error)
 }
 
+/// Validates graph records without treating missing code bindings as graph errors.
+#[rule("rule_porcelain_missing_binding_not_invalid")]
 fn validate_locked(
     store: &StateStore,
     manifest: &Manifest,
