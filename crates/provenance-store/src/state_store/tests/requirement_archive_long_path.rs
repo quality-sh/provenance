@@ -5,12 +5,13 @@ use serde_json::json;
 
 /// The archive cascade writes in a staged copy inside the staged copy of the
 /// Requirement save. Each copy adds about 76 characters to the path, so a
-/// shard there is about 210 characters below the repository root. With the
-/// 60 extra characters below, each shard path in the cascade is longer than
-/// the 260 characters that a Windows file call accepts without the `\\?\`
-/// prefix.
+/// shard there is about 210 characters below the repository root. The test
+/// puts the repository root in a directory with a 60-character name below
+/// the temporary directory. Then each shard path in the cascade is longer
+/// than the 260 characters that a Windows file call accepts without the
+/// `\\?\` prefix.
 #[test]
-fn requirement_archive_under_a_long_repository_path_writes_every_shard() {
+fn requirement_archive_under_a_long_repository_path_archives_the_parent_and_child() {
     let directory = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(directory.path().join("r".repeat(60))).unwrap();
     std::fs::create_dir(&root).unwrap();
