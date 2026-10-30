@@ -1,6 +1,7 @@
 use super::initialized_store_in;
 use super::requirement_archive::{archive, child, requirement};
 use provenance_core::RequirementStatus;
+use provenance_macros::verifies;
 use serde_json::json;
 
 /// The archive cascade writes in a staged copy inside the staged copy of the
@@ -11,6 +12,7 @@ use serde_json::json;
 /// than the 260 characters that a Windows file call accepts without the
 /// `\\?\` prefix.
 #[test]
+#[verifies("rule_windows_long_path_writes", examples)]
 fn requirement_archive_under_a_long_repository_path_archives_the_parent_and_child() {
     let directory = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(directory.path().join("r".repeat(60))).unwrap();
