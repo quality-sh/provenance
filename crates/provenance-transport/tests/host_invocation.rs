@@ -347,12 +347,7 @@ async fn held_calls_finish_when_their_cache_closes_meet() {
         let _ = stall.send(());
     });
 
-    let release = async {
-        control.open();
-        for call in held {
-            call.await.unwrap().unwrap();
-        }
-    };
+    let release = release_held(&control, held);
     tokio::pin!(release);
     let stalled = tokio::select! {
         () = &mut release => false,
