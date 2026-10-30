@@ -47,3 +47,28 @@ fn early_refusals_ask_the_client_to_close_the_connection() {
     assert_eq!(refusal.status(), 401);
     assert_eq!(refusal.header("Connection"), Some("close"));
 }
+
+#[test]
+/// Implementation aid: a refused request with a body within the host limit still gets its
+/// response, also when the host refuses before it reads the body.
+fn a_refused_request_with_a_large_body_gets_its_response() {
+    let repo = repository();
+    let host = start(repo.path());
+    let body = vec![b'x'; 1024 * 1024];
+
+    for (path, auth, expected) in [
+        ("/requirements/req_example/discussions", false, 401),
+        ("/discussion-containers", false, 401),
+        ("/requirements/req_example/discussions", true, 403),
+    ] {
+        let request = request(&host, "POST", path, auth);
+        let request = if auth {
+            request.set("Origin", "https://unrelated.test")
+        } else {
+            request
+        };
+        let refusal = response(request.send_bytes(&body));
+        assert_eq!(refusal.status(), expected, "{path}");
+        refusal.into_string().expect("refusal response body");
+    }
+}
