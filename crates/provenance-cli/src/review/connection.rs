@@ -2,10 +2,11 @@
 //!
 //! The host can refuse a request before it reads the body, so that it never decodes a body
 //! from an unauthenticated client. When the host then closes a socket that still has unread
-//! request bytes, the operating system answers with a reset, and the client can lose the
-//! response it did not read yet. On macOS the client sees `Invalid argument (os error 22)`.
-//! A closed connection thus ends its write side and reads and drops what the client still
-//! sends, up to a bound, before it releases the socket.
+//! request bytes, the operating system answers with a reset. The reset removes the part of
+//! the response that the client did not read yet. On macOS the client sees
+//! `Invalid argument (os error 22)`. For this reason, a closed connection ends its write side.
+//! Then it reads and drops what the client still sends, up to the request body limit and for
+//! 2 seconds, before it releases the socket.
 
 use provenance_macros::rule;
 use std::{
@@ -20,9 +21,9 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 
-/// The bytes a closed connection drops: the host body limit, so that a refused body within
+/// The bytes a closed connection drops: the request body limit, so that a refused body within
 /// the limit does not cause a reset.
-const DRAIN_BYTES: usize = 1024 * 1024;
+const DRAIN_BYTES: usize = provenance_transport::MAX_BODY_BYTES;
 /// The time a closed connection waits for the client to end its side.
 const DRAIN_TIME: Duration = Duration::from_secs(2);
 
