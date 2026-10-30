@@ -152,7 +152,8 @@ fn entries<H: Invoke>() -> Vec<Entry<H>> {
         register::<operation::UpsertContribution, H>(),
         register::<operation::CreateSynthesisPacket, H>(),
         register::<operation::UpsertSynthesisPacket, H>(),
-        // Phase 2b replaces these legacy registrations with resource routes.
+        // No HTTP route binds these relationship operations. A resource write sets
+        // relationships through the fields of its record.
         register::<operation::AddRequirementRefines, H>(),
         register::<operation::ClearRequirementRefines, H>(),
         register::<operation::AddRequirementDependsOn, H>(),

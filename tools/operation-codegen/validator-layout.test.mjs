@@ -51,7 +51,7 @@ export class HttpClient {
 }
 `);
     await writeFile(join(directory, 'effect-runtime.ts'), `
-export class ClientRuntime { run(): never { throw new Error('not called'); } }
+export const runOperation = (): never => { throw new Error('not called'); };
 export const requestEffect = () => undefined;
 export const connectionFailure = () => undefined;
 export type ClientFailure<Failure> = Failure;
