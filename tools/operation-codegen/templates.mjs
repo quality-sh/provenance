@@ -82,7 +82,7 @@ ${query.map(parameter => `    if (call[${JSON.stringify(propertyName(parameter))
   return `    const url = new URL(${url});${queryCode}
     const response = await send(this.fetcher, url, {
       method: '${method.toUpperCase()}', headers: { ${headerCode} }${body}, signal: options.signal,
-    }, '${op.operationId}', ${op['x-operation-mutates'] === true});`;
+    });`;
 }
 
 export function typescriptClient(document, compatibility) {
@@ -117,24 +117,24 @@ export function typescriptClient(document, compatibility) {
     const contract = ${contracts} : undefined;
     if (contract === undefined) throw new TypeError('Invalid query selector');
 ${tsRequest(path, method, op)}
-    const value = await readJson(response, '${op.operationId}', false, options.signal);
+    const value = await readJson(response, options.signal);
     if (!response.ok) {
-      checked(value, contract.failure, '${op.operationId}', false);
+      checked(value, contract.failure);
       throw new OperationError<${failureUnion}>(response.status, value as ${failureUnion});
     }
-    checked(value, contract.success, '${op.operationId}', false);
+    checked(value, contract.success);
     return value as ${successUnion};
   }`;
     }
     return `  async ${op.operationId}(call: ${tsCall(op)}, options: { signal?: AbortSignal } = {}): Promise<components['schemas']['${success}']> {
     const validate = await import('./validators/${op.operationId}.mjs');
 ${tsRequest(path, method, op)}
-    const value = await readJson(response, '${op.operationId}', false, options.signal);
+    const value = await readJson(response, options.signal);
     if (!response.ok) {
-      checked(value, validate.${failure}, '${op.operationId}', false);
+      checked(value, validate.${failure});
       throw new OperationError(response.status, value as components['schemas']['${failure}']);
     }
-    checked(value, validate.${success}, '${op.operationId}', false);
+    checked(value, validate.${success});
     return value as components['schemas']['${success}'];
   }`;
   }).join('\n');
@@ -166,13 +166,13 @@ export class HttpClient {
     const url = new URL(baseUrl);
     if (!['http:', 'https:'].includes(url.protocol) || url.search || url.hash || url.username || url.password) throw new Error('Invalid HTTP host URL');
     const client = new HttpClient(baseUrl.replace(/\\/$/, ''), fetcher);
-    const response = await send(fetcher, client.baseUrl + '/metadata', { redirect: 'error', signal: options.signal }, 'metadata', false);
-    const value = await readJson(response, 'metadata', false, options.signal);
+    const response = await send(fetcher, client.baseUrl + '/metadata', { redirect: 'error', signal: options.signal });
+    const value = await readJson(response, options.signal);
     if (!response.ok) {
-      checked(value, validate.MetadataFailure, 'metadata', false);
+      checked(value, validate.MetadataFailure);
       throw new OperationError<components['schemas']['MetadataFailure']>(response.status, value as components['schemas']['MetadataFailure']);
     }
-    checked(value, validate.MetadataSuccess, 'metadata', false);
+    checked(value, validate.MetadataSuccess);
     const metadata = (value as components['schemas']['MetadataSuccess']).data;
     const received = metadata.compatibility;
     if (received.wire !== COMPATIBILITY.wire || received.state !== COMPATIBILITY.state
@@ -285,7 +285,7 @@ function rustVariantRequest(path, method, op, variant, operation, enums) {
   for (const parameter of queryParameters) setup += `\n                ${rustQueryStatement(parameter, enums)}`;
   for (const parameter of headerParameters) setup += `\n                ${rustHeaderStatement(parameter, enums)}`;
   return `${setup}
-                let response = request.send().await.map_err(|cause| runtime::connection("${operation}", false, cause))?;`;
+                let response = request.send().await.map_err(runtime::connection)?;`;
 }
 
 function rustQueryMethod(path, method, op, enums) {
@@ -331,14 +331,14 @@ function rustQueryMethod(path, method, op, enums) {
     return `    async fn ${helper}(&self${helperArguments.length ? `, ${helperArguments.join(', ')}` : ''}) -> Result<${output}, Error> {
         ${rustVariantRequest(path, method, op, variant, operation, enums)}
         let status = response.status();
-        let value = runtime::read_json(response, "${operation}", false).await?;
+        let value = runtime::read_json(response).await?;
         if !status.is_success() {
-            runtime::validate(&value, "${failed}", "${operation}", false)?;
-            let failure = runtime::decode(value, "${operation}", false)?;
+            runtime::validate(&value, "${failed}")?;
+            let failure = runtime::decode(value)?;
             return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::${operationStem}(Box::new(${failure}::${name}(failure))) });
         }
-        runtime::validate(&value, "${success}", "${operation}", false)?;
-        Ok(${output}::${name}(Box::new(runtime::decode(value, "${operation}", false)?)))
+        runtime::validate(&value, "${success}")?;
+        Ok(${output}::${name}(Box::new(runtime::decode(value)?)))
     }`;
   }).join('\n');
   return `// Generated from OpenAPI. Do not edit.
@@ -382,7 +382,7 @@ function rustRequest(path, method, op, operation, enums) {
   for (const parameter of headerParameters) setup += `\n        ${rustHeaderStatement(parameter, enums)}`;
   if (op.requestBody) setup += `\n        request = request.json(call);`;
   return `${setup}
-        let response = request.send().await.map_err(|cause| runtime::connection("${operation}", false, cause))?;`;
+        let response = request.send().await.map_err(runtime::connection)?;`;
 }
 
 function packedLines(values, size = 8) {
@@ -426,14 +426,14 @@ impl HttpClient {
     pub async fn ${name}(&self, ${rustArgs(op, enums)}) -> Result<crate::types::${success}, Error> {
         ${rustRequest(path, method, op, name, enums)}
         let status = response.status();
-        let value = runtime::read_json(response, "${name}", false).await?;
+        let value = runtime::read_json(response).await?;
         if !status.is_success() {
-            runtime::validate(&value, "${failure}", "${name}", false)?;
-            let failure: crate::types::${failure} = runtime::decode(value, "${name}", false)?;
+            runtime::validate(&value, "${failure}")?;
+            let failure: crate::types::${failure} = runtime::decode(value)?;
             return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::${variant}(Box::new(failure)) });
         }
-        runtime::validate(&value, "${success}", "${name}", false)?;
-        runtime::decode(value, "${name}", false)
+        runtime::validate(&value, "${success}")?;
+        runtime::decode(value)
     }
 }
 `];
@@ -478,17 +478,17 @@ impl HttpClient {
     async fn connect_with_headers(base_url: &str, headers: reqwest::header::HeaderMap, identity: Option<(&str, &str)>) -> Result<Self, Error> {
         let url = reqwest::Url::parse(base_url).map_err(|_| Error::InvalidUrl)?;
         if !matches!(url.scheme(), "http" | "https") || url.query().is_some() || url.fragment().is_some() || !url.username().is_empty() || url.password().is_some() { return Err(Error::InvalidUrl); }
-        let client = Self { base_url: base_url.trim_end_matches('/').to_owned(), http: reqwest::Client::builder().default_headers(headers).retry(reqwest::retry::never()).redirect(reqwest::redirect::Policy::none()).build().map_err(|cause| runtime::connection("metadata", false, cause))? };
-        let response = client.http.get(format!("{}/metadata", client.base_url)).send().await.map_err(|cause| runtime::connection("metadata", false, cause))?;
+        let client = Self { base_url: base_url.trim_end_matches('/').to_owned(), http: reqwest::Client::builder().default_headers(headers).retry(reqwest::retry::never()).redirect(reqwest::redirect::Policy::none()).build().map_err(runtime::connection)? };
+        let response = client.http.get(format!("{}/metadata", client.base_url)).send().await.map_err(runtime::connection)?;
         let status = response.status();
-        let value = runtime::read_json(response, "metadata", false).await?;
+        let value = runtime::read_json(response).await?;
         if !status.is_success() {
-            runtime::validate(&value, "MetadataFailure", "metadata", false)?;
-            let failure: MetadataFailure = runtime::decode(value, "metadata", false)?;
+            runtime::validate(&value, "MetadataFailure")?;
+            let failure: MetadataFailure = runtime::decode(value)?;
             return Err(Error::Operation { status: status.as_u16(), failure: OperationFailure::Metadata(Box::new(failure)) });
         }
-        runtime::validate(&value, "MetadataSuccess", "metadata", false)?;
-        let metadata: MetadataSuccess = runtime::decode(value, "metadata", false)?;
+        runtime::validate(&value, "MetadataSuccess")?;
+        let metadata: MetadataSuccess = runtime::decode(value)?;
         let received = &metadata.data.compatibility;
         if (received.wire, received.state, received.review_journal, received.read_derivation) != COMPATIBILITY { return Err(Error::CompatibilityMismatch); }
         if let Some((repository, scope)) = identity {
