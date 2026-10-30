@@ -224,14 +224,11 @@ impl Repository {
     /// [`Repository::ensure_selected`] enforce the scope.
     #[rule("rule_operation_acts_on_opened_repository")]
     pub fn store(&self) -> StateStore {
-        match &self.section {
-            Some(section) => StateStore::in_guard_section(
-                self.inner.identity.clone(),
-                self.inner.layout.clone(),
-                section.clone(),
-            ),
-            None => StateStore::live(self.inner.identity.clone(), self.inner.layout.clone()),
-        }
+        StateStore::live(
+            self.inner.identity.clone(),
+            self.inner.layout.clone(),
+            self.section.clone(),
+        )
     }
 
     /// The section that this handle holds, if it came from a section guard.

@@ -19,7 +19,7 @@ pub struct PublicationHeld {
 
 /// The kind of section an entry holds.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum HolderKind {
+pub enum HolderKind {
     /// A live publication section, under the repository publication lock.
     Live,
     /// A staged section, under the lock that its stage owns.
@@ -33,7 +33,7 @@ static HOLDERS: Mutex<Vec<Key>> = Mutex::new(Vec::new());
 
 /// Refuses when this thread already holds the section with `identity`.
 #[rule("rule_publication_holders_grant_nothing")]
-pub(crate) fn refuse_if_held(
+pub fn refuse_if_held(
     identity: &str,
     kind: HolderKind,
     repository: &camino::Utf8Path,
@@ -50,13 +50,13 @@ pub(crate) fn refuse_if_held(
 
 /// Records that this thread holds the section with `identity` until the
 /// entry drops, also on unwind.
-pub(crate) fn enter(identity: String, kind: HolderKind) -> HolderEntry {
+pub fn enter(identity: String, kind: HolderKind) -> HolderEntry {
     let key = (identity, kind, std::thread::current().id());
     table().push(key.clone());
     HolderEntry { key }
 }
 
-pub(crate) struct HolderEntry {
+pub struct HolderEntry {
     key: Key,
 }
 

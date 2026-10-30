@@ -57,7 +57,7 @@ pub fn with_stage_body<R>(
 
 /// Refuses live access to `live` through a store that holds its section while
 /// a stage body of that repository runs on this thread.
-pub(crate) fn refuse_held_access_during_stage(live: &ProvenanceLayout) -> anyhow::Result<()> {
+pub fn refuse_held_access_during_stage(live: &ProvenanceLayout) -> anyhow::Result<()> {
     if STAGE_BODIES.with(|bodies| bodies.borrow().is_empty()) {
         return Ok(());
     }
@@ -76,7 +76,7 @@ pub(super) fn refuse_during_stage(key: &str) -> anyhow::Result<()> {
 /// a time. A panic in a staged section poisons the lock, and the stage then
 /// refuses to publish.
 #[derive(Debug)]
-pub(crate) struct StageLock {
+pub struct StageLock {
     identity: String,
     root: Utf8PathBuf,
     sections: Mutex<()>,

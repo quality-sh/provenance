@@ -23,12 +23,18 @@ impl StateStore {
         }
     }
 
-    /// A store over the live state of an opened repository.
-    pub(crate) const fn live(identity: RepositoryIdentity, layout: ProvenanceLayout) -> Self {
+    /// A store over the live state of an opened repository. A store of the
+    /// repository of a section guard holds that section while `section` is
+    /// open; any other store takes the publication lock.
+    pub(crate) fn live(
+        identity: RepositoryIdentity,
+        layout: ProvenanceLayout,
+        section: Option<crate::publication::SectionHandle>,
+    ) -> Self {
         Self {
             identity: Some(identity),
             layout,
-            access: Access::Lock,
+            access: section.map_or(Access::Lock, |until| Access::Section { until: Some(until) }),
             record_stamp: RecordStamp::ResolveFromRepository,
         }
     }
@@ -40,21 +46,6 @@ impl StateStore {
             identity: None,
             layout,
             access: Access::Section { until: None },
-            record_stamp: RecordStamp::ResolveFromRepository,
-        }
-    }
-
-    /// A store over the live state of a repository that a section guard
-    /// holds. It reads and writes without a lock while `until` is open.
-    pub(crate) const fn in_guard_section(
-        identity: RepositoryIdentity,
-        layout: ProvenanceLayout,
-        until: crate::publication::SectionHandle,
-    ) -> Self {
-        Self {
-            identity: Some(identity),
-            layout,
-            access: Access::Section { until: Some(until) },
             record_stamp: RecordStamp::ResolveFromRepository,
         }
     }

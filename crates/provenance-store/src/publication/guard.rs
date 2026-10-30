@@ -82,7 +82,7 @@ impl PublicationGuard {
 /// The life of one synchronous section, shared by the repository handles it
 /// gives out.
 #[derive(Clone, Debug)]
-pub(crate) struct SectionHandle {
+pub struct SectionHandle {
     open: Arc<AtomicBool>,
 }
 
@@ -250,7 +250,7 @@ mod tests {
             .unwrap();
         let manifest = with_publication_guard(&repository, |guard| {
             let held = guard.repository();
-            held.stage(false, None, |staged| staged.manifest())?;
+            held.stage(false, None, crate::state_store::StateStore::manifest)?;
             with_publication_guard(held, |inner| inner.repository().manifest())?;
             drop(runtime.block_on(publication_guard(held))?);
             held.store().manifest()

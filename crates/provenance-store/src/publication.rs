@@ -35,10 +35,11 @@ pub(crate) use staged::{
 };
 pub(crate) use write_permission::{protect_rows, WritePermissions};
 
-/// Runs `operation` in the publication section of `layout` and hands it a
-/// store that holds the section. The store has no repository identity. A
-/// second entry on a thread that holds the section returns
-/// [`PublicationHeld`].
+/// Runs `operation` in the publication section of `layout`.
+///
+/// `operation` gets a store that holds the section. The store has no
+/// repository identity. A second entry on a thread that holds the section
+/// returns [`PublicationHeld`].
 pub fn with_repository_publication<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce(&crate::state_store::StateStore) -> anyhow::Result<R>,
