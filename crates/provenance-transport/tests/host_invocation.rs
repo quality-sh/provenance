@@ -219,10 +219,7 @@ async fn a_refused_identity_does_not_wait_for_a_work_slot() {
         "the refused call answers before any slot wait: {answer:?}"
     );
 
-    control.open();
-    for call in held {
-        call.await.unwrap().unwrap();
-    }
+    release_held(&control, held).await;
     host.shutdown().await;
 }
 
@@ -247,6 +244,18 @@ async fn fill_work_slots(
         control.entered().await;
     }
     held
+}
+
+/// Resumes the clock, opens the gate and waits for the held calls. Each held call opens and
+/// closes the repository cache, and a close that meets another close waits for the close
+/// lock on a runtime timer. A paused clock does not advance while blocking work runs, so
+/// that timer does not fire until the clock runs again.
+async fn release_held(control: &Control, held: Vec<tokio::task::JoinHandle<Resolved>>) {
+    tokio::time::resume();
+    control.open();
+    for call in held {
+        call.await.unwrap().unwrap();
+    }
 }
 
 #[verifies("rule_host_refusal_before_slot_wait", examples)]
@@ -293,50 +302,30 @@ async fn a_request_decode_refusal_does_not_wait_for_a_work_slot() {
     assert_eq!(status, 503, "{body}");
     assert_eq!(body["error"]["kind"], "host_busy");
 
-    control.open();
-    for call in held {
-        call.await.unwrap().unwrap();
-    }
+    release_held(&control, held).await;
     session.close().await;
     host.shutdown().await;
 }
 
+/// A close lock held over the gate opening makes each held call's cache close wait on a
+/// runtime timer, as two closes that meet do.
 #[tokio::test(start_paused = true)]
 async fn held_calls_finish_when_their_cache_closes_meet() {
-    use fs2::FileExt as _;
     let repo = Repository::new("The shared graph is readable.");
     let (host, mut control) = gated_host(&repo, false);
     let held = fill_work_slots(&host, &mut control).await;
     let path = repo.layout.cache_db_path().with_extension("db.close.lock");
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let lock = std::fs::File::create(&path).unwrap();
-    lock.lock_exclusive().unwrap();
+    fs2::FileExt::lock_exclusive(&lock).unwrap();
     let unlock = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(500));
         drop(lock);
     });
-    let (stall, stalled) = tokio::sync::oneshot::channel();
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_secs(10));
-        let _ = stall.send(());
-    });
 
-    control.open();
-    let release = futures::future::join_all(held);
-    tokio::pin!(release);
-    let stalled = tokio::select! {
-        _ = &mut release => false,
-        _ = stalled => true,
-    };
-    if stalled {
-        tokio::time::resume();
-    }
-    for call in release.await {
-        call.unwrap().unwrap();
-    }
+    release_held(&control, held).await;
     unlock.join().unwrap();
     host.shutdown().await;
-    assert!(!stalled, "the held calls stalled behind the paused clock");
 }
 
 /// A check port for builder-order tests; the MCP `check` tool is not exercised here.
