@@ -63,7 +63,7 @@ function errorsFor(path, method = 'get', overrides = {}) {
   return routeGrammarErrors(document([{ path, method, ...overrides }]));
 }
 
-test('the live resource document lints clean', () => {
+test('a well-formed set of resource routes lints clean', () => {
   assert.deepEqual(routeGrammarErrors(document([
     { path: '/requirements', method: 'post' },
     { path: '/requirements/{id}', method: 'get' },
