@@ -71,7 +71,7 @@ fn parent() -> ThreadParent {
 }
 
 #[tokio::test]
-async fn discussion_members_are_direct_and_addressed_messages_paginate() {
+async fn a_message_beyond_the_first_page_reads_directly_and_messages_paginate() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
     let scope = ScopeId::new("default").unwrap();
