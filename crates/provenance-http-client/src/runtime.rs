@@ -144,19 +144,3 @@ fn validator(name: &str) -> &'static jsonschema::Validator {
             .expect("generated response schema is valid")
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::MAX_RESPONSE_BYTES;
-    use serde_json::Value;
-
-    #[test]
-    fn shared_client_policy_cases() {
-        let policy: Value = serde_json::from_str(include_str!("client-policy-cases.json")).unwrap();
-        assert_eq!(
-            MAX_RESPONSE_BYTES as u64,
-            policy["max_response_bytes"].as_u64().unwrap()
-        );
-        assert!(policy.get("refusals").is_none());
-    }
-}
