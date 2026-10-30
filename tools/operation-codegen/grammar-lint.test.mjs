@@ -167,6 +167,15 @@ test('declared action segments are final POSTs', () => {
     .some(error => /action segment 'submit' must be final/.test(error)));
 });
 
+test('an action under a collection that does not own it is rejected', () => {
+  assert.ok(errorsFor('/sources/{id}/answer', 'post')
+    .some(error => /action 'answer' does not belong to collection 'sources'/.test(error)));
+  assert.ok(errorsFor('/requirements/{id}/claim', 'post')
+    .some(error => /action 'claim' does not belong to collection 'requirements'/.test(error)));
+  assert.deepEqual(errorsFor('/questions/{id}/answer', 'post'), []);
+  assert.deepEqual(errorsFor('/sources/{id}/submissions/{proposal_id}/decide', 'post'), []);
+});
+
 test('mutating GETs, implicit POSTs, and read PATCHes are rejected', () => {
   assert.ok(errorsFor('/requirements', 'get', { operation: { 'x-operation-mutates': true } }).some(error => /mutating GETs/.test(error)));
   assert.ok(errorsFor('/requirements', 'post', { operation: { 'x-operation-mutates': undefined } }).some(error => /must be declared explicitly/.test(error)));
