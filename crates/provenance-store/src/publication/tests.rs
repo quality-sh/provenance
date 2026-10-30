@@ -442,7 +442,6 @@ fn a_read_only_write_is_refused_and_creates_no_path() {
         assert!(with_staged_state(store, false, |_| Ok(())).is_err());
         let mut sources = store.list_sources(&scope())?;
         sources[0].id = provenance_core::StableId::new("source_not_in_repository")?;
-        sources[0].scope_id = imported.clone();
         let refusals = [
             store
                 .import_scope(
