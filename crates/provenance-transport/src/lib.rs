@@ -37,7 +37,8 @@ use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 
-pub(crate) const MAX_BODY_BYTES: usize = 1024 * 1024;
+/// The largest request body that the HTTP adapter reads.
+pub const MAX_BODY_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone)]
 pub struct StatementHost {
