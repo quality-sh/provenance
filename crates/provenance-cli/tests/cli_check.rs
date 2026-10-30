@@ -10,6 +10,7 @@ use std::path::Path;
 #[allow(dead_code)]
 mod dictionary_support;
 
+#[path = "cli_check/archive_commit.rs"]
 mod archive_commit;
 
 #[test]
