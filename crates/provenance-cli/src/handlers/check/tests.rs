@@ -274,5 +274,10 @@ async fn scoped_graph_check_ignores_archive_commits_in_other_scopes() {
     let CategoryRun::Graph { findings, .. } = port.run(Category::Graph, None).await.unwrap() else {
         panic!("graph run")
     };
-    assert!(!findings.is_empty());
+    assert!(
+        findings[0]
+            .message
+            .contains("scopes/beta/rules/rule.jsonl line 1"),
+        "{findings:?}"
+    );
 }
