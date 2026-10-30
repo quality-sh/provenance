@@ -1,5 +1,6 @@
-use super::{git, init};
+use super::{git, init, write_jsonl};
 use assert_cmd::Command;
+use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_macros::verifies;
 use std::path::Path;
 use std::process::Output;
@@ -48,6 +49,33 @@ fn graph_check_reports_an_archive_commit_that_a_squash_merge_dropped() {
         graph["findings"],
         serde_json::json!([{ "message": finding }])
     );
+}
+
+/// A scoped graph check reads only the archive commits of its scope, so a
+/// record that does not load in another scope gives no finding.
+#[test]
+#[verifies("rule_archive_commit_in_head_history", examples)]
+fn scoped_graph_check_ignores_archive_commits_in_other_scopes() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path();
+    git(repo, &["init", "--quiet", "--initial-branch=main"]);
+    commit(repo, "Base");
+    init(repo);
+    let state = repo.join(".provenance/state");
+    std::fs::write(
+        state.join("manifest.json"),
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scopes":[{"id":"alpha","path_prefix":"."},{"id":"beta","path_prefix":"beta"}]}).to_string(),
+    )
+    .unwrap();
+    write_jsonl(
+        &state.join("scopes/beta/rules/rule.jsonl"),
+        serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"beta","id":"rule_beta","requirement_id":"req_beta","statement":"The system is safe.","status":"archived","archived_in_commit":{"commit":"not-a-commit"}}).to_string(),
+    );
+
+    let scoped = run(repo, "check --graph --scope alpha", &[]);
+    assert!(scoped.status.success(), "{}", text(&scoped));
+    let every_scope = run(repo, "check --graph", &[]);
+    assert!(!every_scope.status.success(), "{}", text(&every_scope));
 }
 
 fn commit(repo: &Path, message: &str) -> String {
