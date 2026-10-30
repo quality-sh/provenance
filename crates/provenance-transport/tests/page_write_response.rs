@@ -16,13 +16,14 @@ use std::sync::{Arc, Mutex};
 use support::records::Repository;
 use tower::ServiceExt as _;
 
-// Implementation aid: a host policy changes the read settings after capture
-// starts. Canonical writes do not need these settings, but notification reads do.
-struct UnreadableSettings {
+// Implementation aid: a host policy writes one file after it prepares the
+// repository, before the page section starts.
+struct DamagesFile {
     access: provenance_transport::fixture::FixtureAccess,
-    settings: std::path::PathBuf,
+    path: std::path::PathBuf,
+    contents: &'static str,
 }
-impl ContextResolver for UnreadableSettings {
+impl ContextResolver for DamagesFile {
     fn authorize(
         &self,
         operation: &'static str,
@@ -38,11 +39,12 @@ impl ContextResolver for UnreadableSettings {
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         let prepared = self.access.prepare(operation, context, needs)?;
-        std::fs::write(&self.settings, "invalid read settings").unwrap();
+        std::fs::create_dir_all(self.path.parent().unwrap()).unwrap();
+        std::fs::write(&self.path, self.contents).unwrap();
         Ok(prepared)
     }
 }
-impl HostAccess for UnreadableSettings {
+impl HostAccess for DamagesFile {
     fn advertises(&self, operation: &str) -> bool {
         self.access.advertises(operation)
     }
@@ -51,6 +53,42 @@ impl HostAccess for UnreadableSettings {
     }
 }
 
+fn damaging_host(
+    repo: &Repository,
+    path: &str,
+    contents: &'static str,
+    notifications: &Arc<Notifications>,
+) -> provenance_transport::StatementHost {
+    use provenance_transport::fixture::{FixtureAccess, Target};
+    let access = FixtureAccess::new(
+        vec![Target {
+            id: "selected".into(),
+            root: repo.dir.path().to_path_buf(),
+        }],
+        vec![("selected".into(), "default".into())],
+        "fixture-secret",
+        "fixture.test",
+    )
+    .unwrap()
+    .allow_writes();
+    let seen = notifications.clone();
+    provenance_transport::StatementHost::with_access(Arc::new(DamagesFile {
+        access,
+        path: repo.dir.path().join(path),
+        contents,
+    }))
+    .with_credential(Arc::new(support::resource_http::access(repo)))
+    .with_page_writes(
+        repo.open(),
+        Arc::new(move |changes| seen.lock().unwrap().push(changes)),
+    )
+}
+
+const SAVED_RULE: &str = r#"{"data":{
+    "id":"rule_saved", "statement":"The saved write succeeds.", "status":"draft",
+    "severity":"high", "requirement_ids":["req_shared"], "resolution_ids":[]
+}}"#;
+
 // The policy corrupts the settings in `prepare`, before the page section, so
 // the first read of the changes fails.
 #[test]
@@ -58,53 +96,15 @@ impl HostAccess for UnreadableSettings {
 fn a_saved_page_write_succeeds_when_the_snapshot_fails() {
     bounded(|| {
         tokio::runtime::Runtime::new().unwrap().block_on(async {
-            use provenance_transport::{
-                fixture::{FixtureAccess, Target},
-                StatementHost,
-            };
             let repo = Repository::new("The graph is readable.");
-            let access = FixtureAccess::new(
-                vec![Target {
-                    id: "selected".into(),
-                    root: repo.dir.path().to_path_buf(),
-                }],
-                vec![("selected".into(), "default".into())],
-                "fixture-secret",
-                "fixture.test",
-            )
-            .unwrap()
-            .allow_writes();
             let notifications = Arc::new(Mutex::new(Vec::new()));
-            let seen = notifications.clone();
-            let host = StatementHost::with_access(Arc::new(UnreadableSettings {
-                access,
-                settings: repo.dir.path().join(".provenance/settings.json"),
-            }))
-            .with_credential(Arc::new(support::resource_http::access(&repo)))
-            .with_page_writes(
-                repo.open(),
-                Arc::new(move |changes| seen.lock().unwrap().push(changes)),
+            let host = damaging_host(
+                &repo,
+                ".provenance/settings.json",
+                "invalid read settings",
+                &notifications,
             );
-            let mut request = Request::builder()
-                .method("POST")
-                .uri("/rules")
-                .header("host", "fixture.test")
-                .header("authorization", "Bearer fixture-secret")
-                .header("content-type", "application/json")
-                .body(Body::from(
-                    json!({"data":{
-                        "id":"rule_saved", "statement":"The saved write succeeds.", "status":"draft",
-                        "severity":"high", "requirement_ids":["req_shared"], "resolution_ids":[]
-                    }})
-                    .to_string(),
-                ))
-                .unwrap();
-            request.extensions_mut().insert(ReviewPageWrite);
-            let response = host.router().oneshot(request).await.unwrap();
-            let status = response.status();
-            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-                .await
-                .unwrap();
+            let (status, value) = page_request(&host, "POST", "/rules", SAVED_RULE).await;
             assert!(std::fs::read_to_string(
                 repo.dir
                     .path()
@@ -112,13 +112,51 @@ fn a_saved_page_write_succeeds_when_the_snapshot_fails() {
             )
             .unwrap()
             .contains("rule_saved"));
-            assert_eq!(status.as_u16(), 200, "{}", String::from_utf8_lossy(&body));
-            let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(status, 200, "{value}");
             assert_eq!(value["data"]["id"], "rule_saved");
             let notifications = notifications.lock().unwrap();
             assert_eq!(notifications.len(), 1);
             assert!(notifications[0].is_err());
             drop(notifications);
+        });
+    });
+}
+
+// The policy damages the publication marker in `prepare`, so recovery fails
+// and the page section does not start. The write does not run.
+#[test]
+#[verifies("rule_page_write_runs_in_its_change_section", examples)]
+fn a_page_write_is_refused_when_its_section_does_not_start() {
+    bounded(|| {
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let repo = Repository::new("The graph is readable.");
+            let notifications = Arc::new(Mutex::new(Vec::new()));
+            let host = damaging_host(
+                &repo,
+                ".provenance/cache/import-publication.json",
+                "damaged publication marker",
+                &notifications,
+            );
+            let (status, value) = page_request(&host, "POST", "/rules", SAVED_RULE).await;
+            assert_eq!(status, 500, "{value}");
+            assert_eq!(value["error"]["kind"], "internal", "{value}");
+            let notifications = notifications.lock().unwrap();
+            assert_eq!(notifications.len(), 1);
+            assert!(notifications[0].is_err());
+            drop(notifications);
+            std::fs::remove_file(
+                repo.dir
+                    .path()
+                    .join(".provenance/cache/import-publication.json"),
+            )
+            .unwrap();
+            assert!(!std::fs::read_to_string(
+                repo.dir
+                    .path()
+                    .join(".provenance/state/scopes/default/rules/rule.jsonl")
+            )
+            .unwrap_or_default()
+            .contains("rule_saved"));
         });
     });
 }
@@ -244,23 +282,33 @@ async fn page_call(
     path: &str,
     data: serde_json::Value,
 ) -> serde_json::Value {
+    let body = json!({"data":data}).to_string();
+    let (status, value) = page_request(host, method, path, &body).await;
+    assert_eq!(status, 200, "{value}");
+    value
+}
+
+async fn page_request(
+    host: &provenance_transport::StatementHost,
+    method: &str,
+    path: &str,
+    body: &str,
+) -> (u16, serde_json::Value) {
     let mut request = Request::builder()
         .method(method)
         .uri(path)
         .header("host", "fixture.test")
         .header("authorization", "Bearer fixture-secret")
         .header("content-type", "application/json")
-        .body(Body::from(json!({"data":data}).to_string()))
+        .body(Body::from(body.to_owned()))
         .unwrap();
     request.extensions_mut().insert(ReviewPageWrite);
     let response = host.router().oneshot(request).await.unwrap();
-    let status = response.status();
+    let status = response.status().as_u16();
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(status.as_u16(), 200, "{value}");
-    value
+    (status, serde_json::from_slice(&bytes).unwrap())
 }
 
 // Implementation aid: canonical scope replacement can remove records without an
