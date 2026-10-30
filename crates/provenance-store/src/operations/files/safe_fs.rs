@@ -281,6 +281,8 @@ pub fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
     use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_FILE_EXISTS};
     use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
 
+    let from = crate::long_path::extended(from)?;
+    let to = crate::long_path::extended(to)?;
     let from: Vec<u16> = from.as_os_str().encode_wide().chain(once(0)).collect();
     let to: Vec<u16> = to.as_os_str().encode_wide().chain(once(0)).collect();
     if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) } != 0 {

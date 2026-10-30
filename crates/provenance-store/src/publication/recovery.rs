@@ -36,10 +36,11 @@ pub fn write_publication_marker(
     };
     let path = layout.publication_marker_path();
     std::fs::create_dir_all(layout.cache_dir())?;
-    let mut temporary = tempfile::NamedTempFile::new_in(layout.cache_dir())?;
+    let mut temporary =
+        tempfile::NamedTempFile::new_in(crate::long_path::extended(layout.cache_dir())?)?;
     temporary.write_all(&serde_json::to_vec(&marker)?)?;
     temporary.as_file().sync_all()?;
-    temporary.persist(path)?;
+    temporary.persist(crate::long_path::extended(&path)?)?;
     sync_directory(&layout.cache_dir())
 }
 
