@@ -41,3 +41,32 @@ pub fn extended(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
     }
 }
 
+#[cfg(all(test, windows))]
+mod tests {
+    use super::extended;
+    use std::path::PathBuf;
+
+    #[test]
+    fn extended_gives_the_prefixed_absolute_form() {
+        let current = std::env::current_dir().unwrap();
+        let current = current.to_str().unwrap();
+        let cases = [
+            (r"C:\repo\file", r"\\?\C:\repo\file".to_owned()),
+            (
+                r"\\server\share\file",
+                r"\\?\UNC\server\share\file".to_owned(),
+            ),
+            (r"\\.\C:\repo\file", r"\\?\C:\repo\file".to_owned()),
+            (r"\\?\C:\repo\file", r"\\?\C:\repo\file".to_owned()),
+            ("file", format!(r"\\?\{current}\file")),
+            ("", format!(r"\\?\{current}")),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(
+                extended(input).unwrap(),
+                PathBuf::from(expected),
+                "{input:?}"
+            );
+        }
+    }
+}
