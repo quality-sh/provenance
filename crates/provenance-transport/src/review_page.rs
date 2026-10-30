@@ -64,8 +64,9 @@ mod tests {
             observed: Arc::new(move |changes| seen.lock().unwrap().push(changes)),
         };
         let settings = repo.dir.path().join(".provenance/settings.json");
+        let opened = repo.open();
         let result = page.run(|held| {
-            assert_eq!(held.working_tree(), repo.open().working_tree());
+            assert_eq!(held.working_tree(), opened.working_tree());
             std::fs::write(&settings, "invalid read settings").unwrap();
             "the write result"
         });
