@@ -92,5 +92,5 @@ fn a_refusal_before_the_body_does_not_reset_the_connection() {
     stream
         .read_to_end(&mut rest)
         .expect("the host closes without a reset");
-    assert!(rest.is_empty());
+    assert_eq!(rest, b"");
 }
