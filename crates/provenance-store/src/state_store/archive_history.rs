@@ -10,7 +10,7 @@ use crate::stale::git;
 use camino::Utf8Path;
 use provenance_core::ArchivedStamp;
 use provenance_macros::rule;
-use std::collections::BTreeMap;
+use std::collections::btree_map::{BTreeMap, Entry};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,13 +83,9 @@ impl StateStore {
         let mut reasons = BTreeMap::new();
         let mut gaps = Vec::new();
         for (scope_id, record_id, commit) in stamps {
-            let reason = match reasons.get(&commit) {
-                Some(reason) => *reason,
-                None => {
-                    let reason = commit_gap(repo, &commit, &head)?;
-                    reasons.insert(commit.clone(), reason);
-                    reason
-                }
+            let reason = match reasons.entry(commit.clone()) {
+                Entry::Occupied(entry) => *entry.get(),
+                Entry::Vacant(entry) => *entry.insert(commit_gap(repo, &commit, &head)?),
             };
             if let Some(reason) = reason {
                 gaps.push(ArchiveCommitGap {

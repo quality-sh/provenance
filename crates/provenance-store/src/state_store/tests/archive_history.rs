@@ -123,10 +123,10 @@ fn ancestor_archive_commits_give_no_finding() {
     let (base, _) = squashed_history(repo);
     write_rules(&store, &[("rule_kept", &base)]);
 
-    assert!(store
-        .archive_commits_outside_history(repo)
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        store.archive_commits_outside_history(repo).unwrap(),
+        Vec::new()
+    );
 }
 
 #[test]
@@ -135,10 +135,10 @@ fn skips_a_directory_outside_git_and_a_shallow_clone() {
     let (dir, store, _) = seeded_requirement_store();
     write_rules(&store, &[("rule_unknown", UNKNOWN_COMMIT)]);
     let plain = Utf8Path::from_path(dir.path()).unwrap();
-    assert!(store
-        .archive_commits_outside_history(plain)
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        store.archive_commits_outside_history(plain).unwrap(),
+        Vec::new()
+    );
 
     let origin = tempfile::tempdir().unwrap();
     let origin_path = Utf8Path::from_path(origin.path()).unwrap();
@@ -163,8 +163,8 @@ fn skips_a_directory_outside_git_and_a_shallow_clone() {
         git(&shallow, &["rev-parse", "--is-shallow-repository"]),
         "true"
     );
-    assert!(store
-        .archive_commits_outside_history(&shallow)
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        store.archive_commits_outside_history(&shallow).unwrap(),
+        Vec::new()
+    );
 }
