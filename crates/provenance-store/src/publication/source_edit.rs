@@ -203,11 +203,11 @@ pub(super) fn write_marker(
     marker: &SourceEditMarker,
 ) -> anyhow::Result<()> {
     let mut temporary =
-        tempfile::NamedTempFile::new_in(crate::long_path::extended(&layout.cache_dir())?)?;
+        tempfile::NamedTempFile::new_in(crate::long_path::extended(layout.cache_dir())?)?;
     temporary.write_all(&serde_json::to_vec(marker)?)?;
     temporary.as_file().sync_all()?;
     temporary.persist(crate::long_path::extended(
-        &layout.source_edit_marker_path(),
+        layout.source_edit_marker_path(),
     )?)?;
     sync_directory(&layout.cache_dir())
 }
