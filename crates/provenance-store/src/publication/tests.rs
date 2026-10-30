@@ -442,55 +442,58 @@ fn a_read_only_write_is_refused_and_creates_no_path() {
         assert!(with_staged_state(store, false, |_| Ok(())).is_err());
         let sources = store.list_sources(&scope())?;
         assert!(!sources.is_empty());
-        assert!(store
-            .import_scope(
-                &imported,
-                &crate::state_store::ScopeShards {
-                    sources: &sources,
-                    ..Default::default()
-                },
-            )
-            .is_err());
-        assert!(store
-            .begin_verification(
-                scope(),
-                crate::state_store::BeginVerificationInput {
-                    rule: Some("rule_absent".to_string()),
-                    declaration: None,
-                    key: "check".to_string(),
-                    method: "examples".to_string(),
-                    declared_by: "tester".to_string(),
-                    file: Some("tests/check.rs".into()),
-                    symbol: None,
-                    commit: None,
-                },
-                provenance_core::VerificationMethod::Examples,
-            )
-            .is_err());
-        assert!(store
-            .complete_verification(
-                &scope(),
-                crate::state_store::CompleteVerificationInput {
-                    run: "run_absent".to_string(),
-                    status: "passed".to_string(),
-                    error: None,
-                },
-            )
-            .is_err());
+        let refusals = [
+            store
+                .import_scope(
+                    &imported,
+                    &crate::state_store::ScopeShards {
+                        sources: &sources,
+                        ..Default::default()
+                    },
+                )
+                .map(drop),
+            store
+                .begin_verification(
+                    scope(),
+                    crate::state_store::BeginVerificationInput {
+                        rule: Some("rule_absent".to_string()),
+                        declaration: None,
+                        key: "check".to_string(),
+                        method: "examples".to_string(),
+                        declared_by: "tester".to_string(),
+                        file: Some("tests/check.rs".into()),
+                        symbol: None,
+                        commit: None,
+                    },
+                    provenance_core::VerificationMethod::Examples,
+                )
+                .map(drop),
+            store
+                .complete_verification(
+                    &scope(),
+                    crate::state_store::CompleteVerificationInput {
+                        run: "run_absent".to_string(),
+                        status: "passed".to_string(),
+                        error: None,
+                    },
+                )
+                .map(drop),
+        ];
+        for refusal in refusals {
+            assert!(refusal.unwrap_err().to_string().contains("cannot write"));
+        }
         Ok(())
     })
     .unwrap();
     assert_eq!(std::fs::read(&shard).unwrap(), before);
-    assert!(
-        !copy.scopes_dir().join(imported.as_str()).exists(),
-        "no scope"
-    );
-    assert!(!copy.verification_runs_path(&scope()).exists(), "no runs");
-    assert!(
-        !copy.verification_runs_lock_path(&scope()).exists(),
-        "no runs lock"
-    );
-    assert!(!copy.publication_lock_path().exists(), "no lock");
-    assert!(!copy.cache_dir().exists(), "no cache");
-    assert!(!copy.import_transactions_dir().exists(), "no transaction");
+    for path in [
+        copy.scopes_dir().join(imported.as_str()),
+        copy.verification_runs_path(&scope()),
+        copy.verification_runs_lock_path(&scope()),
+        copy.publication_lock_path(),
+        copy.cache_dir(),
+        copy.import_transactions_dir(),
+    ] {
+        assert!(!path.exists(), "{path} exists");
+    }
 }

@@ -22,6 +22,7 @@ impl StateStore {
         input: BeginVerificationInput,
         method: VerificationMethod,
     ) -> anyhow::Result<VerificationRun> {
+        self.ensure_writable()?;
         crate::write_error::ensure!(
             InvalidVerificationTarget,
             !input.declared_by.trim().is_empty(),
@@ -99,6 +100,7 @@ impl StateStore {
         scope_id: &ScopeId,
         input: CompleteVerificationInput,
     ) -> anyhow::Result<VerificationRun> {
+        self.ensure_writable()?;
         let run_id = StableId::new(input.run)
             .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidCompletion, error))?;
         let status = VerificationRunStatus::parse_completion(&input.status)
