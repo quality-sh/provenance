@@ -70,7 +70,7 @@ mod tests {
             "the write result"
         });
         assert_eq!(result, "the write result");
-        let notifications = notifications.lock().unwrap();
+        let notifications = std::mem::take(&mut *notifications.lock().unwrap());
         assert_eq!(notifications.len(), 1);
         assert!(notifications[0].is_err());
     }
