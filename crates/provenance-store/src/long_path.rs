@@ -1,16 +1,14 @@
 //! Paths for file calls that do not accept long Windows paths themselves.
 
+use provenance_macros::rule;
 use std::path::{Path, PathBuf};
 
 /// The form of `path` to give a file call outside `std::fs`, such as the
-/// rename in `NamedTempFile::persist` or `MoveFileExW`.
-///
-/// `std::fs` adds the `\\?\` prefix to a long Windows path itself. Other
-/// calls do not, and Windows refuses a path of 260 characters or more with
-/// "The system cannot find the path specified". On Windows this function
-/// returns the absolute path with that prefix, and an empty path is the
-/// current directory, as it is for `tempfile`. A path that is not UTF-8 stays
-/// absolute without the prefix. On other systems it returns `path` unchanged.
+/// rename in `NamedTempFile::persist`. On Windows it is the absolute path with
+/// the `\\?\` prefix, and an empty path is the current directory; a path that
+/// is not UTF-8 stays absolute without the prefix. On other systems it is
+/// `path` unchanged.
+#[rule("rule_windows_long_path_writes")]
 #[cfg_attr(not(windows), allow(clippy::unnecessary_wraps))]
 pub fn extended(path: impl AsRef<Path>) -> std::io::Result<PathBuf> {
     let path = path.as_ref();
