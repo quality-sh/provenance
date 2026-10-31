@@ -1,24 +1,23 @@
 //! Characterization of the MCP wire surface, without a Rule binding.
 //!
 //! These tests pin the JSON values and response shapes that the MCP library
-//! writes for our server, so a library upgrade that changes them fails here. They speak raw JSON-RPC over
-//! an in-memory stream and do not use the library's client.
+//! writes for our server, so a library upgrade that changes them fails here.
+//! They speak raw JSON-RPC over an in-memory stream and do not use the
+//! library's client.
 #![cfg(feature = "test-fixture")]
 
 mod support {
+    pub mod check_port;
     pub mod records;
 }
 
-use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, PortFuture, Refusal,
-};
 use provenance_transport::{
     fixture::{FixtureAccess, Target},
     StatementHost,
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
-use support::records::Repository;
+use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
 const TOOL_LIST_FNV1A: u64 = 9_728_329_283_418_856_131;
@@ -40,33 +39,6 @@ const PORCELAIN_TOOL_NAMES: &[&str] = &[
     "discuss",
     "reply",
 ];
-
-struct FixtureCheckPort;
-
-impl CheckPort for FixtureCheckPort {
-    fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
-        Box::pin(async move {
-            Ok(match category {
-                Category::Graph => CategoryRun::Graph {
-                    findings: Vec::new(),
-                    refusal: Refusal::None,
-                },
-                Category::Statements => CategoryRun::Statements {
-                    findings: Vec::new(),
-                    context: None,
-                    refusal: Refusal::None,
-                },
-                Category::Bindings => CategoryRun::Bindings {
-                    findings: Vec::new(),
-                    context: BindingContext {
-                        policy: BindingPolicy::Warning,
-                    },
-                    refusal: Refusal::None,
-                },
-            })
-        })
-    }
-}
 
 /// One raw JSON-RPC peer connected to one served host.
 struct Wire {

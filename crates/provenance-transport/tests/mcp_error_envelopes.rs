@@ -1,12 +1,10 @@
 #![cfg(feature = "test-fixture")]
 
 mod support {
+    pub mod check_port;
     pub mod records;
 }
 
-use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, PortFuture, Refusal,
-};
 use provenance_transport::{
     fixture::{FixtureAccess, Target},
     StatementHost,
@@ -14,34 +12,7 @@ use provenance_transport::{
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use support::records::Repository;
-
-struct FixtureCheckPort;
-
-impl CheckPort for FixtureCheckPort {
-    fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
-        Box::pin(async move {
-            Ok(match category {
-                Category::Graph => CategoryRun::Graph {
-                    findings: Vec::new(),
-                    refusal: Refusal::None,
-                },
-                Category::Statements => CategoryRun::Statements {
-                    findings: Vec::new(),
-                    context: None,
-                    refusal: Refusal::None,
-                },
-                Category::Bindings => CategoryRun::Bindings {
-                    findings: Vec::new(),
-                    context: BindingContext {
-                        policy: BindingPolicy::Warning,
-                    },
-                    refusal: Refusal::None,
-                },
-            })
-        })
-    }
-}
+use support::{check_port::FixtureCheckPort, records::Repository};
 
 async fn call(
     client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
