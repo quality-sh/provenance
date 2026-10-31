@@ -55,7 +55,9 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
         "{shaping}"
     );
     assert!(
-        prose.contains("and stays in review with `--status review`."),
+        prose.contains(
+            "A Rule that a proposed Resolution produced stays in review with `--status review`."
+        ),
         "{shaping}"
     );
     assert!(
