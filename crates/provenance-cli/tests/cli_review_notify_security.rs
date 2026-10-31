@@ -43,10 +43,8 @@ fn foreign_codex_home_is_refused() {
     let output = notify(&host, &foreign, repo.path(), "req_notify", "codex", &thread);
 
     let error = refusal(&output);
-    assert!(error["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("codexHome"));
+    assert_eq!(error["error"]["kind"], "invalid_input");
+    assert_eq!(error["error"]["field"], "codexHome");
     assert_eq!(codex.queued(&thread), Vec::<String>::new());
 }
 
@@ -64,6 +62,7 @@ fn thread_outside_repository_is_refused() {
         .as_str()
         .unwrap()
         .contains("does not run in this repository"));
+    assert_eq!(error["error"]["field"], "notify.thread");
     assert_eq!(codex.queued(&thread), Vec::<String>::new());
 }
 
@@ -83,10 +82,8 @@ fn thread_name_is_refused() {
     );
 
     let error = refusal(&output);
-    assert!(error["error"]["message"]
-        .as_str()
-        .unwrap()
-        .contains("notify.thread"));
+    assert_eq!(error["error"]["kind"], "invalid_input");
+    assert_eq!(error["error"]["field"], "notify.thread");
     assert_eq!(codex.queued(&thread), Vec::<String>::new());
 }
 
