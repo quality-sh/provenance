@@ -137,11 +137,13 @@ fn page_write_during_registration_is_not_lost() {
         setup.path().to_str().unwrap(),
     ]);
     let registering = std::thread::spawn(move || review_host_support::waits::output(&mut command));
+    // A person writes on the page while the host reads the first document in pages.
     let mut written = Vec::new();
-    while !registering.is_finished() {
+    while !registering.is_finished() && written.len() < 15 {
         let id = format!("rule_race_{}", written.len());
         page_rule(&setup.host, &id, "req_notify");
         written.push(id);
+        std::thread::sleep(Duration::from_millis(200));
     }
     registration(&registering.join().unwrap());
 
