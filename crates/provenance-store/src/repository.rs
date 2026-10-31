@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 /// One opened repository. A clone shares the open; one open per command or host.
 #[derive(Clone, Debug)]
+#[rule("rule_repository_handle_stays_a_handle")]
 #[verifies("rule_operation_acts_on_opened_repository", construction)]
 pub struct Repository {
     inner: Arc<Inner>,

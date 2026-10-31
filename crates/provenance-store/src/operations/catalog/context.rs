@@ -5,6 +5,7 @@ use provenance_core::protocol::{
     failure::OperationFailure,
     repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
 };
+use provenance_macros::{rule, verifies};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutionNeed {
@@ -18,7 +19,13 @@ pub enum ExecutionNeed {
 pub type ExecutionNeeds = &'static [ExecutionNeed];
 
 /// A native caller or an authorized host supplies the resolved binding once.
+///
+/// A catalog body receives only this context. It carries `Repository`
+/// handles and no path, lock or connection, so a body reaches state only
+/// through the handle and its stores.
 #[derive(Debug, Clone)]
+#[rule("rule_catalog_operations_name_no_storage_mechanics")]
+#[verifies("rule_catalog_operations_name_no_storage_mechanics", construction)]
 pub struct PreparedContext {
     read: Option<PreparedRead>,
     scope: Option<PreparedScope>,
