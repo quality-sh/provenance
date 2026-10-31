@@ -1,4 +1,5 @@
 use crate::layout::ProvenanceLayout;
+use crate::storage::{Atomicity, WriteSet};
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::rule;
@@ -157,21 +158,12 @@ impl crate::state_store::StateStore {
     where
         T: DeserializeOwned + Serialize,
     {
-        self.ensure_writable()?;
-        self.with_repository_publication(|held| {
-            let lock_path = held.layout.state_shard_lock_path(path)?;
-            let mut result = None;
-            crate::jsonl::mutate_jsonl_locked_if(
-                path,
-                &lock_path,
-                held.permissions(),
-                |records| {
-                    result = Some(mutate(held, records)?);
-                    Ok(true)
-                },
-            )?;
-            Ok(result.expect("the mutation ran"))
-        })
+        let mut result = None;
+        self.publish_jsonl_if(path, |held, records| {
+            result = Some(mutate(held, records)?);
+            Ok(true)
+        })?;
+        Ok(result.expect("the mutation ran"))
     }
 
     /// Like [`Self::mutate_jsonl_records`], but writes the shard only when
@@ -184,11 +176,50 @@ impl crate::state_store::StateStore {
     where
         T: DeserializeOwned + Serialize,
     {
+        self.publish_jsonl_if(path, |_, records| mutate(records))
+    }
+
+    /// Reads the shard at `path` once under its advisory lock, runs `mutate`,
+    /// and publishes the new shard when `mutate` returns `true`. A change to
+    /// an enrolled row needs a grant in the permissions of the store.
+    fn publish_jsonl_if<T>(
+        &self,
+        path: &Utf8Path,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<bool>,
+    ) -> anyhow::Result<bool>
+    where
+        T: DeserializeOwned + Serialize,
+    {
         self.ensure_writable()?;
         self.with_repository_publication(|held| {
             let lock_path = held.layout.state_shard_lock_path(path)?;
-            crate::jsonl::mutate_jsonl_locked_if(path, &lock_path, held.permissions(), mutate)
+            crate::jsonl::with_advisory_lock(&lock_path, || {
+                let contents = held.state_text(path)?;
+                let bytes = crate::jsonl::mutate_jsonl_bytes(
+                    path,
+                    contents.as_deref(),
+                    held.permissions(),
+                    |records| mutate(held, records),
+                )?;
+                let Some(bytes) = bytes else {
+                    return Ok(false);
+                };
+                held.publish_shard(path, bytes)?;
+                Ok(true)
+            })
         })
+    }
+
+    /// Publishes the shard at `path` as a one-key write set through the
+    /// adapter of this store. The store holds the section, so the set
+    /// carries no base revision.
+    #[rule("rule_write_sets_publish_through_the_storage_port")]
+    fn publish_shard(&self, path: &Utf8Path, bytes: Vec<u8>) -> anyhow::Result<()> {
+        let writes = WriteSet::new(Atomicity::PerKey).put(self.state_key(path)?, bytes);
+        self.storage()
+            .publish(writes)
+            .map(drop)
+            .map_err(crate::write_error::publish_failure)
     }
 }
 

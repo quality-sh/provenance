@@ -233,6 +233,7 @@ impl Repository {
             self.inner.identity.clone(),
             self.inner.layout.clone(),
             self.section.clone(),
+            Arc::clone(self.storage()),
         )
     }
 
@@ -257,6 +258,7 @@ impl Repository {
             self.inner.identity.clone(),
             self.inner.layout.clone(),
             Arc::new(view),
+            Arc::clone(self.storage()),
         ))
     }
 

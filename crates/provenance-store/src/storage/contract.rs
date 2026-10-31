@@ -4,7 +4,7 @@
 //! own means, not through the port, and runs each port call in the section
 //! that the adapter needs.
 
-use super::{Revision, StateKey, StateStorage, StateView};
+use super::{Atomicity, PublishFailure, Revision, StateKey, StateStorage, StateView, WriteSet};
 use std::collections::BTreeMap;
 
 /// One adapter under test.
@@ -13,6 +13,16 @@ pub trait Harness {
     fn seed(&mut self, entries: &[(&str, &[u8])]);
     /// Runs `call` with the adapter, in the section that the adapter needs.
     fn with_storage<R>(&self, call: impl FnOnce(&dyn StateStorage) -> R) -> R;
+    /// Makes a later landing of `key` fail. Call it after the last seed.
+    fn break_key(&mut self, key: &str);
+}
+
+fn publish<H: Harness>(harness: &H, writes: WriteSet) -> Result<Revision, PublishFailure> {
+    harness.with_storage(|storage| storage.publish(writes))
+}
+
+fn key(key: &str) -> StateKey {
+    StateKey::new(key).unwrap()
 }
 
 fn read<H: Harness>(harness: &H) -> StateView {
@@ -68,6 +78,140 @@ pub fn revision_follows_every_key_and_byte<H: Harness>(mut harness: H) {
     assert_ne!(read(&harness).revision(), changed.revision());
 }
 
+/// A per-key set lands its puts and deletes, and returns the revision of the
+/// whole tree after the write.
+pub fn publish_lands_puts_and_deletes<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}"), ("scopes/a/b.jsonl", b"old")]);
+    let writes = WriteSet::new(Atomicity::PerKey)
+        .put(key("manifest.json"), b"{\"x\":1}".to_vec())
+        .put(key("scopes/a/c.jsonl"), b"new".to_vec())
+        .delete(key("scopes/a/b.jsonl"));
+    let revision = publish(&harness, writes).unwrap();
+    let view = read(&harness);
+    let after: &[(&str, &[u8])] = &[
+        ("manifest.json", b"{\"x\":1}"),
+        ("scopes/a/c.jsonl", b"new"),
+    ];
+    assert_eq!(view.entries(), &expected(after));
+    assert_eq!(&revision, view.revision());
+}
+
+/// A set on the current revision lands and returns the revision after it.
+pub fn publish_on_the_current_base_lands<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    let base = read(&harness).revision().clone();
+    let writes = WriteSet::new(Atomicity::PerKey)
+        .on_base(base)
+        .put(key("scopes/a/x.jsonl"), b"x".to_vec());
+    let revision = publish(&harness, writes).unwrap();
+    assert_eq!(&revision, read(&harness).revision());
+}
+
+/// A set on a revision that moved is refused before any key lands.
+pub fn publish_on_a_moved_base_is_refused<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    let base = read(&harness).revision().clone();
+    harness.seed(&[("scopes/a/x.jsonl", b"moved")]);
+    let moved = read(&harness);
+    let writes = WriteSet::new(Atomicity::PerKey)
+        .on_base(base.clone())
+        .put(key("scopes/a/y.jsonl"), b"y".to_vec());
+    match publish(&harness, writes) {
+        Err(PublishFailure::BaseMoved {
+            base: from,
+            current,
+        }) => {
+            assert_eq!(from, base);
+            assert_eq!(&current, moved.revision());
+        }
+        other => panic!("expected BaseMoved, got {other:?}"),
+    }
+    assert_eq!(read(&harness), moved);
+}
+
+/// A set that puts and deletes one key is refused before any key lands.
+pub fn publish_refuses_a_put_and_delete_of_one_key<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    let before = read(&harness);
+    let writes = WriteSet::new(Atomicity::PerKey)
+        .put(key("scopes/a/x.jsonl"), b"x".to_vec())
+        .delete(key("scopes/a/x.jsonl"));
+    assert!(matches!(
+        publish(&harness, writes),
+        Err(PublishFailure::Refused(_))
+    ));
+    assert_eq!(read(&harness), before);
+}
+
+/// A one-key set that fails while it lands leaves the state as it was and
+/// reports that landing started.
+pub fn a_failed_one_key_set_lands_nothing<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    harness.break_key("scopes/a/x.jsonl");
+    let before = read(&harness);
+    let writes = WriteSet::new(Atomicity::PerKey).put(key("scopes/a/x.jsonl"), b"x".to_vec());
+    assert!(matches!(
+        publish(&harness, writes),
+        Err(PublishFailure::Started(_))
+    ));
+    assert_eq!(read(&harness), before);
+}
+
+/// A per-key set that fails partway leaves the keys before the failure
+/// landed and reports that landing started.
+pub fn a_failed_per_key_set_leaves_a_landed_prefix<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    harness.break_key("scopes/a/b.jsonl");
+    let mut prefix = read(&harness).into_entries();
+    let writes = WriteSet::new(Atomicity::PerKey)
+        .put(key("scopes/a/a.jsonl"), b"a".to_vec())
+        .put(key("scopes/a/b.jsonl"), b"b".to_vec())
+        .put(key("scopes/a/c.jsonl"), b"c".to_vec());
+    assert!(matches!(
+        publish(&harness, writes),
+        Err(PublishFailure::Started(_))
+    ));
+    prefix.insert(key("scopes/a/a.jsonl"), b"a".to_vec());
+    assert_eq!(read(&harness).entries(), &prefix);
+}
+
+/// A whole set of two keys lands both keys. Only an adapter that lands
+/// whole sets runs this case; the local adapter refuses the set.
+pub fn a_two_key_whole_set_lands_both_keys<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    let writes = WriteSet::new(Atomicity::WholeSet)
+        .put(key("scopes/a/a.jsonl"), b"a".to_vec())
+        .put(key("scopes/a/b.jsonl"), b"b".to_vec());
+    let revision = publish(&harness, writes).unwrap();
+    let view = read(&harness);
+    let after: &[(&str, &[u8])] = &[
+        ("manifest.json", b"{}"),
+        ("scopes/a/a.jsonl", b"a"),
+        ("scopes/a/b.jsonl", b"b"),
+    ];
+    assert_eq!(view.entries(), &expected(after));
+    assert_eq!(&revision, view.revision());
+}
+
+/// A whole set of several keys that fails partway rolls back: no key lands.
+///
+/// The local adapter cannot run this case. It refuses a whole set of more
+/// than one key before any key lands, until the staged publication path
+/// moves behind the port. The Durable Object adapter must run it: a
+/// statement that fails inside its transaction rolls back every earlier
+/// statement of the set.
+pub fn a_failed_whole_set_lands_no_key<H: Harness>(mut harness: H) {
+    harness.seed(&[("manifest.json", b"{}")]);
+    harness.break_key("scopes/a/b.jsonl");
+    let before = read(&harness);
+    let writes = WriteSet::new(Atomicity::WholeSet)
+        .put(key("scopes/a/a.jsonl"), b"a".to_vec())
+        .put(key("scopes/a/b.jsonl"), b"b".to_vec())
+        .put(key("scopes/a/c.jsonl"), b"c".to_vec());
+    assert!(publish(&harness, writes).is_err());
+    assert_eq!(read(&harness), before);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,6 +252,13 @@ mod tests {
             })
             .unwrap()
         }
+
+        /// A directory in the place of the file makes its rename fail.
+        fn break_key(&mut self, key: &str) {
+            let path = self.layout.state_dir().join(key);
+            std::fs::create_dir_all(&path).unwrap();
+            std::fs::write(path.join("keep"), b"").unwrap();
+        }
     }
 
     #[derive(Default)]
@@ -125,6 +276,59 @@ mod tests {
         fn with_storage<R>(&self, call: impl FnOnce(&dyn StateStorage) -> R) -> R {
             call(&self.storage)
         }
+
+        fn break_key(&mut self, key: &str) {
+            self.storage.fail_on(StateKey::new(key).unwrap());
+        }
+    }
+
+    /// Runs one publish case on both adapters.
+    macro_rules! on_both_adapters {
+        ($($case:ident),* $(,)?) => {
+            $(
+                #[test]
+                #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+                fn $case() {
+                    super::$case(local());
+                    super::$case(Memory::default());
+                }
+            )*
+        };
+    }
+
+    on_both_adapters!(
+        publish_lands_puts_and_deletes,
+        publish_on_the_current_base_lands,
+        publish_on_a_moved_base_is_refused,
+        publish_refuses_a_put_and_delete_of_one_key,
+        a_failed_one_key_set_lands_nothing,
+        a_failed_per_key_set_leaves_a_landed_prefix,
+    );
+
+    #[test]
+    #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+    fn memory_lands_a_two_key_whole_set_and_rolls_back_a_failed_one() {
+        a_two_key_whole_set_lands_both_keys(Memory::default());
+        a_failed_whole_set_lands_no_key(Memory::default());
+    }
+
+    /// The local adapter cannot run the whole-set cases; see
+    /// [`a_failed_whole_set_lands_no_key`]. It refuses the set instead, and
+    /// no key lands.
+    #[test]
+    #[verifies("rule_write_sets_publish_through_the_storage_port", examples)]
+    fn local_refuses_a_multi_key_whole_set() {
+        let mut harness = local();
+        harness.seed(&[("manifest.json", b"{}")]);
+        let before = read(&harness);
+        let writes = WriteSet::new(Atomicity::WholeSet)
+            .put(key("scopes/a/a.jsonl"), b"a".to_vec())
+            .put(key("scopes/a/b.jsonl"), b"b".to_vec());
+        assert!(matches!(
+            publish(&harness, writes),
+            Err(PublishFailure::Refused(_))
+        ));
+        assert_eq!(read(&harness), before);
     }
 
     #[test]

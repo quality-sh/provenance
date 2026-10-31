@@ -156,6 +156,16 @@ pub(crate) fn publication_started(error: anyhow::Error) -> anyhow::Error {
     }
 }
 
+/// The error of a write set that did not land. A failure after landing
+/// began is a [`PublicationStarted`]; any other failure landed no key.
+pub(crate) fn publish_failure(failure: crate::storage::PublishFailure) -> anyhow::Error {
+    match failure {
+        crate::storage::PublishFailure::Started(error) => publication_started(error),
+        crate::storage::PublishFailure::Refused(error) => error,
+        moved @ crate::storage::PublishFailure::BaseMoved { .. } => moved.into(),
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub struct WriteError(pub anyhow::Error);

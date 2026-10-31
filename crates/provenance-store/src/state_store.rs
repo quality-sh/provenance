@@ -158,6 +158,8 @@ pub struct StateStore {
     pub(crate) layout: ProvenanceLayout,
     access: Access,
     record_stamp: RecordStamp,
+    /// The adapter that the store publishes through.
+    storage: std::sync::Arc<dyn crate::storage::StateStorage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

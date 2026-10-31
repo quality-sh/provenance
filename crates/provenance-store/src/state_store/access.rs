@@ -2,7 +2,8 @@ use super::{Access, RecordStamp, StateStore};
 use crate::layout::ProvenanceLayout;
 use crate::publication::{PublicationGuard, StageLock, WritePermissions};
 use crate::repository::RepositoryIdentity;
-use crate::storage::{StateKey, StateView};
+use crate::storage::local::LocalStateStorage;
+use crate::storage::{StateKey, StateStorage, StateView};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::{rule, verifies};
 use std::marker::PhantomData;
@@ -15,9 +16,10 @@ mod tests;
 
 impl StateStore {
     /// A layout-level store with no repository identity.
-    pub(crate) const fn new(layout: ProvenanceLayout) -> Self {
+    pub(crate) fn new(layout: ProvenanceLayout) -> Self {
         Self {
             identity: None,
+            storage: local(&layout),
             layout,
             access: Access::Lock,
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -31,9 +33,11 @@ impl StateStore {
         identity: RepositoryIdentity,
         layout: ProvenanceLayout,
         section: Option<crate::publication::SectionHandle>,
+        storage: Arc<dyn StateStorage>,
     ) -> Self {
         Self {
             identity: Some(identity),
+            storage,
             layout,
             access: section.map_or(Access::Lock, |until| Access::Section { until: Some(until) }),
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -42,9 +46,10 @@ impl StateStore {
 
     /// A store that holds the live section of `layout`, handed to the
     /// closure of a layout-level section.
-    pub(crate) const fn in_section(layout: ProvenanceLayout) -> Self {
+    pub(crate) fn in_section(layout: ProvenanceLayout) -> Self {
         Self {
             identity: None,
+            storage: local(&layout),
             layout,
             access: Access::Section { until: None },
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -55,9 +60,10 @@ impl StateStore {
     /// creates no path. A record write, a write permission and a staged
     /// publication through it refuse.
     #[rule("rule_read_only_store_refuses_writes")]
-    pub(crate) const fn read_only(layout: ProvenanceLayout) -> Self {
+    pub(crate) fn read_only(layout: ProvenanceLayout) -> Self {
         Self {
             identity: None,
+            storage: local(&layout),
             layout,
             access: Access::ReadOnly,
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -66,13 +72,15 @@ impl StateStore {
 
     /// A store that reads one view of the canonical state of `layout`. It
     /// reads no file and refuses every write and stage.
-    pub(crate) const fn over_view(
+    pub(crate) fn over_view(
         identity: RepositoryIdentity,
         layout: ProvenanceLayout,
         view: Arc<StateView>,
+        storage: Arc<dyn StateStorage>,
     ) -> Self {
         Self {
             identity: Some(identity),
+            storage,
             layout,
             access: Access::View(view),
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -81,7 +89,8 @@ impl StateStore {
 
     /// A store over a staged state root. It keeps the identity of the live
     /// store. Its reads and writes take the lock that the stage owns, not the
-    /// publication lock, because the live section holds that.
+    /// publication lock, because the live section holds that. It publishes
+    /// through an adapter rooted at the staged layout.
     pub(crate) fn staged_view(
         identity: Option<RepositoryIdentity>,
         layout: ProvenanceLayout,
@@ -90,6 +99,7 @@ impl StateStore {
         let stage = StageLock::new(layout.root());
         Self {
             identity,
+            storage: local(&layout),
             layout,
             access: Access::Staged {
                 permissions: WritePermissions::none(),
@@ -151,6 +161,7 @@ impl StateStore {
     fn section_store(&self, access: Access) -> Self {
         Self {
             identity: self.identity.clone(),
+            storage: Arc::clone(&self.storage),
             layout: self.layout.clone(),
             access,
             record_stamp: self.record_stamp.clone(),
@@ -161,6 +172,11 @@ impl StateStore {
     /// store has none.
     pub const fn repository(&self) -> Option<&RepositoryIdentity> {
         self.identity.as_ref()
+    }
+
+    /// The adapter that this store publishes through.
+    pub(crate) fn storage(&self) -> &Arc<dyn StateStorage> {
+        &self.storage
     }
 
     /// The identity, for a staged view of this store.
@@ -237,6 +253,7 @@ impl StateStore {
         GuardedStore {
             store: Self {
                 identity: Some(guard.repository().identity().clone()),
+                storage: Arc::clone(guard.repository().storage()),
                 layout: guard.repository().layout().clone(),
                 access: Access::Section {
                     until: guard.repository().section().cloned(),
@@ -344,7 +361,7 @@ impl StateStore {
     /// file.
     pub(crate) fn state_bytes(&self, path: &Utf8Path) -> anyhow::Result<Option<Vec<u8>>> {
         match &self.access {
-            Access::View(view) => Ok(view.get(&self.view_key(path)?).map(<[u8]>::to_vec)),
+            Access::View(view) => Ok(view.get(&self.state_key(path)?).map(<[u8]>::to_vec)),
             _ => match std::fs::read(path) {
                 Ok(bytes) => Ok(Some(bytes)),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -387,7 +404,7 @@ impl StateStore {
     /// Whether the state file at `path` exists.
     pub(crate) fn state_exists(&self, path: &Utf8Path) -> anyhow::Result<bool> {
         match &self.access {
-            Access::View(view) => Ok(view.get(&self.view_key(path)?).is_some()),
+            Access::View(view) => Ok(view.get(&self.state_key(path)?).is_some()),
             _ => Ok(path.exists()),
         }
     }
@@ -434,7 +451,8 @@ impl StateStore {
         Ok(names)
     }
 
-    fn view_key(&self, path: &Utf8Path) -> anyhow::Result<StateKey> {
+    /// The key of the state file at `path`.
+    pub(crate) fn state_key(&self, path: &Utf8Path) -> anyhow::Result<StateKey> {
         Ok(StateKey::new(self.view_prefix(path)?)?)
     }
 
@@ -460,4 +478,8 @@ fn not_found(path: &Utf8Path) -> anyhow::Error {
 fn invalid_text(path: &Utf8Path) -> anyhow::Error {
     anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::InvalidData))
         .context(format!("read {path}: the file is not UTF-8"))
+}
+
+fn local(layout: &ProvenanceLayout) -> Arc<dyn StateStorage> {
+    Arc::new(LocalStateStorage::new(layout.clone()))
 }

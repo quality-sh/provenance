@@ -4,7 +4,6 @@ use camino::Utf8Path;
 use fs2::FileExt;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs::{File, OpenOptions};
-use std::io::Write;
 
 mod preservation;
 
@@ -57,7 +56,9 @@ pub fn write_jsonl_atomic<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyho
     with_state_publication(path, || write_jsonl_atomic_under_publication(path, records))
 }
 
-/// Mutates one shard under its advisory lock. The caller holds the section.
+/// Mutates one file of derived state, such as the verification runs, under
+/// its advisory lock, and writes the file in place. The caller holds the
+/// section. Canonical state publishes through the storage port instead.
 pub(crate) fn mutate_jsonl_locked<T, R>(
     path: &Utf8Path,
     lock_path: &Utf8Path,
@@ -66,37 +67,39 @@ pub(crate) fn mutate_jsonl_locked<T, R>(
 where
     T: DeserializeOwned + Serialize,
 {
-    let mut result = None;
-    mutate_jsonl_locked_if(path, lock_path, &WritePermissions::none(), |records| {
-        result = Some(mutate(records)?);
-        Ok(true)
-    })?;
-    Ok(result.expect("the mutation ran"))
+    let _lock = AdvisoryLock::acquire(lock_path)?;
+    let contents = path
+        .exists()
+        .then(|| std::fs::read_to_string(path))
+        .transpose()?;
+    let mut loaded = load_jsonl(path, contents.as_deref())?;
+    let result = mutate(loaded.records_mut())?;
+    let lines = loaded.into_lines(path)?;
+    guard_jsonl_lines(path, &lines, &WritePermissions::none())?;
+    write_jsonl_lines_atomic_unlocked(path, &lines)
+        .map_err(crate::write_error::publication_started)?;
+    Ok(result)
 }
 
-/// Like [`mutate_jsonl_locked`], but writes the shard only when `mutate`
-/// returns `true`. The shard is read once. A change to an enrolled row needs
-/// a grant in `permissions`. The caller holds the section, so a staged write
-/// takes no publication lock in the staged state root.
-pub(crate) fn mutate_jsonl_locked_if<T>(
+/// Loads the shard at `path` from `contents`, runs `mutate`, and returns the
+/// new bytes of the shard when `mutate` returns `true`. A change to an
+/// enrolled row needs a grant in `permissions`. The caller writes the bytes.
+pub(crate) fn mutate_jsonl_bytes<T>(
     path: &Utf8Path,
-    lock_path: &Utf8Path,
+    contents: Option<&str>,
     permissions: &WritePermissions,
     mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<bool>,
-) -> anyhow::Result<bool>
+) -> anyhow::Result<Option<Vec<u8>>>
 where
     T: DeserializeOwned + Serialize,
 {
-    let _lock = AdvisoryLock::acquire(lock_path)?;
-    let mut loaded = read_jsonl_unlocked(path)?;
+    let mut loaded = load_jsonl(path, contents)?;
     if !mutate(loaded.records_mut())? {
-        return Ok(false);
+        return Ok(None);
     }
     let lines = loaded.into_lines(path)?;
     guard_jsonl_lines(path, &lines, permissions)?;
-    write_jsonl_lines_atomic_unlocked(path, &lines)
-        .map_err(crate::write_error::publication_started)?;
-    Ok(true)
+    Ok(Some(jsonl_bytes(&lines)))
 }
 
 /// The read a write is built on, guarded the same way an ordinary read is.
@@ -113,14 +116,13 @@ where
 /// row's top-level unknown members onto its new line, and the write is
 /// refused before anything is published when a changed row holds stored data
 /// that cannot be carried over safely.
-fn read_jsonl_unlocked<T>(path: &Utf8Path) -> anyhow::Result<LoadedRecords<T>>
+fn load_jsonl<T>(path: &Utf8Path, contents: Option<&str>) -> anyhow::Result<LoadedRecords<T>>
 where
     T: DeserializeOwned + Serialize,
 {
-    if !path.exists() {
+    let Some(contents) = contents else {
         return Ok(LoadedRecords::default());
-    }
-    let contents = std::fs::read_to_string(path)?;
+    };
     let mut loaded = LoadedRecords::default();
     for (index, line) in contents.lines().enumerate() {
         let value = parse_line(path, index + 1, line)?;
@@ -147,16 +149,11 @@ pub(crate) fn write_jsonl_atomic_under_publication<T: Serialize>(
 }
 
 fn write_jsonl_atomic_unlocked<T: Serialize>(path: &Utf8Path, records: &[T]) -> anyhow::Result<()> {
-    let Some(parent) = path.parent() else {
-        anyhow::bail!("{path} has no parent directory");
-    };
-    std::fs::create_dir_all(parent)?;
-    let mut temp = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
-    for record in records {
-        writeln!(temp, "{}", to_stable_json(record)?)?;
-    }
-    temp.persist(crate::long_path::extended(path)?)?;
-    Ok(())
+    let lines = records
+        .iter()
+        .map(to_stable_json)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    write_jsonl_lines_atomic_unlocked(path, &lines)
 }
 
 /// Writes merged records from the opaque rows read from the merge inputs.
@@ -192,16 +189,17 @@ fn guard_jsonl_lines(
 }
 
 fn write_jsonl_lines_atomic_unlocked(path: &Utf8Path, lines: &[String]) -> anyhow::Result<()> {
-    let Some(parent) = path.parent() else {
-        anyhow::bail!("{path} has no parent directory");
-    };
-    std::fs::create_dir_all(parent)?;
-    let mut temp = tempfile::NamedTempFile::new_in(crate::long_path::extended(parent)?)?;
+    crate::storage::local::write_file_atomic(path, &jsonl_bytes(lines))
+}
+
+/// The lines, each with a final `\n`.
+fn jsonl_bytes(lines: &[String]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(lines.iter().map(|line| line.len() + 1).sum());
     for line in lines {
-        writeln!(temp, "{line}")?;
+        bytes.extend_from_slice(line.as_bytes());
+        bytes.push(b'\n');
     }
-    temp.persist(crate::long_path::extended(path)?)?;
-    Ok(())
+    bytes
 }
 
 /// Runs a raw write in the publication section of the repository that holds
