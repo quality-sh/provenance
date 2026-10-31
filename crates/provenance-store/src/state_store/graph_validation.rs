@@ -44,10 +44,11 @@ impl StateStore {
     }
 }
 
-/// Refuses records whose relation fields do not hold: an archive stamp
-/// that does not match the status, an empty required list, or a chain
-/// that returns to its start. Reads only the front; domains carry no
-/// relation this checks.
+/// Refuses records whose relation fields do not hold.
+///
+/// It refuses an archive stamp that does not match the status, an empty
+/// required list, and a chain that returns to its start. It reads only the
+/// front; domains carry no relation it checks.
 pub fn validate_relations(front: &RecordFront<'_>) -> anyhow::Result<()> {
     ensure_archives(
         front.requirements,

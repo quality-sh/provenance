@@ -16,9 +16,11 @@ fn find_gaps_locked(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Vec<G
     ))
 }
 
-/// Every record a [`GapGraph`] borrows, owned. Readers that need graph joins
-/// rather than the gap list itself load the scope once through here and then
-/// build the same graph the gap policy sees, so the two cannot drift.
+/// Every record a [`GapGraph`] borrows, owned.
+///
+/// Readers that need graph joins rather than the gap list itself load the
+/// scope once through here and then build the same graph the gap policy sees,
+/// so the two cannot drift.
 ///
 /// A caller that already holds the records builds this directly and needs no
 /// store: [`GraphRecords::graph`] gives the gap graph, and its

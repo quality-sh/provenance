@@ -2,7 +2,7 @@
 //! neighbours come out the same as from a hand-built graph, with no store.
 
 use crate::cache::gaps::tests::fixtures as records;
-use crate::cache::{compute_gaps, GraphRecords};
+use crate::cache::{compute_gaps, GapKind, GraphRecords};
 use provenance_core::model::relations::{flow_neighbors, related_nodes, RecordFront};
 use provenance_core::{NodeType, ScopeId, SourceReference};
 use provenance_macros::verifies;
@@ -46,7 +46,7 @@ fn held_records_give_the_gaps_of_the_same_graph() {
         &[],
     );
     assert_eq!(gaps, expected);
-    assert!(!gaps.is_empty());
+    assert_eq!(records::count_kind(&gaps, GapKind::UnreferencedSource), 1);
 }
 
 #[test]

@@ -45,10 +45,11 @@ pub fn changes_revision(kind: NodeType, fields: &[String]) -> bool {
     fields.iter().any(|field| content.contains(&field.as_str()))
 }
 
-/// Digests the review-content fields of one record. Lifecycle fields and
-/// record stamps are left out, so a lifecycle-only save keeps the digest a
-/// submission bound, and a decision on the reviewed content stays possible
-/// after one.
+/// Digests the review-content fields of one record.
+///
+/// Lifecycle fields and record stamps are left out, so a lifecycle-only save
+/// keeps the digest a submission bound, and a decision on the reviewed
+/// content stays possible after one.
 pub fn content_digest<T: Serialize>(kind: NodeType, record: &T) -> anyhow::Result<String> {
     let value = provenance_core::model::record_stamps::content_value(record)?;
     let object = value
