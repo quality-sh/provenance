@@ -279,3 +279,36 @@ fn changed_root_membership_removes_the_record_from_the_bound_document() {
     assert_eq!(current["removedIds"], serde_json::json!(["rule_follow"]));
     assert!(!current["records"].to_string().contains("rule_follow"));
 }
+
+#[test]
+#[provenance_macros::verifies("rule_review_follow_push", examples)]
+fn page_writes_during_the_first_read_reach_follow() {
+    let repo = repository_with_actors(&["reviewer"]);
+    create(repo.path(), "req_follow", "requirement", &[]);
+    for index in 0..3 {
+        let id = format!("rule_before_{index}");
+        create(
+            repo.path(),
+            &id,
+            "rule",
+            &["--requirement-id", "req_follow"],
+        );
+    }
+    let host = start(repo.path());
+    let follow = Follow::with_options(&host, repo.path(), "req_follow", &["--limit", "1"]);
+    let written = (0..5)
+        .map(|index| {
+            let id = format!("rule_race_{index}");
+            page_rule(&host, &id, "req_follow");
+            id
+        })
+        .collect::<Vec<_>>();
+
+    let mut seen = follow.frame()["records"].to_string();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while !written.iter().all(|id| seen.contains(id.as_str())) {
+        assert!(std::time::Instant::now() < deadline, "lost a write: {seen}");
+        seen.push_str(&follow.frame()["records"].to_string());
+    }
+    assert!(seen.contains("rule_before_2"));
+}
