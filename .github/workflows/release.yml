@@ -32,7 +32,8 @@ jobs:
       - uses: ./.github/actions/setup-socket-firewall
       # Releases are cut from main, and main merges run the full platform
       # matrix. Refuse to build unless that run finished green on this exact
-      # commit, so a red platform leg cannot ship unnoticed.
+      # commit, so a red platform leg cannot ship unnoticed. A full main run
+      # takes up to 93 minutes, so the gate waits up to 150 minutes.
       - name: Gate the release on a green CI run
         if: github.event_name == 'push'
         env:
@@ -40,7 +41,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
-          deadline=$((SECONDS + 1800))
+          deadline=$((SECONDS + 9000))
           while :; do
             run=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$SHA&event=push" \
               --jq '[.workflow_runs[] | select(.name == "CI")][0] // empty')
