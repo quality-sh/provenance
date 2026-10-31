@@ -54,6 +54,40 @@ impl Codex {
         command.env("CODEX_HOME", self.home.path());
     }
 
+    /// Puts a `codex` program first on the PATH of a command. It refuses the first
+    /// `codex queue` call and runs the real Codex for each other call.
+    pub fn refuse_first_queue(&self, command: &mut Command) {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let real = std::env::split_paths(&path)
+            .map(|directory| directory.join("codex"))
+            .find(|program| program.is_file())
+            .expect("codex is on PATH");
+        let bin = self.home.path().join("refusing-bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let program = bin.join("codex");
+        std::fs::write(
+            &program,
+            format!(
+                "#!/bin/sh\n\
+                 if [ \"$1\" = queue ] && mkdir '{}' 2>/dev/null; then\n\
+                 echo 'the fixture refuses this message' >&2\n  exit 1\nfi\n\
+                 exec '{}' \"$@\"\n",
+                bin.join("refused").display(),
+                real.display()
+            ),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        std::fs::set_permissions(
+            &program,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+        let mut paths = vec![bin];
+        paths.extend(std::env::split_paths(&path));
+        command.env("PATH", std::env::join_paths(paths).unwrap());
+    }
+
     fn command(&self, cwd: &Path) -> Command {
         let mut command = Command::new("codex");
         self.configure(&mut command);

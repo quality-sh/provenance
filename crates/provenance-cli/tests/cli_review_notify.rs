@@ -25,6 +25,11 @@ struct Setup {
 
 impl Setup {
     fn start() -> Self {
+        Self::start_with(|_, _| {})
+    }
+
+    /// Starts the host with one more change to its command.
+    fn start_with(change: impl FnOnce(&Codex, &mut std::process::Command)) -> Self {
         let repo = repository_with_actors(&["reviewer"]);
         create(repo.path(), "req_notify", "requirement", &[]);
         let codex = Codex::start();
@@ -32,6 +37,7 @@ impl Setup {
         let host = start_with(repo.path(), |command| {
             command.arg("--no-open");
             codex.configure(command);
+            change(&codex, command);
         });
         Self {
             repo,
@@ -104,6 +110,32 @@ fn accepted_full_document_then_changed_record() {
         model_input.iter().any(|text| text == &queued[0]),
         "{model_input:#?}"
     );
+}
+
+#[test]
+#[verifies("rule_review_notify_confirms_first", examples)]
+fn unaccepted_registration_fails_and_leaves_no_registration() {
+    let setup = Setup::start_with(Codex::refuse_first_queue);
+
+    let output = notify(
+        &setup.host,
+        &setup.codex,
+        setup.path(),
+        "req_notify",
+        "codex",
+        &setup.thread,
+    );
+
+    assert!(!output.status.success());
+    let refusal: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(refusal["error"]["kind"], "operation_failed");
+    let message = refusal["error"]["message"].as_str().unwrap();
+    assert!(
+        message.contains("Codex did not accept the message"),
+        "{message}"
+    );
+    page_rule(&setup.host, "rule_after_refusal", "req_notify");
+    setup.quiet(&setup.thread, 0);
 }
 
 #[test]
