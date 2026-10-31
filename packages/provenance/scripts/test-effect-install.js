@@ -48,7 +48,7 @@ if(result.data.issue!==9) throw new Error('Invalid report');`);
       }
       const source = `import * as Effect from 'effect/Effect';
 import * as Schema from 'effect/Schema';
-import {Atom, AtomRegistry} from 'effect/unstable/reactivity';
+import {Atom, AtomRegistry} from 'effect/reactivity';
 import {EffectHttpClient, ProvenanceClient, CheckStatementSuccess, ProvenanceApi} from '@quality-sh/provenance/effect';
 export async function exercise(baseUrl: string, bearer: string, suffix = '') {
  const options={baseUrl,bearer,repository:'fixture',scope:'default'};

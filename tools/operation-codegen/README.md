@@ -155,7 +155,7 @@ included in the Rust package so its unit test remains usable after packaging.
 
 The generator also emits the Effect v4 contract and methods into the existing
 ignored TypeScript source directory. The official `@effect/openapi-generator`,
-Effect, and its platform dependencies use `4.0.0-rc.113`. Generation warnings
+Effect, and its platform dependencies use `4.0.4`. Generation warnings
 stop the build. Runtime wire validators preserve the production fixture values
 without object stripping or default insertion. The existing response validators
 are shared by the Promise and Effect clients.
