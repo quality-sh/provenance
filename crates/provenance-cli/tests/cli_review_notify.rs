@@ -14,7 +14,7 @@ use review_host_support::{
     repository_with_actors, response, start_with, Host,
 };
 use serde_json::json;
-use std::{path::Path, time::Duration};
+use std::{path::Path, process::Output, thread::JoinHandle, time::Duration};
 
 struct Setup {
     repo: tempfile::TempDir,
@@ -138,14 +138,16 @@ fn unaccepted_registration_fails_and_leaves_no_registration() {
     setup.quiet(&setup.thread, 0);
 }
 
-#[test]
-#[verifies("rule_review_notify_consistent_start", examples)]
-fn page_writes_during_every_registration_read_are_not_lost() {
-    let setup = Setup::start();
-    // With one record on each page, every read of the document takes many pages.
-    for index in 0..12 {
+/// Adds rules and starts a registration that reads one record on each page, so each read
+/// of the document takes many pages.
+fn register_in_pages(setup: &Setup, rules: usize) -> JoinHandle<Output> {
+    for index in 0..rules {
         page_rule(&setup.host, &format!("rule_before_{index}"), "req_notify");
     }
+    registering(setup)
+}
+
+fn registering(setup: &Setup) -> JoinHandle<Output> {
     let mut command = setup.host.cli();
     setup.codex.configure(&mut command);
     command.args([
@@ -164,17 +166,48 @@ fn page_writes_during_every_registration_read_are_not_lost() {
         "--repo",
         setup.path().to_str().unwrap(),
     ]);
-    let registering = std::thread::spawn(move || review_host_support::waits::output(&mut command));
-    // A person writes on the page without a pause, so a write lands during each read,
-    // also during the read after the last retry.
-    let mut written = Vec::new();
-    while !registering.is_finished() && written.len() < 80 {
-        let id = format!("rule_race_{}", written.len());
-        page_rule(&setup.host, &id, "req_notify");
-        written.push(id);
-    }
-    registration(&registering.join().unwrap());
+    std::thread::spawn(move || review_host_support::waits::output(&mut command))
+}
 
+fn refusal(output: &Output) -> serde_json::Value {
+    assert!(!output.status.success());
+    serde_json::from_slice::<serde_json::Value>(&output.stderr).unwrap()["error"].clone()
+}
+
+#[test]
+#[verifies("rule_review_notify_consistent_start", examples)]
+fn page_writes_during_registration_reads_are_not_lost() {
+    let setup = Setup::start();
+    let mut attempt = register_in_pages(&setup, 12);
+    let mut busy = 0;
+    let (output, written) = std::thread::scope(|scope| {
+        // A person writes on the page without a pause, then stops.
+        let writer = scope.spawn(|| {
+            let written = (0..80).map(|index| format!("rule_race_{index}"));
+            written
+                .inspect(|id| page_rule(&setup.host, id, "req_notify"))
+                .collect::<Vec<_>>()
+        });
+        let output = loop {
+            let output = attempt.join().unwrap();
+            if output.status.success() || busy == 20 {
+                break output;
+            }
+            // The page changed during every read; the agent registers again.
+            assert_eq!(refusal(&output)["kind"], "host_busy");
+            busy += 1;
+            attempt = registering(&setup);
+        };
+        (output, writer.join().unwrap())
+    });
+    registration(&output);
+
+    let queued = setup.codex.queued(&setup.thread);
+    // A busy refusal or a first reset shows that a write landed during the registration reads.
+    assert!(
+        busy > 0 || parts(&queued[0]).1["type"] == "reset",
+        "{queued:#?}"
+    );
     let deadline = std::time::Instant::now() + Duration::from_secs(60);
     let state = loop {
         let state = replay(&setup.codex.queued(&setup.thread));
@@ -186,6 +219,29 @@ fn page_writes_during_every_registration_read_are_not_lost() {
     for id in written.iter().chain(&["rule_before_0".to_owned()]) {
         assert!(state.contains_key(id), "{id} is lost: {:?}", state.keys());
     }
+}
+
+#[test]
+#[verifies("rule_review_notify_consistent_start", examples)]
+fn page_writes_during_every_registration_read_refuse_and_leave_no_registration() {
+    let setup = Setup::start();
+    let registration = register_in_pages(&setup, 24);
+    // A person writes on the page without a pause until the registration ends.
+    let mut written = 0;
+    while !registration.is_finished() && written < 400 {
+        page_rule(&setup.host, &format!("rule_race_{written}"), "req_notify");
+        written += 1;
+    }
+
+    let error = refusal(&registration.join().unwrap());
+    assert_eq!(error["kind"], "host_busy", "{error}");
+    let message = error["message"].as_str().unwrap();
+    assert!(
+        message.contains("changed during every read") && message.contains("register again"),
+        "{message}"
+    );
+    page_rule(&setup.host, "rule_after_refusal", "req_notify");
+    setup.quiet(&setup.thread, 0);
 }
 
 #[test]

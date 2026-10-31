@@ -3,6 +3,7 @@ mod envelope;
 pub(super) mod frames;
 mod navigation;
 pub(super) mod output;
+mod refusal;
 pub(super) mod stream;
 mod subscribers;
 mod watch;

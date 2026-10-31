@@ -134,7 +134,9 @@ fn map_read_error(error: ReadError) -> ActionError {
         ReadError::InvalidOptions | ReadError::InvalidInput { .. } => ActionError::InvalidOptions,
         ReadError::NotFound => ActionError::NotFound,
         ReadError::AmbiguousIdentity => ActionError::AmbiguousIdentity,
-        ReadError::Operation(message) => ActionError::Operation(message),
+        ReadError::HostBusy(message) | ReadError::Operation(message) => {
+            ActionError::Operation(message)
+        }
     }
 }
 

@@ -180,9 +180,10 @@ impl Follower {
     /// Reads the first full document at the Ready position. A page write that lands during
     /// the read moves the native sequence or makes a later page refuse; then the read runs
     /// again, at most three times, and after that the document goes out as a reset. A page
-    /// write also makes a later page of the reset read refuse; then that read runs again,
-    /// because a reset must hold a complete document. The moved frames stay queued, so later
-    /// steps also deliver their records.
+    /// write also makes a later page of the reset read refuse; then that read runs again, at
+    /// most three times, because a reset must hold a complete document. When the page changes
+    /// during each reset read, the start refuses with `CursorRevisionChanged`. The moved
+    /// frames stay queued, so later steps also deliver their records.
     #[rule("rule_review_notify_consistent_start")]
     pub async fn start(
         &mut self,
@@ -201,23 +202,30 @@ impl Follower {
             }
         }
         let (epoch, sequence) = ready.position();
-        loop {
+        let mut read = Err(ReadFailure::CursorRevisionChanged.into());
+        // A count, not a time, bounds the reset reads: a large document takes long to read
+        // once, and the caller holds the registration lock during each read.
+        for _ in 0..RESET_READS {
             *self = Self::new(epoch);
             self.sequence = sequence;
             self.initialized = true;
-            let read = self
+            read = self
                 .baseline
                 .reconcile(context, root, limit, (epoch, sequence), true, None)
                 .await;
             if !read.as_ref().is_err_and(revision_changed) {
-                return read;
+                break;
             }
         }
+        read
     }
 }
 
+/// The number of reset reads before a start refuses because the page changed during each.
+const RESET_READS: usize = 3;
+
 /// A page write between two pages of one read makes the later page refuse.
-fn revision_changed(error: &anyhow::Error) -> bool {
+pub(in crate::review) fn revision_changed(error: &anyhow::Error) -> bool {
     error.downcast_ref::<ReadFailure>() == Some(&ReadFailure::CursorRevisionChanged)
 }
 
