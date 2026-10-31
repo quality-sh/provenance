@@ -90,6 +90,8 @@ test('a gated row fails only above twice and 5 ms', () => {
   assert.equal(releaseResult(statistics(key, [1.8, 2.6], 20, 60)), 'Pass');
   assert.equal(releaseResult(statistics('repository_state catch_up_ms', [2.3, 2.9], 4, 10)), 'Fail');
   assert.equal(releaseResult({ key, missing: 'base' }), 'Pass');
+  assert.equal(releaseResult({ key, missing: 'head' }), 'Fail');
+  assert.equal(releaseResult({ key, missing: 'some runs' }), 'Fail');
 });
 
 test('ungated rows never fail', () => {

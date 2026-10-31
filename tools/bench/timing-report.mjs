@@ -93,7 +93,9 @@ export function isGated(key) {
 
 export function releaseResult(row) {
   if (!isGated(row.key)) return 'Report only';
-  if (row.missing) return 'Pass';
+  // A row new in the candidate is not a regression; a row the candidate
+  // lost, or that some runs did not print, is not a measured pass.
+  if (row.missing) return row.missing === 'base' ? 'Pass' : 'Fail';
   const fails = row.interval[0] > RELEASE_RATIO && row.headMedian - row.baseMedian > RELEASE_MS;
   return fails ? 'Fail' : 'Pass';
 }

@@ -84,10 +84,11 @@ The release gate applies to the `repository_state` section: the seven
 operation summary rows that it prints, and `catch_up_ms`. A row fails only
 when **both** conditions hold: the lower bound of its ratio interval is
 more than 2, and its candidate median is more than 5 ms above its baseline
-median. A row that only the candidate prints is not a regression. A failed
-row fails the job and sends the release back until the cause is named in
-the notes or fixed. Do not push the version tag before this check passes or
-the notes name the cause.
+median. A row that only the candidate prints is not a regression. A gated
+row that the candidate does not print fails. A failed row fails the job and
+sends the release back until the cause is named in the notes or fixed. Do
+not push the version tag before this check passes or the notes name the
+cause.
 
 Record `scan_ms` and `rebuild_ms`, but do not gate them. Scan time depends on
 the checkout's file count. The rebuild measurement includes preparation of
