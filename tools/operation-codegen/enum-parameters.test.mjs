@@ -61,6 +61,8 @@ test('declared parameter enums render as closed Rust types with exact wire encod
   // The generated module carries the closed enum.
   assert.match(files['parameters.rs'], /Self::Before => "before"/);
   assert.match(files['parameters.rs'], /Self::Both => "both"/);
+  // No string conversion, so an invented string cannot become a parameter.
+  assert.doesNotMatch(files['parameters.rs'], /FromStr|TryFrom|impl From/);
 });
 
 test('identical value sets share one enum and distinct sets get distinct names', () => {

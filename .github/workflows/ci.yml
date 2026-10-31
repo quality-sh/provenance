@@ -156,8 +156,8 @@ jobs:
         with:
           node-version: 24
       - run: sfw npm ci --prefix tools/operation-codegen
-      - name: Run the grammar linter tests
-        run: node --test grammar-lint.test.mjs
+      - name: Run the grammar linter and parameter enum tests
+        run: node --test grammar-lint.test.mjs enum-parameters.test.mjs
         working-directory: tools/operation-codegen
       - run: node --test tools/skills/*.test.mjs
       - run: node tools/operation-codegen/check-source-control.mjs
