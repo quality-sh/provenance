@@ -43,7 +43,7 @@ provenance-scanner.workspace = true
 provenance-ste100.workspace = true
 provenance-contract.workspace = true
 provenance-store.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.3.1" }
+provenance-transport = { path = "../provenance-transport", version = "0.3.2" }
 remove_dir_all.workspace = true
 rustix.workspace = true
 semver.workspace = true
@@ -81,4 +81,4 @@ tempfile.workspace = true
 predicates.workspace = true
 rmcp = { version = "=2.2.0", default-features = false, features = ["client"] }
 tar.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.3.1", features = ["test-fixture"] }
+provenance-transport = { path = "../provenance-transport", version = "0.3.2", features = ["test-fixture"] }

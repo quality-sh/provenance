@@ -280,7 +280,7 @@ fn workspace_release_versions_are_unified() {
         .as_array()
         .unwrap()
         .iter()
-        .all(|package| package["version"] == "0.3.1"));
+        .all(|package| package["version"] == "0.3.2"));
 
     let workspace = workspace_root();
     let sdk: Value = serde_json::from_slice(
@@ -291,8 +291,8 @@ fn workspace_release_versions_are_unified() {
         &fs::read(workspace.join("packages/create-provenance/package.json")).unwrap(),
     )
     .unwrap();
-    assert_eq!(sdk["version"], "0.3.1");
-    assert_eq!(initializer["version"], "0.3.1");
+    assert_eq!(sdk["version"], "0.3.2");
+    assert_eq!(initializer["version"], "0.3.2");
     let targets: Value =
         serde_json::from_slice(&fs::read(workspace.join(".github/release-targets.json")).unwrap())
             .unwrap();
@@ -315,7 +315,7 @@ fn workspace_release_versions_are_unified() {
         .as_object()
         .unwrap()
         .values()
-        .all(|version| version == "0.3.1"));
+        .all(|version| version == "0.3.2"));
 }
 
 #[test]
@@ -355,7 +355,7 @@ fn release_version_preflight_gates_every_artifact_build() {
     {
         let output = Command::new("bash")
             .arg(script)
-            .arg("v0.3.1")
+            .arg("v0.3.2")
             .current_dir(workspace)
             .output()
             .expect("run release version preflight");

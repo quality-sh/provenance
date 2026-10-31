@@ -113,8 +113,8 @@ rows of the report and any cause explanation to the GitHub Release body under
 Tag and push the release commit:
 
 ```sh
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
 The `Release` workflow creates the GitHub Release, attaches archives, and generates release notes.
@@ -147,7 +147,7 @@ The release rejects a tag unless all versions equal the tag without its `v`
 prefix.
 
 A tag with a SemVer prerelease component is published as a prerelease, so
-`v0.3.1-rc.1` is the way to rehearse a release without announcing one. npm
+`v0.3.2-rc.1` is the way to rehearse a release without announcing one. npm
 publishes that version under the `next` tag; stable versions use `latest`.
 
 ## Never `--all-features`
