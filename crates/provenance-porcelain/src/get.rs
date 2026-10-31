@@ -301,6 +301,11 @@ pub enum ReadError {
     InvalidOptions,
     NotFound,
     AmbiguousIdentity,
+    /// The review host refused one request field.
+    InvalidInput {
+        field: String,
+        message: String,
+    },
     Operation(String),
 }
 
@@ -310,7 +315,9 @@ impl Display for ReadError {
             Self::InvalidOptions => formatter.write_str("unsupported read options"),
             Self::NotFound => formatter.write_str("record does not exist"),
             Self::AmbiguousIdentity => formatter.write_str("record ID is not unique"),
-            Self::Operation(message) => formatter.write_str(message),
+            Self::InvalidInput { message, .. } | Self::Operation(message) => {
+                formatter.write_str(message)
+            }
         }
     }
 }
@@ -328,6 +335,9 @@ impl ReadError {
             Self::NotFound => serde_json::json!({"kind": "resource_not_found"}),
             Self::AmbiguousIdentity => serde_json::json!({
                 "kind": "invalid_input", "reason": "invalid_value", "field": "target"
+            }),
+            Self::InvalidInput { field, .. } => serde_json::json!({
+                "kind": "invalid_input", "reason": "invalid_value", "field": field
             }),
             Self::Operation(_) => serde_json::json!({"kind": "operation_failed"}),
         };

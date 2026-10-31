@@ -642,6 +642,9 @@ the field, and queues nothing, when:
 - the thread's working directory, which the host reads with `thread/read` from a
   stdio `codex app-server`, is not in the repository.
 
+The CLI with `--format json` and the MCP `get` tool return this refusal as the
+same `invalid_input` error object, with the same `field`.
+
 The host then attaches a native subscription, reads the full document and
 queues it with `codex queue --thread THREAD --message MESSAGE` before it
 replies. A page write that lands during the read starts the read again, at most

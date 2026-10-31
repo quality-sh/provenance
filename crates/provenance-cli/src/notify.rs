@@ -77,14 +77,17 @@ fn register(context: &RepoContext, mut body: Value) -> Result<Registration, Read
             let text = response.into_string().unwrap_or_default();
             let refusal: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
             let error = &refusal["error"];
-            let mut message = error["message"]
+            let message = error["message"]
                 .as_str()
                 .unwrap_or("the review host refused the notify request")
                 .to_owned();
-            if let Some(field) = error["field"].as_str() {
-                message = format!("{message} (field {field})");
-            }
-            return Err(ReadError::Operation(message));
+            return Err(match error["field"].as_str() {
+                Some(field) if error["kind"] == "invalid_input" => ReadError::InvalidInput {
+                    field: field.to_owned(),
+                    message,
+                },
+                _ => ReadError::Operation(message),
+            });
         }
         Err(error) => return Err(operation(anyhow::Error::new(error))),
     }
