@@ -79,7 +79,9 @@ pub fn revision_follows_every_key_and_byte<H: Harness>(mut harness: H) {
 }
 
 /// A per-key set lands its puts and deletes, and returns the revision of the
-/// whole tree after the write. The set has no base, so an adapter reads and
+/// whole tree after the write.
+///
+/// The set has no base, so an adapter reads and
 /// hashes the whole tree after the write lands; the local adapter does this
 /// under the publication lock.
 pub fn publish_lands_puts_and_deletes<H: Harness>(mut harness: H) {
