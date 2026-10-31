@@ -140,15 +140,11 @@ fn unaccepted_registration_fails_and_leaves_no_registration() {
 
 #[test]
 #[verifies("rule_review_notify_consistent_start", examples)]
-fn page_write_during_registration_is_not_lost() {
+fn page_writes_during_every_registration_read_are_not_lost() {
     let setup = Setup::start();
-    for index in 0..3 {
-        create(
-            setup.path(),
-            &format!("rule_before_{index}"),
-            "rule",
-            &["--requirement-id", "req_notify"],
-        );
+    // With one record on each page, every read of the document takes many pages.
+    for index in 0..12 {
+        page_rule(&setup.host, &format!("rule_before_{index}"), "req_notify");
     }
     let mut command = setup.host.cli();
     setup.codex.configure(&mut command);
@@ -169,13 +165,13 @@ fn page_write_during_registration_is_not_lost() {
         setup.path().to_str().unwrap(),
     ]);
     let registering = std::thread::spawn(move || review_host_support::waits::output(&mut command));
-    // A person writes on the page while the host reads the first document in pages.
+    // A person writes on the page without a pause, so a write lands during each read,
+    // also during the read after the last retry.
     let mut written = Vec::new();
-    while !registering.is_finished() && written.len() < 6 {
+    while !registering.is_finished() && written.len() < 80 {
         let id = format!("rule_race_{}", written.len());
         page_rule(&setup.host, &id, "req_notify");
         written.push(id);
-        std::thread::sleep(Duration::from_millis(750));
     }
     registration(&registering.join().unwrap());
 
