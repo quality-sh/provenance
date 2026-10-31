@@ -636,13 +636,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
+      # Restore only: the default-features cache holds most of the same
+      # dependencies, and one more saved cache would push the repository
+      # over its cache limit.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: v1
-          shared-key: doc-tests
+          shared-key: test-default-features
           add-job-id-key: "false"
-          cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: false
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
       - run: cargo test --workspace --all-features --doc --no-fail-fast
