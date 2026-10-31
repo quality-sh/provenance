@@ -58,8 +58,12 @@ session reads the rendered tree as a builder would, and fixes what does not read
 
 ## Invocation
 
-Two modes. Every session starts or reuses the review host (`provenance review --detach`)
-and gives the person the page link as plain text, so they follow records as they land. Every
+Two modes. The first action of every session, before the first question, opens the
+requirements view where the person can see it. A desktop app with a browser pane opens the
+review page in that pane. Claude Desktop and ChatGPT desktop open the MCP document view. A
+plain CLI session runs `provenance review --detach` without `--no-open`, so the system
+browser opens the page. The view shows the anchor inside the tree of its parent, never as
+a root. The page stays open, and the person watches each record land after each answer. Every
 session ends with a handoff that gives the link again.
 
 ### Chart
@@ -178,22 +182,34 @@ Read the Question's Topic and its Requirement, then select the lowest Requiremen
 obligation the answer concerns. Read its children before selection. Use that Requirement
 for the discussion and new records. Re-select when the answer concerns another child.
 
-A spawned record must add meaning beyond the position. Do not automatically create a
-Requirement and Rule for each Resolution. Identical statements require a meaning check;
-rewriting the words does not remove a repeated obligation. A precise obligation can
-correctly occur in a position and an independently needed Rule.
+The tree reads as a spec. A decision that settles a Question creates a Resolution, and the
+Resolution spawns a child Requirement (`refines` the selected Requirement, `spawned_by` the
+Resolution). The Rules of that decision go under the child and name the Resolution as their
+producer while it is still proposed, so its impact view shows them before approval. No Rule
+goes directly under the anchor. The spawned Requirement states the product behaviour that the
+decision sets, not that a choice was made; it must add meaning beyond the position. Identical
+statements require a meaning check; rewriting the words does not remove a repeated
+obligation. A precise obligation can correctly occur in a position and an independently
+needed Rule.
+
+Every record that a session creates goes to review at once, so the person can approve each
+record on its own. Requirement create opens a review submission; a Rule, Resolution,
+Boundary, or Source is submitted right after its create.
 
 Examples:
 
 - "The owner can set the mascot appearance" creates a direct child Requirement under
   appearance. No choice among alternatives needs to be recorded.
-- "A share link expires after seven days" creates a direct Rule under link expiry.
-  A Requirement alone can ground it; a Resolution producer is optional.
+- "A share link expires after seven days" creates a direct Rule under the link expiry
+  child Requirement. A Requirement alone can ground it; a Resolution producer is optional.
 - Selecting a robot instead of an animal to show repair without suggesting injury
-  creates a Resolution under appearance. No separate obligation requires a spawned record.
-- Selecting configurable expiry instead of a fixed duration can produce a separate
-  Requirement that owners receive advance notice of link expiry. Its parent link is `refines`; its
-  producing Resolution link is `spawned_by`. These links have different meanings.
+  creates a Resolution under appearance. It spawns the child Requirement "The mascot is a
+  robot that shows a repair state when the product fails", and the Rules of that state go
+  under the child.
+- Selecting configurable expiry instead of a fixed duration creates a Resolution that
+  spawns the child Requirement "The owner sets the expiry period of each link". Its parent
+  link is `refines`; its producing Resolution link is `spawned_by`. These links have
+  different meanings.
 
 Read acceptance for the current content revision from review records. Read lifecycle
 separately. Answer text and `made_by` prove neither acceptance nor lifecycle. Omit guessed
