@@ -1,7 +1,15 @@
 /** Structural gate cases. Each one reads one anonymous packet and returns its findings. */
 
 const writeVerb = /\s(create|update|answer|claim|release|submit|close|discuss|reply)\b/;
-const outputFilter = /\|\s*(grep|rg|jq|sed|head|tail|awk|cut)\b/;
+const outputFilter = /\|\s*(grep|rg|jq|sed|head|tail|awk|cut|sort|wc|tr|python3?|node)\b/;
+
+// A read counts only in a call with no write, and only in a segment whose output is not filtered.
+// The segment names the record, or reads it through a loop variable such as `for q in ...; do $P questions $q get`.
+function freshRead(command, id) {
+  if (writeVerb.test(command) || !command.includes(id)) return false;
+  return command.split(/\n|;|&&|\|\|/).some(segment => /\bget\b/.test(segment) && !outputFilter.test(segment)
+    && (segment.includes(id) || (/\$\{?\w+\}?\s+get\b/.test(segment) && new RegExp(`\\bin\\b[^;]*\\b${id}\\b`).test(command))));
+}
 
 function shellCommands(turn) {
   const out = [];
@@ -69,16 +77,15 @@ export function freshReads(packet) {
     const list = commands(turn);
     const firstWrite = list.findIndex(command => writeVerb.test(command));
     if (firstWrite < 0) continue;
-    const reads = list.slice(0, firstWrite).filter(command => !writeVerb.test(command) && !outputFilter.test(command) && /\bget\b/.test(command));
-    if (!reads.some(command => command.includes('topic_pay'))) findings.push({ turn: turn.index, missing: 'topic_pay' });
+    if (!list.slice(0, firstWrite).some(command => freshRead(command, 'topic_pay'))) findings.push({ turn: turn.index, missing: 'topic_pay' });
     const before = byId(turn.before.questions);
     for (const question of turn.after.questions) {
       const prior = before.get(question.id);
       if (!prior || JSON.stringify(prior) === JSON.stringify(question)) continue;
       const writeAt = list.findIndex(command => writeVerb.test(command) && command.includes(question.id));
       const until = writeAt < 0 ? firstWrite : writeAt;
-      const read = list.slice(0, until).some(command => !writeVerb.test(command) && !outputFilter.test(command)
-        && /\bget\b/.test(command) && (command.includes(question.id) || command.includes('--view children')));
+      const read = list.slice(0, until).some(command => freshRead(command, question.id)
+        || (freshRead(command, 'topic_pay') && command.includes('--view children')));
       if (!read) findings.push({ turn: turn.index, missing: question.id });
     }
   }

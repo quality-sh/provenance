@@ -25,6 +25,11 @@ Before you call code redundant or delete tests, run
    the next session what to do without reconstructing your chat.
 5. **The tree reads as a spec.** At every handoff a developer can build from the anchor's
    requirement tree alone. See "The tree is the spec".
+6. **Read the stored state at the start of every turn.** Before the first graph write of a
+   turn, read the Topic, and each Question that you work on, with a `get` command in its
+   own tool call. Do not filter that output: no `| head`, `| grep`, `| jq`, or other pipe.
+   This applies to every turn that writes, also a turn that only claims, releases, or adds
+   a thread note. See "Recover before each turn".
 
 One question per session is **not** the invariant. Grill turns can drain a topic question
 by question; expensive methods claim one question and often stop at a phase boundary.
@@ -399,8 +404,8 @@ existing Questions, never before them. If a new Question must come first, ask th
 person; do not change the stored order yourself. When the person answers an existing
 Question, answer that Question in the graph, even if you also mint follow-up Questions.
 
-Use the same fresh Topic read before a turn that only adds a thread note, checks
-saved decisions, or writes a handoff. Such turns do not need a Question read unless
+Use the same fresh, unfiltered Topic read before a turn that only adds a thread note,
+claims or releases the Topic, checks saved decisions, or writes a handoff. Such turns do not need a Question read unless
 they work on a Question. A claim command or remembered handoff does not replace
 the required get commands.
 

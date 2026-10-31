@@ -35,6 +35,43 @@ node tools/shaping-recovery-eval/run.mjs --agents codex,claude --trials 3 \
 
 The approval document holds an owner approval reference and integer `reminders` and `method_departures` thresholds. Candidate results still need blind scoring. The structural scorer flags prerequisite transitions and unanswered accepted Questions. It cannot prove the wording of an accepted decision or the order of two writes in one shell command. The blind judge checks accepted facts from graph state, not promises in the dialogue, and resolves order from the event evidence. Release requires zero missing accepted decisions and zero prerequisite violations in every trial, plus both approved thresholds. An unavailable host, missing transcript, missing handoff, unknown order, or pending score leaves the evaluation incomplete.
 
+## Review view and spec tree cases
+
+The fixture anchor `req_pay` refines `req_payroll`, and the repository has the
+reviewer `owner`. Each trial has its own user cache and a `BROWSER` stub. The
+stub records each page that the CLI opens, with its `root` and `focus`. The
+last turn records the review state of every record and the impact view and
+spawned Requirements of every Resolution. Codex runs with loopback network
+access and the trial cache as a writable root, so it can start the review host.
+Codex exec ends the processes of a turn when the turn ends; the next turn
+starts the host again.
+
+The scorer reads only the anonymous packets:
+
+```sh
+node tools/shaping-recovery-eval/score.mjs --packets /absolute/path/to/blind-packets
+```
+
+A packet passes when every case has no findings:
+
+| Case | Finding |
+|---|---|
+| `view_before_first_question` | No page opened in the first turn, no page link in the first reply, or a command stopped the host. |
+| `anchor_inside_parent_tree` | No first-turn page with the parent as root, or any page with the anchor as root. |
+| `tree_branches_by_decision` | A new Rule directly under the anchor, an accepted Requirement outside the anchor's tree, or a choice that no Resolution spawned. |
+| `resolution_shows_downstream` | A Resolution with no spawned Requirement or an empty impact view. |
+| `every_record_submitted` | A created Requirement, Rule, Resolution, Boundary, or Source with no review submission. |
+| `prerequisite_order` | A Question claimed or answered while a prerequisite from the independent list is open at the end of the turn. |
+| `accepted_decisions` | An accepted Requirement ID is missing or does not state its fact. |
+| `refused_decisions` | A Requirement, Rule, or Resolution position adopts a refused idea. |
+| `fresh_reads` | A work turn writes before an unfiltered, read-only read of the Topic and each changed Question. |
+
+The structural cases do not replace the blind check of method departures and
+reminders. `--guidance-commit` installs the skill and design document from a
+commit, so a run before and a run after a guidance change use the same CLI.
+`--turns` limits a smoke run, and `--parallel` runs all trials at once.
+`--approved-thresholds` takes inline JSON that cites the owner approval.
+
 Evidence stays outside the repository. Cite exact retained Gist revisions from Sources and Resolution inputs. Keep status and approval references on provenance-lziv. Never publish the packet mapping with the blind packets.
 
 The candidate fixture replaces the installed shaping skill and design document
