@@ -38,6 +38,7 @@ mod writers;
 pub use updates::*;
 
 pub use access::GuardedStore;
+pub(crate) use access::StateEntry;
 pub use archive_history::{ArchiveCommitGap, ArchiveCommitGapReason};
 pub use graph_validation::validate_relations;
 pub use ideation_batches::{
@@ -88,10 +89,10 @@ fn ensure_new_ids_assignable<T>(
     Ok(())
 }
 use readers::{
-    deserialize_closed, read_ideation_landings, read_jsonl, read_jsonl_unlocked,
-    read_legacy_dispositions, read_message_shards_unlocked,
+    read_ideation_landings, read_jsonl, read_jsonl_unlocked, read_legacy_dispositions,
+    read_message_shards_unlocked,
 };
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -125,6 +126,9 @@ enum Access {
     },
     /// Reads with no lock and refuses every write.
     ReadOnly,
+    /// Reads one view of canonical state with no lock and no disk access,
+    /// and refuses every write and stage.
+    View(std::sync::Arc<crate::storage::StateView>),
 }
 
 #[derive(Clone, Debug)]
@@ -154,6 +158,17 @@ pub struct StateStore {
     pub(crate) layout: ProvenanceLayout,
     access: Access,
     record_stamp: RecordStamp,
+    storage: Storage,
+}
+
+/// The adapter that a store publishes through.
+#[derive(Clone, Debug)]
+enum Storage {
+    /// A local-disk adapter over the layout of the store, made at each use.
+    /// A layout-level store and a staged store use it.
+    Layout,
+    /// The adapter of the opened repository.
+    Shared(std::sync::Arc<dyn crate::storage::StateStorage>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,7 +197,7 @@ impl StateStore {
         self.with_repository_read(|held| {
             let path = held.layout.manifest_path();
             crate::test_probes::record_read(&path);
-            manifest_from_bytes(&std::fs::read(&path)?).map_err(|error| {
+            manifest_from_bytes(&held.read_state(&path)?).map_err(|error| {
                 if error.is::<serde_json::Error>() {
                     error.context(format!("failed to parse manifest {path}"))
                 } else {
@@ -198,7 +213,7 @@ impl StateStore {
     ) -> anyhow::Result<(SchemaVersion, Option<Scope>)> {
         self.with_repository_read(|held| {
             let manifest: ManifestProjection =
-                deserialize_closed(&std::fs::read_to_string(held.layout.manifest_path())?)?;
+                deserialize_closed(&held.read_state_text(&held.layout.manifest_path())?)?;
             let selected = manifest
                 .scopes
                 .into_iter()
@@ -213,25 +228,12 @@ impl StateStore {
 
     pub fn list_scope_directories(&self) -> anyhow::Result<Vec<String>> {
         self.with_repository_read(|held| {
-            let scopes_dir = held.layout.scopes_dir();
-            if !scopes_dir.exists() {
-                return Ok(Vec::new());
-            }
-
-            let mut scope_directories = Vec::new();
-            for entry in std::fs::read_dir(scopes_dir)? {
-                let entry = entry?;
-                if entry.file_type()?.is_dir() {
-                    scope_directories.push(entry.file_name().into_string().map_err(|name| {
-                        anyhow::anyhow!(
-                            "non-UTF-8 scope directory name: {}",
-                            name.to_string_lossy()
-                        )
-                    })?);
-                }
-            }
-            scope_directories.sort();
-            Ok(scope_directories)
+            held.state_keys_under(&held.layout.scopes_dir(), StateEntry::Directory, |path| {
+                anyhow::anyhow!(
+                    "non-UTF-8 scope directory name: {}",
+                    path.file_name().unwrap_or_default().to_string_lossy()
+                )
+            })
         })
     }
 
@@ -322,6 +324,21 @@ pub fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("expected string enum serialization"))?
         .to_string())
+}
+
+/// Deserializes `input` and refuses a field that `T` does not know.
+pub(crate) fn deserialize_closed<T: DeserializeOwned>(input: &str) -> anyhow::Result<T> {
+    let mut unknown = None;
+    let mut deserializer = serde_json::Deserializer::from_str(input);
+    let value = serde_ignored::deserialize(&mut deserializer, |path| {
+        if unknown.is_none() {
+            unknown = Some(path.to_string());
+        }
+    })?;
+    if let Some(path) = unknown {
+        anyhow::bail!("unknown field `{path}`");
+    }
+    Ok(value)
 }
 
 pub(crate) fn manifest_from_bytes(bytes: &[u8]) -> anyhow::Result<Manifest> {

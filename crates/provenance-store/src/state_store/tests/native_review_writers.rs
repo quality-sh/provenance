@@ -103,6 +103,7 @@ pub(super) fn seed_native_records(
         .unwrap();
     store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: id("question_native"),
             topic_id: id("topic_native"),

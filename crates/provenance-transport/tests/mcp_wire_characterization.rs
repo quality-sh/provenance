@@ -20,7 +20,7 @@ use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 3_018_221_624_330_917_790;
+const TOOL_LIST_FNV1A: u64 = 563_504_292_512_349_764;
 
 /// The tools that follow the catalog tools, in list order.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[

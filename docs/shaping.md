@@ -58,15 +58,26 @@ session reads the rendered tree as a builder would, and fixes what does not read
 
 ## Invocation
 
-Two modes. Every session starts or reuses the review host (`provenance review --detach`)
-and gives the person the page link as plain text, so they follow records as they land. Every
+Two modes. The first action of every session opens the requirements view where the person
+can see it. This occurs before the first question and before the first graph write. A
+desktop app with a browser pane opens the review page in that pane. Claude Desktop and
+ChatGPT desktop open the MCP document view. A plain CLI session runs `provenance review
+--detach` without `--no-open`, so the system browser opens the page.
+
+The view shows the tree of the anchor's parent, so the anchor is inside that tree and is
+not a root. In Chart mode, the session opens the view of the parent first, then creates the
+anchor under that parent. There is one exception: an anchor with no parent. The session
+creates that anchor first, then opens its own page. This is the only graph write before the
+view opens, and the only page that has the anchor as its root.
+
+The page stays open, and the person watches each record land after each answer. Every
 session ends with a handoff that gives the link again.
 
 ### Chart
 
 A loose idea arrives. One session's work — do **not** also resolve questions.
 
-1. Create (or select) the anchor requirement.
+1. Create (or select) the anchor requirement, in the order that "Invocation" gives.
 2. Grill to surface:
    - **Appetite** (Shape Up): how much time is this worth? Recorded up front, re-checked
      as requirements accumulate.
@@ -84,15 +95,60 @@ The turn loop, against an anchor requirement:
 1. **Prime** — load the map low-res. The frontier is *computed from graph semantics*,
    not hand-wired: requirements that cite no source, unresolved `contradicts` pairs,
    requirements that can't produce a rule, open questions and unexplored topics.
-2. **Claim** — at method-dependent granularity (see table below). Claiming happens
-   before any work so concurrent sessions skip claimed items.
-3. **Resolve and land as you go** — each question is recorded the moment it resolves,
-   before the dialogue moves on. Expect fan-out (see below).
-4. **Graduate fog** the answers made sharp; update or kill questions the decisions
+2. **Recover before each turn** — at the start of every turn, read the full stored
+   Topic and each Question that the turn will work on, before the first write or
+   Question work. This includes accepted answers supplied by the owner. Complete
+   the reads as a separate tool step and inspect the output before any claim or
+   write. Do not combine a recovery read and a claim or write in one command or
+   tool call. A get after a claim does not count, even in the same call. Read the
+   Topic again for note-only, audit, and handoff turns. Run record get commands
+   without output filters; keep claim and method fields visible. Do not pipe these
+   reads through grep, rg, jq, sed, head, or another filter. A previous turn's read,
+   a claim command, or a handoff does not replace these reads. If output is cut
+   short, repeat the read with enough output capacity before work.
+   Check the Topic claim, Question claim, Topic membership, status, and Question method.
+   Repeat these reads after a restart or context compaction. A Topic claim does not
+   select a method: each Question has its own method. Stop work on the selected item
+   if another actor holds a required claim, recovery is incomplete, or the Question
+   is no longer open. Read `provenance <topic_id> get --view children --format json`
+   for the bounded shaping summary. Use it for selection only when `complete` is true.
+   A filtered, depth-limited, truncated, or unchecked read is incomplete. Use record
+   reads and all collection pages to recover the missing data.
+   If the owner directly settles a prototype Question before prototypes are made,
+   record the choice and why it settles the Question without prototypes.
+3. **Claim** — at method-dependent granularity (see table below). Complete the
+   recovery step first. A claim is a graph write. Claim before Question work so
+   concurrent sessions skip claimed items.
+4. **Resolve and land as you go** — each question is recorded the moment it resolves,
+   before the dialogue moves on or the turn ends. For each accepted owner decision,
+   read its resulting graph records and check that they state that decision. Check
+   every decision in the reply. A thread note or a promise is insufficient. Use
+   only the record kinds the answer requires. Do not add prerequisites that
+   postpone an accepted decision. Preserve existing prerequisites and claims;
+   if they prevent landing, report the blocker and the unlanded decision, then
+   stop the interview. Expect fan-out (see below).
+5. **Graduate fog** the answers made sharp; update or kill questions the decisions
    invalidated.
-5. **Stop and hand off** — the turn ends at the first stop condition:
+6. **Stop and hand off** — the turn ends at the first stop condition:
    context budget nearing its threshold, human done, a fork/verify spawn
    (two-phase boundary), or the topic drained.
+
+### Question prerequisites
+
+A Question can name same-Topic Questions in `depends_on`. Create and update accept
+this list through JSON input. An update replaces the list; `[]` clears it. IDs are
+stored once, in ID order. Missing, cross-Topic, self, and cyclic references are
+refused before the write is published. A prerequisite change is a content change
+and changes the review revision with the other Question content.
+
+Only an answered prerequisite permits readiness. An open, human-blocked, or
+archived prerequisite blocks the dependent Question. Closed and archived Topics
+have no ready Questions. Claims restrict work on an item; they do not hide it from
+discovery. Several ready IDs are choices. ID order is display order, not priority.
+
+The children view retains its records and adds Topic and Question claims, Question
+methods, ready IDs, and blocked reasons. The existing item limit and a 64 KiB
+summary limit bound the read. An incomplete summary cannot authorize selection.
 
 ### Invariants
 
@@ -133,22 +189,41 @@ Read the Question's Topic and its Requirement, then select the lowest Requiremen
 obligation the answer concerns. Read its children before selection. Use that Requirement
 for the discussion and new records. Re-select when the answer concerns another child.
 
-A spawned record must add meaning beyond the position. Do not automatically create a
-Requirement and Rule for each Resolution. Identical statements require a meaning check;
-rewriting the words does not remove a repeated obligation. A precise obligation can
-correctly occur in a position and an independently needed Rule.
+The tree reads as a spec:
+
+- A decision that settles a Question creates a Resolution. The Resolution spawns a child
+  Requirement. The child `refines` the selected Requirement and is `spawned_by` the
+  Resolution.
+- The Rules of that decision go under the child. They name the Resolution as their producer
+  while it is still proposed, so its impact view shows them before approval.
+- No Rule goes directly under the anchor.
+- A person who accepts one option and rejects another has made a choice. This is true for
+  every Question method. When the person gives no reason, the rationale records their
+  selection in their words. The Resolution is still created.
+- The spawned Requirement states the product behaviour that the decision sets, not that a
+  choice was made. It must add meaning beyond the position.
+- Identical statements require a meaning check. Rewriting the words does not remove a
+  repeated obligation. A precise obligation can correctly occur in a position and in an
+  independently needed Rule.
+
+Every record that a session creates goes to review at once, so the person can approve each
+record on its own. Requirement create opens a review submission; a Rule, Resolution,
+Boundary, or Source is submitted right after its create.
 
 Examples:
 
 - "The owner can set the mascot appearance" creates a direct child Requirement under
   appearance. No choice among alternatives needs to be recorded.
-- "A share link expires after seven days" creates a direct Rule under link expiry.
-  A Requirement alone can ground it; a Resolution producer is optional.
+- "A share link expires after seven days" creates a direct Rule under the link expiry
+  child Requirement. A Requirement alone can ground it; a Resolution producer is optional.
 - Selecting a robot instead of an animal to show repair without suggesting injury
-  creates a Resolution under appearance. No separate obligation requires a spawned record.
-- Selecting configurable expiry instead of a fixed duration can produce a separate
-  Requirement that owners receive advance notice of link expiry. Its parent link is `refines`; its
-  producing Resolution link is `spawned_by`. These links have different meanings.
+  creates a Resolution under appearance. It spawns the child Requirement "The mascot is a
+  robot that shows a repair state when the product fails", and the Rules of that state go
+  under the child.
+- Selecting configurable expiry instead of a fixed duration creates a Resolution that
+  spawns the child Requirement "The owner sets the expiry period of each link". Its parent
+  link is `refines`; its producing Resolution link is `spawned_by`. These links have
+  different meanings.
 
 Read acceptance for the current content revision from review records. Read lifecycle
 separately. Answer text and `made_by` prove neither acceptance nor lifecycle. Omit guessed

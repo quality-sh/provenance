@@ -9,6 +9,8 @@ use crate::layout::{with_initialized_graph, GraphNotInitialized, ProvenanceLayou
 use crate::publication::SectionHandle;
 use crate::settings::{Settings, SettingsError};
 use crate::state_store::StateStore;
+use crate::storage::local::LocalStateStorage;
+use crate::storage::StateStorage;
 use crate::write_error::{SourceFailure, WriteError, WriteFailure};
 use camino::{Utf8Path, Utf8PathBuf};
 use provenance_core::protocol::failure::{InvalidInputReason, OperationFailure};
@@ -19,6 +21,7 @@ use std::sync::Arc;
 
 /// One opened repository. A clone shares the open; one open per command or host.
 #[derive(Clone, Debug)]
+#[rule("rule_repository_handle_stays_a_handle")]
 #[verifies("rule_operation_acts_on_opened_repository", construction)]
 pub struct Repository {
     inner: Arc<Inner>,
@@ -30,6 +33,7 @@ pub struct Repository {
 struct Inner {
     identity: RepositoryIdentity,
     layout: ProvenanceLayout,
+    storage: Arc<dyn StateStorage>,
 }
 
 /// What a repository is, apart from where its state lives.
@@ -133,6 +137,7 @@ impl Repository {
                     scope,
                     settings: Arc::new(settings),
                 },
+                storage: Arc::new(LocalStateStorage::new(layout.clone())),
                 layout,
             }),
             section: None,
@@ -228,7 +233,33 @@ impl Repository {
             self.inner.identity.clone(),
             self.inner.layout.clone(),
             self.section.clone(),
+            Arc::clone(self.storage()),
         )
+    }
+
+    /// The storage that holds the canonical state of this repository.
+    pub(crate) fn storage(&self) -> &Arc<dyn StateStorage> {
+        &self.inner.storage
+    }
+
+    /// A store over one consistent view of the canonical state.
+    ///
+    /// The view is read in the publication section, after recovery; a handle
+    /// that holds a section reads in that section and takes no second lock.
+    /// The store answers every list and the manifest from the view, with no
+    /// disk access, and refuses every write and stage. Derived state, such as
+    /// verification runs, is not in the view.
+    #[rule("rule_canonical_state_is_read_as_one_view")]
+    pub fn view(&self) -> anyhow::Result<StateStore> {
+        let view = self
+            .store()
+            .with_repository_publication(|_| Ok(self.storage().read_view()?))?;
+        Ok(StateStore::over_view(
+            self.inner.identity.clone(),
+            self.inner.layout.clone(),
+            Arc::new(view),
+            Arc::clone(self.storage()),
+        ))
     }
 
     /// The section that this handle holds, if it came from a section guard.
