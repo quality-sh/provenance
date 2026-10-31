@@ -1,8 +1,8 @@
 //! An entry under `.provenance/state` that is not the manifest or a shard is
 //! not canonical state.
 //!
-//! A write still lands and reports success, and the view leaves the entry
-//! out. A shard that the process cannot read is still an error.
+//! A write through the storage port still lands and reports success, and
+//! the view leaves the entry out. A shard that the process cannot read is still an error.
 #![cfg(unix)]
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -10,6 +10,7 @@ use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;
 use provenance_store::layout::ProvenanceLayout;
 use provenance_store::repository::Repository;
+use provenance_store::review::WriteDiscussion;
 use provenance_store::state_store::CreateSourceInput;
 use std::os::unix::fs::PermissionsExt;
 
@@ -61,15 +62,21 @@ fn make_unreadable(path: &Utf8Path) -> bool {
     std::fs::read(path).is_err()
 }
 
-/// A write lands and reports success, and the view lists both Sources.
+/// A write that lands through the storage port reports success, and the
+/// view lists the Source and the new message.
 fn assert_write_and_view_work(repository: &Repository) {
-    repository
-        .store()
-        .create_source(source_input("source_second"))
-        .unwrap();
-    let sources = repository.view().unwrap().list_sources(&scope()).unwrap();
-    let ids: Vec<_> = sources.iter().map(|source| source.id.as_str()).collect();
-    assert_eq!(ids, ["source_first", "source_second"]);
+    let start: WriteDiscussion = serde_json::from_value(serde_json::json!({
+        "scope_id": "default",
+        "parent": {"node_type": "source", "node_id": "source_first"},
+        "actor": "ben",
+        "declared_by": null,
+        "action": {"kind": "start", "role": "user", "body": "A stray entry is not state."}
+    }))
+    .unwrap();
+    repository.store().write_discussion(start).unwrap();
+    let view = repository.view().unwrap();
+    assert_eq!(view.list_sources(&scope()).unwrap().len(), 1);
+    assert_eq!(view.list_messages(&scope()).unwrap().len(), 1);
 }
 
 #[cfg(target_os = "linux")]
