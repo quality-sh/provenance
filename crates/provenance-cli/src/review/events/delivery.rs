@@ -186,10 +186,14 @@ impl Deliveries {
             })
             .await
             .map_err(|error| Refusal::failed(format!("{error:#}")))?;
+        let mut refused = None;
         for frame in &frames {
-            inner.queue(&target, frame).await.map_err(|error| {
-                Refusal::failed(format!("Codex did not accept the message: {error:#}"))
-            })?;
+            if let Err(error) = inner.queue(&target, frame).await {
+                refused = Some(Refusal::failed(format!(
+                    "Codex did not accept the message: {error:#}"
+                )));
+                break;
+            }
         }
         let (stop, stopped) = watch::channel(false);
         let task = tokio::spawn(deliver(
@@ -201,6 +205,9 @@ impl Deliveries {
         ));
         threads.insert(thread.clone(), Active { stop, task });
         drop(threads);
+        if let Some(refused) = refused {
+            return Err(refused);
+        }
         Ok(Registration {
             client: NotifyClient::Codex,
             thread,
