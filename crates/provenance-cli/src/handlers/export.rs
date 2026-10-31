@@ -2,6 +2,7 @@ use crate::output::OutputFormat;
 use crate::repo_context::RepoContext;
 use crate::store::{ScopeSnapshot, Store};
 use camino::Utf8PathBuf;
+use provenance_store::publication::with_publication_guard;
 use serde::Serialize;
 
 #[derive(Serialize, serde::Deserialize)]
@@ -63,11 +64,14 @@ impl ScopeExport {
     }
 }
 
+/// The export reads its records from one view of the canonical state. The
+/// review and validation checks read the live store in the same section.
 fn export_context(context: &RepoContext) -> anyhow::Result<ScopeExport> {
-    let store = Store::new(&context.open()?);
-    let scope_id = store.repository().scope().clone();
-    store.with_repository_publication(|held| {
-        let snapshot = crate::store::snapshot(held, &scope_id)?;
+    let repository = context.open()?;
+    let scope_id = repository.scope().clone();
+    with_publication_guard(&repository, |guard| {
+        let held = Store::new(guard.repository());
+        let snapshot = crate::store::snapshot(&guard.repository().view()?, &scope_id)?;
         held.ensure_review_portable(&scope_id)?;
         held.validate_ideation_scope(&scope_id)?;
         held.validate_graph_scope(&scope_id)?;

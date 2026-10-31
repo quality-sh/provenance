@@ -1,5 +1,8 @@
 use super::message_ids::{ensure_unique_message_ids, ShardLine};
-use super::{DispositionRecord, Message, ProvenanceLayout, ScopeId, StateStore};
+use super::{
+    deserialize_closed, DispositionRecord, Message, ProvenanceLayout, ScopeId, StateEntry,
+    StateStore,
+};
 use crate::shards;
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
@@ -71,7 +74,7 @@ pub fn parse_line(
 ///
 /// Every reader in this module lands here: [`read_records`] carries the open
 /// families, the closed families and the aliased legacy dispositions;
-/// [`read_jsonl_shards`] carries messages. A family that does not pass
+/// [`read_message_shard_lines`] carries messages. A family that does not pass
 /// through this function is not read at all, which is what makes the version
 /// guard below cover every record rather than the ones somebody remembered.
 ///
@@ -252,27 +255,52 @@ fn unsupported_object_version(
     })
 }
 
-fn read_records<T: DeserializeOwned>(
-    path: &Utf8Path,
+/// How a reader turns the lines of one shard into records.
+struct Reading {
     fields: Fields,
     prepare: fn(&mut serde_json::Value),
-    nested_record_fields: &[&str],
+    nested: &'static [&'static str],
+}
+
+const OPEN: Reading = Reading {
+    fields: Fields::Open,
+    prepare: leave_as_written,
+    nested: NO_NESTED_RECORDS,
+};
+const CLOSED: Reading = Reading {
+    fields: Fields::Closed,
+    ..OPEN
+};
+const LANDINGS: Reading = Reading {
+    nested: IDEATION_LANDING_RECORD_FIELDS,
+    ..OPEN
+};
+const LEGACY_DISPOSITIONS: Reading = Reading {
+    prepare: normalize_disposition_aliases,
+    ..OPEN
+};
+
+/// The records of the shard at `path`, read through `store`; no records
+/// when the shard does not exist.
+fn read_records<T: DeserializeOwned>(
+    store: &StateStore,
+    path: &Utf8Path,
+    reading: &Reading,
 ) -> anyhow::Result<Vec<T>> {
-    if !path.exists() {
+    let Some(contents) = store.state_text(path)? else {
         return Ok(Vec::new());
-    }
-    let contents = std::fs::read_to_string(path)?;
+    };
     let mut records = Vec::new();
     for (index, line) in contents.lines().enumerate() {
         let mut value = parse_line(path, index + 1, line)?;
-        prepare(&mut value);
+        (reading.prepare)(&mut value);
         records.push(record_from_line(
             path,
             index + 1,
             line,
             value,
-            fields,
-            nested_record_fields,
+            reading.fields,
+            reading.nested,
         )?);
     }
     Ok(records)
@@ -284,47 +312,52 @@ pub fn read_jsonl<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, || read_jsonl_unlocked(path))
+    store.state_path_access(path, || read_records(store, path, &OPEN))
 }
 
+/// Reads the shard at `path` through `store`, which holds the section.
+pub(super) fn read_jsonl_held<T: DeserializeOwned>(
+    store: &StateStore,
+    path: &Utf8Path,
+) -> anyhow::Result<Vec<T>> {
+    read_records(store, path, &OPEN)
+}
+
+/// Reads the shard file at `path`; the caller holds the section.
 pub(super) fn read_jsonl_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
-    read_records(path, Fields::Open, leave_as_written, NO_NESTED_RECORDS)
+    read_records(&disk(path), path, &OPEN)
 }
 
 pub(super) fn read_ideation_landings<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, || read_ideation_landings_unlocked(path))
+    store.state_path_access(path, || read_records(store, path, &LANDINGS))
 }
 
 pub(super) fn read_ideation_landings_unlocked<T: DeserializeOwned>(
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    read_records(
-        path,
-        Fields::Open,
-        leave_as_written,
-        IDEATION_LANDING_RECORD_FIELDS,
-    )
+    read_records(&disk(path), path, &LANDINGS)
 }
 
 pub(super) fn read_legacy_dispositions(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<DispositionRecord>> {
-    store.state_path_access(path, || read_legacy_dispositions_unlocked(path))
+    store.state_path_access(path, || read_records(store, path, &LEGACY_DISPOSITIONS))
 }
 
 pub(super) fn read_legacy_dispositions_unlocked(
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<DispositionRecord>> {
-    read_records(
-        path,
-        Fields::Open,
-        normalize_disposition_aliases,
-        NO_NESTED_RECORDS,
-    )
+    read_records(&disk(path), path, &LEGACY_DISPOSITIONS)
+}
+
+/// A store that reads files with no lock, for a caller that holds the
+/// section. File reads use only the path, so the layout root is not used.
+fn disk(path: &Utf8Path) -> StateStore {
+    StateStore::read_only(ProvenanceLayout::new(path.to_owned()))
 }
 
 fn normalize_disposition_aliases(value: &mut serde_json::Value) {
@@ -363,36 +396,19 @@ pub(super) fn read_jsonl_closed<T: DeserializeOwned>(
     store: &StateStore,
     path: &Utf8Path,
 ) -> anyhow::Result<Vec<T>> {
-    store.state_path_access(path, || read_jsonl_closed_unlocked(path))
+    store.state_path_access(path, || read_records(store, path, &CLOSED))
 }
 
-fn read_jsonl_closed_unlocked<T: DeserializeOwned>(path: &Utf8Path) -> anyhow::Result<Vec<T>> {
-    read_records(path, Fields::Closed, leave_as_written, NO_NESTED_RECORDS)
-}
-
-pub(super) fn deserialize_closed<T: DeserializeOwned>(input: &str) -> anyhow::Result<T> {
-    let mut unknown = None;
-    let mut deserializer = serde_json::Deserializer::from_str(input);
-    let value = serde_ignored::deserialize(&mut deserializer, |path| {
-        if unknown.is_none() {
-            unknown = Some(path.to_string());
-        }
-    })?;
-    if let Some(path) = unknown {
-        anyhow::bail!("unknown field `{path}`");
-    }
-    Ok(value)
-}
-
-fn read_jsonl_shards<T: DeserializeOwned>(
+fn read_message_shard_lines<T: DeserializeOwned>(
+    store: &StateStore,
     shard_paths: Vec<Utf8PathBuf>,
-    shard_kind: &str,
 ) -> anyhow::Result<Vec<(T, ShardLine)>> {
     let mut records = Vec::new();
     for path in shard_paths {
         crate::test_probes::record_read(&path);
-        let contents = std::fs::read_to_string(&path)
-            .with_context(|| format!("failed to read {shard_kind} shard {}", path.as_str()))?;
+        let contents = store
+            .read_state_text(&path)
+            .with_context(|| format!("failed to read message shard {}", path.as_str()))?;
         for (index, line) in contents.lines().enumerate() {
             let value = parse_line(&path, index + 1, line)?;
             records.push((
@@ -420,17 +436,21 @@ pub(super) fn read_message_shards(
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
     store.state_path_access(&shards::threads_path(layout, scope), || {
-        read_message_shards_unlocked(layout, scope)
+        read_message_shards_held(store, scope)
     })
+}
+
+fn read_message_shards_held(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Message>> {
+    let rows = read_message_shard_lines(store, message_shard_paths_in(store, scope)?)?;
+    ensure_unique_message_ids(&rows)?;
+    Ok(rows.into_iter().map(|(message, _)| message).collect())
 }
 
 pub(super) fn read_message_shards_unlocked(
     layout: &ProvenanceLayout,
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Message>> {
-    let rows = read_jsonl_shards(message_shard_paths(layout, scope)?, "message")?;
-    ensure_unique_message_ids(&rows)?;
-    Ok(rows.into_iter().map(|(message, _)| message).collect())
+    read_message_shards_held(&StateStore::read_only(layout.clone()), scope)
 }
 
 /// Every month shard of the scope's messages, sorted. All message reads
@@ -439,27 +459,22 @@ pub fn message_shard_paths(
     layout: &ProvenanceLayout,
     scope: &ScopeId,
 ) -> anyhow::Result<Vec<Utf8PathBuf>> {
-    let threads_dir = shards::threads_path(layout, scope)
+    message_shard_paths_in(&StateStore::read_only(layout.clone()), scope)
+}
+
+fn message_shard_paths_in(store: &StateStore, scope: &ScopeId) -> anyhow::Result<Vec<Utf8PathBuf>> {
+    let threads_dir = shards::threads_path(&store.layout, scope)
         .parent()
         .expect("threads path must have a parent")
         .to_path_buf();
-    if !threads_dir.exists() {
-        return Ok(Vec::new());
-    }
-    let mut shard_paths = Vec::new();
-    for entry in std::fs::read_dir(&threads_dir)? {
-        let entry = entry?;
-        if entry.file_type()?.is_file() {
-            let path = Utf8PathBuf::from_path_buf(entry.path()).map_err(|path| {
-                anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
-            })?;
-            if is_message_month_shard(&path) {
-                shard_paths.push(path);
-            }
-        }
-    }
-    shard_paths.sort();
-    Ok(shard_paths)
+    let names = store.state_keys_under(&threads_dir, StateEntry::File, |path| {
+        anyhow::anyhow!("non-UTF-8 message shard path: {}", path.display())
+    })?;
+    Ok(names
+        .into_iter()
+        .map(|name| threads_dir.join(name))
+        .filter(|path| is_message_month_shard(path))
+        .collect())
 }
 
 fn is_message_month_shard(path: &Utf8Path) -> bool {

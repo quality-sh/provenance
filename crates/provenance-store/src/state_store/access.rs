@@ -2,7 +2,8 @@ use super::{Access, RecordStamp, StateStore};
 use crate::layout::ProvenanceLayout;
 use crate::publication::{PublicationGuard, StageLock, WritePermissions};
 use crate::repository::RepositoryIdentity;
-use camino::Utf8Path;
+use crate::storage::{StateKey, StateView};
+use camino::{Utf8Path, Utf8PathBuf};
 use provenance_macros::{rule, verifies};
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -59,6 +60,21 @@ impl StateStore {
             identity: None,
             layout,
             access: Access::ReadOnly,
+            record_stamp: RecordStamp::ResolveFromRepository,
+        }
+    }
+
+    /// A store that reads one view of the canonical state of `layout`. It
+    /// reads no file and refuses every write and stage.
+    pub(crate) const fn over_view(
+        identity: RepositoryIdentity,
+        layout: ProvenanceLayout,
+        view: Arc<StateView>,
+    ) -> Self {
+        Self {
+            identity: Some(identity),
+            layout,
+            access: Access::View(view),
             record_stamp: RecordStamp::ResolveFromRepository,
         }
     }
@@ -123,7 +139,10 @@ impl StateStore {
             Access::ReadOnly => {
                 crate::publication::refuse_held_access_during_stage(&self.layout)?;
             }
-            Access::Lock | Access::Staged { .. } | Access::StagedSection { .. } => {}
+            Access::Lock
+            | Access::Staged { .. }
+            | Access::StagedSection { .. }
+            | Access::View(_) => {}
         }
         Ok(())
     }
@@ -167,7 +186,7 @@ impl StateStore {
             Access::StagedSection { permissions } => Access::StagedSection {
                 permissions: permissions.with(paths, id),
             },
-            Access::Lock | Access::Section { .. } | Access::ReadOnly => {
+            Access::Lock | Access::Section { .. } | Access::ReadOnly | Access::View(_) => {
                 anyhow::bail!("a review write permission needs a staged store")
             }
         };
@@ -187,7 +206,7 @@ impl StateStore {
     pub(crate) fn permissions(&self) -> &WritePermissions {
         static NONE: WritePermissions = WritePermissions::none();
         match &self.access {
-            Access::Lock | Access::Section { .. } | Access::ReadOnly => &NONE,
+            Access::Lock | Access::Section { .. } | Access::ReadOnly | Access::View(_) => &NONE,
             Access::Staged { permissions, .. } | Access::StagedSection { permissions } => {
                 permissions
             }
@@ -252,7 +271,10 @@ impl StateStore {
                 operation,
             ),
             Access::Staged { stage, .. } => stage.run(operation),
-            Access::Section { .. } | Access::StagedSection { .. } | Access::ReadOnly => operation(),
+            Access::Section { .. }
+            | Access::StagedSection { .. }
+            | Access::ReadOnly
+            | Access::View(_) => operation(),
         }
     }
 
@@ -282,15 +304,20 @@ impl StateStore {
                 self.ensure_section_open()?;
                 operation(self)
             }
-            Access::StagedSection { .. } => operation(self),
+            Access::StagedSection { .. } | Access::View(_) => operation(self),
         }
     }
 
-    /// Refuses a write through a read-only store.
+    /// Refuses a write through a read-only store or a view store.
     pub(crate) fn ensure_writable(&self) -> anyhow::Result<()> {
         anyhow::ensure!(
             !matches!(self.access, Access::ReadOnly),
             "a read-only store of {} cannot write",
+            self.layout.root()
+        );
+        anyhow::ensure!(
+            !matches!(self.access, Access::View(_)),
+            "a view store of {} cannot write",
             self.layout.root()
         );
         Ok(())
@@ -302,4 +329,135 @@ impl StateStore {
     ) -> anyhow::Result<R> {
         self.with_repository_publication(operation)
     }
+}
+
+/// The kind of entry that [`StateStore::state_keys_under`] lists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StateEntry {
+    File,
+    Directory,
+}
+
+impl StateStore {
+    /// The bytes of the state file at `path`, or `None` when it does not
+    /// exist. A view store answers from its view; any other store reads the
+    /// file.
+    pub(crate) fn state_bytes(&self, path: &Utf8Path) -> anyhow::Result<Option<Vec<u8>>> {
+        match &self.access {
+            Access::View(view) => Ok(view.get(&self.view_key(path)?).map(<[u8]>::to_vec)),
+            _ => match std::fs::read(path) {
+                Ok(bytes) => Ok(Some(bytes)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(error.into()),
+            },
+        }
+    }
+
+    /// Like [`Self::state_bytes`], as UTF-8 text.
+    pub(crate) fn state_text(&self, path: &Utf8Path) -> anyhow::Result<Option<String>> {
+        match &self.access {
+            Access::View(_) => self
+                .state_bytes(path)?
+                .map(|bytes| String::from_utf8(bytes).map_err(|_| invalid_text(path)))
+                .transpose(),
+            _ => match std::fs::read_to_string(path) {
+                Ok(text) => Ok(Some(text)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(error) => Err(error.into()),
+            },
+        }
+    }
+
+    /// The bytes of the state file at `path`, which must exist.
+    pub(crate) fn read_state(&self, path: &Utf8Path) -> anyhow::Result<Vec<u8>> {
+        match &self.access {
+            Access::View(_) => self.state_bytes(path)?.ok_or_else(|| not_found(path)),
+            _ => Ok(std::fs::read(path)?),
+        }
+    }
+
+    /// Like [`Self::read_state`], as UTF-8 text.
+    pub(crate) fn read_state_text(&self, path: &Utf8Path) -> anyhow::Result<String> {
+        match &self.access {
+            Access::View(_) => self.state_text(path)?.ok_or_else(|| not_found(path)),
+            _ => Ok(std::fs::read_to_string(path)?),
+        }
+    }
+
+    /// Whether the state file at `path` exists.
+    pub(crate) fn state_exists(&self, path: &Utf8Path) -> anyhow::Result<bool> {
+        match &self.access {
+            Access::View(view) => Ok(view.get(&self.view_key(path)?).is_some()),
+            _ => Ok(path.exists()),
+        }
+    }
+
+    /// The names of the entries of `kind` directly below the state directory
+    /// `directory`, sorted. An entry of that kind with a name that is not
+    /// UTF-8 is refused with `non_utf8` of its path.
+    pub(crate) fn state_keys_under(
+        &self,
+        directory: &Utf8Path,
+        kind: StateEntry,
+        non_utf8: impl Fn(&std::path::Path) -> anyhow::Error,
+    ) -> anyhow::Result<Vec<String>> {
+        if let Access::View(view) = &self.access {
+            let prefix = self.view_prefix(directory)?;
+            return Ok(view
+                .children(&prefix)
+                .into_iter()
+                .filter(|(_, below)| *below == (kind == StateEntry::Directory))
+                .map(|(name, _)| name)
+                .collect());
+        }
+        if !directory.exists() {
+            return Ok(Vec::new());
+        }
+        let mut names = Vec::new();
+        for entry in std::fs::read_dir(directory)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            let matches = match kind {
+                StateEntry::File => file_type.is_file(),
+                StateEntry::Directory => file_type.is_dir(),
+            };
+            if matches {
+                names.push(
+                    entry
+                        .file_name()
+                        .into_string()
+                        .map_err(|_| non_utf8(&entry.path()))?,
+                );
+            }
+        }
+        names.sort();
+        Ok(names)
+    }
+
+    fn view_key(&self, path: &Utf8Path) -> anyhow::Result<StateKey> {
+        Ok(StateKey::new(self.view_prefix(path)?)?)
+    }
+
+    /// The path below the state directory with `/` between its parts. A path
+    /// outside the state directory is not canonical state and is refused.
+    fn view_prefix(&self, path: &Utf8Path) -> anyhow::Result<String> {
+        let state = self.layout.state_dir();
+        let relative: Utf8PathBuf = path
+            .strip_prefix(&state)
+            .map_err(|_| {
+                anyhow::anyhow!("{path} is not canonical state, so a view does not hold it")
+            })?
+            .to_path_buf();
+        Ok(relative.iter().collect::<Vec<_>>().join("/"))
+    }
+}
+
+fn not_found(path: &Utf8Path) -> anyhow::Error {
+    anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::NotFound))
+        .context(format!("read {path}"))
+}
+
+fn invalid_text(path: &Utf8Path) -> anyhow::Error {
+    anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::InvalidData))
+        .context(format!("read {path}: the file is not UTF-8"))
 }
