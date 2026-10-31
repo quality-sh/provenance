@@ -69,6 +69,12 @@ impl Subscribers {
         })
     }
 
+    /// The position of the last native frame; a registration compares it before and after
+    /// its first read.
+    pub fn native_sequence(&self) -> u64 {
+        self.inner.lock().unwrap().native_sequence
+    }
+
     pub fn available(&self) {
         self.inner.lock().unwrap().available = true;
     }

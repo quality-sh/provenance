@@ -58,7 +58,7 @@
         <mxCell id="prime" value='&lt;b&gt;prime guidance&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;provenance prime prints&lt;br&gt;porcelain::guidance text&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="r2">
           <mxGeometry x="770" y="24" width="240" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="notif" value='&lt;b&gt;tools/agent-notifications&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Codex mailbox, Claude channel;&lt;br&gt;run get --view review --follow&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="r2">
+        <mxCell id="notif" value='&lt;b&gt;Review notifications&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;host queues changes into Codex;&lt;br&gt;Claude Code Monitor runs get --follow&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="r2">
           <mxGeometry x="1030" y="24" width="250" height="60" as="geometry" />
         </mxCell>
         <mxCell id="r3" value="Interfaces" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f2f7fe;strokeColor=#6c8ebf;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
@@ -261,7 +261,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="00-overview-e4" value="spawns get --follow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.795455;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="notif" target="cmds">
+        <mxCell id="00-overview-e4" value='get --notify, get --follow' style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.795455;entryY=0;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="notif" target="cmds">
           <mxGeometry x="-0.2" relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="1465" y="274" />

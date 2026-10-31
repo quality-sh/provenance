@@ -336,6 +336,22 @@ pub fn target_command() -> Command {
                 .help("Print a link to this record in the running review host."),
         )
         .arg(
+            clap::Arg::new("notify")
+                .long("notify")
+                .value_parser(["codex", "off"])
+                .requires("view")
+                .conflicts_with_all(["follow", "review-link"])
+                .help(
+                    "Queue review changes into a Codex thread, or end that registration with off.",
+                ),
+        )
+        .arg(
+            clap::Arg::new("thread")
+                .long("thread")
+                .requires("notify")
+                .help("The Codex thread UUID for --notify. The default is CODEX_THREAD_ID."),
+        )
+        .arg(
             clap::Arg::new("no-open")
                 .long("no-open")
                 .action(ArgAction::SetTrue)

@@ -57,6 +57,12 @@ it in the same change.
   1800000. A watch ends at its deadline. Start the same command again after the
   deadline notice, after a `disconnected` line, and when the session resumes.
   The first line of each start is the full document.
+- In Codex, register the thread with
+  `{command} <requirement-id> --scope {selected_scope} --view review --notify codex --format json`.
+  The host must run outside the sandbox. It queues the full document into the
+  thread, then each saved change. Codex accepted a message when it is in the
+  thread queue. An idle session reads it at its next turn. To stop, run the same
+  command with `--notify off`.
 - A guarded update after a rejection opens a new submission unless a reviewer
   accepted that content. Revise or withdraw a rejected candidate that no later
   submission replaced. To end a pending review without a replacement, withdraw it.

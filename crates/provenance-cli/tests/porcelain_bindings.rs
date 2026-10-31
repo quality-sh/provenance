@@ -1,3 +1,10 @@
+#[cfg(target_os = "linux")]
+#[path = "review_host_support/codex.rs"]
+mod codex;
+#[cfg(target_os = "linux")]
+#[path = "review_host_support/mod.rs"]
+mod review_host_support;
+
 use assert_cmd::Command;
 use provenance_macros::verifies;
 use serde_json::json;
@@ -253,36 +260,17 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
-    let refused_options = cli_get_error(&repo, &["source_live_inventory", "get", "--limit", "5"]);
+    let limit = json!({"target":"source_live_inventory","limit":5});
+    let depth = json!({"target":"source_live_inventory","view":"children","max_depth":0});
+    let unknown = json!({"target":"source_live_inventory","unknown":true});
 
     for (cli, arguments) in [
-        (
-            cli_get_error(&repo, &["source_missing", "get"]),
-            json!({"target":"source_missing"}),
-        ),
-        (
-            refused_options.clone(),
-            json!({"target":"source_live_inventory","limit":5}),
-        ),
-        (
-            cli_get_error(
-                &repo,
-                &[
-                    "source_live_inventory",
-                    "get",
-                    "--view",
-                    "children",
-                    "--depth",
-                    "0",
-                ],
-            ),
-            json!({"target":"source_live_inventory","view":"children","max_depth":0}),
-        ),
-        (
-            refused_options,
-            json!({"target":"source_live_inventory","unknown":true}),
-        ),
+        ("source_missing get", json!({"target":"source_missing"})),
+        ("source_live_inventory get --limit 5", limit),
+        ("source_live_inventory get --view children --depth 0", depth),
+        ("source_live_inventory get --limit 5", unknown),
     ] {
+        let cli = cli_get_error(&repo, &cli.split(' ').collect::<Vec<_>>());
         let mcp = client
             .call_tool(
                 CallToolRequestParams::new("get")
@@ -293,6 +281,72 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
         assert_eq!(mcp.is_error, Some(true), "{arguments}");
         assert_eq!(mcp.structured_content.unwrap()["error"], cli, "{arguments}");
     }
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread")]
+#[verifies("rule_review_notify_cli_mcp_same", examples)]
+async fn cli_and_mcp_notify_share_one_registration() {
+    use review_host_support::follow::{create, page_rule};
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let repo = review_host_support::repository_with_actors(&["reviewer"]);
+    create(repo.path(), "req_notify", "requirement", &[]);
+    let codex = codex::Codex::start();
+    let thread = codex.thread(repo.path());
+    let host = review_host_support::start_with(repo.path(), |command| {
+        command.arg("--no-open");
+        codex.configure(command);
+    });
+    // The MCP host in this process reads the launch key and Codex home as the CLI does.
+    std::env::set_var(
+        "XDG_CACHE_HOME",
+        host.launch_key_path().ancestors().nth(3).unwrap(),
+    );
+    std::env::set_var("CODEX_HOME", codex.home.path());
+    let context =
+        provenance_cli::repo_context::RepoContext::new(repo.path().to_str().unwrap(), "default");
+    let mcp_host = context.local_host().unwrap();
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { mcp_host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let cli = |notify: &str| {
+        codex::registration(&codex::notify(
+            &host,
+            &codex,
+            repo.path(),
+            "req_notify",
+            notify,
+            &thread,
+        ))
+    };
+    let mcp = |notify: &'static str| {
+        let arguments = json!({"target":"req_notify", "view":"review",
+            "notify": {"client": notify, "thread": thread}});
+        let call = client.call_tool(
+            CallToolRequestParams::new("get")
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        );
+        async move { call.await.unwrap().structured_content.unwrap()["notify"].clone() }
+    };
+
+    let by_cli = cli("codex");
+    let removed_by_mcp = mcp("off").await;
+    page_rule(&host, "rule_after_mcp_off", "req_notify");
+    let by_mcp = mcp("codex").await;
+    let removed_by_cli = cli("off");
+    page_rule(&host, "rule_after_cli_off", "req_notify");
+
+    assert_eq!(by_cli, by_mcp);
+    assert_eq!(by_cli["accepted"], true);
+    assert_eq!(removed_by_cli, removed_by_mcp);
+    assert_eq!(removed_by_cli["removed"], true);
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let queued = codex.queued(&thread);
+    assert_eq!(queued.len(), 2, "{queued:#?}");
+    assert!(!queued.concat().contains("rule_after"));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

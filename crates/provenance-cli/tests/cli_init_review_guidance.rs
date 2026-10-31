@@ -148,3 +148,26 @@ fn init_guidance_runs_follow_under_monitor_and_starts_it_again() {
         "{agents}"
     );
 }
+
+#[test]
+// Implementation aid: the Codex lines name the notify command and its limits; no Rule
+// in the graph states this guidance.
+fn init_guidance_registers_a_codex_thread_and_ends_it_with_off() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        agents.contains(
+            "`provenance <requirement-id> --scope default --view review --notify codex --format json`"
+        ),
+        "{agents}"
+    );
+    for text in [
+        "The host must run outside the sandbox.",
+        "Codex accepted a message when it is in the thread queue.",
+        "An idle session reads it at its next turn.",
+        "To stop, run the same command with `--notify off`.",
+    ] {
+        assert!(prose.contains(text), "missing {text}\n{agents}");
+    }
+}
