@@ -196,6 +196,7 @@ fn export_definitions() -> Value {
                 "resolution_method": {"enum": ["grill", "prototype", "research", "verify", "task"]},
                 "status": {"enum": ["open", "blocked_on_human", "answered"]},
                 "answer": string.clone(), "resolution_id": id.clone(), "contradicts": id.clone(),
+                "depends_on": {"type": "array", "items": id.clone()},
                 "links": {"type": "array", "items": {"$ref": "#/$defs/artifactLink"}}
             })
         ),

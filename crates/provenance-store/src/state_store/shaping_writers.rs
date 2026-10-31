@@ -11,6 +11,7 @@ pub(super) mod artifact_links;
 mod claim_eligibility_tests;
 mod claims;
 mod creators;
+pub(super) mod dependencies;
 use claims::{claim_blocking_status, ensure_claim_holder, now_ms, validated_actor, ShapingStatus};
 pub(super) use claims::{clear_question_claim_on_exit, clear_topic_claim_on_exit};
 
@@ -220,6 +221,7 @@ impl StateStore {
             id,
             expected_etag: None,
             question: None,
+            depends_on: None,
             resolution_method,
             status,
             links,

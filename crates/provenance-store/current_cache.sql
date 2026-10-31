@@ -67,7 +67,7 @@ CREATE TABLE questions (
     topic_id TEXT NOT NULL, requirement_id TEXT NOT NULL, question TEXT NOT NULL,
     resolution_method TEXT NOT NULL, status TEXT NOT NULL, claimed_by TEXT,
     archived_in_commit TEXT, claimed_at INTEGER, answer TEXT, links TEXT NOT NULL, resolution_id TEXT,
-    contradicts TEXT, search_text TEXT NOT NULL, PRIMARY KEY (scope_id, id)
+    contradicts TEXT, depends_on TEXT NOT NULL, search_text TEXT NOT NULL, PRIMARY KEY (scope_id, id)
 );
 CREATE INDEX idx_questions_topic ON questions(scope_id, topic_id);
 CREATE INDEX idx_questions_requirement ON questions(scope_id, requirement_id);

@@ -73,6 +73,7 @@ async fn rejected_candidate_proposal_keeps_its_target_in_the_filtered_document()
             scope_id: scope(),
             id: sid("question_store"),
             topic_id: sid("topic_store"),
+            depends_on: vec![],
             question: "Which store holds the record?".into(),
             resolution_method: ResolutionMethod::Research,
             status: QuestionStatus::Answered,

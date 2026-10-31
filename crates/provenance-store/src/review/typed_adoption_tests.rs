@@ -353,6 +353,7 @@ fn seed_cascade_dependants(
         .unwrap();
     store
         .create_question(CreateQuestionInput {
+            depends_on: Vec::new(),
             scope_id: scope.clone(),
             id: StableId::new("question_cascade").unwrap(),
             topic_id: StableId::new("topic_cascade").unwrap(),

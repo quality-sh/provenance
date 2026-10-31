@@ -133,6 +133,7 @@ fn seed_archived_shaping_records(store: &StateStore, scope: &ScopeId) {
     for id in ["question_archived_one", "question_archived_two"] {
         store
             .create_question(CreateQuestionInput {
+                depends_on: Vec::new(),
                 scope_id: scope.clone(),
                 id: sid(id),
                 topic_id: sid("topic_archived"),

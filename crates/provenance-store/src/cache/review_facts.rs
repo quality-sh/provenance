@@ -134,6 +134,7 @@ pub const QUESTION: ReviewFields = ReviewFields {
         "requirement_id",
         "question",
         "resolution_method",
+        "depends_on",
         "answer",
         "links",
         "resolution_id",

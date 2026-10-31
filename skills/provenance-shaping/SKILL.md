@@ -25,30 +25,11 @@ Before you call code redundant or delete tests, run
    the next session what to do without reconstructing your chat.
 5. **The tree reads as a spec.** At every handoff a developer can build from the anchor's
    requirement tree alone. See "The tree is the spec".
+6. **Read the stored state at the start of every turn.** "Recover before each turn" gives
+   the reads.
 
 One question per session is **not** the invariant. Grill turns can drain a topic question
 by question; expensive methods claim one question and often stop at a phase boundary.
-
-## Check your CLI
-
-Run this before the first graph write of a session:
-
-```sh
-provenance --version
-```
-
-An installed binary that is older than this skill accepts different flags, and it can
-refuse work that the current CLI allows. One obsolete release required a Resolution
-producer on every Rule, which pushed agents into inventing a Resolution for a Rule that a
-Requirement alone had produced. A binary that does not understand `--version` at all is
-far behind; reinstall it before you shape anything:
-
-```sh
-cargo install provenance-cli --force
-```
-
-Do not model the graph around what an old binary accepts. If a command and this skill
-disagree, update the binary first, then shape.
 
 ## Start every session
 
@@ -59,17 +40,52 @@ disagree, update the binary first, then shape.
    provenance init --path . --scope <scope> --path-prefix .
    ```
 
-2. Give the person the review page in your first reply. Before you write records, start or
-   reuse the review host as the Provenance section of `AGENTS.md` says, and paste the page
-   link into the chat as plain text. One host serves the repository and scope for all
-   sessions, so leave it running. Opening the page in a browser or in the app that shows
-   your chat is extra. Always give the link in chat too. A link works once and expires
-   after 24 hours; get a new link when it has expired. The page is served on the machine
-   that runs the host. If that is not the person's machine, say so, and give the person the
-   command from `AGENTS.md` that starts the host on their own machine.
+2. **Open the requirements view first.** Do this before the first question and before
+   the first graph write. The person must see each record land while they answer. Do
+   not ask a question while the view is closed.
 
-   As soon as the anchor exists, send its review link, and send it again at handoff. The
-   page follows records as they land, so the person reads the tree while you shape.
+   The view shows the anchor inside the tree of its parent, not as a root. Open the page
+   of the anchor's parent Requirement (the Requirement that the anchor refines). Never
+   open the page with the anchor as its root. In Chart mode, open the view of the parent
+   first, then create the anchor under that parent.
+
+   **Exception: an anchor with no parent.** Create that anchor first, then open its own
+   page. This is the only graph write before the view opens. It is also the only page
+   that has the anchor as its root.
+
+   Select the command from where the session runs:
+
+   - **A desktop app with a browser pane** (Claude Code desktop, Codex desktop): start or
+     reuse the host without the system browser, get the parent's link, and open
+     `review_url` in the browser pane:
+
+     ```sh
+     provenance review --repo . --repository-id local --scope <scope> --detach --no-open
+     provenance <parent_requirement_id> --scope <scope> --review-link --no-open --format json
+     ```
+
+   - **Claude Desktop or ChatGPT desktop** (MCP tools, no browser pane): open the MCP
+     document view. Call the `get-requirement-document` tool with the parent's ID and show
+     the result to the person. Call it again after each answer lands.
+
+   - **A plain CLI session** (a terminal, `claude`, `codex`): start or reuse the host so
+     that it opens the system browser, then show the parent's tree in that page:
+
+     ```sh
+     provenance review --repo . --repository-id local --scope <scope> --detach
+     provenance <parent_requirement_id> --scope <scope> --review-link --format json
+     ```
+
+     Do not add `--no-open` in a CLI session. The Provenance section of `AGENTS.md`
+     starts the host with `--no-open`; in a shaping session, this step replaces that
+     command.
+
+   Also give `review_url` in the chat as plain text. Tell the person to keep the page
+   open and to watch the records land there after each answer. Keep the page open, and
+   leave the host running for the full session. The page follows records as they land. Do not get a
+   review link for each record: a link for a record below the anchor moves the page to
+   a smaller tree. When you need a new link, get it for the same parent. The Provenance
+   section of `AGENTS.md` gives the general host and link rules.
 
 3. Read the domain guidance, then load the low-resolution map:
 
@@ -107,11 +123,63 @@ it without the chat. Each part of a record holds one kind of content:
 A Question is answered only when the answer covers all of it. If an answer settles part of
 a Question, land that part, leave the Question open, and narrow its text to what remains.
 
-Before you hand off, read the tree as a builder would: open the anchor's review page, or
-read the anchor's requirement document with the command in the Provenance section of
-`AGENTS.md`, and read every statement and description in order. Fix a description that
-retells history, describes another record's behaviour, or lists open items before you hand
-off.
+Before you hand off, read the tree as a builder would. Read the anchor's requirement
+document with `provenance requirements <anchor_requirement_id> document get --scope <scope>
+--format json`, and read every statement and description in order. Fix each description
+that retells history, describes another record's behaviour, or lists open items.
+
+### The shape of the tree
+
+The anchor is the top of the spec, not a list of Rules. Each decision adds one branch:
+
+```text
+parent Requirement
+└── anchor Requirement
+    ├── Resolution: the decision that settles a Question
+    │   └── child Requirement (refines the anchor, spawned by the Resolution)
+    │       ├── Rule (refines the child, produced by the Resolution)
+    │       └── Rule (refines the child, produced by the Resolution)
+    └── child Requirement for an accepted fact
+        └── Rule (refines the child)
+```
+
+- A decision that settles a Question becomes a Resolution. The Resolution spawns a child
+  Requirement: `--refines <requirement_id> --spawned-by <resolution_id>`. The child states
+  what the product does because of the decision, not that a choice was made.
+- The Rules of that decision go under the child Requirement, and each one names the
+  Resolution with `--resolution-id`. The CLI accepts this link while the Resolution is
+  proposed. Do not wait for approval to add the link: through it, the impact view of
+  the proposed Resolution shows its Rules. The impact view lists only these Rules, so every Resolution
+  needs a spawned child Requirement and at least one Rule that names it. A Resolution
+  without them is an orphan; do not leave one.
+- A person who accepts one option and rejects another has made a choice. This is true
+  for every Question method, also `task`, and also when the person gives the Requirement
+  ID. Land the Resolution. If the person gives no reason, the rationale says that the
+  person selected this option over the other one, in their words. Do not invent a reason,
+  and do not skip the Resolution because no reason was given. A Boundary can also record
+  the rejected option, but it does not replace the Resolution.
+- An accepted fact that is not a choice becomes a child Requirement, and its Rules go
+  under that child.
+- Never put a Rule directly under the anchor. Never hang all the session's records off
+  the anchor in one flat list.
+
+### Every record goes to review
+
+Submit every record that the session creates for review at once, so each one has its own
+Approve control on the page. Requirement create opens its review submission by itself.
+Rule, Resolution, Boundary and Source create do not. Submit each of these immediately
+after you create it:
+
+```sh
+provenance <record_id> submit --scope <scope> --actor <actor> \
+  --title "<short name of the record>" --summary "<what the record says>" \
+  --builds-on-json '[]' --evidence-references-json '[]' --source-ids-json '[]' \
+  --format json
+```
+
+Then check that `provenance <record_id> get --view review --scope <scope> --format json`
+shows `review.decision.pending`. A guarded update of a record submits the new revision by
+itself. Do not approve a record; approval stays with the person.
 
 ## Mode 1: Chart
 
@@ -129,11 +197,12 @@ resolve the questions you create.
      --id req_<stable_slug> \
      --statement "<feature-sized idea as a requirement>" \
      --description "<how the product behaves, as far as the brief says>" \
+     --refines <parent_requirement_id> \
      --status discovery \
      --format json
    ```
 
-   Then send the anchor's review link (see "Start every session").
+   "Start every session" gives the order of the view and the anchor create.
 
 2. **Attach known sources to the anchor.** Requirements with no valid source reference
    remain on the missing-source frontier, so add source references when evidence already
@@ -241,7 +310,8 @@ notes, fix the graph or trust the graph.
 
 ### 2. Claim
 
-Claim before work so concurrent sessions skip what you are touching.
+First complete the recovery reads below and inspect their output. Then claim before
+work so concurrent sessions skip what you are touching. A claim is a graph write.
 
 | Method | Claim | Command |
 |---|---|---|
@@ -259,6 +329,83 @@ question. They are context that has become decision-relevant because the turn en
 explicit territory; do not infer further territory from titles or graph proximity. If
 lifecycle consultation fails, the topic claim is not persisted.
 
+### Recover before each turn
+
+At the start of EVERY shaping turn, read the stored Topic claim and the stored
+method of each Question that you will work on in that turn. Do this before the
+first graph write or Question work, including when the owner has already supplied
+an accepted answer. Complete these reads as a separate tool step. Inspect the
+output before any claim or write. Do not combine a recovery read and a claim or
+write in one command or tool call. A get after a claim does not count, even when
+both commands are in the same call. A read in the previous turn does not count. Repeat the reads
+after a restart, a saved handoff, or context compaction.
+
+Run these commands without output filters. Read the full JSON output. Do not pipe
+recovery reads through grep, rg, jq, sed, head, or another filter. Do not extract
+only the Question text, status, or answer: the claim and resolution_method fields
+must remain visible. If output is cut short, repeat the record read with enough
+output capacity before work. Read every selected Question, even if you will settle
+several Questions from one owner reply:
+
+```sh
+provenance topics <topic_id> get --scope <scope> --format json
+provenance questions <question_id> get --scope <scope> --format json
+```
+
+Check that the Question belongs to the selected Topic and is open. Check both claims
+against your actor and the claim required by its method. Read `resolution_method` from
+the Question. A Topic claim does not select a method for its Questions. A mixed-method
+Topic can require a different method for the next Question.
+
+If a required claim is absent, claim the item before work, then read it again. If another
+actor holds a required claim, stop work on that item. If recovery is incomplete, stop
+selection and recover the missing records. Read the bounded summary with
+`provenance <topic_id> get --scope <scope> --view children --format json`. Use its
+ready IDs only when `shaping.complete` is true. Filtered, depth-limited, truncated,
+and unchecked reads are incomplete. Read all pages of the Topic and Question
+collections when you need the map; a partial page cannot establish that work is absent.
+Do not use conversation memory as a substitute for these reads.
+
+A Question is ready only when every ID in `depends_on` names an answered Question
+in the same Topic. An archived or human-blocked prerequisite does not satisfy it.
+Closed and archived Topics have no ready Questions. Ready ID order is display
+order, not priority. Claims restrict work, not discovery. Create or replace
+`depends_on` through JSON input; an empty list clears it. Use prerequisites only
+where order affects the answer.
+
+Before you claim, answer, or land records for a Question, read each Question in its
+`depends_on` list. If one of them is not answered, the Question is not ready: do not
+claim it and do not land its decision. Tell the person which prerequisite is open, and
+work on that prerequisite first.
+
+Do not add a prerequisite to a Question that existed before your session, and do not
+rewrite the text of such a Question. A new Question that you mint goes beside the
+existing Questions, never before them. If a new Question must come first, ask the
+person; do not change the stored order yourself. When the person answers an existing
+Question, answer that Question in the graph, even if you also mint follow-up Questions.
+
+Use the same fresh, unfiltered Topic read before a turn that only adds a thread note,
+claims or releases the Topic, checks saved decisions, or writes a handoff. Such turns do not need a Question read unless
+they work on a Question. A claim command or remembered handoff does not replace
+the required get commands.
+
+Apply the stored method to the selected Question. If the owner directly chooses an
+answer to a prototype Question before prototypes are made, record that choice. Explain
+why it settles the Question without prototypes.
+
+Land every accepted owner decision before you ask the next question or end the turn:
+
+- For each accepted decision in the owner reply, read the resulting graph records. Check
+  that they state that decision. Check each decision, also when one reply has several.
+- A thread note or a promise to write later is not a landed decision.
+- Do not create duplicate records.
+- Do not add prerequisites that postpone an accepted decision.
+- If an existing prerequisite or claim prevents landing, report the blocker. Keep the
+  decision visible as unlanded, and do not continue the interview.
+
+A proposed answer that the human refuses stays unresolved. After a restart or compaction,
+recover accepted decisions from the graph before you continue the dialogue.
+
 ### 3. Resolve and land as you go
 
 For each question, use the method on the question.
@@ -273,17 +420,16 @@ sequence of commands.
    whose obligation the answer concerns. Read its children before selecting it.
    If the answer concerns a different child, use that child for the discussion and
    new records. The session anchor is a map entry point, not the default parent.
-2. Select only the records that the answer implies:
-   - An answer that supplies a fact needs only a Question answer.
-   - A broad obligation needs a Requirement.
-   - A precise atomic behavioural obligation needs a Rule under its Requirement.
-   - A choice among alternatives needs a Resolution. State the unresolved problem
-     in context, the choice in position, and the comparative reasons in rationale.
-     Put source quotations in citations or inputs, not in place of those reasons.
-3. Check each additional record for added meaning. Do not create a Requirement or
-   Rule solely to repeat a Resolution position. Identical text requires a meaning
-   check, not a mandatory rewrite. A precise obligation can correctly appear in a
-   position and a Rule when the Rule adds an independently needed obligation.
+2. Select only the records that the answer implies. "The shape of the tree" gives the
+   records of a decision and of an accepted fact. A fact with no product obligation
+   needs only a Question answer. In a Resolution, state the unresolved problem in
+   context, the choice in position, and the comparative reasons in rationale. Put
+   source quotations in citations or inputs, not in place of those reasons.
+3. Check each additional record for added meaning. "The shape of the tree" gives what
+   the spawned child Requirement states. Do not
+   create a second Requirement or Rule that only repeats the position. A precise
+   obligation can correctly appear in a position and a Rule when the Rule adds an
+   independently needed obligation.
 4. Read review acceptance for the current content revision separately from lifecycle.
    A chat answer, a lifecycle value, and `made_by` do not prove that acceptance.
    Omit guessed authorship. Keep proposals proposed until the graph records review.
@@ -300,7 +446,8 @@ provenance requirements <relevant_requirement_id> discussions create --scope <sc
   --format json
 ```
 
-For a choice among alternatives only:
+For a decision that settles a Question, run these commands in this order. Then submit
+each record as "Every record goes to review" says.
 
 ```sh
 provenance resolutions create --scope <scope> \
@@ -312,30 +459,31 @@ provenance resolutions create --scope <scope> \
   --rationale "<why this alternative meets the need better than the others>" \
   --status proposed \
   --format json
-```
 
-Create a child Requirement only for a separate broad obligation. Its `refines`
-relationship identifies the parent. Add `spawned_by` only if a Resolution produced
-that obligation; it does not replace `refines`.
-
-```sh
 provenance requirements create --scope <scope> \
   --id req_<child_slug> \
-  --statement "<additional broad obligation>" \
+  --statement "<what the product does because of the decision>" \
   --description "<states, what changes them, what the person sees, one example>" \
+  --refines <relevant_requirement_id> \
+  --spawned-by res_<stable_slug> \
   --status discovery \
   --format json
 
-provenance requirements req_<child_slug> update --scope <scope> \
-  --relationships-json '{"refines":["<relevant_requirement_id>"],"spawned_by":"res_<stable_slug>"}' \
-  --if-match <etag> \
+provenance rules create --scope <scope> \
+  --id rule_<stable_slug> \
+  --requirement-id req_<child_slug> \
+  --resolution-id res_<stable_slug> \
+  --statement "<atomic behavioural obligation, in one clause>" \
+  --description "<trigger, result, what the person sees, one example>" \
+  --severity high \
+  --status review \
   --format json
 ```
 
-For a direct Requirement, omit `spawned_by`. For a direct Rule, use the Rule
-commands below without `--resolution-id`. Answer the Question with references to
-records actually created. Add `--resolution-id` only for an approved Resolution (see
-"Landing a Rule and its bindings"):
+`refines` identifies the parent. `spawned_by` names the producing Resolution and does
+not replace `refines`. When no decision produced a record, omit `--spawned-by` and
+`--resolution-id`. Then answer the Question with references to the records that you
+created:
 
 ```sh
 provenance questions <question_id> answer --scope <scope> \
@@ -349,15 +497,18 @@ Examples:
   Requirement under appearance. No alternatives were compared, so no Resolution
   is needed.
 - Direct Rule: "A share link expires after seven days." Add the atomic Rule under
-  link expiry. Do not invent a Resolution producer.
-- Choice with no spawned record: select a robot instead of an animal because the
+  the link expiry child Requirement. Do not invent a Resolution producer.
+- Decision with a spawned Requirement: select a robot instead of an animal because the
   robot can show a repair state without suggesting injury. Record the unresolved
-  visual problem, the choice, and that reason in one Resolution under appearance.
-- Choice with a separate obligation: select configurable expiry instead of a fixed
-  duration because owners need different access periods. A separate Requirement
-  says owners receive advance notice of link expiry. It refines link access and is spawned by the
-  Resolution. Do not add another Requirement that just says configurable expiry
-  was selected.
+  visual problem, the choice, and that reason in one Resolution under appearance. It
+  spawns the child Requirement "The mascot is a robot that shows a repair state when
+  the product fails." The Rule "The mascot shows the repair state while a sync error
+  is open" goes under that child and names the Resolution.
+- Decision with a separate obligation: select configurable expiry instead of a fixed
+  duration because owners need different access periods. The Resolution spawns the
+  child Requirement "The owner sets the expiry period of each link". Its Rules, for
+  example "A link stops working at the end of its expiry period", go under that child
+  and name the Resolution.
 
 Land any Boundary, contradiction, or source gap that the answer also implies.
 
@@ -376,28 +527,17 @@ change the artifact's kind.
    Bind implementation, when it exists, through a scanner-recognized attribute, helper,
    decorator, or comment.
 
-   A Requirement is enough to anchor a Rule. Pass `--resolution-id` only when a Resolution
-   really produced the Rule. A Resolution producer is not required, and inventing one to
-   satisfy the command misrecords how the obligation arose. If the CLI rejects a Rule that
-   cites only a Requirement, the installed binary is out of date; see "Check your CLI".
+   A Requirement is enough to anchor a Rule. A Resolution producer is not required, and
+   inventing one misrecords how the obligation arose.
 
    Rule creation defaults to `draft`. Keep this default for an agent-created Rule. Pass
    `--status active` only when a person ratifies the Rule.
 
-   Only an approved Resolution can produce an active Rule or answer a Question. While the
-   Resolution is proposed, keep the Rule in review with `--status review`, and answer the
-   Question without a citation of the Resolution. Name the Resolution in the answer text.
-
-   ```sh
-   provenance rules create --scope <scope> \
-     --id rule_<stable_slug> \
-     --requirement-id <relevant_requirement_id> \
-     --statement "<atomic behavioural obligation, in one clause>" \
-     --description "<trigger, result, what the person sees, one example>" \
-     --severity high \
-     --status review \
-     --format json
-   ```
+   A Rule that a proposed Resolution produced stays in review with `--status review`.
+   "The shape of the tree" gives its link to the Resolution. Only an approved
+   Resolution can produce an active Rule or answer a Question. While the Resolution is
+   proposed, answer the Question without a citation of the Resolution. Name the
+   Resolution in the answer text.
 
 2. **The bindings, when they exist.** `#[rule("<id>")]` sits on the primary production
    implementation; at most one function or type may carry an id for now.
@@ -537,8 +677,9 @@ Before final response:
      --format json
    ```
 
-4. Tell the user what landed, what remains, and the next commands, and paste the anchor's
-   review link again. Use artifact names and ids together, never bare ids.
+4. Tell the user what landed, what remains, and the next commands. Tell them that the
+   open page shows the tree, and give the link of the anchor's parent again (see
+   "Start every session"). Use artifact names and ids together, never bare ids.
 
 ## Auditing a Rule
 
@@ -597,15 +738,13 @@ against it. Do not make it `active` to clear a report.
 Before moving to the next question, verify the current answer has been handled:
 
 - thread message records the relevant dialogue;
-- each new Requirement and Rule has a description that states behaviour in the present
-  tense, with no history and no list of open items;
-- a Question marked answered is covered completely by its answer;
-- resolution records the accepted decision, if there is one;
+- records and answers meet "The tree is the spec";
+- the view is open as "Start every session" says;
+- the records have the shape that "The shape of the tree" gives;
+- each new record has a pending review submission ("Every record goes to review");
 - each precise atomic behavioural obligation is landed as a Rule; any known primary
   implementation and evidence carry `#[rule]` and `#[verifies]` bindings, and
   `coverage scan --validate-rules` reports any remaining absence honestly;
-- child Requirements add meaning and use `refines` for their parent; `spawned_by`
-  names only a producing Resolution;
 - boundaries/out-of-scope rejections are explicit;
 - source references and evidence are attached where they exist;
 - proposal definitions remain immutable `proposed` records; assertion lineage uses assertion

@@ -1,5 +1,5 @@
 //! Pins the shaping guidance that makes a requirement tree read as a spec and puts the
-//! review page in front of the person from the first reply.
+//! requirements view in front of the person before the first question.
 //!
 //! The sentences are read out of the binary, which is the copy an installed agent gets.
 
@@ -49,15 +49,14 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
     );
     assert!(
         prose.contains(
-            "read the tree as a builder would: open the anchor's review page, or read the \
-             anchor's requirement document with the command in the Provenance section of \
-             `AGENTS.md`,"
+            "read the tree as a builder would. Read the anchor's requirement document with \
+             `provenance requirements <anchor_requirement_id> document get"
         ),
         "{shaping}"
     );
     assert!(
         prose.contains(
-            "While the Resolution is proposed, keep the Rule in review with `--status review`,"
+            "A Rule that a proposed Resolution produced stays in review with `--status review`."
         ),
         "{shaping}"
     );
@@ -106,35 +105,136 @@ fn shaping_guidance_answers_a_question_only_when_the_answer_covers_it() {
         "{shaping}"
     );
     assert!(
-        prose.contains("a Question marked answered is covered completely by its answer;"),
+        prose.contains("records and answers meet \"The tree is the spec\";"),
         "{shaping}"
     );
 }
 
-/// The review host starts with the session, and the link reaches the person as text. The
-/// skill says this in product words and leaves the commands to the `AGENTS.md` section.
+/// The requirements view opens before the first question, in the place where the person
+/// can see it, with the anchor inside the tree of its parent.
 #[test]
 #[verifies("rule_shaping_skill_gives_review_link_first", examples)]
-fn shaping_guidance_puts_the_review_link_in_the_first_reply() {
+fn shaping_guidance_opens_the_requirements_view_before_the_first_question() {
     let shaping = skill("provenance-shaping");
     let prose = normalized(&shaping);
     for text in [
-        "Give the person the review page in your first reply.",
-        "start or reuse the review host as the Provenance section of `AGENTS.md` says, and \
-         paste the page link into the chat as plain text.",
-        "One host serves the repository and scope for all sessions, so leave it running.",
-        "Opening the page in a browser or in the app that shows your chat is extra. Always \
-         give the link in chat too.",
-        "A link works once and expires after 24 hours;",
-        "The page is served on the machine that runs the host. If that is not the person's \
-         machine, say so, and give the person the command from `AGENTS.md` that starts the \
-         host on their own machine.",
-        "paste the anchor's review link again.",
+        "**Open the requirements view first.** Do this before the first question and before \
+         the first graph write.",
+        "The view shows the anchor inside the tree of its parent, not as a root. Open the \
+         page of the anchor's parent Requirement",
+        "Never open the page with the anchor as its root.",
+        "**A desktop app with a browser pane** (Claude Code desktop, Codex desktop)",
+        "open `review_url` in the browser pane",
+        "**Claude Desktop or ChatGPT desktop** (MCP tools, no browser pane): open the MCP \
+         document view.",
+        "**A plain CLI session**",
+        "Do not add `--no-open` in a CLI session.",
+        "Tell the person to keep the page open and to watch the records land there after \
+         each answer.",
+        "**Exception: an anchor with no parent.** Create that anchor first, then open its own \
+         page. This is the only graph write before the view opens.",
+        "In Chart mode, open the view of the parent first, then create the anchor under that \
+         parent.",
     ] {
         assert!(prose.contains(text), "missing {text}\n{shaping}");
     }
-    for command in ["--detach", "--review-link", "document get"] {
-        assert!(!shaping.contains(command), "{command}\n{shaping}");
+    let cli = "provenance review --repo . --repository-id local --scope <scope> --detach\n";
+    assert!(shaping.contains(cli), "{shaping}");
+    let link = "provenance <parent_requirement_id> --scope <scope> --review-link --format json";
+    assert!(shaping.contains(link), "{shaping}");
+    assert!(!prose
+        .contains("Opening the page in a browser or in the app that shows your chat is extra."));
+    assert!(
+        !prose.contains("paste the anchor's review link again."),
+        "{shaping}"
+    );
+}
+
+/// A decision becomes a Resolution that spawns a child Requirement, and its Rules go under
+/// that child with the Resolution as producer, never directly under the anchor.
+#[test]
+#[verifies("rule_shaping_skill_tree_branches_by_decision", examples)]
+fn shaping_guidance_puts_each_decision_on_its_own_branch() {
+    let shaping = skill("provenance-shaping");
+    let prose = normalized(&shaping);
+    for text in [
+        "A decision that settles a Question becomes a Resolution. The Resolution spawns a \
+         child Requirement: `--refines <requirement_id> --spawned-by <resolution_id>`.",
+        "The Rules of that decision go under the child Requirement, and each one names the \
+         Resolution with `--resolution-id`. The CLI accepts this link while the Resolution \
+         is proposed.",
+        "every Resolution needs a spawned child Requirement and at least one Rule that names it.",
+        "Never put a Rule directly under the anchor.",
+        "Do not wait for approval to add the link:",
+        "A person who accepts one option and rejects another has made a choice.",
+        "do not skip the Resolution because no reason was given.",
+    ] {
+        assert!(prose.contains(text), "missing {text}\n{shaping}");
+    }
+    assert!(!prose.contains("Add `--resolution-id` only for an approved Resolution"));
+    assert!(
+        !prose.contains("Choice with no spawned record"),
+        "{shaping}"
+    );
+}
+
+/// The behaviour statement of the spawned child and the link from a Rule to its Resolution
+/// are stated once, in "The shape of the tree", and the other places point to that section.
+#[test]
+#[verifies("rule_shaping_skill_tree_branches_by_decision", examples)]
+fn shaping_guidance_states_each_branch_obligation_once() {
+    let shaping = skill("provenance-shaping");
+    let prose = normalized(&shaping);
+    for (text, count) in [
+        ("not that a choice was made", 1),
+        ("not \"option X was selected\"", 0),
+        ("names that Resolution at once", 0),
+        ("each one names the Resolution with `--resolution-id`", 1),
+        (
+            "\"The shape of the tree\" gives what the spawned child Requirement states.",
+            1,
+        ),
+        (
+            "\"The shape of the tree\" gives its link to the Resolution.",
+            1,
+        ),
+    ] {
+        assert_eq!(prose.matches(text).count(), count, "{text}\n{shaping}");
+    }
+}
+
+/// Each record that a session creates gets its own review submission.
+#[test]
+#[verifies("rule_shaping_skill_submits_every_record", examples)]
+fn shaping_guidance_submits_every_created_record_for_review() {
+    let shaping = skill("provenance-shaping");
+    let prose = normalized(&shaping);
+    for text in [
+        "Submit every record that the session creates for review at once, so each one has its \
+         own Approve control on the page.",
+        "Rule, Resolution, Boundary and Source create do not. Submit each of these immediately \
+         after you create it:",
+        "provenance <record_id> submit --scope <scope> --actor <actor> \\",
+        "each new record has a pending review submission (\"Every record goes to review\");",
+    ] {
+        assert!(prose.contains(text), "missing {text}\n{shaping}");
+    }
+}
+
+/// An agent keeps the stored prerequisites and does not work a Question that is not ready.
+#[test]
+#[verifies("rule_shaping_skill_keeps_stored_prerequisites", examples)]
+fn shaping_guidance_keeps_the_stored_question_order() {
+    let shaping = skill("provenance-shaping");
+    let prose = normalized(&shaping);
+    for text in [
+        "If one of them is not answered, the Question is not ready: do not claim it and do \
+         not land its decision.",
+        "Do not add a prerequisite to a Question that existed before your session, and do not \
+         rewrite the text of such a Question.",
+        "When the person answers an existing Question, answer that Question in the graph,",
+    ] {
+        assert!(prose.contains(text), "missing {text}\n{shaping}");
     }
 }
 
