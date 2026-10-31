@@ -57,8 +57,8 @@ pub fn view_returns_every_key_with_its_bytes<H: Harness>(mut harness: H) {
 }
 
 /// An empty state reads as an empty view.
-pub fn empty_state_reads_as_an_empty_view<H: Harness>(harness: H) {
-    let view = read(&harness);
+pub fn empty_state_reads_as_an_empty_view<H: Harness>(harness: &H) {
+    let view = read(harness);
     assert!(view.entries().is_empty());
     assert_eq!(view.revision(), &Revision::of(&BTreeMap::new()));
 }
@@ -79,7 +79,9 @@ pub fn revision_follows_every_key_and_byte<H: Harness>(mut harness: H) {
 }
 
 /// A per-key set lands its puts and deletes, and returns the revision of the
-/// whole tree after the write.
+/// whole tree after the write. The set has no base, so an adapter reads and
+/// hashes the whole tree after the write lands; the local adapter does this
+/// under the publication lock.
 pub fn publish_lands_puts_and_deletes<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}"), ("scopes/a/b.jsonl", b"old")]);
     let writes = WriteSet::new(Atomicity::PerKey)
@@ -96,7 +98,8 @@ pub fn publish_lands_puts_and_deletes<H: Harness>(mut harness: H) {
     assert_eq!(&revision, view.revision());
 }
 
-/// A set on the current revision lands and returns the revision after it.
+/// A set on the current revision lands and returns the revision of the whole
+/// tree after it. The adapter has the tree from its read of the base.
 pub fn publish_on_the_current_base_lands<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     let base = read(&harness).revision().clone();
@@ -345,12 +348,12 @@ mod tests {
 
     #[test]
     fn local_empty_state_reads_as_an_empty_view() {
-        empty_state_reads_as_an_empty_view(local());
+        empty_state_reads_as_an_empty_view(&local());
     }
 
     #[test]
     fn memory_empty_state_reads_as_an_empty_view() {
-        empty_state_reads_as_an_empty_view(Memory::default());
+        empty_state_reads_as_an_empty_view(&Memory::default());
     }
 
     #[test]

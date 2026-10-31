@@ -76,22 +76,24 @@ impl StateStorage for LocalStateStorage {
         );
         for (key, bytes) in changes {
             let path = self.layout.state_dir().join(key.as_str());
-            match bytes {
-                Some(bytes) => write_file_atomic(&path, bytes),
-                None => remove_file(&path),
-            }
-            .map_err(PublishFailure::Started)?;
+            bytes
+                .map_or_else(
+                    || remove_file(&path),
+                    |bytes| write_file_atomic(&path, bytes),
+                )
+                .map_err(PublishFailure::Started)?;
         }
-        match base_tree {
-            Some(mut tree) => {
+        base_tree.map_or_else(
+            || {
+                self.read_view()
+                    .map(|view| view.revision().clone())
+                    .map_err(|error| PublishFailure::Started(error.into()))
+            },
+            |mut tree| {
                 writes.apply_to(&mut tree);
                 Ok(Revision::of(&tree))
-            }
-            None => self
-                .read_view()
-                .map(|view| view.revision().clone())
-                .map_err(|error| PublishFailure::Started(error.into())),
-        }
+            },
+        )
     }
 }
 

@@ -201,13 +201,13 @@ impl WriteSet {
 
     /// Refuses a set that puts and deletes the same key.
     pub fn ensure_disjoint(&self) -> Result<(), PublishFailure> {
-        match self.deletes.iter().find(|key| self.puts.contains_key(*key)) {
-            Some(key) => Err(PublishFailure::Refused(anyhow::anyhow!(
+        let both = self.deletes.iter().find(|key| self.puts.contains_key(*key));
+        both.map_or(Ok(()), |key| {
+            Err(PublishFailure::Refused(anyhow::anyhow!(
                 "the write set puts and deletes `{}`",
                 key.as_str()
-            ))),
-            None => Ok(()),
-        }
+            )))
+        })
     }
 
     /// The tree after this set lands on `entries`.

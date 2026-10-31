@@ -350,7 +350,7 @@ impl StateStore {
 
 /// The kind of entry that [`StateStore::state_keys_under`] lists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum StateEntry {
+pub enum StateEntry {
     File,
     Directory,
 }

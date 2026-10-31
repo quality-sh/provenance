@@ -22,7 +22,7 @@ struct State {
 }
 
 impl MemoryStateStorage {
-    pub fn new(entries: BTreeMap<StateKey, Vec<u8>>) -> Self {
+    pub const fn new(entries: BTreeMap<StateKey, Vec<u8>>) -> Self {
         Self {
             state: Mutex::new(State {
                 entries,
