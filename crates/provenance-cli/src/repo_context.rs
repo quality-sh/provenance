@@ -39,9 +39,12 @@ impl RepoContext {
             })?;
         let repository = provenance_store::operations::LocalRepository::bind(repository, "native")
             .map_err(|failure| anyhow::anyhow!(failure))?;
-        Ok(provenance_transport::StatementHost::with_access(
-            std::sync::Arc::new(repository),
-        ))
+        Ok(
+            provenance_transport::StatementHost::with_access(std::sync::Arc::new(repository))
+                .with_notify_port(std::sync::Arc::new(crate::notify::HostNotifyPort::new(
+                    self.clone(),
+                ))),
+        )
     }
 }
 

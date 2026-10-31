@@ -161,6 +161,8 @@ impl Invocation {
                     "review-link",
                     "no-open",
                     "follow",
+                    "notify",
+                    "thread",
                 ],
             );
             let mut input = provenance_porcelain::get::GetInput::new(
@@ -173,6 +175,7 @@ impl Invocation {
             input.max_depth = args.depth;
             input.returned_kinds = args.kind;
             input.limit = args.limit;
+            input.notify = notify(&matches)?;
             return Ok(Self::Get(GetInvocation {
                 context,
                 format,
@@ -305,4 +308,26 @@ impl TargetInvocation {
         )
         .await
     }
+}
+
+/// Reads `--notify` and its thread: `--thread`, else `CODEX_THREAD_ID` from a Codex session.
+fn notify(matches: &clap::ArgMatches) -> anyhow::Result<Option<provenance_porcelain::get::Notify>> {
+    use provenance_porcelain::get::{Notify, NotifyClient};
+    let Some(client) = matches.get_one::<String>("notify") else {
+        return Ok(None);
+    };
+    let client = if client == "off" {
+        NotifyClient::Off
+    } else {
+        NotifyClient::Codex
+    };
+    let thread = matches
+        .get_one::<String>("thread")
+        .cloned()
+        .or_else(|| std::env::var("CODEX_THREAD_ID").ok())
+        .filter(|thread| !thread.is_empty());
+    let Some(thread) = thread else {
+        anyhow::bail!("--notify needs --thread or the CODEX_THREAD_ID environment variable");
+    };
+    Ok(Some(Notify { client, thread }))
 }

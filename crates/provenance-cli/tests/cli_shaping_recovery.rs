@@ -373,30 +373,8 @@ fn existing_error_precedence_and_failed_write_state() {
     assert_eq!(get(&repo, "questions", "question_a"), before);
 }
 
-#[test]
-#[verifies("rule_shaping_recovery_bounds", examples)]
-fn summary_has_a_byte_bound_when_claims_are_large() {
-    let (_dir, repo) = setup();
-    for id in ["question_a", "question_b"] {
-        create(&repo, id, None);
-        provenance(&[
-            "questions",
-            id,
-            "claim",
-            "--repo",
-            &repo,
-            "--scope",
-            "default",
-            "--actor",
-            &"worker".repeat(7000),
-        ])
-        .success();
-    }
-    let state = summary(&repo, &[]);
-    assert_eq!(state["complete"], false);
-    assert!(serde_json::to_vec(&state).unwrap().len() <= 65_536);
-}
-
+#[path = "shaping_recovery/bounds.rs"]
+mod bounds;
 #[path = "shaping_recovery/review.rs"]
 mod review;
 

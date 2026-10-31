@@ -225,6 +225,59 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     server.await.unwrap().cancel().await.unwrap();
 }
 
+fn cli_get_error(repo: &str, args: &[&str]) -> serde_json::Value {
+    let output = provenance()
+        .args(args)
+        .args(["--repo", repo, "--format", "json"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let refusal: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();
+    refusal["error"].clone()
+}
+
+#[tokio::test]
+#[verifies("rule_mcp_get_failure_matches_cli", examples)]
+async fn mcp_get_failures_are_the_cli_json_refusals() {
+    use rmcp::{model::CallToolRequestParams, ServiceExt as _};
+
+    let directory = tempfile::tempdir().unwrap();
+    let repo = directory.path().to_string_lossy().into_owned();
+    init_with_source(&repo);
+    let access = provenance_store::operations::LocalRepository::bind(
+        provenance_store::repository::Repository::open(directory.path(), "default").unwrap(),
+        "native",
+    )
+    .unwrap();
+    let host = provenance_transport::StatementHost::with_access(Arc::new(access));
+    let (client_io, server_io) = tokio::io::duplex(256 * 1024);
+    let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
+    let client = ().serve(client_io).await.unwrap();
+    let limit = json!({"target":"source_live_inventory","limit":5});
+    let depth = json!({"target":"source_live_inventory","view":"children","max_depth":0});
+    let unknown = json!({"target":"source_live_inventory","unknown":true});
+
+    for (cli, arguments) in [
+        ("source_missing get", json!({"target":"source_missing"})),
+        ("source_live_inventory get --limit 5", limit),
+        ("source_live_inventory get --view children --depth 0", depth),
+        ("source_live_inventory get --limit 5", unknown),
+    ] {
+        let cli = cli_get_error(&repo, &cli.split(' ').collect::<Vec<_>>());
+        let mcp = client
+            .call_tool(
+                CallToolRequestParams::new("get")
+                    .with_arguments(arguments.as_object().unwrap().clone()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(mcp.is_error, Some(true), "{arguments}");
+        assert_eq!(mcp.structured_content.unwrap()["error"], cli, "{arguments}");
+    }
+    client.cancel().await.unwrap();
+    server.await.unwrap().cancel().await.unwrap();
+}
+
 #[test]
 #[verifies("rule_porcelain_check_selector_union", examples)]
 fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {

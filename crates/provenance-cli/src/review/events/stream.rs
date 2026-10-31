@@ -1,4 +1,5 @@
 //! Current document reconciliation, using the canonical bounded document read.
+use super::frames::Frame;
 use super::output::{Continuity, Document, OutputFrame};
 use provenance_cli::repo_context::RepoContext;
 use provenance_core::protocol::ReadDocumentQuery;
@@ -109,6 +110,101 @@ impl Baseline {
             }
         }
         Ok(frames)
+    }
+}
+
+/// The client state of one review subscription: the delivered baseline and the last host
+/// position. The CLI follow stream and the host delivery task use the same step.
+pub(in crate::review) struct Follower {
+    baseline: Baseline,
+    epoch: String,
+    sequence: u64,
+    initialized: bool,
+}
+
+impl Follower {
+    pub fn new(epoch: &str) -> Self {
+        Self {
+            baseline: Baseline::default(),
+            epoch: epoch.to_owned(),
+            sequence: 0,
+            initialized: false,
+        }
+    }
+
+    /// The last host position, for a disconnected or read-error frame.
+    pub fn position(&self) -> (String, u64) {
+        (self.epoch.clone(), self.sequence)
+    }
+
+    /// Reads current state for one host frame and returns the frames to deliver.
+    pub async fn step(
+        &mut self,
+        context: &RepoContext,
+        root: &str,
+        limit: usize,
+        frame: &Frame,
+    ) -> anyhow::Result<Vec<OutputFrame>> {
+        let (next_epoch, next_sequence) = frame.position();
+        let reset = self.initialized
+            && (matches!(frame, Frame::Reset { .. })
+                || next_epoch != self.epoch
+                || next_sequence != self.sequence + 1);
+        next_epoch.clone_into(&mut self.epoch);
+        self.sequence = next_sequence;
+        if self.initialized
+            && !reset
+            && matches!(frame, Frame::Changed { .. } | Frame::Ready { .. })
+        {
+            return Ok(Vec::new());
+        }
+        let selected = match frame {
+            Frame::Reviewed { scopes, .. } => Some(
+                scopes
+                    .iter()
+                    .filter(|scope| scope.scope == context.scope)
+                    .flat_map(|scope| scope.records.iter().map(|record| record.id.clone()))
+                    .collect::<BTreeSet<_>>(),
+            ),
+            _ => None,
+        };
+        let position = (self.epoch.as_str(), self.sequence);
+        let frames = self
+            .baseline
+            .reconcile(context, root, limit, position, reset, selected.as_ref())
+            .await?;
+        self.initialized = true;
+        Ok(frames)
+    }
+
+    /// Reads the first full document at the Ready position. A page write that lands during
+    /// the read moves the native sequence or makes a later page refuse; then the read runs
+    /// again, at most three times, and after that the document goes out as a reset. The
+    /// moved frames stay queued, so later steps also deliver their records.
+    #[rule("rule_review_notify_consistent_start")]
+    pub async fn start(
+        &mut self,
+        context: &RepoContext,
+        root: &str,
+        limit: usize,
+        ready: &Frame,
+        moved: impl Fn() -> bool,
+    ) -> anyhow::Result<Vec<OutputFrame>> {
+        for _ in 0..3 {
+            *self = Self::new(&self.epoch);
+            if let Ok(frames) = self.step(context, root, limit, ready).await {
+                if !moved() {
+                    return Ok(frames);
+                }
+            }
+        }
+        let (epoch, sequence) = ready.position();
+        *self = Self::new(epoch);
+        self.sequence = sequence;
+        self.initialized = true;
+        self.baseline
+            .reconcile(context, root, limit, (epoch, sequence), true, None)
+            .await
     }
 }
 

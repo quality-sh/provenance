@@ -122,3 +122,52 @@ fn init_guidance_says_what_a_description_holds() {
         "{agents}"
     );
 }
+
+#[test]
+#[verifies("rule_init_follow_monitor_guidance", examples)]
+fn init_guidance_runs_follow_under_monitor_and_starts_it_again() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        prose.contains(
+            "In Claude Code, run the follow command with the Monitor tool and `timeout_ms` \
+             1800000."
+        ),
+        "{agents}"
+    );
+    assert!(
+        prose.contains(
+            "A watch ends at its deadline. Start the same command again after the deadline \
+             notice, after a `disconnected` line, and when the session resumes."
+        ),
+        "{agents}"
+    );
+    assert!(
+        prose.contains("The first line of each start is the full document."),
+        "{agents}"
+    );
+}
+
+#[test]
+// Implementation aid: the Codex lines name the notify command and its limits; no Rule
+// in the graph states this guidance.
+fn init_guidance_registers_a_codex_thread_and_ends_it_with_off() {
+    let agents = agents_after_init();
+    let prose = normalized(&agents);
+
+    assert!(
+        agents.contains(
+            "`provenance <requirement-id> --scope default --view review --notify codex --format json`"
+        ),
+        "{agents}"
+    );
+    for text in [
+        "The host must run outside the sandbox.",
+        "Codex accepted a message when it is in the thread queue.",
+        "An idle session reads it at its next turn.",
+        "To stop, run the same command with `--notify off`.",
+    ] {
+        assert!(prose.contains(text), "missing {text}\n{agents}");
+    }
+}

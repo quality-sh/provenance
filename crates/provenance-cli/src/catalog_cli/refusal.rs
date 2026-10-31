@@ -57,7 +57,7 @@ pub fn json_refusal(error: &anyhow::Error) -> Option<Value> {
         return Some(json!({"error": object, "meta": {}}));
     }
     if let Some(read) = error.downcast_ref::<ReadError>() {
-        return Some(envelope(read_error(read), &read.to_string()));
+        return Some(read.failure());
     }
     if let Some(action) = error.downcast_ref::<ActionError>() {
         return Some(envelope(action_error(action), &action.to_string()));
@@ -76,16 +76,6 @@ pub fn exit_with_json(refusal: &Value) -> ! {
 fn envelope(mut object: Map<String, Value>, message: &str) -> Value {
     object.insert("message".into(), json!(message));
     json!({"error": object, "meta": {}})
-}
-
-fn read_error(error: &ReadError) -> Map<String, Value> {
-    let object = match error {
-        ReadError::InvalidOptions => invalid_input(None),
-        ReadError::NotFound => json!({"kind": "resource_not_found"}),
-        ReadError::AmbiguousIdentity => invalid_input(Some("target")),
-        ReadError::Operation(_) => json!({"kind": "operation_failed"}),
-    };
-    object.as_object().cloned().unwrap_or_default()
 }
 
 fn action_error(error: &ActionError) -> Map<String, Value> {
