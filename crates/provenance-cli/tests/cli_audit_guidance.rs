@@ -132,20 +132,30 @@ fn guidance_calls_the_source_fields_citations_and_not_planned_code_homes() {
     );
 }
 
-/// A Requirement alone anchors a Rule, and the obsolete binary that demanded a
-/// Resolution producer is called out with the command that replaces it.
+/// A Requirement alone anchors a Rule. The version check is general CLI guidance, so
+/// it is in the managed `AGENTS.md` lines and not in the shaping skill.
 #[test]
-fn shaping_guidance_tells_an_agent_to_check_the_installed_cli() {
+fn guidance_tells_an_agent_to_check_the_installed_cli() {
     let shaping = skill("provenance-shaping");
-
-    assert!(shaping.contains("## Check your CLI"), "{shaping}");
-    assert!(shaping.contains("provenance --version"), "{shaping}");
-    assert!(
-        shaping.contains("cargo install provenance-cli --force"),
-        "{shaping}"
-    );
+    assert!(!shaping.contains("## Check your CLI"), "{shaping}");
     assert!(
         shaping.contains("A Resolution producer is not required"),
         "{shaping}"
     );
+
+    let directory = tempfile::tempdir().unwrap();
+    Command::cargo_bin("provenance")
+        .unwrap()
+        .args(["init", "--path", directory.path().to_str().unwrap()])
+        .args(["--scope", "default", "--path-prefix", "."])
+        .assert()
+        .success();
+    let agents = normalized(&std::fs::read_to_string(directory.path().join("AGENTS.md")).unwrap());
+    for text in [
+        "Run `provenance --version` before the first graph write of a session.",
+        "update the binary before you write records.",
+        "Do not change the graph to suit an old binary.",
+    ] {
+        assert!(agents.contains(text), "missing {text}\n{agents}");
+    }
 }

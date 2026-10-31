@@ -58,19 +58,26 @@ session reads the rendered tree as a builder would, and fixes what does not read
 
 ## Invocation
 
-Two modes. The first action of every session, before the first question, opens the
-requirements view where the person can see it. A desktop app with a browser pane opens the
-review page in that pane. Claude Desktop and ChatGPT desktop open the MCP document view. A
-plain CLI session runs `provenance review --detach` without `--no-open`, so the system
-browser opens the page. The view shows the anchor inside the tree of its parent, never as
-a root. The page stays open, and the person watches each record land after each answer. Every
+Two modes. The first action of every session opens the requirements view where the person
+can see it. This occurs before the first question and before the first graph write. A
+desktop app with a browser pane opens the review page in that pane. Claude Desktop and
+ChatGPT desktop open the MCP document view. A plain CLI session runs `provenance review
+--detach` without `--no-open`, so the system browser opens the page.
+
+The view shows the tree of the anchor's parent, so the anchor is inside that tree and is
+not a root. In Chart mode, the session opens the view of the parent first, then creates the
+anchor under that parent. There is one exception: an anchor with no parent. The session
+creates that anchor first, then opens its own page. This is the only graph write before the
+view opens, and the only page that has the anchor as its root.
+
+The page stays open, and the person watches each record land after each answer. Every
 session ends with a handoff that gives the link again.
 
 ### Chart
 
 A loose idea arrives. One session's work — do **not** also resolve questions.
 
-1. Create (or select) the anchor requirement.
+1. Create (or select) the anchor requirement, in the order that "Invocation" gives.
 2. Grill to surface:
    - **Appetite** (Shape Up): how much time is this worth? Recorded up front, re-checked
      as requirements accumulate.
@@ -182,17 +189,22 @@ Read the Question's Topic and its Requirement, then select the lowest Requiremen
 obligation the answer concerns. Read its children before selection. Use that Requirement
 for the discussion and new records. Re-select when the answer concerns another child.
 
-The tree reads as a spec. A decision that settles a Question creates a Resolution, and the
-Resolution spawns a child Requirement (`refines` the selected Requirement, `spawned_by` the
-Resolution). The Rules of that decision go under the child and name the Resolution as their
-producer while it is still proposed, so its impact view shows them before approval. No Rule
-goes directly under the anchor. A person who accepts one option and rejects another has made a
-choice, for every Question method; when the person gives no reason, the rationale records their
-selection in their words, and the Resolution is still created. The spawned Requirement states the product behaviour that the
-decision sets, not that a choice was made; it must add meaning beyond the position. Identical
-statements require a meaning check; rewriting the words does not remove a repeated
-obligation. A precise obligation can correctly occur in a position and an independently
-needed Rule.
+The tree reads as a spec:
+
+- A decision that settles a Question creates a Resolution. The Resolution spawns a child
+  Requirement. The child `refines` the selected Requirement and is `spawned_by` the
+  Resolution.
+- The Rules of that decision go under the child. They name the Resolution as their producer
+  while it is still proposed, so its impact view shows them before approval.
+- No Rule goes directly under the anchor.
+- A person who accepts one option and rejects another has made a choice. This is true for
+  every Question method. When the person gives no reason, the rationale records their
+  selection in their words. The Resolution is still created.
+- The spawned Requirement states the product behaviour that the decision sets, not that a
+  choice was made. It must add meaning beyond the position.
+- Identical statements require a meaning check. Rewriting the words does not remove a
+  repeated obligation. A precise obligation can correctly occur in a position and in an
+  independently needed Rule.
 
 Every record that a session creates goes to review at once, so the person can approve each
 record on its own. Requirement create opens a review submission; a Rule, Resolution,

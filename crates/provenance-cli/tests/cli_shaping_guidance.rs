@@ -49,7 +49,7 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
     );
     assert!(
         prose.contains(
-            "read the tree as a builder would: read the anchor's requirement document with \
+            "read the tree as a builder would. Read the anchor's requirement document with \
              `provenance requirements <anchor_requirement_id> document get"
         ),
         "{shaping}"
@@ -103,7 +103,7 @@ fn shaping_guidance_answers_a_question_only_when_the_answer_covers_it() {
         "{shaping}"
     );
     assert!(
-        prose.contains("a Question marked answered is covered completely by its answer;"),
+        prose.contains("records and answers meet \"The tree is the spec\";"),
         "{shaping}"
     );
 }
@@ -129,8 +129,10 @@ fn shaping_guidance_opens_the_requirements_view_before_the_first_question() {
         "Do not add `--no-open` in a CLI session.",
         "Tell the person to keep the page open and to watch the records land there after \
          each answer.",
-        "One host serves the repository and scope for all sessions, so leave it running.",
-        "A link works once and expires after 24 hours;",
+        "**Exception: an anchor with no parent.** Create that anchor first, then open its own \
+         page. This is the only graph write before the view opens.",
+        "In Chart mode, open the view of the parent first, then create the anchor under that \
+         parent.",
     ] {
         assert!(prose.contains(text), "missing {text}\n{shaping}");
     }
@@ -186,8 +188,7 @@ fn shaping_guidance_submits_every_created_record_for_review() {
         "Rule, Resolution, Boundary and Source create do not. Submit each of these immediately \
          after you create it:",
         "provenance <record_id> submit --scope <scope> --actor <actor> \\",
-        "every new Requirement, Rule, Resolution, Boundary and Source has a pending review \
-         submission;",
+        "each new record has a pending review submission (\"Every record goes to review\");",
     ] {
         assert!(prose.contains(text), "missing {text}\n{shaping}");
     }

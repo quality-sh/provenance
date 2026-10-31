@@ -18,6 +18,10 @@ it in the same change.
   `{command} statement-checks create --statement "<statement>" --format json`. A clean report covers only the
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
   conformance.
+- Run `{command} --version` before the first graph write of a session. If the
+  command fails, or the binary is older than this guidance, update the binary
+  before you write records. An old binary can accept different flags and refuse
+  work that the current CLI allows. Do not change the graph to suit an old binary.
 - Plan: `{command} prime --quiet`
 - New obligation: `{command} rules create --scope {selected_scope} --id rule_<slug> --requirement-id <req> --statement "<testable clause>"`
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
