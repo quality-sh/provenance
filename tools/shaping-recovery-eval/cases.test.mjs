@@ -53,7 +53,9 @@ test('failure 2: a Rule directly under the anchor and a choice with no Resolutio
   const final = graph();
   final.rules = [{ id: 'rule_flat', statement: 'Rows show pay.', requirement_ids: ['req_pay'], status: 'review' }];
   final.requirements[2] = { ...final.requirements[2], spawned_by: undefined };
-  const result = scorePacket(packet({ final, finalReview: review.filter(entry => entry.kind !== 'resolutions') }));
+  final.resolutions = [];
+  const finalReview = [review[0], { ...review[2], id: 'rule_flat' }];
+  const result = scorePacket(packet({ final, finalReview }));
   assert.deepEqual(failing(result), ['tree_branches_by_decision']);
   assert.equal(result.cases.tree_branches_by_decision.length, 2);
 });

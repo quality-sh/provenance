@@ -1,20 +1,93 @@
 /** Structural gate cases. Each one reads one anonymous packet and returns its findings. */
 
-// A write is a CLI call whose action follows the binary or its shell variable within three words,
-// as in `$P questions question_rate answer`; script text that names an action is not a write.
-const writeVerb = /(?:provenance>?|\$\{?\w+\}?)\s+(?:[\w.$<>{}-]+\s+){0,3}(create|update|answer|claim|release|submit|close|discuss|reply)\b/;
-const outputFilter = /\|\s*(grep|rg|jq|sed|head|tail|awk|cut|sort|wc|tr|python3?|node)\b/;
+// The scorer splits each shell command into pipelines of words, outside quotes. Heredoc bodies
+// and comments are script text, not calls. `$(`, backticks and parentheses also start a new pipeline.
+export function pipelines(command) {
+  const out = [];
+  let stages = [], words = [], word = null, quote = null, heredocs = [];
+  const endWord = () => { if (word) words.push(word); word = null; };
+  const endStage = () => { endWord(); if (words.length) stages.push(words); words = []; };
+  const endPipeline = () => { endStage(); if (stages.length) out.push(stages); stages = []; };
+  const append = (text, quoted = false) => { word ??= { text: '', quoted: false }; word.text += text; word.quoted ||= quoted; };
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i], next = command[i + 1];
+    if (quote) {
+      if (c === quote) quote = null;
+      else if (c === '\\' && quote === '"' && next !== undefined) append(command[++i], true);
+      else append(c, true);
+      continue;
+    }
+    if (c === "'" || c === '"') { quote = c; append('', true); continue; }
+    if (c === '\\') { if (next !== '\n' && next !== undefined) append(next); i++; continue; }
+    if (c === '#' && !word) { while (i + 1 < command.length && command[i + 1] !== '\n') i++; continue; }
+    if (c === '<' && next === '<' && command[i + 2] !== '<') {
+      const match = /^<<-?\s*(['"]?)([\w.-]+)\1/.exec(command.slice(i));
+      if (match) { heredocs.push(match[2]); i += match[0].length - 1; continue; }
+    }
+    if (c === '\n') {
+      endPipeline();
+      for (const end of heredocs) {
+        let line;
+        do {
+          const stop = command.indexOf('\n', i + 1);
+          line = command.slice(i + 1, stop < 0 ? command.length : stop);
+          i = stop < 0 ? command.length : stop;
+        } while (i < command.length && line.trim() !== end);
+      }
+      heredocs = [];
+      continue;
+    }
+    if (c === '|' && next !== '|') { endStage(); if (next === '&') i++; continue; }
+    if (c === '&' && (next === '>' || command[i - 1] === '>')) { append(c); continue; }
+    if (';&|()`'.includes(c) || (c === '$' && next === '(')) { endPipeline(); if (next === c || c === '$') i++; continue; }
+    if (/\s/.test(c)) { endWord(); continue; }
+    append(c);
+  }
+  endPipeline();
+  return out;
+}
 
-const segments = command => command.split(/\n|;|&&|\|\|/);
-// A help request names an action but writes nothing.
-const isWrite = command => segments(command).some(segment => writeVerb.test(segment) && !/--help\b/.test(segment));
+const keyword = /^(do|then|else|elif|if|while|until|time|exec|command|!|\{)$/;
+const program = /^(?:\S*\/)?<?provenance>?$|^\$\{?\w+\}?$/;
+const writeVerbs = new Set(['create', 'update', 'answer', 'claim', 'release', 'submit', 'close', 'discuss', 'reply']);
+const outputFilter = /^(grep|rg|jq|sed|head|tail|awk|cut|sort|wc|tr|python3?|node)$/;
 
-// A read counts only in a call with no write, and only in a segment whose output is not filtered.
-// The segment names the record, or reads it through a loop variable such as `for q in ...; do $P questions $q get`.
-function freshRead(command, id) {
-  if (isWrite(command) || !command.includes(id)) return false;
-  return segments(command).some(segment => /\bget\b/.test(segment) && !outputFilter.test(segment)
-    && (segment.includes(id) || (/\$\{?\w+\}?\s+get\b/.test(segment) && new RegExp(`\\bin\\b[^;]*\\b${id}\\b`).test(command))));
+// A CLI call is one pipeline stage that runs the binary or a shell variable that holds it, as in
+// `$P questions question_rate answer`. Its action is the first write verb or `get` in the first
+// four words that are not options. An option is an unquoted word, so an answer text that contains
+// `--help` is not a help request.
+function invocations(command) {
+  const loops = new Map();
+  const calls = [];
+  for (const stages of pipelines(command)) {
+    stages.forEach((stage, at) => {
+      let start = 0;
+      while (start < stage.length && (keyword.test(stage[start].text) || /^\w+=/.test(stage[start].text))) start++;
+      const [head, ...rest] = stage.slice(start);
+      if (head?.text === 'for' && rest[1]?.text === 'in') loops.set(rest[0].text, rest.slice(2).map(word => word.text));
+      if (!head || !program.test(head.text)) return;
+      const options = rest.filter(word => !word.quoted && word.text.startsWith('-')).map(word => word.text);
+      const positional = rest.filter(word => word.quoted || !word.text.startsWith('-')).map(word => word.text).slice(0, 4);
+      const help = options.some(option => option === '--help' || option === '-h') || positional[0] === 'help';
+      const action = positional.find(word => writeVerbs.has(word) || word === 'get');
+      const filtered = stages.slice(at + 1).some(later => outputFilter.test(later[0]?.text ?? ''));
+      calls.push({ words: rest.map(word => word.text), positional, options, action, help, filtered });
+    });
+  }
+  return calls.map(call => ({ ...call, write: !call.help && writeVerbs.has(call.action), read: !call.help && call.action === 'get', loops }));
+}
+
+// A call names a record by its ID, or by a loop variable such as `for q in ...; do $P questions $q get`.
+const names = (call, id) => call.words.includes(id)
+  || call.positional.some(word => (call.loops.get(/^\$\{?(\w+)\}?$/.exec(word)?.[1]) ?? []).includes(id));
+const isWrite = command => invocations(command).some(call => call.write);
+const writes = (command, id) => invocations(command).some(call => call.write && names(call, id));
+
+// A read counts only in a command with no write, and only in a call whose output is not filtered.
+function freshRead(command, id, view) {
+  const calls = invocations(command);
+  return !calls.some(call => call.write)
+    && calls.some(call => call.read && !call.filtered && names(call, id) && (!view || view.test(call.words.join(' '))));
 }
 
 function shellCommands(turn) {
@@ -26,7 +99,7 @@ function shellCommands(turn) {
   return out;
 }
 
-const commands = turn => shellCommands(turn).filter(command => /provenance/.test(command));
+const commands = turn => shellCommands(turn).filter(command => invocations(command).length);
 
 const live = record => !['archived', 'abandoned', 'rejected', 'superseded'].includes(record.status);
 const byId = list => new Map(list.map(record => [record.id, record]));
@@ -88,10 +161,10 @@ export function freshReads(packet) {
     for (const question of turn.after.questions) {
       const prior = before.get(question.id);
       if (!prior || JSON.stringify(prior) === JSON.stringify(question)) continue;
-      const writeAt = list.findIndex(command => isWrite(command) && command.includes(question.id));
+      const writeAt = list.findIndex(command => writes(command, question.id));
       const until = writeAt < 0 ? firstWrite : writeAt;
       const read = list.slice(0, until).some(command => freshRead(command, question.id)
-        || (freshRead(command, 'topic_pay') && command.includes('--view children')));
+        || freshRead(command, 'topic_pay', /--view[= ]children\b/));
       if (!read) findings.push({ turn: turn.index, missing: question.id });
     }
   }
@@ -139,41 +212,58 @@ function subtree(requirements, anchor) {
   return inside;
 }
 
-/** Failure 2: no new Rule is directly under the anchor, and each choice is a Resolution that spawns its Requirement. */
+/** Failure 2: each new Rule is under a Requirement below the anchor, and names the Resolution that
+ * spawned that Requirement. Each choice is a Resolution that spawns its Requirement. */
 export function treeBranchesByDecision(packet) {
   const final = packet.turns.at(-1).after;
   const fixture = new Set(packet.fixture_records);
-  const findings = [];
-  for (const rule of final.rules.filter(live)) {
-    if (!fixture.has(rule.id) && (rule.requirement_ids ?? []).includes(packet.anchor)) findings.push({ rule: rule.id, finding: 'Rule directly under the anchor' });
-  }
   const requirements = byId(final.requirements), resolutions = byId(final.resolutions);
   const inside = subtree(final.requirements, packet.anchor);
+  inside.delete(packet.anchor);
+  const findings = [];
+  for (const rule of final.rules.filter(record => live(record) && !fixture.has(record.id))) {
+    const parents = rule.requirement_ids ?? [];
+    if (parents.includes(packet.anchor)) findings.push({ rule: rule.id, finding: 'Rule directly under the anchor' });
+    else if (!parents.length || !parents.every(id => inside.has(id))) findings.push({ rule: rule.id, finding: 'Rule outside the anchor tree' });
+    for (const resolution of new Set(parents.map(id => requirements.get(id)?.spawned_by).filter(Boolean))) {
+      if (!(rule.resolution_ids ?? []).includes(resolution)) findings.push({ rule: rule.id, finding: `Rule does not name ${resolution}` });
+    }
+    for (const resolution of rule.resolution_ids ?? []) {
+      if (!resolutions.has(resolution)) findings.push({ rule: rule.id, finding: `Rule names the missing Resolution ${resolution}` });
+    }
+  }
   for (const decision of packet.expected_decisions) {
     const record = requirements.get(decision.id);
     if (!record) continue;
-    if (!inside.has(record.id) || record.id === packet.anchor) findings.push({ requirement: record.id, finding: 'not below the anchor' });
+    if (!inside.has(record.id)) findings.push({ requirement: record.id, finding: 'not below the anchor' });
     if (decision.choice && !resolutions.has(record.spawned_by)) findings.push({ requirement: record.id, finding: 'choice not spawned by a Resolution' });
   }
   return findings;
 }
 
-/** Failure 3: every Resolution of the session shows a spawned Requirement and a produced Rule while it is proposed. */
-export function resolutionShowsDownstream(packet) {
+const created = (packet, kinds) => {
   const fixture = new Set(packet.fixture_records);
-  const live = new Set(packet.turns.at(-1).after.resolutions.filter(record => !['archived', 'abandoned'].includes(record.status)).map(record => record.id));
-  return (packet.turns.at(-1).review ?? [])
-    .filter(entry => entry.kind === 'resolutions' && !fixture.has(entry.id) && live.has(entry.id))
-    .filter(entry => !entry.impact_rules.length || !entry.spawned.length)
-    .map(entry => ({ resolution: entry.id, impact_rules: entry.impact_rules, spawned: entry.spawned }));
+  const final = packet.turns.at(-1).after;
+  return kinds.flatMap(kind => (final[kind] ?? []).filter(record => live(record) && !fixture.has(record.id)).map(record => ({ kind, id: record.id })));
+};
+const reviewEntry = (review, { kind, id }) => review.find(entry => entry.kind === kind && entry.id === id);
+
+/** Failure 3: every new Resolution has a review entry that shows a spawned Requirement and a produced Rule. */
+export function resolutionShowsDownstream(packet) {
+  const review = packet.turns.at(-1).review ?? [];
+  return created(packet, ['resolutions']).flatMap(record => {
+    const entry = reviewEntry(review, record);
+    if (!entry) return [{ resolution: record.id, finding: 'no review entry' }];
+    return entry.impact_rules?.length && entry.spawned?.length ? [] : [{ resolution: record.id, impact_rules: entry.impact_rules, spawned: entry.spawned }];
+  });
 }
 
 /** Failure 4: every record that the session created has its own review submission. */
 export function everyRecordSubmitted(packet) {
-  const fixture = new Set(packet.fixture_records);
   const review = packet.turns.at(-1).review;
   if (!review) return [{ finding: 'no final review state' }];
-  return review.filter(entry => !fixture.has(entry.id) && !entry.pending && !entry.decisions).map(entry => ({ kind: entry.kind, id: entry.id }));
+  return created(packet, ['requirements', 'resolutions', 'rules', 'boundaries', 'sources'])
+    .filter(record => { const entry = reviewEntry(review, record); return !entry?.pending && !entry?.decisions; });
 }
 
 export const cases = {
