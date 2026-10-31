@@ -155,6 +155,8 @@ fn guidance_tells_an_agent_to_check_the_installed_cli() {
         "Run `provenance --version` before the first graph write of a session.",
         "update the binary before you write records.",
         "Do not change the graph to suit an old binary.",
+        "To update the native binary, run `cargo install provenance-cli --force`.",
+        "update the `@quality-sh/provenance` development dependency",
     ] {
         assert!(agents.contains(text), "missing {text}\n{agents}");
     }
