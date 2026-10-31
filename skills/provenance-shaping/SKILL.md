@@ -425,8 +425,8 @@ sequence of commands.
    needs only a Question answer. In a Resolution, state the unresolved problem in
    context, the choice in position, and the comparative reasons in rationale. Put
    source quotations in citations or inputs, not in place of those reasons.
-3. Check each additional record for added meaning. The spawned child Requirement states
-   the product behaviour that the decision sets, not "option X was selected". Do not
+3. Check each additional record for added meaning. "The shape of the tree" gives what
+   the spawned child Requirement states. Do not
    create a second Requirement or Rule that only repeats the position. A precise
    obligation can correctly appear in a position and a Rule when the Rule adds an
    independently needed obligation.
@@ -533,8 +533,8 @@ change the artifact's kind.
    Rule creation defaults to `draft`. Keep this default for an agent-created Rule. Pass
    `--status active` only when a person ratifies the Rule.
 
-   A Rule that a proposed Resolution produced names that Resolution at once (see "The
-   shape of the tree"), and stays in review with `--status review`. Only an approved
+   A Rule that a proposed Resolution produced stays in review with `--status review`.
+   "The shape of the tree" gives its link to the Resolution. Only an approved
    Resolution can produce an active Rule or answer a Question. While the Resolution is
    proposed, answer the Question without a citation of the Resolution. Name the
    Resolution in the answer text.

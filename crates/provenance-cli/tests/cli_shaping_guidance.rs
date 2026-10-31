@@ -176,6 +176,31 @@ fn shaping_guidance_puts_each_decision_on_its_own_branch() {
     );
 }
 
+/// The behaviour statement of the spawned child and the link from a Rule to its Resolution
+/// are stated once, in "The shape of the tree", and the other places point to that section.
+#[test]
+#[verifies("rule_shaping_skill_tree_branches_by_decision", examples)]
+fn shaping_guidance_states_each_branch_obligation_once() {
+    let shaping = skill("provenance-shaping");
+    let prose = normalized(&shaping);
+    for (text, count) in [
+        ("not that a choice was made", 1),
+        ("not \"option X was selected\"", 0),
+        ("names that Resolution at once", 0),
+        ("each one names the Resolution with `--resolution-id`", 1),
+        (
+            "\"The shape of the tree\" gives what the spawned child Requirement states.",
+            1,
+        ),
+        (
+            "\"The shape of the tree\" gives its link to the Resolution.",
+            1,
+        ),
+    ] {
+        assert_eq!(prose.matches(text).count(), count, "{text}\n{shaping}");
+    }
+}
+
 /// Each record that a session creates gets its own review submission.
 #[test]
 #[verifies("rule_shaping_skill_submits_every_record", examples)]
