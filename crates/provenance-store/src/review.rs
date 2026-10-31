@@ -1,5 +1,6 @@
 //! Guarded graph record edits and their review state.
 mod classifier;
+pub use classifier::{changed_fields, changes_revision, content_digest, review_revision};
 pub(crate) mod guard;
 mod input;
 mod publication;
