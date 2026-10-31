@@ -126,8 +126,10 @@ impl StateStore {
         }
     }
 
-    /// Refuses unless this store holds the live section.
+    /// Refuses unless this store holds the live section. A view store
+    /// refuses as it does for every write.
     pub(crate) fn ensure_holds_live_section(&self) -> anyhow::Result<()> {
+        self.ensure_not_view()?;
         anyhow::ensure!(
             matches!(self.access, Access::Section { .. }),
             "a staged write needs the store that holds the live section"
@@ -335,6 +337,10 @@ impl StateStore {
             "a read-only store of {} cannot write",
             self.layout.root()
         );
+        self.ensure_not_view()
+    }
+
+    fn ensure_not_view(&self) -> anyhow::Result<()> {
         anyhow::ensure!(
             !matches!(self.access, Access::View(_)),
             "a view store of {} cannot write",
