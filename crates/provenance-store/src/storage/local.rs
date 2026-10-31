@@ -4,6 +4,7 @@ use super::{
     Atomicity, PublishFailure, Revision, StateKey, StateStorage, StateView, StorageError, WriteSet,
 };
 use crate::layout::ProvenanceLayout;
+use crate::shards;
 use camino::Utf8Path;
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -40,9 +41,12 @@ impl StateStorage for LocalStateStorage {
         Ok(StateView::new(entries))
     }
 
-    /// Returns the revision of the whole tree after the write. With a base,
-    /// the adapter has the tree from its read under the lock. With no base,
-    /// it reads and hashes the whole tree under the lock after the write.
+    /// Returns the revision of the whole tree after the write. The tree is
+    /// the manifest and each shard of a scope, as [`Self::read_view`] reads
+    /// them; no other entry under `.provenance/state` is in the revision.
+    /// With a base, the adapter has the tree from its read under the lock.
+    /// With no base, it reads and hashes the tree under the lock after the
+    /// write.
     fn publish(&self, writes: WriteSet) -> Result<Revision, PublishFailure> {
         writes.ensure_disjoint()?;
         if writes.atomicity() == Atomicity::WholeSet && writes.key_count() > 1 {
@@ -119,27 +123,33 @@ fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
     }
 }
 
-/// Every file below `directory`, keyed by `prefix` and its path below it.
-/// A symbolic link or another special entry is not a state file, and the
-/// view leaves it out, as the shard readers do.
+/// The manifest and each shard below `directory`, keyed by `prefix` and
+/// their path below it. The walk enters only a directory that can hold the
+/// manifest or a shard. Any other entry is not canonical state, and the view
+/// leaves it out: a name that is not UTF-8, a symbolic link, a special
+/// entry, or a file that is not the manifest or a shard. A shard that the
+/// process cannot read is an error.
 fn read_tree(
     directory: &Utf8Path,
     prefix: &str,
     entries: &mut BTreeMap<StateKey, Vec<u8>>,
 ) -> Result<(), StorageError> {
-    for entry in directory.read_dir_utf8().map_err(read_error(directory))? {
+    for entry in std::fs::read_dir(directory).map_err(read_error(directory))? {
         let entry = entry.map_err(read_error(directory))?;
-        let path = entry.path();
-        let key = if prefix.is_empty() {
-            entry.file_name().to_owned()
-        } else {
-            format!("{prefix}/{}", entry.file_name())
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
         };
-        let kind = entry.file_type().map_err(read_error(path))?;
-        if kind.is_dir() {
-            read_tree(path, &key, entries)?;
-        } else if kind.is_file() {
-            let bytes = std::fs::read(path).map_err(read_error(path))?;
+        let path = directory.join(&name);
+        let key = if prefix.is_empty() {
+            name
+        } else {
+            format!("{prefix}/{name}")
+        };
+        let kind = entry.file_type().map_err(read_error(&path))?;
+        if kind.is_dir() && shards::can_hold_canonical_keys(&key) {
+            read_tree(&path, &key, entries)?;
+        } else if kind.is_file() && shards::is_canonical_key(&key) {
+            let bytes = std::fs::read(&path).map_err(read_error(&path))?;
             entries.insert(StateKey::new(key)?, bytes);
         }
     }

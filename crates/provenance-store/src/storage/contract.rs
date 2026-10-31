@@ -36,6 +36,13 @@ fn expected(entries: &[(&str, &[u8])]) -> BTreeMap<StateKey, Vec<u8>> {
         .collect()
 }
 
+/// Shards of scope `a`, in key order: `A` < `B` < `C`.
+const A: &str = "scopes/a/questions/question.jsonl";
+const B: &str = "scopes/a/rules/rule.jsonl";
+const C: &str = "scopes/a/sources/source.jsonl";
+const X: &str = "scopes/a/domains/domain.jsonl";
+const Y: &str = "scopes/a/topics/topic.jsonl";
+
 /// Bytes that a text reader would change: no final newline, CRLF, a byte
 /// that is not UTF-8, and an empty file.
 const SHARDS: &[(&str, &[u8])] = &[
@@ -66,15 +73,15 @@ pub fn empty_state_reads_as_an_empty_view<H: Harness>(harness: &H) {
 /// Two reads of unchanged state agree; a changed byte or a moved key
 /// changes the revision.
 pub fn revision_follows_every_key_and_byte<H: Harness>(mut harness: H) {
-    harness.seed(&[("manifest.json", b"{}"), ("scopes/a/x.jsonl", b"one")]);
+    harness.seed(&[("manifest.json", b"{}"), (X, b"one")]);
     let first = read(&harness);
     assert_eq!(read(&harness).revision(), first.revision());
 
-    harness.seed(&[("scopes/a/x.jsonl", b"onf")]);
+    harness.seed(&[(X, b"onf")]);
     let changed = read(&harness);
     assert_ne!(changed.revision(), first.revision());
 
-    harness.seed(&[("scopes/a/y.jsonl", b"onf")]);
+    harness.seed(&[(Y, b"onf")]);
     assert_ne!(read(&harness).revision(), changed.revision());
 }
 
@@ -85,17 +92,14 @@ pub fn revision_follows_every_key_and_byte<H: Harness>(mut harness: H) {
 /// hashes the whole tree after the write lands; the local adapter does this
 /// under the publication lock.
 pub fn publish_lands_puts_and_deletes<H: Harness>(mut harness: H) {
-    harness.seed(&[("manifest.json", b"{}"), ("scopes/a/b.jsonl", b"old")]);
+    harness.seed(&[("manifest.json", b"{}"), (B, b"old")]);
     let writes = WriteSet::new(Atomicity::PerKey)
         .put(key("manifest.json"), b"{\"x\":1}".to_vec())
-        .put(key("scopes/a/c.jsonl"), b"new".to_vec())
-        .delete(key("scopes/a/b.jsonl"));
+        .put(key(C), b"new".to_vec())
+        .delete(key(B));
     let revision = publish(&harness, writes).unwrap();
     let view = read(&harness);
-    let after: &[(&str, &[u8])] = &[
-        ("manifest.json", b"{\"x\":1}"),
-        ("scopes/a/c.jsonl", b"new"),
-    ];
+    let after: &[(&str, &[u8])] = &[("manifest.json", b"{\"x\":1}"), (C, b"new")];
     assert_eq!(view.entries(), &expected(after));
     assert_eq!(&revision, view.revision());
 }
@@ -107,7 +111,7 @@ pub fn publish_on_the_current_base_lands<H: Harness>(mut harness: H) {
     let base = read(&harness).revision().clone();
     let writes = WriteSet::new(Atomicity::PerKey)
         .on_base(base)
-        .put(key("scopes/a/x.jsonl"), b"x".to_vec());
+        .put(key(X), b"x".to_vec());
     let revision = publish(&harness, writes).unwrap();
     assert_eq!(&revision, read(&harness).revision());
 }
@@ -116,11 +120,11 @@ pub fn publish_on_the_current_base_lands<H: Harness>(mut harness: H) {
 pub fn publish_on_a_moved_base_is_refused<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     let base = read(&harness).revision().clone();
-    harness.seed(&[("scopes/a/x.jsonl", b"moved")]);
+    harness.seed(&[(X, b"moved")]);
     let moved = read(&harness);
     let writes = WriteSet::new(Atomicity::PerKey)
         .on_base(base.clone())
-        .put(key("scopes/a/y.jsonl"), b"y".to_vec());
+        .put(key(Y), b"y".to_vec());
     match publish(&harness, writes) {
         Err(PublishFailure::BaseMoved {
             base: from,
@@ -139,8 +143,8 @@ pub fn publish_refuses_a_put_and_delete_of_one_key<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     let before = read(&harness);
     let writes = WriteSet::new(Atomicity::PerKey)
-        .put(key("scopes/a/x.jsonl"), b"x".to_vec())
-        .delete(key("scopes/a/x.jsonl"));
+        .put(key(X), b"x".to_vec())
+        .delete(key(X));
     assert!(matches!(
         publish(&harness, writes),
         Err(PublishFailure::Refused(_))
@@ -152,9 +156,9 @@ pub fn publish_refuses_a_put_and_delete_of_one_key<H: Harness>(mut harness: H) {
 /// reports that landing started.
 pub fn a_failed_one_key_set_lands_nothing<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
-    harness.break_key("scopes/a/x.jsonl");
+    harness.break_key(X);
     let before = read(&harness);
-    let writes = WriteSet::new(Atomicity::PerKey).put(key("scopes/a/x.jsonl"), b"x".to_vec());
+    let writes = WriteSet::new(Atomicity::PerKey).put(key(X), b"x".to_vec());
     assert!(matches!(
         publish(&harness, writes),
         Err(PublishFailure::Started(_))
@@ -166,17 +170,17 @@ pub fn a_failed_one_key_set_lands_nothing<H: Harness>(mut harness: H) {
 /// landed and reports that landing started.
 pub fn a_failed_per_key_set_leaves_a_landed_prefix<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
-    harness.break_key("scopes/a/b.jsonl");
+    harness.break_key(B);
     let mut prefix = read(&harness).into_entries();
     let writes = WriteSet::new(Atomicity::PerKey)
-        .put(key("scopes/a/a.jsonl"), b"a".to_vec())
-        .put(key("scopes/a/b.jsonl"), b"b".to_vec())
-        .put(key("scopes/a/c.jsonl"), b"c".to_vec());
+        .put(key(A), b"a".to_vec())
+        .put(key(B), b"b".to_vec())
+        .put(key(C), b"c".to_vec());
     assert!(matches!(
         publish(&harness, writes),
         Err(PublishFailure::Started(_))
     ));
-    prefix.insert(key("scopes/a/a.jsonl"), b"a".to_vec());
+    prefix.insert(key(A), b"a".to_vec());
     assert_eq!(read(&harness).entries(), &prefix);
 }
 
@@ -185,15 +189,11 @@ pub fn a_failed_per_key_set_leaves_a_landed_prefix<H: Harness>(mut harness: H) {
 pub fn a_two_key_whole_set_lands_both_keys<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
     let writes = WriteSet::new(Atomicity::WholeSet)
-        .put(key("scopes/a/a.jsonl"), b"a".to_vec())
-        .put(key("scopes/a/b.jsonl"), b"b".to_vec());
+        .put(key(A), b"a".to_vec())
+        .put(key(B), b"b".to_vec());
     let revision = publish(&harness, writes).unwrap();
     let view = read(&harness);
-    let after: &[(&str, &[u8])] = &[
-        ("manifest.json", b"{}"),
-        ("scopes/a/a.jsonl", b"a"),
-        ("scopes/a/b.jsonl", b"b"),
-    ];
+    let after: &[(&str, &[u8])] = &[("manifest.json", b"{}"), (A, b"a"), (B, b"b")];
     assert_eq!(view.entries(), &expected(after));
     assert_eq!(&revision, view.revision());
 }
@@ -207,12 +207,12 @@ pub fn a_two_key_whole_set_lands_both_keys<H: Harness>(mut harness: H) {
 /// statement of the set.
 pub fn a_failed_whole_set_lands_no_key<H: Harness>(mut harness: H) {
     harness.seed(&[("manifest.json", b"{}")]);
-    harness.break_key("scopes/a/b.jsonl");
+    harness.break_key(B);
     let before = read(&harness);
     let writes = WriteSet::new(Atomicity::WholeSet)
-        .put(key("scopes/a/a.jsonl"), b"a".to_vec())
-        .put(key("scopes/a/b.jsonl"), b"b".to_vec())
-        .put(key("scopes/a/c.jsonl"), b"c".to_vec());
+        .put(key(A), b"a".to_vec())
+        .put(key(B), b"b".to_vec())
+        .put(key(C), b"c".to_vec());
     assert!(publish(&harness, writes).is_err());
     assert_eq!(read(&harness), before);
 }
@@ -346,8 +346,8 @@ mod tests {
         harness.seed(&[("manifest.json", b"{}")]);
         let before = read(&harness);
         let writes = WriteSet::new(Atomicity::WholeSet)
-            .put(key("scopes/a/a.jsonl"), b"a".to_vec())
-            .put(key("scopes/a/b.jsonl"), b"b".to_vec());
+            .put(key(A), b"a".to_vec())
+            .put(key(B), b"b".to_vec());
         assert!(matches!(
             publish(&harness, writes),
             Err(PublishFailure::Refused(_))

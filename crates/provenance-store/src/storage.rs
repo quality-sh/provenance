@@ -2,8 +2,9 @@
 //!
 //! The engine reads canonical state as one consistent view. A view holds the
 //! manifest and every shard under `.provenance/state`, byte for byte, keyed
-//! by the path below the state directory with `/` between its parts. A
-//! revision digests every key and its bytes. Derived state, such as the
+//! by the path below the state directory with `/` between its parts. No
+//! other entry under `.provenance/state` is in a view. A revision digests
+//! every key of a view and its bytes. Derived state, such as the
 //! verification runs under `.provenance/cache`, is not canonical state and is
 //! not in a view.
 //!

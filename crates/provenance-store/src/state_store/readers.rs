@@ -478,15 +478,8 @@ fn message_shard_paths_in(store: &StateStore, scope: &ScopeId) -> anyhow::Result
 }
 
 fn is_message_month_shard(path: &Utf8Path) -> bool {
-    let Some(file_name) = path.file_name() else {
-        return false;
-    };
-    let bytes = file_name.as_bytes();
-    bytes.len() == "2026-07.jsonl".len()
-        && bytes[0..4].iter().all(u8::is_ascii_digit)
-        && bytes[4] == b'-'
-        && bytes[5..7].iter().all(u8::is_ascii_digit)
-        && &bytes[7..] == b".jsonl"
+    path.file_name()
+        .is_some_and(shards::is_message_month_shard_name)
 }
 
 #[cfg(test)]
