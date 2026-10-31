@@ -2,9 +2,7 @@ use crate::cache::gaps::{compute_gaps, GraphRecords};
 use crate::cache::GapItem;
 use crate::repository::Repository;
 use crate::state_store::StateStore;
-use provenance_core::model::relations::{
-    related_nodes, RecordFront, RelationDirection, RelationRow,
-};
+use provenance_core::model::relations::{related_nodes, RelationDirection, RelationRow};
 use provenance_core::{Message, NodeType, Requirement, Rule, Source, Thread};
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -117,34 +115,20 @@ fn get_requirement_graph_locked(
     requirement_id: &provenance_core::StableId,
     store: &StateStore,
 ) -> anyhow::Result<RequirementGraphView> {
-    let requirement = store
-        .list_requirements(scope)?
-        .into_iter()
+    let records = GraphRecords::load(scope, store)?;
+    let requirement = records
+        .requirements
+        .iter()
         .find(|requirement| requirement.id == *requirement_id)
+        .cloned()
         .ok_or_else(|| anyhow::anyhow!("requirement not found"))?;
     let source_ids: BTreeSet<_> = requirement
         .source_refs
         .iter()
         .map(|reference| reference.source_id.as_str().to_string())
         .collect();
-    let all_sources = store.list_sources(scope)?;
-    let requirements = store.list_requirements(scope)?;
-    let resolutions = store.list_resolutions(scope)?;
-    let rules = store.list_rules(scope)?;
-    let topics = store.list_topics(scope)?;
-    let questions = store.list_questions(scope)?;
-    let domains = store.list_domains(scope)?;
-    let boundaries = store.list_boundaries(scope)?;
-    let front = RecordFront {
-        sources: &all_sources,
-        requirements: &requirements,
-        resolutions: &resolutions,
-        rules: &rules,
-        topics: &topics,
-        questions: &questions,
-        domains: &domains,
-        boundaries: &boundaries,
-    };
+    let graph = records.graph(scope);
+    let front = graph.front();
     let relations = related_nodes(&front, NodeType::Requirement, requirement_id)
         .into_iter()
         .map(|node| match node.direction {
@@ -164,9 +148,11 @@ fn get_requirement_graph_locked(
             },
         })
         .collect();
-    let sources = all_sources
-        .into_iter()
+    let sources = records
+        .sources
+        .iter()
         .filter(|source| source_ids.contains(source.id.as_str()))
+        .cloned()
         .collect();
     Ok(RequirementGraphView {
         requirement,

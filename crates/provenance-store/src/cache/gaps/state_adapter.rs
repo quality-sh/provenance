@@ -19,23 +19,28 @@ fn find_gaps_locked(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Vec<G
 /// Every record a [`GapGraph`] borrows, owned. Readers that need graph joins
 /// rather than the gap list itself load the scope once through here and then
 /// build the same graph the gap policy sees, so the two cannot drift.
-pub(in crate::cache) struct GraphRecords {
-    pub(in crate::cache) sources: Vec<Source>,
-    pub(in crate::cache) requirements: Vec<Requirement>,
-    pub(in crate::cache) resolutions: Vec<Resolution>,
-    pub(in crate::cache) rules: Vec<Rule>,
-    pub(in crate::cache) topics: Vec<Topic>,
-    pub(in crate::cache) questions: Vec<Question>,
-    pub(in crate::cache) threads: Vec<Thread>,
-    pub(in crate::cache) domains: Vec<provenance_core::Domain>,
-    pub(in crate::cache) boundaries: Vec<provenance_core::Boundary>,
-    pub(in crate::cache) contributions: Vec<Contribution>,
-    pub(in crate::cache) synthesis_packets: Vec<SynthesisPacket>,
+///
+/// A caller that already holds the records builds this directly and needs no
+/// store: [`GraphRecords::graph`] gives the gap graph, and its
+/// [`GapGraph::front`] gives the relation front.
+#[derive(Debug, Clone, Default)]
+pub struct GraphRecords {
+    pub sources: Vec<Source>,
+    pub requirements: Vec<Requirement>,
+    pub resolutions: Vec<Resolution>,
+    pub rules: Vec<Rule>,
+    pub topics: Vec<Topic>,
+    pub questions: Vec<Question>,
+    pub threads: Vec<Thread>,
+    pub domains: Vec<provenance_core::Domain>,
+    pub boundaries: Vec<provenance_core::Boundary>,
+    pub contributions: Vec<Contribution>,
+    pub synthesis_packets: Vec<SynthesisPacket>,
 }
 
 impl GraphRecords {
     /// Reads the canonical records under the caller's lock.
-    pub(in crate::cache) fn load(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Self> {
+    pub fn load(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Self> {
         Ok(Self {
             sources: store.list_sources(scope)?,
             requirements: store.list_requirements(scope)?,
@@ -51,7 +56,7 @@ impl GraphRecords {
         })
     }
 
-    pub(in crate::cache) fn graph<'a>(&'a self, scope: &'a ScopeId) -> GapGraph<'a> {
+    pub fn graph<'a>(&'a self, scope: &'a ScopeId) -> GapGraph<'a> {
         GapGraph {
             scope,
             sources: &self.sources,

@@ -11,8 +11,7 @@ use provenance_macros::rule;
 
 pub use graph_query::{GapGraph, GraphQuery};
 pub use model::{node_type_word, GapItem, GapKind};
-pub use state_adapter::find_gaps;
-pub(in crate::cache) use state_adapter::GraphRecords;
+pub use state_adapter::{find_gaps, GraphRecords};
 
 /// Computes gaps in stable policy order. This is also the seam for callers
 /// that already hold graph records rather than a state store.
