@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { scorePacket } from './cases.mjs';
 
 /** Evaluate saved Question states with an independent prerequisite oracle. */
 export function scoreGraph(turns, scenario) {
@@ -50,8 +52,19 @@ export function eventEvidence(events) {
   return evidence;
 }
 
+/** Scores every anonymous packet in a directory. The scorer never reads the packet mapping. */
+export function scorePackets(directory) {
+  return readdirSync(directory).filter(name => /^packet-.*\.json$/.test(name)).sort()
+    .map(name => scorePacket(JSON.parse(readFileSync(join(directory, name), 'utf8'))));
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (!process.argv.includes('--stdin')) throw new Error('Use --stdin with a JSON object containing turns and scenario');
-  const input = JSON.parse(readFileSync(0, 'utf8'));
-  process.stdout.write(`${JSON.stringify(scoreGraph(input.turns, input.scenario))}\n`);
+  const packets = process.argv.indexOf('--packets');
+  if (packets > 0) {
+    process.stdout.write(`${JSON.stringify(scorePackets(process.argv[packets + 1]), null, 2)}\n`);
+  } else {
+    if (!process.argv.includes('--stdin')) throw new Error('Use --stdin with a JSON object containing turns and scenario, or --packets DIR');
+    const input = JSON.parse(readFileSync(0, 'utf8'));
+    process.stdout.write(`${JSON.stringify(scoreGraph(input.turns, input.scenario))}\n`);
+  }
 }

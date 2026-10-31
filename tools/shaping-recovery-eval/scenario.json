@@ -1,5 +1,13 @@
 {
   "name": "overtime shaping recovery",
+  "anchor": "req_pay",
+  "anchor_parent": "req_payroll",
+  "reviewer": "owner",
+  "fixture_records": [
+    "req_payroll",
+    "req_pay",
+    "source_pay_policy"
+  ],
   "questions": [
     {
       "id": "question_threshold",
@@ -62,27 +70,47 @@
   "accepted_decisions": [
     {
       "id": "req_threshold_38",
-      "fact": "Overtime applies after 38 hours in one week."
+      "fact": "Overtime applies after 38 hours in one week.",
+      "terms": [
+        "38"
+      ]
     },
     {
       "id": "req_rate_30",
-      "fact": "The base hourly rate is 30 dollars."
+      "fact": "The base hourly rate is 30 dollars.",
+      "terms": [
+        "30"
+      ]
     },
     {
       "id": "req_format_table",
-      "fact": "The report shows a table of regular hours, overtime hours, rates, and pay."
+      "fact": "The report shows a table of regular hours, overtime hours, rates, and pay.",
+      "choice": true,
+      "terms": [
+        "table"
+      ]
     },
     {
       "id": "req_round_cent",
-      "fact": "Each pay amount is rounded to the nearest cent."
+      "fact": "Each pay amount is rounded to the nearest cent.",
+      "terms": [
+        "cent"
+      ]
     },
     {
       "id": "req_schedule_monday",
-      "fact": "The report is sent on Monday morning."
+      "fact": "The report is sent on Monday morning.",
+      "terms": [
+        "Monday"
+      ]
     },
     {
       "id": "req_delivery_email",
-      "fact": "The report is sent by email to the owner."
+      "fact": "The report is sent by email to the owner.",
+      "choice": true,
+      "terms": [
+        "email"
+      ]
     }
   ],
   "refused_decisions": [
@@ -131,5 +159,13 @@
     {
       "prompt": "Finish with the stored state. Keep unresolved choices open. Do not turn a claim conflict, a missing answer, or an incomplete read into permission to select a Question."
     }
+  ],
+  "refused_terms": [
+    [
+      "bonus"
+    ],
+    [
+      "all staff"
+    ]
   ]
 }

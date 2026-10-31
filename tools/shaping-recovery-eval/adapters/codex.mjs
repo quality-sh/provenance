@@ -6,10 +6,13 @@ export const model = process.env.SHAPING_CODEX_MODEL ?? 'gpt-6-astra';
 export const protocol = 'exec JSONL; saved thread resumed by exec resume';
 export const forcedCompaction = 'No forced compaction command is exposed by exec help.';
 
-export async function invoke({ repo, prompt, session, transcript, timeoutMs = 600_000 }) {
+export async function invoke({ repo, prompt, session, transcript, env, cache, timeoutMs = 600_000 }) {
+  // The review host listens on loopback and keeps its launch key in the trial's user cache.
+  const sandbox = cache ? ['-c', 'sandbox_workspace_write.network_access=true',
+    '-c', `sandbox_workspace_write.writable_roots=${JSON.stringify([cache])}`] : [];
   const args = ['-a', 'never', 'exec', ...(session ? ['resume'] : []), '--json', '--ignore-rules',
-    '--skip-git-repo-check', '-m', model, ...(session ? [session] : ['-s', 'workspace-write', '-C', repo]), prompt];
-  const process = spawn('codex', args, { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'] });
+    '--skip-git-repo-check', '-m', model, ...sandbox, ...(session ? [session] : ['-s', 'workspace-write', '-C', repo]), prompt];
+  const process = spawn('codex', args, { cwd: repo, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '', stderr = '';
   process.stdout.on('data', chunk => { stdout += chunk; });
   process.stderr.on('data', chunk => { stderr += chunk; });

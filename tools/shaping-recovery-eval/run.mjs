@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { randomUUID, randomInt } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { cli, prepareFixture, readGraph, prepareBinary } from './fixture.mjs';
+import { cli, prepareFixture, readGraph, readReview, prepareBinary } from './fixture.mjs';
+import { sessionEnv, openedPages, browserLines, hostRunning, stopHosts } from './session-env.mjs';
 import { readEvidence, eventEvidence } from './score.mjs';
 import * as codex from './adapters/codex.mjs';
 import * as claude from './adapters/claude.mjs';
@@ -76,17 +77,19 @@ async function trial(adapter, build, number, variant) {
   if (existsSync(repo) && !resuming) throw new Error(`Refusing to reuse trial repository ${repo}`);
   if (resuming && existsSync(join(dir, 'report.json'))) return JSON.parse(readFileSync(join(dir, 'report.json'), 'utf8'));
   mkdirSync(dir, { recursive: true });
-  if (!resuming) prepareFixture(build.binary, repo, scenario, variant === 'candidate');
+  if (!resuming) prepareFixture(build.binary, repo, scenario, variant === 'candidate', option('--guidance-commit'));
+  const { env, cache, log } = sessionEnv(dir);
+  const script = scenario.turns.slice(0, Number(option('--turns', scenario.turns.length)));
   const turns = [];
   if (resuming) {
     for (let index = 0; existsSync(join(dir, `turn-${index}.json`)); index++) {
       const turn = JSON.parse(readFileSync(join(dir, `turn-${index}.json`), 'utf8'));
-      if (turn.prompt !== scenario.turns[index]?.prompt) throw new Error('Owner script changed; cannot resume this trial');
+      if (turn.prompt !== script[index]?.prompt) throw new Error('Owner script changed; cannot resume this trial');
       turns.push(turn);
     }
   }
   let session = turns.at(-1)?.session;
-  for (const [index, turn] of scenario.turns.entries()) {
+  for (const [index, turn] of script.entries()) {
     if (index < turns.length) continue;
     const controller_action = turn.release_claim ? cli(build.binary, repo, ['questions', 'question_delivery', 'release', '--actor', 'other-worker']) : undefined;
     if (turn.restart) {
@@ -96,15 +99,22 @@ async function trial(adapter, build, number, variant) {
     const before = readGraph(build.binary, repo);
     const prompt = `${turn.prompt}\nUse ${build.binary} for every Provenance command. The repository is ${repo}.`;
     writeFileSync(join(dir, `turn-${index}.prompt.txt`), `${prompt}\n`);
-    const result = await adapter.invoke({ repo, session, prompt, transcript: join(dir, `turn-${index}.jsonl`) });
+    const opened = browserLines(log);
+    const result = await adapter.invoke({ repo, session, prompt, env, cache, transcript: join(dir, `turn-${index}.jsonl`) });
     session = result.session;
     const after = readGraph(build.binary, repo);
     const evidence = { index, restarted: !!turn.restart, prompt: turn.prompt, session, controller_action,
-      answer: result.answer, read_commands: readEvidence(result.events), tool_events: eventEvidence(result.events), before, after };
+      answer: result.answer, opened_pages: openedPages(log, opened), read_commands: readEvidence(result.events),
+      tool_events: eventEvidence(result.events), before, after };
+    if (index === script.length - 1) {
+      evidence.review = readReview(build.binary, repo, after);
+      evidence.host_running = hostRunning(repo);
+    }
     save(join(dir, `turn-${index}.json`), evidence);
     turns.push(evidence);
-    console.log(`${variant} ${adapter.name} trial ${number}: turn ${index + 1}/${scenario.turns.length}`);
+    console.log(`${variant} ${adapter.name} trial ${number}: turn ${index + 1}/${script.length}`);
   }
+  stopHosts(repo);
   const scored = 'pending blind judgement';
   const missingIds = 'pending blind judgement';
   const report = { host: adapter.name, runner: version(adapter.name), model: adapter.model, build, trial: number,
@@ -128,7 +138,9 @@ function packets(reports) {
     const turns = report.turns.map(({ session, ...turn }) => turn);
     // Paths reveal run labels and are irrelevant to the graph and dialogue obligations.
     const text = JSON.stringify({ packet: id, scenario: scenario.name, expected_decisions: scenario.accepted_decisions,
-      refused_decisions: scenario.refused_decisions, questions: scenario.questions, dependencies: scenario.dependencies, turns }, null, 2);
+      refused_decisions: scenario.refused_decisions, questions: scenario.questions, dependencies: scenario.dependencies,
+      refused_terms: scenario.refused_terms, anchor: scenario.anchor, anchor_parent: scenario.anchor_parent,
+      fixture_records: scenario.fixture_records, turns }, null, 2);
     const scrubbed = text.replaceAll(report.build.binary, '<provenance>').replaceAll(output, '<run-root>')
       .replaceAll(`${report.variant}-${report.host}-${report.trial}`, '<trial>');
     writeFileSync(join(dir, `packet-${id}.json`), `${scrubbed}\n`);
@@ -234,18 +246,28 @@ try {
     const stage = option('--stage', 'baseline');
     if (!['baseline', 'candidate'].includes(stage)) throw new Error('--stage must be baseline or candidate');
     if (stage === 'candidate' && !option('--approved-thresholds')) throw new Error('Candidate trials require --approved-thresholds after baseline approval');
+    const gate = {};
     if (stage === 'candidate') {
-      const thresholds = JSON.parse(readFileSync(option('--approved-thresholds'), 'utf8'));
+      // Inline JSON cites the owner approval recorded on the bead; a path reads it from a document.
+      const value = option('--approved-thresholds');
+      const thresholds = JSON.parse(value.trim().startsWith('{') ? value : readFileSync(value, 'utf8'));
       if (!thresholds.approval || !Number.isInteger(thresholds.reminders) || !Number.isInteger(thresholds.method_departures)) throw new Error('Missing owner threshold approval');
-      save(join(output, 'thresholds.json'), thresholds);
+      gate.thresholds = thresholds;
     }
     const reports = [];
     // Separate repositories and sessions let the hosts run independently.
-    await Promise.all(agents.map(async adapter => {
-      for (let number = 1; number <= trials; number++) reports.push(await trial(adapter, stage === 'baseline' ? base : candidate, number, stage));
-    }));
+    const build = stage === 'baseline' ? base : candidate;
+    if (args.includes('--parallel')) {
+      await Promise.all(agents.flatMap(adapter => Array.from({ length: trials }, async (_, index) => {
+        reports.push(await trial(adapter, build, index + 1, stage));
+      })));
+    } else {
+      await Promise.all(agents.map(async adapter => {
+        for (let number = 1; number <= trials; number++) reports.push(await trial(adapter, build, number, stage));
+      }));
+    }
     const destination = packets(reports);
-    save(join(output, 'checkpoint.json'), { stage, trials, blind_packets: destination,
+    save(join(output, 'checkpoint.json'), { stage, trials, ...gate, blind_packets: destination,
       remaining: stage === 'baseline' ? 'Blind scores and owner threshold approval; then paired candidate trials.' : 'Blind scores and final release gates.' });
     console.log(`Checkpoint: publish ${destination} alone, without packet-mapping.json, for blind scoring. Stop after publication.`);
   }

@@ -12,23 +12,35 @@ export function cli(binary, repo, args, input) {
   return JSON.parse(result.stdout);
 }
 
-export function prepareFixture(binary, repo, scenario, candidate) {
+/** Reads a guidance file from the working tree, or from `commit` when one is given. */
+function guidanceFile(root, relative, commit) {
+  if (!commit) return readFileSync(join(root, relative));
+  const shown = spawnSync('git', ['show', `${commit}:${relative}`], { cwd: root, maxBuffer: 16 * 1024 * 1024 });
+  if (shown.status !== 0) throw new Error(`${commit}:${relative}: ${shown.stderr}`);
+  return shown.stdout;
+}
+
+export function prepareFixture(binary, repo, scenario, candidate, guidanceCommit) {
   mkdirSync(repo, { recursive: true });
-  const initialized = spawnSync(binary, ['init', '--path', repo, '--scope', 'default', '--path-prefix', '.'], { encoding: 'utf8' });
+  // A reviewer makes the review page writable, as in a real session.
+  const initialized = spawnSync(binary, ['init', '--path', repo, '--scope', 'default', '--path-prefix', '.',
+    '--disposition-actor-id', scenario.reviewer], { encoding: 'utf8' });
   if (initialized.status !== 0) throw new Error(initialized.stderr);
   if (candidate) {
     const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
     for (const relative of ['skills/provenance-shaping/SKILL.md', 'docs/shaping.md']) {
       const destination = relative.startsWith('skills/') ? join(repo, '.agents', relative) : join(repo, relative);
       mkdirSync(dirname(destination), { recursive: true });
-      writeFileSync(destination, readFileSync(join(root, relative)));
+      writeFileSync(destination, guidanceFile(root, relative, guidanceCommit));
     }
   }
   cli(binary, repo, ['sources', 'create', '--stdin'], {
     id: 'source_pay_policy', name: 'Overtime example policy', source_type: 'project_artifact',
     reference: '.scenario/policy.txt: the weekly threshold is 38 hours; the owner chooses the rate and presentation.',
   });
-  cli(binary, repo, ['requirements', 'create', '--stdin'], { id: 'req_pay', statement: 'The system calculates overtime pay.' });
+  // The anchor has a parent, so a view rooted at the anchor hides where it belongs.
+  cli(binary, repo, ['requirements', 'create', '--stdin'], { id: scenario.anchor_parent, statement: 'The system supports payroll for one owner.' });
+  cli(binary, repo, ['requirements', 'create', '--stdin'], { id: 'req_pay', statement: 'The system calculates overtime pay.', refines: [scenario.anchor_parent] });
   cli(binary, repo, ['topics', 'create', '--stdin'], { id: 'topic_pay', requirement_id: 'req_pay', title: 'Overtime pay' });
   for (const question of scenario.questions) {
     const input = { id: question.id, topic_id: 'topic_pay', question: question.text, resolution_method: question.method };
@@ -45,13 +57,31 @@ export function prepareFixture(binary, repo, scenario, candidate) {
 
 export function readGraph(binary, repo) {
   const graph = {};
-  for (const kind of ['topics', 'questions', 'requirements', 'resolutions', 'sources']) {
+  for (const kind of ['topics', 'questions', 'requirements', 'resolutions', 'sources', 'rules', 'boundaries']) {
     const result = cli(binary, repo, [kind, 'list', '--exclude-terminal', 'false']);
     if (result.meta?.has_more) throw new Error(`Incomplete ${kind} evidence`);
     graph[kind] = result.data.items ?? result.data;
     if (!Array.isArray(graph[kind])) throw new Error(`Unexpected ${kind} list response`);
   }
   return graph;
+}
+
+/** Reads the review state that the person sees for each record, and each Resolution's downstream records. */
+export function readReview(binary, repo, graph) {
+  const kinds = ['requirements', 'rules', 'resolutions', 'boundaries', 'sources'];
+  const records = [];
+  for (const kind of kinds) {
+    for (const record of graph[kind]) {
+      const review = cli(binary, repo, [record.id, 'get', '--view', 'review']).review?.decision;
+      const entry = { kind, id: record.id, pending: !!review?.pending, decisions: review?.decisions?.length ?? 0 };
+      if (kind === 'resolutions') {
+        entry.impact_rules = (cli(binary, repo, ['resolutions', record.id, 'impact']).data.affected_rules ?? []).map(rule => rule.id);
+        entry.spawned = graph.requirements.filter(requirement => requirement.spawned_by === record.id).map(requirement => requirement.id);
+      }
+      records.push(entry);
+    }
+  }
+  return records;
 }
 
 export function artifact(binary, commit) {
