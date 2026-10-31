@@ -1,4 +1,4 @@
-use super::{Access, RecordStamp, StateStore};
+use super::{Access, RecordStamp, StateStore, Storage};
 use crate::layout::ProvenanceLayout;
 use crate::publication::{PublicationGuard, StageLock, WritePermissions};
 use crate::repository::RepositoryIdentity;
@@ -16,10 +16,10 @@ mod tests;
 
 impl StateStore {
     /// A layout-level store with no repository identity.
-    pub(crate) fn new(layout: ProvenanceLayout) -> Self {
+    pub(crate) const fn new(layout: ProvenanceLayout) -> Self {
         Self {
             identity: None,
-            storage: local(&layout),
+            storage: Storage::Layout,
             layout,
             access: Access::Lock,
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -37,7 +37,7 @@ impl StateStore {
     ) -> Self {
         Self {
             identity: Some(identity),
-            storage,
+            storage: Storage::Shared(storage),
             layout,
             access: section.map_or(Access::Lock, |until| Access::Section { until: Some(until) }),
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -46,10 +46,10 @@ impl StateStore {
 
     /// A store that holds the live section of `layout`, handed to the
     /// closure of a layout-level section.
-    pub(crate) fn in_section(layout: ProvenanceLayout) -> Self {
+    pub(crate) const fn in_section(layout: ProvenanceLayout) -> Self {
         Self {
             identity: None,
-            storage: local(&layout),
+            storage: Storage::Layout,
             layout,
             access: Access::Section { until: None },
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -60,10 +60,10 @@ impl StateStore {
     /// creates no path. A record write, a write permission and a staged
     /// publication through it refuse.
     #[rule("rule_read_only_store_refuses_writes")]
-    pub(crate) fn read_only(layout: ProvenanceLayout) -> Self {
+    pub(crate) const fn read_only(layout: ProvenanceLayout) -> Self {
         Self {
             identity: None,
-            storage: local(&layout),
+            storage: Storage::Layout,
             layout,
             access: Access::ReadOnly,
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -80,7 +80,7 @@ impl StateStore {
     ) -> Self {
         Self {
             identity: Some(identity),
-            storage,
+            storage: Storage::Shared(storage),
             layout,
             access: Access::View(view),
             record_stamp: RecordStamp::ResolveFromRepository,
@@ -99,7 +99,7 @@ impl StateStore {
         let stage = StageLock::new(layout.root());
         Self {
             identity,
-            storage: local(&layout),
+            storage: Storage::Layout,
             layout,
             access: Access::Staged {
                 permissions: WritePermissions::none(),
@@ -161,7 +161,7 @@ impl StateStore {
     fn section_store(&self, access: Access) -> Self {
         Self {
             identity: self.identity.clone(),
-            storage: Arc::clone(&self.storage),
+            storage: self.storage.clone(),
             layout: self.layout.clone(),
             access,
             record_stamp: self.record_stamp.clone(),
@@ -175,8 +175,11 @@ impl StateStore {
     }
 
     /// The adapter that this store publishes through.
-    pub(crate) fn storage(&self) -> &Arc<dyn StateStorage> {
-        &self.storage
+    pub(crate) fn storage(&self) -> Arc<dyn StateStorage> {
+        match &self.storage {
+            Storage::Layout => Arc::new(LocalStateStorage::new(self.layout.clone())),
+            Storage::Shared(storage) => Arc::clone(storage),
+        }
     }
 
     /// The identity, for a staged view of this store.
@@ -253,7 +256,7 @@ impl StateStore {
         GuardedStore {
             store: Self {
                 identity: Some(guard.repository().identity().clone()),
-                storage: Arc::clone(guard.repository().storage()),
+                storage: Storage::Shared(Arc::clone(guard.repository().storage())),
                 layout: guard.repository().layout().clone(),
                 access: Access::Section {
                     until: guard.repository().section().cloned(),
@@ -478,8 +481,4 @@ fn not_found(path: &Utf8Path) -> anyhow::Error {
 fn invalid_text(path: &Utf8Path) -> anyhow::Error {
     anyhow::Error::new(std::io::Error::from(std::io::ErrorKind::InvalidData))
         .context(format!("read {path}: the file is not UTF-8"))
-}
-
-fn local(layout: &ProvenanceLayout) -> Arc<dyn StateStorage> {
-    Arc::new(LocalStateStorage::new(layout.clone()))
 }

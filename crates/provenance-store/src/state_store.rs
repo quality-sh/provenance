@@ -158,8 +158,17 @@ pub struct StateStore {
     pub(crate) layout: ProvenanceLayout,
     access: Access,
     record_stamp: RecordStamp,
-    /// The adapter that the store publishes through.
-    storage: std::sync::Arc<dyn crate::storage::StateStorage>,
+    storage: Storage,
+}
+
+/// The adapter that a store publishes through.
+#[derive(Clone, Debug)]
+enum Storage {
+    /// A local-disk adapter over the layout of the store, made at each use.
+    /// A layout-level store and a staged store use it.
+    Layout,
+    /// The adapter of the opened repository.
+    Shared(std::sync::Arc<dyn crate::storage::StateStorage>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
