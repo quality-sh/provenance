@@ -69,9 +69,11 @@ export function compare(pairs) {
   return keys.map(key => {
     const present = pairs.filter(({ base, head }) => base.has(key) && head.has(key));
     if (present.length !== pairs.length) {
-      const inBase = pairs.every(({ base }) => base.has(key));
-      const inHead = pairs.every(({ head }) => head.has(key));
-      return { key, missing: inBase ? 'head' : inHead ? 'base' : 'some runs' };
+      const missing = {
+        base: pairs.filter(({ base }) => !base.has(key)).length,
+        head: pairs.filter(({ head }) => !head.has(key)).length,
+      };
+      return { key, missing, runs: pairs.length };
     }
     const base = present.map(pair => pair.base.get(key));
     const head = present.map(pair => pair.head.get(key));
@@ -91,11 +93,25 @@ export function isGated(key) {
   return /^repository_state (\S+ summary|catch_up_ms)$/.test(key);
 }
 
+// A row new in the candidate is in no base run and in every head run.
+function candidateOnly(row) {
+  return row.missing.base === row.runs && row.missing.head === 0;
+}
+
+// The sides and run counts that do not print a row, for example
+// `base in 2 of 6 runs`. A side that prints the row in no run is only named.
+export function describeMissing(row) {
+  return ['base', 'head']
+    .filter(side => row.missing[side] > 0)
+    .map(side => (row.missing[side] === row.runs ? side : `${side} in ${row.missing[side]} of ${row.runs} runs`))
+    .join(' and ');
+}
+
 export function releaseResult(row) {
   if (!isGated(row.key)) return 'Report only';
-  // A row new in the candidate is not a regression; a row the candidate
-  // lost, or that some runs did not print, is not a measured pass.
-  if (row.missing) return row.missing === 'base' ? 'Pass' : 'Fail';
+  // A row new in the candidate is not a regression; a row that any run of
+  // either side did not print is not a measured pass.
+  if (row.missing) return candidateOnly(row) ? 'Pass' : 'Fail';
   const fails = row.interval[0] > RELEASE_RATIO && row.headMedian - row.baseMedian > RELEASE_MS;
   return fails ? 'Fail' : 'Pass';
 }
@@ -124,13 +140,16 @@ export function renderReport(rows, info, gate = 'none') {
     const failed = rows.filter(row => releaseResult(row) === 'Fail').length;
     const gated = rows.filter(row => isGated(row.key)).length;
     lines.push(`Release gate: ${failed === 0 ? 'pass' : `**fail** (${failed} of ${gated} gated rows)`}. A gated row fails when the lower bound of its ratio interval is above ${RELEASE_RATIO} and its head median is more than ${RELEASE_MS} ms above the base median.`, '');
+    const unmeasured = rows.filter(row => row.missing && releaseResult(row) === 'Fail');
+    for (const row of unmeasured) lines.push(`- Fail: \`${row.key}\` is missing in ${describeMissing(row)}.`);
+    if (unmeasured.length > 0) lines.push('');
   }
   lines.push(`| Row | Base median ms | Head median ms | Ratio head/base | 95% interval |${release ? ' Gate |' : ''}`);
   lines.push(`|---|---:|---:|---:|---|${release ? '---|' : ''}`);
   for (const row of rows) {
     const result = release ? ` ${releaseResult(row)} |` : '';
     if (row.missing) {
-      lines.push(`| \`${row.key}\` | | | | missing in ${row.missing} |${result}`);
+      lines.push(`| \`${row.key}\` | | | | missing in ${describeMissing(row)} |${result}`);
       continue;
     }
     const interval = row.interval ? `${times(row.interval[0])} to ${times(row.interval[1])}` : 'too few pairs';

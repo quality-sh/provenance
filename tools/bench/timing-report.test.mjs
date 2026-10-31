@@ -62,7 +62,7 @@ test('compare pairs each run with its partner and reports missing rows', () => {
   const [get, scan, stale] = compare(pairs);
   assert.deepEqual(get, { key: 'repository_state get summary', baseMedian: 2, headMedian: 7, ratio: 3.5, interval: [1, 6] });
   assert.equal(scan.ratio, 1);
-  assert.deepEqual(stale, { key: 'repository_state stale summary', missing: 'base' });
+  assert.deepEqual(stale, { key: 'repository_state stale summary', missing: { base: 6, head: 0 }, runs: 6 });
 });
 
 test('the report names the commits and flags a changed harness', () => {
@@ -89,9 +89,10 @@ test('a gated row fails only above twice and 5 ms', () => {
   assert.equal(releaseResult(statistics(key, [2.3, 2.9], 2, 5)), 'Pass');
   assert.equal(releaseResult(statistics(key, [1.8, 2.6], 20, 60)), 'Pass');
   assert.equal(releaseResult(statistics('repository_state catch_up_ms', [2.3, 2.9], 4, 10)), 'Fail');
-  assert.equal(releaseResult({ key, missing: 'base' }), 'Pass');
-  assert.equal(releaseResult({ key, missing: 'head' }), 'Fail');
-  assert.equal(releaseResult({ key, missing: 'some runs' }), 'Fail');
+  assert.equal(releaseResult({ key, missing: { base: 6, head: 0 }, runs: 6 }), 'Pass');
+  assert.equal(releaseResult({ key, missing: { base: 0, head: 6 }, runs: 6 }), 'Fail');
+  assert.equal(releaseResult({ key, missing: { base: 2, head: 0 }, runs: 6 }), 'Fail');
+  assert.equal(releaseResult({ key, missing: { base: 6, head: 1 }, runs: 6 }), 'Fail');
 });
 
 test('ungated rows never fail', () => {
