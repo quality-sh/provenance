@@ -178,9 +178,9 @@ impl Follower {
     }
 
     /// Reads the first full document at the Ready position. A page write that lands during
-    /// the read moves the native sequence; then the read runs again, at most three times,
-    /// and after that the document goes out as a reset. The moved frames stay queued, so
-    /// later steps also deliver their records.
+    /// the read moves the native sequence or makes a later page refuse; then the read runs
+    /// again, at most three times, and after that the document goes out as a reset. The
+    /// moved frames stay queued, so later steps also deliver their records.
     #[rule("rule_review_notify_consistent_start")]
     pub async fn start(
         &mut self,
@@ -192,17 +192,19 @@ impl Follower {
     ) -> anyhow::Result<Vec<OutputFrame>> {
         for _ in 0..3 {
             *self = Self::new(&self.epoch);
-            let frames = self.step(context, root, limit, ready).await?;
-            if !moved() {
-                return Ok(frames);
+            if let Ok(frames) = self.step(context, root, limit, ready).await {
+                if !moved() {
+                    return Ok(frames);
+                }
             }
         }
         let (epoch, sequence) = ready.position();
-        let frames = self
-            .baseline
+        *self = Self::new(epoch);
+        self.sequence = sequence;
+        self.initialized = true;
+        self.baseline
             .reconcile(context, root, limit, (epoch, sequence), true, None)
-            .await?;
-        Ok(frames)
+            .await
     }
 }
 

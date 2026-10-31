@@ -346,7 +346,8 @@ async fn cli_and_mcp_notify_share_one_registration() {
     std::thread::sleep(std::time::Duration::from_millis(1500));
     let queued = codex.queued(&thread);
     assert_eq!(queued.len(), 2, "{queued:#?}");
-    assert!(!queued.concat().contains("rule_after"));
+    assert!(queued[1].contains("rule_after_mcp_off"));
+    assert!(!queued.concat().contains("rule_after_cli_off"));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }

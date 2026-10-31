@@ -582,6 +582,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
+      - name: Install Codex for the review notify tests
+        run: sfw npm install --global --no-audit --no-fund @openai/codex@0.159.1
       - run: cargo test -p provenance-cli --no-fail-fast --timings
       - name: Save Cargo timing reports
         if: always()

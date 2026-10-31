@@ -323,10 +323,17 @@ async fn deliver(
                 return;
             }
         };
-        let frames = match follower
+        // A page write between two document pages makes the later page refuse. The second
+        // read sees no next sequence, so it delivers a full document.
+        let mut read = follower
             .step(&inner.context, &target.root, target.limit, &frame)
-            .await
-        {
+            .await;
+        if read.is_err() {
+            read = follower
+                .step(&inner.context, &target.root, target.limit, &frame)
+                .await;
+        }
+        let frames = match read {
             Ok(frames) => frames,
             Err(error) => {
                 let (epoch, sequence) = follower.position();
