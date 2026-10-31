@@ -23,7 +23,23 @@ use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStrea
 
 const TOOL_LIST_FNV1A: u64 = 0;
 
-const TOOL_NAMES: &[&str] = &[];
+/// The tools that follow the catalog tools, in list order.
+const PORCELAIN_TOOL_NAMES: &[&str] = &[
+    "get",
+    "search",
+    "api",
+    "check",
+    "create",
+    "update",
+    "answer",
+    "claim",
+    "release",
+    "submit",
+    "discussions",
+    "discussion",
+    "discuss",
+    "reply",
+];
 
 struct FixtureCheckPort;
 
@@ -173,7 +189,14 @@ async fn tool_list_keeps_its_names_order_and_schemas() {
         .iter()
         .map(|tool| tool["name"].as_str().unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(names, TOOL_NAMES);
+    assert_eq!(names.len(), 190);
+    let (catalog, porcelain) = names.split_at(names.len() - PORCELAIN_TOOL_NAMES.len());
+    let definitions = provenance_contract::definitions()
+        .iter()
+        .map(|definition| definition.name)
+        .collect::<Vec<_>>();
+    assert_eq!(catalog, definitions);
+    assert_eq!(porcelain, PORCELAIN_TOOL_NAMES);
     assert_eq!(fnv1a(&result.to_string()), TOOL_LIST_FNV1A);
 }
 
@@ -190,7 +213,31 @@ async fn tool_call_result_keeps_its_shape() {
             }),
         )
         .await;
-    assert_eq!(response, json!(null));
+    let mut result = response["result"].clone();
+    let text = result["content"][0]["text"].as_str().unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(text).unwrap(),
+        result["structuredContent"]
+    );
+    result["content"][0]["text"] = json!("<structured content>");
+    // The analyzer reports the package version of this build.
+    let analyzer = result["structuredContent"]["data"]
+        .as_object_mut()
+        .unwrap()
+        .remove("analyzer_version")
+        .unwrap();
+    assert!(analyzer.is_string());
+    assert_eq!(
+        result,
+        json!({
+            "content":[{"type":"text","text":"<structured content>"}],
+            "isError":false,
+            "structuredContent":{
+                "data":{"findings":[],"issue":9,"standard":"ASD-STE100"},
+                "meta":{}
+            }
+        })
+    );
 }
 
 #[tokio::test]
@@ -203,9 +250,31 @@ async fn typed_refusal_and_unknown_tool_keep_their_shape() {
             json!({"name":"check-statement","arguments":{"data":{}}}),
         )
         .await;
-    assert_eq!(refusal, json!(null));
+    let envelope = json!({
+        "error":{"field":"request.statement","kind":"invalid_input","reason":"required"},
+        "meta":{}
+    });
+    assert_eq!(
+        refusal,
+        json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "result":{
+                "content":[{"type":"text","text":envelope.to_string()}],
+                "isError":true,
+                "structuredContent":envelope
+            }
+        })
+    );
     let unknown = wire
         .request("tools/call", json!({"name":"no-such-tool","arguments":{}}))
         .await;
-    assert_eq!(unknown, json!(null));
+    assert_eq!(
+        unknown,
+        json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "error":{"code":-32601,"message":"Unknown tool"}
+        })
+    );
 }
