@@ -4,7 +4,7 @@ use super::authoring::{description, render_readable, Action, ActionError};
 use provenance_contract::Definition;
 use provenance_core::NodeType;
 use provenance_macros::rule;
-use rmcp::model::{CallToolResult, Content, Tool};
+use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::{json, Map, Value};
 
 pub fn tools(host: &crate::StatementHost) -> Vec<Tool> {
@@ -207,7 +207,7 @@ pub async fn call(
     match host.invoke_target(&route, data, headers).await {
         Ok(value) => {
             let mut result = CallToolResult::structured(value.clone());
-            result.content = vec![Content::text(render_readable(
+            result.content = vec![ContentBlock::text(render_readable(
                 action, &target, route.kind, &value,
             ))];
             result

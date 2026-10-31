@@ -4,7 +4,7 @@ use crate::StatementHost;
 use provenance_porcelain::api::{
     render_discovery_readable, ApiArguments, ApiError, ApiOutcome, ApiRequest,
 };
-use rmcp::model::{CallToolResult, Content, Tool};
+use rmcp::model::{CallToolResult, ContentBlock, Tool};
 use serde_json::Value;
 
 pub fn tool() -> Tool {
@@ -43,7 +43,7 @@ pub async fn call(
             let mut result = CallToolResult::structured(
                 serde_json::to_value(&catalog).expect("catalog is JSON"),
             );
-            result.content = vec![Content::text(render_discovery_readable(&catalog))];
+            result.content = vec![ContentBlock::text(render_discovery_readable(&catalog))];
             result
         }
         Ok(ApiOutcome::Invoked(value)) => CallToolResult::structured(value),
