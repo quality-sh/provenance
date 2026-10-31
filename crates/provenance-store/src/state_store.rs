@@ -39,6 +39,7 @@ pub use updates::*;
 
 pub use access::GuardedStore;
 pub use archive_history::{ArchiveCommitGap, ArchiveCommitGapReason};
+pub use graph_validation::validate_relations;
 pub use ideation_batches::{
     assertion_cites_contribution, assertion_cites_synthesis,
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, CONTRIBUTION_KIND,
@@ -62,6 +63,7 @@ pub use requirement_reviews::{
 };
 pub use scope_ingestion::ScopeShards;
 pub(crate) use statement_policy::StatementWriteError;
+pub use typed_specs::{decide_typed_spec, TypedSpecDecision, TypedSpecView};
 pub use typed_statement_policy::TypedSpecWriteError;
 
 use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
