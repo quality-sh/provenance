@@ -2,7 +2,7 @@
 
 use provenance_porcelain::check::CheckInput;
 use provenance_porcelain::get::{GetInput, ReadError};
-use rmcp::model::{CallToolResult, Content};
+use rmcp::model::{CallToolResult, ContentBlock};
 use serde_json::Value;
 
 mod api_mcp;
@@ -59,7 +59,7 @@ pub(crate) async fn call_discussion(
             let mut result = CallToolResult::structured(
                 serde_json::to_value(outcome).expect("Discussion outcome is JSON"),
             );
-            result.content = vec![Content::text(readable)];
+            result.content = vec![ContentBlock::text(readable)];
             result
         }
         Err(error) => discussion_error(&error),
@@ -151,7 +151,7 @@ pub(crate) async fn call_check(
     let summary = provenance_porcelain::check::render_readable(&outcome);
     let mut result =
         CallToolResult::structured(serde_json::to_value(outcome).expect("check outcome is JSON"));
-    result.content = vec![Content::text(summary)];
+    result.content = vec![ContentBlock::text(summary)];
     result
 }
 
@@ -171,7 +171,7 @@ pub(crate) async fn call_get(
             let mut result = CallToolResult::structured(
                 serde_json::to_value(outcome).expect("get outcome is JSON"),
             );
-            result.content = vec![Content::text(summary)];
+            result.content = vec![ContentBlock::text(summary)];
             result
         }
         Err(error) => get_error(
@@ -207,7 +207,7 @@ pub(crate) async fn call_search(
             let mut result = CallToolResult::structured(
                 serde_json::to_value(response).expect("search result is JSON"),
             );
-            result.content = vec![Content::text(summary)];
+            result.content = vec![ContentBlock::text(summary)];
             result
         }
         Err(error) => search_error(&error),

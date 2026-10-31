@@ -1,0 +1,44 @@
+Timing over seeded_queries: operation request served_ms
+get summary 1.4
+neighbors summary 1.7
+trace summary 1.8
+impact summary 1.5
+search summary 1.8
+stale summary 13.1
+resolve_symbol summary 1.4
+scan_ms 0.1
+rebuild_ms 15.1
+catch_up_ms 1.7
+Timing over cache_seeded: operation request served_ms
+get summary 1.5
+neighbors summary 1.8
+trace summary 2.3
+impact summary 1.8
+evidence summary 1.6
+search summary 1.9
+resolve_symbol summary 1.6
+scan_ms 0.2
+rebuild_ms 20.0
+catch_up_ms 3.1
+Timing over cache_owner_rows: operation request served_ms
+get summary 1.4
+neighbors summary 2.0
+trace summary 2.9
+impact summary 1.5
+evidence summary 1.3
+search summary 2.3
+resolve_symbol summary 1.5
+scan_ms 0.2
+rebuild_ms 11.0
+catch_up_ms 2.1
+Timing over repository_state: operation request served_ms
+get summary 1.4
+neighbors summary 2.2
+trace summary 5.8
+impact summary 1.8
+evidence summary 1.4
+search summary 8.5
+resolve_symbol summary 1.3
+scan_ms 0.2
+rebuild_ms 282.9
+catch_up_ms 10.3

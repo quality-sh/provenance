@@ -63,6 +63,16 @@ test('declared parameter enums render as closed Rust types with exact wire encod
   assert.match(files['parameters.rs'], /Self::Both => "both"/);
 });
 
+test('no generated Rust file converts a string into a parameter enum', () => {
+  const files = rustClientFiles(document(), compatibility);
+  // Match the trait in an impl header with any path prefix, for example
+  // `impl From<&str>` and `impl std::convert::From<&str>`.
+  const conversion = /\bimpl\b[^{]*\b(?:FromStr|TryFrom|From)\b/;
+  const rust = Object.entries(files).filter(([path]) => path.endsWith('.rs'));
+  assert.equal(rust.length, Object.keys(files).length, 'the generator writes only Rust files');
+  for (const [path, source] of rust) assert.doesNotMatch(source, conversion, path);
+});
+
 test('identical value sets share one enum and distinct sets get distinct names', () => {
   const files = rustClientFiles(document(), compatibility);
   const parameters = files['parameters.rs'];

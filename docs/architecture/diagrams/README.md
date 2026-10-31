@@ -35,7 +35,7 @@ arrows show build-time generation or packaging.
 - `10-ste100.drawio`: provenance-ste100 checks, the project dictionary, and the
   store functions that call them.
 - `11-codegen-and-clients.drawio`: provenance-codegen, tools/operation-codegen,
-  the generated output, provenance-http-client, and tools/compat-gate.
+  the generated output, and provenance-http-client.
 - `12-sdks.drawio`: the TypeScript SDK, create-provenance, provenance-sdk, and
   the two SDK examples.
 

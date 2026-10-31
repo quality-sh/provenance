@@ -1,5 +1,0 @@
-authorized-by: Ben Nasraoui
-date: 2026-10-31
-pull-request: 533
-commit: c679b363
-reason: The owner selected release 0.3.1. Change all published crate and npm package versions from 0.3.0 to 0.3.1.
