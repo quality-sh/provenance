@@ -76,7 +76,7 @@ struct Wire {
 }
 
 impl Wire {
-    async fn start(host: StatementHost) -> Self {
+    fn start(host: StatementHost) -> Self {
         let (client_io, server_io) = tokio::io::duplex(1024 * 1024);
         tokio::spawn(async move {
             let running = host.serve_mcp(server_io).await.unwrap();
@@ -154,7 +154,7 @@ fn full_host(repository: &Repository) -> StatementHost {
 #[tokio::test]
 async fn initialize_response_keeps_its_fields() {
     for requested in ["2025-06-18", "2024-11-05"] {
-        let mut wire = Wire::start(StatementHost::default()).await;
+        let mut wire = Wire::start(StatementHost::default());
         let mut result = wire.initialize(requested).await;
         // The library reports its own package version here.
         let version = result["serverInfo"]
@@ -162,7 +162,7 @@ async fn initialize_response_keeps_its_fields() {
             .unwrap()
             .remove("version")
             .unwrap();
-        assert!(!version.as_str().unwrap().is_empty());
+        assert_ne!(version.as_str().unwrap(), "");
         assert_eq!(
             result,
             json!({
@@ -179,7 +179,7 @@ async fn initialize_response_keeps_its_fields() {
 #[tokio::test]
 async fn tool_list_keeps_its_names_order_and_schemas() {
     let repository = Repository::new("The shared graph is readable.");
-    let mut wire = Wire::start(full_host(&repository)).await;
+    let mut wire = Wire::start(full_host(&repository));
     wire.initialize("2025-06-18").await;
     let response = wire.request("tools/list", json!({})).await;
     let result = &response["result"];
@@ -202,7 +202,7 @@ async fn tool_list_keeps_its_names_order_and_schemas() {
 
 #[tokio::test]
 async fn tool_call_result_keeps_its_shape() {
-    let mut wire = Wire::start(StatementHost::default()).await;
+    let mut wire = Wire::start(StatementHost::default());
     wire.initialize("2025-06-18").await;
     let response = wire
         .request(
@@ -242,7 +242,7 @@ async fn tool_call_result_keeps_its_shape() {
 
 #[tokio::test]
 async fn typed_refusal_and_unknown_tool_keep_their_shape() {
-    let mut wire = Wire::start(StatementHost::default()).await;
+    let mut wire = Wire::start(StatementHost::default());
     wire.initialize("2025-06-18").await;
     let refusal = wire
         .request(
