@@ -97,3 +97,9 @@ test('script text that names an action is not a write', () => {
   const events = [shell("$P requirements req_pay document get > doc.json; python3 - doc.json <<'EOF'\nprint(n['answer'], 'create')\nEOF")];
   assert.deepEqual(scorePacket(packet({ events })).cases.fresh_reads, []);
 });
+
+test('a help request before the reads is not a write', () => {
+  const events = [shell('$P requirements create --help | head -40'), shell('provenance topics topic_pay get'),
+    shell('provenance questions question_format get'), shell('provenance questions question_format answer --answer table')];
+  assert.deepEqual(scorePacket(packet({ events })).cases.fresh_reads, []);
+});

@@ -5,11 +5,15 @@
 const writeVerb = /(?:provenance>?|\$\{?\w+\}?)\s+(?:[\w.$<>{}-]+\s+){0,3}(create|update|answer|claim|release|submit|close|discuss|reply)\b/;
 const outputFilter = /\|\s*(grep|rg|jq|sed|head|tail|awk|cut|sort|wc|tr|python3?|node)\b/;
 
+const segments = command => command.split(/\n|;|&&|\|\|/);
+// A help request names an action but writes nothing.
+const isWrite = command => segments(command).some(segment => writeVerb.test(segment) && !/--help\b/.test(segment));
+
 // A read counts only in a call with no write, and only in a segment whose output is not filtered.
 // The segment names the record, or reads it through a loop variable such as `for q in ...; do $P questions $q get`.
 function freshRead(command, id) {
-  if (writeVerb.test(command) || !command.includes(id)) return false;
-  return command.split(/\n|;|&&|\|\|/).some(segment => /\bget\b/.test(segment) && !outputFilter.test(segment)
+  if (isWrite(command) || !command.includes(id)) return false;
+  return segments(command).some(segment => /\bget\b/.test(segment) && !outputFilter.test(segment)
     && (segment.includes(id) || (/\$\{?\w+\}?\s+get\b/.test(segment) && new RegExp(`\\bin\\b[^;]*\\b${id}\\b`).test(command))));
 }
 
@@ -77,14 +81,14 @@ export function freshReads(packet) {
   const findings = [];
   for (const turn of packet.turns) {
     const list = commands(turn);
-    const firstWrite = list.findIndex(command => writeVerb.test(command));
+    const firstWrite = list.findIndex(command => isWrite(command));
     if (firstWrite < 0) continue;
     if (!list.slice(0, firstWrite).some(command => freshRead(command, 'topic_pay'))) findings.push({ turn: turn.index, missing: 'topic_pay' });
     const before = byId(turn.before.questions);
     for (const question of turn.after.questions) {
       const prior = before.get(question.id);
       if (!prior || JSON.stringify(prior) === JSON.stringify(question)) continue;
-      const writeAt = list.findIndex(command => writeVerb.test(command) && command.includes(question.id));
+      const writeAt = list.findIndex(command => isWrite(command) && command.includes(question.id));
       const until = writeAt < 0 ? firstWrite : writeAt;
       const read = list.slice(0, until).some(command => freshRead(command, question.id)
         || (freshRead(command, 'topic_pay') && command.includes('--view children')));
