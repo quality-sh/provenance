@@ -368,6 +368,20 @@ mod tests {
         revision_follows_every_key_and_byte(Memory::default());
     }
 
+    /// A symbolic link in the state directory is not a state file.
+    #[cfg(unix)]
+    #[test]
+    #[verifies("rule_canonical_state_is_read_as_one_view", examples)]
+    fn local_view_leaves_out_a_symbolic_link() {
+        let mut harness = local();
+        harness.seed(&[("manifest.json", b"{}")]);
+        let outside = harness.layout.root().join("outside.txt");
+        std::fs::write(&outside, b"outside").unwrap();
+        std::os::unix::fs::symlink(&outside, harness.layout.state_dir().join("link")).unwrap();
+        let view = read(&harness);
+        assert_eq!(view.entries(), &expected(&[("manifest.json", b"{}")]));
+    }
+
     /// Verification runs under `.provenance/cache` are derived state.
     #[test]
     #[verifies("rule_canonical_state_is_read_as_one_view", examples)]

@@ -120,6 +120,8 @@ fn remove_file(path: &Utf8Path) -> anyhow::Result<()> {
 }
 
 /// Every file below `directory`, keyed by `prefix` and its path below it.
+/// A symbolic link or another special entry is not a state file, and the
+/// view leaves it out, as the shard readers do.
 fn read_tree(
     directory: &Utf8Path,
     prefix: &str,
@@ -139,10 +141,6 @@ fn read_tree(
         } else if kind.is_file() {
             let bytes = std::fs::read(path).map_err(read_error(path))?;
             entries.insert(StateKey::new(key)?, bytes);
-        } else {
-            return Err(StorageError::Read(anyhow::anyhow!(
-                "state path {path} is not a file or a directory"
-            )));
         }
     }
     Ok(())
