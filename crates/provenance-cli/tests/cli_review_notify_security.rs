@@ -47,7 +47,7 @@ fn foreign_codex_home_is_refused() {
         .as_str()
         .unwrap()
         .contains("codexHome"));
-    assert!(codex.queued(&thread).is_empty());
+    assert_eq!(codex.queued(&thread), Vec::<String>::new());
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn thread_outside_repository_is_refused() {
         .as_str()
         .unwrap()
         .contains("does not run in this repository"));
-    assert!(codex.queued(&thread).is_empty());
+    assert_eq!(codex.queued(&thread), Vec::<String>::new());
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn thread_name_is_refused() {
         .as_str()
         .unwrap()
         .contains("notify.thread"));
-    assert!(codex.queued(&thread).is_empty());
+    assert_eq!(codex.queued(&thread), Vec::<String>::new());
 }
 
 #[test]
@@ -113,5 +113,5 @@ fn repository_or_scope_mismatch_is_refused() {
         assert_eq!(body["error"]["kind"], "invalid_input");
         assert_eq!(body["error"]["field"], field);
     }
-    assert!(codex.queued(&thread).is_empty());
+    assert_eq!(codex.queued(&thread), Vec::<String>::new());
 }
