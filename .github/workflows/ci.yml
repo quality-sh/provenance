@@ -465,9 +465,20 @@ jobs:
           }
           RS
           PROVENANCE_TEST_STE100_ASSET_URL=http://127.0.0.1:12345/exported.pdf cargo run --quiet --offline --manifest-path target/test-ste100-env/Cargo.toml
+      # The trybuild compile-fail tests check compile-time refusals, which are
+      # the same on every platform, so only the Linux leg runs them.
+      # cargo_nested_sdk runs a real nested Cargo build and stays on every leg.
       - name: Test concurrently
         if: runner.os != 'Linux'
-        run: cargo nextest run --profile ci --workspace --all-features --no-fail-fast --cargo-profile test --timings
+        shell: bash
+        env:
+          COMPILE_FAIL_TESTS: >-
+            binary_id(provenance-core::projection_row_refusals)
+            | binary_id(provenance-core::relation_derive_refusals)
+            | binary_id(provenance-macros::compile_fail)
+            | binary_id(provenance-sdk::compile_fail)
+            | (binary_id(provenance-store::compile_fail) & not test(=record_family_catalog_leaves_out_store_only_columns))
+        run: cargo nextest run --profile ci --workspace --all-features --no-fail-fast --cargo-profile test --timings -E "not ($COMPILE_FAIL_TESTS)"
       # The Linux leg runs the same suite once with coverage instrumentation.
       # The CRAP gate reads its LCOV output, so the suite does not run twice.
       - name: Install pinned coverage tool
