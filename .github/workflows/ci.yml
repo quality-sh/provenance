@@ -704,17 +704,7 @@ jobs:
       - name: Measure the trybuild builds
         if: always()
         shell: bash
-        run: |
-          du -sh target/tests/trybuild || true
-          du -h -d 3 target/tests/trybuild | sort -h | tail -25 || true
-          echo "zstd bytes: $(tar -C target/tests -cf - trybuild | zstd -T0 --long=30 -3 | wc -c)"
-      - name: Probe a warm trybuild run
-        shell: bash
-        run: |
-          find crates fixtures -type f -exec touch {} +
-          start=$(date +%s)
-          cargo nextest run --profile ci -p provenance-core -p provenance-macros -p provenance-sdk -p provenance-store --test compile_fail --test relation_derive_refusals --test projection_row_refusals --all-features --no-fail-fast -E "$COMPILE_FAIL_TESTS"
-          echo "warm seconds: $(( $(date +%s) - start ))"
+        run: if [[ -d target/tests/trybuild ]]; then du -sh target/tests/trybuild; fi
       - name: Save the trybuild builds
         if: github.ref == 'refs/heads/main' && steps.trybuild-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
