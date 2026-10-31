@@ -149,7 +149,7 @@ async fn mcp_get_rejects_an_unknown_returned_kind() {
     assert_eq!(result.is_error, Some(true));
     assert_eq!(
         result.structured_content.unwrap()["error"]["kind"],
-        "invalid_options"
+        "invalid_input"
     );
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
@@ -279,7 +279,7 @@ async fn mcp_get_keeps_permitted_kinds_without_probing_forbidden_kinds() {
     assert_eq!(forbidden.is_error, Some(true));
     assert_eq!(
         forbidden.structured_content.unwrap()["error"]["kind"],
-        "not_found"
+        "resource_not_found"
     );
 
     client.cancel().await.unwrap();

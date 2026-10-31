@@ -264,6 +264,25 @@ impl Display for ReadError {
 
 impl std::error::Error for ReadError {}
 
+impl ReadError {
+    /// The `{error, meta}` object that the CLI and MCP both return for this failure.
+    #[rule("rule_mcp_get_failure_matches_cli")]
+    pub fn failure(&self) -> serde_json::Value {
+        let mut error = match self {
+            Self::InvalidOptions => {
+                serde_json::json!({"kind": "invalid_input", "reason": "invalid_value"})
+            }
+            Self::NotFound => serde_json::json!({"kind": "resource_not_found"}),
+            Self::AmbiguousIdentity => serde_json::json!({
+                "kind": "invalid_input", "reason": "invalid_value", "field": "target"
+            }),
+            Self::Operation(_) => serde_json::json!({"kind": "operation_failed"}),
+        };
+        error["message"] = serde_json::Value::String(self.to_string());
+        serde_json::json!({"error": error, "meta": {}})
+    }
+}
+
 /// Existing operation paths needed to compose a known-record read.
 pub trait GetPort: Send + Sync {
     fn resolve<'a>(&'a self, id: &'a str) -> PortFuture<'a, RecordResolution>;

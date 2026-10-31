@@ -161,7 +161,7 @@ pub(crate) async fn call_get(
     arguments: serde_json::Map<String, Value>,
 ) -> CallToolResult {
     let Ok(arguments) = serde_json::from_value::<GetInput>(Value::Object(arguments)) else {
-        return get_error("invalid_options", "unsupported read options");
+        return crate::mcp_surface::envelope_error(&ReadError::InvalidOptions.failure());
     };
     let service = host.porcelain().get();
     match service.get(arguments).await {
@@ -174,15 +174,7 @@ pub(crate) async fn call_get(
             result.content = vec![ContentBlock::text(summary)];
             result
         }
-        Err(error) => get_error(
-            match error {
-                ReadError::InvalidOptions => "invalid_options",
-                ReadError::NotFound => "not_found",
-                ReadError::AmbiguousIdentity => "ambiguous_identity",
-                ReadError::Operation(_) => "operation_failed",
-            },
-            &error.to_string(),
-        ),
+        Err(error) => crate::mcp_surface::envelope_error(&error.failure()),
     }
 }
 
