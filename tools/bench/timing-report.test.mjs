@@ -132,3 +132,47 @@ test('the release gate sets the exit status and only reports without it', async 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+async function gateOnRuns(bases, heads) {
+  const directory = await mkdtemp(join(tmpdir(), 'timing-report-'));
+  try {
+    const pairs = [];
+    for (let index = 0; index < bases.length; index += 1) {
+      await writeFile(join(directory, `base-${index}.txt`), bases[index]);
+      await writeFile(join(directory, `head-${index}.txt`), heads[index]);
+      pairs.push({ base: `base-${index}.txt`, head: `head-${index}.txt` });
+    }
+    await writeFile(join(directory, 'runs.json'), JSON.stringify({ pairs }));
+    return spawnSync(process.execPath, [join(here, 'timing-report.mjs'), '--runs', directory, '--gate', 'release'], { encoding: 'utf8' });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+const section = 'Timing over repository_state: operation request served_ms\n';
+const withGet = `${section}catch_up_ms 10.0\nget summary 4.0\n`;
+const withoutGet = `${section}catch_up_ms 10.0\n`;
+
+test('the release gate fails a gated row that some baseline runs do not print', async () => {
+  const bases = [withGet, withoutGet, withGet, withoutGet, withGet, withGet];
+  const result = await gateOnRuns(bases, Array(6).fill(withGet));
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /Release gate: \*\*fail\*\* \(1 of 2 gated rows\)/);
+  assert.match(result.stdout, /`repository_state get summary` is missing in base in 2 of 6 runs\./);
+  assert.match(result.stdout, /\| `repository_state get summary` \| \| \| \| missing in base in 2 of 6 runs \| Fail \|/);
+});
+
+test('the release gate fails a gated row that some candidate runs do not print', async () => {
+  const heads = [withGet, withGet, withGet, withGet, withGet, withoutGet];
+  const result = await gateOnRuns(Array(6).fill(withGet), heads);
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /`repository_state get summary` is missing in head in 1 of 6 runs\./);
+});
+
+test('the release gate passes a gated row that only the candidate prints', async () => {
+  const result = await gateOnRuns(Array(6).fill(withoutGet), Array(6).fill(withGet));
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Release gate: pass\./);
+  assert.match(result.stdout, /\| `repository_state get summary` \| \| \| \| missing in base \| Pass \|/);
+  assert.doesNotMatch(result.stdout, /is missing in/);
+});
