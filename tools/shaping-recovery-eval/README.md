@@ -60,13 +60,13 @@ A packet passes when every case has no findings:
 | `anchor_inside_parent_tree` | No first-turn page with the parent as root, or any page with the anchor as root. |
 | `tree_branches_by_decision` | A new Rule that is not under a Requirement below the anchor, a Rule that does not name the Resolution that spawned its Requirement, an accepted Requirement outside the anchor's tree, or a choice that no Resolution spawned. |
 | `resolution_shows_downstream` | A new Resolution with no review entry, no spawned Requirement, or an empty impact view. |
-| `every_record_submitted` | A created Requirement, Rule, Resolution, Boundary, or Source in the final graph with no review submission. |
+| `every_record_submitted` | A created Requirement, Rule, Resolution, Boundary, or Source in the final graph with no review submission, whatever its status. |
 | `prerequisite_order` | A Question claimed or answered while a prerequisite from the independent list is open at the end of the turn. |
 | `accepted_decisions` | An accepted Requirement ID is missing or does not state its fact. |
 | `refused_decisions` | A Requirement, Rule, or Resolution position adopts a refused idea. |
 | `fresh_reads` | A work turn writes before an unfiltered, read-only read of the Topic and each changed Question. |
 
-The `fresh_reads` case reads each CLI call in a shell command separately: each pipeline stage that runs the binary or a shell variable such as `$P`. A help option makes only its own call a help request. Text in quotes, heredoc bodies and comments is not a call.
+The `fresh_reads` case reads each CLI call in a shell command separately: each pipeline stage that runs the binary or a shell variable such as `$P`. A call after `env`, `command`, `exec`, `time`, `nohup` or `xargs` counts. A call in `$(...)` or backticks counts, also inside double quotes. A help option makes only its own call a help request. Other text in quotes, heredoc bodies and comments is not a call.
 
 The structural cases do not replace the blind check of method departures and
 reminders. `--guidance-commit` installs the skill and design document from a

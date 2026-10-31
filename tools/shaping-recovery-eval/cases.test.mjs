@@ -158,3 +158,29 @@ test('every created record needs a review entry', () => {
   const partial = scorePacket(packet({ finalReview: review.filter(entry => entry.kind !== 'rules') }));
   assert.deepEqual(partial.cases.every_record_submitted, [{ kind: 'rules', id: 'rule_rows' }]);
 });
+
+test('a write after a command prefix needs the reads first', () => {
+  for (const prefix of ['env', 'env -i P=1', 'command', 'exec', 'time', 'nohup', 'xargs -n 1', 'echo x | xargs']) {
+    assert.deepEqual(freshFindings(`${prefix} provenance questions question_format answer --answer table`), unread, prefix);
+  }
+  assert.deepEqual(freshFindings('env provenance topics topic_pay get', 'nohup provenance questions question_format get',
+    'provenance questions question_format answer --answer table'), []);
+});
+
+test('a write in a command substitution needs the reads first, also inside double quotes', () => {
+  assert.deepEqual(freshFindings('echo "$(provenance questions question_format answer --answer table)"'), unread);
+  assert.deepEqual(freshFindings('echo "`provenance questions question_format answer --answer table`"'), unread);
+  assert.deepEqual(freshFindings('echo "done: $(env provenance questions question_format answer --answer "a table")."'), unread);
+  assert.deepEqual(freshFindings('echo "$(provenance topics topic_pay get)" "`provenance questions question_format get`"',
+    'provenance questions question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('echo "provenance questions question_format answer --answer table"; echo \'$(provenance questions question_format answer)\'',
+    'provenance topics topic_pay get', 'provenance questions question_format get', 'provenance questions question_format answer --answer table'), []);
+});
+
+test('an inactive record that the session created needs review evidence', () => {
+  const final = graph({ sources: [{ id: 'source_notes', title: 'Notes', status: 'archived' }] });
+  const result = scorePacket(packet({ final, finalReview: [...review, { kind: 'sources', id: 'source_notes', pending: false, decisions: 0 }] }));
+  assert.deepEqual(result.cases.every_record_submitted, [{ kind: 'sources', id: 'source_notes' }]);
+  const submitted = scorePacket(packet({ final, finalReview: [...review, { kind: 'sources', id: 'source_notes', pending: false, decisions: 1 }] }));
+  assert.deepEqual(submitted.cases.every_record_submitted, []);
+});

@@ -1,16 +1,23 @@
 /** Structural gate cases. Each one reads one anonymous packet and returns its findings. */
 
 // The scorer splits each shell command into pipelines of words, outside quotes. Heredoc bodies
-// and comments are script text, not calls. `$(`, backticks and parentheses also start a new pipeline.
+// and comments are script text, not calls. `$(`, backticks and parentheses also start a new pipeline,
+// also inside double quotes. `nested` holds the open substitutions and the quote that each one ends in.
 export function pipelines(command) {
   const out = [];
   let stages = [], words = [], word = null, quote = null, heredocs = [];
+  const nested = [];
   const endWord = () => { if (word) words.push(word); word = null; };
   const endStage = () => { endWord(); if (words.length) stages.push(words); words = []; };
   const endPipeline = () => { endStage(); if (stages.length) out.push(stages); stages = []; };
   const append = (text, quoted = false) => { word ??= { text: '', quoted: false }; word.text += text; word.quoted ||= quoted; };
   for (let i = 0; i < command.length; i++) {
     const c = command[i], next = command[i + 1];
+    if (quote === '"' && (c === '`' || (c === '$' && next === '('))) {
+      endPipeline(); nested.push({ close: c === '`' ? '`' : ')', quote }); quote = null;
+      if (c === '$') i++;
+      continue;
+    }
     if (quote) {
       if (c === quote) quote = null;
       else if (c === '\\' && quote === '"' && next !== undefined) append(command[++i], true);
@@ -39,7 +46,15 @@ export function pipelines(command) {
     }
     if (c === '|' && next !== '|') { endStage(); if (next === '&') i++; continue; }
     if (c === '&' && (next === '>' || command[i - 1] === '>')) { append(c); continue; }
-    if (';&|()`'.includes(c) || (c === '$' && next === '(')) { endPipeline(); if (next === c || c === '$') i++; continue; }
+    if (c === ')' || c === '`') {
+      endPipeline();
+      const open = nested.at(-1);
+      if (open?.close === c) { nested.pop(); quote = open.quote; append('', !!quote); }
+      else if (c === '`') nested.push({ close: c, quote: null });
+      continue;
+    }
+    if (c === '(' || (c === '$' && next === '(')) { endPipeline(); nested.push({ close: ')', quote: null }); if (c === '$') i++; continue; }
+    if (';&|'.includes(c)) { endPipeline(); if (next === c) i++; continue; }
     if (/\s/.test(c)) { endWord(); continue; }
     append(c);
   }
@@ -47,13 +62,16 @@ export function pipelines(command) {
   return out;
 }
 
-const keyword = /^(do|then|else|elif|if|while|until|time|exec|command|!|\{)$/;
+const keyword = /^(do|then|else|elif|if|while|until|!|\{)$/;
+// A prefix runs the next word as a program. These options of a prefix take a value word.
+const prefix = /^(env|command|exec|time|nohup|xargs)$/;
+const prefixValue = /^-([nILPdsaE]|-max-args|-replace|-max-lines|-max-procs|-delimiter|-arg-file|-eof|u|C|S|-unset|-chdir|-split-string)$/;
 const program = /^(?:\S*\/)?<?provenance>?$|^\$\{?\w+\}?$/;
 const writeVerbs = new Set(['create', 'update', 'answer', 'claim', 'release', 'submit', 'close', 'discuss', 'reply']);
 const outputFilter = /^(grep|rg|jq|sed|head|tail|awk|cut|sort|wc|tr|python3?|node)$/;
 
 // A CLI call is one pipeline stage that runs the binary or a shell variable that holds it, as in
-// `$P questions question_rate answer`. Its action is the first write verb or `get` in the first
+// `$P questions question_rate answer`, also after a prefix such as `env` or `xargs`. Its action is the first write verb or `get` in the first
 // four words that are not options. An option is an unquoted word, so an answer text that contains
 // `--help` is not a help request.
 function invocations(command) {
@@ -61,8 +79,14 @@ function invocations(command) {
   const calls = [];
   for (const stages of pipelines(command)) {
     stages.forEach((stage, at) => {
-      let start = 0;
-      while (start < stage.length && (keyword.test(stage[start].text) || /^\w+=/.test(stage[start].text))) start++;
+      let start = 0, prefixed = false;
+      while (start < stage.length) {
+        const text = stage[start].text;
+        if (keyword.test(text) || /^\w+=/.test(text)) start++;
+        else if (prefix.test(text)) { prefixed = true; start++; }
+        else if (prefixed && text.startsWith('-')) start += prefixValue.test(text) ? 2 : 1;
+        else break;
+      }
       const [head, ...rest] = stage.slice(start);
       if (head?.text === 'for' && rest[1]?.text === 'in') loops.set(rest[0].text, rest.slice(2).map(word => word.text));
       if (!head || !program.test(head.text)) return;
@@ -241,10 +265,11 @@ export function treeBranchesByDecision(packet) {
   return findings;
 }
 
-const created = (packet, kinds) => {
+// The records that the session created, by default only the live ones.
+const created = (packet, kinds, keep = live) => {
   const fixture = new Set(packet.fixture_records);
   const final = packet.turns.at(-1).after;
-  return kinds.flatMap(kind => (final[kind] ?? []).filter(record => live(record) && !fixture.has(record.id)).map(record => ({ kind, id: record.id })));
+  return kinds.flatMap(kind => (final[kind] ?? []).filter(record => keep(record) && !fixture.has(record.id)).map(record => ({ kind, id: record.id })));
 };
 const reviewEntry = (review, { kind, id }) => review.find(entry => entry.kind === kind && entry.id === id);
 
@@ -258,11 +283,11 @@ export function resolutionShowsDownstream(packet) {
   });
 }
 
-/** Failure 4: every record that the session created has its own review submission. */
+/** Failure 4: every record that the session created has its own review submission, whatever its status. */
 export function everyRecordSubmitted(packet) {
   const review = packet.turns.at(-1).review;
   if (!review) return [{ finding: 'no final review state' }];
-  return created(packet, ['requirements', 'resolutions', 'rules', 'boundaries', 'sources'])
+  return created(packet, ['requirements', 'resolutions', 'rules', 'boundaries', 'sources'], () => true)
     .filter(record => { const entry = reviewEntry(review, record); return !entry?.pending && !entry?.decisions; });
 }
 
