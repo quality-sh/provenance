@@ -84,12 +84,9 @@ fn exported_question_prerequisites_match_the_public_schema() {
         .stdout
         .clone();
     let shown: Value = serde_json::from_slice(&output).unwrap();
-    let validator = jsonschema::JSONSchema::compile(&shown["schema"]).unwrap();
+    let validator = jsonschema::draft7::new(&shown["schema"]).unwrap();
     let errors: Vec<_> = validator
-        .validate(&document)
-        .err()
-        .into_iter()
-        .flatten()
+        .iter_errors(&document)
         .map(|error| error.to_string())
         .collect();
     assert!(
