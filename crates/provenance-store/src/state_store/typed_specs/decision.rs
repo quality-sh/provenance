@@ -1,6 +1,6 @@
 //! The typed-spec decision: a function of one input and one record view.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use provenance_core::{
     DeclarationAddress, ImplementationBinding, Requirement, Rule, ScopeId, Source, StableId,
@@ -49,7 +49,7 @@ pub struct TypedSpecDecision {
 enum Outcome {
     Conflicts(OwnershipDecision),
     Replace {
-        replacement: publication::Replacement,
+        replacement: Box<publication::Replacement>,
         requirement_resources: Vec<ReconciledResource>,
         rule_resources: Vec<ReconciledResource>,
     },
@@ -93,11 +93,11 @@ impl TypedSpecDecision {
 pub fn decide_typed_spec(
     scope_id: &ScopeId,
     mut input: TypedSpecInput,
-    view: TypedSpecView,
+    view: &TypedSpecView,
 ) -> anyhow::Result<TypedSpecDecision> {
     normalize_rule_relationships(&mut input.rules)
         .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidDeclaration, error))?;
-    let current = CurrentTypedState::new(&input.declared_by, &view)?;
+    let current = CurrentTypedState::new(&input.declared_by, view)?;
     let ids = desired_typed_ids(&input, &current)
         .map_err(|error| SourceFailure::wrap(WriteFailure::InvalidDeclaration, error))?;
     let ownership = adoption::decide(scope_id, &input, &current, &ids)?;
@@ -142,12 +142,12 @@ pub fn decide_typed_spec(
     let deleted_resources =
         all_resources(&source_resources, &requirement_resources, &rule_resources);
     let cascade = cascade::Cascade::prepare(
-        &view,
+        view,
         &deleted_resources,
         &mut sources,
         &mut requirements,
         &mut rules,
-    )?;
+    );
     ensure_resolutions_exist(&view.resolutions, &requirements, &rules)?;
     ensure_acyclic(&requirements)?;
     let implementation_reconciliation = reconcile_implementations(
@@ -181,13 +181,13 @@ pub fn decide_typed_spec(
     Ok(TypedSpecDecision {
         result,
         outcome: Outcome::Replace {
-            replacement: publication::Replacement {
+            replacement: Box::new(publication::Replacement {
                 sources,
                 requirements,
                 rules,
                 implementations: implementation_reconciliation.records,
                 cascade,
-            },
+            }),
             requirement_resources,
             rule_resources,
         },

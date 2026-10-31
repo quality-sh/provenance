@@ -14,7 +14,7 @@ use serde_json::json;
 
 const OWNER: &str = "spec://payroll";
 
-fn spec(requirements: serde_json::Value) -> TypedSpecInput {
+fn spec(requirements: &serde_json::Value) -> TypedSpecInput {
     serde_json::from_value(json!({
         "schema_version": SUPPORTED_SCHEMA_VERSION.0,
         "spec": "payroll",
@@ -48,7 +48,7 @@ fn an_omitted_owned_requirement_is_deleted_from_records_in_memory() {
         ..TypedSpecView::default()
     };
 
-    let decision = decide_typed_spec(&scope, spec(json!([])), view).unwrap();
+    let decision = decide_typed_spec(&scope, spec(&json!([])), &view).unwrap();
 
     let deleted = decision
         .result
@@ -69,14 +69,14 @@ fn the_plan_equals_the_decision_over_the_view_the_store_reads() {
     store
         .apply_typed_spec(
             &scope,
-            spec(json!([requirement("pay"), requirement("overtime")])),
+            spec(&json!([requirement("pay"), requirement("overtime")])),
         )
         .unwrap();
-    let next = spec(json!([requirement("pay"), requirement("leave")]));
+    let next = spec(&json!([requirement("pay"), requirement("leave")]));
 
     let plan = store.plan_typed_spec(&scope, next.clone()).unwrap();
     let view = store.typed_spec_view(&scope).unwrap();
-    let decision = decide_typed_spec(&scope, next, view).unwrap();
+    let decision = decide_typed_spec(&scope, next, &view).unwrap();
 
     assert_eq!(decision.result, plan);
     assert_eq!((plan.created, plan.deleted), (1, 1));
@@ -89,7 +89,7 @@ fn the_plan_equals_the_decision_over_the_view_the_store_reads() {
 )]
 fn an_apply_refuses_a_plan_that_a_native_write_made_stale() {
     let (_dir, store, scope) = initialized_store();
-    let input = spec(json!([requirement("pay")]));
+    let input = spec(&json!([requirement("pay")]));
     let plan = store.plan_typed_spec(&scope, input.clone()).unwrap();
     let planned = plan
         .resources

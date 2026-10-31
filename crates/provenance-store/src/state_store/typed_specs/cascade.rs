@@ -39,7 +39,7 @@ impl Cascade {
         sources: &mut [Source],
         requirements: &mut [Requirement],
         rules: &mut Vec<Rule>,
-    ) -> anyhow::Result<Self> {
+    ) -> Self {
         let deleted = |kind| {
             resources
                 .iter()
@@ -96,7 +96,7 @@ impl Cascade {
             &requirement_ids,
             &resolution_ids,
             &rule_ids,
-        )?;
+        );
 
         let mut changes =
             describe_replacement(NodeType::Source, &before_sources, sources, |r| &r.id);
@@ -119,14 +119,14 @@ impl Cascade {
             |r| &r.id,
         ));
         changes.extend(shaping.changes);
-        Ok(Self {
+        Self {
             rules: rule_ids,
             resolutions,
             topics: shaping.topics,
             questions: shaping.questions,
             boundaries: shaping.boundaries,
             changes,
-        })
+        }
     }
 
     pub(super) fn report(&self, resources: &mut [ReconciledResource]) -> Vec<CascadedResource> {
@@ -251,7 +251,7 @@ fn prepare_shaping(
     requirement_ids: &BTreeSet<String>,
     resolution_ids: &BTreeSet<String>,
     rule_ids: &BTreeSet<String>,
-) -> anyhow::Result<ShapingRecords> {
+) -> ShapingRecords {
     let mut topics = view.topics.clone();
     let before_topics = topics.clone();
     let mut topic_ids = BTreeSet::new();
@@ -313,12 +313,12 @@ fn prepare_shaping(
         &boundaries,
         |r| &r.id,
     ));
-    Ok(ShapingRecords {
+    ShapingRecords {
         topics,
         questions,
         boundaries,
         changes,
-    })
+    }
 }
 
 fn describe_replacement<'a, T: serde::Serialize>(

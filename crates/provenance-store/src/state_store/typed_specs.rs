@@ -87,7 +87,7 @@ impl StateStore {
     ) -> anyhow::Result<TypedSpecResult> {
         self.validate_typed_spec(scope_id, &input)?;
         let view = self.typed_spec_view(scope_id)?;
-        let decision = decide_typed_spec(scope_id, input, view)?;
+        let decision = decide_typed_spec(scope_id, input, &view)?;
         match mode {
             ReconcileMode::Plan => Ok(decision.result),
             ReconcileMode::Apply => decision.publish(self, scope_id),
