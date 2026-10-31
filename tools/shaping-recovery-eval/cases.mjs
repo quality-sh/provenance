@@ -1,6 +1,8 @@
 /** Structural gate cases. Each one reads one anonymous packet and returns its findings. */
 
-const writeVerb = /\s(create|update|answer|claim|release|submit|close|discuss|reply)\b/;
+// A write is a CLI call whose action follows the binary or its shell variable within three words,
+// as in `$P questions question_rate answer`; script text that names an action is not a write.
+const writeVerb = /(?:provenance>?|\$\{?\w+\}?)\s+(?:[\w.$<>{}-]+\s+){0,3}(create|update|answer|claim|release|submit|close|discuss|reply)\b/;
 const outputFilter = /\|\s*(grep|rg|jq|sed|head|tail|awk|cut|sort|wc|tr|python3?|node)\b/;
 
 // A read counts only in a call with no write, and only in a segment whose output is not filtered.

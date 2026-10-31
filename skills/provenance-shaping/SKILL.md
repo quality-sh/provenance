@@ -171,6 +171,12 @@ parent Requirement
   before anyone approves it. The impact view lists only these Rules, so every Resolution
   needs a spawned child Requirement and at least one Rule that names it. A Resolution
   without them is an orphan; do not leave one.
+- A person who accepts one option and rejects another has made a choice. This is true
+  for every Question method, also `task`, and also when the person gives the Requirement
+  ID. Land the Resolution. If the person gives no reason, the rationale says that the
+  person selected this option over the other one, in their words. Do not invent a reason,
+  and do not skip the Resolution because no reason was given. A Boundary can also record
+  the rejected option, but it does not replace the Resolution.
 - An accepted fact that is not a choice becomes a child Requirement, and its Rules go
   under that child.
 - Never put a Rule directly under the anchor. Never hang all the session's records off

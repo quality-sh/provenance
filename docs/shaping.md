@@ -186,7 +186,9 @@ The tree reads as a spec. A decision that settles a Question creates a Resolutio
 Resolution spawns a child Requirement (`refines` the selected Requirement, `spawned_by` the
 Resolution). The Rules of that decision go under the child and name the Resolution as their
 producer while it is still proposed, so its impact view shows them before approval. No Rule
-goes directly under the anchor. The spawned Requirement states the product behaviour that the
+goes directly under the anchor. A person who accepts one option and rejects another has made a
+choice, for every Question method; when the person gives no reason, the rationale records their
+selection in their words, and the Resolution is still created. The spawned Requirement states the product behaviour that the
 decision sets, not that a choice was made; it must add meaning beyond the position. Identical
 statements require a meaning check; rewriting the words does not remove a repeated
 obligation. A precise obligation can correctly occur in a position and an independently

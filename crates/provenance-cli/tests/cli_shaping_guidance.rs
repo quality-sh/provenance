@@ -162,6 +162,8 @@ fn shaping_guidance_puts_each_decision_on_its_own_branch() {
         "every Resolution needs a spawned child Requirement and at least one Rule that names it.",
         "Never put a Rule directly under the anchor.",
         "Do not wait for approval to add the link:",
+        "A person who accepts one option and rejects another has made a choice.",
+        "do not skip the Resolution because no reason was given.",
     ] {
         assert!(prose.contains(text), "missing {text}\n{shaping}");
     }

@@ -92,3 +92,8 @@ test('a recovery read through a filter or after the write does not count', () =>
     shell('provenance questions question_format get')];
   assert.deepEqual(scorePacket(packet({ final, events })).cases.fresh_reads, [{ turn: 1, missing: 'topic_pay' }, { turn: 1, missing: 'question_format' }]);
 });
+
+test('script text that names an action is not a write', () => {
+  const events = [shell("$P requirements req_pay document get > doc.json; python3 - doc.json <<'EOF'\nprint(n['answer'], 'create')\nEOF")];
+  assert.deepEqual(scorePacket(packet({ events })).cases.fresh_reads, []);
+});
