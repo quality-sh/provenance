@@ -2,10 +2,10 @@
 //! the repository, a thread name, or another repository or scope, and queues nothing.
 #![cfg(target_os = "linux")]
 
-#[path = "review_host_support/mod.rs"]
-mod review_host_support;
 #[path = "review_host_support/codex.rs"]
 mod codex;
+#[path = "review_host_support/mod.rs"]
+mod review_host_support;
 
 use codex::{notify, Codex};
 use provenance_macros::verifies;
@@ -73,7 +73,14 @@ fn thread_name_is_refused() {
     let (repo, codex, host) = setup();
     let thread = codex.thread(repo.path());
 
-    let output = notify(&host, &codex, repo.path(), "req_notify", "codex", "my-session");
+    let output = notify(
+        &host,
+        &codex,
+        repo.path(),
+        "req_notify",
+        "codex",
+        "my-session",
+    );
 
     let error = refusal(&output);
     assert!(error["error"]["message"]
