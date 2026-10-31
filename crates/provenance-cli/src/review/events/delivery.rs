@@ -5,12 +5,9 @@ use super::{
     envelope::{self, Selection},
     frames::Frame,
     output::OutputFrame,
-    stream::Follower,
+    refusal::Refusal,
+    stream::{revision_changed, Follower},
     subscribers::{Subscribers, Subscription},
-};
-use axum::{
-    response::{IntoResponse, Response},
-    Json,
 };
 use provenance_cli::repo_context::RepoContext;
 use provenance_macros::rule;
@@ -40,49 +37,6 @@ pub(super) struct DeliveryRequest {
     limit: usize,
     notify: Notify,
     codex_home: Option<String>,
-}
-
-/// A refused registration names the request field to change; a failed one has no field.
-pub(super) struct Refusal {
-    field: Option<&'static str>,
-    message: String,
-}
-
-impl Refusal {
-    fn input(field: &'static str, message: &str) -> Self {
-        Self {
-            field: Some(field),
-            message: message.to_owned(),
-        }
-    }
-
-    const fn failed(message: String) -> Self {
-        Self {
-            field: None,
-            message,
-        }
-    }
-}
-
-impl IntoResponse for Refusal {
-    fn into_response(self) -> Response {
-        let (status, error) = match self.field {
-            Some(field) => (
-                axum::http::StatusCode::BAD_REQUEST,
-                serde_json::json!({"kind": "invalid_input", "field": field,
-                    "reason": "invalid_value", "message": self.message}),
-            ),
-            None => (
-                axum::http::StatusCode::BAD_GATEWAY,
-                serde_json::json!({"kind": "operation_failed", "message": self.message}),
-            ),
-        };
-        (
-            status,
-            Json(serde_json::json!({"error": error, "meta": {}})),
-        )
-            .into_response()
-    }
 }
 
 #[derive(Clone)]
@@ -185,7 +139,15 @@ impl Deliveries {
                 inner.subscribers.native_sequence() != at
             })
             .await
-            .map_err(|error| Refusal::failed(format!("{error:#}")))?;
+            .map_err(|error| {
+                if revision_changed(&error) {
+                    Refusal::busy(
+                        "the page changed during every read of the document; register again",
+                    )
+                } else {
+                    Refusal::failed(format!("{error:#}"))
+                }
+            })?;
         for frame in &frames {
             inner.queue(&target, frame).await.map_err(|error| {
                 Refusal::failed(format!("Codex did not accept the message: {error:#}"))
