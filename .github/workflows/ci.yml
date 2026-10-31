@@ -473,6 +473,8 @@ jobs:
       # The trybuild compile-fail tests check compile-time refusals, which are
       # the same on every platform, so only the Linux leg runs them.
       # cargo_nested_sdk runs a real nested Cargo build and stays on every leg.
+      # The generated HTTP client is platform neutral and is the slowest crate
+      # to compile, so only the Linux leg compiles and tests it.
       - name: Test concurrently
         if: runner.os != 'Linux'
         shell: bash
@@ -483,7 +485,7 @@ jobs:
             | binary_id(provenance-macros::compile_fail)
             | binary_id(provenance-sdk::compile_fail)
             | (binary_id(provenance-store::compile_fail) & not test(=record_family_catalog_leaves_out_store_only_columns))
-        run: cargo nextest run --profile ci --workspace --all-features --no-fail-fast --cargo-profile test --timings -E "not ($COMPILE_FAIL_TESTS)"
+        run: cargo nextest run --profile ci --workspace --exclude provenance-http-client --all-features --no-fail-fast --cargo-profile test --timings -E "not ($COMPILE_FAIL_TESTS)"
       # The Linux leg runs the same suite once with coverage instrumentation.
       # The CRAP gate reads its LCOV output, so the suite does not run twice.
       - name: Install pinned coverage tool
@@ -501,6 +503,41 @@ jobs:
           # each corrupt profile path and merges the remaining valid profiles.
           # Test failures still fail this command; an entirely invalid set fails too.
           cargo llvm-cov nextest --workspace --all-features --no-fail-fast --lcov --failure-mode all --output-path target/crap/lcov.info
+      # The coverage step has stopped with exit code 143 (SIGTERM) during a
+      # compile that printed nothing. These facts show if the runner ran out
+      # of memory.
+      - name: Show memory facts after a failed test run
+        if: failure() && runner.os == 'Linux'
+        run: |
+          echo "::group::Memory now"
+          free -m
+          df -h / "$GITHUB_WORKSPACE"
+          echo "::endgroup::"
+          echo "::group::Kernel log lines about out-of-memory kills"
+          sudo dmesg -T | grep -iE 'out of memory|oom-kill|oom_reaper|killed process' \
+            || echo "No out-of-memory lines in the kernel log."
+          echo "::endgroup::"
+          echo "::group::systemd-oomd journal"
+          if systemctl cat systemd-oomd.service >/dev/null 2>&1; then
+            sudo journalctl -u systemd-oomd --no-pager -o short-precise
+          else
+            echo "systemd-oomd is not present."
+          fi
+          echo "::endgroup::"
+          # The runner service cgroup holds every step of this job, so its
+          # memory.peak is the peak memory of the job.
+          echo "::group::Peak memory and events per cgroup of this step"
+          cgroup=$(cut -d: -f3 /proc/self/cgroup)
+          while :; do
+            dir="/sys/fs/cgroup$cgroup"
+            if [[ -r "$dir/memory.peak" ]]; then
+              echo "$cgroup: peak $(( $(cat "$dir/memory.peak") / 1048576 )) MiB"
+              sed 's/^/  /' "$dir/memory.events"
+            fi
+            [[ "$cgroup" == / ]] && break
+            cgroup=$(dirname "$cgroup")
+          done
+          echo "::endgroup::"
       - name: Save coverage for the CRAP gate
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -509,8 +546,11 @@ jobs:
           path: target/crap/lcov.info
           retention-days: 7
           if-no-files-found: error
+      # The Linux leg builds with coverage instrumentation, so its doc tests
+      # would rebuild the workspace. The doc-tests job runs them in parallel.
       - name: Test documentation
-        run: cargo test --workspace --all-features --doc --no-fail-fast
+        if: runner.os != 'Linux'
+        run: cargo test --workspace --exclude provenance-http-client --all-features --doc --no-fail-fast
       - name: Save the test report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -572,6 +612,40 @@ jobs:
           path: target/cargo-timings/*.html
           if-no-files-found: warn
           retention-days: 30
+
+  doc-tests:
+    timeout-minutes: 30
+    name: Documentation tests
+    needs: [changes, generate-operations]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - run: node tools/skills/prepare.mjs
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: operation-generated
+          path: target/operation-artifact
+      - name: Restore generated operation source
+        shell: bash
+        run: tar -xzf target/operation-artifact/operation-generated.tar.gz
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          prefix-key: v1
+          shared-key: doc-tests
+          add-job-id-key: "false"
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
+      - run: cargo test --workspace --all-features --doc --no-fail-fast
 
   crap-quality:
     timeout-minutes: 30
@@ -1133,6 +1207,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: repository-file-access-${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Fetch crates through Socket Firewall
         env:
           # Cargo on Windows checks certificate revocation with schannel, and
@@ -1165,6 +1240,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: skills-install
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: node tools/skills/prepare.mjs
       - name: Fetch crates through Socket Firewall
         env:
@@ -1190,6 +1266,7 @@ jobs:
       - clippy
       - test
       - test-default-features
+      - doc-tests
       - build-cli-linux
       - build-cli-platforms
       - agent-notifications
