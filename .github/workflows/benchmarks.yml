@@ -1,0 +1,162 @@
+name: Benchmarks
+
+# Times two commits in one job on one frozen copy of `.provenance/state`.
+# The timing test of each commit runs in turn, `pairs` times, and the report
+# gives each row's medians and the paired ratio with a 95% interval.
+on:
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: "Baseline commit, tag or branch (default: the latest v* tag)"
+        type: string
+        required: false
+      candidate:
+        description: "Candidate commit, tag or branch (default: the dispatched commit)"
+        type: string
+        required: false
+      input_ref:
+        description: "Commit whose .provenance/state both sides read (default: the baseline)"
+        type: string
+        required: false
+      pairs:
+        description: Number of paired runs
+        type: number
+        default: 15
+  pull_request:
+    paths:
+      - ".github/workflows/benchmarks.yml"
+      - "tools/bench/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: never
+  # The value each side's .cargo/config.toml gives `cargo test`. The test
+  # binaries run directly, so the job sets it.
+  PROVENANCE_TEST_STE100_ASSET_URL: http://127.0.0.1:0/ASD-STE100_ISSUE9.pdf
+
+jobs:
+  paired-timing:
+    name: Paired timing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      # The workspace root holds no .cargo directory. Each side builds from
+      # its own sibling directory, so its Cargo reads only its own config.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          path: repo
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve the commits
+        id: commits
+        working-directory: repo
+        env:
+          BASELINE: ${{ inputs.baseline }}
+          CANDIDATE: ${{ inputs.candidate }}
+          INPUT_REF: ${{ inputs.input_ref }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$BASELINE" ]]; then
+            BASELINE=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+          fi
+          baseline=$(git rev-parse --verify "$BASELINE^{commit}")
+          candidate=$(git rev-parse --verify "${CANDIDATE:-$GITHUB_SHA}^{commit}")
+          input=$(git rev-parse --verify "${INPUT_REF:-$baseline}^{commit}")
+          {
+            echo "baseline=$baseline"
+            echo "baseline_name=$BASELINE"
+            echo "candidate=$candidate"
+            echo "input=$input"
+          } >> "$GITHUB_OUTPUT"
+          harness=(
+            crates/provenance-store/src/operations/queries/tests/comparison.rs
+            crates/provenance-store/src/operations/queries/tests/comparison
+          )
+          if git diff --quiet "$baseline" "$candidate" -- "${harness[@]}"; then
+            echo "harness_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "harness_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check out both sides on the frozen state
+        env:
+          BASELINE: ${{ steps.commits.outputs.baseline }}
+          CANDIDATE: ${{ steps.commits.outputs.candidate }}
+          INPUT: ${{ steps.commits.outputs.input }}
+        run: |
+          set -euo pipefail
+          git -C repo worktree add --detach ../base "$BASELINE"
+          git -C repo worktree add --detach ../head "$CANDIDATE"
+          for side in base head; do
+            rm -rf "$side/.provenance/state"
+            git -C repo archive "$INPUT" .provenance/state | tar -x -C "$side"
+          done
+          diff -r base/.provenance/state head/.provenance/state
+          echo "State rows: $(find base/.provenance/state -name "*.jsonl" -exec cat {} + | wc -l)"
+      - uses: ./repo/.github/actions/setup-socket-firewall
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: benchmarks
+          save-if: false
+          workspaces: |
+            base -> target
+            head -> target
+      - name: Build each side's release test binary
+        id: build
+        run: |
+          set -euo pipefail
+          for side in base head; do
+            (
+              cd "$side"
+              sfw cargo fetch --locked
+              cargo test --locked -p provenance-store --release --no-run --message-format=json \
+                > "$RUNNER_TEMP/$side-build.json"
+            )
+            binary=$(jq -r 'select(.reason == "compiler-artifact" and .profile.test and .target.kind == ["lib"] and .target.name == "provenance_store") | .executable' "$RUNNER_TEMP/$side-build.json")
+            test -x "$binary"
+            echo "$side=$binary" >> "$GITHUB_OUTPUT"
+          done
+      - name: Run both binaries in turn
+        env:
+          BASE_BIN: ${{ steps.build.outputs.base }}
+          HEAD_BIN: ${{ steps.build.outputs.head }}
+          PAIRS: ${{ inputs.pairs || 15 }}
+        run: |
+          node repo/tools/bench/paired-timing.mjs \
+            --base "$BASE_BIN" --base-cwd base/crates/provenance-store \
+            --head "$HEAD_BIN" --head-cwd head/crates/provenance-store \
+            --pairs "$PAIRS" --out timing-report/runs
+      - name: Write the report
+        env:
+          BASELINE: ${{ steps.commits.outputs.baseline }}
+          BASELINE_NAME: ${{ steps.commits.outputs.baseline_name }}
+          CANDIDATE: ${{ steps.commits.outputs.candidate }}
+          INPUT: ${{ steps.commits.outputs.input }}
+          HARNESS_CHANGED: ${{ steps.commits.outputs.harness_changed }}
+        run: |
+          set -euo pipefail
+          flags=()
+          if [[ "$HARNESS_CHANGED" == true ]]; then
+            flags+=(--harness-changed)
+          fi
+          node repo/tools/bench/timing-report.mjs --runs timing-report/runs \
+            --baseline "$BASELINE ($BASELINE_NAME)" --candidate "$CANDIDATE" --input "$INPUT" \
+            --runner "$ImageOS $ImageVersion" "${flags[@]}" > timing-report/report.md
+          cat timing-report/report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: timing-report
+          path: timing-report
+          if-no-files-found: ignore
