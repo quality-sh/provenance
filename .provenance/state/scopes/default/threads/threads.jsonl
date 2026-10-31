@@ -30,6 +30,7 @@
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_native_rust_sdk_role","parent":{"node_type":"question","node_id":"question_native_rust_sdk_role"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_sdk_local_host_ownership","parent":{"node_type":"question","node_id":"question_sdk_local_host_ownership"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_question_question_wiki_homepage_direction","parent":{"node_type":"question","node_id":"question_wiki_homepage_direction"},"status":"active","created_at":1}
+{"schema_version":2,"scope_id":"default","id":"thread_requirement_req_change_names_verifying_tests","parent":{"node_type":"requirement","node_id":"req_change_names_verifying_tests"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_cli_mcp_shared_grammar","parent":{"node_type":"requirement","node_id":"req_cli_mcp_shared_grammar"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_default_wiki_output_is_ignored","parent":{"node_type":"requirement","node_id":"req_default_wiki_output_is_ignored"},"status":"active","created_at":1}
 {"schema_version":2,"scope_id":"default","id":"thread_requirement_req_porcelain_target_first_records","parent":{"node_type":"requirement","node_id":"req_porcelain_target_first_records"},"status":"active","created_at":1}
