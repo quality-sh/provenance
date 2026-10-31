@@ -574,6 +574,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
 name = "either"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1531,7 +1537,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "camino",
@@ -1547,7 +1553,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-macros"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1556,10 +1562,11 @@ dependencies = [
 
 [[package]]
 name = "provenance-scanner"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
  "provenance-core",
  "provenance-macros",
  "same-file",
@@ -1569,10 +1576,11 @@ dependencies = [
 
 [[package]]
 name = "provenance-sdk"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
  "provenance-core",
  "provenance-macros",
  "provenance-store",
@@ -1580,7 +1588,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-ste100"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "fs2",
  "hex",
@@ -1594,11 +1602,12 @@ dependencies = [
 
 [[package]]
 name = "provenance-store"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "camino",
+ "dunce",
  "fs2",
  "fs_at",
  "hex",
@@ -1612,7 +1621,6 @@ dependencies = [
  "serde",
  "serde_ignored",
  "serde_json",
- "serde_path_to_error",
  "sha2 0.11.0",
  "sqlx",
  "tempfile",
@@ -1827,17 +1835,6 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
-]
-
-[[package]]
-name = "serde_path_to_error"
-version = "0.1.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
-dependencies = [
- "itoa",
- "serde",
- "serde_core",
 ]
 
 [[package]]
@@ -2740,9 +2737,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.0.4"
+version = "9.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a954114b47a54df49f83d2722814e86b23d4bb1b54a1b90fb7d92b41619ddc22"
+checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
 dependencies = [
  "crc32fast",
  "flate2",

@@ -178,7 +178,7 @@ pub fn discover(root: &Path, scope: &str) -> anyhow::Result<Option<DiscoveredLoc
 }
 
 fn canonical_root(root: &Path) -> anyhow::Result<PathBuf> {
-    root.canonicalize()
+    dunce::canonicalize(root)
         .with_context(|| format!("cannot canonicalize repository root {}", root.display()))
 }
 
@@ -229,12 +229,16 @@ fn verified(record: &RegistryRecord) -> bool {
 }
 
 fn registry_path(root: &Path, scope: &str) -> PathBuf {
-    root.join(".provenance/cache/local-hosts")
+    root.join(".provenance")
+        .join("cache")
+        .join("local-hosts")
         .join(format!("{scope}.json"))
 }
 
 fn lock_path(root: &Path, scope: &str) -> PathBuf {
-    root.join(".provenance/cache/local-hosts")
+    root.join(".provenance")
+        .join("cache")
+        .join("local-hosts")
         .join(format!("{scope}.lock"))
 }
 

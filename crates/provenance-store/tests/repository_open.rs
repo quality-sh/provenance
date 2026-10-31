@@ -38,7 +38,7 @@ fn open_canonicalizes_the_root_and_selects_the_declared_scope() {
     assert_eq!(repository.scope().as_str(), "b");
     assert_eq!(
         repository.working_tree(),
-        camino::Utf8PathBuf::from_path_buf(dir.path().canonicalize().unwrap()).unwrap()
+        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap()
     );
     assert_eq!(repository.identity().scope(), repository.scope());
     assert_eq!(repository.manifest().unwrap().scopes.len(), 2);
@@ -110,7 +110,9 @@ fn settings_are_read_once_at_open_and_an_invalid_file_refuses_the_open() {
     let OpenFailure::Settings(SettingsError::Invalid { path, key, problem }) = &error else {
         panic!("expected a typed settings refusal: {error}");
     };
-    assert_eq!(path, &settings_path(&layout));
+    // The refusal names the file under the resolved root, the root the
+    // opened repository reports.
+    assert_eq!(path, &settings_path(repository.layout()));
     assert_eq!(key, "read.freshness_policy");
     assert!(problem.contains("catch_up, annotate_only, refuse_stale"));
 }

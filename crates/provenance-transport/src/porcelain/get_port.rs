@@ -36,7 +36,7 @@ impl HostGetPort {
 }
 
 pub(super) fn permitted_node_types(host: &crate::StatementHost) -> Vec<NodeType> {
-    catalog::definitions()
+    provenance_contract::definitions()
         .iter()
         .filter(|definition| host.advertises(definition.name))
         .filter_map(|definition| {
@@ -298,7 +298,7 @@ async fn load_review_discussions(
 }
 
 fn discussion_parent_is_supported(host: &crate::StatementHost, kind: NodeType) -> bool {
-    catalog::definitions().iter().any(|definition| {
+    provenance_contract::definitions().iter().any(|definition| {
         host.advertises(definition.name)
             && definition.registration.handler.operation == catalog::ReviewDiscussions::NAME
             && definition
@@ -330,7 +330,7 @@ fn operation_error<E: std::error::Error>(
 
 pub(super) fn is_available(host: &crate::StatementHost) -> bool {
     host.advertises(catalog::ResolveRecord::NAME)
-        && catalog::definitions().iter().any(|definition| {
+        && provenance_contract::definitions().iter().any(|definition| {
             host.advertises(definition.name)
                 && definition
                     .registration

@@ -187,21 +187,25 @@ impl StateStore {
         relationships: &RequirementRelations,
     ) -> anyhow::Result<()> {
         let path = shards::requirements_path(&self.layout, scope);
-        self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
-            let position = records
-                .iter()
-                .position(|record| record.id == *id)
-                .expect("the guarded Requirement remains present");
-            relationships.validate(self, scope, records, id)?;
-            let final_sets = relationships.expand(&records[position]);
-            let record = &mut records[position];
-            record.refines = final_sets.refines;
-            record.depends_on = final_sets.depends_on;
-            record.supersedes = final_sets.supersedes;
-            record.spawned_by = final_sets.spawned_by;
-            record.source_refs = final_sets.cites;
-            Ok(record.clone())
-        })?;
+        self.mutate_graph_record_with_store(
+            &path,
+            None,
+            |held, records: &mut Vec<Requirement>| {
+                let position = records
+                    .iter()
+                    .position(|record| record.id == *id)
+                    .expect("the guarded Requirement remains present");
+                relationships.validate(held, scope, records, id)?;
+                let final_sets = relationships.expand(&records[position]);
+                let record = &mut records[position];
+                record.refines = final_sets.refines;
+                record.depends_on = final_sets.depends_on;
+                record.supersedes = final_sets.supersedes;
+                record.spawned_by = final_sets.spawned_by;
+                record.source_refs = final_sets.cites;
+                Ok(record.clone())
+            },
+        )?;
         let record = self.requirement(scope, id)?;
         for (name, target) in record.references() {
             let decl = Requirement::relations()

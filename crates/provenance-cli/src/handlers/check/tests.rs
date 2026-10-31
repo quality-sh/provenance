@@ -145,7 +145,7 @@ fn binding_check_reads_a_scope_published_after_the_code_scan() {
     )
     .unwrap();
     let scanned = provenance_scanner::scan_path_with_content(&repo).unwrap();
-    provenance_store::publication::with_repository_publication(&layout, || {
+    provenance_store::publication::with_repository_publication(&layout, |_| {
         manifest.scopes.push(provenance_core::Scope {
             id: ScopeId::new("second").unwrap(),
             path_prefix: RepoPathPrefix::new("second"),
@@ -208,6 +208,76 @@ async fn graph_check_refuses_an_undeclared_scope_without_a_default_scope() {
         findings[0]
             .message
             .contains("unknown scope `gamma`; declared scopes: alpha, beta"),
+        "{findings:?}"
+    );
+}
+
+#[tokio::test]
+#[provenance_macros::verifies("rule_archive_commit_in_head_history", examples)]
+async fn scoped_graph_check_ignores_archive_commits_in_other_scopes() {
+    let directory = tempfile::tempdir().unwrap();
+    let repo = Utf8PathBuf::from_path_buf(directory.path().to_path_buf()).unwrap();
+    for arguments in [
+        &["init", "--quiet", "--initial-branch=main"][..],
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "commit",
+            "--quiet",
+            "--allow-empty",
+            "-m",
+            "Base",
+        ],
+    ] {
+        let status = std::process::Command::new("git")
+            .current_dir(&repo)
+            .args(arguments)
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {arguments:?}");
+    }
+    let layout = ProvenanceLayout::new(repo.clone());
+    let mut manifest =
+        Manifest::default_with_scope(ScopeId::new("alpha").unwrap(), RepoPathPrefix::new("."));
+    manifest.scopes.push(provenance_core::Scope {
+        id: ScopeId::new("beta").unwrap(),
+        path_prefix: RepoPathPrefix::new("beta"),
+    });
+    let rules = layout.state_dir().join("scopes/beta/rules");
+    std::fs::create_dir_all(&rules).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    let rule = serde_json::json!({
+        "schema_version": provenance_core::SUPPORTED_SCHEMA_VERSION.0,
+        "scope_id": "beta",
+        "id": "rule_beta",
+        "requirement_id": "req_beta",
+        "statement": "The system is safe.",
+        "status": "archived",
+        "archived_in_commit": { "commit": "not-a-commit" },
+    });
+    std::fs::write(rules.join("rule.jsonl"), format!("{rule}\n")).unwrap();
+
+    let port = RepositoryCheckPort::new(repo, false, None);
+    let CategoryRun::Graph { findings, .. } =
+        port.run(Category::Graph, Some("alpha")).await.unwrap()
+    else {
+        panic!("graph run")
+    };
+    assert_eq!(findings, [] as [provenance_porcelain::check::Finding; 0]);
+
+    let CategoryRun::Graph { findings, .. } = port.run(Category::Graph, None).await.unwrap() else {
+        panic!("graph run")
+    };
+    assert!(
+        findings[0]
+            .message
+            .contains("scopes/beta/rules/rule.jsonl line 1"),
         "{findings:?}"
     );
 }

@@ -152,10 +152,10 @@ fn signing_key(ctx: &ReadContext) -> anyhow::Result<Vec<u8>> {
     let dir = crate::layout::ProvenanceLayout::new(ctx.repo().to_owned()).cache_dir();
     let path = dir.join("read-cursor.key");
     if !path.exists() {
-        let mut file = tempfile::NamedTempFile::new_in(&dir)?;
+        let mut file = tempfile::NamedTempFile::new_in(crate::long_path::extended(&dir)?)?;
         file.write_all(uuid::Uuid::new_v4().as_bytes())?;
         file.write_all(uuid::Uuid::new_v4().as_bytes())?;
-        match file.persist_noclobber(&path) {
+        match file.persist_noclobber(crate::long_path::extended(&path)?) {
             Ok(_) => {}
             Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(error) => return Err(error.into()),

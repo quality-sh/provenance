@@ -42,7 +42,7 @@ fn aliased_root_relative(root: &Utf8Path, path: &Utf8Path) -> Result<Utf8PathBuf
     }
     let parent = path.parent().ok_or(Refusal::Denied)?;
     for ancestor in parent.ancestors().collect::<Vec<_>>().into_iter().rev() {
-        if std::fs::canonicalize(ancestor).is_ok_and(|resolved| resolved == root.as_std_path()) {
+        if dunce::canonicalize(ancestor).is_ok_and(|resolved| resolved == root.as_std_path()) {
             let suffix = path.strip_prefix(ancestor).map_err(|_| Refusal::Denied)?;
             return relative(root, suffix);
         }

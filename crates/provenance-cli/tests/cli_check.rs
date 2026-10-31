@@ -10,6 +10,9 @@ use std::path::Path;
 #[allow(dead_code)]
 mod dictionary_support;
 
+#[path = "cli_check/archive_commit.rs"]
+mod archive_commit;
+
 #[test]
 fn check_rejects_dangling_artifact_links() {
     let dir = tempfile::tempdir().unwrap();
@@ -400,7 +403,7 @@ fn strict_check_passes_when_the_referenced_index_is_present() {
         .stdout(contains(r#""category": "graph""#).and(contains(r#""status": "passed""#)));
 }
 
-fn git(repo: &Path, arguments: &[&str]) {
+pub(crate) fn git(repo: &Path, arguments: &[&str]) {
     let output = std::process::Command::new("git")
         .current_dir(repo)
         .args(arguments)
@@ -413,7 +416,7 @@ fn git(repo: &Path, arguments: &[&str]) {
     );
 }
 
-fn init(repo: &Path) {
+pub(crate) fn init(repo: &Path) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([

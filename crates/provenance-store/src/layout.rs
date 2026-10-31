@@ -39,7 +39,8 @@ impl ProvenanceLayout {
     }
     pub fn verification_runs_lock_path(&self, scope: &provenance_core::ScopeId) -> Utf8PathBuf {
         self.cache_dir()
-            .join("locks/scopes")
+            .join("locks")
+            .join("scopes")
             .join(scope.as_str())
             .join("verification-runs.jsonl.lock")
     }
@@ -55,12 +56,15 @@ impl ProvenanceLayout {
     }
     pub fn lifecycle_lock_path(&self, scope: &provenance_core::ScopeId) -> Utf8PathBuf {
         self.cache_dir()
-            .join("locks/scopes")
+            .join("locks")
+            .join("scopes")
             .join(scope.as_str())
             .join("ideation.lifecycle.lock")
     }
     pub fn publication_lock_path(&self) -> Utf8PathBuf {
-        self.cache_dir().join("locks/repository.publication.lock")
+        self.cache_dir()
+            .join("locks")
+            .join("repository.publication.lock")
     }
     pub fn publication_marker_path(&self) -> Utf8PathBuf {
         self.cache_dir().join("import-publication.json")
@@ -79,7 +83,11 @@ impl ProvenanceLayout {
 pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
     for candidate in start.ancestors() {
         if candidate.join(".git").exists()
-            || candidate.join(".provenance/state/manifest.json").exists()
+            || candidate
+                .join(".provenance")
+                .join("state")
+                .join("manifest.json")
+                .exists()
         {
             return Ok(candidate.to_path_buf());
         }
@@ -164,13 +172,18 @@ pub fn with_initialized_graph<R>(
 }
 
 /// Runs a repository-wide operation after the initialized-graph gate, with a
-/// store over every scope of the layout. The store has no repository identity.
+/// store over every scope of the layout that holds the section. The store has
+/// no repository identity.
 pub fn with_initialized_state<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce(Manifest, &crate::state_store::StateStore) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    let store = crate::state_store::StateStore::new(layout.clone());
-    with_initialized_graph(layout, |manifest| operation(manifest, &store))
+    with_initialized_graph(layout, |manifest| {
+        operation(
+            manifest,
+            &crate::state_store::StateStore::in_section(layout.clone()),
+        )
+    })
 }
 
 /// Require a valid manifest before a caller opens a graph operation.

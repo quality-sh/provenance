@@ -1,9 +1,9 @@
-use provenance_store::operations::catalog::{self, TargetAction};
+use provenance_contract::TargetAction;
 use std::collections::BTreeSet;
 
 #[test]
 fn target_actions_are_declared_once_by_canonical_registrations() {
-    let actual = catalog::definitions()
+    let actual = provenance_contract::definitions()
         .iter()
         .filter_map(|definition| {
             definition.registration.target.map(|target| {
@@ -50,7 +50,7 @@ fn target_actions_are_declared_once_by_canonical_registrations() {
 fn each_target_action_and_kind_resolves_to_one_registration() {
     for action in TargetAction::RECORD {
         for kind in provenance_core::NodeType::ALL {
-            let matches = catalog::definitions()
+            let matches = provenance_contract::definitions()
                 .iter()
                 .filter(|definition| {
                     definition

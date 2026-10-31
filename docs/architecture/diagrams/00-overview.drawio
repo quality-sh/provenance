@@ -155,19 +155,16 @@
           <mxGeometry x="30" y="90" width="198" height="54" as="geometry" />
         </mxCell>
         <mxCell id="ci" value="CI checks and evaluation tools" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fdf3f2;strokeColor=#b85450;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
-          <mxGeometry x="310" y="1000" width="1400" height="115" as="geometry" />
+          <mxGeometry x="310" y="1000" width="1050" height="115" as="geometry" />
         </mxCell>
         <mxCell id="agentcargo" value='&lt;b&gt;scripts/agent-bin/cargo&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;opt-in cargo: pushes a snapshot&lt;br&gt;branch, runs agent-cargo.yml,&lt;br&gt;returns the CI result&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="ci">
           <mxGeometry x="15" y="30" width="330" height="72" as="geometry" />
         </mxCell>
-        <mxCell id="compat" value='&lt;b&gt;tools/compat-gate&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;check.mjs: a watched protocol&lt;br&gt;or package value change needs&lt;br&gt;an AUTHORIZED-BUMP marker&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="ci">
-          <mxGeometry x="365" y="30" width="330" height="72" as="geometry" />
-        </mxCell>
         <mxCell id="shapeval" value='&lt;b&gt;tools/shaping-eval&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;runs codex and claude CLIs&lt;br&gt;on shaping tasks; score.mjs&lt;br&gt;scores the graph&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="ci">
-          <mxGeometry x="715" y="30" width="320" height="72" as="geometry" />
+          <mxGeometry x="365" y="30" width="320" height="72" as="geometry" />
         </mxCell>
         <mxCell id="vnative" value='&lt;b&gt;tools/review-host/verify-native.ts&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;starts review --no-open on a&lt;br&gt;fixture; checks served files&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="ci">
-          <mxGeometry x="1055" y="30" width="330" height="72" as="geometry" />
+          <mxGeometry x="705" y="30" width="330" height="72" as="geometry" />
         </mxCell>
         <mxCell id="00-overview-legend" value="Legend" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
           <mxGeometry x="310" y="1135" width="830" height="178" as="geometry" />

@@ -57,7 +57,8 @@ impl PublicationAttempt {
             let publish = publish.take().unwrap();
             let (send, receive) = std::sync::mpsc::channel();
             *writer.lock().unwrap() = Some(std::thread::spawn(move || {
-                let result = crate::publication::with_repository_publication(&layout, publish);
+                let result =
+                    crate::publication::with_repository_publication(&layout, |_| publish());
                 let _ = send.send(());
                 result
             }));
@@ -297,7 +298,7 @@ async fn a_publication_after_the_unlocked_hash_keeps_the_checked_answer() {
             std::fs::Permissions::from_mode(0o644),
         )?;
         // The writer can publish canonical files. The database stays read-only.
-        crate::publication::with_repository_publication(&layout, || {
+        crate::publication::with_repository_publication(&layout, |_| {
             let path = crate::shards::requirements_path(&layout, &scope);
             crate::cache::tests::fixtures::rewrite_records(&path, |record| {
                 record["statement"] = "Changed after the freshness check".into();

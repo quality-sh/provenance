@@ -38,20 +38,18 @@ export function connectionFailure<F>(cause: unknown,
   return new ConnectionError(cause);
 }
 
-export class ClientRuntime {
-  run<I, A, F>(_operation: string, _mutates: boolean, input: I,
-    request: (input: I, signal: AbortSignal) => Promise<unknown>,
-    isSuccess: (value: unknown) => value is A,
-    isFailure: (value: unknown) => value is F): Effect.Effect<A, ClientFailure<F>> {
-    return Effect.suspend(() => {
-      let snapshot: I;
-      try { snapshot = JSON.parse(JSON.stringify(input)) as I; }
-      catch { return Effect.fail(new InvalidRequestError()); }
-      return requestEffect(signal => request(snapshot, signal), cause => connectionFailure(cause, isFailure)).pipe(
-        Effect.flatMap(value => isSuccess(value)
-          ? Effect.succeed(value)
-          : Effect.fail(new MalformedResponseError())),
-      );
-    });
-  }
+export function runOperation<I, A, F>(input: I,
+  request: (input: I, signal: AbortSignal) => Promise<unknown>,
+  isSuccess: (value: unknown) => value is A,
+  isFailure: (value: unknown) => value is F): Effect.Effect<A, ClientFailure<F>> {
+  return Effect.suspend(() => {
+    let snapshot: I;
+    try { snapshot = JSON.parse(JSON.stringify(input)) as I; }
+    catch { return Effect.fail(new InvalidRequestError()); }
+    return requestEffect(signal => request(snapshot, signal), cause => connectionFailure(cause, isFailure)).pipe(
+      Effect.flatMap(value => isSuccess(value)
+        ? Effect.succeed(value)
+        : Effect.fail(new MalformedResponseError())),
+    );
+  });
 }

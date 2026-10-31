@@ -22,7 +22,14 @@ fn requirements_list_identifies_the_selected_malformed_manifest() {
     assert!(!output.status.success());
     assert_eq!(output.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8(output.stderr).unwrap();
-    assert!(stderr.contains(manifest.to_str().unwrap()), "{stderr}");
+    // The opened repository names the manifest under its resolved root.
+    let resolved = dunce::canonicalize(&selected)
+        .unwrap()
+        .join(".provenance")
+        .join("state")
+        .join("manifest.json");
+    assert!(stderr.contains(resolved.to_str().unwrap()), "{stderr}");
+    assert!(!stderr.contains(r"\\?\"), "{stderr}");
     assert!(
         stderr.contains("key must be a string at line 1 column 2"),
         "{stderr}"

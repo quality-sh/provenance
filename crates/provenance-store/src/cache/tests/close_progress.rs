@@ -49,7 +49,7 @@ fn failed_freshness_close(setup_delay: Duration) {
             let handle = tokio::task::spawn_blocking(move || {
                 entered_tx.send(())?;
                 let result =
-                    crate::publication::with_repository_publication(&competing_layout, || Ok(()));
+                    crate::publication::with_repository_publication(&competing_layout, |_| Ok(()));
                 let _ = finished_tx.send(());
                 result
             });
@@ -136,7 +136,7 @@ fn materialization_closes_with_four_busy_blocking_workers() {
                 let entered_tx = entered_tx.clone();
                 let handle = tokio::task::spawn_blocking(move || {
                     entered_tx.send(()).unwrap();
-                    crate::publication::with_repository_publication(&competing_layout, || Ok(()))
+                    crate::publication::with_repository_publication(&competing_layout, |_| Ok(()))
                 });
                 waiters_out.lock().unwrap().push(handle);
             }

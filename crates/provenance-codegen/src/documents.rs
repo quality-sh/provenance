@@ -83,7 +83,7 @@ pub fn documents() -> (Value, Value) {
     let mut shared_components = BTreeMap::new();
     let mut paths: Map<String, Value> = Map::new();
     let mut tools = Vec::new();
-    let definitions = provenance_store::operations::catalog::definitions();
+    let definitions = provenance_contract::definitions();
     check_names(definitions);
     for definition in definitions {
         let family = pascal(definition.name);
@@ -192,7 +192,7 @@ fn shared_review_handler(handler: &str) -> bool {
 }
 
 fn route_component(
-    definition: &provenance_store::operations::catalog::Definition,
+    definition: &provenance_contract::Definition,
     role: &str,
     name: &str,
     schema: Value,
@@ -217,7 +217,7 @@ fn route_component(
 }
 
 fn query_variant_documents(
-    variants: Vec<provenance_store::operations::catalog::QueryVariant>,
+    variants: Vec<provenance_contract::QueryVariant>,
     family: &str,
     schemas: &mut Map<String, Value>,
 ) -> Vec<Value> {
@@ -352,7 +352,7 @@ fn rewrite_variant(value: &mut Value, targets: &BTreeMap<String, String>) {
     }
 }
 
-fn parameter_document(parameter: &provenance_store::operations::catalog::Parameter) -> Value {
+fn parameter_document(parameter: &provenance_contract::Parameter) -> Value {
     let mut document = json!({
         "name": parameter.name,
         "in": parameter.location,
@@ -405,7 +405,7 @@ fn add_metadata(paths: &mut Map<String, Value>, schemas: &mut Map<String, Value>
     );
 }
 
-fn check_names(definitions: &[provenance_store::operations::catalog::Definition]) {
+fn check_names(definitions: &[provenance_contract::Definition]) {
     let mut operations = std::collections::BTreeSet::new();
     let mut tools = std::collections::BTreeSet::new();
     for definition in definitions {
@@ -435,7 +435,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "operationId collision")]
     fn operation_ids_cannot_collide() {
-        let mut definitions = provenance_store::operations::catalog::definitions().to_vec();
+        let mut definitions = provenance_contract::definitions().to_vec();
         definitions[1].operation_id = definitions[0].operation_id;
         super::check_names(&definitions[..2]);
     }

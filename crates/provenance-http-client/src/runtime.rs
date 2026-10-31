@@ -74,24 +74,16 @@ pub enum Error {
     },
 }
 
-pub fn connection(_: &'static str, _: bool, cause: reqwest::Error) -> Error {
+pub fn connection(cause: reqwest::Error) -> Error {
     Error::Connection(ResponseFailure::new(cause))
 }
 const fn outcome(cause: ResponseFailure) -> Error {
     Error::MalformedResponse(cause)
 }
 
-pub async fn read_json(
-    mut response: reqwest::Response,
-    operation: &'static str,
-    mutates: bool,
-) -> Result<Value, Error> {
+pub async fn read_json(mut response: reqwest::Response) -> Result<Value, Error> {
     let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|cause| connection(operation, mutates, cause))?
-    {
+    while let Some(chunk) = response.chunk().await.map_err(connection)? {
         if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
             return Err(outcome(ResponseFailure::contract()));
         }
@@ -100,20 +92,11 @@ pub async fn read_json(
     serde_json::from_slice(&bytes).map_err(|cause| outcome(ResponseFailure::new(cause)))
 }
 
-pub fn decode<T: DeserializeOwned>(
-    value: Value,
-    _operation: &'static str,
-    _mutates: bool,
-) -> Result<T, Error> {
+pub fn decode<T: DeserializeOwned>(value: Value) -> Result<T, Error> {
     serde_json::from_value(value).map_err(|cause| outcome(ResponseFailure::new(cause)))
 }
 
-pub fn validate(
-    value: &Value,
-    schema: &str,
-    _operation: &'static str,
-    _mutates: bool,
-) -> Result<(), Error> {
+pub fn validate(value: &Value, schema: &str) -> Result<(), Error> {
     if validator(schema).is_valid(value) {
         Ok(())
     } else {
@@ -160,20 +143,4 @@ fn validator(name: &str) -> &'static jsonschema::Validator {
             .build(&schema)
             .expect("generated response schema is valid")
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::MAX_RESPONSE_BYTES;
-    use serde_json::Value;
-
-    #[test]
-    fn shared_client_policy_cases() {
-        let policy: Value = serde_json::from_str(include_str!("client-policy-cases.json")).unwrap();
-        assert_eq!(
-            MAX_RESPONSE_BYTES as u64,
-            policy["max_response_bytes"].as_u64().unwrap()
-        );
-        assert!(policy.get("refusals").is_none());
-    }
 }

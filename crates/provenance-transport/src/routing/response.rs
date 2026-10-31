@@ -1,6 +1,6 @@
+use provenance_contract::{Definition, ResponseAdapter, ResponseBinding};
 use provenance_core::protocol::failure::ErasedFailure;
 use provenance_core::protocol::{read_failure::ReadFailure, QUERY_RESPONSE_BYTES};
-use provenance_store::operations::catalog::{Definition, ResponseAdapter, ResponseBinding};
 use serde_json::{json, Map, Value};
 use std::io::{self, Write};
 
@@ -174,10 +174,12 @@ fn move_page_meta(object: &mut Map<String, Value>, meta: &mut Map<String, Value>
 mod tests {
     use super::*;
     use provenance_core::protocol::{QUERY_RESPONSE_BYTES, SDK_PROTOCOL_VERSION};
-    use provenance_store::operations::catalog;
 
-    fn search_binding() -> (&'static catalog::Definition, catalog::ResponseBinding) {
-        let definition = catalog::definitions()
+    fn search_binding() -> (
+        &'static provenance_contract::Definition,
+        provenance_contract::ResponseBinding,
+    ) {
+        let definition = provenance_contract::definitions()
             .iter()
             .find(|definition| definition.path == "/rules")
             .unwrap();
@@ -215,8 +217,8 @@ mod tests {
     }
 
     fn payload_bytes_at_limit(
-        definition: &catalog::Definition,
-        binding: &catalog::ResponseBinding,
+        definition: &provenance_contract::Definition,
+        binding: &provenance_contract::ResponseBinding,
     ) -> usize {
         let empty = success(raw_search(""), definition, binding, true).unwrap();
         QUERY_RESPONSE_BYTES - empty.bytes().len()

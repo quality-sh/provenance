@@ -175,9 +175,11 @@ async fn revision_comparison_checks_digest_and_instance_even_when_serial_matches
             .await
             .unwrap();
         assert!(first["next_cursor"].is_string());
-        let pool = sqlx::SqlitePool::connect(&format!("sqlite://{}", store.layout.cache_db_path()))
-            .await
-            .unwrap();
+        let pool = sqlx::SqlitePool::connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new().filename(store.layout.cache_db_path()),
+        )
+        .await
+        .unwrap();
         sqlx::query(sql).execute(&pool).await.unwrap();
         pool.close().await;
         let result = queries::search(

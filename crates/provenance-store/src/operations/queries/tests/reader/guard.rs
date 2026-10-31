@@ -62,7 +62,7 @@ async fn a_canonical_write_does_not_wait_for_a_read() {
             let (sender, receiver) = mpsc::channel();
             let writer_layout = layout.clone();
             let writer = std::thread::spawn(move || {
-                with_repository_publication(&writer_layout, || {
+                with_repository_publication(&writer_layout, |_| {
                     sender.send(()).unwrap();
                     Ok(())
                 })

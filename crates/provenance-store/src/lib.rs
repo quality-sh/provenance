@@ -11,6 +11,7 @@ pub mod fixture_probe;
 pub mod graph_reference;
 pub mod jsonl;
 pub mod layout;
+mod long_path;
 pub mod merge;
 pub mod operations;
 pub mod publication;

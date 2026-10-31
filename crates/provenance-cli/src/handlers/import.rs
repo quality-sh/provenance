@@ -6,6 +6,7 @@ use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
 use provenance_store::layout::ProvenanceLayout;
+use provenance_store::publication::with_publication_guard;
 use provenance_store::repository::Repository;
 use provenance_store::state_store::{
     assertion_cites_contribution, assertion_cites_synthesis,
@@ -50,8 +51,9 @@ pub(super) fn import_scope(
         + exported.proposal_cards.len()
         + exported.assertion_records.len()
         + exported.dispositions.len();
-    let store = Store::new(&repository);
-    store.with_repository_publication(|| {
+    with_publication_guard(&repository, |guard| {
+        let held = guard.repository();
+        let store = Store::new(held);
         store.ensure_review_portable(&scope_id)?;
         anyhow::ensure!(
             exported
@@ -90,7 +92,7 @@ pub(super) fn import_scope(
             |record| record.id.as_str(),
         )?;
         ensure_asserted_evidence_preserved(&stored, &exported)?;
-        apply_import(&repository, &stored, &exported, dry_run)
+        apply_import(held, &stored, &exported, dry_run)
     })?;
     Ok(ImportReport {
         status: "ok",
@@ -233,8 +235,9 @@ fn ensure_asserted_evidence_preserved(
     Ok(())
 }
 
-/// Publishes the export over the live state. `live` is the snapshot read
-/// before the stage; the stage body reads only the staged store.
+/// Publishes the export over the live state. `repository` holds the section
+/// that read `live`, the snapshot before the stage; the stage body reads only
+/// the staged store.
 fn apply_import(
     repository: &Repository,
     live: &ScopeSnapshot,

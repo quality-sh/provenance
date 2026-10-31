@@ -5,7 +5,6 @@ use super::{
     CreateReviewRequirement,
 };
 use crate::{
-    review::guard,
     review::publication::with_record_state,
     state_store::{
         record_stamps::GraphRecord, AddSourceReferenceInput, CreateRequirementInput, RecordStamp,
@@ -26,10 +25,10 @@ impl StateStore {
     ) -> anyhow::Result<()> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
-        self.with_repository_publication(|| {
-            with_record_state(self, RecordStamp::resolved(stamp), |staged| {
+        self.with_repository_publication(|held| {
+            with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                 let staged_path = staged.layout.root().join(&relative);
-                guard::with_writer(&staged_path, "*", || {
+                staged.permitting(&[&staged_path], "*", |staged| {
                     let scope = replacement.first().map(|record| {
                         let record: ReviewRecord = record.clone().into();
                         record.scope_id().clone()
@@ -59,10 +58,10 @@ impl StateStore {
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
-        self.with_repository_publication(|| {
-            with_record_state(self, RecordStamp::resolved(stamp), |staged| {
+        self.with_repository_publication(|held| {
+            with_record_state(held, RecordStamp::resolved(stamp), |staged| {
                 let staged_path = staged.layout.root().join(&relative);
-                guard::with_writer(&staged_path, id.as_str(), || write(staged))
+                staged.permitting(&[&staged_path], id.as_str(), write)
             })
         })
     }

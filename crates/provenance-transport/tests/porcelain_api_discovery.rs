@@ -9,7 +9,6 @@ use jsonschema::Validator;
 use provenance_macros::verifies;
 use provenance_porcelain::api::{ApiMethod, ApiOutcome, ApiParameter, ApiRequest};
 use provenance_porcelain::Porcelain;
-use provenance_store::operations::catalog;
 use provenance_transport::porcelain::HostApiPort;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
@@ -72,7 +71,7 @@ async fn api_discovery_describes_the_live_catalog_routes() {
     // the described routes must track that set exactly.
     assert_eq!(
         routes.len(),
-        catalog::definitions().len(),
+        provenance_contract::definitions().len(),
         "one described route per advertised definition"
     );
 
@@ -80,10 +79,11 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         .iter()
         .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
         .expect("the source member route is described");
-    let definition = catalog::definitions()
+    let definition = provenance_contract::definitions()
         .iter()
         .find(|definition| {
-            definition.path == "/sources/{id}" && definition.method == catalog::HttpMethod::Get
+            definition.path == "/sources/{id}"
+                && definition.method == provenance_contract::HttpMethod::Get
         })
         .unwrap();
     assert_eq!(member["description"], definition.description);

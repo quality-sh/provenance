@@ -48,7 +48,7 @@ pub fn analyze_impact(
 ) -> anyhow::Result<ImpactView> {
     let store = repository.store();
     let scope = repository.scope();
-    let records = store.with_repository_publication(|| GraphRecords::load(scope, &store))?;
+    let records = store.with_repository_publication(|held| GraphRecords::load(scope, held))?;
     let graph = records.graph(scope);
     let front = graph.front();
     let mut nodes = BTreeMap::<(String, String, &'static str), ImpactNode>::new();

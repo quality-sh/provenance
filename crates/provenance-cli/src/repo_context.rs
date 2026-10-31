@@ -107,13 +107,15 @@ pub fn initialization_hint(repo: &camino::Utf8Path, error: anyhow::Error) -> any
 }
 
 fn enclosing_repository(repo: &camino::Utf8Path) -> Option<Utf8PathBuf> {
-    let here = std::fs::canonicalize(repo.as_std_path()).ok()?;
+    let here = dunce::canonicalize(repo.as_std_path()).ok()?;
     let here = Utf8PathBuf::from_path_buf(here).ok()?;
     here.ancestors()
         .skip(1)
         .find(|ancestor| {
             ancestor
-                .join(".provenance/state/manifest.json")
+                .join(".provenance")
+                .join("state")
+                .join("manifest.json")
                 .as_std_path()
                 .is_file()
         })

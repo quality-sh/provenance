@@ -87,6 +87,30 @@ impl PreparedContext {
         }
         self
     }
+    /// Binds the prepared repository to `held`, the repository of the section
+    /// that the operation runs in. `held` must have the same working tree and
+    /// scope; another repository is refused with
+    /// [`OperationFailure::Internal`].
+    pub fn within(mut self, held: &Repository) -> Result<Self, OperationFailure> {
+        let rebind = |prepared: &mut Repository| {
+            if prepared.working_tree() == held.working_tree() && prepared.scope() == held.scope() {
+                *prepared = held.clone();
+                Ok(())
+            } else {
+                Err(OperationFailure::Internal)
+            }
+        };
+        if let Some(read) = &mut self.read {
+            rebind(&mut read.repository)?;
+        }
+        if let Some(scope) = &mut self.scope {
+            rebind(&mut scope.repository)?;
+        }
+        if let Some(repository) = &mut self.repository {
+            rebind(&mut repository.repository)?;
+        }
+        Ok(self)
+    }
     pub(super) fn scope(self) -> Result<PreparedScope, OperationFailure> {
         self.scope.ok_or(OperationFailure::UnavailableNeeds)
     }
@@ -160,6 +184,52 @@ impl ContextResolver for NoRepositories {
         _: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         Err(OperationFailure::UnavailableNeeds)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PreparedContext, PreparedRepository};
+    use provenance_core::protocol::failure::OperationFailure;
+
+    fn context(repository: &crate::repository::Repository) -> PreparedContext {
+        PreparedContext::for_repository(PreparedRepository {
+            repository: repository.clone(),
+            requested_target: "repo".to_owned(),
+        })
+    }
+
+    #[test]
+    fn within_binds_the_same_repository_and_refuses_another() {
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let prepared = crate::cache::tests::fixtures::initialized(first.path());
+        let same = crate::repository::Repository::open(prepared.working_tree(), "default").unwrap();
+        let other = crate::cache::tests::fixtures::initialized(second.path());
+        let mut manifest = prepared.manifest().unwrap();
+        let mut extra = manifest.scopes[0].clone();
+        extra.id = provenance_core::ScopeId::new("extra").unwrap();
+        extra.path_prefix = provenance_core::RepoPathPrefix::new("extra");
+        manifest.scopes.push(extra);
+        std::fs::write(
+            prepared.layout().manifest_path(),
+            serde_json::to_string(&manifest).unwrap(),
+        )
+        .unwrap();
+        let other_scope =
+            crate::repository::Repository::open(prepared.working_tree(), "extra").unwrap();
+
+        let bound = context(&prepared).within(&same).unwrap();
+        assert_eq!(
+            bound.repository().unwrap().repository.working_tree(),
+            same.working_tree()
+        );
+        for held in [&other, &other_scope] {
+            assert!(matches!(
+                context(&prepared).within(held).unwrap_err(),
+                OperationFailure::Internal
+            ));
+        }
     }
 }
 

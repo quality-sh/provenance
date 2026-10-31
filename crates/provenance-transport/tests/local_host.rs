@@ -211,3 +211,51 @@ fn announcement_refuses_a_live_slot_owner() {
         format!("{}/", first.endpoint)
     );
 }
+
+/// A root of 260 characters or more keeps the verbatim `\\?\` prefix on
+/// Windows. This regression test has no Rule: it shows that the publication
+/// lock and the local-host registry open under such a root.
+#[cfg(windows)]
+#[test]
+fn a_long_root_opens_the_publication_lock_and_the_local_host_registry() {
+    use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
+    use provenance_store::{layout::ProvenanceLayout, repository::Repository};
+
+    let parent = tempfile::tempdir().unwrap();
+    let mut root = dunce::canonicalize(parent.path()).unwrap();
+    while root.as_os_str().len() < 300 {
+        root.push("d".repeat(40));
+    }
+    let layout = ProvenanceLayout::new(root.to_str().unwrap());
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    let manifest =
+        Manifest::default_with_scope(ScopeId::new("default").unwrap(), RepoPathPrefix::new("."));
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+
+    let repository = Repository::open(&root, "default").unwrap();
+    let opened = repository.working_tree().as_std_path();
+    assert!(opened.to_str().unwrap().starts_with(r"\\?\"), "{opened:?}");
+    let lock = repository.layout().publication_lock_path();
+    assert!(lock.is_file(), "{lock}");
+    assert!(!lock.as_str().contains('/'), "{lock}");
+
+    let host = LocalHostFixture::start(opened, "default", "local");
+    let registry = opened
+        .join(".provenance")
+        .join("cache")
+        .join("local-hosts")
+        .join("default.json");
+    assert!(registry.is_file(), "{registry:?}");
+    assert_eq!(
+        discover(opened, "default")
+            .unwrap()
+            .unwrap()
+            .endpoint()
+            .as_str(),
+        format!("{}/", host.endpoint)
+    );
+}

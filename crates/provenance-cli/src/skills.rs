@@ -240,7 +240,8 @@ fn file_report(path: &Path, status: FileStatus) -> FileInstallReport {
 }
 
 fn canonical_skill_file(repo: &Path, skill: &EmbeddedSkill) -> PathBuf {
-    repo.join(".agents/skills")
+    repo.join(".agents")
+        .join("skills")
         .join(skill.directory)
         .join("SKILL.md")
 }

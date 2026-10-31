@@ -797,6 +797,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1276,7 +1282,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash 0.2.0",
+ "foldhash",
 ]
 
 [[package]]
@@ -2419,13 +2425,14 @@ dependencies = [
 
 [[package]]
 name = "provenance-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
  "axum",
  "camino",
  "clap",
+ "dunce",
  "flate2",
  "fs2",
  "futures-util",
@@ -2435,6 +2442,7 @@ dependencies = [
  "open",
  "pdf_oxide",
  "predicates",
+ "provenance-contract",
  "provenance-core",
  "provenance-macros",
  "provenance-porcelain",
@@ -2465,10 +2473,11 @@ dependencies = [
 
 [[package]]
 name = "provenance-codegen"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "jsonschema",
  "prettyplease",
+ "provenance-contract",
  "provenance-core",
  "provenance-ste100",
  "provenance-store",
@@ -2481,8 +2490,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "provenance-contract"
+version = "0.3.1"
+dependencies = [
+ "jsonschema",
+ "provenance-core",
+ "provenance-macros",
+ "provenance-ste100",
+ "provenance-store",
+ "schemars 1.2.2",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "provenance-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "camino",
@@ -2501,7 +2527,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-http-client"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "jsonschema",
@@ -2511,12 +2537,11 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.20",
  "tokio",
- "trybuild",
 ]
 
 [[package]]
 name = "provenance-macros"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "camino",
  "proc-macro2",
@@ -2528,7 +2553,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-porcelain"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "provenance-core",
  "provenance-macros",
@@ -2541,10 +2566,11 @@ dependencies = [
 
 [[package]]
 name = "provenance-report"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
  "provenance-core",
  "provenance-macros",
  "provenance-scanner",
@@ -2556,10 +2582,11 @@ dependencies = [
 
 [[package]]
 name = "provenance-scanner"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
  "provenance-core",
  "provenance-macros",
  "same-file",
@@ -2570,10 +2597,11 @@ dependencies = [
 
 [[package]]
 name = "provenance-sdk"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "camino",
+ "dunce",
  "provenance-core",
  "provenance-macros",
  "provenance-store",
@@ -2585,7 +2613,7 @@ dependencies = [
 
 [[package]]
 name = "provenance-ste100"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "fs2",
  "hex",
@@ -2601,11 +2629,12 @@ dependencies = [
 
 [[package]]
 name = "provenance-store"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "camino",
+ "dunce",
  "filetime",
  "fs2",
  "fs_at",
@@ -2622,7 +2651,6 @@ dependencies = [
  "serde",
  "serde_ignored",
  "serde_json",
- "serde_path_to_error",
  "sha2 0.11.0",
  "sqlx",
  "tempfile",
@@ -2636,13 +2664,15 @@ dependencies = [
 
 [[package]]
 name = "provenance-transport"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "axum",
+ "dunce",
  "fs2",
  "futures",
  "jsonschema",
+ "provenance-contract",
  "provenance-core",
  "provenance-macros",
  "provenance-porcelain",
@@ -3086,9 +3116,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "1.4.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f542f74cf247da16f19bbc87e298cd201e912314f4083e88cdd671f44f5fcb53"
+checksum = "14db48ee17a9ba61810ab1a9c1beb7d06d8136ae39ac25a1137f10d357af01af"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4936,9 +4966,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.0.4"
+version = "9.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a954114b47a54df49f83d2722814e86b23d4bb1b54a1b90fb7d92b41619ddc22"
+checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
 dependencies = [
  "crc32fast",
  "flate2",

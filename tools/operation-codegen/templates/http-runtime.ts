@@ -40,13 +40,13 @@ export class IdentityMismatchError extends ClientError {
   }
 }
 
-export async function send(fetcher: typeof fetch, url: string | URL, init: RequestInit, _operation: string, _mutates: boolean): Promise<Response> {
+export async function send(fetcher: typeof fetch, url: string | URL, init: RequestInit): Promise<Response> {
   try { return await fetcher(url, { ...init, redirect: 'error' }); }
   catch (cause) { throw new ConnectionError(cause); }
 }
 
 // @provenance rule: rule_sdk_read_interruption_releases_resources
-export async function readJson(response: Response, _operation: string, _mutates: boolean, signal?: AbortSignal): Promise<unknown> {
+export async function readJson(response: Response, signal?: AbortSignal): Promise<unknown> {
   const malformed = (cause?: unknown) => new MalformedResponseError(cause);
   const reader = response.body?.getReader();
   if (!reader) throw malformed();
@@ -79,6 +79,6 @@ export async function readJson(response: Response, _operation: string, _mutates:
   catch (cause) { throw malformed(cause); }
 }
 
-export function checked(value: unknown, validate: (value: unknown) => boolean, _operation: string, _mutates: boolean): void {
+export function checked(value: unknown, validate: (value: unknown) => boolean): void {
   if (!validate(value)) throw new MalformedResponseError();
 }

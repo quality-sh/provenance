@@ -1,4 +1,4 @@
-use super::{guard, DiscussionAction, WriteDiscussion};
+use super::{DiscussionAction, WriteDiscussion};
 use crate::{
     canonical_digest,
     review::publication::with_record_state,
@@ -30,7 +30,7 @@ impl StateStore {
     /// Creates a distinct Discussion root or changes one addressed Discussion.
     #[rule("rule_record_comments_have_separate_reply_threads")]
     pub fn write_discussion(&self, input: WriteDiscussion) -> anyhow::Result<Discussion> {
-        self.with_repository_publication(|| self.write_discussion_in_publication(input, None))
+        self.with_repository_publication(|held| held.write_discussion_in_publication(input, None))
     }
 
     pub(super) fn write_discussion_in_publication(
@@ -119,11 +119,10 @@ impl StateStore {
             }
         }
         with_record_state(self, RecordStamp::ResolveFromRepository, |staged| {
-            let layout = &staged.layout;
-            guard::with_writer(&shards::threads_path(layout, &input.scope_id), "*", || {
-                guard::with_writer(&shards::messages_path(layout, &input.scope_id), "*", || {
-                    staged.commit_discussion(input, head, None)
-                })
+            let threads = shards::threads_path(&staged.layout, &input.scope_id);
+            let messages = shards::messages_path(&staged.layout, &input.scope_id);
+            staged.permitting(&[&threads, &messages], "*", |staged| {
+                staged.commit_discussion(input, head, None)
             })
         })
     }
@@ -196,8 +195,8 @@ impl StateStore {
             }
         };
         let path = shards::discussions_path(&self.layout, scope);
-        guard::with_writer(&path, "*", || {
-            self.mutate_jsonl_records(&path, |discussions: &mut Vec<Discussion>| {
+        self.permitting(&[&path], "*", |store| {
+            store.mutate_jsonl_records(&path, |discussions: &mut Vec<Discussion>| {
                 match discussions
                     .iter_mut()
                     .find(|d| d.discussion_id == discussion.discussion_id)

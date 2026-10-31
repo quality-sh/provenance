@@ -1,10 +1,10 @@
 //! Target-first routing over registered record operations.
 
 use axum::http::HeaderMap;
+use provenance_contract::Definition;
 use provenance_core::NodeType;
 use provenance_macros::rule;
 pub use provenance_porcelain::action::{description, render_readable, Action, ActionError};
-use provenance_store::operations::catalog::{self, Definition};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -61,9 +61,9 @@ impl crate::StatementHost {
             }
         }
         let method = match route.definition.method {
-            catalog::HttpMethod::Get => axum::http::Method::GET,
-            catalog::HttpMethod::Post => axum::http::Method::POST,
-            catalog::HttpMethod::Patch => axum::http::Method::PATCH,
+            provenance_contract::HttpMethod::Get => axum::http::Method::GET,
+            provenance_contract::HttpMethod::Post => axum::http::Method::POST,
+            provenance_contract::HttpMethod::Patch => axum::http::Method::PATCH,
         };
         self.invoke_resource(method, &route.path, data, BTreeMap::new(), headers)
             .await
@@ -73,7 +73,7 @@ impl crate::StatementHost {
         &self,
         action: Action,
     ) -> Vec<(NodeType, &'static Definition)> {
-        catalog::target_definitions(action)
+        provenance_contract::target_definitions(action)
             .filter_map(|(kind, _)| {
                 self.executable_target_definition(action, kind)
                     .ok()
@@ -87,8 +87,8 @@ impl crate::StatementHost {
         action: Action,
         kind: NodeType,
     ) -> Result<&'static Definition, ActionError> {
-        let definition =
-            catalog::target_definition(action, kind).ok_or(ActionError::InvalidOptions)?;
+        let definition = provenance_contract::target_definition(action, kind)
+            .ok_or(ActionError::InvalidOptions)?;
         if !self.advertises(definition.name) {
             return Err(ActionError::AccessDenied);
         }

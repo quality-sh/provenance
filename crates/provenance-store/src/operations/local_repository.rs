@@ -239,7 +239,10 @@ mod tests {
                 Ok(())
             }
         });
-        crate::publication::with_staged_state(&layout, false, |_| Ok(())).unwrap();
+        crate::publication::with_repository_publication(&layout, |held| {
+            crate::publication::with_staged_state(held, false, |_| Ok(()))
+        })
+        .unwrap();
         crate::test_probes::disarm("state_after_backup_rename");
         let reader = reader.take().expect("the publication reached the gap");
         assert_eq!(reader.join().unwrap(), Ok(()));

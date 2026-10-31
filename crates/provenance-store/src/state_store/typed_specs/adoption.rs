@@ -28,10 +28,6 @@ impl OwnershipDecision {
         &self.conflicts
     }
 
-    pub(super) fn into_conflicts(self) -> Vec<ReconciledResource> {
-        self.conflicts
-    }
-
     pub(super) fn refuse(self) -> anyhow::Result<()> {
         Err(crate::write_error::SourceFailure::wrap(
             crate::write_error::WriteFailure::OwnershipConflict {

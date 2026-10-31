@@ -182,8 +182,8 @@ impl StateStore {
             revision: revision.clone(),
         };
         let path = shards::discussions_path(&self.layout, scope);
-        super::guard::with_writer(&path, "*", || {
-            self.mutate_jsonl_records(&path, |discussions: &mut Vec<Discussion>| {
+        self.permitting(&[&path], "*", |store| {
+            store.mutate_jsonl_records(&path, |discussions: &mut Vec<Discussion>| {
                 let discussion = discussions
                     .iter_mut()
                     .find(|d| d.discussion_id == origin.discussion_id)
