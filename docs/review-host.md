@@ -645,7 +645,8 @@ the field, and queues nothing, when:
 The host then attaches a native subscription, reads the full document and
 queues it with `codex queue --thread THREAD --message MESSAGE` before it
 replies. A page write that lands during the read starts the read again, at most
-three times; then the document goes out as a reset. The reply is
+three times; then the document goes out as a reset. If that read also fails,
+the registration fails. The reply is
 `{"client", "thread", "registered", "accepted", "removed"}` in `notify` of the
 get output. A refused or unaccepted registration fails the command.
 
