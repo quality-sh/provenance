@@ -31,7 +31,7 @@ fn cargo_injected_argument_initializes_one_package_at_the_cli_version() {
         .exists());
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@=0.3.1 --manifest-path"));
+        .contains("add provenance-sdk@=0.3.2 --manifest-path"));
 }
 
 #[test]
@@ -283,7 +283,7 @@ fn explicit_package_selects_its_manifest_directory_as_the_path_prefix() {
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
     assert!(fixture
         .cargo_calls()
-        .contains("add provenance-sdk@=0.3.1 --manifest-path"));
+        .contains("add provenance-sdk@=0.3.2 --manifest-path"));
 }
 
 #[test]
@@ -338,7 +338,7 @@ fn rerun_refuses_to_change_the_existing_target_package() {
     assert_eq!(fixture.scope_path_prefix(), "crates/api");
     assert!(!fixture
         .cargo_calls()
-        .contains("add provenance-sdk@0.3.1 --package worker --exact"));
+        .contains("add provenance-sdk@0.3.2 --package worker --exact"));
 }
 
 #[test]
