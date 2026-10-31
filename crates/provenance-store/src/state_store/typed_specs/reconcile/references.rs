@@ -8,10 +8,10 @@
 
 use std::collections::BTreeMap;
 
-use provenance_core::model::relations::RelationOwner;
-use provenance_core::{NodeType, Requirement, Rule, ScopeId, Source, StableId};
+use provenance_core::model::relations::{kind_word, RelationOwner};
+use provenance_core::{NodeType, Requirement, Resolution, Rule, Source, StableId};
 
-use super::super::super::{StateStore, TypedRequirementInput, TypedRuleInput, TypedSourceInput};
+use super::super::super::{TypedRequirementInput, TypedRuleInput, TypedSourceInput};
 
 fn ids_of(keys: &[String], ids: &BTreeMap<String, StableId>) -> Vec<StableId> {
     let mut resolved: Vec<StableId> = keys.iter().map(|key| ids[key].clone()).collect();
@@ -86,19 +86,29 @@ pub(super) fn apply_rule(
 
 /// The canonical resolutions a document names must exist in the scope.
 pub(in crate::state_store::typed_specs) fn ensure_resolutions_exist(
-    store: &StateStore,
-    scope_id: &ScopeId,
+    resolutions: &[Resolution],
     requirements: &[Requirement],
     rules: &[Rule],
 ) -> anyhow::Result<()> {
-    for resolution in requirements
+    let named = requirements
         .iter()
         .filter_map(|requirement| requirement.spawned_by.as_ref())
-    {
-        store.ensure_node_exists(scope_id, NodeType::Resolution, resolution, "spawned_by")?;
-    }
-    for resolution in rules.iter().flat_map(|rule| &rule.resolution_ids) {
-        store.ensure_node_exists(scope_id, NodeType::Resolution, resolution, "resolution_ids")?;
+        .map(|id| (id, "spawned_by"))
+        .chain(
+            rules
+                .iter()
+                .flat_map(|rule| &rule.resolution_ids)
+                .map(|id| (id, "resolution_ids")),
+        );
+    for (resolution, named_by) in named {
+        crate::write_error::ensure!(
+            MissingReference,
+            resolutions.iter().any(|record| &record.id == resolution),
+            "{} {} does not exist ({})",
+            kind_word(NodeType::Resolution),
+            resolution.as_str(),
+            named_by
+        );
     }
     Ok(())
 }

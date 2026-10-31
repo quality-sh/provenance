@@ -14,6 +14,7 @@ mod current_schema_behavior;
 pub mod fixtures;
 mod frontier_behavior;
 mod gap_rule_behavior;
+mod graph_records_behavior;
 mod in_place_behavior;
 mod materialization_behavior;
 mod materialize_guard_behavior;
