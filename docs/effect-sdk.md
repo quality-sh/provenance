@@ -57,7 +57,7 @@ Use the shared service in application-owned atoms:
 
 ```ts
 import * as Effect from "effect/Effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { ProvenanceClient } from "@quality-sh/provenance/effect";
 
 const runtime = Atom.runtime(ProvenanceClient.layer({

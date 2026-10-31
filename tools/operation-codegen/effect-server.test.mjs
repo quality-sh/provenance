@@ -129,8 +129,8 @@ test('an in-memory Effect server accepts writes and optional rule searches with 
     await writeFile(entry, `
 import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
-import { HttpRouter, HttpServer } from 'effect/unstable/http';
-import { HttpApiBuilder, HttpApiTest } from 'effect/unstable/httpapi';
+import { HttpRouter, HttpServer } from 'effect/http';
+import { HttpApiBuilder, HttpApiTest } from 'effect/http-api';
 import { ProvenanceApi } from './effect-contract.js';
 const handlers = HttpApiBuilder.group(ProvenanceApi, 'rules', group => group.handleAll({
   listRules: ({ query }) => Effect.succeed({ data: [query.base ?? query.file ?? 'optional'] }),
