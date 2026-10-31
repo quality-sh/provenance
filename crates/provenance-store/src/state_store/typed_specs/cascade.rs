@@ -10,6 +10,7 @@ use super::super::{
     CascadedResource, ReconcileState, ReconciledResource, StateStore, TypedFieldChange,
     TypedResourceKind,
 };
+use super::view::TypedSpecView;
 use crate::shards;
 
 #[cfg(test)]
@@ -33,8 +34,7 @@ struct ShapingRecords {
 
 impl Cascade {
     pub(super) fn prepare(
-        store: &StateStore,
-        scope: &ScopeId,
+        view: &TypedSpecView,
         resources: &[ReconciledResource],
         sources: &mut [Source],
         requirements: &mut [Requirement],
@@ -54,7 +54,7 @@ impl Cascade {
         let before_requirements = requirements.to_vec();
         let before_rules = rules.clone();
 
-        let mut resolutions = store.list_resolutions(scope)?;
+        let mut resolutions = view.resolutions.clone();
         let before_resolutions = resolutions.clone();
         let mut resolution_ids = BTreeSet::new();
         resolutions.retain_mut(|record| {
@@ -91,8 +91,7 @@ impl Cascade {
         });
 
         let shaping = prepare_shaping(
-            store,
-            scope,
+            view,
             &source_ids,
             &requirement_ids,
             &resolution_ids,
@@ -247,14 +246,13 @@ impl Cascade {
 }
 
 fn prepare_shaping(
-    store: &StateStore,
-    scope: &ScopeId,
+    view: &TypedSpecView,
     source_ids: &BTreeSet<String>,
     requirement_ids: &BTreeSet<String>,
     resolution_ids: &BTreeSet<String>,
     rule_ids: &BTreeSet<String>,
 ) -> anyhow::Result<ShapingRecords> {
-    let mut topics = store.list_topics(scope)?;
+    let mut topics = view.topics.clone();
     let before_topics = topics.clone();
     let mut topic_ids = BTreeSet::new();
     topics.retain_mut(|record| {
@@ -272,7 +270,7 @@ fn prepare_shaping(
         }
         !remove
     });
-    let mut questions = store.list_questions(scope)?;
+    let mut questions = view.questions.clone();
     let before_questions = questions.clone();
     questions.retain_mut(|record| {
         let remove = requirement_ids.contains(record.requirement_id.as_str())
@@ -290,7 +288,7 @@ fn prepare_shaping(
         }
         !remove
     });
-    let mut boundaries = store.list_boundaries(scope)?;
+    let mut boundaries = view.boundaries.clone();
     let before_boundaries = boundaries.clone();
     boundaries.retain(|r| !requirement_ids.contains(r.requirement_id.as_str()));
     for boundary in &mut boundaries {

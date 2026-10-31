@@ -14,13 +14,13 @@ pub(super) struct Reconciliation {
 }
 
 pub(super) fn reconcile(
-    store: &StateStore,
+    current: &[ImplementationBinding],
     scope_id: &ScopeId,
     graph: DesiredTypedGraph<'_>,
     canonical_rules: &[Rule],
     preserve_omitted_for: &BTreeSet<String>,
 ) -> anyhow::Result<Reconciliation> {
-    let mut records = store.list_implementation_bindings(scope_id)?;
+    let mut records = current.to_vec();
     let mut desired = desired_bindings(scope_id, graph, &records)?;
     for binding in records
         .iter()
