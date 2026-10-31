@@ -1,4 +1,4 @@
-use super::{root_of, seeded_store, sid};
+use super::{repository_at, root_of, seeded_store, sid};
 use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
@@ -30,8 +30,7 @@ impl ContextResolver for Target {
         _: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         Ok(PreparedContext::read(PreparedRead {
-            root: self.0.clone(),
-            scope: ScopeId::new("default").unwrap(),
+            repository: crate::repository::Repository::open(&self.0, "default").unwrap(),
             policy: ReadPolicy::default(),
             requested_target: "test".into(),
             external: true,
@@ -102,17 +101,14 @@ fn seed_lifecycle_records(store: &StateStore, scope: &ScopeId) {
 }
 
 async fn list_rules(root: &camino::Utf8Path, request: Value) -> anyhow::Result<Value> {
-    list_family(root, "page-rules", request).await
+    list_family::<crate::operations::family_operations::PageRules>(root, request).await
 }
 
-async fn list_family(
+async fn list_family<O: catalog::Operation>(
     root: &camino::Utf8Path,
-    operation: &'static str,
     request: Value,
 ) -> anyhow::Result<Value> {
-    catalog::invoke_with(
-        operation,
-        provenance_core::SDK_PROTOCOL_VERSION,
+    crate::test_support::call::<O, _>(
         json!({
             "context":{"repository":"test","scope":"default"},
             "request": request,
@@ -193,8 +189,7 @@ fn seed_archived_shaping_records(store: &StateStore, scope: &ScopeId) {
 
 async fn search(root: &camino::Utf8Path, request: Value) -> anyhow::Result<Value> {
     let result = queries::search(
-        Some(root.to_owned()),
-        &ScopeId::new("default")?,
+        &repository_at(root),
         ReadPolicy::default(),
         serde_json::from_value(request)?,
     )
@@ -331,6 +326,22 @@ async fn search_cursor_binds_the_terminal_filter() {
     .contains("cursor"));
 }
 
+/// The page of family `O` lists the archived records only without the terminal filter.
+async fn assert_filter_hides_archived<O: catalog::Operation>(root: &camino::Utf8Path) {
+    let unfiltered = list_family::<O>(root, json!({"limit":50})).await.unwrap();
+    assert_ne!(
+        unfiltered["result"]["items"].as_array().unwrap().as_slice(),
+        &[] as &[Value]
+    );
+    let filtered = list_family::<O>(root, json!({"exclude_terminal":true,"limit":50}))
+        .await
+        .unwrap();
+    assert_eq!(
+        filtered["result"]["items"].as_array().unwrap().as_slice(),
+        &[] as &[Value]
+    );
+}
+
 #[tokio::test]
 /// Implementation aid: this checks filtered aggregate totals for archived shaping records.
 async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals() {
@@ -338,26 +349,9 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     seed_archived_shaping_records(&store, &scope);
     let root = root_of(&dir);
 
-    for operation in ["page-topics", "page-questions"] {
-        let unfiltered = list_family(&root, operation, json!({"limit":50}))
-            .await
-            .unwrap();
-        assert_ne!(
-            unfiltered["result"]["items"].as_array().unwrap().as_slice(),
-            &[] as &[Value]
-        );
-        let filtered = list_family(
-            &root,
-            operation,
-            json!({"exclude_terminal":true,"limit":50}),
-        )
-        .await
-        .unwrap();
-        assert_eq!(
-            filtered["result"]["items"].as_array().unwrap().as_slice(),
-            &[] as &[Value]
-        );
-    }
+    assert_filter_hides_archived::<crate::operations::family_operations::PageTopics>(&root).await;
+    assert_filter_hides_archived::<crate::operations::family_operations::PageQuestions>(&root)
+        .await;
 
     let found = search(
         &root,
@@ -371,8 +365,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     );
 
     let unfiltered_document = queries::read_document(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::default(),
         provenance_core::protocol::ReadDocumentQuery {
             id: "req_overtime".into(),
@@ -389,8 +382,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     );
 
     let document = queries::read_document(
-        Some(root),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::default(),
         provenance_core::protocol::ReadDocumentQuery {
             id: "req_overtime".into(),

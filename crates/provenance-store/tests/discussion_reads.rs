@@ -22,15 +22,14 @@ async fn legacy_membership_is_explicit_and_pages_rebuild_from_records() {
         limit: 1,
         cursor: None,
     };
-    let page = read_discussions(root, &scope(), ReadPolicy::default(), query.clone())
+    let page = read_discussions(&repository(root), ReadPolicy::default(), query.clone())
         .await
         .unwrap();
     assert!(
         matches!(&page.result.entries[0],DiscussionGroup::Addressed {discussion,..} if discussion.version==2)
     );
     let next = read_discussions(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionQuery {
             cursor: page.result.next_cursor.clone(),
@@ -43,8 +42,7 @@ async fn legacy_membership_is_explicit_and_pages_rebuild_from_records() {
         matches!(&next.result.entries[0],DiscussionGroup::Legacy {thread_id,..} if *thread_id==old.thread.id)
     );
     let messages = read_discussion_messages(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionMessagesQuery {
             parent: a.parent.clone(),
@@ -64,8 +62,7 @@ async fn legacy_membership_is_explicit_and_pages_rebuild_from_records() {
         .iter()
         .any(|m| m.id == old.message.id));
     let legacy = read_discussion_messages(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionMessagesQuery {
             parent: a.parent.clone(),
@@ -82,8 +79,7 @@ async fn legacy_membership_is_explicit_and_pages_rebuild_from_records() {
     assert_eq!(legacy.result.entries[0].id, old.message.id);
     let b = start(&store, "b");
     assert!(read_discussions(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionQuery {
             cursor: page.result.next_cursor,
@@ -95,13 +91,12 @@ async fn legacy_membership_is_explicit_and_pages_rebuild_from_records() {
     let mut wrong = query.clone();
     wrong.parent.node_id = StableId::new("other").unwrap();
     assert!(
-        read_discussions(root, &scope(), ReadPolicy::default(), wrong)
+        read_discussions(&repository(root), ReadPolicy::default(), wrong)
             .await
             .is_err()
     );
     let rebuilt = read_discussions(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionQuery {
             limit: 200,
@@ -131,8 +126,7 @@ async fn message_selector_refuses_wrong_parent_and_missing_discussion() {
         ),
     ] {
         assert!(read_discussion_messages(
-            root,
-            &scope(),
+            &repository(root),
             ReadPolicy::default(),
             DiscussionMessagesQuery {
                 parent,
@@ -156,8 +150,7 @@ async fn missing_discussion_message_is_a_conflict() {
     let messages = provenance_store::shards::messages_path(&layout, &scope());
     std::fs::remove_file(&messages).unwrap();
     assert!(read_discussions(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionQuery {
             parent: a.parent,
@@ -202,11 +195,11 @@ async fn complete_cache_rebuild_retains_resolved_groups_and_outcomes() {
         limit: 50,
         cursor: None,
     };
-    let first = read_discussions(root, &scope(), ReadPolicy::default(), query.clone())
+    let first = read_discussions(&repository(root), ReadPolicy::default(), query.clone())
         .await
         .unwrap();
     std::fs::remove_dir_all(layout.cache_dir()).unwrap();
-    let rebuilt = read_discussions(root, &scope(), ReadPolicy::default(), query)
+    let rebuilt = read_discussions(&repository(root), ReadPolicy::default(), query)
         .await
         .unwrap();
     assert_eq!(first.result.entries, rebuilt.result.entries);
@@ -252,8 +245,7 @@ async fn large_but_legal_discussion_messages_stay_readable() {
         ))
         .unwrap();
     let page = read_discussion_messages(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         DiscussionMessagesQuery {
             parent: a.parent,

@@ -29,10 +29,10 @@ impl Baseline {
         let mut cursor = None;
         let mut current = BTreeMap::new();
         let mut ordered = Vec::new();
+        let repository = context.open()?;
         loop {
             let page = queries::read_document(
-                Some(context.repo.clone()),
-                &context.scope_id()?,
+                &repository,
                 ReadPolicy::default(),
                 ReadDocumentQuery {
                     id: root.to_owned(),

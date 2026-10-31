@@ -195,8 +195,9 @@ fn authorization_precedes_body_decode_and_rejects_unrelated_origins() {
 #[verifies("rule_record_comment_joins_anchored_thread", examples)]
 fn record_comment_joins_the_selected_record_thread() {
     let repo = repository();
-    let layout = provenance_store::layout::ProvenanceLayout::new(repo.path().to_str().unwrap());
-    provenance_store::state_store::StateStore::new(layout)
+    provenance_store::repository::Repository::open(repo.path(), "default")
+        .unwrap()
+        .store()
         .create_requirement(provenance_store::state_store::CreateRequirementInput {
             scope_id: provenance_core::ScopeId::new("default").unwrap(),
             id: provenance_core::StableId::new("req_example").unwrap(),

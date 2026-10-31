@@ -49,13 +49,13 @@ impl StateStore {
         id: &StableId,
     ) -> anyhow::Result<Vec<VersionedRecord>> {
         let path = shards::path_for(&self.layout, scope, kind);
-        let (working, discussions) = self.with_repository_publication(|| {
+        let (working, discussions) = self.with_repository_publication(|held| {
             let text = match std::fs::read_to_string(&path) {
                 Ok(text) => Some(text),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
                 Err(error) => return Err(error.into()),
             };
-            Ok((text, self.list_discussions(scope)?))
+            Ok((text, held.list_discussions(scope)?))
         })?;
         let files = git::file_versions(self.layout.root(), &path)?;
         let records = files

@@ -93,10 +93,10 @@ fn assert_gap(gaps: &[GapItem], kind: GapKind, node_type: NodeType, node_id: &st
 #[test]
 fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     store
         .create_proposal_card(CreateProposalCardInput {
-            scope_id: scope.clone(),
+            scope_id: scope,
             id: sid("proposal_demand_only"),
             proposal_key: "demand-only".into(),
             proposal_type: ProposalType::RequirementCandidate,
@@ -123,7 +123,7 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
         })
         .unwrap();
 
-    let prime = prime_context(&layout, &scope, false).unwrap();
+    let prime = prime_context(&open(&layout), false).unwrap();
 
     assert!(!serde_json::to_string(&prime)
         .unwrap()
@@ -136,7 +136,7 @@ fn ordinary_prime_does_not_expand_into_a_global_proposal_queue() {
 #[verifies("rule_graph_gaps", examples)]
 fn find_gaps_reports_the_frontier_taxonomy() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_anchor");
     create_source(&store, &scope, "source_unused");
     // A reference the writers refuse arrives only by hand.
@@ -197,8 +197,23 @@ fn find_gaps_reports_the_frontier_taxonomy() {
         "question_frontier",
         QuestionStatus::Open,
     );
+    // A merge can join an archive on one branch with a new child on the other.
+    let requirements = crate::shards::requirements_path(&layout, &scope);
+    append_record(
+        &requirements,
+        &serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            "id": "req_archived_parent", "statement": "req_archived_parent statement",
+            "status": "archived",
+            "archived_in_commit": {"commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}),
+    );
+    append_record(
+        &requirements,
+        &serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0, "scope_id": scope.as_str(),
+            "id": "req_live_child", "statement": "req_live_child statement",
+            "status": "active", "refines": ["req_archived_parent"]}),
+    );
 
-    let gaps = find_gaps(&layout, &scope).unwrap();
+    let gaps = find_gaps(&open(&layout)).unwrap();
     for (kind, node_type, id) in [
         (
             GapKind::MissingSourceRefs,
@@ -236,6 +251,11 @@ fn find_gaps_reports_the_frontier_taxonomy() {
             "question_frontier",
         ),
         (GapKind::UnexploredTopic, NodeType::Topic, "topic_frontier"),
+        (
+            GapKind::NoLiveParent,
+            NodeType::Requirement,
+            "req_live_child",
+        ),
     ] {
         assert_gap(&gaps, kind, node_type, id);
     }
@@ -256,13 +276,13 @@ fn find_gaps_reports_the_frontier_taxonomy() {
         contradiction.related_node_id.as_deref(),
         Some("req_contradicts_b")
     );
-    assert_eq!(prime_context(&layout, &scope, false).unwrap().gaps, gaps);
+    assert_eq!(prime_context(&open(&layout), false).unwrap().gaps, gaps);
 }
 
 #[test]
 fn prime_renders_frontier_gap_subjects() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_anchor");
     for id in [
         "req_contradicts_a",
@@ -281,7 +301,7 @@ fn prime_renders_frontier_gap_subjects() {
         "question_frontier",
         QuestionStatus::Open,
     );
-    let rendered = render_prime_markdown(&prime_context(&layout, &scope, false).unwrap());
+    let rendered = render_prime_markdown(&prime_context(&open(&layout), false).unwrap());
     assert!(rendered.contains("- requirement req_contradicts_a -> requirement req_contradicts_b: unresolved `contradicts` pair"));
     assert!(rendered.contains("- question question_frontier: open question"));
     assert!(rendered.contains("- topic topic_frontier: unexplored topic"));
@@ -291,7 +311,7 @@ fn prime_renders_frontier_gap_subjects() {
 #[verifies("rule_graph_gaps", examples)]
 fn prime_renders_blocked_on_human_questions_with_status() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_anchor");
     create_requirement(
         &store,
@@ -308,13 +328,13 @@ fn prime_renders_blocked_on_human_questions_with_status() {
         "question_blocked",
         QuestionStatus::BlockedOnHuman,
     );
-    let gaps = find_gaps(&layout, &scope).unwrap();
+    let gaps = find_gaps(&open(&layout)).unwrap();
     let blocked = gaps
         .iter()
         .find(|gap| gap.kind == GapKind::OpenQuestion && gap.node_id == "question_blocked")
         .unwrap();
     assert!(blocked.reason.contains("blocked_on_human"));
-    let rendered = render_prime_markdown(&prime_context(&layout, &scope, false).unwrap());
+    let rendered = render_prime_markdown(&prime_context(&open(&layout), false).unwrap());
     assert!(rendered.contains("- question question_blocked:"));
     assert!(rendered.contains("blocked_on_human"));
 }

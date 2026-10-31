@@ -13,53 +13,124 @@ use crate::envelope::{
     Relevance, Severity, Site, SiteRole, Subject, SubjectKind,
 };
 use camino::Utf8Path;
-use provenance_core::coverage::{EvidenceDiffReport, EvidenceDiffState, EvidenceSiteKind};
-use provenance_core::{Requirement, Rule};
-use provenance_scanner::{InactiveBindingOrigin, InactiveBindingRole, RuleEvidenceFacts};
+use provenance_core::coverage::{
+    EvidenceDiffReport, EvidenceDiffSite, EvidenceDiffState, EvidenceSiteKind,
+};
+use provenance_core::{ImplementationBinding, Requirement, Rule, RuleStatus, VerificationBinding};
+use provenance_macros::rule;
+use provenance_scanner::{
+    source_sites, FileScan, InactiveBindingOrigin, InactiveBindingRole, RuleEvidenceFacts,
+    SourceSiteRole,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// How the base commit compares, for honest comparison labels.
 pub(super) struct BaselineView {
-    existed_at_base: Option<BTreeSet<String>>,
+    evidence: Option<BaselineEvidence>,
+}
+
+struct BaselineEvidence {
+    /// Rules active at the base. Missing-evidence findings apply only to
+    /// active Rules, so a Rule that was not active had no such finding.
+    active_rules: BTreeSet<String>,
+    implementations: BTreeSet<String>,
+    verifications: BTreeSet<String>,
+    inactive_bindings: BTreeSet<String>,
 }
 
 impl BaselineView {
-    const fn compatible(ids: BTreeSet<String>) -> Self {
-        Self {
-            existed_at_base: Some(ids),
-        }
-    }
-
     const fn uncertain() -> Self {
-        Self {
-            existed_at_base: None,
-        }
+        Self { evidence: None }
     }
 
-    /// The comparison label for one subject. A compatible baseline labels a
-    /// subject absent from the base `new` and one present at the base
-    /// `pre_existing`; any other baseline stays `uncertain`.
-    fn comparison(&self, subject_id: &str) -> Comparison {
-        match &self.existed_at_base {
-            Some(ids) if !ids.contains(subject_id) => Comparison::New,
+    /// Compare an inactive Rule binding with the same condition at the base.
+    /// A Rule that was active at the base has a new finding.
+    #[rule("rule_report_inactive_binding_compares_with_base")]
+    fn inactive_binding_comparison(&self, subject_id: &str) -> Comparison {
+        match &self.evidence {
+            Some(evidence) if !evidence.inactive_bindings.contains(subject_id) => Comparison::New,
             Some(_) => Comparison::PreExisting,
             None => Comparison::Uncertain,
         }
     }
 
-    fn rule_id_set(rules: &[Rule]) -> BTreeSet<String> {
-        rules
-            .iter()
-            .map(|rule| rule.id.as_str().to_string())
-            .collect()
+    fn missing_implementation_comparison(&self, rule_id: &str) -> Comparison {
+        self.missing_evidence_comparison(rule_id, |evidence| &evidence.implementations)
     }
 
-    /// The baseline view for the rules that existed at the base commit.
-    /// With a compatible baseline, a head rule absent from this set is new
-    /// in the range; any other baseline leaves every label uncertain.
-    pub(super) fn for_rules(compatibility: BaselineCompatibility, base_rules: &[Rule]) -> Self {
+    fn missing_verification_comparison(&self, rule_id: &str) -> Comparison {
+        self.missing_evidence_comparison(rule_id, |evidence| &evidence.verifications)
+    }
+
+    /// Compare a missing-evidence finding with the base. The finding is new
+    /// unless the Rule was active at the base and had no evidence of this kind.
+    #[rule("rule_report_missing_evidence_compares_with_base")]
+    fn missing_evidence_comparison(
+        &self,
+        rule_id: &str,
+        ids: fn(&BaselineEvidence) -> &BTreeSet<String>,
+    ) -> Comparison {
+        match &self.evidence {
+            Some(evidence)
+                if !evidence.active_rules.contains(rule_id) || ids(evidence).contains(rule_id) =>
+            {
+                Comparison::New
+            }
+            Some(_) => Comparison::PreExisting,
+            None => Comparison::Uncertain,
+        }
+    }
+
+    /// The baseline view for Rules and their evidence at the base commit.
+    pub(super) fn for_rules(
+        compatibility: BaselineCompatibility,
+        base_rules: &[Rule],
+        base_scans: &[FileScan],
+        base_implementations: &[ImplementationBinding],
+        base_verifications: &[VerificationBinding],
+    ) -> Self {
         match compatibility {
-            BaselineCompatibility::Compatible => Self::compatible(Self::rule_id_set(base_rules)),
+            BaselineCompatibility::Compatible => {
+                let mut implementation_rule_ids = base_implementations
+                    .iter()
+                    .map(|binding| binding.rule_id.as_str().to_string())
+                    .collect::<BTreeSet<_>>();
+                let mut verification_rule_ids = base_verifications
+                    .iter()
+                    .map(|binding| binding.rule_id.as_str().to_string())
+                    .collect::<BTreeSet<_>>();
+                for site in source_sites(base_scans) {
+                    match site.role() {
+                        SourceSiteRole::Implementation => {
+                            implementation_rule_ids.insert(site.rule_id().to_string());
+                        }
+                        SourceSiteRole::Verification(_) => {
+                            verification_rule_ids.insert(site.rule_id().to_string());
+                        }
+                    }
+                }
+                let inactive_bindings = base_rules
+                    .iter()
+                    .filter(|rule| {
+                        matches!(&rule.status, RuleStatus::Deprecated | RuleStatus::Archived)
+                            && (implementation_rule_ids.contains(rule.id.as_str())
+                                || verification_rule_ids.contains(rule.id.as_str()))
+                    })
+                    .map(|rule| rule.id.as_str().to_string())
+                    .collect();
+                Self {
+                    evidence: Some(BaselineEvidence {
+                        active_rules: base_rules
+                            .iter()
+                            .filter(|rule| rule.status == RuleStatus::Active)
+                            .map(|rule| rule.id.as_str().to_string())
+                            .collect(),
+                        implementations: implementation_rule_ids,
+                        verifications: verification_rule_ids,
+                        inactive_bindings,
+                    }),
+                }
+            }
             BaselineCompatibility::Missing | BaselineCompatibility::Incompatible => {
                 Self::uncertain()
             }
@@ -109,7 +180,7 @@ pub(super) fn rule_evidence_findings(
                 SubjectKind::Rule,
                 rule_id,
                 Severity::Warning,
-                baseline.comparison(rule_id),
+                baseline.missing_implementation_comparison(rule_id),
                 BindingPresence::Absent,
             )
         })
@@ -119,7 +190,7 @@ pub(super) fn rule_evidence_findings(
                 SubjectKind::Rule,
                 rule_id,
                 severity,
-                baseline.comparison(rule_id),
+                baseline.missing_verification_comparison(rule_id),
                 BindingPresence::Absent,
             )
         }))
@@ -160,7 +231,7 @@ fn inactive_current_findings(
                 SubjectKind::Rule,
                 &subject_id,
                 severity,
-                baseline.comparison(&subject_id),
+                baseline.inactive_binding_comparison(&subject_id),
                 BindingPresence::Present,
             );
             current.sites = sites;
@@ -169,24 +240,44 @@ fn inactive_current_findings(
         .collect()
 }
 
-/// Site findings from the evidence diff: verification sites that are gone or
-/// moved between the base and head revisions. These facts are comparative,
-/// so the caller supplies them only for a compatible baseline.
-pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding> {
+/// Site findings from the evidence diff. Removed implementation and
+/// verification sites are findings. A moved verification site is also a
+/// finding. A moved implementation anchor, or a typed binding in the same
+/// file, is a replacement and not a removal. These facts need a compatible
+/// baseline.
+#[rule("rule_report_removed_implementation_site_is_a_finding")]
+pub(super) fn evidence_site_findings(
+    report: &EvidenceDiffReport,
+    head_implementations: &[ImplementationBinding],
+) -> Vec<Finding> {
     report
         .sites
         .iter()
-        .filter(|site| site.kind == EvidenceSiteKind::Verification)
+        .filter(|site| !replaced_by_typed_binding(site, head_implementations))
         .filter(|site| {
             matches!(
-                site.state,
-                EvidenceDiffState::Gone | EvidenceDiffState::Moved
+                (site.kind, site.state),
+                (EvidenceSiteKind::RuleBinding, EvidenceDiffState::Gone)
+                    | (
+                        EvidenceSiteKind::Verification,
+                        EvidenceDiffState::Gone | EvidenceDiffState::Moved
+                    )
             )
         })
         .map(|site| {
-            let code = match site.state {
-                EvidenceDiffState::Gone => DiagnosticCode::VerificationSiteRemoved,
-                _ => DiagnosticCode::VerificationSiteMoved,
+            let (code, role) = match (site.kind, site.state) {
+                (EvidenceSiteKind::RuleBinding, EvidenceDiffState::Gone) => (
+                    DiagnosticCode::ImplementationSiteRemoved,
+                    SiteRole::Implementation,
+                ),
+                (_, EvidenceDiffState::Gone) => (
+                    DiagnosticCode::VerificationSiteRemoved,
+                    SiteRole::Verification,
+                ),
+                _ => (
+                    DiagnosticCode::VerificationSiteMoved,
+                    SiteRole::Verification,
+                ),
             };
             let mut finding = finding(
                 code,
@@ -197,7 +288,7 @@ pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding
                 BindingPresence::Present,
             );
             if site.state == EvidenceDiffState::Moved {
-                if let Some(current) = site_at(CommitRole::Head, &site.file_path, site.line) {
+                if let Some(current) = site_at(CommitRole::Head, &site.file_path, site.line, role) {
                     finding.sites.push(current);
                 }
             }
@@ -206,7 +297,7 @@ pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding
                 .clone()
                 .unwrap_or_else(|| site.file_path.clone());
             let origin_line = site.original_line.or(site.line);
-            if let Some(removed) = site_at(CommitRole::Base, &origin, origin_line) {
+            if let Some(removed) = site_at(CommitRole::Base, &origin, origin_line, role) {
                 finding.removed_sites.push(removed);
             }
             finding
@@ -214,13 +305,33 @@ pub(super) fn evidence_site_findings(report: &EvidenceDiffReport) -> Vec<Finding
         .collect()
 }
 
-fn site_at(commit: CommitRole, path: &Utf8Path, line: Option<usize>) -> Option<Site> {
+/// A removed scanned implementation site is replaced, not removed, when a
+/// typed implementation binding at head names the same Rule in the same file.
+fn replaced_by_typed_binding(
+    site: &EvidenceDiffSite,
+    head_implementations: &[ImplementationBinding],
+) -> bool {
+    site.kind == EvidenceSiteKind::RuleBinding
+        && site.state == EvidenceDiffState::Gone
+        && head_implementations.iter().any(|binding| {
+            binding.rule_id.as_str() == site.subject_id
+                && (binding.file == site.file_path
+                    || site.original_file_path.as_ref() == Some(&binding.file))
+        })
+}
+
+fn site_at(
+    commit: CommitRole,
+    path: &Utf8Path,
+    line: Option<usize>,
+    role: SiteRole,
+) -> Option<Site> {
     let line = u32::try_from(line?).ok()?;
     Some(Site {
         commit,
         path: path.to_string(),
         line,
-        role: Some(SiteRole::Verification),
+        role: Some(role),
         method: None,
     })
 }

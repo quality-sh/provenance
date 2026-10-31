@@ -1,8 +1,8 @@
-use super::{classifier, guard, SaveRequirement};
+use super::{classifier, SaveRequirement};
 use crate::{
     review::publication::with_record_state,
     shards,
-    state_store::StateStore,
+    state_store::{RecordStamp, StateStore},
     write_error::{SourceFailure, WriteFailure},
 };
 use provenance_core::review::{RequirementEditState, ReviewRecord};
@@ -49,8 +49,8 @@ impl StateStore {
         scope: &ScopeId,
         id: &StableId,
     ) -> anyhow::Result<RequirementEditState> {
-        self.with_repository_publication(|| {
-            let record = self.requirement(scope, id)?;
+        self.with_repository_publication(|held| {
+            let record = held.requirement(scope, id)?;
             Self::record_edit_state_for_record(&record.into())
         })
     }
@@ -61,8 +61,8 @@ impl StateStore {
         kind: NodeType,
         id: &StableId,
     ) -> anyhow::Result<RequirementEditState> {
-        self.with_repository_publication(|| {
-            let record = crate::cache::review_families::record(self, scope, kind, id)?;
+        self.with_repository_publication(|held| {
+            let record = crate::cache::review_families::record(held, scope, kind, id)?;
             Self::record_edit_state_for_record(&record)
         })
     }
@@ -117,29 +117,28 @@ impl StateStore {
             "review request exceeds the operation byte budget"
         );
         input.normalize();
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             crate::test_probes::at("requirement_save_locked")?;
             let scope_id = input.update.scope_id.clone();
             let scope = &scope_id;
             anyhow::ensure!(
-                self.manifest()?.scopes.iter().any(|s| s.id == *scope),
+                held.manifest()?.scopes.iter().any(|s| s.id == *scope),
                 "review scope is not in the manifest"
             );
-            let record = self.requirement(scope, &input.update.id)?;
+            let record = held.requirement(scope, &input.update.id)?;
             super::owner_matches(&record, input.update.declared_by.as_deref())?;
             if let Some(origin) = origin {
-                self.validate_discussion_origin(scope, origin)?;
+                held.validate_discussion_origin(scope, origin)?;
             }
             let current_etag = etag(&ReviewRecord::from(record.clone()))?;
             let stale = (input.expected_etag != current_etag).then_some(current_etag);
-            let stamp = self.current_record_stamp()?;
-            with_record_state(&self.layout, |layout| {
-                let staged = Self::staged(layout.clone(), stamp);
-                let path = shards::requirements_path(layout, scope);
+            let stamp = held.current_record_stamp()?;
+            with_record_state(held, RecordStamp::resolved(stamp), |staged| {
+                let path = shards::requirements_path(&staged.layout, scope);
                 let record_id = record.id.clone();
-                guard::with_writer(&path, record_id.as_str(), || {
+                staged.permitting(&[&path], record_id.as_str(), |staged| {
                     let after = staged.commit_requirement(input, &record, origin, stale)?;
-                    complete(&staged, after)
+                    complete(staged, after)
                 })
             })
         })
@@ -207,7 +206,7 @@ mod tests {
         .unwrap();
         (
             temp,
-            StateStore::new(layout),
+            crate::test_support::store(&layout),
             ScopeId::new("default").unwrap(),
         )
     }

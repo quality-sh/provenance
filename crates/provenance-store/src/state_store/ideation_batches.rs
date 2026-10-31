@@ -12,10 +12,12 @@ impl StateStore {
     pub(super) fn with_lifecycle_lock<R>(
         &self,
         scope: &ScopeId,
-        operation: impl FnOnce() -> anyhow::Result<R>,
+        operation: impl FnOnce(&Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        self.with_repository_publication(|| {
-            crate::jsonl::with_advisory_lock(&self.layout.lifecycle_lock_path(scope), operation)
+        self.with_repository_publication(|held| {
+            crate::jsonl::with_advisory_lock(&held.layout.lifecycle_lock_path(scope), || {
+                operation(held)
+            })
         })
     }
 
@@ -32,8 +34,8 @@ impl StateStore {
         incoming: IdeationLandingBatch,
         replace: bool,
     ) -> anyhow::Result<()> {
-        self.with_lifecycle_lock(scope, || {
-            self.write_ideation_batch(scope, incoming, replace)
+        self.with_lifecycle_lock(scope, |held| {
+            held.write_ideation_batch(scope, incoming, replace)
         })
     }
 

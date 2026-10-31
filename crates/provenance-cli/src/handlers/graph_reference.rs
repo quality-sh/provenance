@@ -12,8 +12,9 @@ pub(super) fn handle(command: GraphReferenceCommand) -> anyhow::Result<()> {
             let correlation = correlation_system
                 .zip(correlation_key)
                 .map(|(system, key)| ExternalCorrelation { system, key });
+            let repository = context.open()?;
             let reference = GraphReferences::open(&context.repo)?.issue(
-                &context.scope,
+                &repository,
                 commit.as_deref(),
                 correlation,
             )?;

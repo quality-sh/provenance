@@ -9,6 +9,7 @@ use crate::{Annotation, ParseWarning};
 use bindings::parse_binding_or_warn;
 pub use bounded::scan_path_bounded;
 use consumed::{consume_binding_lines, consume_comment_lines};
+pub use ignore::selects_source_path;
 use rust_lines::{rust_annotation_marker_position, rust_line_states, RustLexicalState};
 
 mod bindings;
@@ -92,14 +93,7 @@ pub fn scan_path(path: &Utf8Path) -> anyhow::Result<Vec<FileScan>> {
 
 pub fn scan_path_with_content(path: &Utf8Path) -> anyhow::Result<Vec<FileScanWithContent>> {
     let mut scans = Vec::new();
-    for entry in repository_walk(path, false) {
-        let entry = entry?;
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let Some(file_path) = Utf8PathBuf::from_path_buf(entry.path().to_path_buf()).ok() else {
-            continue;
-        };
+    for file_path in source_paths(path)? {
         let Some(language) = file_path.extension().and_then(Language::from_extension) else {
             continue;
         };
@@ -110,8 +104,31 @@ pub fn scan_path_with_content(path: &Utf8Path) -> anyhow::Result<Vec<FileScanWit
             content,
         });
     }
-    scans.sort_by(|a, b| a.scan.file_path.cmp(&b.scan.file_path));
     Ok(scans)
+}
+
+/// The source files the scan selects under `path`, in path order. No file
+/// is read.
+pub fn source_paths(path: &Utf8Path) -> anyhow::Result<Vec<Utf8PathBuf>> {
+    let mut paths = Vec::new();
+    for entry in repository_walk(path, false) {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let Some(file_path) = Utf8PathBuf::from_path_buf(entry.path().to_path_buf()).ok() else {
+            continue;
+        };
+        if file_path
+            .extension()
+            .and_then(Language::from_extension)
+            .is_some()
+        {
+            paths.push(file_path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
 }
 
 /// Walks a repository tree for the scan. Directories named like dependency,
@@ -136,11 +153,11 @@ fn repository_walk(
 /// Whether other output is generated is the repository's own call, made
 /// through its `.gitignore` files.
 fn is_ignored_directory(entry: &walkdir::DirEntry) -> bool {
-    entry.file_type().is_dir()
-        && matches!(
-            entry.file_name().to_str(),
-            Some(".git" | "node_modules" | "target")
-        )
+    entry.file_type().is_dir() && is_ignored_directory_name(entry.file_name().to_str())
+}
+
+fn is_ignored_directory_name(name: Option<&str>) -> bool {
+    matches!(name, Some(".git" | "node_modules" | "target"))
 }
 
 /// Walks a file line by line, feeding two channels: bindings (`#[rule]`,

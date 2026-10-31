@@ -227,10 +227,7 @@ echoes, old operation aliases, and compatibility translators.
 Phase 2b removed the legacy versioned operation wire.
 
 A breaking change requires human authorization. Agents never bump a version, a
-release, or the tuple. The required compatibility gate fails when a watched
-value changes without an `AUTHORIZED-BUMP` marker written by a human. The gate
-binds the marker to the same change as the bump, so a stale marker authorizes
-nothing (docs/compatibility-gate.md).
+release, or the tuple without express approval from the owner.
 
 ## 7. Grammar
 
@@ -289,9 +286,7 @@ OpenAPI and MCP documents.
 
 The generator checks the live OpenAPI and MCP documents against this grammar.
 It rejects a prohibited route shape, request shape, response envelope, status,
-payload identity, or tool description before it writes generated output. The
-compatibility gate in `docs/compatibility-gate.md` remains independent and
-required.
+payload identity, or tool description before it writes generated output.
 
 Requirement refinement parents use an ID list in `refines`. A record omits an empty
 list. An empty list identifies a root. Creation accepts a list. A relationship edit

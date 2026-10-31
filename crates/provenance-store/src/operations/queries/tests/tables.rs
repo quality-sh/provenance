@@ -20,7 +20,7 @@ fn sid(value: &str) -> StableId {
 }
 
 async fn snapshot_of(store: &TestStore) -> (CacheConnection, ReadSnapshot) {
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
         .await
@@ -115,7 +115,7 @@ async fn assert_rows_read_as_written<K: ProjectionRow + Serialize>(
             .as_str()
             .unwrap()
             .to_string();
-        let row = sqlx::query(&sql)
+        let row = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(scope)
             .bind(&id)
             .fetch_one(pool)
@@ -146,7 +146,7 @@ async fn every_stored_row_of_the_repository_state_reads_back_as_written() {
             .any(|resolution| resolution.confidence == Some(1.0)),
         "the repository state must hold a resolution with confidence 1.0"
     );
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     let word = scope.as_str();
     assert_rows_read_as_written::<Source>(pool.pool(), word, state.list_sources(scope).unwrap())

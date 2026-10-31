@@ -5,11 +5,10 @@ mod support {
     pub mod records;
 }
 
-use jsonschema::JSONSchema;
+use jsonschema::Validator;
 use provenance_macros::verifies;
 use provenance_porcelain::api::{ApiMethod, ApiOutcome, ApiParameter, ApiRequest};
 use provenance_porcelain::Porcelain;
-use provenance_store::operations::catalog;
 use provenance_transport::porcelain::HostApiPort;
 use provenance_transport::StatementHost;
 use serde_json::{json, Value};
@@ -72,7 +71,7 @@ async fn api_discovery_describes_the_live_catalog_routes() {
     // the described routes must track that set exactly.
     assert_eq!(
         routes.len(),
-        catalog::definitions().len(),
+        provenance_contract::definitions().len(),
         "one described route per advertised definition"
     );
 
@@ -80,10 +79,11 @@ async fn api_discovery_describes_the_live_catalog_routes() {
         .iter()
         .find(|route| route["path"] == "/sources/{id}" && route["method"] == "get")
         .expect("the source member route is described");
-    let definition = catalog::definitions()
+    let definition = provenance_contract::definitions()
         .iter()
         .find(|definition| {
-            definition.path == "/sources/{id}" && definition.method == catalog::HttpMethod::Get
+            definition.path == "/sources/{id}"
+                && definition.method == provenance_contract::HttpMethod::Get
         })
         .unwrap();
     assert_eq!(member["description"], definition.description);
@@ -203,6 +203,7 @@ async fn api_discovery_preserves_query_contracts() {
         .iter()
         .any(|parameter| parameter.name == "file" && parameter.required));
     assert!(symbol_names.contains(&"symbol"));
+    assert!(symbol_names.contains(&"cursor"));
     assert!(
         !symbol_names.contains(&"base"),
         "resolve-symbol must not inherit the stale query parameters"
@@ -265,11 +266,9 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
             .as_ref()
             .clone(),
     );
-    // jsonschema resolves #/$defs/ references lazily, so a dangling reference
-    // compiles and only fails validation of an output that reaches it; the
-    // discovery output below carries routes, which reach the route defs.
-    let published =
-        JSONSchema::compile(&published_schema).expect("the published api output schema compiles");
+    // jsonschema resolves each local reference when it builds the validator,
+    // so a dangling reference fails here.
+    let published = compile(&published_schema).expect("the published api output schema compiles");
 
     let discovery = session.call(json!({})).await;
     let structured = discovery.structured_content.as_ref().unwrap();
@@ -304,12 +303,20 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
         .find(|form| form["query"].is_null())
         .expect("the base form is described")["success_schema"]
         .clone();
-    let base_contract =
-        JSONSchema::compile(&base_schema).expect("the described base form schema compiles");
+    let base_contract = compile(&base_schema).expect("the described base form schema compiles");
     assert!(
         base_contract.is_valid(named.structured_content.as_ref().unwrap()),
         "named tool output violates the described route schema: {named:?}"
     );
 
     session.shutdown().await;
+}
+
+/// Read a schema that has no `$schema` keyword as a Draft 7 document.
+fn compile(schema: &Value) -> Result<Validator, jsonschema::ValidationError<'static>> {
+    if schema.get("$schema").is_some() {
+        jsonschema::validator_for(schema)
+    } else {
+        jsonschema::draft7::new(schema)
+    }
 }

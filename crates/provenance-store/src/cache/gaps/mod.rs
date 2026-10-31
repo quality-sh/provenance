@@ -3,6 +3,7 @@ mod dangling;
 mod frontier;
 pub mod graph_query;
 mod ideation_targets;
+mod live_parents;
 mod model;
 mod state_adapter;
 
@@ -10,8 +11,7 @@ use provenance_macros::rule;
 
 pub use graph_query::{GapGraph, GraphQuery};
 pub use model::{node_type_word, GapItem, GapKind};
-pub use state_adapter::find_gaps;
-pub(in crate::cache) use state_adapter::GraphRecords;
+pub use state_adapter::{find_gaps, GraphRecords};
 
 /// Computes gaps in stable policy order. This is also the seam for callers
 /// that already hold graph records rather than a state store.
@@ -31,6 +31,7 @@ pub fn compute_gaps(graph: &GapGraph<'_>) -> Vec<GapItem> {
     contradiction::add_gaps(&query, &mut gaps);
     frontier::add_question_gaps(&query, &mut gaps);
     frontier::add_topic_gaps(&query, &mut gaps);
+    live_parents::add_gaps(&query, &mut gaps);
     gaps
 }
 

@@ -1,14 +1,13 @@
-use super::{root_of, seeded_store};
+use super::{repository_at, root_of, seeded_store};
 use crate::cache::tests::fixtures::append_record;
 use crate::operations::{queries, read_policy::ReadPolicy};
-use provenance_core::{protocol::ReadDocumentQuery, ScopeId};
+use provenance_core::protocol::ReadDocumentQuery;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 async fn page(root: &camino::Utf8Path, id: &str, cursor: Value) -> anyhow::Result<Value> {
     let result = queries::read_document(
-        Some(root.to_owned()),
-        &ScopeId::new("default")?,
+        &repository_at(root),
         ReadPolicy::default(),
         serde_json::from_value::<ReadDocumentQuery>(json!({"id":id,"cursor":cursor,"limit":50}))?,
     )

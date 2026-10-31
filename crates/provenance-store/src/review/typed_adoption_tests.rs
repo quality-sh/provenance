@@ -31,7 +31,7 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     .unwrap();
     (
         temp,
-        StateStore::new(layout),
+        crate::test_support::store(&layout),
         ScopeId::new("default").unwrap(),
     )
 }

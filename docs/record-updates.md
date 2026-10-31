@@ -22,8 +22,8 @@ the same writers. The Requirement PATCH uses the guarded review writer.
 | Record | Fields that can change | Nullable fields that can be cleared |
 | --- | --- | --- |
 | `update-source` | `name`, `source_type`, `url`, `reference`, `commit_pin`, `effective_date`, `review_date` | `url`, `reference`, `commit_pin`, `effective_date`, `review_date` |
-| `update-resolution` | `title`, `position`, `rationale`, `status`, `context`, `enforcement`, `confidence`, `inputs`, `made_by`, `approved_by`, `approved_at`, `review_on` | `context`, `enforcement`, `confidence`, `made_by`, `approved_by`, `approved_at`, `review_on` |
-| `update-requirement` | `statement`, `description`, `fog`, `status`, `domain_id` | `description`, `fog`, `domain_id` |
+| `update-resolution` | `title`, `position`, `rationale`, `status`, `context`, `enforcement`, `confidence`, `inputs`, `made_by`, `approved_by`, `approved_at`, `review_on`, `archived_in_commit` | `context`, `enforcement`, `confidence`, `made_by`, `approved_by`, `approved_at`, `review_on` |
+| `update-requirement` | `statement`, `description`, `fog`, `status`, `domain_id`, `archived_in_commit` | `description`, `fog`, `domain_id` |
 | `update-rule` | `name`, `description`, `statement`, `status`, `severity`, `source_document`, `source_section`, `archived_in_commit` | `name`, `description`, `source_document`, `source_section` |
 | `update-domain` | `name`, `description`, `color` | `description`, `color` |
 | `update-boundary` | `statement`, `source_ref` | `source_ref` |
@@ -123,13 +123,19 @@ return the saved result.
 
 Rule deprecation and archival use the existing `status` values. An archived
 Rule must have `archived_in_commit`; the other Rule statuses must not have it.
-Archived Topics and Questions have the same commit evidence requirement. An
-archived status is terminal. Archiving a Topic archives all Questions in that
-Topic in the same publication. Archiving one Question does not change its
-Topic. Discussions on archived records stay readable as history. Updates do
-not delete records or their relationships. A Topic that closes clears its
-claim. A Question status change keeps the native answer requirement and clears
-claims when the question leaves its claimable state.
+Archived Requirements, Resolutions, Topics and Questions have the same commit
+evidence requirement. An archived status is terminal. Archiving a Topic
+archives all Questions in that Topic in the same publication. Archiving one
+Question does not change its Topic. Discussions on archived records stay
+readable as history. Updates do not delete records or their relationships. A
+Topic that closes clears its claim. A Question status change keeps the native
+answer requirement and clears claims when the question leaves its claimable
+state.
+
+The archive commit is the commit that contains the change. Merge a pull
+request that archives records with a merge commit. A squash or rebase merge
+drops the commit that the archive names. `provenance check --graph` reports
+each archive commit that is not in the history of `HEAD`.
 
 ## Native CLI
 

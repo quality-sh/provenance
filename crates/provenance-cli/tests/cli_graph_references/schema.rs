@@ -81,7 +81,7 @@ const fn verdict(accepted: bool) -> &'static str {
     }
 }
 
-fn reference_validator(repo: &Path) -> jsonschema::JSONSchema {
+fn reference_validator(repo: &Path) -> jsonschema::Validator {
     let output = provenance(repo)
         .args(["schema", "show", "graph-reference", "--format", "json"])
         .assert()
@@ -90,7 +90,7 @@ fn reference_validator(repo: &Path) -> jsonschema::JSONSchema {
         .stdout
         .clone();
     let shown: Value = serde_json::from_slice(&output).unwrap();
-    jsonschema::JSONSchema::compile(shown.get("schema").unwrap()).unwrap()
+    jsonschema::draft7::new(shown.get("schema").unwrap()).unwrap()
 }
 
 fn runtime_accepts(repo: &Path, name: &str, candidate: &Value) -> bool {

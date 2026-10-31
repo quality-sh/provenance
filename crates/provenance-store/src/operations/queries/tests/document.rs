@@ -1,4 +1,5 @@
-use super::{root_of, seeded_store};
+use super::{repository_at, repository_of, root_of, seeded_store};
+use crate::cache::tests::fixtures::open;
 use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
@@ -22,8 +23,7 @@ impl ContextResolver for Target {
         _: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         Ok(PreparedContext::read(PreparedRead {
-            root: self.0.clone(),
-            scope: provenance_core::ScopeId::new("default").unwrap(),
+            repository: crate::repository::Repository::open(&self.0, "default").unwrap(),
             policy: ReadPolicy::default(),
             requested_target: "test".into(),
             external: true,
@@ -31,7 +31,7 @@ impl ContextResolver for Target {
     }
 }
 async fn read(root: camino::Utf8PathBuf) -> Value {
-    catalog::invoke_with("read-document", provenance_core::SDK_PROTOCOL_VERSION,
+    crate::test_support::call::<catalog::ReadDocument, _>(
         json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_overtime"}}),
         catalog::Direct(Arc::new(Target(root)))).await.expect("complete document operation")
 }
@@ -68,7 +68,7 @@ async fn complete(root: camino::Utf8PathBuf) -> Value {
     let mut all = read(root.clone()).await;
     let stamp = all["stamp"].clone();
     while all["next_cursor"].is_string() {
-        let next = catalog::invoke_with("read-document", provenance_core::SDK_PROTOCOL_VERSION,
+        let next = crate::test_support::call::<catalog::ReadDocument, _>(
             json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime","cursor":all["next_cursor"]}}),
             catalog::Direct(Arc::new(Target(root.clone())))).await.unwrap();
         for field in ["serial", "digest", "instance_id", "derivation"] {
@@ -123,9 +123,7 @@ async fn document_reads_all_saved_records_and_marks_failed_catch_up() {
     }
     assert_eq!(next["stamp"]["live"], json!(["canonical"]));
     std::fs::write(path, "invalid JSON\n").unwrap();
-    let failed = catalog::invoke_with(
-        "read-document",
-        provenance_core::SDK_PROTOCOL_VERSION,
+    let failed = crate::test_support::call::<catalog::ReadDocument, _>(
         json!({"context":{"repository":"test","scope":"default"},"request":{"id":"req_overtime"}}),
         catalog::Direct(Arc::new(Target(root_of(&dir)))),
     )
@@ -160,8 +158,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
         limit: 50,
     };
     let stale = super::super::read_document(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
         request.clone(),
     )
@@ -172,8 +169,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
         Some(&ReadFailure::DocumentRootMissing)
     );
 
-    let failed = catalog::invoke_with(
-        "read-document", provenance_core::SDK_PROTOCOL_VERSION,
+    let failed = crate::test_support::call::<catalog::ReadDocument, _>(
         json!({"context":{"repository":"test","scope":"default","freshness":"catch_up"},"request":{"id":"req_new"}}),
         catalog::Direct(Arc::new(Target(root_of(&dir)))),
     ).await.unwrap_err();
@@ -181,7 +177,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
 
     std::fs::write(path, saved).unwrap();
     let recovered =
-        super::super::read_document(Some(root_of(&dir)), &scope, ReadPolicy::default(), request)
+        super::super::read_document(&repository_of(&dir), ReadPolicy::default(), request)
             .await
             .unwrap();
     assert_eq!(recovered.result.root_id.as_str(), "req_new");
@@ -195,7 +191,7 @@ async fn document_failed_catch_up_precedes_missing_root_in_old_projection() {
 async fn document_valid_freshness_preserves_page_refusals() {
     use crate::operations::read_policy::FreshnessPolicy;
 
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     read(root_of(&dir)).await;
     for freshness in [
         FreshnessPolicy::CatchUp,
@@ -207,8 +203,7 @@ async fn document_valid_freshness_preserves_page_refusals() {
             ("req_overtime", Some("invalid"), ReadFailure::CursorInvalid),
         ] {
             let error = super::super::read_document(
-                Some(root_of(&dir)),
-                &scope,
+                &repository_of(&dir),
                 ReadPolicy::with_freshness(freshness),
                 ReadDocumentQuery {
                     id: id.into(),
@@ -237,7 +232,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
     let initial = complete(root.clone()).await;
     let layout = store.layout.clone();
     let write_scope = scope.clone();
-    let answer = reader::answer(&root, &scope, ReadPolicy::default(), move |ctx| {
+    let answer = reader::answer(&repository_at(&root), ReadPolicy::default(), move |ctx| {
         Box::pin(async move {
             assert_eq!(ctx.snapshot().table::<provenance_core::Requirement>().count().await?, 1);
             let path = crate::shards::requirements_path(&layout, &write_scope);
@@ -258,7 +253,7 @@ async fn document_keeps_graph_and_discussions_at_one_revision_during_publication
                     "ai_metadata":{"order":"logical"}
                 }));
             }
-            crate::cache::catch_up_state(&layout).await?;
+            crate::cache::catch_up_state(&open(&layout)).await?;
             super::super::document::read(ctx, ReadDocumentQuery {
                 id: "req_overtime".into(),
                 exclude_terminal: false,
@@ -319,7 +314,7 @@ async fn search_returns_a_revision_bound_cursor() {
         row["id"] = json!(format!("req_search_{i:03}"));
         crate::cache::tests::fixtures::append_record(&path, &row);
     }
-    let first = catalog::invoke_with("search", provenance_core::SDK_PROTOCOL_VERSION,
+    let first = crate::test_support::call::<catalog::Search, _>(
         json!({"context":{"repository":"test","scope":"default"},"request":{"text":"req_","limit":200}}),
         catalog::Direct(Arc::new(Target(root_of(&dir))))).await.unwrap();
     assert_eq!(first["nodes"].as_array().unwrap().len(), 200);

@@ -36,10 +36,11 @@ pub fn write_publication_marker(
     };
     let path = layout.publication_marker_path();
     std::fs::create_dir_all(layout.cache_dir())?;
-    let mut temporary = tempfile::NamedTempFile::new_in(layout.cache_dir())?;
+    let mut temporary =
+        tempfile::NamedTempFile::new_in(crate::long_path::extended(layout.cache_dir())?)?;
     temporary.write_all(&serde_json::to_vec(&marker)?)?;
     temporary.as_file().sync_all()?;
-    temporary.persist(path)?;
+    temporary.persist(crate::long_path::extended(&path)?)?;
     sync_directory(&layout.cache_dir())
 }
 
@@ -114,7 +115,7 @@ fn recovery_dir_inside_cache(
     let parent = candidate
         .parent()
         .ok_or_else(|| anyhow::anyhow!("publication marker transaction has no parent"))?;
-    let canonical_parent = std::fs::canonicalize(parent)?;
+    let canonical_parent = dunce::canonicalize(parent)?;
     anyhow::ensure!(
         canonical_parent == canonical_container.as_std_path(),
         OUTSIDE_REPOSITORY_CACHE
@@ -154,7 +155,7 @@ fn ensure_written_path_has_no_symlinks(
             candidate
                 .ancestors()
                 .find(|ancestor| {
-                    std::fs::canonicalize(ancestor)
+                    dunce::canonicalize(ancestor)
                         .is_ok_and(|resolved| resolved == canonical_container.as_std_path())
                 })
                 .and_then(|ancestor| {

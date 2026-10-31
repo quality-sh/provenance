@@ -169,11 +169,11 @@ impl StateStore {
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             if let Some(target) = &target {
-                self.ensure_node_exists(scope_id, decl.target, target, "--target-id")?;
+                held.ensure_node_exists(scope_id, decl.target, target, "--target-id")?;
             }
-            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
+            held.mutate_graph_record(&path, |records: &mut Vec<T>| {
                 if let Some(target) = &target {
                     if decl.target == T::OWNER {
                         ensure_no_cycle(records, name, owner, std::slice::from_ref(target))?;
@@ -218,9 +218,9 @@ impl StateStore {
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
-        self.with_repository_publication(|| {
-            self.ensure_node_exists(scope_id, decl.target, &target, "--target-id")?;
-            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
+        self.with_repository_publication(|held| {
+            held.ensure_node_exists(scope_id, decl.target, &target, "--target-id")?;
+            held.mutate_graph_record(&path, |records: &mut Vec<T>| {
                 if decl.target == T::OWNER {
                     ensure_no_cycle(records, name, owner, std::slice::from_ref(&target))?;
                 }
@@ -266,8 +266,8 @@ impl StateStore {
     {
         let decl = declared::<T>(name);
         let path = shards::path_for(&self.layout, scope_id, T::OWNER);
-        self.with_repository_publication(|| {
-            self.mutate_graph_record(&path, |records: &mut Vec<T>| {
+        self.with_repository_publication(|held| {
+            held.mutate_graph_record_with_store(&path, None, |store, records: &mut Vec<T>| {
                 let position = records
                     .iter()
                     .position(|record| RelationOwner::id(record) == owner)
@@ -282,7 +282,7 @@ impl StateStore {
                             ),
                         )
                     })?;
-                self.validate_relation_targets(
+                store.validate_relation_targets(
                     scope_id,
                     records,
                     owner,

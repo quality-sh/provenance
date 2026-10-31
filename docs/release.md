@@ -57,68 +57,64 @@ Generated client source stays outside Git and enters the crate archives. Cargo
 requires `--allow-dirty` for those files. The preceding checks reject changes to
 tracked source and untracked files that Git does not ignore.
 
-- [ ] On the release commit, run the timing report command below once. Compare
-  the `repository_state` rows with the previous release's notes, meet the
-  criterion below, and prepare the rows and any cause explanation for the
-  release notes before tagging.
+- [ ] On the release commit, run the `Benchmarks` workflow with the release
+  gate as the section below gives. Prepare its `repository_state` rows and
+  any cause explanation for the release notes before tagging.
 
-Run this command by hand in Bash, from the repository root, after all W5
-release-gate changes are included. It builds and runs the ignored timing
-report in release mode. It is never a continuous-integration gate, and it
-needs no new Cargo task.
+Run the `Benchmarks` workflow from GitHub Actions on the release branch:
+set `baseline` to the previous release tag, `candidate` to the full release
+commit id, and `gate` to `release`. Keep the other inputs at their defaults.
 
-```bash
-set -o pipefail
-CARGO_BUILD_JOBS=3 cargo test -p provenance-store --release -- --ignored timing_comparison_rows --nocapture \
-  | rg 'summary|_ms' > /tmp/timing-$(git rev-parse --short HEAD).txt
+```sh
+gh workflow run Benchmarks --ref <release-branch> \
+  -f baseline=<previous-tag> -f candidate=<release-commit> -f gate=release
 ```
 
-Keep the report section headed `repository_state`. Each operation's served
-summary is the median across its cases; each case is the median of five
-timed runs after a warm-up. The unchanged `catch_up_ms` row is also the
-median of five passes. Run the command once, rather than repeat it to select
-a faster result.
+The job builds the release timing test of both commits and runs the two
+binaries in turn, 15 times each, on one copy of the baseline's
+`.provenance/state`. The job summary and the `timing-report` artifact give,
+for each row, the median of each side, the median of the paired ratios
+candidate/baseline, and a 95% interval for that ratio. The artifact also
+holds the raw outputs. Run the workflow once, rather than repeat it to
+select a faster result. If the report warns that the comparison test files
+differ between the two commits, the two sides do not time the same steps.
+Name that difference in the notes.
 
-Compare each operation's served summary row and `catch_up_ms` with the same
-row in the previous release's notes. If those notes have no comparable row,
-record the missing prior row and use the current row as the reference for
-the next release. A missing prior row is not a regression.
-A row fails only when **both** conditions hold: it is more than twice the
-previous value, and it is more than 5 ms above that value. A failed row sends the release back until the cause is
-named in the notes or fixed. Do not push the version tag before this check
-passes or the notes name the cause.
+The release gate applies to the `repository_state` section: the seven
+operation summary rows that it prints, and `catch_up_ms`. A row fails only
+when **both** conditions hold: the lower bound of its ratio interval is
+more than 2, and its candidate median is more than 5 ms above its baseline
+median. A row that only the candidate prints, in every run, is not a
+regression. A gated row that a run of the baseline or of the candidate does
+not print fails. The report names the row and the side that does not print
+it. A failed row fails the job and
+sends the release back until the cause is named in the notes or fixed. Do
+not push the version tag before this check passes or the notes name the
+cause.
 
 Record `scan_ms` and `rebuild_ms`, but do not gate them. Scan time depends on
 the checkout's file count. The rebuild measurement includes preparation of
 a fresh database for this store. Earlier report sections have already
-opened SQLite databases.
+opened SQLite databases. The other report sections are not gated.
 
-For the first release, use these reference rows from section F.2 of the W5
-release gate plan, revision 3. They were measured in a release build at
-`03a935c`, before the in-place catch-up change.
+To examine a result on a local host, run the timing test from a checkout
+that is not inside another checkout. Cargo reads `.cargo/config.toml` from
+the current directory and from all parent directories.
 
-| Repository state row | Reference ms | Use |
-|---|---|---|
-| `get` served summary (24 cases) | 1.0 | Compare |
-| `search` served summary (4 cases) | 1.7 | Compare |
-| Unchanged `catch_up_ms` | 21.8 | Compare |
-| `scan_ms` | 0.1 | Report only |
-| `rebuild_ms` | 144 | Report only |
-
-Section F.2 gives no reference for the other operations. Record their first
-served summaries as references for the next release; do not invent a prior
-value. The later W5 comparison-test removal supplies timing rows for all
-eight operations. That change must be included before this release check.
+```bash
+cargo test -p provenance-store --release -- --ignored timing_comparison_rows --nocapture
+```
 
 After the `Release` workflow generates the notes, add the `repository_state`
-rows and any cause explanation to the GitHub Release body under
-`Timing (release build, <commit>)`, with the full release commit id.
+rows of the report and any cause explanation to the GitHub Release body under
+`Timing (release build, <commit>)`, with the full release commit id and the
+`Benchmarks` run link.
 
 Tag and push the release commit:
 
 ```sh
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
 The `Release` workflow creates the GitHub Release, attaches archives, and generates release notes.
@@ -151,7 +147,7 @@ The release rejects a tag unless all versions equal the tag without its `v`
 prefix.
 
 A tag with a SemVer prerelease component is published as a prerelease, so
-`v0.3.0-rc.1` is the way to rehearse a release without announcing one. npm
+`v0.3.1-rc.1` is the way to rehearse a release without announcing one. npm
 publishes that version under the `next` tag; stable versions use `latest`.
 
 ## Never `--all-features`

@@ -49,7 +49,7 @@ fn resolve(file: &str, symbol: Option<&str>, line: Option<usize>) -> Request {
         file: file.into(),
         symbol: symbol.map(str::to_string),
         line,
-
+        cursor: None,
         limit: 50,
     })
 }
@@ -146,7 +146,9 @@ pub(super) fn request_set(base: &str) -> Vec<Request> {
 async fn answers() -> Vec<Value> {
     let store = TestStore::pinned();
     let base = store.base_commit.clone().expect("git on the path");
-    crate::cache::catch_up_state(&store.layout()).await.unwrap();
+    crate::cache::catch_up_state(&store.repository())
+        .await
+        .unwrap();
     crate::test_probes::set_test_scan(None);
     let policy = ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly);
     let mut answers = Vec::new();
@@ -262,7 +264,7 @@ fn normalize_revision_digest(value: &mut Value) {
 
 fn digest(answers: &[Value]) -> String {
     let bytes = serde_json::to_vec(answers).unwrap();
-    format!("sha256:{:x}", Sha256::digest(bytes))
+    format!("sha256:{}", hex::encode(Sha256::digest(bytes)))
 }
 
 /// The file: one header line, then one compact line per answer.

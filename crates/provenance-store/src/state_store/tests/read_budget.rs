@@ -14,7 +14,6 @@ use crate::state_store::{
 use crate::write_error::{SourceFailure, WriteError, WriteFailure};
 use provenance_core::model::ProjectionRow;
 use provenance_core::protocol::failure::OperationFailure;
-use provenance_core::protocol::SDK_PROTOCOL_VERSION;
 use provenance_core::{
     Message, MessageRole, NodeType, ResolutionStatus, ScopeId, Source, SourceType, StableId,
     Thread, ThreadParent, ThreadStatus, SUPPORTED_SCHEMA_VERSION,
@@ -45,8 +44,7 @@ impl ContextResolver for Target {
         _: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         Ok(PreparedContext::read(PreparedRead {
-            root: self.0.clone(),
-            scope: ScopeId::new("default").unwrap(),
+            repository: crate::repository::Repository::open(&self.0, "default").unwrap(),
             policy: ReadPolicy::default(),
             requested_target: "test".into(),
             external: true,
@@ -108,14 +106,11 @@ fn wire_call(request: serde_json::Value) -> serde_json::Value {
 
 /// Invokes one wire operation against the store at `root` in the default
 /// scope. A refusal gives its failure kind.
-pub(super) async fn operation_read(
+pub(super) async fn operation_read<O: catalog::Operation>(
     root: &camino::Utf8Path,
-    operation: &str,
     request: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    catalog::invoke_with(
-        operation,
-        SDK_PROTOCOL_VERSION,
+    crate::test_support::call::<O, _>(
         wire_call(request),
         catalog::Direct(Arc::new(Target(root.to_path_buf()))),
     )
@@ -127,11 +122,15 @@ pub(super) async fn member_read(
     root: &camino::Utf8Path,
     id: &str,
 ) -> Result<serde_json::Value, String> {
-    operation_read(root, "get-source", json!({"id": id})).await
+    operation_read::<crate::operations::family_operations::GetSource>(root, json!({"id": id})).await
 }
 
 pub(super) async fn list_read(root: &camino::Utf8Path) -> Result<serde_json::Value, String> {
-    operation_read(root, "page-sources", json!({"limit": 50, "cursor": null})).await
+    operation_read::<crate::operations::family_operations::PageSources>(
+        root,
+        json!({"limit": 50, "cursor": null}),
+    )
+    .await
 }
 
 /// The trigger case: the request body fits the transport budget while the
@@ -213,9 +212,9 @@ async fn write_side_measure_matches_the_read_side_accounting() {
 
     let cache = crate::cache::open_cache(&store.layout).await.unwrap();
     let expression = crate::cache::read::page::byte_expression(Source::COLUMNS);
-    let stored: i64 = sqlx::query_scalar(&format!(
+    let stored: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT {expression} FROM sources WHERE scope_id = ? AND id = ?"
-    ))
+    )))
     .bind(scope.as_str())
     .bind(OVERSIZED_ID)
     .fetch_one(cache.pool())
@@ -408,9 +407,7 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
         .create_resolution(resolution_input(&scope, "res_base", String::new()))
         .unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
-    catalog::invoke_with(
-        "get-resolution",
-        SDK_PROTOCOL_VERSION,
+    crate::test_support::call::<crate::operations::family_operations::GetResolution, _>(
         wire_call(json!({"id": "res_base"})),
         catalog::Direct(Arc::new(Target(root))),
     )
@@ -419,9 +416,9 @@ async fn resolution_real_accounting_matches_sqlite_and_refuses_boundary_overflow
     let cache = crate::cache::open_cache(&store.layout).await.unwrap();
     let expression =
         crate::cache::read::page::byte_expression(provenance_core::Resolution::COLUMNS);
-    let stored: i64 = sqlx::query_scalar(&format!(
+    let stored: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
         "SELECT {expression} FROM resolutions WHERE scope_id = ? AND id = ?"
-    ))
+    )))
     .bind(scope.as_str())
     .bind("res_base")
     .fetch_one(cache.pool())

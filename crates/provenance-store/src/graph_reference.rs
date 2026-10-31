@@ -10,8 +10,9 @@ use serde::{Deserialize, Serialize};
 pub use export::{graph_digest, ExactExport};
 pub use projection::GraphExport;
 
+use crate::repository::Repository;
 use git::{GitRepository, TreeSource};
-use projection::load_projection;
+use projection::{load_projection, read_projection};
 
 const STORE_PATH: &str = ".provenance/state";
 
@@ -83,7 +84,7 @@ pub struct GraphCounts {
 }
 
 pub struct GraphReferences {
-    repository: GitRepository,
+    git: GitRepository,
 }
 
 impl GraphReference {
@@ -151,27 +152,32 @@ impl GraphReference {
 }
 
 impl GraphReferences {
+    /// The references of the Git repository at `repo`. Reading a reference
+    /// needs only Git: the pinned graph comes from the commit, not from the
+    /// live state.
     pub fn open(repo: &Utf8Path) -> Result<Self, GraphReferenceError> {
         Ok(Self {
-            repository: GitRepository::open(repo)?,
+            git: GitRepository::open(repo)?,
         })
     }
 
+    /// Pins the graph of the scope `repository` selected at a commit.
     pub fn issue(
         &self,
-        scope: &str,
+        repository: &Repository,
         revision: Option<&str>,
         correlation: Option<ExternalCorrelation>,
     ) -> Result<GraphReference, GraphReferenceError> {
         if let Some(correlation) = &correlation {
             validate_correlation(correlation)?;
         }
+        let scope = repository.scope().as_str();
         let implicit_head = revision.is_none();
-        let commit = self.repository.resolve_commit(revision.unwrap_or("HEAD"))?;
+        let commit = self.git.resolve_commit(revision.unwrap_or("HEAD"))?;
         let graph = self.projection(TreeSource::Commit(&commit), scope)?;
         if implicit_head {
             let index = self.projection(TreeSource::Index, scope)?;
-            let worktree = load_projection(self.repository.root(), scope)?;
+            let worktree = read_projection(&repository.store(), repository.scope())?;
             let committed_bytes = canonical_bytes(&graph)?;
             if committed_bytes != canonical_bytes(&index)?
                 || committed_bytes != canonical_bytes(&worktree)?
@@ -185,7 +191,7 @@ impl GraphReferences {
             }
         }
 
-        let repository_id = self.repository.identity(&commit)?;
+        let repository_id = self.git.identity(&commit)?;
         let graph_digest = graph_digest(&graph)?;
         let reference_id =
             reference_identity(&repository_id, STORE_PATH, scope, &commit, &graph_digest);
@@ -250,7 +256,7 @@ impl GraphReferences {
         source: TreeSource<'_>,
         scope: &str,
     ) -> Result<GraphExport, GraphReferenceError> {
-        let tree = self.repository.materialize(source)?;
+        let tree = self.git.materialize(source)?;
         load_projection(
             Utf8Path::from_path(tree.path()).ok_or_else(|| GraphReferenceError::Incomplete {
                 detail: "temporary Git tree path is not UTF-8".into(),
@@ -294,11 +300,11 @@ impl GraphReferences {
         reference: &GraphReference,
     ) -> Result<GraphExport, GraphReferenceError> {
         reference.validate()?;
-        let commit = self.repository.resolve_commit(&reference.commit)?;
+        let commit = self.git.resolve_commit(&reference.commit)?;
         if commit != reference.commit {
             return mismatch("commit", &reference.commit, &commit);
         }
-        let repository_id = self.repository.identity(&commit)?;
+        let repository_id = self.git.identity(&commit)?;
         if repository_id != reference.repository_id {
             return mismatch("repository_id", &reference.repository_id, &repository_id);
         }

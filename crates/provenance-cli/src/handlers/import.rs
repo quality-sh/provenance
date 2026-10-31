@@ -1,11 +1,13 @@
 use super::export::ScopeExport;
 use crate::output;
 use crate::repo_context::RepoContext;
-use crate::store::{ScopeSnapshot, Store};
+use crate::store::{snapshot, ScopeSnapshot, Store};
 use camino::Utf8PathBuf;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
 use provenance_store::layout::ProvenanceLayout;
+use provenance_store::publication::with_publication_guard;
+use provenance_store::repository::Repository;
 use provenance_store::state_store::{
     assertion_cites_contribution, assertion_cites_synthesis,
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, ScopeShards,
@@ -30,11 +32,9 @@ pub(super) fn import_scope(
 ) -> anyhow::Result<ImportReport> {
     let input = std::fs::read_to_string(input)?;
     let exported = deserialize_scope_export(&input)?;
-    anyhow::ensure!(
-        exported.scope == context.scope,
-        "import scope does not match --scope"
-    );
-    let scope_id = context.scope_id()?;
+    let repository = context.open()?;
+    repository.ensure_selected(&ScopeId::new(&exported.scope)?)?;
+    let scope_id = repository.scope().clone();
     let records = exported.sources.len()
         + exported.domains.len()
         + exported.requirements.len()
@@ -51,8 +51,9 @@ pub(super) fn import_scope(
         + exported.proposal_cards.len()
         + exported.assertion_records.len()
         + exported.dispositions.len();
-    let store = context.open_graph()?;
-    store.with_repository_publication(|| {
+    with_publication_guard(&repository, |guard| {
+        let held = guard.repository();
+        let store = Store::new(held);
         store.ensure_review_portable(&scope_id)?;
         anyhow::ensure!(
             exported
@@ -71,7 +72,7 @@ pub(super) fn import_scope(
             assertions: &exported.assertion_records,
             dispositions: &exported.dispositions,
         })?;
-        let stored = store.snapshot(&scope_id)?;
+        let stored = store.snapshot()?;
         ensure_immutable_records_preserved(
             "proposal",
             &stored.proposal_cards,
@@ -91,7 +92,7 @@ pub(super) fn import_scope(
             |record| record.id.as_str(),
         )?;
         ensure_asserted_evidence_preserved(&stored, &exported)?;
-        apply_import(store.layout(), &scope_id, &exported, dry_run)
+        apply_import(held, &stored, &exported, dry_run)
     })?;
     Ok(ImportReport {
         status: "ok",
@@ -234,17 +235,20 @@ fn ensure_asserted_evidence_preserved(
     Ok(())
 }
 
+/// Publishes the export over the live state. `repository` holds the section
+/// that read `live`, the snapshot before the stage; the stage body reads only
+/// the staged store.
 fn apply_import(
-    live_layout: &ProvenanceLayout,
-    scope_id: &ScopeId,
+    repository: &Repository,
+    live: &ScopeSnapshot,
     exported: &ScopeExport,
     dry_run: bool,
 ) -> anyhow::Result<()> {
-    provenance_store::publication::with_staged_state(live_layout, dry_run, |layout| {
-        StateStore::new(layout.clone()).import_scope(scope_id, &scope_shards(exported))?;
-        let staged_repo = layout.provenance_dir().parent().unwrap().to_path_buf();
-        super::check::validate_repository(staged_repo)?;
-        ensure_changed_statements_are_clean(live_layout, layout, scope_id)
+    let scope_id = repository.scope();
+    repository.stage(dry_run, None, |staged| {
+        staged.import_scope(scope_id, &scope_shards(exported))?;
+        super::check::validate_repository(staged)?;
+        ensure_changed_statements_are_clean(live, staged)
     })
 }
 
@@ -272,15 +276,16 @@ fn scope_shards(exported: &ScopeExport) -> ScopeShards<'_> {
 
 #[rule("rule_ste_import_changed_statement_gate")]
 fn ensure_changed_statements_are_clean(
-    live_layout: &ProvenanceLayout,
-    staged_layout: &ProvenanceLayout,
-    scope_id: &ScopeId,
+    live_snapshot: &ScopeSnapshot,
+    staged: &StateStore,
 ) -> anyhow::Result<()> {
-    let live = Store::open(live_layout.provenance_dir().parent().unwrap());
-    let staged = Store::open(staged_layout.provenance_dir().parent().unwrap());
-    let live_snapshot = live.snapshot(scope_id)?;
-    let staged_snapshot = staged.snapshot(scope_id)?;
-    let dictionary = provenance_store::dictionary_reference::load_project_dictionary(live_layout);
+    let identity = staged
+        .repository()
+        .ok_or_else(|| anyhow::anyhow!("a staged import has the live repository identity"))?;
+    let staged_snapshot = snapshot(staged, identity.scope())?;
+    let dictionary = provenance_store::dictionary_reference::load_project_dictionary(
+        &ProvenanceLayout::new(identity.working_tree()),
+    );
     let diagnostics = analyze_changed_statements(
         &live_snapshot.requirements,
         &live_snapshot.rules,

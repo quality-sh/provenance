@@ -155,7 +155,7 @@ included in the Rust package so its unit test remains usable after packaging.
 
 The generator also emits the Effect v4 contract and methods into the existing
 ignored TypeScript source directory. The official `@effect/openapi-generator`,
-Effect, and its platform dependencies use `4.0.0-rc.113`. Generation warnings
+Effect, and its platform dependencies use `4.0.4`. Generation warnings
 stop the build. Runtime wire validators preserve the production fixture values
 without object stripping or default insertion. The existing response validators
 are shared by the Promise and Effect clients.
@@ -185,3 +185,9 @@ The installed-package check uses the existing CLI and fixture executables in
 installs do not build Rust or run code generation. See the
 [Effect SDK guide](../../docs/effect-sdk.md) for setup, atoms, error handling,
 wire schema limits, and downstream prerequisites.
+
+The shared preparation command also copies the four root skill sources into
+`crates/provenance-cli/skills/` for Cargo packages. Run
+`node tools/skills/prepare.mjs` before a direct Cargo package or publish command.
+See [bundled skill preparation](../skills/README.md). These copies are generated
+files and must not be tracked.

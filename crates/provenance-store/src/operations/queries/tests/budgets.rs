@@ -1,4 +1,4 @@
-use super::{root_of, seeded_store};
+use super::{repository_at, repository_of, root_of, seeded_store};
 use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
@@ -78,8 +78,7 @@ impl ContextResolver for Target {
         _: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         Ok(PreparedContext::read(PreparedRead {
-            root: self.0.clone(),
-            scope: provenance_core::ScopeId::new("default").unwrap(),
+            repository: crate::repository::Repository::open(&self.0, "default").unwrap(),
             policy: ReadPolicy::default(),
             requested_target: "test".into(),
             external: self.1,
@@ -120,8 +119,7 @@ async fn neighbors_keeps_an_under_budget_response_and_its_wire_envelope() {
     append_large_children(&store, &scope, 1);
 
     let answer = queries::neighbors(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         neighbors_query(),
     )
@@ -144,8 +142,7 @@ async fn neighbors_refuses_an_oversized_response_through_native_and_registered_c
     let root = root_of(&dir);
 
     let error = queries::neighbors(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::default(),
         neighbors_query(),
     )
@@ -156,9 +153,7 @@ async fn neighbors_refuses_an_oversized_response_through_native_and_registered_c
         Some(&ReadFailure::PageBudgetExceeded)
     );
 
-    let failure = catalog::invoke_with(
-        "neighbors",
-        SDK_PROTOCOL_VERSION,
+    let failure = crate::test_support::call::<catalog::Neighbors, _>(
         json!({
             "context": {"repository": "test", "scope": "default"},
             "request": {
@@ -215,8 +210,7 @@ async fn evidence_keeps_an_under_budget_record() {
     append_verification_binding(&store, &scope, &"x".repeat(LARGE_FIELD_BYTES));
 
     let answer = queries::evidence(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         evidence_query(),
     )
@@ -233,8 +227,7 @@ async fn evidence_refuses_one_record_over_the_record_budget() {
     append_verification_binding(&store, &scope, &"x".repeat(70_000));
 
     let error = queries::evidence(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         evidence_query(),
     )
@@ -259,11 +252,13 @@ async fn set_rule_description_bytes(
         .await
         .unwrap();
     let expression = crate::cache::read::page::byte_expression(Rule::COLUMNS);
-    let size: i64 = sqlx::query_scalar(&format!("SELECT {expression} FROM rules WHERE id = ?"))
-        .bind(id)
-        .fetch_one(cache.pool())
-        .await
-        .unwrap();
+    let size: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+        "SELECT {expression} FROM rules WHERE id = ?"
+    )))
+    .bind(id)
+    .fetch_one(cache.pool())
+    .await
+    .unwrap();
     cache.close().await.unwrap();
     usize::try_from(size).unwrap()
 }
@@ -277,9 +272,7 @@ fn get_rule_query() -> GetQuery {
 }
 
 async fn get_rule_member(root: camino::Utf8PathBuf) -> serde_json::Value {
-    catalog::invoke_with(
-        "get-rule",
-        SDK_PROTOCOL_VERSION,
+    crate::test_support::call::<crate::operations::family_operations::GetRule, _>(
         json!({
             "context": {"repository": "test", "scope": "default"},
             "request": {"id": "rule_overtime"}
@@ -303,8 +296,7 @@ async fn stored_record_bytes_decide_query_eligibility_not_wrapper_bytes() {
     crate::cache::tests::fixtures::create_rule_of(&store, &scope, "rule_overtime", "req_overtime");
     let root = root_of(&dir);
     queries::get(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::default(),
         get_rule_query(),
     )
@@ -317,8 +309,7 @@ async fn stored_record_bytes_decide_query_eligibility_not_wrapper_bytes() {
     assert_eq!(size, crate::operations::reader::RECORD_BYTES);
 
     let answer = queries::get(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
         get_rule_query(),
     )
@@ -337,8 +328,7 @@ async fn stored_record_bytes_decide_query_eligibility_not_wrapper_bytes() {
     let size = set_rule_description_bytes(&store, "rule_overtime", description_bytes + 1).await;
     assert_eq!(size, crate::operations::reader::RECORD_BYTES + 1);
     let error = queries::get(
-        Some(root.clone()),
-        &scope,
+        &repository_at(&root),
         ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),
         get_rule_query(),
     )

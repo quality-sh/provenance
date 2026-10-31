@@ -133,9 +133,11 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_source(&repo);
-    let access =
-        provenance_store::operations::LocalRepository::new(directory.path(), "native", "default")
-            .unwrap();
+    let access = provenance_store::operations::LocalRepository::bind(
+        provenance_store::repository::Repository::open(directory.path(), "default").unwrap(),
+        "native",
+    )
+    .unwrap();
     let host = provenance_transport::StatementHost::with_access(Arc::new(access))
         .with_check_port(Arc::new(EmptyCheckPort));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
@@ -150,7 +152,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
         .to_string();
     let get_tool = tools.iter().find(|tool| tool.name == get_name).unwrap();
     let get_schema = json!(get_tool.output_schema.as_ref().unwrap());
-    let get_validator = jsonschema::JSONSchema::compile(&get_schema).unwrap();
+    let get_validator = compile(&get_schema).unwrap();
     let invalid_record = json!({
         "record": {"id":"source_live_inventory", "kind":"source", "value":42},
         "view":"record", "related":[], "detail":null, "bounds":null
@@ -316,6 +318,8 @@ fn cli_readable_get_includes_the_record_view_context_and_bounds() {
             "req_readable",
             "--statement",
             "Show related records in readable output.",
+            "--status",
+            "active",
             "--severity",
             "high",
         ])
@@ -347,4 +351,15 @@ fn cli_readable_get_includes_the_record_view_context_and_bounds() {
     assert!(readable.contains("rule_readable"));
     assert!(readable.contains("bounds:"));
     assert!(readable.contains("limit=7"));
+}
+
+/// Read a schema that has no `$schema` keyword as a Draft 7 document.
+fn compile(
+    schema: &serde_json::Value,
+) -> Result<jsonschema::Validator, jsonschema::ValidationError<'static>> {
+    if schema.get("$schema").is_some() {
+        jsonschema::validator_for(schema)
+    } else {
+        jsonschema::draft7::new(schema)
+    }
 }

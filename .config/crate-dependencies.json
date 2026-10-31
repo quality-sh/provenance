@@ -1,0 +1,253 @@
+{
+  "host_crates": [
+    "axum",
+    "clap",
+    "dunce",
+    "filetime",
+    "fs2",
+    "fs_at",
+    "hyper",
+    "jsonschema",
+    "libsqlite3-sys",
+    "notify",
+    "open",
+    "remove_dir_all",
+    "reqwest",
+    "rmcp",
+    "rustix",
+    "same-file",
+    "sqlx",
+    "tempfile",
+    "tokio",
+    "tokio-tungstenite",
+    "tokio-util",
+    "tower",
+    "ureq",
+    "walkdir",
+    "windows-sys"
+  ],
+  "forbidden": {
+    "provenance-core": [
+      "provenance-store",
+      "provenance-contract",
+      "provenance-transport",
+      "provenance-cli",
+      "tokio",
+      "axum"
+    ],
+    "provenance-store": [
+      "provenance-contract",
+      "provenance-transport",
+      "provenance-cli",
+      "axum",
+      "rmcp"
+    ],
+    "provenance-contract": [
+      "provenance-transport",
+      "provenance-cli",
+      "tokio",
+      "axum",
+      "rmcp"
+    ],
+    "provenance-porcelain": [
+      "provenance-store",
+      "provenance-contract",
+      "provenance-transport",
+      "provenance-cli",
+      "clap",
+      "rmcp"
+    ],
+    "provenance-transport": [
+      "provenance-cli"
+    ]
+  },
+  "crates": {
+    "provenance-cli": {
+      "dependencies": [
+        "axum",
+        "clap",
+        "dunce",
+        "fs2",
+        "jsonschema",
+        "notify",
+        "open",
+        "provenance-contract",
+        "provenance-core",
+        "provenance-macros",
+        "provenance-porcelain",
+        "provenance-report",
+        "provenance-scanner",
+        "provenance-ste100",
+        "provenance-store",
+        "provenance-transport",
+        "remove_dir_all",
+        "rustix",
+        "tempfile",
+        "tokio",
+        "tokio-tungstenite",
+        "ureq",
+        "walkdir",
+        "windows-sys"
+      ],
+      "dev-dependencies": [
+        "jsonschema",
+        "provenance-transport",
+        "rmcp",
+        "tempfile"
+      ]
+    },
+    "provenance-codegen": {
+      "dependencies": [
+        "provenance-contract",
+        "provenance-core",
+        "provenance-ste100",
+        "provenance-store"
+      ],
+      "dev-dependencies": [
+        "jsonschema",
+        "tempfile"
+      ]
+    },
+    "provenance-contract": {
+      "dependencies": [
+        "provenance-core",
+        "provenance-macros",
+        "provenance-store"
+      ],
+      "dev-dependencies": [
+        "jsonschema",
+        "provenance-ste100",
+        "provenance-store",
+        "tokio"
+      ]
+    },
+    "provenance-core": {
+      "dependencies": [
+        "provenance-macros"
+      ],
+      "dev-dependencies": [
+        "jsonschema"
+      ]
+    },
+    "provenance-http-client": {
+      "dependencies": [
+        "jsonschema",
+        "reqwest"
+      ],
+      "dev-dependencies": [
+        "tokio"
+      ]
+    },
+    "provenance-macros": {
+      "dependencies": [],
+      "dev-dependencies": [
+        "provenance-scanner"
+      ]
+    },
+    "provenance-porcelain": {
+      "dependencies": [
+        "provenance-core",
+        "provenance-macros"
+      ],
+      "dev-dependencies": [
+        "provenance-macros",
+        "tempfile",
+        "tokio"
+      ]
+    },
+    "provenance-report": {
+      "dependencies": [
+        "dunce",
+        "provenance-core",
+        "provenance-macros",
+        "provenance-scanner",
+        "provenance-store"
+      ],
+      "dev-dependencies": [
+        "tempfile"
+      ]
+    },
+    "provenance-scanner": {
+      "dependencies": [
+        "dunce",
+        "provenance-core",
+        "provenance-macros",
+        "same-file",
+        "walkdir"
+      ],
+      "dev-dependencies": [
+        "provenance-macros",
+        "tempfile"
+      ]
+    },
+    "provenance-sdk": {
+      "dependencies": [
+        "dunce",
+        "provenance-core",
+        "provenance-macros",
+        "provenance-store"
+      ],
+      "dev-dependencies": [
+        "tempfile",
+        "tokio"
+      ]
+    },
+    "provenance-ste100": {
+      "dependencies": [
+        "fs2",
+        "provenance-macros"
+      ],
+      "dev-dependencies": [
+        "jsonschema"
+      ]
+    },
+    "provenance-store": {
+      "dependencies": [
+        "dunce",
+        "fs2",
+        "fs_at",
+        "libsqlite3-sys",
+        "provenance-core",
+        "provenance-macros",
+        "provenance-scanner",
+        "provenance-ste100",
+        "rustix",
+        "sqlx",
+        "tempfile",
+        "tokio",
+        "windows-sys"
+      ],
+      "dev-dependencies": [
+        "filetime",
+        "fs_at",
+        "jsonschema"
+      ]
+    },
+    "provenance-transport": {
+      "dependencies": [
+        "axum",
+        "dunce",
+        "fs2",
+        "provenance-contract",
+        "provenance-core",
+        "provenance-macros",
+        "provenance-porcelain",
+        "provenance-store",
+        "rmcp",
+        "tempfile",
+        "tokio",
+        "tokio-util",
+        "ureq"
+      ],
+      "dev-dependencies": [
+        "jsonschema",
+        "provenance-macros",
+        "provenance-ste100",
+        "sqlx",
+        "tempfile",
+        "tokio",
+        "tower"
+      ]
+    }
+  }
+}

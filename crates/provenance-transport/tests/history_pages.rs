@@ -99,7 +99,7 @@ fn commit(repo: &Repository) -> String {
 #[tokio::test]
 async fn requirement_history_pages_report_limit_has_more_and_cursor() {
     let repo = Repository::new("The shared graph is readable.");
-    let store = StateStore::new(repo.layout.clone());
+    let store = repo.open().store();
     let create: CreateReviewRequirement = serde_json::from_value(json!({
         "actor":"ben","origin":null,
         "create":{"scope_id":"default","id":"req_hist",

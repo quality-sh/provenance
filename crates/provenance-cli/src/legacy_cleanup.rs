@@ -13,18 +13,21 @@ const END_MARKER: &str = "<!-- END PROVENANCE SKILLS -->";
 const AGENTS_PREAMBLE: &str = "# Provenance Skills\n\nThese skills are distributed with the provenance CLI and should match the installed binary.\n\nBefore shaping or backtrace work, run `provenance skills install --target agents-md` if skills are absent.\n";
 
 pub fn skill_paths(base: &Path) -> impl Iterator<Item = PathBuf> + '_ {
-    [base.join(".claude/skills"), base.join(".agents/skills")]
-        .into_iter()
-        .flat_map(|root| {
-            LEGACY_SKILL_DIRECTORIES
-                .iter()
-                .map(move |directory| root.join(directory).join("SKILL.md"))
-        })
+    [
+        base.join(".claude").join("skills"),
+        base.join(".agents").join("skills"),
+    ]
+    .into_iter()
+    .flat_map(|root| {
+        LEGACY_SKILL_DIRECTORIES
+            .iter()
+            .map(move |directory| root.join(directory).join("SKILL.md"))
+    })
 }
 
 pub fn agents_path(base: &Path, global: bool) -> PathBuf {
     if global {
-        base.join(".agents/AGENTS.md")
+        base.join(".agents").join("AGENTS.md")
     } else {
         base.join("AGENTS.md")
     }

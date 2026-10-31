@@ -1,0 +1,10 @@
+error[E0521]: borrowed data escapes outside of closure
+ --> tests/compile_fail/staged_store_outlives_stage.rs:8:13
+  |
+5 |     let mut escaped = None;
+  |         ----------- `escaped` declared here, outside of the closure body
+6 |     repository
+7 |         .stage(false, None, |staged| {
+  |                              ------ `staged` is a reference that is only valid in the closure body
+8 |             escaped = Some(staged);
+  |             ^^^^^^^^^^^^^^^^^^^^^^ `staged` escapes the closure body here

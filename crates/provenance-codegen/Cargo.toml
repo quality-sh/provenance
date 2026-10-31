@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 provenance-core = { workspace = true, features = ["schema"] }
+provenance-contract.workspace = true
 provenance-store = { workspace = true, features = ["schema"] }
 provenance-ste100 = { workspace = true, features = ["schema"] }
 serde_json.workspace = true

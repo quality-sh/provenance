@@ -1,6 +1,8 @@
 use anyhow::Context;
 use camino::{Utf8Path, Utf8PathBuf};
-use std::process::{Command, Output};
+use std::collections::BTreeSet;
+use std::io::Write;
+use std::process::{Command, Output, Stdio};
 use std::sync::OnceLock;
 
 #[derive(Debug)]
@@ -133,26 +135,116 @@ pub fn resolve_range(
 }
 
 pub fn revision_files(repo: &Utf8Path, revision: &str) -> anyhow::Result<Vec<RevisionFile>> {
-    let output = git(repo, &["ls-tree", "-rz", "--name-only", revision])?;
-    let mut files = Vec::new();
-    for raw_path in output.stdout.split(|byte| *byte == 0) {
-        if raw_path.is_empty() {
+    read_blobs(repo, revision_source_blobs(repo, revision)?)
+}
+
+/// Read the revision blobs for the selected repository paths only. A path
+/// uses `/` separators, as Git writes it. An empty selection reads no file.
+pub fn revision_files_at_paths(
+    repo: &Utf8Path,
+    revision: &str,
+    paths: &BTreeSet<String>,
+) -> anyhow::Result<Vec<RevisionFile>> {
+    if paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let blobs = revision_source_blobs(repo, revision)?
+        .into_iter()
+        .filter(|(_, path)| paths.contains(path.as_str()))
+        .collect();
+    read_blobs(repo, blobs)
+}
+
+/// The object id and path of each source blob in the revision tree. One
+/// `ls-tree` call lists the tree; it takes no path specs, so the argument
+/// list stays short for any selection.
+fn revision_source_blobs(
+    repo: &Utf8Path,
+    revision: &str,
+) -> anyhow::Result<Vec<(String, Utf8PathBuf)>> {
+    let output = git(repo, &["ls-tree", "-rz", revision])?;
+    let mut blobs = Vec::new();
+    for entry in output.stdout.split(|byte| *byte == 0) {
+        if entry.is_empty() {
             continue;
         }
-        let path = Utf8PathBuf::from(String::from_utf8(raw_path.to_vec())?);
-        if path
-            .extension()
-            .and_then(provenance_scanner::Language::from_extension)
-            .is_none()
+        let entry = std::str::from_utf8(entry).context("git ls-tree wrote a non-UTF-8 entry")?;
+        let (meta, path) = entry
+            .split_once('\t')
+            .context("git ls-tree wrote an entry without a path")?;
+        let mut fields = meta.split(' ');
+        let (Some(_mode), Some(kind), Some(object)) = (fields.next(), fields.next(), fields.next())
+        else {
+            anyhow::bail!("git ls-tree wrote a malformed entry: {entry}");
+        };
+        let path = Utf8PathBuf::from(path);
+        if kind != "blob"
+            || path
+                .extension()
+                .and_then(provenance_scanner::Language::from_extension)
+                .is_none()
         {
             continue;
         }
-        let object = format!("{revision}:{path}");
-        let blob = git(repo, &["show", &object])?;
+        blobs.push((object.to_string(), path));
+    }
+    Ok(blobs)
+}
+
+/// Read the blobs through one `git cat-file --batch` process.
+fn read_blobs(
+    repo: &Utf8Path,
+    blobs: Vec<(String, Utf8PathBuf)>,
+) -> anyhow::Result<Vec<RevisionFile>> {
+    if blobs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut child = command(repo)
+        .args(["cat-file", "--batch"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("run git cat-file --batch")?;
+    let mut stdin = child.stdin.take().context("open git cat-file input")?;
+    let mut request = String::new();
+    for (object, _) in &blobs {
+        request.push_str(object);
+        request.push('\n');
+    }
+    let writer = std::thread::spawn(move || stdin.write_all(request.as_bytes()));
+    let output = child
+        .wait_with_output()
+        .context("read git cat-file --batch")?;
+    let written = writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("git cat-file input writer panicked"))?;
+    let output = checked(output, "git cat-file --batch")?;
+    written.context("write git cat-file input")?;
+    let mut rest = output.stdout.as_slice();
+    let mut files = Vec::with_capacity(blobs.len());
+    for (object, path) in blobs {
+        let header_end = rest
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .context("git cat-file omitted an object header")?;
+        let header = std::str::from_utf8(&rest[..header_end])?;
+        let size = match header.split(' ').collect::<Vec<_>>().as_slice() {
+            [id, "blob", size] if *id == object => size.parse::<usize>()?,
+            _ => anyhow::bail!("git cat-file could not read {path} ({header})"),
+        };
+        let body_start = header_end + 1;
+        let body = rest
+            .get(body_start..body_start + size)
+            .context("git cat-file wrote a short object")?;
         files.push(RevisionFile {
+            content: String::from_utf8(body.to_vec())
+                .with_context(|| format!("read blob {path} as UTF-8"))?,
             path,
-            content: String::from_utf8(blob.stdout)?,
         });
+        rest = rest
+            .get(body_start + size + 1..)
+            .context("git cat-file omitted an object terminator")?;
     }
     Ok(files)
 }
@@ -278,6 +370,34 @@ fn resolve_commit(repo: &Utf8Path, revision: &str) -> anyhow::Result<String> {
     Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
+/// Whether the object exists and names a commit.
+pub(crate) fn commit_exists(repo: &Utf8Path, commit: &str) -> anyhow::Result<bool> {
+    let expression = format!("{commit}^{{commit}}");
+    let status = command(repo)
+        .args(["cat-file", "-e", &expression])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("run git cat-file -e")?;
+    Ok(status.success())
+}
+
+/// Whether `commit` is in the history of `head`. Both must name commits.
+pub(crate) fn is_ancestor(repo: &Utf8Path, commit: &str, head: &str) -> anyhow::Result<bool> {
+    let output = command(repo)
+        .args(["merge-base", "--is-ancestor", commit, head])
+        .output()
+        .context("run git merge-base --is-ancestor")?;
+    match output.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        _ => anyhow::bail!(
+            "git merge-base --is-ancestor failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ),
+    }
+}
+
 fn git(repo: &Utf8Path, args: &[&str]) -> anyhow::Result<Output> {
     let output = command(repo)
         .args(args)
@@ -296,6 +416,8 @@ fn checked(output: Output, operation: &str) -> anyhow::Result<Output> {
     Ok(output)
 }
 
+#[cfg(test)]
+mod batch_tests;
 #[cfg(test)]
 mod security_tests;
 

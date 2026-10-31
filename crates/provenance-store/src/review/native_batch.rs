@@ -1,10 +1,10 @@
 //! Canonical staged writer for one or more native graph record changes.
 
-use super::guard;
 use crate::{
     review::publication::with_record_state,
     state_store::{
-        read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, StateStore,
+        read_budget::ensure_slice_within_read_budget, record_stamps::GraphRecord, RecordStamp,
+        StateStore,
     },
     write_error::{SourceFailure, WriteFailure},
 };
@@ -21,9 +21,8 @@ impl StateStore {
         write: impl FnOnce(&NativeRecordBatch<'_>) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         let stamp = self.current_record_stamp()?;
-        with_record_state(&self.layout, |layout| {
-            let staged = Self::staged(layout.clone(), stamp);
-            write(&NativeRecordBatch { store: &staged })
+        with_record_state(self, RecordStamp::resolved(stamp), |staged| {
+            write(&NativeRecordBatch { store: staged })
         })
     }
 
@@ -31,12 +30,12 @@ impl StateStore {
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
-        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         self.with_native_record_batch(|batch| {
             let staged_path = batch.store.layout.root().join(relative);
-            batch.mutate_one(&staged_path, expected_etag, mutate)
+            batch.mutate_one_with_store(&staged_path, expected_etag, mutate)
         })
     }
 }
@@ -52,8 +51,19 @@ impl NativeRecordBatch<'_> {
         expected_etag: Option<&str>,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
-        let (result, changes) = self.write(path, expected_etag, |records| {
-            let result = mutate(records)?;
+        self.mutate_one_with_store(path, expected_etag, |_, records| mutate(records))
+    }
+
+    /// Like [`Self::mutate_one`], but `mutate` also gets the store that holds
+    /// the staged section.
+    fn mutate_one_with_store<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        expected_etag: Option<&str>,
+        mutate: impl FnOnce(&StateStore, &mut Vec<T>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        let (result, changes) = self.write(path, expected_etag, |held, records| {
+            let result = mutate(held, records)?;
             Ok((result.clone(), Some(result.id().clone())))
         })?;
         Ok(changes
@@ -68,7 +78,7 @@ impl NativeRecordBatch<'_> {
         path: &Utf8Path,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<()>,
     ) -> anyhow::Result<()> {
-        self.write(path, None, |records| {
+        self.write(path, None, |_, records| {
             mutate(records)?;
             Ok(((), None))
         })
@@ -79,35 +89,34 @@ impl NativeRecordBatch<'_> {
         &self,
         path: &Utf8Path,
         expected_etag: Option<&str>,
-        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<(R, Option<StableId>)>,
+        mutate: impl FnOnce(&StateStore, &mut Vec<T>) -> anyhow::Result<(R, Option<StableId>)>,
     ) -> anyhow::Result<(R, Vec<(T, T)>)>
     where
         T: GraphRecord,
     {
-        guard::with_writer(path, "*", || {
+        self.store.permitting(&[path], "*", |store| {
             let (result, changes) =
-                self.store
-                    .mutate_jsonl_records(path, |records: &mut Vec<T>| {
-                        let before = records.clone();
-                        let (result, guarded_id) = mutate(records)?;
-                        self.store.stamp_records(&before, records)?;
-                        ensure_slice_within_read_budget(records)?;
-                        if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
-                            check_etag(&before, id, expected)?;
-                        }
-                        let changes = records
-                            .iter()
-                            .filter_map(|after| {
-                                let previous =
-                                    before.iter().find(|record| record.id() == after.id())?;
-                                (previous != after).then(|| (previous.clone(), after.clone()))
-                            })
-                            .collect::<Vec<_>>();
-                        Ok((result, changes))
-                    })?;
+                store.mutate_jsonl_records_with_store(path, |held, records: &mut Vec<T>| {
+                    let before = records.clone();
+                    let (result, guarded_id) = mutate(held, records)?;
+                    held.stamp_records(&before, records)?;
+                    ensure_slice_within_read_budget(records)?;
+                    if let (Some(expected), Some(id)) = (expected_etag, guarded_id.as_ref()) {
+                        check_etag(&before, id, expected)?;
+                    }
+                    let changes = records
+                        .iter()
+                        .filter_map(|after| {
+                            let previous =
+                                before.iter().find(|record| record.id() == after.id())?;
+                            (previous != after).then(|| (previous.clone(), after.clone()))
+                        })
+                        .collect::<Vec<_>>();
+                    Ok((result, changes))
+                })?;
             if let Some((_, after)) = changes.first() {
                 let review: ReviewRecord = after.clone().into();
-                self.store.validate_graph_scope(review.scope_id())?;
+                store.validate_graph_scope(review.scope_id())?;
             }
             Ok((result, changes))
         })

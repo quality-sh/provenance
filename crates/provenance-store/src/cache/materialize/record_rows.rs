@@ -44,10 +44,10 @@ fn insert_sql<K: ProjectionRow>(with_search_text: bool) -> String {
     )
 }
 
-fn bind<'q>(
-    query: Query<'q, Sqlite, SqliteArguments<'q>>,
+fn bind(
+    query: Query<'_, Sqlite, SqliteArguments>,
     value: ColumnValue,
-) -> Query<'q, Sqlite, SqliteArguments<'q>> {
+) -> Query<'_, Sqlite, SqliteArguments> {
     match value {
         ColumnValue::Null => query.bind(None::<String>),
         ColumnValue::Integer(integer) => query.bind(integer),
@@ -63,11 +63,11 @@ async fn load<K: Clone + ProjectionRow + serde::de::DeserializeOwned>(
     bytes: &[u8],
     wrap: Option<fn(Box<K>) -> GraphNode>,
 ) -> anyhow::Result<u64> {
-    let sql = insert_sql::<K>(wrap.is_some());
+    let sql: std::sync::Arc<str> = insert_sql::<K>(wrap.is_some()).into();
     let mut loaded = 0;
     for record in serde_json::from_slice::<Vec<K>>(bytes)? {
         let node = wrap.map(|wrap| wrap(Box::new(record.clone())));
-        let mut query = sqlx::query(&sql);
+        let mut query = sqlx::query(sqlx::AssertSqlSafe(std::sync::Arc::clone(&sql)));
         for value in record.row()? {
             query = bind(query, value);
         }

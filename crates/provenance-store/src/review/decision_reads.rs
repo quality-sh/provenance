@@ -63,9 +63,9 @@ impl StateStore {
         scope: &ScopeId,
         records: &[(NodeType, StableId)],
     ) -> anyhow::Result<DocumentReviewState> {
-        self.with_repository_publication(|| {
-            let facts = CycleFacts::validated(self, scope)?;
-            let mut families = ReviewFamilyIndex::new(self, scope, records);
+        self.with_repository_publication(|held| {
+            let facts = CycleFacts::validated(held, scope)?;
+            let mut families = ReviewFamilyIndex::new(held, scope, records);
             let mut states = Vec::new();
             for (kind, id) in records {
                 // A reference to a record that no longer exists has no review state.

@@ -1,57 +1,59 @@
-use camino::Utf8Path;
 use provenance_core::{
     AssertionRecord, Boundary, Contribution, DispositionRecord, Domain, ImplementationBinding,
     Message, ProposalCard, Question, Requirement, Resolution, Rule, ScopeId, Source,
     SynthesisPacket, Thread, Topic, VerificationBinding,
 };
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+use provenance_store::{repository::Repository, state_store::StateStore};
 
+/// The live store of one opened repository.
 #[derive(Debug)]
 pub struct Store {
-    layout: ProvenanceLayout,
+    repository: Repository,
     state: StateStore,
 }
 
 impl Store {
-    pub fn open(repo: impl AsRef<Utf8Path>) -> Self {
-        let layout = ProvenanceLayout::new(repo.as_ref().to_path_buf());
-        let state = StateStore::new(layout.clone());
-        Self { layout, state }
+    pub fn new(repository: &Repository) -> Self {
+        Self {
+            repository: repository.clone(),
+            state: repository.store(),
+        }
     }
 
-    pub fn open_required(repo: impl AsRef<Utf8Path>) -> anyhow::Result<Self> {
-        let store = Self::open(repo);
-        provenance_store::layout::require_initialized_graph(&store.layout)?;
-        Ok(store)
+    pub const fn repository(&self) -> &Repository {
+        &self.repository
     }
 
-    pub const fn layout(&self) -> &ProvenanceLayout {
-        &self.layout
+    /// Every family of the selected scope, read under one publication section.
+    pub fn snapshot(&self) -> anyhow::Result<ScopeSnapshot> {
+        snapshot(&self.state, self.repository.scope())
     }
+}
 
-    pub fn snapshot(&self, scope: &ScopeId) -> anyhow::Result<ScopeSnapshot> {
-        self.with_repository_publication(|| {
-            Ok(ScopeSnapshot {
-                sources: self.list_sources(scope)?,
-                domains: self.list_domains(scope)?,
-                requirements: self.list_requirements(scope)?,
-                boundaries: self.list_boundaries(scope)?,
-                topics: self.list_topics(scope)?,
-                questions: self.list_questions(scope)?,
-                resolutions: self.list_resolutions(scope)?,
-                rules: self.list_rules(scope)?,
-                verification_bindings: self.list_verification_bindings(scope)?,
-                implementation_bindings: self.list_implementation_bindings(scope)?,
-                threads: self.list_threads(scope)?,
-                messages: self.list_messages(scope)?,
-                contributions: self.list_contributions(scope)?,
-                synthesis_packets: self.list_synthesis_packets(scope)?,
-                proposal_cards: self.list_proposal_definitions(scope)?,
-                assertion_records: self.list_assertion_records(scope)?,
-                dispositions: self.list_dispositions(scope)?,
-            })
+/// Every family of one scope, read under one publication section. Takes the
+/// scope because repository-wide callers read each manifest scope in turn.
+pub fn snapshot(store: &StateStore, scope: &ScopeId) -> anyhow::Result<ScopeSnapshot> {
+    store.with_repository_publication(|held| {
+        Ok(ScopeSnapshot {
+            sources: held.list_sources(scope)?,
+            domains: held.list_domains(scope)?,
+            requirements: held.list_requirements(scope)?,
+            boundaries: held.list_boundaries(scope)?,
+            topics: held.list_topics(scope)?,
+            questions: held.list_questions(scope)?,
+            resolutions: held.list_resolutions(scope)?,
+            rules: held.list_rules(scope)?,
+            verification_bindings: held.list_verification_bindings(scope)?,
+            implementation_bindings: held.list_implementation_bindings(scope)?,
+            threads: held.list_threads(scope)?,
+            messages: held.list_messages(scope)?,
+            contributions: held.list_contributions(scope)?,
+            synthesis_packets: held.list_synthesis_packets(scope)?,
+            proposal_cards: held.list_proposal_definitions(scope)?,
+            assertion_records: held.list_assertion_records(scope)?,
+            dispositions: held.list_dispositions(scope)?,
         })
-    }
+    })
 }
 
 impl std::ops::Deref for Store {

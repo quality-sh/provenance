@@ -222,12 +222,12 @@ impl ReadSnapshot {
                 .map(|(kind, id)| format!("{}:{}", kind.as_str(), id.as_str()))
                 .collect::<Vec<_>>(),
         )?;
-        let overflow: i64 = sqlx::query_scalar(&format!(
+        let overflow: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "{sets} SELECT \
             (SELECT count(*) FROM members) > 4096 OR (SELECT count(*) FROM refs) > 4096 \
             OR (SELECT count(*) FROM branch) > 4096 OR (SELECT count(*) FROM ancestors) > 4096 \
             OR (SELECT count(*) FROM decisions) > 4096"
-        ))
+        )))
         .bind(self.scope().as_str())
         .bind(root)
         .bind(&hidden)
@@ -236,11 +236,11 @@ impl ReadSnapshot {
         if overflow != 0 {
             return Err(ReadFailure::PageBudgetExceeded.into());
         }
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
             "{sets} SELECT stage, kind, CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id, counter, rank FROM ordered \
             WHERE (stage, rank, counter, id) > (?4, ?5, ?6, ?7) \
             ORDER BY stage, rank, counter, id LIMIT ?8"
-        ))
+        )))
         .bind(self.scope().as_str())
         .bind(root)
         .bind(&hidden)

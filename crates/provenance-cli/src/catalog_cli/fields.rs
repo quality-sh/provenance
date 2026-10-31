@@ -1,5 +1,5 @@
 use clap::{Arg, ArgAction, Command};
-use provenance_store::operations::catalog::{Definition, Parameter};
+use provenance_contract::{Definition, Parameter};
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 
@@ -190,7 +190,7 @@ pub(super) fn augment_with_overrides(
     Ok(command)
 }
 
-pub(super) use provenance_store::operations::catalog::{cli_name, json_flag};
+pub(super) use provenance_contract::{cli_name, json_flag};
 
 fn flag(name: &str, repeated: bool) -> Arg {
     let argument = Arg::new(name.to_owned())
@@ -289,12 +289,8 @@ pub fn schema_input(
         let parsed = raw
             .as_deref()
             .map(|raw| {
-                provenance_store::operations::catalog::parse_schema_value_in(
-                    schema,
-                    declaration,
-                    raw,
-                )
-                .map_err(|_| anyhow::anyhow!("invalid value for --{name}"))
+                provenance_contract::parse_schema_value_in(schema, declaration, raw)
+                    .map_err(|_| anyhow::anyhow!("invalid value for --{name}"))
             })
             .transpose()?;
         if let Some(parsed) = parsed {
@@ -312,7 +308,7 @@ mod tests {
 
     #[test]
     fn json_flag_declarations_follow_wire_fields_not_aliases() {
-        let definitions = provenance_store::operations::catalog::definitions();
+        let definitions = provenance_contract::definitions();
         let rules = definitions
             .iter()
             .filter(|definition| definition.path.split('/').nth(1) == Some("rules"))
@@ -347,7 +343,7 @@ mod tests {
 
     #[test]
     fn every_registered_json_spelling_is_a_canonical_wire_flag() {
-        let definitions = provenance_store::operations::catalog::definitions();
+        let definitions = provenance_contract::definitions();
         let mut collections = BTreeMap::<&str, Vec<&Definition>>::new();
         for definition in definitions {
             let collection = definition.path.split('/').nth(1).expect("route collection");

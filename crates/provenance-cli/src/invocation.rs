@@ -256,7 +256,7 @@ impl Invocation {
 
 impl SearchArgs {
     pub(crate) async fn dispatch(self) -> anyhow::Result<()> {
-        let parameters = provenance_store::operations::catalog::definitions()
+        let parameters = provenance_contract::definitions()
             .iter()
             .find_map(|definition| {
                 definition

@@ -1,64 +1,23 @@
 // Release-check aid: this flow checks the native bundle and SDK against a running host.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { execFileSync, spawn } from 'node:child_process';
-import { once } from 'node:events';
-import { copyFile, mkdir, mkdtemp, readFile, rm, chmod } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { createInterface } from 'node:readline';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { withFixtureHost } from './fixture-host.ts';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const [binaryArg, assetsArg, sdkArg] = process.argv.slice(2);
 if (!binaryArg || !assetsArg || !sdkArg) throw new Error('Usage: node verify-native.ts BINARY COMPOSED_ASSETS SDK_PACKAGE');
 const info = JSON.parse(await readFile(join(resolve(assetsArg), 'host-build-info.json'), 'utf8'));
 const { HttpClient } = await import(pathToFileURL(join(resolve(sdkArg), 'dist/client.js')).href);
-const work = await mkdtemp(join(tmpdir(), 'provenance-native-review-'));
-const binary = join(work, process.platform === 'win32' ? 'provenance.exe' : 'provenance');
-let host: ReturnType<typeof spawn> | undefined;
-try {
-  await copyFile(resolve(binaryArg), binary);
-  await chmod(binary, 0o755);
-  const repository = join(work, 'repository');
-  const steAssets = join(work, 'ste-assets');
-  await mkdir(steAssets);
-  await copyFile(
-    join(root, 'packages/provenance/test/fixtures/synthetic-ste-dictionary.pdf'),
-    join(steAssets, 'ASD-STE100_ISSUE9.pdf'),
-  );
-  const fixtureEnv = {
-    ...process.env,
-    PROVENANCE_STE100_ASSET_DIR: steAssets,
-    PROVENANCE_STE100_INDEX_DIR: join(work, 'ste-indexes'),
-  };
-  const cli = (...args: string[]) => execFileSync(binary, args, {
-    cwd: work, encoding: 'utf8', timeout: 180_000, env: fixtureEnv,
-  });
-  cli('init', '--path', repository, '--scope', 'default', '--path-prefix', '.');
+await withFixtureHost(binaryArg, repository => {
   for (const [id, parent] of [['req_root', undefined], ['req_child', 'req_root']]) {
-    execFileSync(binary, [
-      'requirements', 'create', '--repo', repository, '--scope', 'default',
-      '--stdin',
-    ], {
-      cwd: work, encoding: 'utf8', timeout: 30_000,
-      input: JSON.stringify({
-        actor: 'review-test', id, statement: 'The record is readable.', status: 'discovery',
-        depends_on: [], supersedes: [], ...(parent ? { refines: [parent] } : {}),
-      }),
+    repository.create('requirements', {
+      actor: 'review-test', id, statement: 'The record is readable.', status: 'discovery',
+      depends_on: [], supersedes: [], ...(parent ? { refines: [parent] } : {}),
     });
   }
-  host = spawn(binary, ['review', '--repo', repository, '--repository-id', 'fixture', '--scope', 'default', '--no-open'], {
-    cwd: work, env: { ...process.env, PATH: work }, stdio: ['ignore', 'pipe', 'inherit'],
-  });
-  const exited = once(host, 'exit');
-  const lines = createInterface({ input: host.stdout! });
-  const [line] = await Promise.race([
-    once(lines, 'line', { signal: AbortSignal.timeout(30_000) }),
-    exited.then(() => { throw new Error('Review host exited before startup'); }),
-  ]);
-  lines.close();
-  const config = JSON.parse(line);
+}, async config => {
   const get = (path: string, headers = {}) => fetch(`${config.endpoint}${path}`, { headers, signal: AbortSignal.timeout(10_000) });
   for (const [file, expected] of Object.entries(info.files)) {
     const response = await get(`/${file}`);
@@ -91,14 +50,5 @@ try {
   await assert.rejects(HttpClient.connectWithBearer(
     config.endpoint, config.bearer, globalThis.fetch, { repository: 'fixture', scope: 'other' },
   ));
-  host.kill('SIGTERM');
-  await exited;
-  console.log(`Verified ${Object.keys(info.files).length} embedded files, SDK cursor reads, search, and access checks: ${binaryArg}`);
-} finally {
-  if (host && host.exitCode === null && host.signalCode === null) {
-    const exited = once(host, 'exit');
-    host.kill();
-    await exited;
-  }
-  await rm(work, { recursive: true, force: true });
-}
+});
+console.log(`Verified ${Object.keys(info.files).length} embedded files, SDK cursor reads, search, and access checks: ${binaryArg}`);

@@ -1,4 +1,5 @@
 //! Keep native error sources while publishing a closed safe projection.
+use crate::cache::CompletionTimedOut;
 use crate::operations::files::FileAccessRefusal;
 use crate::operations::reader::ReadRefusal;
 use crate::stale::git::GitRefusal;
@@ -6,6 +7,7 @@ use provenance_core::protocol::{
     failure::OperationFailure,
     read_failure::{MovedUnit, ReadFailure},
 };
+use provenance_macros::rule;
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -29,7 +31,9 @@ impl ReadError {
             ReadFailure::ResourceNotFound => 404,
             ReadFailure::ReadFailed => 500,
             ReadFailure::FileAccessDenied => 403,
-            ReadFailure::FileUnavailable | ReadFailure::GitUnavailable => 503,
+            ReadFailure::FileUnavailable
+            | ReadFailure::GitUnavailable
+            | ReadFailure::CacheCloseTimedOut { .. } => 503,
             _ => 409,
         }
     }
@@ -50,6 +54,9 @@ impl ReadError {
         if let Some(error) = self.0.downcast_ref::<FileAccessRefusal>() {
             return file_failure(error);
         }
+        if let Some(error) = self.0.downcast_ref::<CompletionTimedOut>() {
+            return completion_failure(error);
+        }
         self.0
             .downcast_ref::<ReadRefusal>()
             .map_or(ReadFailure::ReadFailed, refusal_failure)
@@ -68,6 +75,15 @@ const fn file_failure(error: &FileAccessRefusal) -> ReadFailure {
         FileAccessRefusal::Unavailable => ReadFailure::FileUnavailable,
         FileAccessRefusal::Denied => ReadFailure::FileAccessDenied,
         FileAccessRefusal::Missing | FileAccessRefusal::Read(_) => ReadFailure::ReadFailed,
+    }
+}
+
+/// The stage of a cache close that missed its deadline, without the lock
+/// path or the connection count.
+#[rule("rule_cache_completion_names_its_stage_at_the_deadline")]
+const fn completion_failure(error: &CompletionTimedOut) -> ReadFailure {
+    ReadFailure::CacheCloseTimedOut {
+        stage: error.stage.public(),
     }
 }
 

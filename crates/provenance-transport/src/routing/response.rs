@@ -1,6 +1,6 @@
+use provenance_contract::{Definition, ResponseAdapter, ResponseBinding};
 use provenance_core::protocol::failure::ErasedFailure;
 use provenance_core::protocol::{read_failure::ReadFailure, QUERY_RESPONSE_BYTES};
-use provenance_store::operations::catalog::{Definition, ResponseAdapter, ResponseBinding};
 use serde_json::{json, Map, Value};
 use std::io::{self, Write};
 
@@ -50,31 +50,29 @@ pub(super) fn success(
             }
             json!({"items":value})
         }
-        ResponseAdapter::ObjectItems(field) => {
-            let items = value
-                .as_object_mut()
-                .and_then(|object| object.remove(field))
-                .ok_or_else(|| malformed(definition))?;
-            if !items.is_array() {
-                return Err(malformed(definition));
-            }
-            json!({"items":items})
-        }
+        ResponseAdapter::ObjectItems(field) => rename_items(value, field, definition)?,
         ResponseAdapter::ResultItems(field) => {
-            let mut result = take_result(value, definition, &mut meta)?;
-            let items = result
-                .as_object_mut()
-                .and_then(|object| object.remove(field))
-                .ok_or_else(|| malformed(definition))?;
-            if !items.is_array() {
-                return Err(malformed(definition));
-            }
-            json!({"items":items})
+            let result = take_result(value, definition, &mut meta)?;
+            rename_items(result, field, definition)?
         }
     };
     let value = json!({"data":data,"meta":meta});
     let bytes = encode(definition.name, &value, query_response)?;
     Ok(Success { value, bytes })
+}
+
+fn rename_items(
+    mut value: Value,
+    field: &str,
+    definition: &Definition,
+) -> Result<Value, ErasedFailure> {
+    let object = value.as_object_mut().ok_or_else(|| malformed(definition))?;
+    let items = object
+        .remove(field)
+        .filter(Value::is_array)
+        .ok_or_else(|| malformed(definition))?;
+    object.insert("items".into(), items);
+    Ok(value)
 }
 
 fn encode(
@@ -176,10 +174,12 @@ fn move_page_meta(object: &mut Map<String, Value>, meta: &mut Map<String, Value>
 mod tests {
     use super::*;
     use provenance_core::protocol::{QUERY_RESPONSE_BYTES, SDK_PROTOCOL_VERSION};
-    use provenance_store::operations::catalog;
 
-    fn search_binding() -> (&'static catalog::Definition, catalog::ResponseBinding) {
-        let definition = catalog::definitions()
+    fn search_binding() -> (
+        &'static provenance_contract::Definition,
+        provenance_contract::ResponseBinding,
+    ) {
+        let definition = provenance_contract::definitions()
             .iter()
             .find(|definition| definition.path == "/rules")
             .unwrap();
@@ -217,8 +217,8 @@ mod tests {
     }
 
     fn payload_bytes_at_limit(
-        definition: &catalog::Definition,
-        binding: &catalog::ResponseBinding,
+        definition: &provenance_contract::Definition,
+        binding: &provenance_contract::ResponseBinding,
     ) -> usize {
         let empty = success(raw_search(""), definition, binding, true).unwrap();
         QUERY_RESPONSE_BYTES - empty.bytes().len()

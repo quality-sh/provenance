@@ -1,12 +1,10 @@
 #![cfg(feature = "test-fixture")]
 
 mod support {
+    pub mod check_port;
     pub mod records;
 }
 
-use provenance_porcelain::check::{
-    BindingContext, BindingPolicy, Category, CategoryRun, CheckPort, PortFuture, Refusal,
-};
 use provenance_transport::{
     fixture::{FixtureAccess, Target},
     StatementHost,
@@ -14,34 +12,7 @@ use provenance_transport::{
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use std::sync::Arc;
-use support::records::Repository;
-
-struct FixtureCheckPort;
-
-impl CheckPort for FixtureCheckPort {
-    fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
-        Box::pin(async move {
-            Ok(match category {
-                Category::Graph => CategoryRun::Graph {
-                    findings: Vec::new(),
-                    refusal: Refusal::None,
-                },
-                Category::Statements => CategoryRun::Statements {
-                    findings: Vec::new(),
-                    context: None,
-                    refusal: Refusal::None,
-                },
-                Category::Bindings => CategoryRun::Bindings {
-                    findings: Vec::new(),
-                    context: BindingContext {
-                        policy: BindingPolicy::Warning,
-                    },
-                    refusal: Refusal::None,
-                },
-            })
-        })
-    }
-}
+use support::{check_port::FixtureCheckPort, records::Repository};
 
 async fn call(
     client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
@@ -77,7 +48,7 @@ fn assert_matches_output_schema(
     result: &rmcp::model::CallToolResult,
 ) {
     let schema = json!(tool.output_schema.as_ref().unwrap());
-    let validator = jsonschema::JSONSchema::compile(&schema).unwrap();
+    let validator = compile(&schema).unwrap();
     let structured = result.structured_content.as_ref().unwrap();
     assert!(
         validator.is_valid(structured),
@@ -176,4 +147,13 @@ async fn every_mcp_tool_family_uses_the_error_envelope() {
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
+}
+
+/// Read a schema that has no `$schema` keyword as a Draft 7 document.
+fn compile(schema: &Value) -> Result<jsonschema::Validator, jsonschema::ValidationError<'static>> {
+    if schema.get("$schema").is_some() {
+        jsonschema::validator_for(schema)
+    } else {
+        jsonschema::draft7::new(schema)
+    }
 }

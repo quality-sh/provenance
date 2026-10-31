@@ -22,6 +22,8 @@ pub enum GapKind {
     OpenQuestion,
     /// A topic is still unexplored.
     UnexploredTopic,
+    /// A live record has Requirement parents, and each of them is archived.
+    NoLiveParent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]

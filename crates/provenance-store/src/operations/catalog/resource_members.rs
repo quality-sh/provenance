@@ -59,9 +59,9 @@ async fn reviewed_member(
     read: PreparedRead,
     request: ReviewedResourceRequest,
 ) -> Result<ReadResult<ReviewResource>, ReadError> {
-    let record_scope = read.scope.clone();
+    let record_scope = read.repository.scope().clone();
     Ok(
-        reader::answer(&read.root, &read.scope, read.policy, move |context| {
+        reader::answer(&read.repository, read.policy, move |context| {
             Box::pin(std::future::ready(review_resource(
                 context,
                 &record_scope,
@@ -131,7 +131,7 @@ macro_rules! member_operation {
             },
             |read, request| async move {
                 Ok(
-                    reader::answer(&read.root, &read.scope, read.policy, move |ctx| {
+                    reader::answer(&read.repository, read.policy, move |ctx| {
                         Box::pin($read(ctx, request))
                     })
                     .await?

@@ -57,7 +57,8 @@ impl PublicationAttempt {
             let publish = publish.take().unwrap();
             let (send, receive) = std::sync::mpsc::channel();
             *writer.lock().unwrap() = Some(std::thread::spawn(move || {
-                let result = crate::publication::with_repository_publication(&layout, publish);
+                let result =
+                    crate::publication::with_repository_publication(&layout, |_| publish());
                 let _ = send.send(());
                 result
             }));
@@ -98,7 +99,7 @@ async fn publication_between_units(add_scope: bool) {
         );
     }
     let _restore = super::read_only::lock_untakeable(&store);
-    let error = crate::publication::publication_guard(&store.layout())
+    let error = crate::publication::publication_guard(&store.repository())
         .await
         .err();
     let Some(error) = error else {
@@ -163,7 +164,7 @@ async fn a_scope_restored_after_the_global_hash_refuses() {
 #[tokio::test]
 async fn a_guarded_read_refuses_a_file_added_after_collection() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let layout = store.layout();
     let scope = store.scope.clone();
     let before = unit_digest(&layout.state_dir(), &Unit::Scope(scope.clone())).unwrap();
@@ -247,7 +248,7 @@ async fn a_read_only_hash_refuses_stale_state_with_a_pending_publication() {
         record["statement"] = "Changed before the read".into();
     });
     let _restore = super::read_only::lock_untakeable(&store);
-    let error = crate::publication::publication_guard(&store.layout())
+    let error = crate::publication::publication_guard(&store.repository())
         .await
         .err()
         .unwrap();
@@ -275,7 +276,7 @@ async fn a_publication_after_the_unlocked_hash_keeps_the_checked_answer() {
     let before = get_through(&store, ReadPolicy::default()).await.unwrap();
     let bytes = std::fs::read(store.layout().cache_db_path()).unwrap();
     let _restore = super::read_only::lock_untakeable(&store);
-    let guard = crate::publication::publication_guard(&store.layout()).await;
+    let guard = crate::publication::publication_guard(&store.repository()).await;
     if guard.is_ok() {
         eprintln!("SKIPPED publication after unlocked hash: lock permissions do not bind");
         return;
@@ -297,7 +298,7 @@ async fn a_publication_after_the_unlocked_hash_keeps_the_checked_answer() {
             std::fs::Permissions::from_mode(0o644),
         )?;
         // The writer can publish canonical files. The database stays read-only.
-        crate::publication::with_repository_publication(&layout, || {
+        crate::publication::with_repository_publication(&layout, |_| {
             let path = crate::shards::requirements_path(&layout, &scope);
             crate::cache::tests::fixtures::rewrite_records(&path, |record| {
                 record["statement"] = "Changed after the freshness check".into();

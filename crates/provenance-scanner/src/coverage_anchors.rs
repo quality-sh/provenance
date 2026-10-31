@@ -45,7 +45,7 @@ struct ScanPaths<'a> {
 
 impl<'a> ScanPaths<'a> {
     fn new(repo: &'a camino::Utf8Path, scan_path: &'a camino::Utf8Path) -> Self {
-        let canonical_repo = std::fs::canonicalize(repo)
+        let canonical_repo = dunce::canonicalize(repo)
             .ok()
             .and_then(|path| camino::Utf8PathBuf::from_path_buf(path).ok());
         Self {
@@ -79,7 +79,7 @@ impl<'a> ScanPaths<'a> {
     }
 
     fn normalized(&self, path: &camino::Utf8Path) -> camino::Utf8PathBuf {
-        let canonical = std::fs::canonicalize(path)
+        let canonical = dunce::canonicalize(path)
             .ok()
             .and_then(|path| camino::Utf8PathBuf::from_path_buf(path).ok());
         lexical_normalize(self.relative(canonical.as_deref().unwrap_or(path)))

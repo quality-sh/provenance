@@ -8,7 +8,8 @@ use super::units::{self, Unit};
 use super::{family_rows, relation_rows, stamp, validation};
 use crate::cache::{open_cache, revision_digest_from_stored_rows, ProjectionFamily};
 use crate::current_schema::{self, Compatibility};
-use crate::{layout::ProvenanceLayout, publication};
+use crate::publication;
+use crate::repository::Repository;
 use provenance_core::ScopeId;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -36,9 +37,9 @@ pub struct CatchUpReport {
     pub cache_recreated: bool,
 }
 
-pub async fn catch_up_state(layout: &ProvenanceLayout) -> anyhow::Result<CatchUpReport> {
-    let guard = publication::publication_guard(layout).await?;
-    let connection = open_cache(layout).await?;
+pub async fn catch_up_state(repository: &Repository) -> anyhow::Result<CatchUpReport> {
+    let guard = publication::publication_guard(repository).await?;
+    let connection = open_cache(repository.layout()).await?;
     let report = catch_up_with_guard(&guard, connection.pool()).await;
     // The connection completes before the report, whatever the pass did.
     connection.close().await?;

@@ -10,8 +10,20 @@ fn fixture() -> (tempfile::TempDir, ProvenanceLayout, StateStore, ScopeId) {
     let temp = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(temp.path().to_path_buf()).unwrap();
     let layout = ProvenanceLayout::new(root);
-    let store = StateStore::new(layout.clone());
     let scope = ScopeId::new("default").unwrap();
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_vec(&provenance_core::Manifest::default_with_scope(
+            scope.clone(),
+            provenance_core::RepoPathPrefix::new("."),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let store = provenance_store::repository::Repository::open(temp.path(), "default")
+        .unwrap()
+        .store();
     (temp, layout, store, scope)
 }
 
@@ -62,7 +74,12 @@ fn requirement_review_read_refuses_a_future_layout() {
 #[tokio::test]
 async fn requirement_review_read_waits_for_the_repository_guard() {
     let (_temp, layout, store, scope) = fixture();
-    let guard = publication_guard(&layout).await.unwrap();
+    let repository = provenance_store::repository::Repository::open(
+        layout.provenance_dir().parent().unwrap(),
+        "default",
+    )
+    .unwrap();
+    let guard = publication_guard(&repository).await.unwrap();
     let (started, ready) = mpsc::channel();
     let (sender, receiver) = mpsc::channel();
     let reader = std::thread::spawn(move || {

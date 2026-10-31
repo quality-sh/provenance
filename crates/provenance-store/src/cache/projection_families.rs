@@ -105,8 +105,8 @@ macro_rules! define_projection_families {
                 }
             }
 
-            #[cfg(test)]
-            pub(crate) const fn catalog_operation_names(self) -> &'static [&'static str] {
+            /// The wire names of the list, page and member operations of this family.
+            pub const fn catalog_operation_names(self) -> &'static [&'static str] {
                 self.meta().catalog_operations
             }
 
@@ -194,7 +194,6 @@ pub struct FamilyMeta {
     pub route_order: Option<u16>,
     pub budget: BudgetKind,
     pub terminal_statuses: &'static [&'static str],
-    #[allow(dead_code)]
     pub catalog_operations: &'static [&'static str],
 }
 

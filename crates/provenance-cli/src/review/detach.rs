@@ -58,9 +58,7 @@ impl Drop for StartedHost {
 /// background, then prints where the review page is served.
 #[rule("rule_review_detach_reuses_running_host")]
 pub fn run(options: &super::Options) -> anyhow::Result<()> {
-    let repo = options
-        .repo
-        .canonicalize()
+    let repo = dunce::canonicalize(&options.repo)
         .with_context(|| format!("cannot find repository {}", options.repo.display()))?;
     let read_only = without_reviewer(&repo)?;
     // Concurrent starts for one repository and scope wait here, so the later one reuses
@@ -229,7 +227,7 @@ fn host_key(repo: &Path, scope: &str) -> String {
     let mut key = repo.as_os_str().as_encoded_bytes().to_vec();
     key.push(0);
     key.extend_from_slice(scope.as_bytes());
-    format!("{:x}", sha2::Sha256::digest(&key))
+    hex::encode(sha2::Sha256::digest(&key))
 }
 
 /// An exclusive lock on one file per repository and scope in the owner-only cache, held
@@ -267,8 +265,20 @@ fn host_directory() -> anyhow::Result<PathBuf> {
 fn without_reviewer(repo: &Path) -> anyhow::Result<bool> {
     let repo = camino::Utf8PathBuf::from_path_buf(repo.to_path_buf())
         .map_err(|path| anyhow::anyhow!("repository path {} is not UTF-8", path.display()))?;
-    let store = crate::store::Store::open_required(&repo)?;
-    provenance_store::layout::with_initialized_graph(store.layout(), |manifest| {
+    let layout = provenance_store::layout::ProvenanceLayout::new(repo);
+    provenance_store::layout::with_initialized_graph(&layout, |manifest| {
         Ok(manifest.disposition_actor_ids.is_empty())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    // This test has no Rule. It keeps the digest text the same when the hash library changes.
+    #[test]
+    fn host_key_is_the_lowercase_sha256_hex_of_repository_nul_scope() {
+        assert_eq!(
+            super::host_key(std::path::Path::new("/repo"), "scope"),
+            "5abb9782d062aa329b94abbae50db8aeaca5d6c48590f72d3f0dddb2fcbfca12"
+        );
+    }
 }

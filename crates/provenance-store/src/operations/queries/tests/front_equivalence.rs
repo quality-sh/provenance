@@ -61,7 +61,7 @@ async fn assert_fronts_agree(store: &TestStore) {
         store.name
     );
 
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     let snapshot = ReadSnapshot::open(pool.pool(), scope)
         .await
@@ -108,7 +108,7 @@ async fn the_sql_front_agrees_with_the_record_front_over_every_store() {
 )]
 async fn a_lookup_outside_the_frontier_is_an_invariant_violation() {
     let store = TestStore::pinned();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     let snapshot = ReadSnapshot::open(pool.pool(), &store.scope)
         .await
@@ -128,7 +128,7 @@ async fn a_lookup_outside_the_frontier_is_an_invariant_violation() {
 #[tokio::test]
 async fn a_relation_row_with_an_undeclared_name_is_refused() {
     let store = TestStore::pinned();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     sqlx::query(
         "INSERT INTO relations (scope_id, owner_type, owner_id, relation, target_type, target_id) \

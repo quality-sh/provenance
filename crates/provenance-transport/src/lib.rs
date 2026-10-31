@@ -37,7 +37,8 @@ use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
 
-pub(crate) const MAX_BODY_BYTES: usize = 1024 * 1024;
+/// The largest request body that the HTTP adapter reads.
+pub const MAX_BODY_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone)]
 pub struct StatementHost {
@@ -89,12 +90,15 @@ impl StatementHost {
     #[must_use]
     pub fn with_page_writes(
         mut self,
-        layout: provenance_store::layout::ProvenanceLayout,
+        repository: provenance_store::repository::Repository,
         observed: Arc<
             dyn Fn(anyhow::Result<provenance_store::review_changes::ReviewChanges>) + Send + Sync,
         >,
     ) -> Self {
-        self.page_writes = Some(review_page::PageWrites { layout, observed });
+        self.page_writes = Some(review_page::PageWrites {
+            repository,
+            observed,
+        });
         self
     }
     /// Inject the repository-aware computations used by the MCP `check` tool.

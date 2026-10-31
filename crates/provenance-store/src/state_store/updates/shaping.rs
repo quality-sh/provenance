@@ -15,7 +15,7 @@ impl StateStore {
             return self
                 .with_native_record_batch(|batch| batch.store().write_topic_archive(batch, input));
         }
-        self.with_repository_publication(|| self.write_topic_update(input))
+        self.with_repository_publication(|held| held.write_topic_update(input))
     }
 
     fn write_topic_archive(
@@ -90,12 +90,12 @@ impl StateStore {
     }
 
     pub fn edit_question(&self, input: EditQuestionInput) -> anyhow::Result<Question> {
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             if let Some(question) = &input.question {
                 required_text(question)?;
             }
             if let Some(id) = &input.resolution_id {
-                self.ensure_node_exists(
+                held.ensure_node_exists(
                     &input.scope_id,
                     NodeType::Resolution,
                     id,
@@ -103,16 +103,16 @@ impl StateStore {
                 )?;
             }
             if let Some(id) = &input.contradicts {
-                self.ensure_node_exists(&input.scope_id, NodeType::Requirement, id, "contradicts")?;
+                held.ensure_node_exists(&input.scope_id, NodeType::Requirement, id, "contradicts")?;
             }
-            let links = self.checked_update_links(&input.scope_id, input.links)?;
+            let links = held.checked_update_links(&input.scope_id, input.links)?;
             let depends_on = if let Some(dependencies) = input.depends_on {
-                let current = self
+                let current = held
                     .list_questions(&input.scope_id)?
                     .into_iter()
                     .find(|question| question.id == input.id)
                     .ok_or_else(|| invalid("question does not exist"))?;
-                Some(self.checked_question_dependencies(
+                Some(held.checked_question_dependencies(
                     &input.scope_id,
                     &input.id,
                     &current.topic_id,
@@ -121,7 +121,7 @@ impl StateStore {
             } else {
                 None
             };
-            self.mutate_question_with_etag(
+            held.mutate_question_with_etag(
                 &input.scope_id,
                 &input.id,
                 input.expected_etag.as_deref(),

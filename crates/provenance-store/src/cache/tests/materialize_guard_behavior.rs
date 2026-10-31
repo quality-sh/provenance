@@ -1,4 +1,5 @@
 use super::super::*;
+use super::fixtures::open;
 use super::fixtures::*;
 use super::projection_stamp_behavior::seed_integration_shards;
 use crate::test_probes::publication_lock_is_held as lock_is_held;
@@ -17,7 +18,7 @@ async fn materialization_holds_the_publication_lock_at_commit() {
         );
         Ok(())
     });
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     crate::test_probes::disarm("materialize_before_commit");
     assert!(fired.get(), "the commit probe must have run");
 }
@@ -36,7 +37,7 @@ async fn materialization_holds_the_publication_lock_while_schema_prepares() {
         );
         Ok(())
     });
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     crate::test_probes::disarm("prepare_current_schema_under_guard");
     assert!(fired.get(), "the schema probe must have run");
 }
@@ -44,7 +45,7 @@ async fn materialization_holds_the_publication_lock_while_schema_prepares() {
 #[tokio::test]
 async fn catch_up_holds_the_publication_lock_while_schema_is_checked() {
     let (_dir, layout, _scope) = seeded_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let fired = std::rc::Rc::new(std::cell::Cell::new(false));
     let probe_layout = layout.clone();
     let probe_fired = fired.clone();
@@ -56,7 +57,7 @@ async fn catch_up_holds_the_publication_lock_while_schema_is_checked() {
         );
         Ok(())
     });
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     crate::test_probes::disarm("prepare_current_schema_under_guard");
     assert!(fired.get(), "the schema probe must have run");
 }
@@ -75,7 +76,7 @@ async fn empty_materialization_holds_the_publication_lock() {
         );
         Ok(())
     });
-    materialize_empty_state(&layout).await.unwrap();
+    materialize_empty_state(&open(&layout)).await.unwrap();
     crate::test_probes::disarm("materialize_empty_under_guard");
     assert!(fired.get(), "the guard probe must have run");
 }
@@ -84,7 +85,7 @@ async fn empty_materialization_holds_the_publication_lock() {
 async fn stamp_rows_carry_content_digests_that_rebuild_the_revision_digest() {
     let (_dir, layout, scope) = seeded_layout();
     seed_integration_shards(&layout, scope.as_str());
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
 
     let stored_digest: String =

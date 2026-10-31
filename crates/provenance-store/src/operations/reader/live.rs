@@ -7,7 +7,6 @@
 
 use super::ReadContext;
 use crate::cache::{self, GraphEvidence};
-use crate::layout::ProvenanceLayout;
 use crate::stale::{gate, git};
 use crate::state_store::StateStore;
 use camino::Utf8Path;
@@ -58,21 +57,17 @@ impl<'c> LiveHandle<'c> {
         );
     }
 
-    fn layout(&self) -> ProvenanceLayout {
-        ProvenanceLayout::new(self.context.repo().to_path_buf())
-    }
-
     /// The canonical store behind the repository.
     pub fn store(&self) -> StateStore {
         self.only(Live::Canonical);
-        StateStore::new(self.layout())
+        self.context.repository().store()
     }
 
     /// The canonical graph references that name a repository path, which
     /// the diff half is read against.
-    pub fn graph_evidence(&self, scope: &ScopeId) -> anyhow::Result<GraphEvidence> {
+    pub fn graph_evidence(&self) -> anyhow::Result<GraphEvidence> {
         self.only(Live::Canonical);
-        cache::graph_evidence(&self.layout(), scope)
+        cache::graph_evidence(self.context.repository())
     }
 
     /// A scan of the working tree, stopped at the policy's file count; the
@@ -107,7 +102,7 @@ impl<'c> LiveHandle<'c> {
     /// The scope's verification runs.
     pub fn runs(&self, scope: &ScopeId) -> anyhow::Result<Vec<VerificationRun>> {
         self.only(Live::VerificationRuns);
-        StateStore::new(self.layout()).read_verification_runs(
+        self.context.repository().store().read_verification_runs(
             scope,
             crate::cache::read::page::RECORD_BYTES,
             |_, next| {
@@ -130,7 +125,7 @@ impl<'c> LiveHandle<'c> {
         ) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         self.only(Live::VerificationRuns);
-        StateStore::new(self.layout()).read_verification_runs(
+        self.context.repository().store().read_verification_runs(
             scope,
             crate::cache::read::page::RESOURCE_RECORD_BYTES,
             read,

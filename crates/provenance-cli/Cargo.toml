@@ -9,7 +9,8 @@ repository.workspace = true
 homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
-# Composed assets are prepared before packaging and are not tracked by Git.
+# Composed assets and skills are prepared before packaging and are not tracked.
+# Run node tools/skills/prepare.mjs before Cargo collects package files.
 include = ["src/**", "skills/**", "build.rs", "build/**", "review-assets/**", "review-assets-generated/**", "tests/**", "Cargo.toml", "README.md"]
 
 [lints]
@@ -32,6 +33,7 @@ camino.workspace = true
 clap.workspace = true
 fs2.workspace = true
 jsonschema.workspace = true
+hex.workspace = true
 pulldown-cmark.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
@@ -39,8 +41,9 @@ provenance-porcelain.workspace = true
 provenance-report.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
+provenance-contract.workspace = true
 provenance-store.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.3.0" }
+provenance-transport = { path = "../provenance-transport", version = "0.3.1" }
 remove_dir_all.workspace = true
 rustix.workspace = true
 semver.workspace = true
@@ -55,6 +58,7 @@ ureq.workspace = true
 url.workspace = true
 walkdir.workspace = true
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
+dunce.workspace = true
 
 [target.'cfg(not(windows))'.dependencies]
 open.workspace = true
@@ -75,6 +79,6 @@ pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy
 jsonschema.workspace = true
 tempfile.workspace = true
 predicates.workspace = true
-rmcp = { version = "=1.4.0", default-features = false, features = ["client"] }
+rmcp = { version = "=2.2.0", default-features = false, features = ["client"] }
 tar.workspace = true
-provenance-transport = { path = "../provenance-transport", version = "0.3.0", features = ["test-fixture"] }
+provenance-transport = { path = "../provenance-transport", version = "0.3.1", features = ["test-fixture"] }

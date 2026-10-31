@@ -21,7 +21,7 @@ async fn resolution_update_retains_placement_and_records_approval_and_later_inpu
         )
         .await
         .unwrap_err();
-    assert_ne!(error["kind"], "unknown_operation");
+    assert_eq!(error["kind"], "invalid_update");
     assert_eq!(
         fixture.store.list_resolutions(&fixture.scope).unwrap(),
         before

@@ -1,6 +1,5 @@
 #[path = "review_host_support/mod.rs"]
 mod review_host_support;
-use provenance_store::layout::ProvenanceLayout;
 use review_host_support::{
     follow::{create, setup, Follow},
     repository, start, waits,
@@ -75,7 +74,6 @@ fn configuration_reset_returns_current_document_with_unknown_continuity() {
 #[test]
 #[provenance_macros::verifies("rule_review_follow_reset", examples)]
 fn kernel_queue_overflow_reconciles_the_current_document() {
-    use provenance_store::layout::ProvenanceLayout;
     let repo = repository();
     let replacement = repository();
     for root in [repo.path(), replacement.path()] {
@@ -108,10 +106,7 @@ fn kernel_queue_overflow_reconciles_the_current_document() {
         count <= 262_144,
         "overflow needs a dedicated runner for this queue size"
     );
-    let layout = ProvenanceLayout::new(
-        camino::Utf8PathBuf::from_path_buf(repo.path().to_path_buf()).unwrap(),
-    );
-    review_host_support::waits::publish(&layout, || {
+    review_host_support::waits::publish(&waits::repository(repo.path()), || {
         host.signal("-STOP");
         let result = (|| {
             for index in 0..count + 1024 {
@@ -174,9 +169,7 @@ fn restart_requires_a_new_subscription_with_unknown_continuity() {
 }
 
 fn remove_shard(root: &std::path::Path, shard: &str) {
-    let layout =
-        ProvenanceLayout::new(camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap());
-    waits::publish(&layout, || {
+    waits::publish(&waits::repository(root), || {
         let target = root.join(format!(".provenance/state/scopes/default/{shard}"));
         assert!(
             target.exists(),

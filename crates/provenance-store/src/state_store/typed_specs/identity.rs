@@ -164,7 +164,7 @@ fn resolve_id(
         })
         .collect::<String>();
     let identity = format!("{owner}\0{}", address.segments().join("/"));
-    let digest = format!("{:x}", Sha256::digest(identity.as_bytes()));
+    let digest = hex::encode(Sha256::digest(identity.as_bytes()));
     StableId::new(format!("{kind}_{slug}_{}", &digest[..10]))
 }
 

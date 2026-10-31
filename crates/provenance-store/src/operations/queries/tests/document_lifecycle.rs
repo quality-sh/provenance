@@ -1,4 +1,4 @@
-use super::{root_of, seeded_store, sid};
+use super::{repository_at, root_of, seeded_store, sid};
 use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::state_store::{
     CreateRequirementInput, CreateResolutionInput, CreateRuleInput, StateStore,
@@ -179,8 +179,7 @@ async fn page(
     });
     query["exclude_terminal"] = json!(exclude_terminal);
     let result = queries::read_document(
-        Some(root.to_owned()),
-        &ScopeId::new("default")?,
+        &repository_at(root),
         ReadPolicy::default(),
         serde_json::from_value::<ReadDocumentQuery>(query)?,
     )

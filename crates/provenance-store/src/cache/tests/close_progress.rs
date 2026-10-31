@@ -26,11 +26,13 @@ fn failed_freshness_close(setup_delay: Duration) {
         let dir = tempfile::tempdir().unwrap();
         let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
         let layout = ProvenanceLayout::new(root.clone());
-        let scope = provenance_core::ScopeId::new("default").unwrap();
-        let guard =
-            tokio::time::timeout(SETUP_LIMIT, crate::publication::publication_guard(&layout))
-                .await
-                .context("the setup publication guard must open")??;
+        let repository = super::fixtures::initialized(dir.path());
+        let guard = tokio::time::timeout(
+            SETUP_LIMIT,
+            crate::publication::publication_guard(&repository),
+        )
+        .await
+        .context("the setup publication guard must open")??;
         let release_setup = tokio::spawn(async move {
             tokio::time::sleep(setup_delay).await;
             drop(guard);
@@ -47,7 +49,7 @@ fn failed_freshness_close(setup_delay: Duration) {
             let handle = tokio::task::spawn_blocking(move || {
                 entered_tx.send(())?;
                 let result =
-                    crate::publication::with_repository_publication(&competing_layout, || Ok(()));
+                    crate::publication::with_repository_publication(&competing_layout, |_| Ok(()));
                 let _ = finished_tx.send(());
                 result
             });
@@ -61,8 +63,7 @@ fn failed_freshness_close(setup_delay: Duration) {
         let result = tokio::time::timeout(SETUP_LIMIT, async {
             let read = async {
                 let answer = crate::operations::reader::answer(
-                    &root,
-                    &scope,
+                    &repository,
                     crate::operations::read_policy::ReadPolicy::default(),
                     |_| Box::pin(async { Ok(1usize) }),
                 )
@@ -124,6 +125,7 @@ fn materialization_closes_with_four_busy_blocking_workers() {
         let dir = tempfile::tempdir().unwrap();
         let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
         let layout = ProvenanceLayout::new(root);
+        let repository = super::fixtures::initialized(dir.path());
         let probe_layout = layout.clone();
         let waiters = Arc::new(Mutex::new(Vec::new()));
         let waiters_out = Arc::clone(&waiters);
@@ -134,7 +136,7 @@ fn materialization_closes_with_four_busy_blocking_workers() {
                 let entered_tx = entered_tx.clone();
                 let handle = tokio::task::spawn_blocking(move || {
                     entered_tx.send(()).unwrap();
-                    crate::publication::with_repository_publication(&competing_layout, || Ok(()))
+                    crate::publication::with_repository_publication(&competing_layout, |_| Ok(()))
                 });
                 waiters_out.lock().unwrap().push(handle);
             }
@@ -147,7 +149,7 @@ fn materialization_closes_with_four_busy_blocking_workers() {
         let started = Instant::now();
         let result = tokio::time::timeout(
             Duration::from_secs(2),
-            crate::cache::materialize_empty_state(&layout),
+            crate::cache::materialize_empty_state(&repository),
         )
         .await;
         let elapsed = started.elapsed();

@@ -1,8 +1,8 @@
-use super::{classifier, guard};
+use super::classifier;
 use crate::{
     review::publication::with_record_state,
     shards,
-    state_store::{CreateRequirementInput, StateStore},
+    state_store::{CreateRequirementInput, RecordStamp, StateStore},
 };
 use provenance_core::{
     review::RequirementEditState, threads::DiscussionOrigin, NodeType, Requirement,
@@ -48,46 +48,42 @@ impl StateStore {
         complete: impl FnOnce(&Self, Requirement) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         normalize(&mut input)?;
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             let scope = &input.create.scope_id;
             anyhow::ensure!(
-                self.manifest()?.scopes.iter().any(|s| s.id == *scope),
+                held.manifest()?.scopes.iter().any(|s| s.id == *scope),
                 "review scope is not in the manifest"
             );
             crate::write_error::ensure!(
                 AlreadyExists,
-                !self
+                !held
                     .list_requirements(scope)?
                     .iter()
                     .any(|r| r.id == input.create.id),
                 "Requirement already exists"
             );
             if let Some(origin) = &input.origin {
-                self.validate_discussion_origin(scope, origin)?;
+                held.validate_discussion_origin(scope, origin)?;
             }
             anyhow::ensure!(
                 input.origin.is_some()
-                    || !self.origin_requires_review(scope, input.create.origin_message.as_ref())?,
+                    || !held.origin_requires_review(scope, input.create.origin_message.as_ref())?,
                 "addressed creation requires Discussion origin"
             );
-            self.validate_requirement_origin(
+            held.validate_requirement_origin(
                 scope,
                 input.create.origin_thread.as_ref(),
                 input.create.origin_message.as_ref(),
             )?;
             let scope = scope.clone();
             let id = input.create.id.clone();
-            let stamp = self.current_record_stamp()?;
-            with_record_state(&self.layout, |layout| {
-                guard::with_writer(
-                    &shards::requirements_path(layout, &scope),
-                    id.as_str(),
-                    || {
-                        let staged = Self::staged(layout.clone(), stamp);
-                        let created = staged.commit_creation(input)?;
-                        complete(&staged, created)
-                    },
-                )
+            let stamp = held.current_record_stamp()?;
+            with_record_state(held, RecordStamp::resolved(stamp), |staged| {
+                let path = shards::requirements_path(&staged.layout, &scope);
+                staged.permitting(&[&path], id.as_str(), |staged| {
+                    let created = staged.commit_creation(input)?;
+                    complete(staged, created)
+                })
             })
         })
     }

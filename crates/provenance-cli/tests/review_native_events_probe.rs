@@ -3,7 +3,9 @@
 mod review_host_support;
 
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
-use provenance_store::{layout::ProvenanceLayout, publication::publication_guard};
+use provenance_store::{
+    layout::ProvenanceLayout, publication::publication_guard, repository::Repository,
+};
 use std::{
     path::Path,
     sync::mpsc,
@@ -26,7 +28,8 @@ fn wait_for(receiver: &mpsc::Receiver<notify::Result<Event>>, path: &Path) {
 #[tokio::test]
 async fn native_events_detect_state_replacement_and_reattached_writes_under_guard() {
     let repo = review_host_support::repository();
-    let root = camino::Utf8PathBuf::from_path_buf(repo.path().canonicalize().unwrap()).unwrap();
+    let root =
+        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(repo.path()).unwrap()).unwrap();
     let layout = ProvenanceLayout::new(root);
     let (sender, receiver) = mpsc::channel();
     let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |event| {
@@ -42,7 +45,8 @@ async fn native_events_detect_state_replacement_and_reattached_writes_under_guar
     watcher
         .watch(layout.state_dir().as_std_path(), RecursiveMode::Recursive)
         .unwrap();
-    let guard = publication_guard(&layout).await.unwrap();
+    let repository = Repository::open(repo.path(), "default").unwrap();
+    let guard = publication_guard(&repository).await.unwrap();
     let manifest = std::fs::read(layout.manifest_path()).unwrap();
     let old = layout.provenance_dir().join("probe-old-state");
     std::fs::rename(layout.state_dir(), &old).unwrap();

@@ -4,10 +4,10 @@ use crate::{
     review::{
         decision_input::WithdrawRecordReview,
         decision_state::{check_request_size, review_submission, CycleFacts, Receipt},
-        guard, new_id, owner_matches,
+        new_id, owner_matches,
     },
     shards,
-    state_store::StateStore,
+    state_store::{RecordStamp, StateStore},
     write_error::SourceFailure,
 };
 use provenance_core::{
@@ -50,20 +50,20 @@ impl StateStore {
         }
         check_request_size(&input)?;
         let scope = input.scope_id.clone();
-        self.with_repository_publication(move || {
+        self.with_repository_publication(move |held| {
             anyhow::ensure!(
-                self.manifest()?.scopes.iter().any(|s| s.id == scope),
+                held.manifest()?.scopes.iter().any(|s| s.id == scope),
                 "review scope is not in the manifest"
             );
-            let proposal = review_submission(self, &scope, &input.proposal_id)?;
-            let facts = CycleFacts::validated(self, &scope)?;
+            let proposal = review_submission(held, &scope, &input.proposal_id)?;
+            let facts = CycleFacts::validated(held, &scope)?;
             validate_submission_address(
                 &proposal,
                 addressed.as_ref().map(|(kind, id)| (*kind, id)),
             )?;
             let kind = NodeType::from(proposal.traceability.target.artifact_type);
             let record_id = &proposal.traceability.target.artifact_id;
-            let record = crate::cache::review_families::record(self, &scope, kind, record_id)?;
+            let record = crate::cache::review_families::record(held, &scope, kind, record_id)?;
             owner_matches(&record, input.declared_by.as_deref())?;
             let binding = proposal
                 .record_revision
@@ -87,12 +87,12 @@ impl StateStore {
             };
             if let Some(reason) = refusal {
                 return Err(SourceFailure::wrap(
-                    facts.conflict_failure(self, &scope, kind, record_id)?,
+                    facts.conflict_failure(held, &scope, kind, record_id)?,
                     anyhow::anyhow!(reason),
                 ));
             }
-            with_record_state(&self.layout, |layout| {
-                Self::new(layout.clone()).commit_withdrawal(input)
+            with_record_state(held, RecordStamp::ResolveFromRepository, |staged| {
+                staged.commit_withdrawal(input)
             })
         })
     }
@@ -102,19 +102,16 @@ impl StateStore {
         let proposal = review_submission(self, &input.scope_id, &input.proposal_id)?;
         let kind = NodeType::from(proposal.traceability.target.artifact_type);
         let record_id = proposal.traceability.target.artifact_id.clone();
-        let withdrawal = guard::with_writer(
-            &shards::withdrawals_path(&self.layout, &input.scope_id),
-            "*",
-            || {
-                self.create_withdrawal(Withdrawal {
-                    scope_id: input.scope_id.clone(),
-                    id: new_id(),
-                    proposal_id: input.proposal_id.clone(),
-                    actor: input.actor.clone(),
-                    reason: input.reason.clone(),
-                })
-            },
-        )?;
+        let path = shards::withdrawals_path(&self.layout, &input.scope_id);
+        let withdrawal = self.permitting(&[&path], "*", |store| {
+            store.create_withdrawal(Withdrawal {
+                scope_id: input.scope_id.clone(),
+                id: new_id(),
+                proposal_id: input.proposal_id.clone(),
+                actor: input.actor.clone(),
+                reason: input.reason.clone(),
+            })
+        })?;
         Ok(Receipt {
             id: withdrawal.id,
             record_kind: kind,

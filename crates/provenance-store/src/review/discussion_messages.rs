@@ -3,21 +3,20 @@ use crate::operations::{
     read_policy::ReadPolicy,
     reader::{self, Cursor, Position, ReadContext},
 };
-use camino::Utf8Path;
+use crate::repository::Repository;
 use provenance_core::{
     protocol::{read_failure::ReadFailure, Stamped},
     threads::{DiscussionMessagesPage, DiscussionMessagesQuery, DiscussionSelector},
-    Message, MessageRole, SchemaVersion, ScopeId, StableId,
+    Message, MessageRole, SchemaVersion, StableId,
 };
 
 pub async fn read_discussion_messages(
-    repo: &Utf8Path,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     query: DiscussionMessagesQuery,
 ) -> anyhow::Result<Stamped<DiscussionMessagesPage>> {
     crate::operations::reader::check_limit(query.limit)?;
-    let answer = reader::answer(repo, scope, policy, move |ctx| {
+    let answer = reader::answer(repository, policy, move |ctx| {
         Box::pin(messages(ctx, query, None))
     })
     .await?;
@@ -25,14 +24,13 @@ pub async fn read_discussion_messages(
 }
 
 pub async fn read_discussion_message(
-    repo: &Utf8Path,
-    scope: &ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     parent: provenance_core::ThreadParent,
     selector: DiscussionSelector,
     message_id: StableId,
 ) -> anyhow::Result<Stamped<Message>> {
-    reader::answer(repo, scope, policy, move |ctx| {
+    reader::answer(repository, policy, move |ctx| {
         Box::pin(message(ctx, parent, selector, message_id))
     })
     .await
@@ -59,14 +57,15 @@ async fn message(
          WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND m.id=?"
     );
     let mut tx = ctx.snapshot().connection().await;
-    let row: Option<(String, String, String, i64, Option<String>, i64)> = sqlx::query_as(&sql)
-        .bind(ctx.snapshot().scope().as_str())
-        .bind(kind)
-        .bind(parent.node_id.as_str())
-        .bind(selector_id)
-        .bind(message_id.as_str())
-        .fetch_optional(&mut **tx)
-        .await?;
+    let row: Option<(String, String, String, i64, Option<String>, i64)> =
+        sqlx::query_as(sqlx::AssertSqlSafe(sql))
+            .bind(ctx.snapshot().scope().as_str())
+            .bind(kind)
+            .bind(parent.node_id.as_str())
+            .bind(selector_id)
+            .bind(message_id.as_str())
+            .fetch_optional(&mut **tx)
+            .await?;
     drop(tx);
     let (thread, role, body, created_at, metadata, size) =
         row.ok_or(ReadFailure::ResourceNotFound)?;
@@ -194,7 +193,7 @@ async fn message_keys(
     let (join, selector, condition) = selector_sql(&query.selector);
     let kind = super::discussion_state::discussion_kind_word(query.parent.node_type);
     let mut tx = ctx.snapshot().connection().await;
-    let keys: Vec<(String, i64, i64)> = sqlx::query_as(&format!("SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+COALESCE(length(CAST(m.ai_metadata AS BLOB)),0)+length(m.id)+length(m.thread_id)+256 FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?"))
+    let keys: Vec<(String, i64, i64)> = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT m.id,m.created_at,length(CAST(m.body AS BLOB))+COALESCE(length(CAST(m.ai_metadata AS BLOB)),0)+length(m.id)+length(m.thread_id)+256 FROM messages m JOIN threads t ON t.scope_id=m.scope_id AND t.id=m.thread_id {join} WHERE m.scope_id=? AND t.parent_type=? AND t.parent_id=? AND {condition} AND (m.created_at>? OR (m.created_at=? AND m.id>?)) ORDER BY m.created_at,m.id LIMIT ?")))
         .bind(ctx.snapshot().scope().as_str()).bind(kind).bind(query.parent.node_id.as_str()).bind(selector)
         .bind(position.counter).bind(position.counter).bind(&position.id).bind(i64::try_from(query.limit+1)?).fetch_all(&mut **tx).await.map_err(anyhow::Error::from).map_err(reader::page_error)?;
     drop(tx);

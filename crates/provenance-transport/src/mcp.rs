@@ -1,6 +1,5 @@
 use crate::{mcp_surface, routing, StatementHost};
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
-use provenance_store::operations::catalog;
 use rmcp::{
     model::{
         CallToolRequestParams, CallToolResult, ErrorCode, ListToolsResult, PaginatedRequestParams,
@@ -28,7 +27,7 @@ impl ServerHandler for StatementHost {
         _: Option<PaginatedRequestParams>,
         _: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + '_ {
-        let mut tools = catalog::definitions()
+        let mut tools = provenance_contract::definitions()
             .iter()
             .filter(|definition| self.advertises(definition.name))
             .map(|definition| {
@@ -107,7 +106,7 @@ impl ServerHandler for StatementHost {
         {
             return call_authoring_action(self, action, request.arguments).await;
         }
-        if let Some(definition) = catalog::definitions()
+        if let Some(definition) = provenance_contract::definitions()
             .iter()
             .find(|d| d.name == request.name)
         {
@@ -123,7 +122,7 @@ impl ServerHandler for StatementHost {
 
 async fn call_catalog_tool(
     host: &StatementHost,
-    definition: &'static catalog::Definition,
+    definition: &'static provenance_contract::Definition,
     arguments: Option<serde_json::Map<String, Value>>,
 ) -> Result<CallToolResult, ErrorData> {
     if !host.advertises(definition.name) {
@@ -213,14 +212,14 @@ type McpCall = (
 );
 
 pub fn mcp_call(
-    definition: &'static catalog::Definition,
+    definition: &'static provenance_contract::Definition,
     value: &Value,
 ) -> Result<McpCall, ErasedFailure> {
     mcp_call_with_path(definition, value, BTreeMap::new())
 }
 
 pub fn mcp_target_call(
-    definition: &'static catalog::Definition,
+    definition: &'static provenance_contract::Definition,
     value: &Value,
     target: &str,
 ) -> Result<(Value, BTreeMap<String, String>, axum::http::HeaderMap), ErasedFailure> {
@@ -236,7 +235,7 @@ pub fn mcp_target_call(
 }
 
 fn mcp_call_with_path(
-    definition: &'static catalog::Definition,
+    definition: &'static provenance_contract::Definition,
     value: &Value,
     mut path: BTreeMap<String, String>,
 ) -> Result<McpCall, ErasedFailure> {
@@ -246,8 +245,8 @@ fn mcp_call_with_path(
         .unwrap_or_else(|| serde_json::json!({}));
     let mut query = BTreeMap::new();
     let mut headers = axum::http::HeaderMap::new();
-    let variants: Vec<catalog::QueryVariant> = definition.query_variants();
-    let parameters: Vec<catalog::Parameter> = if variants.is_empty() {
+    let variants: Vec<provenance_contract::QueryVariant> = definition.query_variants();
+    let parameters: Vec<provenance_contract::Parameter> = if variants.is_empty() {
         definition.parameters()
     } else {
         let selector: Option<&str> = arguments.get("query").and_then(Value::as_str);
@@ -271,7 +270,8 @@ fn mcp_call_with_path(
             return Err(invalid());
         }
         let Some(value) = value else { continue };
-        let text = catalog::serialize_parameter_value(&parameter, &value).map_err(|_| invalid())?;
+        let text = provenance_contract::serialize_parameter_value(&parameter, &value)
+            .map_err(|_| invalid())?;
         match parameter.location {
             "path" => {
                 path.insert(parameter.name.to_owned(), text);

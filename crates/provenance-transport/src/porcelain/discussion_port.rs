@@ -1,3 +1,4 @@
+use provenance_contract::DiscussionWriteKind;
 use provenance_core::{
     protocol::{failure::OperationError, Stamped},
     threads::{
@@ -13,7 +14,7 @@ use provenance_porcelain::{
     },
 };
 use provenance_store::{
-    operations::catalog::{self, DiscussionWriteKind, Operation as _},
+    operations::catalog::{self, Operation as _},
     review::DiscussionAction,
 };
 
@@ -29,7 +30,7 @@ impl HostDiscussionPort {
     }
 
     fn permitted_parent_kinds<O: catalog::Operation>(&self) -> Vec<NodeType> {
-        catalog::definitions()
+        provenance_contract::definitions()
             .iter()
             .filter(|definition| definition.registration.handler.operation == O::NAME)
             .filter(|definition| self.host.advertises(definition.name))
@@ -44,7 +45,7 @@ impl HostDiscussionPort {
             Action::Reply => DiscussionWriteKind::Reply,
             _ => return Vec::new(),
         };
-        write_parent_kinds(catalog::definitions(), kind, |name| {
+        write_parent_kinds(provenance_contract::definitions(), kind, |name| {
             self.host.advertises(name)
         })
     }
@@ -59,7 +60,7 @@ impl HostDiscussionPort {
 }
 
 fn write_parent_kinds(
-    definitions: &[catalog::Definition],
+    definitions: &[provenance_contract::Definition],
     kind: DiscussionWriteKind,
     advertises: impl Fn(&str) -> bool,
 ) -> Vec<NodeType> {
@@ -240,7 +241,7 @@ mod tests {
 
     #[test]
     fn write_grants_follow_the_registered_action_after_a_route_rename() {
-        let mut definitions = catalog::definitions().to_vec();
+        let mut definitions = provenance_contract::definitions().to_vec();
         let start = definitions
             .iter_mut()
             .find(|definition| definition.name == "requirements-create-discussion")

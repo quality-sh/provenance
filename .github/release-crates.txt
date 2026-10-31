@@ -7,5 +7,6 @@ provenance-store
 provenance-report
 provenance-sdk
 provenance-http-client
+provenance-contract
 provenance-transport
 provenance-cli

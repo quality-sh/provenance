@@ -10,6 +10,7 @@ members = [
     "crates/provenance-store",
     "crates/provenance-transport",
     "crates/provenance-codegen",
+    "crates/provenance-contract",
     "crates/provenance-http-client",
     "crates/provenance-report",
 ]
@@ -41,7 +42,7 @@ missing_panics_doc = "allow"
 must_use_candidate = "allow"
 module_name_repetitions = "allow"
 [workspace.package]
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 license = "BUSL-1.1"
 repository = "https://github.com/quality-sh/provenance"
@@ -52,14 +53,16 @@ publish = ["crates-io"]
 [workspace.dependencies]
 anyhow = "1.0"
 assert_cmd = "2.0"
-axum = "0.7"
+axum = "0.8"
 camino = { version = "1.1", features = ["serde1"] }
 clap = { version = "4.5", features = ["derive", "string"] }
+dunce = "1.0.5"
 filetime = "0.2"
 flate2 = "1"
 fs2 = "0.4"
 fs_at = "0.2"
-jsonschema = { version = "0.18", features = ["draft202012"] }
+hex = "0.4"
+jsonschema = { version = "0.60", default-features = false, features = ["idna", "resolve-file", "resolve-http", "tls-ring"] }
 open = "5.4"
 proc-macro2 = "1.0"
 pulldown-cmark = "0.10"
@@ -71,13 +74,13 @@ serde = { version = "1.0", features = ["derive"] }
 serde_ignored = "0.1"
 serde_json = "1.0"
 semver = "1.0"
-sha2 = "0.10"
+sha2 = "0.11"
 syn = { version = "2.0", features = ["derive", "parsing", "printing", "proc-macro"] }
-sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
+sqlx = { version = "0.9", default-features = false, features = ["sqlite", "runtime-tokio"] }
 tar = "0.4"
 tempfile = "3.10"
 time = { version = "0.3", features = ["formatting", "parsing"] }
-thiserror = "1.0"
+thiserror = "2"
 tokio = { version = "1.0", features = ["macros", "net", "rt-multi-thread"] }
 ureq = { version = "2.12", default-features = false, features = ["tls"] }
 url = "2.5"
@@ -85,13 +88,14 @@ uuid = { version = "1.10", features = ["v4"] }
 toml = "0.8"
 trybuild = "1.0"
 predicates = "3.1"
-provenance-core = { path = "crates/provenance-core", version = "0.3.0" }
-provenance-macros = { path = "crates/provenance-macros", version = "0.3.0" }
-provenance-porcelain = { path = "crates/provenance-porcelain", version = "0.3.0" }
-provenance-report = { path = "crates/provenance-report", version = "0.3.0" }
-provenance-scanner = { path = "crates/provenance-scanner", version = "0.3.0" }
-provenance-ste100 = { path = "crates/provenance-ste100", version = "0.3.0" }
-provenance-store = { path = "crates/provenance-store", version = "0.3.0" }
+provenance-contract = { path = "crates/provenance-contract", version = "0.3.1" }
+provenance-core = { path = "crates/provenance-core", version = "0.3.1" }
+provenance-macros = { path = "crates/provenance-macros", version = "0.3.1" }
+provenance-porcelain = { path = "crates/provenance-porcelain", version = "0.3.1" }
+provenance-report = { path = "crates/provenance-report", version = "0.3.1" }
+provenance-scanner = { path = "crates/provenance-scanner", version = "0.3.1" }
+provenance-ste100 = { path = "crates/provenance-ste100", version = "0.3.1" }
+provenance-store = { path = "crates/provenance-store", version = "0.3.1" }
 walkdir = "2.5"
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem"] }
 

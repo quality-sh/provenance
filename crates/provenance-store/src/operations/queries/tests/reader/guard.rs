@@ -4,6 +4,7 @@
 use super::super::comparison::test_stores;
 use super::get_query;
 use crate::cache::tests::fixtures::create_requirement;
+use crate::cache::tests::fixtures::open;
 use crate::cache::{catch_up_state, catch_up_with_guard, open_cache};
 use crate::operations::queries::records;
 use crate::operations::read_policy::ReadPolicy;
@@ -28,25 +29,20 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
         Ok(())
     });
     let run_layout = layout.clone();
-    let stamped = answer(
-        &store.root,
-        &store.scope,
-        ReadPolicy::default(),
-        move |ctx| {
-            Box::pin(async move {
-                anyhow::ensure!(
-                    !publication_lock_is_held(&run_layout),
-                    "the lock must be free while the read answers"
-                );
-                let found = records::get(ctx, get_query("req_overtime")).await?;
-                anyhow::ensure!(
-                    !publication_lock_is_held(&run_layout),
-                    "the lock must be free after the operation read canonical state"
-                );
-                Ok(found)
-            })
-        },
-    )
+    let stamped = answer(&store.repository(), ReadPolicy::default(), move |ctx| {
+        Box::pin(async move {
+            anyhow::ensure!(
+                !publication_lock_is_held(&run_layout),
+                "the lock must be free while the read answers"
+            );
+            let found = records::get(ctx, get_query("req_overtime")).await?;
+            anyhow::ensure!(
+                !publication_lock_is_held(&run_layout),
+                "the lock must be free after the operation read canonical state"
+            );
+            Ok(found)
+        })
+    })
     .await
     .unwrap();
     crate::test_probes::disarm("prepare_current_schema_under_guard");
@@ -61,28 +57,23 @@ async fn the_publication_lock_is_free_while_a_read_answers() {
 async fn a_canonical_write_does_not_wait_for_a_read() {
     let store = test_stores::seeded_queries();
     let layout = store.layout();
-    let stamped = answer(
-        &store.root,
-        &store.scope,
-        ReadPolicy::default(),
-        move |ctx| {
-            Box::pin(async move {
-                let (sender, receiver) = mpsc::channel();
-                let writer_layout = layout.clone();
-                let writer = std::thread::spawn(move || {
-                    with_repository_publication(&writer_layout, || {
-                        sender.send(()).unwrap();
-                        Ok(())
-                    })
-                });
-                receiver
-                    .recv_timeout(Duration::from_secs(5))
-                    .expect("a canonical write must not wait on an open read");
-                writer.join().unwrap()?;
-                records::get(ctx, get_query("req_overtime")).await
-            })
-        },
-    )
+    let stamped = answer(&store.repository(), ReadPolicy::default(), move |ctx| {
+        Box::pin(async move {
+            let (sender, receiver) = mpsc::channel();
+            let writer_layout = layout.clone();
+            let writer = std::thread::spawn(move || {
+                with_repository_publication(&writer_layout, |_| {
+                    sender.send(()).unwrap();
+                    Ok(())
+                })
+            });
+            receiver
+                .recv_timeout(Duration::from_secs(5))
+                .expect("a canonical write must not wait on an open read");
+            writer.join().unwrap()?;
+            records::get(ctx, get_query("req_overtime")).await
+        })
+    })
     .await
     .unwrap();
     assert!(stamped.result.found);
@@ -96,7 +87,7 @@ async fn a_canonical_write_does_not_wait_for_a_read() {
 async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
     let store = test_stores::seeded_queries();
     let layout = store.layout();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let second_pool = open_cache(&layout).await.unwrap();
 
@@ -113,7 +104,7 @@ async fn a_read_that_started_before_a_publication_answers_at_its_serial() {
         "req_second",
         RequirementStatus::Active,
     );
-    let guard = publication_guard(&layout).await.unwrap();
+    let guard = publication_guard(&open(&layout)).await.unwrap();
     let report = catch_up_with_guard(&guard, second_pool.pool())
         .await
         .unwrap();

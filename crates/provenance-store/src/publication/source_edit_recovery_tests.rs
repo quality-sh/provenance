@@ -12,7 +12,7 @@ const BEFORE: &[u8] = b"before\n";
 const AFTER: &[u8] = b"after\n";
 
 fn canonical_root(temp: &tempfile::TempDir) -> camino::Utf8PathBuf {
-    camino::Utf8PathBuf::from_path_buf(temp.path().canonicalize().unwrap()).unwrap()
+    camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(temp.path()).unwrap()).unwrap()
 }
 
 fn fixture() -> tempfile::TempDir {
@@ -32,9 +32,11 @@ fn publish(root: &Utf8Path) {
     let held = files
         .read_bounded(Utf8Path::new("source.txt"), 1024)
         .unwrap();
-    with_staged_state_and_source_edit(&layout, held, AFTER, |staged| {
-        std::fs::write(staged.state_dir().join("value"), AFTER)?;
-        Ok(())
+    with_repository_publication(&layout, |section| {
+        with_staged_state_and_source_edit(section, held, AFTER, |staged| {
+            std::fs::write(staged.state_dir().join("value"), AFTER)?;
+            Ok(())
+        })
     })
     .unwrap();
 }
@@ -83,7 +85,7 @@ fn each_source_edit_phase_recovers_matching_file_and_state() {
         assert_eq!(status.code(), Some(86), "{phase}");
 
         let layout = ProvenanceLayout::new(root);
-        with_repository_publication(&layout, || Ok(())).unwrap();
+        with_repository_publication(&layout, |_| Ok(())).unwrap();
         assert_eq!(
             std::fs::read(root.join("source.txt")).unwrap(),
             AFTER,
@@ -127,7 +129,7 @@ fn recovery_refuses_third_file_bytes_without_overwriting_them() {
     std::fs::write(root.join("source.txt"), b"external\n").unwrap();
     let layout = ProvenanceLayout::new(root);
 
-    let error = with_repository_publication(&layout, || Ok(())).unwrap_err();
+    let error = with_repository_publication(&layout, |_| Ok(())).unwrap_err();
 
     assert!(matches!(
         error.downcast_ref::<SourceEditRecoveryFailure>(),
@@ -196,7 +198,7 @@ fn final_marker_clears_when_cleanup_lost_its_result() {
     let transaction = Utf8Path::new(marker["transaction_dir"].as_str().unwrap());
     std::fs::remove_dir_all(transaction).unwrap();
 
-    with_repository_publication(&layout, || Ok(())).unwrap();
+    with_repository_publication(&layout, |_| Ok(())).unwrap();
 
     assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), AFTER);
     assert_eq!(
@@ -221,7 +223,7 @@ fn failed_rollback_retains_material_and_restart_finishes_the_edit() {
     assert!(result.is_err());
     let layout = ProvenanceLayout::new(root);
     assert!(layout.source_edit_marker_path().exists());
-    with_repository_publication(&layout, || Ok(())).unwrap();
+    with_repository_publication(&layout, |_| Ok(())).unwrap();
     assert_eq!(std::fs::read(root.join("source.txt")).unwrap(), AFTER);
     assert_eq!(
         std::fs::read(layout.state_dir().join("value")).unwrap(),

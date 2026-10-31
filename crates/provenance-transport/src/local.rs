@@ -97,7 +97,7 @@ impl HostAccess for LocalRepository {
             <catalog::WriteTargetDiscussion as catalog::Operation>::NAME,
         ]
         .contains(&operation)
-            || catalog::definitions()
+            || provenance_contract::definitions()
                 .iter()
                 .any(|definition| definition.name == operation)
     }
