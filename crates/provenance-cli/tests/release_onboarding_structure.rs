@@ -274,7 +274,7 @@ fn native_archives_include_cargo_provenance_but_npm_engines_do_not() {
 }
 
 #[test]
-fn workspace_release_versions_are_unified_at_0_3_0() {
+fn workspace_release_versions_are_unified() {
     let metadata = cargo_metadata();
     assert!(metadata["packages"]
         .as_array()
