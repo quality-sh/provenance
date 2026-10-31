@@ -35,8 +35,8 @@ const UNSUPPORTED_SCHEMA_VERSION: u32 = REVIEW_SCHEMA_VERSION.0 + 1;
 
 #[test]
 #[verifies("rule_reads_supported_version_only", examples)]
-fn wiki_and_check_refuse_unsupported_version_rows_in_every_stored_family() {
-    for command in ["check", "wiki"] {
+fn export_and_check_refuse_unsupported_version_rows_in_every_stored_family() {
+    for command in ["check", "export"] {
         for (family, relative_path) in STORED_FAMILIES {
             let dir = tempfile::tempdir().unwrap();
             let repo = dir.path().to_str().unwrap();
@@ -45,18 +45,7 @@ fn wiki_and_check_refuse_unsupported_version_rows_in_every_stored_family() {
             plant_unsupported_version_row(dir.path(), relative_path, &record_id);
 
             let mut invocation = Command::cargo_bin("provenance").unwrap();
-            if command == "check" {
-                invocation.args(["check", "--repo", repo]);
-            } else {
-                invocation.args([
-                    "wiki",
-                    "build",
-                    "--repo",
-                    repo,
-                    "--out",
-                    dir.path().join("wiki").to_str().unwrap(),
-                ]);
-            }
+            invocation.args([command, "--repo", repo]);
             invocation
                 .assert()
                 .failure()

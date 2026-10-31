@@ -1,17 +1,24 @@
 use super::super::{
-    invoke_with, ContextResolver, ExecutionNeeds, PreparedContext, PreparedScope, RequestedContext,
+    ContextResolver, DecideRecordReview, Direct, ExecutionNeeds, Operation, PreparedContext,
+    PreparedScope, RequestedContext, SubmitRecordReview, WithdrawRecordReview, WriteDiscussion,
 };
 use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
+use crate::test_support::call;
 use provenance_core::{
     protocol::failure::OperationFailure, Manifest, RepoPathPrefix, Scope, ScopeId,
-    SDK_PROTOCOL_VERSION,
 };
+use provenance_macros::verifies;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
 struct Resolver(PreparedScope);
 
 impl ContextResolver for Resolver {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Ok(())
+    }
+
     fn prepare(
         &self,
         _: &'static str,
@@ -23,11 +30,10 @@ impl ContextResolver for Resolver {
 }
 
 #[tokio::test]
+#[verifies("rule_operation_scope_is_the_opened_scope", examples)]
 async fn discussion_write_scope_mismatch_keeps_its_safe_status() {
-    let directory = tempfile::tempdir().unwrap();
-    let error = invoke_with(
-        "write-discussion",
-        SDK_PROTOCOL_VERSION,
+    let (_directory, _layout, resolver) = review_fixture();
+    let error = call::<WriteDiscussion, _>(
         json!({
             "context": {"repository": "fixture", "scope": "selected"},
             "request": {
@@ -38,17 +44,33 @@ async fn discussion_write_scope_mismatch_keeps_its_safe_status() {
                 "action": {"kind": "start", "role": "user", "body": "Concern"}
             }
         }),
-        Arc::new(Resolver(PreparedScope {
-            root: camino::Utf8PathBuf::from_path_buf(directory.path().into()).unwrap(),
-            scope: ScopeId::new("selected").unwrap(),
-            requested_target: "fixture".into(),
-        })),
+        Direct(resolver),
     )
     .await
     .unwrap_err();
 
     assert_eq!(error.error, json!({"kind": "scope_mismatch"}));
     assert_eq!(error.status_code(), 400);
+}
+
+/// The handle refuses another declared scope before any read or write.
+#[test]
+#[verifies("rule_operation_scope_is_the_opened_scope", examples)]
+fn ensure_selected_refuses_the_other_declared_scope() {
+    let (_directory, layout, resolver) = review_fixture();
+    let repository = &resolver.0.repository;
+    assert_eq!(
+        repository.ensure_selected(&ScopeId::new("selected").unwrap()),
+        Ok(())
+    );
+    assert_eq!(
+        repository.ensure_selected(&ScopeId::new("other").unwrap()),
+        Err(crate::repository::ScopeMismatch {
+            selected: ScopeId::new("selected").unwrap(),
+            requested: ScopeId::new("other").unwrap(),
+        })
+    );
+    assert!(!layout.scopes_dir().exists());
 }
 
 fn review_fixture() -> (tempfile::TempDir, ProvenanceLayout, Arc<Resolver>) {
@@ -68,23 +90,20 @@ fn review_fixture() -> (tempfile::TempDir, ProvenanceLayout, Arc<Resolver>) {
     )
     .unwrap();
     let resolver = Arc::new(Resolver(PreparedScope {
-        root,
-        scope: selected,
+        repository: Repository::open(&root, selected.as_str()).unwrap(),
         requested_target: "fixture".into(),
     }));
     (directory, layout, resolver)
 }
 
-async fn assert_review_scope_mismatch(operation: &str, request: Value) {
+async fn assert_review_scope_mismatch<O: Operation>(request: Value) {
     let (_directory, layout, resolver) = review_fixture();
-    let error = invoke_with(
-        operation,
-        SDK_PROTOCOL_VERSION,
+    let error = call::<O, _>(
         json!({
             "context": {"repository": "fixture", "scope": "selected"},
             "request": request,
         }),
-        resolver,
+        Direct(resolver),
     )
     .await
     .unwrap_err();
@@ -96,60 +115,51 @@ async fn assert_review_scope_mismatch(operation: &str, request: Value) {
 
 #[tokio::test]
 async fn submit_record_review_rejects_a_scope_mismatch_without_writing() {
-    assert_review_scope_mismatch(
-        "submit-record-review",
-        json!({
-            "scope_id": "other",
-            "actor": "agent",
-            "record_kind": "requirement",
-            "record_id": "req_one",
-            "declared_by": null,
-            "title": "Review title",
-            "summary": "Review summary",
-            "confidence": null,
-            "source_ids": [],
-            "evidence_references": [],
-            "builds_on": [],
-            "expected_revision": null,
-            "revises": null
-        }),
-    )
+    assert_review_scope_mismatch::<SubmitRecordReview>(json!({
+        "scope_id": "other",
+        "actor": "agent",
+        "record_kind": "requirement",
+        "record_id": "req_one",
+        "declared_by": null,
+        "title": "Review title",
+        "summary": "Review summary",
+        "confidence": null,
+        "source_ids": [],
+        "evidence_references": [],
+        "builds_on": [],
+        "expected_revision": null,
+        "revises": null
+    }))
     .await;
 }
 
 #[tokio::test]
 async fn decide_record_review_rejects_a_scope_mismatch_without_writing() {
-    assert_review_scope_mismatch(
-        "decide-record-review",
-        json!({
-            "scope_id": "other",
-            "record_kind": "requirement",
-            "record_id": "req_one",
-            "actor": {"identity_type": "human", "id": "reviewer"},
-            "proposal_id": "proposal_one",
-            "decision": "rejected",
-            "rationale": "The revision needs work.",
-            "canonical_artifact": null,
-            "feedback": null,
-            "declared_by": null
-        }),
-    )
+    assert_review_scope_mismatch::<DecideRecordReview>(json!({
+        "scope_id": "other",
+        "record_kind": "requirement",
+        "record_id": "req_one",
+        "actor": {"identity_type": "human", "id": "reviewer"},
+        "proposal_id": "proposal_one",
+        "decision": "rejected",
+        "rationale": "The revision needs work.",
+        "canonical_artifact": null,
+        "feedback": null,
+        "declared_by": null
+    }))
     .await;
 }
 
 #[tokio::test]
 async fn withdraw_record_review_rejects_a_scope_mismatch_without_writing() {
-    assert_review_scope_mismatch(
-        "withdraw-record-review",
-        json!({
-            "scope_id": "other",
-            "record_kind": "requirement",
-            "record_id": "req_one",
-            "actor": "agent",
-            "proposal_id": "proposal_one",
-            "declared_by": null,
-            "reason": "The author will revise the proposal."
-        }),
-    )
+    assert_review_scope_mismatch::<WithdrawRecordReview>(json!({
+        "scope_id": "other",
+        "record_kind": "requirement",
+        "record_id": "req_one",
+        "actor": "agent",
+        "proposal_id": "proposal_one",
+        "declared_by": null,
+        "reason": "The author will revise the proposal."
+    }))
     .await;
 }

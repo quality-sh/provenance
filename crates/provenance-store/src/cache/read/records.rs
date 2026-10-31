@@ -7,7 +7,8 @@ use crate::cache::quoted;
 use crate::operations::reader::{ReadSnapshot, Table};
 use provenance_core::model::ProjectionRow;
 use provenance_core::{
-    Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
+    Boundary, Domain, ImplementationBinding, NodeType, Question, Requirement, Resolution, Rule,
+    Source, StableId, Topic, VerificationBinding,
 };
 use provenance_macros::rule;
 use sqlx::sqlite::SqliteRow;
@@ -23,7 +24,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         );
         let row = {
             let mut tx = self.snapshot().connection().await;
-            sqlx::query(&sql)
+            sqlx::query(sqlx::AssertSqlSafe(sql))
                 .bind(self.snapshot().scope().as_str())
                 .bind(id.as_str())
                 .fetch_optional(&mut **tx)
@@ -75,7 +76,8 @@ impl<K: ProjectionRow> Table<'_, K> {
                 quoted(K::TABLE),
                 quoted(column)
             );
-            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            let mut query =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
             for value in chunk {
                 query = query.bind(*value);
             }
@@ -134,7 +136,8 @@ impl<K: ProjectionRow> Table<'_, K> {
                 quoted(K::TABLE),
                 quoted(column)
             );
-            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            let mut query =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
             for value in chunk {
                 query = query.bind(*value);
             }
@@ -163,31 +166,6 @@ impl<K: ProjectionRow> Table<'_, K> {
         self.page_by_field("id", &wanted, "", limit).await
     }
 
-    /// The rule ids named by the rows whose file column holds the file,
-    /// and whose symbol matches when one is named. Only the two columns
-    /// are read, so collecting candidates decodes no record.
-    pub(crate) async fn rule_ids_for_file(
-        &self,
-        file: &str,
-        symbol: Option<&str>,
-    ) -> anyhow::Result<Vec<String>> {
-        let filter = symbol.map_or(String::new(), |_| " AND symbol = ?".to_string());
-        let sql = format!(
-            "SELECT rule_id FROM {} WHERE scope_id = ? AND file = ?{filter} ORDER BY rule_id",
-            quoted(K::TABLE)
-        );
-        let mut query = sqlx::query_scalar(&sql)
-            .bind(self.snapshot().scope().as_str())
-            .bind(file);
-        if let Some(symbol) = symbol {
-            query = query.bind(symbol);
-        }
-        let mut tx = self.snapshot().connection().await;
-        let ids: Vec<String> = query.fetch_all(&mut **tx).await?;
-        drop(tx);
-        Ok(ids)
-    }
-
     /// The given ids that count, in id order, each after its stored byte
     /// count passes the cap. The caller bounds the list.
     async fn page_rows(&self, ids: &[String]) -> anyhow::Result<Vec<K>> {
@@ -200,7 +178,8 @@ impl<K: ProjectionRow> Table<'_, K> {
                 "SELECT {expression} AS record_bytes FROM {} WHERE scope_id = ? AND id IN ({marks})",
                 quoted(K::TABLE)
             );
-            let mut query = sqlx::query_scalar(&sql).bind(self.snapshot().scope().as_str());
+            let mut query =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
             for value in chunk {
                 query = query.bind(*value);
             }
@@ -258,7 +237,8 @@ impl<K: ProjectionRow> Table<'_, K> {
                 quoted(K::TABLE),
                 quoted(column)
             );
-            let mut query = sqlx::query(&sql).bind(self.snapshot().scope().as_str());
+            let mut query =
+                sqlx::query(sqlx::AssertSqlSafe(sql)).bind(self.snapshot().scope().as_str());
             for value in chunk {
                 query = query.bind(*value);
             }
@@ -279,7 +259,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         );
         let found: Option<i64> = {
             let mut tx = self.snapshot().connection().await;
-            sqlx::query_scalar(&sql)
+            sqlx::query_scalar(sqlx::AssertSqlSafe(sql))
                 .bind(self.snapshot().scope().as_str())
                 .bind(id.as_str())
                 .fetch_optional(&mut **tx)
@@ -300,7 +280,7 @@ impl<K: ProjectionRow> Table<'_, K> {
         );
         let rows = {
             let mut tx = self.snapshot().connection().await;
-            sqlx::query(&sql)
+            sqlx::query(sqlx::AssertSqlSafe(sql))
                 .bind(self.snapshot().scope().as_str())
                 .bind(needle.to_lowercase())
                 .fetch_all(&mut **tx)
@@ -308,6 +288,74 @@ impl<K: ProjectionRow> Table<'_, K> {
         };
         rows.iter().map(decode::<K>).collect()
     }
+}
+
+pub struct ImplementationSymbolSite {
+    pub rule_id: String,
+    pub symbol: String,
+}
+
+pub struct VerificationSymbolSite {
+    pub rule_id: String,
+    pub symbol: Option<String>,
+    pub method: String,
+}
+
+impl Table<'_, ImplementationBinding> {
+    pub(crate) async fn implementation_sites_for_file(
+        &self,
+        file: &str,
+    ) -> anyhow::Result<Vec<ImplementationSymbolSite>> {
+        let rows = symbol_rows(self, "rule_id, symbol", file).await?;
+        rows.iter()
+            .map(|row| {
+                Ok(ImplementationSymbolSite {
+                    rule_id: row.try_get("rule_id")?,
+                    symbol: row.try_get("symbol")?,
+                })
+            })
+            .collect()
+    }
+}
+
+impl Table<'_, VerificationBinding> {
+    pub(crate) async fn verification_sites_for_file(
+        &self,
+        file: &str,
+    ) -> anyhow::Result<Vec<VerificationSymbolSite>> {
+        let rows = symbol_rows(self, "rule_id, symbol, method", file).await?;
+        rows.iter()
+            .map(|row| {
+                Ok(VerificationSymbolSite {
+                    rule_id: row.try_get("rule_id")?,
+                    symbol: row.try_get("symbol")?,
+                    method: row.try_get("method")?,
+                })
+            })
+            .collect()
+    }
+}
+
+/// The binding rows whose file column holds the file, with `select` as
+/// the column list. Only the named columns are read, so no binding record
+/// decodes. The callers pass a constant column list.
+async fn symbol_rows<K: ProjectionRow>(
+    table: &Table<'_, K>,
+    select: &'static str,
+    file: &str,
+) -> anyhow::Result<Vec<SqliteRow>> {
+    let sql = format!(
+        "SELECT {select} FROM {} WHERE scope_id = ? AND file = ? ORDER BY rule_id, id",
+        quoted(K::TABLE)
+    );
+    let mut tx = table.snapshot().connection().await;
+    let rows = sqlx::query(sqlx::AssertSqlSafe(sql))
+        .bind(table.snapshot().scope().as_str())
+        .bind(file)
+        .fetch_all(&mut **tx)
+        .await?;
+    drop(tx);
+    Ok(rows)
 }
 
 /// The kind of a record named without one: the first kind, in rank

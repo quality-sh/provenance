@@ -51,8 +51,8 @@ export interface RequirementState {
   readonly description?: string;
   readonly sources: readonly object[];
   readonly rules: readonly object[];
-  /** The key of the requirement this one refines. */
-  readonly refines?: string;
+  /** Keys of the requirements this one refines. */
+  readonly refines?: readonly string[];
   /** Keys of the requirements this one depends on. */
   readonly dependsOn?: readonly string[];
   /** Keys of the older requirements this one replaces. */
@@ -338,12 +338,14 @@ export class BoundRequirement<SpecKey extends string, Key extends string> {
     return this.copy({ rules: appendSnapshots("Rule", state.rules, rules, ruleState) });
   }
 
-  // Names the requirement of the same spec this one refines.
+  // Adds a parent Requirement in the same spec.
   refines(parent: PublicRequirement<SpecKey, any>): BoundRequirement<SpecKey, Key> {
     const state = requirementState(this);
     const parentState = requirementState(parent);
     assertContext("Requirement", parentState, state.context);
-    return this.copy({ refines: parentState.key });
+    return this.copy({
+      refines: [...new Set([...(state.refines ?? []), parentState.key])],
+    });
   }
 
   // Names the requirements of the same spec this one depends on.

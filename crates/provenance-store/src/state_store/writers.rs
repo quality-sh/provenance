@@ -98,7 +98,7 @@ impl StateStore {
         if let Some(domain_id) = &domain_id {
             self.ensure_node_exists(&scope_id, NodeType::Domain, domain_id, "--domain-id")?;
         }
-        if let Some(parent) = &refines {
+        for parent in &refines {
             self.ensure_node_exists(&scope_id, NodeType::Requirement, parent, "--refines")?;
         }
         for dependency in &depends_on {
@@ -114,6 +114,7 @@ impl StateStore {
         let path = shards::requirements_path(&self.layout, &scope_id);
         self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
             let requirement = Requirement {
+                archived_in_commit: None,
                 created: None,
                 updated: None,
                 schema_version: SUPPORTED_SCHEMA_VERSION,

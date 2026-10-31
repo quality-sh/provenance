@@ -1,6 +1,8 @@
 mod access;
+mod archive_history;
 mod canonical_artifacts;
 mod domain_writers;
+mod family_readers;
 mod graph_validation;
 mod ideation_batches;
 mod ideation_edits;
@@ -9,6 +11,7 @@ mod ideation_validation;
 mod ideation_writers;
 mod implementation_bindings;
 mod inputs;
+mod live_parents;
 pub(crate) mod message_ids;
 mod proposal_surfaces;
 mod proposal_writers;
@@ -35,6 +38,8 @@ mod writers;
 pub use updates::*;
 
 pub use access::GuardedStore;
+pub use archive_history::{ArchiveCommitGap, ArchiveCommitGapReason};
+pub use graph_validation::validate_relations;
 pub use ideation_batches::{
     assertion_cites_contribution, assertion_cites_synthesis,
     ensure_asserted_contribution_unchanged, ensure_asserted_synthesis_unchanged, CONTRIBUTION_KIND,
@@ -58,13 +63,14 @@ pub use requirement_reviews::{
 };
 pub use scope_ingestion::ScopeShards;
 pub(crate) use statement_policy::StatementWriteError;
+pub use typed_specs::{decide_typed_spec, TypedSpecDecision, TypedSpecView};
 pub use typed_statement_policy::TypedSpecWriteError;
 
-use crate::{layout::ProvenanceLayout, shards};
+use crate::{layout::ProvenanceLayout, repository::RepositoryIdentity, shards};
 use ideation_batches::overlay_records;
 use provenance_core::{
     ensure_record_id_assignable, ensure_supported_schema_version, AssertionRecord, Contribution,
-    DispositionRecord, ImplementationBinding, Manifest, Message, ProposalCard, Rule, SchemaVersion,
+    DispositionRecord, ImplementationBinding, Manifest, Message, ProposalCard, SchemaVersion,
     Scope, ScopeId, SynthesisPacket, Thread, VerificationBinding,
 };
 
@@ -82,8 +88,8 @@ fn ensure_new_ids_assignable<T>(
     Ok(())
 }
 use readers::{
-    deserialize_closed, read_ideation_landings, read_jsonl, read_jsonl_closed, read_jsonl_unlocked,
-    read_legacy_dispositions, read_message_shards, read_message_shards_unlocked,
+    deserialize_closed, read_ideation_landings, read_jsonl, read_jsonl_unlocked,
+    read_legacy_dispositions, read_message_shards_unlocked,
 };
 use serde::{Deserialize, Serialize};
 
@@ -98,19 +104,53 @@ struct ManifestProjection {
 
 #[derive(Debug)]
 enum Access {
+    /// Takes the publication lock for each read and write.
     Lock,
-    Held,
+    /// Holds the live section: inside a held section, or under a guard. A
+    /// store from the repository of a section guard keeps `until`, and its
+    /// reads and writes refuse after that section ends.
+    Section {
+        until: Option<crate::publication::SectionHandle>,
+    },
+    /// A store over a staged state root. Each read and write takes the lock
+    /// that the stage owns.
+    Staged {
+        permissions: crate::publication::WritePermissions,
+        stage: std::sync::Arc<crate::publication::StageLock>,
+    },
+    /// The store that a staged section hands its closure. Only a staged store
+    /// carries write permissions.
+    StagedSection {
+        permissions: crate::publication::WritePermissions,
+    },
+    /// Reads with no lock and refuses every write.
+    ReadOnly,
 }
 
 #[derive(Clone, Debug)]
-enum RecordStamp {
+pub(crate) enum RecordStamp {
     ResolveFromRepository,
     Omit,
     Fixed(provenance_core::Stamp),
 }
 
+impl RecordStamp {
+    /// The stamp a write resolved once before it staged: that stamp, or none.
+    pub(crate) fn resolved(stamp: Option<provenance_core::Stamp>) -> Self {
+        stamp.map_or(Self::Omit, Self::Fixed)
+    }
+}
+
+/// A store over one state root.
+///
+/// A store from [`Repository::store`](crate::repository::Repository::store) or
+/// [`Repository::stage`](crate::repository::Repository::stage) carries the live
+/// identity; a layout-level store from `init` or a repository-wide `check`
+/// has none. A store has no `Clone`, so a staged store exists only as the
+/// stage body's borrow.
 #[derive(Debug)]
 pub struct StateStore {
+    identity: Option<RepositoryIdentity>,
     pub(crate) layout: ProvenanceLayout,
     access: Access,
     record_stamp: RecordStamp,
@@ -137,184 +177,10 @@ pub struct PostMessageResult {
     pub message: Message,
 }
 
-macro_rules! family_reader {
-    (Rules, $record:ty, $path:ident, $list:ident, $closed:ident) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            validate_rule_archives(read_jsonl(self, &shards::$path(&self.layout, scope))?)
-        }
-
-        pub(crate) fn $closed(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            validate_rule_archives(read_jsonl_closed(
-                self,
-                &shards::$path(&self.layout, scope),
-            )?)
-        }
-    };
-    ($variant:ident, $record:ty, $path:ident, $list:ident, $closed:ident) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            read_jsonl(self, &shards::$path(&self.layout, scope))
-        }
-
-        pub(crate) fn $closed(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            read_jsonl_closed(self, &shards::$path(&self.layout, scope))
-        }
-    };
-}
-
-macro_rules! define_export_readers {
-    (
-        export { $(
-            $variant:ident {
-                record: $record:ty,
-                field: $field:ident,
-                path: $path:ident,
-                node: [$($node:tt)*],
-                reader: $list:ident,
-                closed: [$closed:ident],
-                $($export_rest:tt)*
-            };
-        )* }
-        canonical { $($canonical:tt)* }
-        bindings { $(
-            $binding_variant:ident {
-                record: $binding_record:ty,
-                field: $binding_field:ident,
-                path: $binding_path:ident,
-                node: [$($binding_node:tt)*],
-                reader: $binding_list:ident,
-                closed: [$binding_closed:ident],
-                $($binding_rest:tt)*
-            };
-        )* }
-        internal { $($internal:tt)* }
-    ) => {
-        $(family_reader!($variant, $record, $path, $list, $closed);)*
-        $(family_reader!(
-            $binding_variant,
-            $binding_record,
-            $binding_path,
-            $binding_list,
-            $binding_closed
-        );)*
-    };
-}
-
-macro_rules! canonical_reader {
-    ($record:ty, $path:ident, $list:ident, direct) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            read_jsonl(self, &shards::$path(&self.layout, scope))
-        }
-    };
-    ($record:ty, $path:ident, $list:ident, messages) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            read_message_shards(self, &self.layout, scope)
-        }
-    };
-    ($record:ty, $path:ident, $list:ident, contributions) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.list_contributions_after_direct_read(scope, || Ok(()))
-        }
-    };
-    ($record:ty, $path:ident, $list:ident, synthesis_packets) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|| {
-                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
-                for batch in self.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.synthesis_packets, |record| {
-                        record.id.as_str()
-                    });
-                }
-                Ok(records)
-            })
-        }
-    };
-    ($record:ty, $path:ident, $list:ident, proposal_cards) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.project_proposal_cards(scope, None, || Ok(()))
-        }
-    };
-    ($record:ty, $path:ident, $list:ident, assertion_records) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|| {
-                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
-                for batch in self.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.assertions, |record| record.id.as_str());
-                }
-                Ok(records)
-            })
-        }
-    };
-    ($record:ty, $path:ident, $list:ident, dispositions) => {
-        pub fn $list(&self, scope: &ScopeId) -> anyhow::Result<Vec<$record>> {
-            self.with_repository_read(|| {
-                let mut records = read_jsonl(self, &shards::$path(&self.layout, scope))?;
-                records.extend(read_legacy_dispositions(
-                    self,
-                    &shards::legacy_promotion_decisions_path(&self.layout, scope),
-                )?);
-                for batch in self.list_ideation_landings(scope)? {
-                    overlay_records(&mut records, batch.dispositions, |record| {
-                        record.id.as_str()
-                    });
-                }
-                Ok(records)
-            })
-        }
-    };
-}
-
-macro_rules! define_canonical_readers {
-    (
-        export { $($export:tt)* }
-        canonical { $(
-            $variant:ident {
-                record: $record:ty,
-                field: $field:ident,
-                path: $path:ident,
-                meta: $meta:tt,
-                node: [$($node:tt)*],
-                reader: {
-                    open: $reader:ident,
-                    closed: [$($closed:tt)*],
-                    strategy: $strategy:ident
-                },
-                id: $id:ident,
-                loader: [$($loader:tt)*],
-                graph: [$($graph:tt)*],
-                import: [$($import:tt)*],
-                catalog: [$($catalog:tt)*],
-                route: [$($route:tt)*]
-                $(, review: $review:ident)?
-            };
-        )* }
-        bindings { $($bindings:tt)* }
-        internal { $($internal:tt)* }
-    ) => {
-        $(canonical_reader!($record, $path, $reader, $strategy);)*
-    };
-}
-
 impl StateStore {
-    pub const fn new(layout: ProvenanceLayout) -> Self {
-        Self {
-            layout,
-            access: Access::Lock,
-            record_stamp: RecordStamp::ResolveFromRepository,
-        }
-    }
-
-    pub(crate) fn staged(layout: ProvenanceLayout, stamp: Option<provenance_core::Stamp>) -> Self {
-        let record_stamp = stamp.map_or(RecordStamp::Omit, RecordStamp::Fixed);
-        Self {
-            layout,
-            access: Access::Lock,
-            record_stamp,
-        }
-    }
-
     pub fn manifest(&self) -> anyhow::Result<Manifest> {
-        self.with_repository_read(|| {
-            let path = self.layout.manifest_path();
+        self.with_repository_read(|held| {
+            let path = held.layout.manifest_path();
             crate::test_probes::record_read(&path);
             manifest_from_bytes(&std::fs::read(&path)?).map_err(|error| {
                 if error.is::<serde_json::Error>() {
@@ -330,9 +196,9 @@ impl StateStore {
         &self,
         scope: &ScopeId,
     ) -> anyhow::Result<(SchemaVersion, Option<Scope>)> {
-        self.with_repository_read(|| {
+        self.with_repository_read(|held| {
             let manifest: ManifestProjection =
-                deserialize_closed(&std::fs::read_to_string(self.layout.manifest_path())?)?;
+                deserialize_closed(&std::fs::read_to_string(held.layout.manifest_path())?)?;
             let selected = manifest
                 .scopes
                 .into_iter()
@@ -346,8 +212,8 @@ impl StateStore {
     }
 
     pub fn list_scope_directories(&self) -> anyhow::Result<Vec<String>> {
-        self.with_repository_read(|| {
-            let scopes_dir = self.layout.scopes_dir();
+        self.with_repository_read(|held| {
+            let scopes_dir = held.layout.scopes_dir();
             if !scopes_dir.exists() {
                 return Ok(Vec::new());
             }
@@ -368,9 +234,6 @@ impl StateStore {
             Ok(scope_directories)
         })
     }
-
-    crate::cache::record_families!(define_export_readers);
-    crate::cache::family_table::record_family_rows!(define_canonical_readers);
 
     pub fn active_verification_bindings(
         &self,
@@ -395,10 +258,10 @@ impl StateStore {
         scope: &ScopeId,
         after_direct_read: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<Contribution>> {
-        self.with_repository_read(|| {
-            let mut records = read_jsonl(self, &shards::contributions_path(&self.layout, scope))?;
+        self.with_repository_read(|held| {
+            let mut records = read_jsonl(held, &shards::contributions_path(&held.layout, scope))?;
             after_direct_read()?;
-            for batch in self.list_ideation_landings(scope)? {
+            for batch in held.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.contributions, |record| {
                     record.id.as_str()
                 });
@@ -419,17 +282,17 @@ impl StateStore {
         disposition_actor_ids: Option<&[String]>,
         after_validation: impl FnOnce() -> anyhow::Result<()>,
     ) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_read(|| {
+        self.with_repository_read(|held| {
             if let Some(disposition_actor_ids) = disposition_actor_ids {
-                self.validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)?;
+                held.validate_ideation_scope_with_actor_ids(scope, disposition_actor_ids)?;
             } else {
-                self.validate_ideation_scope(scope)?;
+                held.validate_ideation_scope(scope)?;
             }
-            self.validate_graph_scope(scope)?;
+            held.validate_graph_scope(scope)?;
             after_validation()?;
-            let assertions = self.list_assertion_records(scope)?;
-            let dispositions = self.list_dispositions(scope)?;
-            Ok(self
+            let assertions = held.list_assertion_records(scope)?;
+            let dispositions = held.list_dispositions(scope)?;
+            Ok(held
                 .list_proposal_definitions(scope)?
                 .into_iter()
                 .map(|mut proposal| {
@@ -444,23 +307,14 @@ impl StateStore {
         })
     }
     pub fn list_proposal_definitions(&self, scope: &ScopeId) -> anyhow::Result<Vec<ProposalCard>> {
-        self.with_repository_read(|| {
-            let mut records = read_jsonl(self, &shards::proposal_cards_path(&self.layout, scope))?;
-            for batch in self.list_ideation_landings(scope)? {
+        self.with_repository_read(|held| {
+            let mut records = read_jsonl(held, &shards::proposal_cards_path(&held.layout, scope))?;
+            for batch in held.list_ideation_landings(scope)? {
                 overlay_records(&mut records, batch.proposals, |record| record.id.as_str());
             }
             Ok(records)
         })
     }
-}
-
-fn validate_rule_archives(rules: Vec<Rule>) -> anyhow::Result<Vec<Rule>> {
-    for rule in &rules {
-        rule.validate_archive().map_err(|error| {
-            anyhow::anyhow!("rule {} is archive-inconsistent: {error}", rule.id.as_str())
-        })?;
-    }
-    Ok(rules)
 }
 
 pub fn serde_name<T: serde::Serialize>(value: &T) -> anyhow::Result<String> {

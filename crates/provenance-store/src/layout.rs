@@ -28,11 +28,6 @@ impl ProvenanceLayout {
     pub fn cache_dir(&self) -> Utf8PathBuf {
         self.provenance_dir().join("cache")
     }
-    /// Default output directory for the generated wiki: a derived artifact,
-    /// gitignored the same way `cache_dir` is.
-    pub fn wiki_dir(&self) -> Utf8PathBuf {
-        self.provenance_dir().join("wiki")
-    }
     pub fn cache_db_path(&self) -> Utf8PathBuf {
         self.cache_dir().join("provenance.db")
     }
@@ -44,7 +39,8 @@ impl ProvenanceLayout {
     }
     pub fn verification_runs_lock_path(&self, scope: &provenance_core::ScopeId) -> Utf8PathBuf {
         self.cache_dir()
-            .join("locks/scopes")
+            .join("locks")
+            .join("scopes")
             .join(scope.as_str())
             .join("verification-runs.jsonl.lock")
     }
@@ -60,12 +56,15 @@ impl ProvenanceLayout {
     }
     pub fn lifecycle_lock_path(&self, scope: &provenance_core::ScopeId) -> Utf8PathBuf {
         self.cache_dir()
-            .join("locks/scopes")
+            .join("locks")
+            .join("scopes")
             .join(scope.as_str())
             .join("ideation.lifecycle.lock")
     }
     pub fn publication_lock_path(&self) -> Utf8PathBuf {
-        self.cache_dir().join("locks/repository.publication.lock")
+        self.cache_dir()
+            .join("locks")
+            .join("repository.publication.lock")
     }
     pub fn publication_marker_path(&self) -> Utf8PathBuf {
         self.cache_dir().join("import-publication.json")
@@ -84,7 +83,11 @@ impl ProvenanceLayout {
 pub fn locate_repo_root(start: &Utf8Path) -> anyhow::Result<Utf8PathBuf> {
     for candidate in start.ancestors() {
         if candidate.join(".git").exists()
-            || candidate.join(".provenance/state/manifest.json").exists()
+            || candidate
+                .join(".provenance")
+                .join("state")
+                .join("manifest.json")
+                .exists()
         {
             return Ok(candidate.to_path_buf());
         }
@@ -114,16 +117,20 @@ fn path_exists(path: &Utf8Path) -> anyhow::Result<bool> {
     }
 }
 
+/// Tells if a publication can hold or hide the live state.
+///
+/// A publisher creates its lock before it can move the live state.
+pub(crate) fn publication_can_run(layout: &ProvenanceLayout) -> anyhow::Result<bool> {
+    Ok(path_exists(&layout.publication_marker_path())?
+        || path_exists(&layout.publication_lock_path())?)
+}
+
 /// Run a graph operation after publication recovery and manifest validation.
 pub fn with_initialized_graph<R>(
     layout: &ProvenanceLayout,
     operation: impl FnOnce(Manifest) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    // A publisher creates its lock before it can move the live state.
-    if !path_exists(&layout.manifest_path())?
-        && !path_exists(&layout.publication_marker_path())?
-        && !path_exists(&layout.publication_lock_path())?
-    {
+    if !path_exists(&layout.manifest_path())? && !publication_can_run(layout)? {
         return Err(GraphNotInitialized.into());
     }
     crate::publication::with_repository_publication_checked(
@@ -137,13 +144,21 @@ pub fn with_initialized_graph<R>(
             Ok(())
         },
         || {
-            let manifest = match std::fs::metadata(layout.manifest_path()) {
-                Ok(metadata) if metadata.is_file() => {
-                    crate::state_store::StateStore::new(layout.clone()).manifest()?
-                }
+            let path = layout.manifest_path();
+            let manifest = match std::fs::metadata(&path) {
+                Ok(metadata) if metadata.is_file() => crate::state_store::manifest_from_bytes(
+                    &std::fs::read(&path)?,
+                )
+                .map_err(|error| {
+                    if error.is::<serde_json::Error>() {
+                        error.context(format!("failed to parse manifest {path}"))
+                    } else {
+                        error
+                    }
+                })?,
                 Ok(_) => anyhow::bail!("Provenance graph manifest is not a file"),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    if path_exists(&layout.manifest_path())? {
+                    if path_exists(&path)? {
                         anyhow::bail!("Provenance graph manifest is not a file");
                     }
                     return Err(GraphNotInitialized.into());
@@ -154,6 +169,21 @@ pub fn with_initialized_graph<R>(
             operation(manifest)
         },
     )
+}
+
+/// Runs a repository-wide operation after the initialized-graph gate, with a
+/// store over every scope of the layout that holds the section. The store has
+/// no repository identity.
+pub fn with_initialized_state<R>(
+    layout: &ProvenanceLayout,
+    operation: impl FnOnce(Manifest, &crate::state_store::StateStore) -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    with_initialized_graph(layout, |manifest| {
+        operation(
+            manifest,
+            &crate::state_store::StateStore::in_section(layout.clone()),
+        )
+    })
 }
 
 /// Require a valid manifest before a caller opens a graph operation.
@@ -176,7 +206,6 @@ mod tests {
             layout.cache_db_path(),
             root.join(".provenance/cache/provenance.db")
         );
-        assert_eq!(layout.wiki_dir(), root.join(".provenance/wiki"));
         assert_eq!(
             layout.source_edit_marker_path(),
             root.join(".provenance/cache/source-edit-publication.json")

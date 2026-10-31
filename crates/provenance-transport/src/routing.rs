@@ -1,13 +1,16 @@
 use crate::StatementHost;
 use axum::http::{HeaderMap, Method};
+use provenance_contract::{Definition, HttpMethod};
 use provenance_core::protocol::failure::{ErasedFailure, InvalidInputReason, OperationFailure};
-use provenance_store::operations::catalog::{self, ContextKind, Definition, HttpMethod};
+use provenance_core::SDK_PROTOCOL_VERSION;
+use provenance_store::operations::catalog::ContextKind;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, sync::OnceLock};
 
 mod identity;
 mod request;
 mod response;
+mod wire;
 
 pub use request::{decode_body, query};
 
@@ -30,7 +33,7 @@ fn index() -> &'static RouteIndex {
             post: Vec::new(),
             patch: Vec::new(),
         };
-        for definition in catalog::definitions() {
+        for definition in provenance_contract::definitions() {
             match definition.method {
                 HttpMethod::Get => &mut index.get,
                 HttpMethod::Post => &mut index.post,
@@ -56,7 +59,7 @@ pub fn find(method: &Method, path: &str) -> Option<Matched> {
 
 /// Whether any registered route publishes this path under some method.
 pub fn path_is_known(path: &str) -> bool {
-    catalog::definitions()
+    provenance_contract::definitions()
         .iter()
         .any(|definition| match_path(definition.path, path).is_some())
 }
@@ -105,15 +108,17 @@ pub async fn invoke(
         headers,
         identity.as_ref().map(|(_, scope)| scope.as_str()),
     )?;
-    let call = host.bound_call(bound.handler.context, &bound.data)?;
-    let value = host
-        .invoke_backing(
-            matched.definition.name,
-            bound.handler.operation,
-            call,
+    let call = context(identity, bound.handler.context, &bound.data)?;
+    let value = provenance_contract::invoke_with(
+        bound.handler.operation,
+        SDK_PROTOCOL_VERSION,
+        call,
+        wire::WireCall {
+            host: host.clone(),
             page_write,
-        )
-        .await?;
+        },
+    )
+    .await?;
     let value = response::success(
         value,
         matched.definition,
@@ -154,7 +159,7 @@ pub async fn invoke(
     Ok((value, etag))
 }
 
-pub fn context(
+fn context(
     identity: Option<(String, String)>,
     kind: ContextKind,
     request: &Value,

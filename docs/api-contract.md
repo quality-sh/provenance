@@ -227,10 +227,7 @@ echoes, old operation aliases, and compatibility translators.
 Phase 2b removed the legacy versioned operation wire.
 
 A breaking change requires human authorization. Agents never bump a version, a
-release, or the tuple. The required compatibility gate fails when a watched
-value changes without an `AUTHORIZED-BUMP` marker written by a human. The gate
-binds the marker to the same change as the bump, so a stale marker authorizes
-nothing (docs/compatibility-gate.md).
+release, or the tuple without express approval from the owner.
 
 ## 7. Grammar
 
@@ -289,6 +286,22 @@ OpenAPI and MCP documents.
 
 The generator checks the live OpenAPI and MCP documents against this grammar.
 It rejects a prohibited route shape, request shape, response envelope, status,
-payload identity, or tool description before it writes generated output. The
-compatibility gate in `docs/compatibility-gate.md` remains independent and
-required.
+payload identity, or tool description before it writes generated output.
+
+Requirement refinement parents use an ID list in `refines`. A record omits an empty
+list. An empty list identifies a root. Creation accepts a list. A relationship edit
+accepts a complete list or an `add`/`remove` delta. The scalar shape is not accepted.
+The protocol version stays unchanged. Both generated clients use this contract.
+
+For one selected child, the CLI accepts `update --replace-parent P --with-parent B`
+with `--actor`. For a Requirement owned by a declaration, `--declared-by` supplies
+the existing owner precondition to both writes. The helper reads the child guard,
+adds B, and uses the returned guard to remove P.
+An explicit `--if-match` controls the first write. A failed second write can leave
+both parents. A retry preserves the other parents. If B is a parent and P is
+not, the helper makes no write: it refuses a P that does not exist. Otherwise it
+writes a message to standard error that the replacement is already done, exits with
+success, and prints the unchanged record. Because it makes no write, it does
+not check `--if-match` or `--declared-by` in that case. Each write uses the existing
+Requirement PATCH operation. The helper changes no descendant and does not declare
+supersession. A supersession declaration alone changes no child or prior status.

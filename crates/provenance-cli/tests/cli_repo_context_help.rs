@@ -35,8 +35,6 @@ fn centralized_repository_context_keeps_command_help() {
             "swarm-backtrace-land",
             &["swarm-backtrace", "land", "--help"],
         ),
-        ("wiki-build", &["wiki", "build", "--help"]),
-        ("wiki-serve", &["wiki", "serve", "--help"]),
     ];
     let actual = commands
         .iter()

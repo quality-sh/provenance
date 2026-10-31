@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Effect from 'effect/Effect';
+import * as Cause from 'effect/Cause';
+import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
 import { COMPATIBILITY, EffectHttpClient } from './effect.js';
 import { verifies } from './rules.js';
@@ -32,7 +34,7 @@ test('interrupting a read cancels the response body and releases its lock', asyn
   assert.equal(body.locked, false);
 });
 
-test('an interrupted mutation is sent once and ends as a connection error', async () => {
+test('an interrupted mutation is sent once and ends as an interruption', async () => {
   let started!: () => void;
   const dispatched = new Promise<void>(resolve => { started = resolve; });
   let posts = 0;
@@ -47,7 +49,7 @@ test('an interrupted mutation is sent once and ends as a connection error', asyn
   await Effect.runPromise(Fiber.interrupt(fiber));
   const exit = await Effect.runPromise(Fiber.await(fiber));
   assert.equal(posts, 1);
-  assert.equal(exit._tag, 'Failure');
+  assert.ok(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause));
 });
 
 test('connection pins the complete compatibility tuple and bound identity', async () => {

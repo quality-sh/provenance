@@ -61,7 +61,7 @@ pub(super) async fn evidence(
         .map(|base| {
             let diff = ctx.live(Live::Diff);
             let (base, head) = diff.resolve_range(base, request.head)?;
-            let graph = ctx.live(Live::Canonical).graph_evidence(&scope)?;
+            let graph = ctx.live(Live::Canonical).graph_evidence()?;
             diff.disturbed(base, head, std::slice::from_ref(&request.rule), &graph)
                 .map(|found| StaleEvidence {
                     base: found.base,

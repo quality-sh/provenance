@@ -6,10 +6,8 @@ use camino::Utf8Path;
 use provenance_core::review::{EvidenceQuery, ReviewHistoryQuery};
 use provenance_store::{
     cache,
-    layout::ProvenanceLayout,
     operations::read_policy::ReadPolicy,
     review::{read_evidence, read_history},
-    state_store::StateStore,
 };
 use review_support::*;
 use serde_json::json;
@@ -34,15 +32,15 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
         .unwrap()
         .file_type()
         .is_symlink());
-    let layout = ProvenanceLayout::new(&root);
-    let store = StateStore::new(layout.clone());
+    let store = provenance_store::repository::Repository::open(&root, "default")
+        .unwrap()
+        .store();
     store
         .save_requirement(save(&store, json!({"description":"saved"})))
         .unwrap();
-    cache::materialize_state(&layout).await.unwrap();
+    cache::materialize_state(&repository(&root)).await.unwrap();
     let history = read_history(
-        &root,
-        &scope(),
+        &repository(&root),
         ReadPolicy::default(),
         ReviewHistoryQuery {
             record_kind: provenance_core::NodeType::Requirement,
@@ -57,8 +55,7 @@ async fn review_reads_and_projection_accept_a_symlinked_repository_parent() {
     let working = history.result.entries[0].id.clone();
     assert_eq!(working.as_str(), "working");
     let page = read_evidence(
-        &root,
-        &scope(),
+        &repository(&root),
         ReadPolicy::default(),
         EvidenceQuery {
             record_kind: provenance_core::NodeType::Requirement,

@@ -31,7 +31,7 @@ fn every_fixture_record_carries_its_required_relations() {
 fn a_refinement_chain_that_returns_to_its_start_is_a_cycle() {
     let mut records = fixture();
     assert_eq!(cycle_in(&records.requirements, "refines"), None);
-    records.requirements[0].refines = Some(sid("req_penalty"));
+    records.requirements[0].refines = vec![sid("req_penalty")];
     let cycle = cycle_in(&records.requirements, "refines").unwrap();
     assert_eq!(cycle.closes_from, sid("req_penalty"));
     assert_eq!(cycle.closes_into, sid("req_overtime"));
@@ -45,9 +45,9 @@ fn a_three_record_cycle_is_named_by_its_closing_pair_with_the_cycle_printed() {
     let mut a = requirement("req_cyc_a", None, &[]);
     let mut b = requirement("req_cyc_b", None, &[]);
     let mut c = requirement("req_cyc_c", None, &[]);
-    a.refines = Some(sid("req_cyc_b"));
-    b.refines = Some(sid("req_cyc_c"));
-    c.refines = Some(sid("req_cyc_a"));
+    a.refines = vec![sid("req_cyc_b")];
+    b.refines = vec![sid("req_cyc_c")];
+    c.refines = vec![sid("req_cyc_a")];
     let records = vec![a, b, c];
 
     let cycle = cycle_in(&records, "refines").expect("the chain closes");

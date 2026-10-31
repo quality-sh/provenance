@@ -70,8 +70,7 @@ async fn discussion_edit_version_shows_its_change() {
         .unwrap();
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let history = read_history(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         ReviewHistoryQuery {
             record_kind: NodeType::Requirement,
@@ -98,7 +97,7 @@ async fn discussion_edit_version_shows_its_change() {
             offset: 0,
         };
         async move {
-            read_evidence(root, &scope(), ReadPolicy::default(), query)
+            read_evidence(&repository(root), ReadPolicy::default(), query)
                 .await
                 .unwrap()
                 .result
@@ -156,8 +155,7 @@ async fn plain_save_to_previous_content_has_no_discussion_origin() {
 
     let root = camino::Utf8Path::from_path(temp.path()).unwrap();
     let history = read_history(
-        root,
-        &scope(),
+        &repository(root),
         ReadPolicy::default(),
         ReviewHistoryQuery {
             record_kind: NodeType::Requirement,
@@ -201,8 +199,7 @@ async fn discussion_and_plain_save_in_one_commit_keep_the_commit_origin() {
     commit_state(&temp, "Return to text A");
 
     let history = read_history(
-        camino::Utf8Path::from_path(temp.path()).unwrap(),
-        &scope(),
+        &repository(camino::Utf8Path::from_path(temp.path()).unwrap()),
         ReadPolicy::default(),
         ReviewHistoryQuery {
             record_kind: NodeType::Requirement,

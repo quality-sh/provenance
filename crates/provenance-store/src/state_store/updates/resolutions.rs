@@ -30,15 +30,15 @@ impl StateStore {
         let path = shards::resolutions_path(&self.layout, &input.scope_id);
         let expected_etag = input.expected_etag.clone();
         let inputs = validate_inputs(input.inputs)?;
-        let record = self.mutate_graph_record_with_etag(
+        let record = self.mutate_graph_record_with_store(
             &path,
             expected_etag.as_deref(),
-            |records: &mut Vec<Resolution>| {
+            |store, records: &mut Vec<Resolution>| {
                 let position = records
                     .iter()
                     .position(|record| record.id == input.id)
                     .ok_or_else(missing)?;
-                self.validate_relation_targets(
+                store.validate_relation_targets(
                     &scope,
                     records,
                     &input.id,
@@ -62,16 +62,15 @@ impl StateStore {
                     &mut record.supersedes,
                     input.supersedes.as_ref(),
                 );
-                for text in [&input.title, &input.position, &input.rationale]
-                    .into_iter()
-                    .flatten()
-                {
-                    required_text(text)?;
-                }
+                validate_resolution_text([&input.title, &input.position, &input.rationale])?;
                 set(&mut record.title, input.title);
                 set(&mut record.position, input.position);
                 set(&mut record.rationale, input.rationale);
                 set(&mut record.status, input.status);
+                set(
+                    &mut record.archived_in_commit,
+                    input.archived_in_commit.map(Some),
+                );
                 if let Some(inputs) = inputs {
                     record.inputs = inputs;
                 }
@@ -126,4 +125,11 @@ impl StateStore {
         validate_final_relations(self, &scope, &record)?;
         Ok(record)
     }
+}
+
+fn validate_resolution_text(values: [&Option<String>; 3]) -> anyhow::Result<()> {
+    for text in values.into_iter().flatten() {
+        required_text(text)?;
+    }
+    Ok(())
 }

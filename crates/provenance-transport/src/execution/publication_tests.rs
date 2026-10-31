@@ -1,10 +1,7 @@
 use super::*;
 use crate::fixture::records::Repository;
 use provenance_core::ScopeId;
-use provenance_store::{
-    operations::catalog::{self, Apply, PreparedContext, PreparedScope},
-    state_store::StateStore,
-};
+use provenance_store::operations::catalog::{self, Apply, PreparedContext, PreparedScope};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::oneshot;
 
@@ -23,14 +20,14 @@ fn apply(context: PreparedContext, runtime: &tokio::runtime::Handle) {
 
 fn context(repo: &Repository) -> PreparedContext {
     PreparedContext::for_scope(PreparedScope {
-        root: repo.dir.path().to_str().unwrap().into(),
-        scope: ScopeId::new("default").unwrap(),
+        repository: repo.open(),
         requested_target: "selected".into(),
     })
 }
 
 fn requirements(repo: &Repository) -> usize {
-    StateStore::new(repo.layout.clone())
+    repo.open()
+        .store()
         .list_requirements(&ScopeId::new("default").unwrap())
         .unwrap()
         .len()
@@ -44,7 +41,7 @@ async fn a_panicked_task_after_publication_has_an_internal_failure() {
     let runtime = tokio::runtime::Handle::current();
     let execution = Execution::default();
     let error = execution
-        .run("apply", move || {
+        .run::<(), _>(move || {
             apply(context, &runtime);
             panic!("injected response loss after publication");
         })
@@ -52,11 +49,7 @@ async fn a_panicked_task_after_publication_has_an_internal_failure() {
         .unwrap_err();
     execution.shutdown().await;
     assert_eq!(requirements(&repo), before + 1, "the write took effect");
-    assert_eq!(error.error, serde_json::json!({"kind":"internal"}));
-    assert_eq!(
-        serde_json::to_value(error.meta).unwrap(),
-        serde_json::json!({})
-    );
+    assert_eq!(error, OperationFailure::Internal);
 }
 
 #[tokio::test]
@@ -74,13 +67,12 @@ async fn a_disconnected_caller_keeps_publication_owned_until_shutdown() {
     let (finished, done) = oneshot::channel();
     let caller = tokio::spawn(async move {
         worker
-            .run("apply", move || {
+            .run(move || {
                 attempts.fetch_add(1, Ordering::SeqCst);
                 apply(context, &runtime);
                 published.send(()).unwrap();
                 continue_work.blocking_recv().unwrap();
                 finished.send(()).unwrap();
-                Ok(Value::Null)
             })
             .await
     });

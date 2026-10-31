@@ -67,6 +67,8 @@ pub fn create_rule(repo: &Path, id: &str, statement: &str) {
             "req_rule_anchor",
             "--statement",
             statement,
+            "--status",
+            "active",
         ])
         .assert()
         .success();
@@ -103,7 +105,7 @@ pub fn diagnostic(kind: &str, id: &str, start: usize) -> Value {
         "field": "statement",
         "standard": "ASD-STE100",
         "issue": 9,
-        "analyzer_version": "0.3.0",
+        "analyzer_version": "0.3.1",
         "rule": "8.1",
         "disposition": "violation",
         "span": {"start": start, "end": start + 1},

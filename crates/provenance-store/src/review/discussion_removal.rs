@@ -1,6 +1,5 @@
 //! Typed-spec apply deletes the Discussions of the records that it deletes.
 
-use super::guard;
 use crate::{
     shards,
     state_store::{readers, StateStore},
@@ -114,26 +113,27 @@ impl StateStore {
                 .into_iter()
                 .map(|kind| shards::path_for(&self.layout, scope, kind)),
         );
-        guard::with_writers(&paths, "*", || {
-            self.mutate_jsonl_records(&discussions_path, |rows: &mut Vec<Discussion>| {
+        let paths = paths.iter().map(AsRef::as_ref).collect::<Vec<_>>();
+        self.permitting(&paths, "*", |store| {
+            store.mutate_jsonl_records(&discussions_path, |rows: &mut Vec<Discussion>| {
                 rows.retain(|d| !discussion_ids.contains(d.discussion_id.as_str()));
                 Ok(())
             })?;
             for path in &message_paths {
-                self.mutate_jsonl_records(path, |rows: &mut Vec<Message>| {
+                store.mutate_jsonl_records(path, |rows: &mut Vec<Message>| {
                     rows.retain(|m| !removed.threads.contains(m.thread_id.as_str()));
                     Ok(())
                 })?;
             }
-            self.mutate_jsonl_records(&threads_path, |rows: &mut Vec<Thread>| {
+            store.mutate_jsonl_records(&threads_path, |rows: &mut Vec<Thread>| {
                 rows.retain(|t| !removed.threads.contains(t.id.as_str()));
                 Ok(())
             })?;
-            let path = |kind| shards::path_for(&self.layout, scope, kind);
-            self.clear_origins::<Source>(&path(NodeType::Source), &removed)?;
-            self.clear_origins::<Requirement>(&path(NodeType::Requirement), &removed)?;
-            self.clear_origins::<Resolution>(&path(NodeType::Resolution), &removed)?;
-            self.clear_origins::<Rule>(&path(NodeType::Rule), &removed)
+            let path = |kind| shards::path_for(&store.layout, scope, kind);
+            store.clear_origins::<Source>(&path(NodeType::Source), &removed)?;
+            store.clear_origins::<Requirement>(&path(NodeType::Requirement), &removed)?;
+            store.clear_origins::<Resolution>(&path(NodeType::Resolution), &removed)?;
+            store.clear_origins::<Rule>(&path(NodeType::Rule), &removed)
         })
     }
 

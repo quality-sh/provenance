@@ -167,7 +167,7 @@ fn export_definitions() -> Value {
                 "status": {"enum": ["active", "discovery", "refinement", "resolved"]},
                 "domain_id": id.clone(),
                 "source_refs": {"type": "array", "items": {"$ref": "#/$defs/sourceReference"}},
-                "refines": id.clone(), "depends_on": id_list.clone(),
+                "refines": id_list.clone(), "depends_on": id_list.clone(),
                 "supersedes": id_list.clone(), "spawned_by": id.clone()
             })
         )),

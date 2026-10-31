@@ -41,12 +41,7 @@ async fn verification_refuses_a_symlink_outside_the_repository_before_publicatio
     ] {
         let input = serde_json::from_value(json!({"rule":"rule_shared","key":"check","method":"examples","declared_by":"fixture","file":file})).unwrap();
         let error = WriteError::from(
-            provenance_store::operations::begin_verification(
-                Some(repo.dir.path().to_str().unwrap().into()),
-                scope.clone(),
-                input,
-            )
-            .unwrap_err(),
+            provenance_store::operations::begin_verification(&repo.open(), input).unwrap_err(),
         );
         assert!(matches!(error.safe(), WriteFailure::FileAccessDenied));
         assert_eq!(error.status(), 403);
@@ -58,15 +53,9 @@ async fn verification_refuses_a_symlink_outside_the_repository_before_publicatio
 #[verifies("rule_verification_run_path_is_relative", examples)]
 fn an_absolute_evidence_path_is_stored_relative_to_the_repository() {
     let repo = Repository::new("The evidence is readable.");
-    let scope = provenance_core::ScopeId::new("default").unwrap();
     std::fs::write(repo.dir.path().join("valid.rs"), "fn check() {}\n").unwrap();
     let input = serde_json::from_value(json!({"rule":"rule_shared","key":"check","method":"examples","declared_by":"fixture","file":repo.dir.path().join("valid.rs")})).unwrap();
-    let run = provenance_store::operations::begin_verification(
-        Some(repo.dir.path().to_str().unwrap().into()),
-        scope,
-        input,
-    )
-    .unwrap();
+    let run = provenance_store::operations::begin_verification(&repo.open(), input).unwrap();
     assert_eq!(run.file.unwrap(), "valid.rs");
 }
 

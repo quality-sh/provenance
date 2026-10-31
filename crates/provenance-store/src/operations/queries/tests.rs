@@ -1,6 +1,7 @@
 use super::records;
 use crate::layout::ProvenanceLayout;
 use crate::operations::read_policy::ReadPolicy;
+use crate::repository::Repository;
 use crate::state_store::{
     CreateBoundaryInput, CreateDomainInput, CreateRequirementInput, StateStore,
 };
@@ -34,6 +35,7 @@ mod order;
 mod pinned;
 mod reader;
 mod stamp;
+mod symbol_pages;
 mod symbols;
 mod tables;
 
@@ -57,7 +59,7 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
         .unwrap(),
     )
     .unwrap();
-    let store = StateStore::new(layout);
+    let store = crate::test_support::store(&layout);
     store
         .create_domain(CreateDomainInput {
             scope_id: scope.clone(),
@@ -75,7 +77,7 @@ fn seeded_store() -> (tempfile::TempDir, StateStore, ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: Some(sid("domain_payroll")),
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -100,16 +102,25 @@ fn root_of(dir: &tempfile::TempDir) -> camino::Utf8PathBuf {
     camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap()
 }
 
+/// The opened repository of a seeded store, for the public operations.
+fn repository_of(dir: &tempfile::TempDir) -> Repository {
+    Repository::open(dir.path(), "default").unwrap()
+}
+
+/// The opened repository at a root, for the public operations.
+fn repository_at(root: &camino::Utf8Path) -> Repository {
+    Repository::open(root, "default").unwrap()
+}
+
 #[tokio::test]
 async fn get_answers_a_domain_and_a_boundary_by_id() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     for (kind, id, wire) in [
         (NodeType::Domain, "domain_payroll", "domain"),
         (NodeType::Boundary, "boundary_no_backpay", "boundary"),
     ] {
         let answer = super::get(
-            Some(root_of(&dir)),
-            &scope,
+            &repository_of(&dir),
             ReadPolicy::default(),
             GetQuery {
                 protocol_version: Some(SDK_PROTOCOL_VERSION),
@@ -130,10 +141,9 @@ async fn get_answers_a_domain_and_a_boundary_by_id() {
 #[tokio::test]
 #[verifies("rule_porcelain_search_crosses_kinds", examples)]
 async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         SearchQuery {
             cursor: None,
@@ -162,10 +172,9 @@ async fn search_reaches_domains_and_boundaries_by_kind_and_text() {
 
 #[tokio::test]
 async fn filter_only_search_reaches_each_selected_kind() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         serde_json::from_value(serde_json::json!({
             "node_types":["requirement", "boundary"],
@@ -192,10 +201,9 @@ async fn filter_only_search_reaches_each_selected_kind() {
 
 #[tokio::test]
 async fn default_search_keeps_the_six_settled_kinds_under_protocol_five() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         SearchQuery {
             cursor: None,
@@ -240,10 +248,9 @@ fn rank_appends_the_new_kinds_after_the_six_settled_positions() {
 /// serves the order the whole-graph load used to pin.
 #[tokio::test]
 async fn search_answers_new_kinds_after_every_settled_kind() {
-    let (dir, _store, scope) = seeded_store();
+    let (dir, _store, _scope) = seeded_store();
     let answer = super::search(
-        Some(root_of(&dir)),
-        &scope,
+        &repository_of(&dir),
         ReadPolicy::default(),
         SearchQuery {
             cursor: None,

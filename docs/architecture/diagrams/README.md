@@ -20,7 +20,8 @@ arrows show build-time generation or packaging.
 - `03-store-cache-and-reads.drawio`: provenance-store reads, freshness policy,
   SQLite catch-up, and reads that use git.
 - `04-transport-and-contract.drawio`: provenance-transport, provenance-porcelain,
-  and the `operations::catalog` contract that HTTP, MCP and in-process calls share.
+  and the provenance-contract wire contract and store `operations::catalog` that
+  HTTP, MCP and in-process calls share.
 - `05-cli-dispatch.drawio`: how provenance-cli parses a command and sends it to
   the in-process host or to a built-in handler.
 - `06-agent-surfaces.drawio`: init guidance in AGENTS.md, skill install, prime,
@@ -34,7 +35,7 @@ arrows show build-time generation or packaging.
 - `10-ste100.drawio`: provenance-ste100 checks, the project dictionary, and the
   store functions that call them.
 - `11-codegen-and-clients.drawio`: provenance-codegen, tools/operation-codegen,
-  the generated output, provenance-http-client, and tools/compat-gate.
+  the generated output, and provenance-http-client.
 - `12-sdks.drawio`: the TypeScript SDK, create-provenance, provenance-sdk, and
   the two SDK examples.
 
@@ -55,9 +56,9 @@ arrows show build-time generation or packaging.
   it takes the publication lock.
 - The internals of provenance-web are not in this repository. The diagrams show
   only the pin in `tools/review-assets.json` and the `mountReview` entry point.
-- `skills/` and `crates/provenance-cli/skills/` hold the same four SKILL.md
-  files. The code embeds only the crate copy. The test
-  `crates/provenance-cli/tests/cli_skills.rs` checks that
-  `provenance skills show` matches the files in `skills/`.
+- `skills/` holds the only tracked copy of the four bundled SKILL.md files.
+  The build script `crates/provenance-cli/build/skills.rs` copies them into the
+  binary. `node tools/skills/prepare.mjs` writes generated copies to
+  `crates/provenance-cli/skills/` for Cargo packages. Git ignores those copies.
 - No workflow in this repository runs `provenance report build` or
   `provenance report render`.

@@ -19,7 +19,10 @@ fn fixture() -> (tempfile::TempDir, StateStore, ScopeId) {
     )
     .unwrap();
     let scope = ScopeId::new("default").unwrap();
-    (temp, StateStore::new(layout), scope)
+    let store = provenance_store::repository::Repository::open(root, "default")
+        .unwrap()
+        .store();
+    (temp, store, scope)
 }
 
 fn requirement(scope: &ScopeId, id: &str) -> CreateRequirementInput {
@@ -98,7 +101,7 @@ fn direct_create_and_all_named_content_writers_open_submissions() {
             .unwrap();
     }
     store
-        .set_requirement_refines(&scope, &id, StableId::new("req_b").unwrap())
+        .add_requirement_refines(&scope, &id, StableId::new("req_b").unwrap())
         .unwrap();
     proposal = assert_new_pending(&store, &scope, &id, &proposal);
     store

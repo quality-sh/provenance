@@ -1,9 +1,16 @@
 import { connectEvents, type EventSocket } from './events.ts';
 import {
-  CONNECTION_REFUSED, createSession, type ReviewConfig, type ReviewHandle, type ReviewMountOptions,
+  CONNECTION_REFUSED, createSession, InvalidReviewer, type ConfigReviewer, type ReviewConfig, type ReviewHandle,
+  type ReviewMountOptions,
 } from './session.ts';
 
 const LAUNCH_SESSION_ROUTE = '/review-launch/session';
+
+/** The local storage key of the page session. Local storage is scoped to this host's origin. */
+export const SESSION_KEY = 'provenance-review-session';
+
+/** The subprotocol name the event socket offers beside the page session. */
+export const EVENT_PROTOCOL = 'provenance-review';
 
 export interface BrowserElement {
   hidden: boolean;
@@ -41,8 +48,14 @@ interface BootstrapDependencies {
     cache: 'no-store';
   }) => Promise<FetchResponse>;
   readonly mount: (root: BrowserElement, options: ReviewMountOptions) => ReviewHandle;
-  /** Opens the host's event socket. */
-  readonly openEvents: () => EventSocket;
+  /** The page's own-origin storage; the browser passes localStorage. */
+  readonly storage: {
+    getItem(key: string): string | null;
+    setItem(key: string, value: string): void;
+    removeItem(key: string): void;
+  };
+  /** Opens the host's event socket with the page session. */
+  readonly openEvents: (session: string) => EventSocket;
   /** Calls the listener when the page is online or active again. */
   readonly onWake: (listener: () => void) => void;
 }
@@ -57,12 +70,27 @@ export const SETTINGS_CHANGED =
 
 const sameActors = (left: ReviewConfig, right: ReviewConfig) =>
   left.dispositionActorIds.length === right.dispositionActorIds.length &&
-  left.dispositionActorIds.every((id, index) => right.dispositionActorIds[index] === id);
+  left.dispositionActorIds.every((id, index) => right.dispositionActorIds[index] === id) &&
+  left.reviewer?.actorId === right.reviewer?.actorId && left.reviewer?.allowed === right.reviewer?.allowed;
 
 function element(document: BrowserDocument, id: string): BrowserElement {
   const found = document.getElementById(id);
   if (!found) throw new Error(`Missing browser element: ${id}`);
   return found;
+}
+
+/** The reviewer that the host reports, as is; the page decides only as this person. */
+// @provenance rule: rule_review_host_app_passes_reviewer
+function configReviewer(value: object): { reviewer?: ConfigReviewer } {
+  // The app never invents a reviewer: without one from the host, the page is read-only.
+  if (!('reviewer' in value)) return {};
+  const reviewer = value.reviewer;
+  if (typeof reviewer !== 'object' || reviewer === null ||
+    !('actorId' in reviewer) || typeof reviewer.actorId !== 'string' ||
+    !('allowed' in reviewer) || typeof reviewer.allowed !== 'boolean') {
+    throw new InvalidReviewer('Invalid reviewer');
+  }
+  return { reviewer: { actorId: reviewer.actorId, allowed: reviewer.allowed } };
 }
 
 function reviewConfig(value: unknown, origin: string): ReviewConfig {
@@ -79,21 +107,56 @@ function reviewConfig(value: unknown, origin: string): ReviewConfig {
     repositoryId: value.repositoryId,
     scope: value.scope,
     dispositionActorIds: value.dispositionActorIds,
+    ...configReviewer(value),
   };
 }
 
-function sessionBearer(value: unknown): string {
+function launchSession(value: unknown): string {
   if (typeof value !== 'object' || value === null ||
-    !('bearer' in value) || typeof value.bearer !== 'string' || value.bearer === '') {
+    !('session' in value) || typeof value.session !== 'string' || value.session === '') {
     throw new Error('Invalid launch session');
   }
-  return value.bearer;
+  return value.session;
+}
+
+/** Keeps the page session in this origin's storage and sends it only as a bearer to this origin. */
+// @provenance rule: rule_review_page_session_stays_on_its_origin
+async function startPageSession(
+  page: Pick<BootstrapDependencies, 'fetch' | 'storage'> & { origin: string },
+  code: string | null,
+) {
+  const { fetch, storage } = page;
+  let bearer: string;
+  if (code) {
+    const launch = await fetch(LAUNCH_SESSION_ROUTE, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code }), redirect: 'error', cache: 'no-store',
+    });
+    if (!launch.ok) throw new Error('Launch refused');
+    bearer = launchSession(await launch.json());
+    storage.setItem(SESSION_KEY, bearer);
+  } else {
+    // A reload or a new tab on this origin reuses the stored session.
+    bearer = storage.getItem(SESSION_KEY) ?? '';
+  }
+  const configuration = async () => {
+    const response = await fetch('/review-config', {
+      headers: { authorization: `Bearer ${bearer}` }, redirect: 'error', cache: 'no-store',
+    });
+    if (!response.ok) {
+      // A session from an earlier host run is useless, so the page forgets it.
+      if (storage.getItem(SESSION_KEY) === bearer) storage.removeItem(SESSION_KEY);
+      throw new Error('Access refused');
+    }
+    return reviewConfig(await response.json(), page.origin);
+  };
+  return { bearer, configuration };
 }
 
 /** Takes the launch code out of the address bar and exchanges it once for the page session. */
 export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   // A browser refuses `fetch` when it is called as a method of another object.
-  const { fetch, location } = dependencies;
+  const { fetch, location, storage } = dependencies;
   const root = element(dependencies.document, 'root');
   const selection = element(dependencies.document, 'selection');
   const requirement = element(dependencies.document, 'requirement');
@@ -108,8 +171,9 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   let configuration: (() => Promise<ReviewConfig>) | undefined;
   let current: ReviewConfig | undefined;
   let firstReady = true;
+  let pageSession = '';
   const events = connectEvents({
-    open: dependencies.openEvents,
+    open: () => dependencies.openEvents(pageSession),
     refresh: change => {
       session.refresh(change);
       if (change._tag !== 'Everything' || !configuration) return;
@@ -150,22 +214,10 @@ export function bootstrapReviewPage(dependencies: BootstrapDependencies) {
   });
 
   void (async () => {
-    let bearer = '';
-    if (code) {
-      const launch = await fetch(LAUNCH_SESSION_ROUTE, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code }), redirect: 'error', cache: 'no-store',
-      });
-      if (!launch.ok) throw new Error('Launch refused');
-      bearer = sessionBearer(await launch.json());
-    }
-    configuration = async () => {
-      const response = await fetch('/review-config', {
-        headers: bearer ? { authorization: `Bearer ${bearer}` } : {}, redirect: 'error', cache: 'no-store',
-      });
-      if (!response.ok) throw new Error('Access refused');
-      return reviewConfig(await response.json(), location.origin);
-    };
-    await session.connect(bearer, configuration);
+    const access = await startPageSession({ fetch, storage, origin: location.origin }, code);
+    pageSession = access.bearer;
+    configuration = access.configuration;
+    if (pageSession === '') throw new Error('No page session');
+    await session.connect(pageSession, configuration);
   })().catch(() => { status.textContent = CONNECTION_REFUSED; });
 }

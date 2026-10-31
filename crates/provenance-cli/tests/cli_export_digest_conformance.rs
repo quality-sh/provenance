@@ -74,7 +74,7 @@ fn export_document(graph: &Value) -> Value {
     })
 }
 
-fn export_validator() -> jsonschema::JSONSchema {
+fn export_validator() -> jsonschema::Validator {
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
@@ -88,7 +88,7 @@ fn export_validator() -> jsonschema::JSONSchema {
         .unwrap();
     assert!(output.status.success(), "schema show failed");
     let shown: Value = serde_json::from_slice(&output.stdout).unwrap();
-    jsonschema::JSONSchema::compile(shown.get("schema").unwrap()).unwrap()
+    jsonschema::draft7::new(shown.get("schema").unwrap()).unwrap()
 }
 
 struct Case {

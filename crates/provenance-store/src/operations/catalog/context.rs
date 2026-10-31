@@ -1,12 +1,9 @@
 //! Resources required before an operation can run.
 use crate::operations::read_policy::ReadPolicy;
-use camino::Utf8PathBuf;
-use provenance_core::{
-    protocol::{
-        failure::OperationFailure,
-        repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
-    },
-    ScopeId,
+use crate::repository::Repository;
+use provenance_core::protocol::{
+    failure::OperationFailure,
+    repository::{RepositoryContext, RepositoryScope, RepositoryTarget},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,19 +26,17 @@ pub struct PreparedContext {
 }
 #[derive(Debug, Clone)]
 pub struct PreparedRepository {
-    pub root: Utf8PathBuf,
+    pub repository: Repository,
     pub requested_target: String,
 }
 #[derive(Debug, Clone)]
 pub struct PreparedScope {
-    pub root: Utf8PathBuf,
-    pub scope: ScopeId,
+    pub repository: Repository,
     pub requested_target: String,
 }
 #[derive(Debug, Clone)]
 pub struct PreparedRead {
-    pub root: Utf8PathBuf,
-    pub scope: ScopeId,
+    pub repository: Repository,
     pub policy: ReadPolicy,
     pub requested_target: String,
     pub external: bool,
@@ -57,12 +52,11 @@ impl PreparedContext {
     pub fn read(read: PreparedRead) -> Self {
         Self {
             repository: Some(PreparedRepository {
-                root: read.root.clone(),
+                repository: read.repository.clone(),
                 requested_target: read.requested_target.clone(),
             }),
             scope: Some(PreparedScope {
-                root: read.root.clone(),
-                scope: read.scope.clone(),
+                repository: read.repository.clone(),
                 requested_target: read.requested_target.clone(),
             }),
             read: Some(read),
@@ -78,7 +72,7 @@ impl PreparedContext {
     pub fn for_scope(scope: PreparedScope) -> Self {
         Self {
             repository: Some(PreparedRepository {
-                root: scope.root.clone(),
+                repository: scope.repository.clone(),
                 requested_target: scope.requested_target.clone(),
             }),
             read: None,
@@ -87,11 +81,35 @@ impl PreparedContext {
     }
     /// Use native answer framing after a host has authorized this context.
     #[must_use]
-    pub(super) const fn into_native(mut self) -> Self {
+    pub const fn into_native(mut self) -> Self {
         if let Some(read) = &mut self.read {
             read.external = false;
         }
         self
+    }
+    /// Binds the prepared repository to `held`, the repository of the section
+    /// that the operation runs in. `held` must have the same working tree and
+    /// scope; another repository is refused with
+    /// [`OperationFailure::Internal`].
+    pub fn within(mut self, held: &Repository) -> Result<Self, OperationFailure> {
+        let rebind = |prepared: &mut Repository| {
+            if prepared.working_tree() == held.working_tree() && prepared.scope() == held.scope() {
+                *prepared = held.clone();
+                Ok(())
+            } else {
+                Err(OperationFailure::Internal)
+            }
+        };
+        if let Some(read) = &mut self.read {
+            rebind(&mut read.repository)?;
+        }
+        if let Some(scope) = &mut self.scope {
+            rebind(&mut scope.repository)?;
+        }
+        if let Some(repository) = &mut self.repository {
+            rebind(&mut repository.repository)?;
+        }
+        Ok(self)
     }
     pub(super) fn scope(self) -> Result<PreparedScope, OperationFailure> {
         self.scope.ok_or(OperationFailure::UnavailableNeeds)
@@ -135,6 +153,14 @@ impl PreparedContext {
 
 /// Hosts authorize the selected target before reading settings or preparing storage.
 pub trait ContextResolver: Send + Sync {
+    /// Identity only, no repository IO. Runs on the runtime thread before the work slot wait.
+    fn authorize(
+        &self,
+        operation: &'static str,
+        context: &RequestedContext,
+    ) -> Result<(), OperationFailure>;
+    /// Repository IO: manifest grant, settings, read policy. Runs on the blocking path and
+    /// repeats the identity check.
     fn prepare(
         &self,
         operation: &'static str,
@@ -142,8 +168,15 @@ pub trait ContextResolver: Send + Sync {
         needs: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure>;
 }
+/// Tests only: a resolver with no repositories.
+#[cfg(test)]
 pub(super) struct NoRepositories;
+#[cfg(test)]
 impl ContextResolver for NoRepositories {
+    fn authorize(&self, _: &'static str, _: &RequestedContext) -> Result<(), OperationFailure> {
+        Err(OperationFailure::UnavailableNeeds)
+    }
+
     fn prepare(
         &self,
         _: &'static str,
@@ -151,6 +184,52 @@ impl ContextResolver for NoRepositories {
         _: ExecutionNeeds,
     ) -> Result<PreparedContext, OperationFailure> {
         Err(OperationFailure::UnavailableNeeds)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PreparedContext, PreparedRepository};
+    use provenance_core::protocol::failure::OperationFailure;
+
+    fn context(repository: &crate::repository::Repository) -> PreparedContext {
+        PreparedContext::for_repository(PreparedRepository {
+            repository: repository.clone(),
+            requested_target: "repo".to_owned(),
+        })
+    }
+
+    #[test]
+    fn within_binds_the_same_repository_and_refuses_another() {
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let prepared = crate::cache::tests::fixtures::initialized(first.path());
+        let same = crate::repository::Repository::open(prepared.working_tree(), "default").unwrap();
+        let other = crate::cache::tests::fixtures::initialized(second.path());
+        let mut manifest = prepared.manifest().unwrap();
+        let mut extra = manifest.scopes[0].clone();
+        extra.id = provenance_core::ScopeId::new("extra").unwrap();
+        extra.path_prefix = provenance_core::RepoPathPrefix::new("extra");
+        manifest.scopes.push(extra);
+        std::fs::write(
+            prepared.layout().manifest_path(),
+            serde_json::to_string(&manifest).unwrap(),
+        )
+        .unwrap();
+        let other_scope =
+            crate::repository::Repository::open(prepared.working_tree(), "extra").unwrap();
+
+        let bound = context(&prepared).within(&same).unwrap();
+        assert_eq!(
+            bound.repository().unwrap().repository.working_tree(),
+            same.working_tree()
+        );
+        for held in [&other, &other_scope] {
+            assert!(matches!(
+                context(&prepared).within(held).unwrap_err(),
+                OperationFailure::Internal
+            ));
+        }
     }
 }
 

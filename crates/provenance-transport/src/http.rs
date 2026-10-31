@@ -6,17 +6,20 @@ use axum::{
     routing::{get, patch, post},
     Json, Router,
 };
+use provenance_contract::HttpMethod;
 use provenance_core::protocol::{
     failure::{ErasedFailure, InvalidInputReason, OperationFailure},
     host::HostMetadata,
     ResponseMeta, SuccessEnvelope,
 };
 use provenance_macros::rule;
-use provenance_store::operations::catalog::{self, HttpMethod};
 
+/// Every route authenticates through the host's credential policy before it is classified;
+/// a bound host without a policy refuses each request.
+#[rule("rule_bound_router_requires_credential_policy")]
 pub fn router(host: StatementHost) -> Router {
     let mut router = Router::new().route("/metadata", get(metadata));
-    for definition in catalog::definitions() {
+    for definition in provenance_contract::definitions() {
         let path = axum_path(definition.path);
         router = match definition.method {
             HttpMethod::Get => router.route(&path, get(invoke)),
@@ -36,7 +39,7 @@ fn axum_path(path: &str) -> String {
         .map(|(index, part)| {
             part.strip_prefix('{')
                 .and_then(|part| part.strip_suffix('}'))
-                .map_or_else(|| part.to_owned(), |_| format!(":p{index}"))
+                .map_or_else(|| part.to_owned(), |_| format!("{{p{index}}}"))
         })
         .collect::<Vec<_>>()
         .join("/")
@@ -70,6 +73,8 @@ async fn metadata(State(host): State<StatementHost>, request: Request) -> Respon
     .into_response()
 }
 
+/// The HTTP adapter is the one caller that presents a credential to the host.
+#[rule("rule_credential_check_only_on_http")]
 async fn invoke(State(host): State<StatementHost>, request: Request) -> Response {
     if let Err(error) = host.authenticate(request.headers()) {
         return failure::response(error);

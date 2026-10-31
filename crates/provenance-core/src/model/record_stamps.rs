@@ -105,6 +105,11 @@ impl super::Rule {
                 || self.status == super::RuleStatus::Archived,
             "archived Rule status is terminal"
         );
+        anyhow::ensure!(
+            previous.status != super::RuleStatus::Archived
+                || self.archived_in_commit == previous.archived_in_commit,
+            "archived Rule commit cannot change"
+        );
         self.validate_archive()
     }
 }
@@ -135,6 +140,11 @@ macro_rules! archive_lifecycle {
                     previous.status != $archived || self.status == $archived,
                     concat!("archived ", $name, " status is terminal")
                 );
+                anyhow::ensure!(
+                    previous.status != $archived
+                        || self.archived_in_commit == previous.archived_in_commit,
+                    concat!("archived ", $name, " commit cannot change")
+                );
                 self.validate_archive()
             }
         }
@@ -152,4 +162,17 @@ archive_lifecycle!(
     super::QuestionStatus,
     super::QuestionStatus::Archived,
     "Question"
+);
+
+archive_lifecycle!(
+    super::Requirement,
+    super::RequirementStatus,
+    super::RequirementStatus::Archived,
+    "Requirement"
+);
+archive_lifecycle!(
+    super::Resolution,
+    super::ResolutionStatus,
+    super::ResolutionStatus::Archived,
+    "Resolution"
 );

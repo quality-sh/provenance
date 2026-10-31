@@ -1,4 +1,6 @@
 use super::seeded_requirement_store;
+use crate::state_store::validate_relations;
+use provenance_core::model::relations::RecordFront;
 use provenance_core::ScopeId;
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 
@@ -18,7 +20,7 @@ fn requirement(scope: &ScopeId, id: &str, refines: &str) -> serde_json::Value {
         "id": id,
         "statement": format!("{id} statement"),
         "status": "active",
-        "refines": refines,
+        "refines": [refines],
     })
 }
 
@@ -167,5 +169,58 @@ fn a_mutual_supersession_between_two_sources_is_refused_by_the_validator() {
     assert_eq!(
         error.to_string(),
         "supersedes forms a cycle: source_a -> source_b -> source_a"
+    );
+}
+
+fn front_of<'a>(
+    requirements: &'a [provenance_core::Requirement],
+    rules: &'a [provenance_core::Rule],
+) -> RecordFront<'a> {
+    RecordFront {
+        sources: &[],
+        requirements,
+        resolutions: &[],
+        rules,
+        topics: &[],
+        questions: &[],
+        domains: &[],
+        boundaries: &[],
+    }
+}
+
+#[test]
+fn a_refines_cycle_in_held_records_is_refused_with_the_state_text() {
+    let scope = ScopeId::new("default").unwrap();
+    let requirements: [provenance_core::Requirement; 2] = [
+        requirement(&scope, "req_leave", "req_rates"),
+        requirement(&scope, "req_rates", "req_leave"),
+    ]
+    .map(|record| serde_json::from_value(record).unwrap());
+
+    let error = validate_relations(&front_of(&requirements, &[])).unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "refines forms a cycle: req_leave -> req_rates -> req_leave"
+    );
+}
+
+#[test]
+fn a_held_rule_with_no_requirement_is_refused_with_the_state_text() {
+    let rules: [provenance_core::Rule; 1] = [serde_json::from_value(serde_json::json!({
+        "schema_version": SUPPORTED_SCHEMA_VERSION.0,
+        "scope_id": "default",
+        "id": "rule_bare",
+        "statement": "A rule with no requirement",
+        "status": "active",
+        "severity": "high",
+    }))
+    .unwrap()];
+
+    let error = validate_relations(&front_of(&[], &rules)).unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "rule rule_bare is refused: a rule needs one requirement"
     );
 }

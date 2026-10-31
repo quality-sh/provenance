@@ -7,16 +7,19 @@ selection, configuration read, and connection error display.
 
 The page has no credential field. It reads a single-use launch code from the
 `#launch=` URL fragment and removes the fragment from the address bar. It then
-exchanges the code one time at `POST /review-launch/session` for the access
-token. The access token stays in page memory. It is sent only in an
-Authorization header to the current origin. The application does not store the
-token or put it in a URL. The host also sets a session cookie. With no launch
-code, the application tries the cookie session. A used, expired, or foreign
-code, or a refused session, shows how to get a new link. The host's existing origin, repository, scope, and file-access
+exchanges the code one time at `POST /review-launch/session` for the page
+session. The application keeps the session under `provenance-review-session` in
+the local storage of its origin, which includes the port, so no other local
+server can read it. It sends the session only in an Authorization header to the
+current origin and as a WebSocket subprotocol beside `provenance-review` on the
+event socket. It never puts the session in a URL or a cookie. With no launch
+code, a reload or a new tab uses the stored session. A used, expired, or foreign
+code, or a refused session, shows how to get a new link; a refused session is
+removed from storage. The host's existing origin, repository, scope, and file-access
 checks remain in effect.
 The renderer owns the generated Effect client and its reads and writes.
 
-The renderer pin uses the successful main build from web PR 23 and SDK 0.2.3.
+The renderer pin uses the successful main build from web PR 74 and SDK 0.3.0.
 The composer checks the archive SHA-256, source commit, and clean build state
 before it creates the output.
 
@@ -39,7 +42,10 @@ Set `PROVENANCE_REVIEW_ASSETS_DIR` to that output when building
 the CLI. This override takes precedence over the generated package assets.
 
 The output directory must not exist. The builder checks the host's TypeScript
-against the renderer declarations.
+against the renderer declarations. Those declarations import packages that the
+host does not install, such as `effect`. The builder ignores only that missing
+package error in the renderer `types/` files. A missing renderer declaration
+file or a wrong mount option type still fails the build.
 `host-build-info.json` records the renderer source commit, dirty state, input
 file hashes, and hashes of all served files. The builder keeps
 the renderer module unchanged and adds `host.js`, `host.css`, and the host HTML.
@@ -77,12 +83,27 @@ repository and scope access. Release validation runs this check on executables
 extracted from both native archives and npm engine packages. It does not
 publish a release during a manual run.
 
+The review write check starts a new review host for each step on one
+repository. The generated client starts, replies to and resolves Discussions,
+rejects with feedback, and revises a Requirement. Each step reads the result
+through the next host. The check also closes one write response before its body
+arrives. The client must report a connection error, send the write only once,
+and the repository must hold one result. CI runs this check on the Linux CLI.
+
 ```sh
 node --test tools/review-host/*.test.ts
 node tools/review-host/verify-native.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
+node tools/review-host/verify-renderer-reads.ts /absolute/provenance crates/provenance-cli/review-assets-generated packages/provenance
+node tools/review-host/verify-review-writes.ts /absolute/provenance packages/provenance
+node tools/review-host/verify-page-session.ts /absolute/provenance
 ```
 
-The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-13d51d69ae34/provenance-review.tar.gz)
+`verify-page-session.ts` runs the page bootstrap against a real host with Node's
+fetch and WebSocket: a launch link stores the session and opens the event
+socket, a reload mounts with the stored session, and a changed session is
+refused and removed.
+
+The [public renderer archive](https://github.com/quality-sh/provenance/releases/download/renderer-377852a18205/provenance-review.tar.gz)
 contains the exact bytes from the pinned upstream build. The release contains
 only the renderer. It is separate from the CLI releases and is not the latest
 CLI release. CI and release preparation use this archive without access to the

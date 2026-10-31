@@ -81,7 +81,7 @@ impl NestedWorkspace {
         .unwrap();
         std::fs::write(
             package.join("src/main.rs"),
-            r#"use provenance_sdk::{implemented_by, operations, requirement, rule, spec, Settings};
+            r#"use provenance_sdk::{implemented_by, operations, requirement, rule, spec, Repository, Settings};
 
 fn start_workflow() {}
 
@@ -98,8 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )])])
         .build()?;
     operations::apply(
-        settings.repository.clone(),
-        &settings.scope_id()?,
+        &Repository::discover(settings.repository.clone(), &settings.scope)?,
         document.materialize(settings.owner),
     )?;
     Ok(())

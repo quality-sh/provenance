@@ -1,5 +1,4 @@
-use provenance_core::protocol::failure::{ErasedFailure as FailureEnvelope, OperationFailure};
-use serde_json::Value;
+use provenance_core::protocol::failure::{ErasedFailure, OperationFailure};
 use std::sync::{Arc, Mutex};
 use tokio::sync::Semaphore;
 use tokio_util::task::TaskTracker;
@@ -29,11 +28,15 @@ impl Execution {
         }
     }
 
-    pub async fn run<F>(&self, operation: &str, work: F) -> Result<Value, FailureEnvelope>
+    /// Waits for a work slot, then runs the work on the tracked blocking pool.
+    pub async fn run<T, F>(&self, work: F) -> Result<T, OperationFailure>
     where
-        F: FnOnce() -> Result<Value, FailureEnvelope> + Send + 'static,
+        T: Send + 'static,
+        F: FnOnce() -> T + Send + 'static,
     {
-        let permit = crate::admission::acquire(self.state.admission.clone()).await?;
+        let permit = crate::admission::acquire(self.state.admission.clone())
+            .await
+            .map_err(refusal)?;
         let task = {
             let closed = self
                 .state
@@ -41,7 +44,7 @@ impl Execution {
                 .lock()
                 .expect("admission lock is not poisoned");
             if *closed {
-                return Err(crate::admission::unavailable());
+                return Err(OperationFailure::UnavailableNeeds);
             }
             let task = self.state.tasks.spawn_blocking(move || {
                 let _permit = permit;
@@ -51,8 +54,7 @@ impl Execution {
             drop(closed);
             task
         };
-        task.await
-            .map_err(|_| FailureEnvelope::new(Some(operation), OperationFailure::Internal))?
+        task.await.map_err(|_| OperationFailure::Internal)
     }
 
     pub async fn shutdown(&self) {
@@ -71,6 +73,11 @@ impl Execution {
     }
 }
 
+/// The admission wait answers with an erased refusal; the typed caller gets the common failure back.
+fn refusal(refused: ErasedFailure) -> OperationFailure {
+    serde_json::from_value(refused.error).unwrap_or(OperationFailure::Internal)
+}
+
 #[cfg(all(test, feature = "test-fixture"))]
 #[path = "execution/publication_tests.rs"]
 mod publication_tests;
@@ -84,7 +91,7 @@ mod tests {
 
     struct HeldWork {
         release: std::sync::mpsc::Sender<()>,
-        call: tokio::task::JoinHandle<Result<Value, FailureEnvelope>>,
+        call: tokio::task::JoinHandle<Result<(), OperationFailure>>,
     }
 
     async fn hold_work(execution: &Execution) -> HeldWork {
@@ -93,10 +100,9 @@ mod tests {
         let (release, wait) = std::sync::mpsc::channel();
         let call = tokio::spawn(async move {
             worker
-                .run("read", move || {
+                .run(move || {
                     let _ = started.send(());
                     let _ = wait.recv();
-                    Ok(Value::Null)
                 })
                 .await
         });
@@ -110,7 +116,7 @@ mod tests {
         let execution = Execution::new(1);
         let HeldWork { release, call } = hold_work(&execution).await;
         let started_wait = tokio::time::Instant::now();
-        let waiting = execution.run("apply", || panic!("Rejected work must not run"));
+        let waiting = execution.run::<(), _>(|| panic!("Rejected work must not run"));
         tokio::pin!(waiting);
         assert!(futures::poll!(&mut waiting).is_pending());
         tokio::time::advance(std::time::Duration::from_millis(2999)).await;
@@ -120,7 +126,7 @@ mod tests {
         assert_eq!(started_wait.elapsed(), std::time::Duration::from_secs(3));
         release.send(()).unwrap();
         call.await.unwrap().unwrap();
-        assert_eq!(refused.error, serde_json::json!({"kind":"host_busy"}));
+        assert_eq!(refused, OperationFailure::HostBusy);
         execution.shutdown().await;
     }
 
@@ -133,9 +139,8 @@ mod tests {
         let mut waiters = Vec::new();
         for index in 0..5 {
             let order = order.clone();
-            let mut waiter = Box::pin(execution.run("read", move || {
+            let mut waiter = Box::pin(execution.run(move || {
                 order.lock().unwrap().push(index);
-                Ok(Value::Null)
             }));
             assert!(futures::poll!(&mut waiter).is_pending());
             waiters.push(waiter);
@@ -155,7 +160,7 @@ mod tests {
     async fn shutdown_ends_execution_waits_at_once() {
         let execution = Execution::new(1);
         let HeldWork { release, call } = hold_work(&execution).await;
-        let waiting = execution.run("read", || panic!("Closed work must not run"));
+        let waiting = execution.run::<(), _>(|| panic!("Closed work must not run"));
         tokio::pin!(waiting);
         assert!(futures::poll!(&mut waiting).is_pending());
         let closing = execution.shutdown();
@@ -166,10 +171,7 @@ mod tests {
             .unwrap()
             .unwrap_err();
         assert_eq!(refused.status_code(), 503);
-        assert_eq!(
-            refused.error,
-            serde_json::json!({"kind":"unavailable_needs"})
-        );
+        assert_eq!(refused, OperationFailure::UnavailableNeeds);
         release.send(()).unwrap();
         call.await.unwrap().unwrap();
         closing.await;
@@ -185,11 +187,10 @@ mod tests {
         let worker = execution.clone();
         let caller = tokio::spawn(async move {
             worker
-                .run("apply", move || {
+                .run(move || {
                     started.send(()).unwrap();
                     work_barrier.wait();
                     finished.send(()).unwrap();
-                    Ok(Value::Null)
                 })
                 .await
         });
@@ -209,21 +210,17 @@ mod tests {
             .unwrap();
         closing.await.unwrap();
         done.await.unwrap();
-        assert!(execution.run("apply", || Ok(Value::Null)).await.is_err());
+        assert!(execution.run(|| ()).await.is_err());
     }
 
     #[tokio::test]
     async fn a_panicked_read_task_retains_the_internal_failure_kind() {
         let execution = Execution::default();
         let error = execution
-            .run("get", || panic!("injected read task failure"))
+            .run::<(), _>(|| panic!("injected read task failure"))
             .await
             .unwrap_err();
         execution.shutdown().await;
-        assert_eq!(error.error, serde_json::json!({"kind":"internal"}));
-        assert_eq!(
-            serde_json::to_value(error.meta).unwrap(),
-            serde_json::json!({})
-        );
+        assert_eq!(error, OperationFailure::Internal);
     }
 }

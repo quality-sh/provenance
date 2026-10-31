@@ -93,7 +93,10 @@ fn skills_install_default_writes_canonical_files_and_relative_claude_symlinks() 
 
 #[test]
 fn fork_tournament_skill_documents_the_assertable_winner_lifecycle() {
-    let skill = include_str!("../skills/provenance-fork-tournament/SKILL.md");
+    let skill = include_str!(concat!(
+        env!("OUT_DIR"),
+        "/skills/provenance-fork-tournament/SKILL.md"
+    ));
 
     assert!(skill.contains("provenance schema show proposal --format json"));
     assert!(skill.contains("provenance proposals prop_<question>_<winner_slot> assertions create"));

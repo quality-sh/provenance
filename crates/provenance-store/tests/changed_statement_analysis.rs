@@ -8,6 +8,7 @@ use provenance_store::statement_analysis::{analyze_changed_statements, Statement
 
 fn requirement(id: &str, statement: &str) -> Requirement {
     Requirement {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -22,7 +23,7 @@ fn requirement(id: &str, statement: &str) -> Requirement {
 
         domain_id: None,
         source_refs: Vec::new(),
-        refines: None,
+        refines: Vec::new(),
         depends_on: Vec::new(),
         supersedes: Vec::new(),
         spawned_by: None,

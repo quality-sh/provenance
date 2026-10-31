@@ -6,7 +6,7 @@ use std::{
 
 use serde_json::Value;
 
-const CRATE_ORDER: [&str; 11] = [
+const CRATE_ORDER: [&str; 12] = [
     "provenance-macros",
     "provenance-core",
     "provenance-porcelain",
@@ -16,6 +16,7 @@ const CRATE_ORDER: [&str; 11] = [
     "provenance-report",
     "provenance-sdk",
     "provenance-http-client",
+    "provenance-contract",
     "provenance-transport",
     "provenance-cli",
 ];
@@ -220,7 +221,7 @@ fn cli_package_contains_its_embedded_skills() {
 }
 
 #[test]
-fn crate_local_embedded_skills_are_checked_out_with_lf() {
+fn root_skill_sources_are_checked_out_with_lf() {
     let workspace = workspace_root();
     for skill in [
         "provenance-fork-tournament",
@@ -228,7 +229,7 @@ fn crate_local_embedded_skills_are_checked_out_with_lf() {
         "provenance-shaping",
         "provenance-swarm-backtrace",
     ] {
-        let path = format!("crates/provenance-cli/skills/{skill}/SKILL.md");
+        let path = format!("skills/{skill}/SKILL.md");
         let output = Command::new("git")
             .args(["check-attr", "eol", "--", &path])
             .current_dir(&workspace)

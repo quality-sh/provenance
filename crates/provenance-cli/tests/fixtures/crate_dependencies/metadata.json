@@ -1,0 +1,35 @@
+{
+  "packages": [
+    {
+      "name": "provenance-macros",
+      "dependencies": [
+        { "name": "syn", "rename": null, "kind": null, "target": null, "optional": false }
+      ]
+    },
+    {
+      "name": "provenance-core",
+      "dependencies": [
+        { "name": "provenance-macros", "rename": null, "kind": null, "target": null, "optional": false },
+        { "name": "serde", "rename": null, "kind": null, "target": null, "optional": false }
+      ]
+    },
+    {
+      "name": "provenance-store",
+      "dependencies": [
+        { "name": "provenance-core", "rename": null, "kind": null, "target": null, "optional": false },
+        { "name": "fs2", "rename": null, "kind": "build", "target": null, "optional": false },
+        { "name": "tokio", "rename": null, "kind": null, "target": null, "optional": true },
+        { "name": "rustix", "rename": null, "kind": null, "target": "cfg(unix)", "optional": false },
+        { "name": "tempfile", "rename": null, "kind": "dev", "target": null, "optional": false }
+      ]
+    },
+    {
+      "name": "provenance-report",
+      "dependencies": [
+        { "name": "provenance-core", "rename": null, "kind": null, "target": null, "optional": false },
+        { "name": "provenance-store", "rename": null, "kind": null, "target": null, "optional": false },
+        { "name": "serde_json", "rename": null, "kind": null, "target": null, "optional": false }
+      ]
+    }
+  ]
+}

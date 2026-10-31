@@ -64,6 +64,8 @@ pub enum RequirementStatus {
     Refinement,
     #[serde(rename = "resolved")]
     Resolved,
+    #[serde(rename = "archived")]
+    Archived,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -85,6 +87,8 @@ pub enum ResolutionStatus {
     Superseded,
     #[serde(rename = "abandoned")]
     Abandoned,
+    #[serde(rename = "archived")]
+    Archived,
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

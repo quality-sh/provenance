@@ -35,7 +35,7 @@ fn initialized() -> (tempfile::TempDir, StateStore, ScopeId) {
         .unwrap(),
     )
     .unwrap();
-    (dir, StateStore::new(layout), scope)
+    (dir, crate::test_support::store(&layout), scope)
 }
 
 /// One native repository and one repository reached only through the catalog
@@ -55,8 +55,7 @@ fn twin() -> (
 
 fn prepared(dir: &tempfile::TempDir, scope: &ScopeId) -> PreparedContext {
     PreparedContext::for_scope(PreparedScope {
-        root: camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap(),
-        scope: scope.clone(),
+        repository: crate::repository::Repository::open(dir.path(), scope.as_str()).unwrap(),
         requested_target: "selected".into(),
     })
 }
@@ -120,7 +119,7 @@ fn seed_requirement(store: &StateStore, scope: &ScopeId) {
             description: None,
             status: provenance_core::RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

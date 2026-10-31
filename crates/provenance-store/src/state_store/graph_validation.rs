@@ -14,7 +14,8 @@
 use super::StateStore;
 use crate::write_error::{SourceFailure, WriteFailure};
 use provenance_core::model::relations::{
-    cycle_in, cycle_refusal, kind_word, missing_required, required_refusal, RelationOwner,
+    cycle_in, cycle_refusal, kind_word, missing_required, required_refusal, RecordFront,
+    RelationOwner,
 };
 use provenance_core::ScopeId;
 
@@ -26,33 +27,64 @@ impl StateStore {
         let requirements = self.list_requirements(scope)?;
         let resolutions = self.list_resolutions(scope)?;
         let rules = self.list_rules(scope)?;
-        for rule in &rules {
-            rule.validate_archive()?;
-        }
         let topics = self.list_topics(scope)?;
-        for topic in &topics {
-            topic.validate_archive()?;
-        }
         let questions = self.list_questions(scope)?;
-        for question in &questions {
-            question.validate_archive()?;
-        }
+        let domains = self.list_domains(scope)?;
         let boundaries = self.list_boundaries(scope)?;
-        ensure_required(&sources)?;
-        ensure_required(&requirements)?;
-        ensure_required(&resolutions)?;
-        ensure_required(&rules)?;
-        ensure_required(&topics)?;
-        ensure_required(&questions)?;
-        ensure_required(&boundaries)?;
-        ensure_acyclic(&requirements)?;
-        ensure_acyclic(&sources)?;
-        ensure_acyclic(&resolutions)?;
-        ensure_acyclic(&rules)?;
-        ensure_acyclic(&topics)?;
-        ensure_acyclic(&questions)?;
-        ensure_acyclic(&boundaries)
+        validate_relations(&RecordFront {
+            sources: &sources,
+            requirements: &requirements,
+            resolutions: &resolutions,
+            rules: &rules,
+            topics: &topics,
+            questions: &questions,
+            domains: &domains,
+            boundaries: &boundaries,
+        })
     }
+}
+
+/// Refuses records whose relation fields do not hold.
+///
+/// It refuses an archive stamp that does not match the status, an empty
+/// required list, and a chain that returns to its start. It reads only the
+/// front; domains carry no relation it checks.
+pub fn validate_relations(front: &RecordFront<'_>) -> anyhow::Result<()> {
+    ensure_archives(
+        front.requirements,
+        provenance_core::Requirement::validate_archive,
+    )?;
+    ensure_archives(
+        front.resolutions,
+        provenance_core::Resolution::validate_archive,
+    )?;
+    ensure_archives(front.rules, provenance_core::Rule::validate_archive)?;
+    ensure_archives(front.topics, provenance_core::Topic::validate_archive)?;
+    ensure_archives(front.questions, provenance_core::Question::validate_archive)?;
+    ensure_required(front.sources)?;
+    ensure_required(front.requirements)?;
+    ensure_required(front.resolutions)?;
+    ensure_required(front.rules)?;
+    ensure_required(front.topics)?;
+    ensure_required(front.questions)?;
+    ensure_required(front.boundaries)?;
+    ensure_acyclic(front.requirements)?;
+    ensure_acyclic(front.sources)?;
+    ensure_acyclic(front.resolutions)?;
+    ensure_acyclic(front.rules)?;
+    ensure_acyclic(front.topics)?;
+    ensure_acyclic(front.questions)?;
+    ensure_acyclic(front.boundaries)
+}
+
+fn ensure_archives<T>(
+    records: &[T],
+    validate: impl Fn(&T) -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    for record in records {
+        validate(record)?;
+    }
+    Ok(())
 }
 
 fn ensure_required<T: RelationOwner>(records: &[T]) -> anyhow::Result<()> {

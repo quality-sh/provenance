@@ -24,6 +24,7 @@ pub use provenance_core::{EngineInfo, ScopeId, SourceType, StableId, SDK_PROTOCO
 pub use provenance_macros::{rule, verifies};
 pub use provenance_store::operations;
 pub use provenance_store::operations::{AffectedRule, TypedSpecPlan};
+pub use provenance_store::repository::{OpenFailure, Repository};
 pub use provenance_store::state_store::TypedSpecResult;
 
 pub use macros::identifier_matches_key;

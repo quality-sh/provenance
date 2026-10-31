@@ -1,13 +1,13 @@
 use super::{compute_gaps, graph_query::GapGraph, model::GapItem};
-use crate::{layout::ProvenanceLayout, state_store::StateStore};
+use crate::{repository::Repository, state_store::StateStore};
 use provenance_core::{
     Contribution, Question, Requirement, Resolution, Rule, ScopeId, Source, SynthesisPacket,
     Thread, Topic,
 };
 
-pub fn find_gaps(layout: &ProvenanceLayout, scope: &ScopeId) -> anyhow::Result<Vec<GapItem>> {
-    let store = StateStore::new(layout.clone());
-    store.with_repository_publication(|| find_gaps_locked(scope, &store))
+pub fn find_gaps(repository: &Repository) -> anyhow::Result<Vec<GapItem>> {
+    let store = repository.store();
+    store.with_repository_publication(|held| find_gaps_locked(repository.scope(), held))
 }
 
 fn find_gaps_locked(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Vec<GapItem>> {
@@ -16,26 +16,33 @@ fn find_gaps_locked(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Vec<G
     ))
 }
 
-/// Every record a [`GapGraph`] borrows, owned. Readers that need graph joins
-/// rather than the gap list itself load the scope once through here and then
-/// build the same graph the gap policy sees, so the two cannot drift.
-pub(in crate::cache) struct GraphRecords {
-    pub(in crate::cache) sources: Vec<Source>,
-    pub(in crate::cache) requirements: Vec<Requirement>,
-    pub(in crate::cache) resolutions: Vec<Resolution>,
-    pub(in crate::cache) rules: Vec<Rule>,
-    pub(in crate::cache) topics: Vec<Topic>,
-    pub(in crate::cache) questions: Vec<Question>,
-    pub(in crate::cache) threads: Vec<Thread>,
-    pub(in crate::cache) domains: Vec<provenance_core::Domain>,
-    pub(in crate::cache) boundaries: Vec<provenance_core::Boundary>,
-    pub(in crate::cache) contributions: Vec<Contribution>,
-    pub(in crate::cache) synthesis_packets: Vec<SynthesisPacket>,
+/// Every record a [`GapGraph`] borrows, owned.
+///
+/// Readers that need graph joins rather than the gap list itself load the
+/// scope once through here and then build the same graph the gap policy sees,
+/// so the two cannot drift.
+///
+/// A caller that already holds the records builds this directly and needs no
+/// store: [`GraphRecords::graph`] gives the gap graph, and its
+/// [`GapGraph::front`] gives the relation front.
+#[derive(Debug, Clone, Default)]
+pub struct GraphRecords {
+    pub sources: Vec<Source>,
+    pub requirements: Vec<Requirement>,
+    pub resolutions: Vec<Resolution>,
+    pub rules: Vec<Rule>,
+    pub topics: Vec<Topic>,
+    pub questions: Vec<Question>,
+    pub threads: Vec<Thread>,
+    pub domains: Vec<provenance_core::Domain>,
+    pub boundaries: Vec<provenance_core::Boundary>,
+    pub contributions: Vec<Contribution>,
+    pub synthesis_packets: Vec<SynthesisPacket>,
 }
 
 impl GraphRecords {
     /// Reads the canonical records under the caller's lock.
-    pub(in crate::cache) fn load(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Self> {
+    pub fn load(scope: &ScopeId, store: &StateStore) -> anyhow::Result<Self> {
         Ok(Self {
             sources: store.list_sources(scope)?,
             requirements: store.list_requirements(scope)?,
@@ -51,7 +58,7 @@ impl GraphRecords {
         })
     }
 
-    pub(in crate::cache) fn graph<'a>(&'a self, scope: &'a ScopeId) -> GapGraph<'a> {
+    pub fn graph<'a>(&'a self, scope: &'a ScopeId) -> GapGraph<'a> {
         GapGraph {
             scope,
             sources: &self.sources,

@@ -16,6 +16,7 @@ fn scope_id() -> ScopeId {
 
 pub fn requirement(id: &str) -> Requirement {
     Requirement {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -30,7 +31,7 @@ pub fn requirement(id: &str) -> Requirement {
         status: RequirementStatus::Active,
         domain_id: None,
         source_refs: Vec::new(),
-        refines: None,
+        refines: Vec::new(),
         depends_on: Vec::new(),
         supersedes: Vec::new(),
         spawned_by: None,
@@ -41,6 +42,7 @@ pub fn requirement(id: &str) -> Requirement {
 
 pub fn resolution(id: &str) -> Resolution {
     Resolution {
+        archived_in_commit: None,
         created: None,
         updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,

@@ -142,10 +142,6 @@ fn remove_if_owned_with_hook(
     Ok(())
 }
 
-pub fn atomic_replace(path: &Path, before: &FileSnapshot, contents: &[u8]) -> anyhow::Result<()> {
-    atomic_replace_with_hook(path, before, contents, || {}).map(|_| ())
-}
-
 fn atomic_replace_with_hook(
     path: &Path,
     before: &FileSnapshot,
@@ -303,7 +299,7 @@ mod tests {
     fn replaces_an_absent_regular_file() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("nested/file.txt");
-        atomic_replace(&path, &FileSnapshot::Missing, b"planned\n").unwrap();
+        atomic_replace_with_hook(&path, &FileSnapshot::Missing, b"planned\n", || {}).unwrap();
         assert_eq!(std::fs::read(path).unwrap(), b"planned\n");
     }
 
@@ -315,7 +311,7 @@ mod tests {
         let before = FileSnapshot::read(&path).unwrap();
         std::fs::write(&path, "concurrent\n").unwrap();
 
-        let error = atomic_replace(&path, &before, b"planned\n").unwrap_err();
+        let error = atomic_replace_with_hook(&path, &before, b"planned\n", || {}).unwrap_err();
 
         assert!(error.to_string().contains("changed after"));
         assert_eq!(std::fs::read(path).unwrap(), b"concurrent\n");
@@ -365,7 +361,7 @@ mod tests {
         ));
         std::fs::write(&collision, "unrelated\n").unwrap();
 
-        atomic_replace(&path, &before, b"planned\n").unwrap();
+        atomic_replace_with_hook(&path, &before, b"planned\n", || {}).unwrap();
 
         assert_eq!(std::fs::read(path).unwrap(), b"planned\n");
         assert_eq!(std::fs::read(collision).unwrap(), b"unrelated\n");

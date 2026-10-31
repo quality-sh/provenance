@@ -37,7 +37,7 @@ async fn a_read_answers_at_the_stored_serial_when_catch_up_refuses() {
     assert_eq!(healthy.stamp.policy, StampPolicy::CatchUp);
 
     orphan_every_rule(&store);
-    let refused = catch_up_state(&store.layout()).await.unwrap_err();
+    let refused = catch_up_state(&store.repository()).await.unwrap_err();
     assert!(refused.to_string().contains("needs one requirement"));
 
     let stamped = get_through(&store, ReadPolicy::default()).await.unwrap();
@@ -163,7 +163,7 @@ async fn annotate_only_refuses_an_incompatible_database_by_type() {
 #[tokio::test]
 async fn annotate_only_refuses_an_incompatible_current_schema_without_writing() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
         .execute(pool.pool())
@@ -244,7 +244,7 @@ async fn a_pre_stamp_database_refuses_and_names_materialize_when_catch_up_fails(
 #[verifies("rule_annotate_only_refuses_a_half_migrated_projection", examples)]
 async fn annotate_only_refuses_an_incomplete_database() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     sqlx::query("DELETE FROM projection_family_digests")
         .execute(pool.pool())
@@ -278,13 +278,13 @@ async fn annotate_only_refuses_an_incomplete_database() {
 #[verifies("rule_annotate_only_refuses_a_half_migrated_projection", examples)]
 async fn a_projection_with_no_scope_is_not_half_migrated() {
     let store = test_stores::seeded_queries();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let manifest_path = store.layout().manifest_path();
     let mut manifest: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&manifest_path).unwrap()).unwrap();
     manifest["scopes"] = serde_json::json!([]);
     std::fs::write(&manifest_path, serde_json::to_string(&manifest).unwrap()).unwrap();
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let answer = get_through(
         &store,
         ReadPolicy::with_freshness(FreshnessPolicy::AnnotateOnly),

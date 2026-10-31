@@ -15,7 +15,7 @@ fn requirement(store: &crate::state_store::StateStore, scope: &provenance_core::
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -31,14 +31,14 @@ fn a_refines_chain_back_to_the_owner_is_refused() {
     requirement(&store, &scope, "req_leave");
     requirement(&store, &scope, "req_rates");
     store
-        .set_requirement_refines(&scope, &sid("req_leave"), sid("req_overtime"))
+        .add_requirement_refines(&scope, &sid("req_leave"), sid("req_overtime"))
         .unwrap();
     store
-        .set_requirement_refines(&scope, &sid("req_rates"), sid("req_leave"))
+        .add_requirement_refines(&scope, &sid("req_rates"), sid("req_leave"))
         .unwrap();
 
     let error = store
-        .set_requirement_refines(&scope, &sid("req_overtime"), sid("req_rates"))
+        .add_requirement_refines(&scope, &sid("req_overtime"), sid("req_rates"))
         .unwrap_err();
 
     assert_eq!(
@@ -77,7 +77,7 @@ fn a_missing_target_is_refused_by_kind() {
 fn a_missing_owner_is_refused_by_its_own_id_and_flag() {
     let (_dir, store, scope) = seeded_source_requirement_store();
     let error = store
-        .set_requirement_refines(&scope, &sid("req_ghost"), sid("req_overtime"))
+        .add_requirement_refines(&scope, &sid("req_ghost"), sid("req_overtime"))
         .unwrap_err();
     assert_eq!(
         error.to_string(),

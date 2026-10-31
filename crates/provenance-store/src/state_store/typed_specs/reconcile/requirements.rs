@@ -55,6 +55,7 @@ impl DeclarationRecord for Requirement {
             })
             .collect();
         let mut requirement = Self {
+            archived_in_commit: None,
             created: None,
             updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -68,7 +69,7 @@ impl DeclarationRecord for Requirement {
             status: RequirementStatus::Active,
             domain_id: None,
             source_refs,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

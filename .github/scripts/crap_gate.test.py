@@ -314,7 +314,7 @@ class NativeGateTests(unittest.TestCase):
         method = by_name["Settings::from_env"]
         self.assertEqual(method["crate"], "provenance-sdk")
         self.assertTrue(method["file"].endswith("crates/provenance-sdk/src/settings.rs"))
-        self.assertEqual(by_name["Execution::run"]["cyclomatic"], 4.0)
+        self.assertEqual(by_name["Execution::run"]["cyclomatic"], 3.0)
         self.assertFalse(any("closure" in name for name in by_name))
         self.assertFalse(
             any(row["file"].endswith("operations/catalog/creation.rs") for row in rows),

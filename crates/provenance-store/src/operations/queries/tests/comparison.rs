@@ -14,6 +14,7 @@ pub mod requests;
 pub mod test_stores;
 mod timing;
 
+use crate::cache::tests::fixtures::open;
 use crate::cache::{catch_up_state, open_cache};
 use crate::operations::read_policy::{FreshnessPolicy, ReadPolicy};
 use crate::operations::reader::{self, ReadSnapshot};
@@ -29,7 +30,7 @@ use test_stores::TestStore;
 
 /// Fields the served answer carries beside the answer bytes; the pinned
 /// answers file holds the answers without them.
-const ADDITIVE_FIELDS: [&str; 7] = [
+const ADDITIVE_FIELDS: [&str; 8] = [
     "stamp",
     "freshness_error",
     "implementation_bindings_has_more",
@@ -37,12 +38,37 @@ const ADDITIVE_FIELDS: [&str; 7] = [
     "verification_runs_has_more",
     "reviews_has_more",
     "scan_cut",
+    "matches",
 ];
 
 pub fn strip_additive(value: &mut Value) {
     if let Some(map) = value.as_object_mut() {
         for field in ADDITIVE_FIELDS {
             map.remove(field);
+        }
+    }
+    strip_scanned_item_names(value);
+}
+
+/// Scanned impact sites now name their item; the pinned answers hold
+/// them without the name.
+fn strip_scanned_item_names(value: &mut Value) {
+    let Some(rules) = value
+        .get_mut("affected_rules")
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+    for rule in rules {
+        for list in ["implementations", "verifications"] {
+            let Some(sites) = rule.get_mut(list).and_then(Value::as_array_mut) else {
+                continue;
+            };
+            for site in sites.iter_mut().filter_map(Value::as_object_mut) {
+                if site.contains_key("line") {
+                    site.remove("symbol");
+                }
+            }
         }
     }
 }
@@ -69,9 +95,8 @@ pub async fn served_stamped(
     policy: ReadPolicy,
 ) -> anyhow::Result<provenance_core::protocol::Stamped<Value>> {
     use super::super::{evidence, impact, records, stale, symbols, walk};
-    let scope = store.scope.clone();
     let request = request.clone();
-    reader::answer(&store.root, &store.scope, policy, move |ctx| {
+    reader::answer(&store.repository(), policy, move |ctx| {
         Box::pin(async move {
             Ok(match request {
                 Request::Get(query) => settle(records::get(ctx, query).await),
@@ -80,7 +105,7 @@ pub async fn served_stamped(
                 Request::Trace(query) => settle(walk::trace(ctx, query).await),
                 Request::Impact(query) => settle(impact::impact(ctx, query).await),
                 Request::Evidence(query) => settle(evidence::evidence(ctx, query).await),
-                Request::Stale(query) => settle(stale::stale(ctx, &scope, query)),
+                Request::Stale(query) => settle(stale::stale(ctx, query)),
                 Request::ResolveSymbol(query) => settle(symbols::resolve(ctx, query).await),
             })
         })
@@ -104,11 +129,11 @@ async fn served_answer(store: &TestStore, request: &Request) -> Value {
 async fn prepare(store: &TestStore) -> (f64, f64) {
     let layout = store.layout();
     let started = Instant::now();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let rebuild_ms = timing::elapsed_ms(started);
     // The steady-state pass, which every read under `catch_up` pays.
     let started = Instant::now();
-    catch_up_state(&layout).await.unwrap();
+    catch_up_state(&open(&layout)).await.unwrap();
     let catch_up_ms = timing::elapsed_ms(started);
     let scans = provenance_scanner::scan_path(&store.root).unwrap();
     crate::test_probes::set_test_scan(Some(scans));
@@ -123,7 +148,7 @@ async fn print_timings(store: TestStore) {
     let mut catch_up_samples = Vec::new();
     for _ in 0..timing::RUNS {
         let started = Instant::now();
-        catch_up_state(&layout).await.unwrap();
+        catch_up_state(&open(&layout)).await.unwrap();
         catch_up_samples.push(timing::elapsed_ms(started));
     }
     let catch_up_ms = timing::median(&mut catch_up_samples);
@@ -201,7 +226,7 @@ async fn projection_counts_match_canonical_over_the_repository_state() {
     let store = test_stores::repository_state();
     let state = store.state_store();
     let scope = &store.scope;
-    catch_up_state(&store.layout()).await.unwrap();
+    catch_up_state(&store.repository()).await.unwrap();
     let pool = open_cache(&store.layout()).await.unwrap();
     let snapshot = reader::ReadSnapshot::open(pool.pool(), scope)
         .await

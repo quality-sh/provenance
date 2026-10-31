@@ -1,31 +1,130 @@
 //! Complete-state publication shared by import and review saves.
 use super::{
-    clear_publication_marker, sync_directory, sync_tree, with_repository_publication,
-    write_publication_marker, PublicationPhase,
+    clear_publication_marker, enter, held_here, refuse_if_held, sync_directory, sync_tree,
+    write_publication_marker, HolderKind, PublicationPhase,
 };
 use crate::layout::ProvenanceLayout;
-use camino::Utf8PathBuf;
+use crate::state_store::StateStore;
+use camino::{Utf8Path, Utf8PathBuf};
+use provenance_macros::rule;
+use std::sync::{Arc, Mutex};
 
-/// Copies the complete state tree and publishes the prepared result under one lock.
-/// Copy cost is proportional to all state bytes, including existing evidence.
+/// A stage body tried to enter a live publication section of its repository.
+#[derive(Debug, thiserror::Error)]
+#[error("a staged write cannot read or write the live state of {repository}")]
+pub struct LiveAccessDuringStage {
+    pub repository: Utf8PathBuf,
+}
+
+/// Runs a stage body. While it runs, a live publication section of the same
+/// repository on this thread refuses, so the body cannot read or write the
+/// live state through a captured repository, an open or a guard.
+#[rule("rule_staged_store_lives_only_inside_stage")]
+pub fn with_stage_body<R>(
+    live: &ProvenanceLayout,
+    body: impl FnOnce() -> anyhow::Result<R>,
+) -> anyhow::Result<R> {
+    let _body = enter(
+        super::publication_lock_identity(live)?,
+        HolderKind::StageBody,
+    );
+    body()
+}
+
+/// Refuses live access to `live` through a store that holds its section, or
+/// through a read-only store, while a stage body of that repository runs on
+/// this thread.
+pub fn refuse_held_access_during_stage(live: &ProvenanceLayout) -> anyhow::Result<()> {
+    if !held_here(None, HolderKind::StageBody) {
+        return Ok(());
+    }
+    refuse_during_stage(&super::publication_lock_identity(live)?, live.root())
+}
+
+pub(super) fn refuse_during_stage(key: &str, repository: &Utf8Path) -> anyhow::Result<()> {
+    if held_here(Some(key), HolderKind::StageBody) {
+        return Err(LiveAccessDuringStage {
+            repository: repository.to_owned(),
+        }
+        .into());
+    }
+    Ok(())
+}
+
+/// The lock that one stage owns. The staged sections of the stage run one at
+/// a time. A panic in a staged section poisons the lock, and the stage then
+/// refuses to publish.
+#[derive(Debug)]
+pub struct StageLock {
+    identity: String,
+    root: Utf8PathBuf,
+    sections: Mutex<()>,
+}
+
+impl StageLock {
+    pub(crate) fn new(root: &Utf8Path) -> Arc<Self> {
+        Arc::new(Self {
+            identity: root.to_string(),
+            root: root.to_owned(),
+            sections: Mutex::new(()),
+        })
+    }
+
+    /// Runs one staged section. Another thread waits; a second entry on this
+    /// thread returns [`PublicationHeld`](super::PublicationHeld).
+    #[rule("rule_staged_sections_run_one_at_a_time")]
+    pub(crate) fn run<R>(
+        &self,
+        operation: impl FnOnce() -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        refuse_if_held(&self.identity, HolderKind::Stage, &self.root)?;
+        let _section = self
+            .sections
+            .lock()
+            .map_err(|_| anyhow::anyhow!("a staged section of {} panicked", self.root))?;
+        let _holder = enter(self.identity.clone(), HolderKind::Stage);
+        operation()
+    }
+
+    /// Refuses when a staged section panicked.
+    pub(crate) fn ensure_intact(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            !self.sections.is_poisoned(),
+            "a staged section of {} panicked; the stage is not published",
+            self.root
+        );
+        Ok(())
+    }
+}
+
+/// Copies the complete state tree and publishes the prepared result under the
+/// section that `held` holds: the live section, or the staged section of a
+/// stage that writes in steps. Copy cost is proportional to all state bytes,
+/// including existing evidence.
 pub fn with_staged_state<R>(
-    live_layout: &ProvenanceLayout,
+    held: &StateStore,
     dry_run: bool,
     prepare: impl FnOnce(&ProvenanceLayout) -> anyhow::Result<R>,
 ) -> anyhow::Result<R> {
-    with_repository_publication(live_layout, || {
-        let mut publication = ImportPublication;
-        stage_with_hook(live_layout, dry_run, prepare, &mut publication).map_err(|error| {
-            if live_layout.publication_marker_path().exists() {
-                crate::write_error::publication_started(error)
-            } else {
-                // A failed staged write or completed rollback did not commit live state.
-                match error.downcast::<crate::write_error::PublicationStarted>() {
-                    Ok(staged) => staged.0,
-                    Err(error) => error,
-                }
+    let live_layout = &held.layout;
+    let mut publication = ImportPublication { transactions: None };
+    if held.holds_staged_section()? {
+        // The stage lock holds the staged root, so no publication lock is taken there.
+        super::prepare_publication_lock(live_layout)?;
+        // The inner transaction goes beside the staged root, in the transaction of the
+        // outer stage. A transaction inside the staged root makes paths too long on Windows.
+        publication.transactions = live_layout.root().parent().map(Utf8Path::to_owned);
+    }
+    stage_with_hook(live_layout, dry_run, prepare, &mut publication).map_err(|error| {
+        if live_layout.publication_marker_path().exists() {
+            crate::write_error::publication_started(error)
+        } else {
+            // A failed staged write or completed rollback did not commit live state.
+            match error.downcast::<crate::write_error::PublicationStarted>() {
+                Ok(staged) => staged.0,
+                Err(error) => error,
             }
-        })
+        }
     })
 }
 
@@ -64,6 +163,7 @@ pub(super) enum InstallState {
     FileInstalled,
 }
 
+#[rule("rule_live_projection_shows_only_published_state")]
 pub(super) fn stage_with_hook<R>(
     live_layout: &ProvenanceLayout,
     dry_run: bool,
@@ -245,11 +345,33 @@ fn rollback_publication(
     sync_directory(&live_layout.provenance_dir())
 }
 
-struct ImportPublication;
+/// The hook of a staged state publication. `transactions` is set for a stage
+/// in a staged section: its transaction then goes in the outer transaction,
+/// and it writes no marker, because recovery never runs on a staged root. A
+/// crash leaves the outer transaction, which recovery discards or completes.
+struct ImportPublication {
+    transactions: Option<Utf8PathBuf>,
+}
+
+impl ImportPublication {
+    fn mark(
+        &self,
+        live: &ProvenanceLayout,
+        transaction: &camino::Utf8Path,
+        phase: PublicationPhase,
+    ) -> anyhow::Result<()> {
+        if self.transactions.is_some() {
+            return Ok(());
+        }
+        write_publication_marker(live, transaction, phase)
+    }
+}
 
 impl StagedStateHook for ImportPublication {
     fn transactions_dir(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
-        live.import_transactions_dir()
+        self.transactions
+            .clone()
+            .unwrap_or_else(|| live.import_transactions_dir())
     }
 
     fn marker_path(&self, live: &ProvenanceLayout) -> Utf8PathBuf {
@@ -261,7 +383,7 @@ impl StagedStateHook for ImportPublication {
         live: &ProvenanceLayout,
         transaction: &camino::Utf8Path,
     ) -> anyhow::Result<()> {
-        write_publication_marker(live, transaction, PublicationPhase::Prepared)?;
+        self.mark(live, transaction, PublicationPhase::Prepared)?;
         crate::test_probes::at("state_marker_prepared")
     }
 
@@ -273,7 +395,7 @@ impl StagedStateHook for ImportPublication {
         sync_directory(transaction)?;
         crate::test_probes::at("state_backup_created")?;
         sync_directory(&live.provenance_dir())?;
-        write_publication_marker(live, transaction, PublicationPhase::BackupCreated)
+        self.mark(live, transaction, PublicationPhase::BackupCreated)
     }
 
     fn state_installed(&mut self, _live: &ProvenanceLayout) -> anyhow::Result<()> {
@@ -288,7 +410,7 @@ impl StagedStateHook for ImportPublication {
         live: &ProvenanceLayout,
         transaction: &camino::Utf8Path,
     ) -> anyhow::Result<()> {
-        write_publication_marker(live, transaction, PublicationPhase::Published)
+        self.mark(live, transaction, PublicationPhase::Published)
     }
 
     fn after_published(&mut self) -> anyhow::Result<()> {

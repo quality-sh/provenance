@@ -5,6 +5,7 @@ use super::{ReadRefusal, ReadSnapshot};
 use crate::cache::{open_stored_cache, scope_ids, unit_stored_digest, units_for};
 use crate::layout::ProvenanceLayout;
 use crate::publication::publication_guard;
+use crate::repository::Repository;
 use provenance_core::protocol::StampPolicy;
 use provenance_core::ScopeId;
 use provenance_macros::rule;
@@ -28,8 +29,10 @@ pub(super) fn describe_moved(moved: &[MovedUnit]) -> String {
 
 /// The policy compares hashes without changing projection rows or revisions.
 #[rule("rule_refuse_stale_writes_no_revision")]
-pub(super) async fn run(layout: &ProvenanceLayout, scope: &ScopeId) -> anyhow::Result<Freshness> {
-    let guard = match publication_guard(layout).await {
+pub(super) async fn run(repository: &Repository) -> anyhow::Result<Freshness> {
+    let layout = repository.layout();
+    let scope = repository.scope();
+    let guard = match publication_guard(repository).await {
         Ok(guard) => Some(guard),
         Err(error) if crate::cache::permission_failure(layout, &error) => None,
         Err(error) => return Err(error),

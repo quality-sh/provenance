@@ -122,7 +122,9 @@ fn record_saves_change_only_record_files() {
     let temp = tempfile::tempdir().unwrap();
     let layout = ProvenanceLayout::new(Utf8Path::from_path(temp.path()).unwrap());
     initialization::initialize(&layout, &[]);
-    let store = StateStore::new(layout.clone());
+    let store = provenance_store::repository::Repository::open(temp.path(), "default")
+        .unwrap()
+        .store();
     let scope = ScopeId::new("default").unwrap();
 
     let manifest = std::fs::read(layout.manifest_path()).unwrap();

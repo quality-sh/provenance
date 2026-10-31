@@ -131,8 +131,9 @@ async fn non_create_schema_and_dispatch_deny_a_hidden_mutation() {
 async fn no_resolvable_kind_hides_non_create_tools_but_keeps_create_executable() {
     let repository = Repository::new("The shared graph is readable.");
     let mut access = writable_access(&repository);
-    for definition in
-        catalog::definitions().iter().filter(|definition| {
+    for definition in provenance_contract::definitions()
+        .iter()
+        .filter(|definition| {
             definition.registration.queries.iter().any(|query| {
                 query.name == catalog::Trace::NAME && query.request.node_type.is_some()
             })

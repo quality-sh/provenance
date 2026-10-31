@@ -1,7 +1,7 @@
 use axum::{body::Body, extract::Request, http::Method, response::Response};
 use provenance_core::protocol::failure::OperationFailure;
 use provenance_macros::rule;
-use provenance_transport::{HostAccess, LocalAccess};
+use provenance_transport::{HttpCredential, LocalAccess};
 
 include!(concat!(env!("OUT_DIR"), "/review_assets.rs"));
 

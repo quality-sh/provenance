@@ -11,9 +11,9 @@ fn issue_schema_accepts_only_the_serialized_integer_nine() {
             .into_generator()
             .into_root_schema_for::<StandardIssue>();
         let value = serde_json::to_value(schema).unwrap();
-        let validator = jsonschema::JSONSchema::options()
+        let validator = jsonschema::options()
             .with_draft(jsonschema::Draft::Draft202012)
-            .compile(&value)
+            .build(&value)
             .unwrap();
         assert!(validator.is_valid(&serde_json::to_value(StandardIssue::Nine).unwrap()));
         for invalid in [json!(8), json!(10), json!("9"), json!("Nine"), json!(null)] {
@@ -35,9 +35,9 @@ fn analyzer_output_validates_against_its_serialize_schema() {
         .into_generator()
         .into_root_schema_for::<Report>();
     let schema = serde_json::to_value(schema).unwrap();
-    let compiled = jsonschema::JSONSchema::options()
+    let compiled = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&schema)
+        .build(&schema)
         .unwrap();
     assert!(compiled.is_valid(&value));
     assert_eq!(value["issue"], 9);

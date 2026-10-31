@@ -1,7 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::store::Store;
-use provenance_core::ScopeId;
+use provenance_store::repository::Repository;
 
 pub(super) struct ValidationState {
     pub rules: Vec<provenance_core::Rule>,
@@ -11,8 +10,8 @@ pub(super) struct ValidationState {
 }
 
 pub(super) fn load_validation_state(
+    repository: &Repository,
     repo: &camino::Utf8Path,
-    scope: &str,
     scans: &[provenance_scanner::FileScan],
     enabled: bool,
 ) -> anyhow::Result<ValidationState> {
@@ -24,9 +23,9 @@ pub(super) fn load_validation_state(
             warnings: Vec::new(),
         });
     }
-    let store = Store::open(repo);
-    let scope = ScopeId::new(scope)?;
-    let rules = store.list_rules(&scope)?;
+    let store = repository.store();
+    let scope = repository.scope();
+    let rules = store.list_rules(scope)?;
     let known = rules
         .iter()
         .map(|rule| rule.id.as_str().to_string())
@@ -36,7 +35,7 @@ pub(super) fn load_validation_state(
         scans,
         known.iter().cloned(),
     ));
-    let implementations = store.active_implementation_bindings(&scope)?;
+    let implementations = store.active_implementation_bindings(scope)?;
     for site in provenance_scanner::source_sites(scans).filter(|site| {
         matches!(
             site.role(),
@@ -58,7 +57,7 @@ pub(super) fn load_validation_state(
     }
     Ok(ValidationState {
         rules,
-        bindings: store.active_verification_bindings(&scope)?,
+        bindings: store.active_verification_bindings(scope)?,
         implementations,
         warnings,
     })

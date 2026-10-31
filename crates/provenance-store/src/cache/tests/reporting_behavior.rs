@@ -1,9 +1,7 @@
 use super::super::*;
 use super::fixtures::*;
 use crate::layout::ProvenanceLayout;
-use crate::state_store::{
-    CreateRequirementInput, CreateResolutionInput, CreateRuleInput, StateStore,
-};
+use crate::state_store::{CreateRequirementInput, CreateResolutionInput, CreateRuleInput};
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
     NodeType, RequirementStatus, ResolutionStatus, RuleSeverity, RuleStatus, ScopeId,
@@ -12,10 +10,9 @@ use provenance_macros::verifies;
 
 #[test]
 fn impact_reports_hop_distance_and_direction() {
-    let (_dir, layout, scope) = seeded_layout();
+    let (_dir, layout, _scope) = seeded_layout();
     let impact = analyze_impact(
-        &layout,
-        &scope,
+        &open(&layout),
         NodeType::Source,
         &sid("source_schads"),
         ImpactOptions {
@@ -35,15 +32,15 @@ fn impact_reports_hop_distance_and_direction() {
 
 #[test]
 fn graph_evidence_lists_the_fixture_rule() {
-    let (_dir, layout, scope) = seeded_layout();
-    let evidence = graph_evidence(&layout, &scope).unwrap();
+    let (_dir, layout, _scope) = seeded_layout();
+    let evidence = graph_evidence(&open(&layout)).unwrap();
     assert!(evidence.rule_ids.contains("rule_schads_pay_001"));
 }
 
 #[test]
 fn health_counts_rules_with_complete_traceability() {
-    let (_dir, layout, scope) = seeded_layout();
-    let health = coverage_health(&layout, &scope).unwrap();
+    let (_dir, layout, _scope) = seeded_layout();
+    let health = coverage_health(&open(&layout)).unwrap();
     assert_eq!(health.rules.total, 1);
     assert_eq!(health.rules.with_complete_traceability, 1);
     assert_eq!(health.gaps.total, 0);
@@ -52,7 +49,7 @@ fn health_counts_rules_with_complete_traceability() {
 /// Seeds a requirement, the decision that settles it, and a rule both are
 /// recorded as producing. No source is attached to the requirement.
 fn seed_unsourced_chain(layout: &ProvenanceLayout, scope: &ScopeId) {
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout);
     create_requirement(&store, scope, "req_unsourced", RequirementStatus::Active);
     store
         .create_resolution(CreateResolutionInput {
@@ -103,7 +100,7 @@ fn orphan_report_wants_a_source_behind_the_producing_requirement() {
     let (_dir, layout, scope) = seeded_layout();
     seed_unsourced_chain(&layout, &scope);
 
-    let orphans = orphan_rules(&layout, &scope).unwrap();
+    let orphans = orphan_rules(&open(&layout)).unwrap();
     let orphan_ids: Vec<&str> = orphans
         .iter()
         .map(|orphan| orphan.rule_id.as_str())
@@ -113,10 +110,10 @@ fn orphan_report_wants_a_source_behind_the_producing_requirement() {
 
     // The gap report names the requirement's missing source, never the
     // rule; the two readers differ only over the source leg.
-    let gaps = find_gaps(&layout, &scope).unwrap();
+    let gaps = find_gaps(&open(&layout)).unwrap();
     assert!(!gaps.iter().any(|gap| gap.node_id == "rule_unsourced"));
     assert_eq!(
-        coverage_health(&layout, &scope)
+        coverage_health(&open(&layout))
             .unwrap()
             .rules
             .with_complete_traceability,
@@ -129,14 +126,14 @@ fn orphan_report_wants_a_source_behind_the_producing_requirement() {
 #[test]
 fn requirement_produced_rule_does_not_need_a_resolution() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_anchor");
     create_requirement(&store, &scope, "req_half", RequirementStatus::Active);
     attach_source(&store, &scope, "req_half", "source_anchor");
     store
         .create_rule(CreateRuleInput {
             archived_in_commit: None,
-            scope_id: scope.clone(),
+            scope_id: scope,
             id: sid("rule_half"),
             name: None,
             description: None,
@@ -152,13 +149,13 @@ fn requirement_produced_rule_does_not_need_a_resolution() {
         })
         .unwrap();
 
-    assert!(orphan_rules(&layout, &scope).unwrap().is_empty());
-    assert!(!find_gaps(&layout, &scope)
+    assert!(orphan_rules(&open(&layout)).unwrap().is_empty());
+    assert!(!find_gaps(&open(&layout))
         .unwrap()
         .iter()
         .any(|gap| gap.node_id == "rule_half"));
     assert_eq!(
-        coverage_health(&layout, &scope)
+        coverage_health(&open(&layout))
             .unwrap()
             .rules
             .with_complete_traceability,
@@ -169,7 +166,7 @@ fn requirement_produced_rule_does_not_need_a_resolution() {
 #[test]
 fn rule_without_a_producing_requirement_remains_orphaned() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_anchor");
     create_requirement(&store, &scope, "req_decided", RequirementStatus::Active);
     attach_source(&store, &scope, "req_decided", "source_anchor");
@@ -201,11 +198,11 @@ fn rule_without_a_producing_requirement_remains_orphaned() {
             "severity": "high", "resolution_ids": ["res_decided"]}),
     );
 
-    let orphans = orphan_rules(&layout, &scope).unwrap();
+    let orphans = orphan_rules(&open(&layout)).unwrap();
     assert_eq!(orphans.len(), 1);
     assert_eq!(orphans[0].rule_id, "rule_unattached");
     assert_eq!(orphans[0].missing, vec!["source".to_string()]);
-    assert!(!find_gaps(&layout, &scope)
+    assert!(!find_gaps(&open(&layout))
         .unwrap()
         .iter()
         .any(|gap| gap.node_id == "rule_unattached"));
@@ -217,7 +214,7 @@ fn seed_rule_with_producers(
     has_requirement: bool,
     has_resolution: bool,
 ) {
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(layout);
     if has_requirement {
         create_source(&store, scope, "source_anchor");
         create_requirement(&store, scope, "req_rule", RequirementStatus::Active);
@@ -300,7 +297,7 @@ fn orphan_health_and_gaps_agree_on_the_source_leg() {
             let (_dir, layout, scope) = empty_layout();
             seed_rule_with_producers(&layout, &scope, has_requirement, has_resolution);
 
-            let orphans = orphan_rules(&layout, &scope).unwrap();
+            let orphans = orphan_rules(&open(&layout)).unwrap();
             let orphan = orphans
                 .iter()
                 .find(|orphan| orphan.rule_id == "rule_under_test");
@@ -310,7 +307,7 @@ fn orphan_health_and_gaps_agree_on_the_source_leg() {
                 "orphans disagreed with the source leg for \
                  requirement={has_requirement}, resolution={has_resolution}"
             );
-            let health = coverage_health(&layout, &scope).unwrap();
+            let health = coverage_health(&open(&layout)).unwrap();
             assert_eq!(
                 health.rules.with_complete_traceability,
                 usize::from(has_requirement),
@@ -318,7 +315,7 @@ fn orphan_health_and_gaps_agree_on_the_source_leg() {
                  resolution={has_resolution}"
             );
             assert!(
-                !find_gaps(&layout, &scope)
+                !find_gaps(&open(&layout))
                     .unwrap()
                     .iter()
                     .any(|gap| gap.node_id == "rule_under_test"),
@@ -333,15 +330,15 @@ fn orphan_health_and_gaps_agree_on_the_source_leg() {
 #[provenance_macros::verifies("rule_graph_gaps", examples)]
 fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
     let (_dir, layout, scope) = seeded_layout();
-    StateStore::new(layout.clone())
+    crate::test_support::store(&layout)
         .create_requirement(CreateRequirementInput {
-            scope_id: scope.clone(),
+            scope_id: scope,
             id: sid("req_missing_domain"),
             statement: "Rostering rules need a domain".into(),
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -349,7 +346,7 @@ fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
             origin_message: None,
         })
         .unwrap();
-    let gaps = find_gaps(&layout, &scope).unwrap();
+    let gaps = find_gaps(&open(&layout)).unwrap();
     assert!(gaps.iter().any(|gap| gap.kind == GapKind::MissingDomainId
         && gap.requirement_id.as_deref() == Some("req_missing_domain")
         && gap.reason.contains("domain_id")));
@@ -362,8 +359,8 @@ fn gaps_flag_requirements_without_domain_id_but_not_requirements_with_one() {
 /// the requirement cites it under.
 #[test]
 fn prime_lists_a_twice_cited_source_once() {
-    let (_dir, layout, scope) = super::fixtures::pinned_store::pinned_store_layout();
-    let view = get_requirement_graph(&layout, &scope, &sid("req_overtime")).unwrap();
+    let (_dir, layout, _scope) = super::fixtures::pinned_store::pinned_store_layout();
+    let view = get_requirement_graph(&open(&layout), &sid("req_overtime")).unwrap();
     let citations: Vec<_> = view
         .relations
         .iter()

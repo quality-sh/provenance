@@ -91,6 +91,15 @@ approves and shows its age to the approver. An unavailable limit blocks approval
 'Limits unavailable, try again'. Example: a limit raised at 09:10 applies by 10:10. Open:
 how old a stale limit may be before it blocks approval."
 
+## Conditional obligations
+
+A conditional Rule states when its obligation applies. Name the mode or configuration
+in the Requirement and Rule. A parent link does not select a private Rule subset.
+
+Example: "In offline mode, the client stores each unsent change until the next connection."
+A report states the tested mode. In online mode, this condition does not apply. In offline
+mode, a lost unsent change is an unmet obligation. Do not report these two states as equal.
+
 ## Good vs. bad
 
 Fictional product, "ExpenseFlow."
@@ -122,7 +131,9 @@ Rule — good: "An expense strictly above the submitting employee's delegated au
 limit needs a second approver." The statement holds no semicolon, because the write gate
 applies ASD-STE100 Issue 9. Put the behaviour at the limit in a second Rule, or in the
 description. `--source-document` and `--source-section` cite where the obligation was
-read, which here is the policy clause:
+read, which here is the policy clause. Rule creation defaults to `draft`. Keep this default
+for an agent-created Rule. When a person ratifies the Rule, pass `--status active`. This
+agent command keeps the `draft` default:
 
 ```sh
 provenance rules create --scope <scope> \

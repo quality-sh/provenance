@@ -3,8 +3,6 @@ name: Socket
 on:
   pull_request:
     paths:
-      - "package.json"
-      - "package-lock.json"
       - "packages/**"
       - "examples/typescript-sdk/package.json"
       - "examples/typescript-sdk/package-lock.json"

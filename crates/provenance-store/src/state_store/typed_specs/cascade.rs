@@ -10,6 +10,7 @@ use super::super::{
     CascadedResource, ReconcileState, ReconciledResource, StateStore, TypedFieldChange,
     TypedResourceKind,
 };
+use super::view::TypedSpecView;
 use crate::shards;
 
 #[cfg(test)]
@@ -33,13 +34,12 @@ struct ShapingRecords {
 
 impl Cascade {
     pub(super) fn prepare(
-        store: &StateStore,
-        scope: &ScopeId,
+        view: &TypedSpecView,
         resources: &[ReconciledResource],
         sources: &mut [Source],
         requirements: &mut [Requirement],
         rules: &mut Vec<Rule>,
-    ) -> anyhow::Result<Self> {
+    ) -> Self {
         let deleted = |kind| {
             resources
                 .iter()
@@ -54,7 +54,7 @@ impl Cascade {
         let before_requirements = requirements.to_vec();
         let before_rules = rules.clone();
 
-        let mut resolutions = store.list_resolutions(scope)?;
+        let mut resolutions = view.resolutions.clone();
         let before_resolutions = resolutions.clone();
         let mut resolution_ids = BTreeSet::new();
         resolutions.retain_mut(|record| {
@@ -72,7 +72,7 @@ impl Cascade {
             requirement
                 .source_refs
                 .retain(|r| !source_ids.contains(r.source_id.as_str()));
-            clear_id(&mut requirement.refines, &requirement_ids);
+            remove_ids(&mut requirement.refines, &requirement_ids);
             remove_ids(&mut requirement.depends_on, &requirement_ids);
             remove_ids(&mut requirement.supersedes, &requirement_ids);
             clear_id(&mut requirement.spawned_by, &resolution_ids);
@@ -91,13 +91,12 @@ impl Cascade {
         });
 
         let shaping = prepare_shaping(
-            store,
-            scope,
+            view,
             &source_ids,
             &requirement_ids,
             &resolution_ids,
             &rule_ids,
-        )?;
+        );
 
         let mut changes =
             describe_replacement(NodeType::Source, &before_sources, sources, |r| &r.id);
@@ -120,14 +119,14 @@ impl Cascade {
             |r| &r.id,
         ));
         changes.extend(shaping.changes);
-        Ok(Self {
+        Self {
             rules: rule_ids,
             resolutions,
             topics: shaping.topics,
             questions: shaping.questions,
             boundaries: shaping.boundaries,
             changes,
-        })
+        }
     }
 
     pub(super) fn report(&self, resources: &mut [ReconciledResource]) -> Vec<CascadedResource> {
@@ -247,14 +246,13 @@ impl Cascade {
 }
 
 fn prepare_shaping(
-    store: &StateStore,
-    scope: &ScopeId,
+    view: &TypedSpecView,
     source_ids: &BTreeSet<String>,
     requirement_ids: &BTreeSet<String>,
     resolution_ids: &BTreeSet<String>,
     rule_ids: &BTreeSet<String>,
-) -> anyhow::Result<ShapingRecords> {
-    let mut topics = store.list_topics(scope)?;
+) -> ShapingRecords {
+    let mut topics = view.topics.clone();
     let before_topics = topics.clone();
     let mut topic_ids = BTreeSet::new();
     topics.retain_mut(|record| {
@@ -272,7 +270,7 @@ fn prepare_shaping(
         }
         !remove
     });
-    let mut questions = store.list_questions(scope)?;
+    let mut questions = view.questions.clone();
     let before_questions = questions.clone();
     questions.retain_mut(|record| {
         let remove = requirement_ids.contains(record.requirement_id.as_str())
@@ -290,7 +288,7 @@ fn prepare_shaping(
         }
         !remove
     });
-    let mut boundaries = store.list_boundaries(scope)?;
+    let mut boundaries = view.boundaries.clone();
     let before_boundaries = boundaries.clone();
     boundaries.retain(|r| !requirement_ids.contains(r.requirement_id.as_str()));
     for boundary in &mut boundaries {
@@ -315,12 +313,12 @@ fn prepare_shaping(
         &boundaries,
         |r| &r.id,
     ));
-    Ok(ShapingRecords {
+    ShapingRecords {
         topics,
         questions,
         boundaries,
         changes,
-    })
+    }
 }
 
 fn describe_replacement<'a, T: serde::Serialize>(

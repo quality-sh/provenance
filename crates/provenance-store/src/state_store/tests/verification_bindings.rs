@@ -112,7 +112,7 @@ fn canonical_identity_cannot_be_reused_in_another_scope() {
             description: None,
             status: provenance_core::RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -240,9 +240,10 @@ async fn the_verification_page_lists_only_the_bindings_of_the_named_rule() {
 }
 
 async fn verification_page(root: &camino::Utf8Path, rule: &str) -> serde_json::Value {
-    super::read_budget::operation_read(
+    super::read_budget::operation_read::<
+        crate::operations::family_operations::PageVerificationBindings,
+    >(
         root,
-        "page-verification-bindings",
         serde_json::json!({"rule": rule, "limit": 10, "cursor": null}),
     )
     .await

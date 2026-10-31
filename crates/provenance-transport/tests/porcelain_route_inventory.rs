@@ -1,5 +1,3 @@
-use provenance_store::operations::catalog;
-
 const ROUTE_INVENTORY_FNV1A: u64 = 11_939_930_231_785_398_772;
 
 fn add(hash: &mut u64, text: &str) {
@@ -12,7 +10,7 @@ fn add(hash: &mut u64, text: &str) {
 #[test]
 fn porcelain_seam_preserves_public_routes() {
     let mut hash = 0xcbf2_9ce4_8422_2325;
-    for definition in catalog::definitions() {
+    for definition in provenance_contract::definitions() {
         add(&mut hash, definition.method.as_str());
         add(&mut hash, " ");
         add(&mut hash, definition.path);

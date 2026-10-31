@@ -13,7 +13,8 @@ async fn scope_ids_read_the_manifest_while_the_publication_guard_is_held() {
         serde_json::to_vec(&manifest).unwrap(),
     )
     .unwrap();
-    let guard = provenance_store::publication::publication_guard(&layout)
+    let repository = provenance_store::repository::Repository::open(dir.path(), "default").unwrap();
+    let guard = provenance_store::publication::publication_guard(&repository)
         .await
         .unwrap();
     let state = layout.state_dir();

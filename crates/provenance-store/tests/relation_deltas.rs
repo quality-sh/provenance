@@ -19,7 +19,7 @@ fn seed_targets(store: &provenance_store::state_store::StateStore) {
                     "statement": "The system stores records.",
                     "status": "discovery", "depends_on": depends_on, "supersedes": [],
                     "description": null, "domain_id": null,
-                    "refines": null, "spawned_by": null,
+                    "refines": [], "spawned_by": null,
                     "origin_thread": null, "origin_message": null
                 }))
                 .unwrap(),
@@ -129,11 +129,11 @@ fn singleton_edits_set_and_clear() {
     );
     save_ok(&store, json!({"spawned_by": null}));
     assert_eq!(record(&store).spawned_by, None);
-    save_ok(&store, json!({"refines": "req_b"}));
+    save_ok(&store, json!({"refines": ["req_b"]}));
     assert_eq!(
         record(&store)
             .refines
-            .as_ref()
+            .first()
             .map(provenance_core::StableId::as_str),
         Some("req_b")
     );

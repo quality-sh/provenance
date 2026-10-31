@@ -27,8 +27,7 @@ fn query(id: &str) -> ImpactQuery {
 async fn a_resolution_reaches_the_rules_that_name_it_only() {
     let store = TestStore::pinned();
     let answer = queries::impact(
-        Some(store.root.clone()),
-        &store.scope,
+        &store.repository(),
         ReadPolicy::default(),
         query("res_overtime"),
     )
@@ -68,7 +67,7 @@ async fn impact_under(
         freshness: FreshnessPolicy::AnnotateOnly,
         scan_limit,
     };
-    reader::answer(&store.root, &store.scope, policy, move |ctx| {
+    reader::answer(&store.repository(), policy, move |ctx| {
         Box::pin(async move { impact::impact(ctx, query("req_overtime")).await })
     })
     .await
@@ -87,7 +86,9 @@ async fn impact_says_when_the_scan_was_cut() {
         "rule_overtime",
         "req_overtime",
     );
-    crate::cache::catch_up_state(&store.layout()).await.unwrap();
+    crate::cache::catch_up_state(&store.repository())
+        .await
+        .unwrap();
     crate::test_probes::set_test_scan(None);
 
     let whole = impact_under(&store, usize::MAX).await.unwrap();
@@ -110,6 +111,48 @@ async fn impact_says_when_the_scan_was_cut() {
     assert_eq!(cut.stamp.serial, whole.stamp.serial);
 }
 
+#[tokio::test]
+#[verifies("rule_impact_scanned_sites_name_their_items", examples)]
+async fn scanned_impact_sites_name_their_items() {
+    let store = test_stores::seeded_queries();
+    crate::cache::tests::fixtures::create_rule_of(
+        &store.state_store(),
+        &store.scope,
+        "rule_overtime",
+        "req_overtime",
+    );
+    std::fs::write(
+        store.root.join("src/pay.rs"),
+        concat!(
+            "#[rule(\"rule_overtime\")]\n",
+            "fn pay() {}\n",
+            "#[verifies(\"rule_overtime\", examples)]\n",
+            "fn checks_pay() {}\n",
+        ),
+    )
+    .unwrap();
+
+    let answer = queries::impact(
+        &store.repository(),
+        ReadPolicy::default(),
+        query("req_overtime"),
+    )
+    .await
+    .unwrap()
+    .result;
+
+    assert_eq!(
+        answer.affected_rules[0].implementations[0]
+            .symbol
+            .as_deref(),
+        Some("pay")
+    );
+    assert_eq!(
+        answer.affected_rules[0].verifications[0].symbol.as_deref(),
+        Some("checks_pay")
+    );
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn direct_reader_accepts_an_alias_of_the_repository_root() {
@@ -118,7 +161,8 @@ async fn direct_reader_accepts_an_alias_of_the_repository_root() {
     let alias = alias_dir.path().join("repository");
     std::os::unix::fs::symlink(&store.root, &alias).unwrap();
     let alias = camino::Utf8PathBuf::from_path_buf(alias).unwrap();
-    let answer = reader::answer(&alias, &store.scope, ReadPolicy::default(), |ctx| {
+    let aliased = crate::repository::Repository::open(&alias, store.scope.as_str()).unwrap();
+    let answer = reader::answer(&aliased, ReadPolicy::default(), |ctx| {
         Box::pin(async move { impact::impact(ctx, query("req_overtime")).await })
     })
     .await

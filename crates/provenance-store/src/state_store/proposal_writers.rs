@@ -25,7 +25,7 @@ impl StateStore {
             "assertion proposal_id must match proposal id"
         );
         let scope = proposal.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || {
+        self.with_lifecycle_lock(&scope, |held| {
             let proposal = proposal_from_input(proposal)?;
             let assertion = AssertionRecord {
                 schema_version: SUPPORTED_SCHEMA_VERSION,
@@ -35,7 +35,7 @@ impl StateStore {
                 synthesis_packet_id: assertion.synthesis_packet_id,
                 supporting_claim_ids: assertion.supporting_claim_ids,
             };
-            self.write_ideation_batch(
+            held.write_ideation_batch(
                 &scope,
                 super::IdeationLandingBatch {
                     contributions: Vec::new(),
@@ -52,7 +52,7 @@ impl StateStore {
 
     pub fn assert_proposal(&self, input: CreateAssertionInput) -> anyhow::Result<AssertionRecord> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_assertion(input))
+        self.with_lifecycle_lock(&scope, |held| held.write_assertion(input))
     }
 
     pub fn assert_proposal_after_human_decision(
@@ -61,9 +61,9 @@ impl StateStore {
         decision_keys: &[StableId],
     ) -> anyhow::Result<AssertionRecord> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || {
-            self.ensure_proposal_not_disposed(&scope, &input.proposal_id)?;
-            let mut synthesis = self
+        self.with_lifecycle_lock(&scope, |held| {
+            held.ensure_proposal_not_disposed(&scope, &input.proposal_id)?;
+            let mut synthesis = held
                 .list_synthesis_packets(&scope)?
                 .into_iter()
                 .find(|packet| packet.id == input.synthesis_packet_id)
@@ -100,7 +100,7 @@ impl StateStore {
                 synthesis_packet_id: input.synthesis_packet_id,
                 supporting_claim_ids: input.supporting_claim_ids,
             };
-            self.write_ideation_batch(
+            held.write_ideation_batch(
                 &scope,
                 super::IdeationLandingBatch {
                     contributions: Vec::new(),
@@ -175,7 +175,7 @@ impl StateStore {
         input: CreateProposalCardInput,
     ) -> anyhow::Result<ProposalCard> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_proposal_card(input))
+        self.with_lifecycle_lock(&scope, |held| held.write_proposal_card(input))
     }
 
     fn write_proposal_card(&self, input: CreateProposalCardInput) -> anyhow::Result<ProposalCard> {
@@ -183,7 +183,7 @@ impl StateStore {
         ensure_record_id_assignable(candidate.id.as_str())?;
         anyhow::ensure!(
             candidate.proposal_type != ProposalType::RecordRevision
-                || crate::review::guard::writer_allows(
+                || self.permits(
                     &shards::proposal_cards_path(&self.layout, &candidate.scope_id),
                     "*"
                 ),
@@ -224,7 +224,7 @@ impl StateStore {
         input: CreateDispositionInput,
     ) -> anyhow::Result<DispositionRecord> {
         let scope = input.scope_id.clone();
-        self.with_lifecycle_lock(&scope, || self.write_disposition(input))
+        self.with_lifecycle_lock(&scope, |held| held.write_disposition(input))
     }
 
     fn write_disposition(
@@ -262,10 +262,7 @@ impl StateStore {
         {
             if target.proposal_type == ProposalType::RecordRevision {
                 anyhow::ensure!(
-                    crate::review::guard::writer_allows(
-                        &shards::dispositions_path(&self.layout, &scope_id),
-                        "*"
-                    ),
+                    self.permits(&shards::dispositions_path(&self.layout, &scope_id), "*"),
                     "decisions on review submissions go through the review seam"
                 );
             }

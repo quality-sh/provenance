@@ -103,6 +103,7 @@ created: None, updated: None,
 fn every_requirement_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Requirement {
+archived_in_commit: None,
 created: None, updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),
@@ -116,7 +117,7 @@ created: None, updated: None,
             status: RequirementStatus::Active,
             domain_id: Some(sid("domain_payroll")),
             source_refs: vec![reference("source_award")],
-            refines: Some(sid("req_pay")),
+            refines: vec![sid("req_pay")],
             depends_on: vec![sid("req_rates")],
             supersedes: vec![sid("req_overtime_2019")],
             spawned_by: Some(sid("res_threshold")),
@@ -132,6 +133,7 @@ created: None, updated: None,
 fn every_resolution_reference_key_is_declared_or_allowed() {
     assert_walk(
         &Resolution {
+archived_in_commit: None,
 created: None, updated: None,
             schema_version: SUPPORTED_SCHEMA_VERSION,
             scope_id: ScopeId::new("default").unwrap(),

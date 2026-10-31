@@ -63,7 +63,7 @@ export async function prepare(workspace, { variant }) {
     ['req_tasks', 'The robot rewards completed tasks.', 'req_robot'],
     ['req_health', 'The robot loses health when goals are neglected.', 'req_robot'],
     ['req_appearance', 'The robot has a friendly appearance.', 'req_robot'],
-  ]) await create(workspace, 'requirements', { id, statement, ...(refines ? { refines } : {}) });
+  ]) await create(workspace, 'requirements', { id, statement, ...(refines ? { refines: [refines] } : {}) });
   await create(workspace, 'resolutions', { id: 'res_negative_control', title: 'Health floor', requirement_ids: ['req_health'], position: 'Use a zero health floor.', context: 'Health cannot express a value below zero.', rationale: 'A zero floor prevents negative health. A negative floor would require a separate meaning.', status: 'proposed' });
   await create(workspace, 'rules', { id: 'rule_negative_control', requirement_ids: ['req_health'], resolution_ids: ['res_negative_control'], statement: 'Health cannot decrease below 0.', source_document: 'Owner brief, health negative control', source_section: 'The owner requires a zero health floor independently of the proposed Resolution.', status: 'active' });
 }

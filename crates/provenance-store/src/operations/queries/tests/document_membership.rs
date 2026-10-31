@@ -1,14 +1,13 @@
-use super::{root_of, seeded_store};
+use super::{repository_at, root_of, seeded_store};
 use crate::cache::tests::fixtures::append_record;
 use crate::operations::{queries, read_policy::ReadPolicy};
-use provenance_core::{protocol::ReadDocumentQuery, ScopeId};
+use provenance_core::protocol::ReadDocumentQuery;
 use provenance_macros::verifies;
 use serde_json::{json, Value};
 
 async fn page(root: &camino::Utf8Path, id: &str, cursor: Value) -> anyhow::Result<Value> {
     let result = queries::read_document(
-        Some(root.to_owned()),
-        &ScopeId::new("default")?,
+        &repository_at(root),
         ReadPolicy::default(),
         serde_json::from_value::<ReadDocumentQuery>(json!({"id":id,"cursor":cursor,"limit":50}))?,
     )
@@ -101,7 +100,7 @@ async fn member_work_budget_refuses_instead_of_claiming_a_complete_prefix() {
     let mut record = json!(store.list_requirements(&scope).unwrap()[0]);
     for i in 0..4100 {
         record["id"] = json!(format!("req_budget_{i:04}"));
-        record["refines"] = json!("req_overtime");
+        record["refines"] = json!(["req_overtime"]);
         append_record(&path, &record);
     }
     let error = page(&root_of(&dir), "req_overtime", Value::Null)
@@ -122,7 +121,7 @@ async fn byte_limited_pages_continue_without_truncating_canonical_records() {
     record["description"] = json!("x".repeat(40_000));
     for i in 0..35 {
         record["id"] = json!(format!("req_bytes_{i:03}"));
-        record["refines"] = json!("req_overtime");
+        record["refines"] = json!(["req_overtime"]);
         append_record(&path, &record);
     }
     let root = root_of(&dir);

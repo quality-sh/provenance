@@ -9,7 +9,7 @@ use crate::{
     shards,
     state_store::{read_budget, RequirementReviewInput, StateStore},
 };
-use provenance_core::{Boundary, Domain, NodeType, Requirement};
+use provenance_core::{Boundary, Domain, NodeType, Requirement, RequirementStatus};
 use provenance_macros::rule;
 
 impl StateStore {
@@ -19,34 +19,40 @@ impl StateStore {
         &self,
         input: UpdateRequirementInput,
     ) -> anyhow::Result<Requirement> {
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             if let Some(id) = &input.domain_id {
-                self.ensure_node_exists(&input.scope_id, NodeType::Domain, id, "domain_id")?;
+                held.ensure_node_exists(&input.scope_id, NodeType::Domain, id, "domain_id")?;
             }
             if let Some(statement) = &input.statement {
                 required_text(statement)?;
                 super::super::statement_policy::ensure_statement_is_writable(
-                    &self.layout,
+                    &held.layout,
                     statement,
                 )?;
             }
             if let Some(fog) = &input.fog {
                 required_text(fog)?;
             }
-            let rule_ids = self.rule_ids_for_requirement(&input.scope_id, &input.id)?;
-            self.list_requirement_reviews(&input.scope_id)?;
+            let rule_ids = held.rule_ids_for_requirement(&input.scope_id, &input.id)?;
+            held.list_requirement_reviews(&input.scope_id)?;
             let changed_at = super::super::requirement_reviews::now_millis()?;
-            let path = shards::requirements_path(&self.layout, &input.scope_id);
+            let path = shards::requirements_path(&held.layout, &input.scope_id);
             let mut before = String::new();
-            let record = self.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
+            let mut was_archived = false;
+            let record = held.mutate_graph_record(&path, |records: &mut Vec<Requirement>| {
                 let record = records
                     .iter_mut()
                     .find(|r| r.id == input.id)
                     .ok_or_else(missing)?;
                 owner_matches(record.declared_by.as_deref(), input.declared_by.as_deref())?;
                 before.clone_from(&record.statement);
+                was_archived = record.status == RequirementStatus::Archived;
                 set(&mut record.statement, input.statement);
                 set(&mut record.status, input.status);
+                set(
+                    &mut record.archived_in_commit,
+                    input.archived_in_commit.map(Some),
+                );
                 optional(
                     &mut record.description,
                     input.description,
@@ -68,6 +74,12 @@ impl StateStore {
                 )?;
                 Ok(record.clone())
             })?;
+            if record.status == RequirementStatus::Archived && !was_archived {
+                let stamp = record.archived_in_commit.as_ref().ok_or_else(|| {
+                    invalid("archived_in_commit is required for an archived Requirement")
+                })?;
+                held.archive_dependents(&record.scope_id, &record.id, stamp)?;
+            }
             if before != record.statement {
                 let reviews = rule_ids
                     .into_iter()
@@ -80,7 +92,7 @@ impl StateStore {
                         changed_at,
                     })
                     .collect();
-                self.record_requirement_reviews(&input.scope_id, reviews)
+                held.record_requirement_reviews(&input.scope_id, reviews)
                     .map_err(crate::write_error::publication_started)?;
             }
             Ok(record)
@@ -123,9 +135,9 @@ impl StateStore {
     }
 
     pub fn update_boundary(&self, input: UpdateBoundaryInput) -> anyhow::Result<Boundary> {
-        self.with_repository_publication(|| {
+        self.with_repository_publication(|held| {
             if let Some(reference) = &input.source_ref {
-                self.ensure_node_exists(
+                held.ensure_node_exists(
                     &input.scope_id,
                     NodeType::Source,
                     &reference.source_id,
@@ -135,9 +147,9 @@ impl StateStore {
             if let Some(statement) = &input.statement {
                 required_text(statement)?;
             }
-            let path = shards::boundaries_path(&self.layout, &input.scope_id);
+            let path = shards::boundaries_path(&held.layout, &input.scope_id);
             let expected_etag = input.expected_etag.clone();
-            self.mutate_graph_record_with_etag(
+            held.mutate_graph_record_with_etag(
                 &path,
                 expected_etag.as_deref(),
                 |records: &mut Vec<Boundary>| {

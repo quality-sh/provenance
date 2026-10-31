@@ -24,8 +24,24 @@ pub trait GraphRecord:
         self.review_id()
     }
 
+    /// Refuses a live status after archive for each stored lifecycle record.
+    #[provenance_macros::rule("rule_archive_is_terminal_for_each_record")]
     fn validate_write(&self, previous: Option<&Self>) -> anyhow::Result<()> {
         match (self.clone().into(), previous.cloned().map(Into::into)) {
+            (ReviewRecord::Requirement(record), Some(ReviewRecord::Requirement(previous))) => {
+                record
+                    .validate_transition(&previous)
+                    .map_err(invalid_update)
+            }
+            (ReviewRecord::Requirement(record), None) => {
+                record.validate_archive().map_err(invalid_update)
+            }
+            (ReviewRecord::Resolution(record), Some(ReviewRecord::Resolution(previous))) => record
+                .validate_transition(&previous)
+                .map_err(invalid_update),
+            (ReviewRecord::Resolution(record), None) => {
+                record.validate_archive().map_err(invalid_update)
+            }
             (ReviewRecord::Rule(rule), Some(ReviewRecord::Rule(previous))) => {
                 rule.validate_transition(&previous).map_err(invalid_update)
             }
@@ -124,9 +140,13 @@ impl StateStore {
             RecordStamp::Fixed(stamp) => return Ok(Some(stamp.clone())),
             RecordStamp::ResolveFromRepository => {}
         }
+        // A staged store reads the commit of its live working tree.
+        let working_tree = self
+            .repository()
+            .map_or_else(|| self.layout.root(), |identity| identity.working_tree());
         let output = std::process::Command::new("git")
             .args(["rev-parse", "HEAD"])
-            .current_dir(self.layout.root())
+            .current_dir(working_tree)
             .output();
         // A new repository without a commit can still accept its first graph.
         let Ok(output) = output else {
@@ -155,7 +175,10 @@ impl StateStore {
             let previous = by_id.get(record.id().as_str()).copied();
             record.validate_write(previous)?;
             if previous != Some(&*record) {
-                self.validate_resolution_decision_write(&record.clone().into())?;
+                let review: ReviewRecord = record.clone().into();
+                self.validate_resolution_decision_write(&review)?;
+                let previous: Option<ReviewRecord> = previous.cloned().map(Into::into);
+                self.validate_new_requirement_links(&review, previous.as_ref())?;
             }
             if previous != Some(&*record) && stamp.is_none() {
                 stamp = Some(self.current_record_stamp()?);
@@ -179,7 +202,18 @@ impl StateStore {
         expected_etag: Option<&str>,
         mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<T> {
-        if T::KIND != NodeType::Requirement && !crate::review::guard::writer_allows_path(path) {
+        self.mutate_graph_record_with_store(path, expected_etag, |_, records| mutate(records))
+    }
+
+    /// Like `mutate_graph_record_with_etag`, but the edit gets the store it runs against:
+    /// the staged copy on the native path, `self` on the guarded path.
+    pub(crate) fn mutate_graph_record_with_store<T: GraphRecord>(
+        &self,
+        path: &Utf8Path,
+        expected_etag: Option<&str>,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
+    ) -> anyhow::Result<T> {
+        if T::KIND != NodeType::Requirement && !self.permits_path(path) {
             return self.save_native_record(path, expected_etag, mutate);
         }
         self.mutate_graph_record_guarded(path, mutate)
@@ -189,12 +223,12 @@ impl StateStore {
     pub(crate) fn mutate_graph_record_guarded<T: GraphRecord>(
         &self,
         path: &Utf8Path,
-        mutate: impl FnOnce(&mut Vec<T>) -> anyhow::Result<T>,
+        mutate: impl FnOnce(&Self, &mut Vec<T>) -> anyhow::Result<T>,
     ) -> anyhow::Result<(Option<T>, T)> {
-        self.mutate_jsonl_records(path, |records: &mut Vec<T>| {
+        self.mutate_jsonl_records_with_store(path, |held, records: &mut Vec<T>| {
             let before = records.clone();
-            let result = mutate(records)?;
-            self.stamp_records(&before, records)?;
+            let result = mutate(held, records)?;
+            held.stamp_records(&before, records)?;
             let stamped = records
                 .iter()
                 .find(|r| r.id() == result.id())
@@ -214,10 +248,7 @@ impl StateStore {
         replacement: Vec<T>,
     ) -> anyhow::Result<()> {
         let has_stored_record = !super::readers::read_jsonl::<T>(self, path)?.is_empty();
-        if T::KIND != NodeType::Requirement
-            && has_stored_record
-            && !crate::review::guard::writer_allows_path(path)
-        {
+        if T::KIND != NodeType::Requirement && has_stored_record && !self.permits_path(path) {
             return self.replace_native_records(path, &replacement);
         }
         self.replace_graph_records_guarded(path, replacement)
@@ -229,9 +260,9 @@ impl StateStore {
         path: &Utf8Path,
         mut replacement: Vec<T>,
     ) -> anyhow::Result<Vec<T>> {
-        self.mutate_jsonl_records(path, |records| {
+        self.mutate_jsonl_records_with_store(path, |held, records| {
             let before = records.clone();
-            self.stamp_records(records, &mut replacement)?;
+            held.stamp_records(records, &mut replacement)?;
             ensure_slice_within_read_budget(&replacement)?;
             *records = replacement;
             Ok(before)

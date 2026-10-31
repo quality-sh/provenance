@@ -1,4 +1,5 @@
 use super::fixtures::empty_layout;
+use super::fixtures::open;
 use crate::cache::{catch_up_state, materialize_empty_state, materialize_state, open_cache};
 use crate::layout::ProvenanceLayout;
 use provenance_core::{RepoPathPrefix, Scope, ScopeId};
@@ -96,7 +97,7 @@ async fn fresh_cache_initialization_preserves_canonical_services_files() {
     let (_directory, layout, _scope) = empty_layout();
     let canaries = seed_canaries(&layout);
 
-    materialize_empty_state(&layout).await.unwrap();
+    materialize_empty_state(&open(&layout)).await.unwrap();
 
     canaries.assert_unchanged();
 }
@@ -107,7 +108,7 @@ async fn full_rebuild_preserves_canonical_services_files_before_a_later_failure(
     add_linked_scope(&layout);
     let canaries = seed_canaries(&layout);
 
-    let error = materialize_state(&layout).await.unwrap_err();
+    let error = materialize_state(&open(&layout)).await.unwrap_err();
 
     canaries.assert_unchanged();
     assert!(
@@ -119,7 +120,7 @@ async fn full_rebuild_preserves_canonical_services_files_before_a_later_failure(
 #[tokio::test]
 async fn existing_cache_catch_up_preserves_canonical_services_files_before_a_later_failure() {
     let (_directory, layout, _scope) = empty_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let cache = open_cache(&layout).await.unwrap();
     sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
         .execute(cache.pool())
@@ -129,7 +130,7 @@ async fn existing_cache_catch_up_preserves_canonical_services_files_before_a_lat
     add_linked_scope(&layout);
     let canaries = seed_canaries(&layout);
 
-    let error = catch_up_state(&layout).await.unwrap_err();
+    let error = catch_up_state(&open(&layout)).await.unwrap_err();
 
     canaries.assert_unchanged();
     assert!(
@@ -141,7 +142,7 @@ async fn existing_cache_catch_up_preserves_canonical_services_files_before_a_lat
 #[tokio::test]
 async fn incompatible_cache_rebuild_keeps_canonical_state_byte_identical() {
     let (_directory, layout, _scope) = empty_layout();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let before = canonical_bytes(&layout);
     let cache = open_cache(&layout).await.unwrap();
     sqlx::query("UPDATE _cache_metadata SET schema_digest = 'incompatible'")
@@ -150,7 +151,7 @@ async fn incompatible_cache_rebuild_keeps_canonical_state_byte_identical() {
         .unwrap();
     cache.close().await.unwrap();
 
-    let report = catch_up_state(&layout).await.unwrap();
+    let report = catch_up_state(&open(&layout)).await.unwrap();
 
     assert!(report.cache_recreated);
     assert_eq!(canonical_bytes(&layout), before);

@@ -2,12 +2,7 @@
 use crate::OperationFailure;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
-use std::{
-    collections::BTreeMap,
-    error::Error as StdError,
-    fmt,
-    sync::{Arc, OnceLock},
-};
+use std::{collections::BTreeMap, error::Error as StdError, fmt, sync::OnceLock};
 
 pub const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 
@@ -79,24 +74,16 @@ pub enum Error {
     },
 }
 
-pub fn connection(_: &'static str, _: bool, cause: reqwest::Error) -> Error {
+pub fn connection(cause: reqwest::Error) -> Error {
     Error::Connection(ResponseFailure::new(cause))
 }
 const fn outcome(cause: ResponseFailure) -> Error {
     Error::MalformedResponse(cause)
 }
 
-pub async fn read_json(
-    mut response: reqwest::Response,
-    operation: &'static str,
-    mutates: bool,
-) -> Result<Value, Error> {
+pub async fn read_json(mut response: reqwest::Response) -> Result<Value, Error> {
     let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|cause| connection(operation, mutates, cause))?
-    {
+    while let Some(chunk) = response.chunk().await.map_err(connection)? {
         if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
             return Err(outcome(ResponseFailure::contract()));
         }
@@ -105,20 +92,11 @@ pub async fn read_json(
     serde_json::from_slice(&bytes).map_err(|cause| outcome(ResponseFailure::new(cause)))
 }
 
-pub fn decode<T: DeserializeOwned>(
-    value: Value,
-    _operation: &'static str,
-    _mutates: bool,
-) -> Result<T, Error> {
+pub fn decode<T: DeserializeOwned>(value: Value) -> Result<T, Error> {
     serde_json::from_value(value).map_err(|cause| outcome(ResponseFailure::new(cause)))
 }
 
-pub fn validate(
-    value: &Value,
-    schema: &str,
-    _operation: &'static str,
-    _mutates: bool,
-) -> Result<(), Error> {
+pub fn validate(value: &Value, schema: &str) -> Result<(), Error> {
     if validator(schema).is_valid(value) {
         Ok(())
     } else {
@@ -126,23 +104,8 @@ pub fn validate(
     }
 }
 
-struct NoExternalSchemas;
-impl jsonschema::SchemaResolver for NoExternalSchemas {
-    fn resolve(
-        &self,
-        _: &Value,
-        _: &reqwest::Url,
-        _: &str,
-    ) -> Result<Arc<Value>, jsonschema::SchemaResolverError> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "external schemas are disabled",
-        )
-        .into())
-    }
-}
-fn validators() -> &'static BTreeMap<String, OnceLock<jsonschema::JSONSchema>> {
-    static VALIDATORS: OnceLock<BTreeMap<String, OnceLock<jsonschema::JSONSchema>>> =
+fn validators() -> &'static BTreeMap<String, OnceLock<jsonschema::Validator>> {
+    static VALIDATORS: OnceLock<BTreeMap<String, OnceLock<jsonschema::Validator>>> =
         OnceLock::new();
     VALIDATORS.get_or_init(|| {
         document()["response_schemas"]
@@ -167,33 +130,17 @@ fn document() -> &'static Value {
     })
 }
 
-fn validator(name: &str) -> &'static jsonschema::JSONSchema {
+fn validator(name: &str) -> &'static jsonschema::Validator {
     validators()[name].get_or_init(|| {
         let document = document();
         let schema = json!({
             "$ref":format!("#/components/schemas/{name}"),
             "components":document["components"]
         });
-        jsonschema::JSONSchema::options()
+        jsonschema::options()
             .with_draft(jsonschema::Draft::Draft202012)
-            .with_resolver(NoExternalSchemas)
-            .compile(&schema)
+            .offline()
+            .build(&schema)
             .expect("generated response schema is valid")
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::MAX_RESPONSE_BYTES;
-    use serde_json::Value;
-
-    #[test]
-    fn shared_client_policy_cases() {
-        let policy: Value = serde_json::from_str(include_str!("client-policy-cases.json")).unwrap();
-        assert_eq!(
-            MAX_RESPONSE_BYTES as u64,
-            policy["max_response_bytes"].as_u64().unwrap()
-        );
-        assert!(policy.get("refusals").is_none());
-    }
 }

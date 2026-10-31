@@ -1,4 +1,5 @@
 //! Record edits retain canonical identities and use the existing publication writer.
+mod archive;
 mod descriptions;
 mod inputs;
 mod knowledge;

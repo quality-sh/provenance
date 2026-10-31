@@ -1,4 +1,5 @@
 mod assets;
+mod connection;
 mod detach;
 mod events;
 pub mod follow;
@@ -14,12 +15,13 @@ use axum::{
     Json,
 };
 use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
+use provenance_store::{operations::LocalRepository, repository::Repository};
 use provenance_transport::{
     local_host::{
         LocalHostIdentity, LocalHostRegistration, IDENTITY_ROUTE, LAUNCH_CODE_ROUTE,
         LAUNCH_SESSION_ROUTE,
     },
-    HostAccess, LocalAccess, StatementHost,
+    HttpCredential, LocalAccess, StatementHost,
 };
 use serde_json::{json, Value};
 use std::{future::IntoFuture, io::Write, path::PathBuf, sync::Arc, time::Duration};
@@ -59,18 +61,18 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         uuid::Uuid::new_v4().simple(),
         uuid::Uuid::new_v4().simple()
     );
-    let (canonical_repo, access) = repository_access(&options, &token, address)?;
-    if access.disposition_actor_ids()?.is_empty() {
+    let (repository, binding, access) = repository_access(&options, &token, address)?;
+    let canonical_repo = repository.working_tree().as_std_path().to_path_buf();
+    if binding.disposition_actor_ids()?.is_empty() {
         eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
     }
-    let host = StatementHost::with_access(access.clone()).with_check_port(Arc::new(
-        crate::handlers::check::RepositoryCheckPort::new(
-            camino::Utf8PathBuf::from_path_buf(canonical_repo.clone())
-                .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
+    let host = StatementHost::with_access(binding.clone())
+        .with_credential(access.clone())
+        .with_check_port(Arc::new(crate::handlers::check::RepositoryCheckPort::new(
+            repository.working_tree().to_path_buf(),
             false,
             None,
-        ),
-    ));
+        )));
     let endpoint = format!("http://{address}");
     // Discovery treats a registered host that does not answer as stale, so the record is
     // announced only after the listener serves.
@@ -87,10 +89,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         launch::LaunchKey::publish(&identity.instance_nonce)?,
     );
     let events = events::ReviewEvents::start(
-        provenance_store::layout::ProvenanceLayout::new(
-            camino::Utf8PathBuf::from_path_buf(canonical_repo.clone())
-                .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
-        ),
+        repository.clone(),
         options.scope.clone(),
         identity.instance_nonce.clone(),
         access.clone(),
@@ -103,15 +102,14 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
         "sdkVersion": env!("CARGO_PKG_VERSION"),
     });
     let review_configuration = ReviewConfiguration {
-        access: access.clone(),
+        credential: access.clone(),
+        repository: binding,
+        path: repository.working_tree().to_path_buf(),
         value: config,
     };
     let page_events = events.clone();
     let host = host.with_page_writes(
-        provenance_store::layout::ProvenanceLayout::new(
-            camino::Utf8PathBuf::from_path_buf(canonical_repo)
-                .map_err(|_| anyhow::anyhow!("repository path is not UTF-8"))?,
-        ),
+        repository,
         Arc::new(move |changes| page_events.page_changed(changes)),
     );
     let router = review_router(
@@ -126,7 +124,7 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     let signals = ShutdownSignals::new()?;
     let (stop, stopped) = tokio::sync::oneshot::channel();
     let server = tokio::spawn(
-        axum::serve(listener, router)
+        axum::serve(connection::Listener(listener), router)
             .with_graceful_shutdown(async {
                 let _ = stopped.await;
             })
@@ -186,30 +184,22 @@ fn review_router(
         ))
 }
 
+/// The opened repository, its alias binding and the caller credential, built separately.
 fn repository_access(
     options: &Options,
     token: &str,
     address: std::net::SocketAddr,
-) -> anyhow::Result<(PathBuf, Arc<LocalAccess>)> {
-    let canonical_repo = options
-        .repo
-        .canonicalize()
-        .map_err(|_| OperationFailure::InvalidInput {
-            field: None,
-            reason: provenance_core::protocol::failure::InvalidInputReason::InvalidValue,
-        })
+) -> anyhow::Result<(Repository, Arc<LocalRepository>, Arc<LocalAccess>)> {
+    let repository = Repository::open(&options.repo, &options.scope)
         .context("cannot configure review repository access")?;
-    let access = Arc::new(
-        LocalAccess::new(
-            &canonical_repo,
-            &options.repository_id,
-            &options.scope,
-            token,
-            address,
-        )
-        .context("cannot configure review repository access")?,
+    let binding = Arc::new(
+        LocalRepository::bind(repository.clone(), &options.repository_id)
+            .context("cannot configure review repository access")?,
     );
-    Ok((canonical_repo, access))
+    let access = Arc::new(
+        LocalAccess::new(token, address).context("cannot configure review repository access")?,
+    );
+    Ok((repository, binding, access))
 }
 
 /// Opens the review page signed in, or tells the person which link to open.
@@ -313,7 +303,9 @@ impl ShutdownSignals {
 
 #[derive(Clone)]
 struct ReviewConfiguration {
-    access: Arc<LocalAccess>,
+    credential: Arc<LocalAccess>,
+    repository: Arc<LocalRepository>,
+    path: camino::Utf8PathBuf,
     value: Value,
 }
 
@@ -321,15 +313,33 @@ async fn configuration(
     State(mut config): State<ReviewConfiguration>,
     request: Request,
 ) -> Response {
-    if let Err(error) = config.access.authenticate(request.headers()) {
+    if let Err(error) = config.credential.authenticate(request.headers()) {
         return refusal(error);
     }
-    let actor_ids = match config.access.disposition_actor_ids() {
+    let actor_ids = match disposition_actor_ids(config.repository.clone()).await {
         Ok(actor_ids) => actor_ids,
         Err(error) => return refusal(error),
     };
+    let path = config.path.clone();
+    let reviewer = tokio::task::spawn_blocking(move || crate::reviewer::review_actor_id(&path))
+        .await
+        .ok()
+        .flatten();
+    if let Some(actor_id) = reviewer {
+        config.value["reviewer"] =
+            json!({ "allowed": actor_ids.contains(&actor_id), "actorId": actor_id });
+    }
     config.value["dispositionActorIds"] = json!(actor_ids);
     Json(config.value).into_response()
+}
+
+/// The manifest read can wait for the publication lock, so it runs off the runtime workers.
+async fn disposition_actor_ids(
+    repository: Arc<LocalRepository>,
+) -> Result<Vec<String>, OperationFailure> {
+    tokio::task::spawn_blocking(move || repository.disposition_actor_ids())
+        .await
+        .unwrap_or(Err(OperationFailure::Internal))
 }
 
 async fn protect_origin(
@@ -358,9 +368,9 @@ async fn protect_origin(
     }
     let mut response = match access.check_origin(&headers) {
         Ok(()) => {
-            // A cross-site entry navigation serves only assets and cannot use a cookie.
+            // A cross-site entry navigation serves only assets and cannot use a page session.
             if access.check_origin(request.headers()).is_ok() {
-                let page = codes.authenticate_cookie(request.headers_mut());
+                let page = codes.authenticate_session(request.headers_mut());
                 if page && matches!(*request.method(), Method::POST | Method::PATCH) {
                     request
                         .extensions_mut()

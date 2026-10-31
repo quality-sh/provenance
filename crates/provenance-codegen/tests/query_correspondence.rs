@@ -48,7 +48,7 @@ fn references<'a>(value: &'a Value, found: &mut Vec<&'a str>) {
 
 #[test]
 fn catalog_query_parameters_retain_required_and_optional_input_facts() {
-    let definitions = provenance_store::operations::catalog::definitions();
+    let definitions = provenance_contract::definitions();
     for (definition_name, selector, parameter_name, required) in [
         ("list-rules", "search", "text", false),
         ("list-rules", "stale", "base", true),

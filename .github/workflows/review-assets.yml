@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
-      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # master
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
       - run: sfw npm ci --prefix tools/operation-codegen
@@ -40,6 +40,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: node tools/review-host/prepare.ts crates/provenance-cli/review-assets-generated
       - run: node --test tools/review-host/*.test.ts
+      - run: node tools/skills/prepare.mjs
       - name: Check Cargo asset inclusion
         run: |
           cargo package --locked --allow-dirty -p provenance-cli --list > target/review-package-files

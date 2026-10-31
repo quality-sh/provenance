@@ -32,7 +32,7 @@ fn disposition(schema: &Value, decision: &str, rationale: Option<&str>) -> Value
 #[test]
 fn published_disposition_schema_matches_rationale_rules() {
     let schema = published_schema();
-    let validator = jsonschema::JSONSchema::compile(&schema).unwrap();
+    let validator = jsonschema::draft7::new(&schema).unwrap();
     for decision in ["accepted", "deferred"] {
         assert!(validator.is_valid(&disposition(&schema, decision, None)));
     }

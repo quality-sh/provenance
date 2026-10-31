@@ -5,7 +5,7 @@
 //! and defaults, the selected query parameters, and the request controls.
 use super::address::{self, Segment};
 use super::fields::{self, Source};
-use provenance_store::operations::catalog::{CliDefaultValue, Definition, Parameter};
+use provenance_contract::{CliDefaultValue, Definition, Parameter};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -19,24 +19,30 @@ pub(super) fn target(
     kind: Option<provenance_core::NodeType>,
 ) -> anyhow::Result<()> {
     use crate::invocation::grammar::TargetVerb;
-    use provenance_store::operations::catalog;
 
     if let Some(TargetVerb::Action(action)) = action {
-        if catalog::TargetAction::RECORD.contains(&action) {
-            let needs_type = action == catalog::TargetAction::Create && kind.is_none();
+        if provenance_contract::TargetAction::RECORD.contains(&action) {
+            let needs_type = action == provenance_contract::TargetAction::Create && kind.is_none();
             let mut allowed = super::COMMON
                 .iter()
                 .copied()
                 .chain(["stdin", "help"])
                 .map(str::to_owned)
                 .collect::<BTreeSet<_>>();
-            if action == catalog::TargetAction::Create {
+            if action == provenance_contract::TargetAction::Create {
                 allowed.insert("record_type".into());
             }
-            for (_, definition) in catalog::target_definitions(action).filter(|(registered, _)| {
-                !needs_type && kind.is_none_or(|kind| *registered == kind)
-            }) {
+            for (_, definition) in
+                provenance_contract::target_definitions(action).filter(|(registered, _)| {
+                    !needs_type && kind.is_none_or(|kind| *registered == kind)
+                })
+            {
                 allowed.extend(fields::accepted_flags(&fields::declared(definition)?));
+            }
+            if action == provenance_contract::TargetAction::Update
+                && kind.is_none_or(|kind| kind == provenance_core::NodeType::Requirement)
+            {
+                allowed.extend(["replace_parent".into(), "with_parent".into()]);
             }
             allowed.remove("id");
             allowed.remove("id-json");

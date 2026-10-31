@@ -93,8 +93,7 @@ pub async fn serve(repo: Utf8PathBuf, host: String, port: u16) -> anyhow::Result
 
 impl DocsSite {
     fn load(repo: &Path) -> anyhow::Result<Self> {
-        let repo = repo
-            .canonicalize()
+        let repo = dunce::canonicalize(repo)
             .with_context(|| format!("repo path does not exist: {}", repo.display()))?;
         let docs_dir = repo.join("docs");
         let mut source_files = Vec::new();

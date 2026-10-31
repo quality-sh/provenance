@@ -264,16 +264,16 @@ fn validate_transaction(
     layout: &ProvenanceLayout,
     transaction: &Utf8Path,
 ) -> anyhow::Result<Utf8PathBuf> {
-    let parent = std::fs::canonicalize(layout.source_edit_transactions_dir())?;
+    let parent = dunce::canonicalize(layout.source_edit_transactions_dir())?;
     let candidate_parent = transaction
         .parent()
         .ok_or_else(|| anyhow::anyhow!("source-edit transaction has no parent"))?;
     anyhow::ensure!(
-        std::fs::canonicalize(candidate_parent)? == parent,
+        dunce::canonicalize(candidate_parent)? == parent,
         "source-edit transaction is outside its transaction directory"
     );
     require_real_directory(transaction)?;
-    Utf8PathBuf::from_path_buf(std::fs::canonicalize(transaction)?)
+    Utf8PathBuf::from_path_buf(dunce::canonicalize(transaction)?)
         .map_err(|path| anyhow::anyhow!("source-edit transaction is not UTF-8: {}", path.display()))
 }
 
@@ -323,12 +323,12 @@ fn validate_missing_transaction(
     layout: &ProvenanceLayout,
     transaction: &Utf8Path,
 ) -> anyhow::Result<()> {
-    let parent = std::fs::canonicalize(layout.source_edit_transactions_dir())?;
+    let parent = dunce::canonicalize(layout.source_edit_transactions_dir())?;
     let candidate_parent = transaction
         .parent()
         .ok_or_else(|| anyhow::anyhow!("source-edit transaction has no parent"))?;
     anyhow::ensure!(
-        std::fs::canonicalize(candidate_parent)? == parent,
+        dunce::canonicalize(candidate_parent)? == parent,
         "source-edit transaction is outside its transaction directory"
     );
     match std::fs::symlink_metadata(transaction) {

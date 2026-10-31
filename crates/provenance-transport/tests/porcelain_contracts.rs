@@ -1,4 +1,4 @@
-use jsonschema::JSONSchema;
+use jsonschema::Validator;
 use provenance_porcelain::check::{
     BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, CheckPort, Finding,
     PortFuture, Refusal, StatementContext,
@@ -16,12 +16,12 @@ mod support {
     pub mod resource_http;
 }
 
-fn validator(schema: &Value) -> JSONSchema {
-    JSONSchema::compile(schema).expect("emitted MCP schema is valid")
+fn validator(schema: &Value) -> Validator {
+    compile(schema).expect("emitted MCP schema is valid")
 }
 
 #[cfg(feature = "test-fixture")]
-fn assert_get_schema_edges(input: &JSONSchema, output: &JSONSchema, valid: &Value) {
+fn assert_get_schema_edges(input: &Validator, output: &Validator, valid: &Value) {
     for invalid in [
         json!({"target":""}),
         json!({"target":"req_shared","view":"invented"}),
@@ -141,9 +141,9 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
             output.is_valid(value),
             "{view:?}: {:?}",
             output
-                .validate(value)
-                .err()
-                .map(|errors| errors.map(|error| error.to_string()).collect::<Vec<_>>())
+                .iter_errors(value)
+                .map(|error| error.to_string())
+                .collect::<Vec<_>>()
         );
 
         let service = provenance_porcelain::Porcelain::new(
@@ -174,7 +174,7 @@ async fn emitted_get_contract_accepts_each_live_view_and_rejects_wrong_payloads(
     server.await.unwrap().cancel().await.unwrap();
 }
 
-fn assert_check_context_edges(output: &JSONSchema) {
+fn assert_check_context_edges(output: &Validator) {
     use provenance_porcelain::check::{CategoryReport, CheckOutcome};
 
     let result = CheckOutcome {
@@ -308,9 +308,9 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
         output.is_valid(value),
         "{:?}",
         output
-            .validate(value)
-            .err()
-            .map(|errors| errors.map(|error| error.to_string()).collect::<Vec<_>>())
+            .iter_errors(value)
+            .map(|error| error.to_string())
+            .collect::<Vec<_>>()
     );
     let shared = provenance_porcelain::Porcelain::new(port.clone())
         .check(CheckInput::default())
@@ -365,4 +365,13 @@ async fn emitted_check_contract_accepts_all_categories_contexts_and_unavailable_
 
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
+}
+
+/// Read a schema that has no `$schema` keyword as a Draft 7 document.
+fn compile(schema: &Value) -> Result<Validator, jsonschema::ValidationError<'static>> {
+    if schema.get("$schema").is_some() {
+        jsonschema::validator_for(schema)
+    } else {
+        jsonschema::draft7::new(schema)
+    }
 }

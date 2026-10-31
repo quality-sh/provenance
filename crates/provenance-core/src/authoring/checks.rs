@@ -176,6 +176,7 @@ pub fn reference_violations(
         let named = requirement
             .refines
             .iter()
+            .flatten()
             .chain(requirement.depends_on.iter().flatten())
             .chain(requirement.supersedes.iter().flatten());
         for other in named {

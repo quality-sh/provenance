@@ -5,11 +5,10 @@ use super::{
     CreateReviewRequirement,
 };
 use crate::{
-    review::guard,
     review::publication::with_record_state,
     state_store::{
-        record_stamps::GraphRecord, AddSourceReferenceInput, CreateRequirementInput, StateStore,
-        UpdateRequirementInput,
+        record_stamps::GraphRecord, AddSourceReferenceInput, CreateRequirementInput, RecordStamp,
+        StateStore, UpdateRequirementInput,
     },
     write_error::{SourceFailure, WriteError, WriteFailure},
 };
@@ -26,11 +25,10 @@ impl StateStore {
     ) -> anyhow::Result<()> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
-        self.with_repository_publication(|| {
-            with_record_state(&self.layout, |layout| {
-                let staged = Self::staged(layout.clone(), stamp.clone());
-                let staged_path = layout.root().join(&relative);
-                guard::with_writer(&staged_path, "*", || {
+        self.with_repository_publication(|held| {
+            with_record_state(held, RecordStamp::resolved(stamp), |staged| {
+                let staged_path = staged.layout.root().join(&relative);
+                staged.permitting(&[&staged_path], "*", |staged| {
                     let scope = replacement.first().map(|record| {
                         let record: ReviewRecord = record.clone().into();
                         record.scope_id().clone()
@@ -60,11 +58,10 @@ impl StateStore {
     ) -> anyhow::Result<T> {
         let relative = path.strip_prefix(self.layout.root())?.to_owned();
         let stamp = self.current_record_stamp()?;
-        self.with_repository_publication(|| {
-            with_record_state(&self.layout, |layout| {
-                let staged = Self::staged(layout.clone(), stamp.clone());
-                let staged_path = layout.root().join(&relative);
-                guard::with_writer(&staged_path, id.as_str(), || write(&staged))
+        self.with_repository_publication(|held| {
+            with_record_state(held, RecordStamp::resolved(stamp), |staged| {
+                let staged_path = staged.layout.root().join(&relative);
+                staged.permitting(&[&staged_path], id.as_str(), write)
             })
         })
     }
@@ -136,7 +133,8 @@ impl StateStore {
         )
     }
 
-    pub fn set_requirement_refines(
+    /// Adds one parent without changing the other parents or Rule records.
+    pub fn add_requirement_refines(
         &self,
         scope_id: &ScopeId,
         requirement: &StableId,
@@ -145,7 +143,7 @@ impl StateStore {
         self.save_record(
             empty_update(scope_id, requirement),
             Some(RequirementRelations {
-                refines: Some(SingleEdit::Set(target)),
+                refines: Some(add_delta(vec![target])),
                 ..RequirementRelations::default()
             }),
         )
@@ -159,7 +157,7 @@ impl StateStore {
         self.save_record(
             empty_update(scope_id, requirement),
             Some(RequirementRelations {
-                refines: Some(SingleEdit::Clear),
+                refines: Some(ListEdit::Set(Vec::new())),
                 ..RequirementRelations::default()
             }),
         )
@@ -195,6 +193,9 @@ impl StateStore {
         )
     }
 
+    /// Records supersession without changing children or the prior record.
+    #[provenance_macros::rule("rule_supersession_preserves_unselected_children")]
+    #[provenance_macros::rule("rule_supersession_does_not_archive_superseded_record")]
     pub fn add_requirement_supersedes(
         &self,
         scope_id: &ScopeId,
@@ -321,6 +322,7 @@ const fn remove_delta(remove: Vec<StableId>) -> ListEdit {
 
 fn empty_update(scope_id: &ScopeId, id: &StableId) -> UpdateRequirementInput {
     UpdateRequirementInput {
+        archived_in_commit: None,
         scope_id: scope_id.clone(),
         id: id.clone(),
         expected_etag: None,
@@ -348,7 +350,7 @@ impl StateStore {
             return Ok(None);
         };
         let mut wanted = serde_json::to_value(input)?;
-        for field in ["depends_on", "supersedes"] {
+        for field in ["refines", "depends_on", "supersedes"] {
             if let Some(serde_json::Value::Array(ids)) = wanted.get_mut(field) {
                 ids.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
                 ids.dedup();

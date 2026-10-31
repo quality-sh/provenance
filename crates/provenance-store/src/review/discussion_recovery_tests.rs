@@ -11,7 +11,7 @@ fn scope() -> ScopeId {
     ScopeId::new("default").unwrap()
 }
 fn open(root: &Utf8Path) -> StateStore {
-    StateStore::new(ProvenanceLayout::new(root))
+    crate::test_support::store(&ProvenanceLayout::new(root))
 }
 fn root_input() -> WriteDiscussion {
     serde_json::from_value(json!({"scope_id":"default","parent":{"node_type":"requirement","node_id":"req_a"},"actor":"ben","action":{"kind":"start","role":"user","body":"Concern"}})).unwrap()
@@ -95,7 +95,7 @@ fn origin(root: &Discussion) -> provenance_core::threads::DiscussionOrigin {
 /// Reads the Discussions after any interrupted publication recovers.
 fn discussions(store: &StateStore) -> Vec<Discussion> {
     store
-        .with_repository_publication(|| store.list_discussions(&scope()))
+        .with_repository_publication(|held| held.list_discussions(&scope()))
         .unwrap()
 }
 fn edit(store: &StateStore) -> super::SaveRequirement {

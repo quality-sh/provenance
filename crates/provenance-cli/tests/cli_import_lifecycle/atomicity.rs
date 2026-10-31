@@ -431,3 +431,31 @@ fn dry_run_rejects_symlinked_cache_before_locking() {
         "outside writes: {outside_entries:?}"
     );
 }
+
+#[test]
+#[provenance_macros::verifies("rule_operation_scope_is_the_opened_scope", examples)]
+fn an_export_of_another_scope_is_refused_without_changing_live_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("repo");
+    init_repo(&repo, None);
+    let baseline = dir.path().join("baseline.json");
+    export_scope(&repo, &baseline).success();
+    let mut other: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&baseline).unwrap()).unwrap();
+    other["scope"] = serde_json::json!("other");
+    let input = dir.path().join("other.json");
+    write_json(&input, &other);
+
+    import_scope(&repo, &input)
+        .failure()
+        .stderr(predicates::str::contains(
+            "request scope `other` does not match the selected scope `default`",
+        ));
+
+    let after = dir.path().join("after.json");
+    export_scope(&repo, &after).success();
+    assert_eq!(
+        std::fs::read(after).unwrap(),
+        std::fs::read(baseline).unwrap()
+    );
+}

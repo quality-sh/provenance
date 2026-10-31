@@ -183,6 +183,15 @@ This emits one Rule with two relationships. Shared versus local identity is
 chosen by where the Rule is declared, not inferred from JavaScript object
 reuse. Sources linked with `.from(...)` are collected transitively by `build()`.
 
+A spec cannot set a Rule status. Apply creates each new spec Rule as `draft`.
+To make the Rule active, a person changes its status with
+`provenance rules <id> update --status active --declared-by <owner> --if-match <etag>`,
+where `<owner>` is the declaration owner from `PROVENANCE_SPEC_OWNER`. A later
+apply keeps that status. A new key or a move to a different Requirement gives a
+new `draft` Rule, and apply deletes the old Rule. A move between a Requirement
+and the spec context keeps the Rule and its status when apply finds one
+existing Rule.
+
 `implementedBy()` accepts an exported function or class through a direct named
 import or a non-computed namespace member. The SDK reads that expression from
 the spec source and records the imported module and exported symbol; the runtime
@@ -422,7 +431,7 @@ server toolchain. The explicit CLI remains a separate packaged executable.
 
 The `@quality-sh/provenance/effect` entry supplies generated Effect operations,
 runtime wire schemas, and `ProvenanceApi`. Applications install the exact peer
-`effect@4.0.0-rc.113`. The existing Promise client requires no Effect setup.
+`effect@4.0.4`. The existing Promise client requires no Effect setup.
 Use an explicitly connected `EffectHttpClient` through `ProvenanceClient` with
 `Atom.runtime` to preserve the shared client policy. Keep the client while
 mutation outcomes remain unresolved. See the

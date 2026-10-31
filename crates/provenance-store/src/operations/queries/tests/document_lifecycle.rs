@@ -1,4 +1,4 @@
-use super::{root_of, seeded_store, sid};
+use super::{repository_at, root_of, seeded_store, sid};
 use crate::operations::{queries, read_policy::ReadPolicy};
 use crate::state_store::{
     CreateRequirementInput, CreateResolutionInput, CreateRuleInput, StateStore,
@@ -18,7 +18,7 @@ fn add_root_requirement(store: &StateStore, scope: &ScopeId, id: &str) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -37,7 +37,7 @@ fn add_requirement(store: &StateStore, scope: &ScopeId, id: &str, parent: &str) 
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: Some(sid(parent)),
+            refines: vec![sid(parent)],
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -179,8 +179,7 @@ async fn page(
     });
     query["exclude_terminal"] = json!(exclude_terminal);
     let result = queries::read_document(
-        Some(root.to_owned()),
-        &ScopeId::new("default")?,
+        &repository_at(root),
         ReadPolicy::default(),
         serde_json::from_value::<ReadDocumentQuery>(query)?,
     )

@@ -56,9 +56,11 @@ members(kind, id) AS (
  SELECT kind, id FROM member_candidates candidate WHERE {member_filter} LIMIT 4097
 ),
 ancestors(id) AS (
- SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2 AND refines IS NOT NULL
- UNION SELECT r.refines FROM ancestors a JOIN requirements r
- ON r.scope_id = ?1 AND r.id = a.id WHERE r.refines IS NOT NULL
+ SELECT target_id FROM relations WHERE scope_id = ?1 AND owner_id = ?2
+ AND owner_type = 'requirement' AND relation = 'refines'
+ UNION SELECT r.target_id FROM ancestors a JOIN relations r
+ ON r.scope_id = ?1 AND r.owner_id = a.id
+ WHERE r.owner_type = 'requirement' AND r.relation = 'refines'
  LIMIT 4097
 ),
 reference_candidates(kind, id) AS (
@@ -144,10 +146,11 @@ impl ReadSnapshot {
                     let mut tx = self.connection().await;
                     let depth: i64 = sqlx::query_scalar(
                         "WITH RECURSIVE ancestors(id) AS (
-                         SELECT refines FROM requirements WHERE scope_id = ?1 AND id = ?2
-                         AND refines IS NOT NULL UNION
-                         SELECT r.refines FROM ancestors a JOIN requirements r
-                         ON r.scope_id = ?1 AND r.id = a.id WHERE r.refines IS NOT NULL)
+                         SELECT target_id FROM relations WHERE scope_id = ?1 AND owner_id = ?2
+                         AND owner_type = 'requirement' AND relation = 'refines' UNION
+                         SELECT r.target_id FROM ancestors a JOIN relations r
+                         ON r.scope_id = ?1 AND r.owner_id = a.id
+                         WHERE r.owner_type = 'requirement' AND r.relation = 'refines')
                          SELECT COUNT(*) FROM ancestors",
                     )
                     .bind(self.scope().as_str())
@@ -219,12 +222,12 @@ impl ReadSnapshot {
                 .map(|(kind, id)| format!("{}:{}", kind.as_str(), id.as_str()))
                 .collect::<Vec<_>>(),
         )?;
-        let overflow: i64 = sqlx::query_scalar(&format!(
+        let overflow: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
             "{sets} SELECT \
             (SELECT count(*) FROM members) > 4096 OR (SELECT count(*) FROM refs) > 4096 \
             OR (SELECT count(*) FROM branch) > 4096 OR (SELECT count(*) FROM ancestors) > 4096 \
             OR (SELECT count(*) FROM decisions) > 4096"
-        ))
+        )))
         .bind(self.scope().as_str())
         .bind(root)
         .bind(&hidden)
@@ -233,11 +236,11 @@ impl ReadSnapshot {
         if overflow != 0 {
             return Err(ReadFailure::PageBudgetExceeded.into());
         }
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(sqlx::AssertSqlSafe(format!(
             "{sets} SELECT stage, kind, CASE WHEN length(CAST(id AS BLOB)) <= 1024 THEN id END AS id, counter, rank FROM ordered \
             WHERE (stage, rank, counter, id) > (?4, ?5, ?6, ?7) \
             ORDER BY stage, rank, counter, id LIMIT ?8"
-        ))
+        )))
         .bind(self.scope().as_str())
         .bind(root)
         .bind(&hidden)

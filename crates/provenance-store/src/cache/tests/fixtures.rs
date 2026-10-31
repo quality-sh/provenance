@@ -1,4 +1,5 @@
 use crate::layout::ProvenanceLayout;
+use crate::repository::Repository;
 use crate::state_store::{
     CreateBoundaryInput, CreateDomainInput, CreateQuestionInput, CreateRequirementInput,
     CreateResolutionInput, CreateRuleInput, CreateSourceInput, CreateTopicInput, StateStore,
@@ -13,6 +14,28 @@ pub mod pinned_store;
 
 pub fn sid(value: &str) -> StableId {
     StableId::new(value).unwrap()
+}
+
+/// Opens the fixture repository under `layout` for the `default` scope.
+pub fn open(layout: &ProvenanceLayout) -> Repository {
+    Repository::open(layout.root(), "default").unwrap()
+}
+
+/// Writes a manifest that declares `default` under `root`, then opens it.
+pub fn initialized(root: &std::path::Path) -> Repository {
+    let layout =
+        ProvenanceLayout::new(camino::Utf8PathBuf::from_path_buf(root.to_path_buf()).unwrap());
+    std::fs::create_dir_all(layout.state_dir()).unwrap();
+    std::fs::write(
+        layout.manifest_path(),
+        serde_json::to_string(&Manifest::default_with_scope(
+            ScopeId::new("default").unwrap(),
+            RepoPathPrefix::new("."),
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    open(&layout)
 }
 
 pub fn empty_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
@@ -35,7 +58,7 @@ pub fn empty_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
 
 pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     store
         .create_domain(CreateDomainInput {
             scope_id: scope.clone(),
@@ -54,7 +77,7 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: Some(sid("domain_payroll")),
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -112,7 +135,7 @@ pub fn seeded_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
 /// tests need a row from each.
 pub fn owner_row_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
     let (dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     seed_owner_chain(&store, &scope);
     seed_shaping_owners(&store, &scope);
     (dir, layout, scope)
@@ -153,7 +176,7 @@ fn seed_owner_chain(store: &StateStore, scope: &ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: Some(sid("domain_payroll")),
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -286,7 +309,7 @@ pub fn create_requirement(
             description: None,
             status,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,

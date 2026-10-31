@@ -6,11 +6,11 @@ use provenance_core::{Manifest, RepoPathPrefix, ScopeId};
 use provenance_macros::verifies;
 use provenance_sdk::{operations, requirement, rule, spec};
 use provenance_store::layout::ProvenanceLayout;
-use provenance_store::state_store::StateStore;
 
 fn repository() -> (tempfile::TempDir, camino::Utf8PathBuf) {
     let dir = tempfile::tempdir().unwrap();
-    let root = camino::Utf8PathBuf::from_path_buf(dir.path().canonicalize().unwrap()).unwrap();
+    let root =
+        camino::Utf8PathBuf::from_path_buf(dunce::canonicalize(dir.path()).unwrap()).unwrap();
     let layout = ProvenanceLayout::new(root.clone());
     std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
     std::fs::write(
@@ -65,8 +65,7 @@ fn an_unresolved_implementation_target_refuses_apply_without_writes() {
         .unwrap();
 
     let error = operations::apply(
-        Some(root.clone()),
-        &ScopeId::new("default").unwrap(),
+        &provenance_sdk::Repository::open(&root, "default").unwrap(),
         document.materialize("spec://rust"),
     )
     .unwrap_err();
@@ -77,7 +76,9 @@ fn an_unresolved_implementation_target_refuses_apply_without_writes() {
             .contains("implementation target `src/absent.rs` does not exist"),
         "unexpected refusal: {error}"
     );
-    let store = StateStore::new(ProvenanceLayout::new(root));
+    let store = provenance_store::repository::Repository::open(root, "default")
+        .unwrap()
+        .store();
     assert_eq!(
         store.list_rules(&ScopeId::new("default").unwrap()).unwrap(),
         [] as [provenance_core::Rule; 0]

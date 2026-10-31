@@ -20,6 +20,7 @@ async fn source_update_preserves_omissions_and_clears_nullable_fields() {
 async fn source_update_refusals_do_not_publish_any_field() {
     let fixture = Fixture::new();
     let before = fixture.source().await;
+    let mut kinds = Vec::new();
     for patch in [
         json!({"id":"source_missing","url":"changed"}),
         json!({"id":"source_one","url":"changed","commit_pin":"bad"}),
@@ -30,12 +31,22 @@ async fn source_update_refusals_do_not_publish_any_field() {
         let mut patch = patch;
         patch["scope_id"] = json!("default");
         let error = fixture.call("update-source", patch).await.unwrap_err();
-        assert_ne!(error["kind"], "unknown_operation");
+        kinds.push(error["kind"].clone());
         assert_eq!(
             serde_json::to_value(&fixture.store.list_sources(&fixture.scope).unwrap()[0]).unwrap(),
             before
         );
     }
+    assert_eq!(
+        kinds,
+        [
+            "missing_reference",
+            "invalid_commit_pin",
+            "invalid_input",
+            "invalid_input",
+            "record_ownership_conflict",
+        ]
+    );
 }
 
 #[tokio::test]
@@ -50,7 +61,7 @@ async fn direct_updates_do_not_take_over_typed_declarations() {
         )
         .await
         .unwrap_err();
-    assert_ne!(error["kind"], "unknown_operation");
+    assert_eq!(error["kind"], "record_ownership_conflict");
     assert_eq!(fixture.store.list_sources(&fixture.scope).unwrap(), before);
 }
 
@@ -162,4 +173,41 @@ async fn null_is_omission_and_invalid_clear_requests_are_atomic() {
             before
         );
     }
+}
+
+#[tokio::test]
+async fn a_source_update_that_removes_a_superseded_source_checks_it_in_the_stage() {
+    let fixture = Fixture::new();
+    for (id, supersedes) in [
+        ("source_old", json!([])),
+        ("source_one", json!(["source_old"])),
+    ] {
+        fixture.call("create-source", json!({"scope_id":"default","id":id,"name":id,"source_type":"policy","supersedes":supersedes})).await.unwrap();
+    }
+
+    let removed = fixture
+        .call(
+            "update-source",
+            json!({"scope_id":"default","id":"source_one","supersedes":{"remove":["source_old"]}}),
+        )
+        .await
+        .unwrap();
+    assert!(removed.get("supersedes").is_none(), "{removed}");
+
+    let error = fixture
+        .call(
+            "update-source",
+            json!({"scope_id":"default","id":"source_one","supersedes":{"remove":["source_missing"]}}),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error, json!({"kind":"missing_reference"}));
+    let saved = fixture
+        .store
+        .list_sources(&fixture.scope)
+        .unwrap()
+        .into_iter()
+        .find(|source| source.id.as_str() == "source_one")
+        .unwrap();
+    assert_eq!(serde_json::to_value(saved).unwrap(), removed);
 }

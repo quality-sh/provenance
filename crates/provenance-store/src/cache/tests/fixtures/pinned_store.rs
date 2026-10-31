@@ -55,7 +55,7 @@ pub fn pinned_store_layout() -> (tempfile::TempDir, ProvenanceLayout, ScopeId) {
         initialized.status.success(),
         "initialize pinned fixture Git repository"
     );
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     seed_graph(&store, &scope);
     seed_shaping(&store, &scope);
     seed_integrations(&layout, &scope);
@@ -77,7 +77,7 @@ fn requirement(id: &str, refines: Option<&str>, depends_on: &[&str]) -> CreateRe
         description: None,
         status: RequirementStatus::Active,
         domain_id: Some(sid("domain_payroll")),
-        refines: refines.map(sid),
+        refines: refines.into_iter().map(sid).collect(),
         depends_on: depends_on.iter().map(|id| sid(id)).collect(),
         supersedes: Vec::new(),
         spawned_by: None,

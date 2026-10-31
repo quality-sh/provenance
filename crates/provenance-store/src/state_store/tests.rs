@@ -7,6 +7,11 @@ use provenance_core::{Manifest, RepoPathPrefix, RequirementStatus, ScopeId, Sour
 fn initialized_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     let dir = tempfile::tempdir().unwrap();
     let root = camino::Utf8PathBuf::from_path_buf(dir.path().to_path_buf()).unwrap();
+    let (store, scope) = initialized_store_in(root);
+    (dir, store, scope)
+}
+
+fn initialized_store_in(root: camino::Utf8PathBuf) -> (StateStore, ScopeId) {
     let layout = ProvenanceLayout::new(root);
     std::fs::create_dir_all(layout.manifest_path().parent().unwrap()).unwrap();
     let scope = ScopeId::new("default").unwrap();
@@ -19,8 +24,8 @@ fn initialized_store() -> (tempfile::TempDir, StateStore, ScopeId) {
         .unwrap(),
     )
     .unwrap();
-    let store = StateStore::new(layout);
-    (dir, store, scope)
+    let store = crate::test_support::store(&layout);
+    (store, scope)
 }
 
 fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
@@ -33,7 +38,7 @@ fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -65,6 +70,7 @@ pub(super) fn seeded_source_requirement_store() -> (tempfile::TempDir, StateStor
     (dir, store, scope)
 }
 
+mod archive_history;
 mod asserted_evidence;
 mod direct_statement_write_gate;
 mod graph_validation;
@@ -92,7 +98,15 @@ mod source_requirements;
 mod source_supersedes_concurrency;
 mod threads;
 mod typed_adoption;
+mod typed_decision;
 mod typed_references;
 mod typed_review_writers;
 mod typed_statement_feedback;
 mod verification_bindings;
+
+mod requirement_archive;
+mod requirement_archive_children;
+mod requirement_archive_links;
+#[cfg(windows)]
+mod requirement_archive_long_path;
+mod requirement_archive_parents;

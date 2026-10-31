@@ -44,6 +44,7 @@ created: None, updated: None,
 
 pub(super) fn requirement(id: &str, domain_id: Option<&str>, cites: &[&str]) -> Requirement {
     Requirement {
+archived_in_commit: None,
 created: None, updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
@@ -63,7 +64,7 @@ created: None, updated: None,
                 clause: None,
             })
             .collect(),
-        refines: None,
+        refines: Vec::new(),
         depends_on: Vec::new(),
         supersedes: Vec::new(),
         spawned_by: None,
@@ -154,6 +155,7 @@ pub(super) struct Fixture {
 
 pub(super) fn resolution(id: &str, requirements: &[&str], supersedes: &[&str]) -> Resolution {
     Resolution {
+archived_in_commit: None,
 created: None, updated: None,
         schema_version: SUPPORTED_SCHEMA_VERSION,
         scope_id: scope(),
@@ -214,7 +216,7 @@ pub(super) fn question(
 /// once: `req_overtime` is the hub, `req_penalty` refines and depends on it.
 pub(super) fn fixture() -> Fixture {
     let mut penalty = requirement("req_penalty", None, &[]);
-    penalty.refines = Some(sid("req_overtime"));
+    penalty.refines = vec![sid("req_overtime")];
     penalty.depends_on = ids(&["req_overtime"]);
     let mut overtime = requirement("req_overtime", Some("domain_payroll"), &["source_award"]);
     overtime.spawned_by = Some(sid("res_threshold"));

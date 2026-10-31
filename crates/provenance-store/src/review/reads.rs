@@ -3,7 +3,7 @@ use crate::operations::read_policy::ReadPolicy;
 use crate::operations::reader::{
     self, check_limit, Cursor, Live, Position, ReadContext, PAGE_BYTES,
 };
-use camino::Utf8Path;
+use crate::repository::Repository;
 use provenance_core::protocol::{read_failure::ReadFailure, Stamped};
 use provenance_core::review::{EvidencePage, EvidenceQuery, ReviewHistoryPage, ReviewHistoryQuery};
 use provenance_core::{NodeType, StableId};
@@ -11,16 +11,13 @@ use provenance_macros::rule;
 use serde_json::Value;
 
 pub async fn read_history(
-    repo: &Utf8Path,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     query: ReviewHistoryQuery,
 ) -> anyhow::Result<Stamped<ReviewHistoryPage>> {
     check_limit(query.limit)?;
-    let answer = reader::answer(repo, scope, policy, move |ctx| {
-        Box::pin(history(ctx, query))
-    })
-    .await?;
+    let answer =
+        reader::answer(repository, policy, move |ctx| Box::pin(history(ctx, query))).await?;
     crate::operations::queries::page::checked("review-history", answer)
 }
 
@@ -82,12 +79,11 @@ async fn versions(
 
 /// Reads a bounded span of one record version, or of the version before it.
 pub async fn read_evidence(
-    repo: &Utf8Path,
-    scope: &provenance_core::ScopeId,
+    repository: &Repository,
     policy: ReadPolicy,
     query: EvidenceQuery,
 ) -> anyhow::Result<Stamped<EvidencePage>> {
-    let answer = reader::answer(repo, scope, policy, move |ctx| {
+    let answer = reader::answer(repository, policy, move |ctx| {
         Box::pin(async move {
             ctx.snapshot().bound_page_work().await?;
             let versions = versions(ctx, query.record_kind, query.record_id.clone()).await?;

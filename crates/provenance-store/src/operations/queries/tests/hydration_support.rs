@@ -47,7 +47,7 @@ pub fn append_requirement(
     record["id"] = json!(id);
     record["description"] = json!("x".repeat(description_bytes));
     record["domain_id"] = json!(None::<String>);
-    record["refines"] = refines.map(|value| json!(value)).unwrap_or(json!(null));
+    record["refines"] = json!(refines.into_iter().collect::<Vec<_>>());
     record["depends_on"] = json!(depends_on);
     record["supersedes"] = json!([]);
     append_record(&path, &record);
@@ -141,6 +141,7 @@ pub fn resolve_query(symbol: Option<&str>, limit: usize) -> ResolveSymbolQuery {
         file: "src/pay.rs".into(),
         symbol: symbol.map(str::to_string),
         line: None,
+        cursor: None,
         limit,
     }
 }

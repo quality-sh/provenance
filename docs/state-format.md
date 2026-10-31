@@ -157,5 +157,4 @@ families and records sorted by stable ID. JSON object keys are lexicographically
 before SHA-256 hashing. The projection contains the selected manifest scope and its
 sources, domains, requirements, boundaries, topics, questions, resolutions, and rules;
 relations travel as the fields on those records. Threads, messages, contributions,
-synthesis packets, proposals, assertions, dispositions, cache data, and wiki output are
-excluded.
+synthesis packets, proposals, assertions, dispositions, and cache data are excluded.

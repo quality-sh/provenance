@@ -291,6 +291,9 @@ pub struct GraphChange {
     pub lifecycle_before: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lifecycle_after: Option<String>,
+    /// IDs of head records that supersede this record.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub superseded_by: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub relations_added: Vec<RelationChange>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

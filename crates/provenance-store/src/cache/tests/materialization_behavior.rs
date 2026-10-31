@@ -1,7 +1,8 @@
 use super::super::*;
+use super::fixtures::open;
 use super::fixtures::*;
 use crate::state_store::{
-    CreateQuestionInput, CreateResolutionInput, CreateSourceInput, CreateTopicInput, StateStore,
+    CreateQuestionInput, CreateResolutionInput, CreateSourceInput, CreateTopicInput,
 };
 use provenance_core::SUPPORTED_SCHEMA_VERSION;
 use provenance_core::{
@@ -34,7 +35,10 @@ async fn materialize_rejects_missing_disposition_canonical_artifact_before_cache
     )
     .unwrap();
 
-    let error = materialize_state(&layout).await.unwrap_err().to_string();
+    let error = materialize_state(&open(&layout))
+        .await
+        .unwrap_err()
+        .to_string();
 
     assert!(
         error.contains("canonical artifact does not exist"),
@@ -74,7 +78,10 @@ async fn materialize_rejects_misfiled_disposition_target_before_cache_changes() 
     )
     .unwrap();
 
-    let error = materialize_state(&layout).await.unwrap_err().to_string();
+    let error = materialize_state(&open(&layout))
+        .await
+        .unwrap_err()
+        .to_string();
 
     assert!(
         error.contains("canonical artifact does not exist"),
@@ -107,7 +114,7 @@ async fn materialize_caches_generic_disposition_external_action() {
     )
     .unwrap();
 
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let action: String =
         sqlx::query_scalar("SELECT external_action FROM dispositions WHERE id = ?")
@@ -124,7 +131,7 @@ async fn materialize_caches_generic_disposition_external_action() {
 #[tokio::test]
 async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
     let (_dir, layout, scope) = seeded_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     store
         .set_requirement_fog(
             &scope,
@@ -163,7 +170,7 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
         .claim_question(&scope, &sid("question_threshold"), "agent-two")
         .unwrap();
 
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let fog: Option<String> = sqlx::query_scalar("SELECT fog FROM requirements WHERE id = ?")
         .bind("req_schads_overtime")
@@ -197,7 +204,7 @@ async fn materialize_state_caches_fog_resolution_method_and_claim_state() {
 #[tokio::test]
 async fn materialize_state_caches_enriched_source_and_resolution_fields() {
     let (_dir, layout, scope) = empty_layout();
-    let store = StateStore::new(layout.clone());
+    let store = crate::test_support::store(&layout);
     create_source(&store, &scope, "source_sah_2025");
     create_requirement(
         &store,
@@ -230,7 +237,7 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             description: None,
             status: provenance_core::RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -263,7 +270,7 @@ async fn materialize_state_caches_enriched_source_and_resolution_fields() {
             origin_message: None,
         })
         .unwrap();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let source: (Option<String>, Option<i64>, Option<i64>) =
         sqlx::query_as("SELECT reference, effective_date, review_date FROM sources WHERE id = ?")
@@ -299,7 +306,7 @@ async fn materialize_state_caches_commit_pin_and_confidence_scores() {
     let proposals_path = crate::shards::proposal_cards_path(&layout, &scope);
     std::fs::create_dir_all(proposals_path.parent().unwrap()).unwrap();
     std::fs::write(&proposals_path, serde_json::json!({"schema_version": SUPPORTED_SCHEMA_VERSION.0,"scope_id":"default","id":"proposal_overtime_traceability","proposal_key":"req-overtime-traceability","proposal_type":"requirement_candidate","title":"Clarify overtime traceability","summary":"Add source-backed threshold language.","confidence":0.83,"traceability":{"target":{"artifact_type":"requirement","artifact_id":"req_overtime"},"source_ids":["source_codebase"],"evidence_references":[],"supporting_claim_ids":["claim_overtime_threshold"]},"promotion_state":"proposed"}).to_string()).unwrap();
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let commit_pin: Option<String> =
         sqlx::query_scalar("SELECT commit_pin FROM sources WHERE id = ?")
@@ -391,7 +398,7 @@ async fn materialize_state_caches_proposal_lineage() {
         std::fs::write(path, format!("{contents}\n")).unwrap();
     }
 
-    materialize_state(&layout).await.unwrap();
+    materialize_state(&open(&layout)).await.unwrap();
     let pool = open_cache(&layout).await.unwrap();
     let builds_on: String = sqlx::query_scalar("SELECT builds_on FROM proposal_cards WHERE id = ?")
         .bind("proposal_b")

@@ -20,7 +20,6 @@ mod reviewer;
 mod skills;
 mod ste_onboarding;
 mod user_cache;
-mod wiki;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

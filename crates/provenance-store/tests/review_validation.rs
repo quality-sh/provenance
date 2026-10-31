@@ -3,7 +3,7 @@ mod record_review_decisions;
 #[allow(dead_code)]
 mod review_support;
 use provenance_core::{StableId, VerificationMethod};
-use provenance_store::{layout::ProvenanceLayout, state_store::StateStore};
+use provenance_store::layout::ProvenanceLayout;
 use review_support::*;
 use serde_json::json;
 
@@ -13,7 +13,7 @@ fn failed_relationship_replacement_does_not_publish_the_text_edit() {
     store.save_requirement(save(&store, json!({}))).unwrap();
     let before = store.requirement_edit_state(&scope(), &id()).unwrap();
     let mut input = save(&store, json!({"description":"must not persist"}));
-    input.relationships = Some(serde_json::from_value(json!({"refines":"req_a", "depends_on":[], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
+    input.relationships = Some(serde_json::from_value(json!({"refines":["req_a"], "depends_on":[], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
     assert!(store.save_requirement(input).is_err());
     assert_eq!(
         store.requirement_edit_state(&scope(), &id()).unwrap(),
@@ -38,7 +38,7 @@ fn relationship_sets_are_normalized_and_classified_without_lifecycle_changes() {
         .unwrap();
     let first = store.save_requirement(save(&store, json!({}))).unwrap();
     let mut input = save(&store, json!({}));
-    input.relationships = Some(serde_json::from_value(json!({"refines":null, "depends_on":["req_b","req_b"], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
+    input.relationships = Some(serde_json::from_value(json!({"refines":[], "depends_on":["req_b","req_b"], "supersedes":[], "spawned_by":null, "cites":[]})).unwrap());
     let result = store.save_requirement(input).unwrap();
     assert_ne!(first.revision, result.revision);
     assert_eq!(
@@ -57,9 +57,13 @@ fn enrolled_scope_refuses_lossy_portability() {
         r#"{"schema_version":2,"scopes":[{"id":"default","path_prefix":"."}]}"#,
     )
     .unwrap();
-    assert!(StateStore::new(empty_layout)
-        .ensure_review_portable(&scope())
-        .is_ok());
+    assert!(
+        provenance_store::repository::Repository::open(empty.path(), "default")
+            .unwrap()
+            .store()
+            .ensure_review_portable(&scope())
+            .is_ok()
+    );
 
     let (_temp, store) = fixture();
     assert!(store.ensure_review_portable(&scope()).is_err());

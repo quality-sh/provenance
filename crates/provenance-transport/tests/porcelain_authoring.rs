@@ -8,7 +8,6 @@ mod support {
 
 use provenance_core::{ScopeId, StableId};
 use provenance_macros::verifies;
-use provenance_store::state_store::StateStore;
 use rmcp::{model::CallToolRequestParams, ServiceExt as _};
 use serde_json::{json, Value};
 use support::records::Repository;
@@ -128,7 +127,7 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
                 "actor":"agent",
                 "statement":"The MCP action submits the target Requirement.",
                 "status":"active",
-                "refines":"req_shared",
+                "refines":["req_shared"],
                 "depends_on":[],
                 "supersedes":[]
             }
@@ -142,7 +141,7 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
     );
     assert_eq!(
         requirement.structured_content.as_ref().unwrap()["data"]["refines"],
-        "req_shared"
+        json!(["req_shared"])
     );
     let created_submission = requirement.structured_content.as_ref().unwrap()["data"]["decision"]
         ["pending"]["proposal_id"]
@@ -208,7 +207,7 @@ async fn mcp_target_first_requirement_update_passes_relationship_deltas() {
 #[tokio::test]
 async fn mcp_target_first_requirement_submit_uses_the_target() {
     let repository = Repository::new("The shared graph is readable.");
-    let store = StateStore::new(repository.layout.clone());
+    let store = repository.open().store();
     let scope = ScopeId::new("default").unwrap();
     let requirement = StableId::new("req_shared").unwrap();
     let proposal = store

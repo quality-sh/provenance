@@ -10,7 +10,9 @@ A reader-facing taxonomy classification for requirements. A derived rule belongs
 
 ## Requirement
 
-A higher-level obligation the system must satisfy. Requirements are refined into Rules.
+A higher-level obligation the system must satisfy. A Requirement can refine more than one
+parent Requirement. Each parent refers to the same Requirement and its Rules. A Requirement
+with no refinement parent is a root. A dependency is separate from refinement.
 
 ## Resolution
 

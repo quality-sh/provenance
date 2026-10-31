@@ -21,7 +21,11 @@ fn staged_store() -> (
     let staged_layout = ProvenanceLayout::new(staged_root);
     std::fs::create_dir_all(staged_layout.state_dir()).unwrap();
     std::fs::write(staged_layout.manifest_path(), &manifest_before).unwrap();
-    let staged_store = StateStore::new(staged_layout);
+    let staged_store = StateStore::staged_view(
+        None,
+        staged_layout,
+        crate::state_store::RecordStamp::ResolveFromRepository,
+    );
     (dir, live_store, staged_store, scope, manifest_before)
 }
 
@@ -39,7 +43,7 @@ fn seed_shard<T: serde::Serialize>(path: &camino::Utf8Path, records: &[T]) {
 fn scope_import_writes_only_the_imported_shards() {
     let (_dir, live_store, staged_store, scope, manifest_before) = staged_store();
 
-    with_repository_publication(&live_store.layout, || {
+    with_repository_publication(&live_store.layout, |_| {
         staged_store.import_scope(&scope, &ScopeShards::default())
     })
     .unwrap();
@@ -68,7 +72,7 @@ fn scope_import_writes_only_the_imported_shards() {
 fn scope_import_does_not_create_a_staged_repository_lock() {
     let (_dir, live_store, staged_store, scope, _manifest_before) = staged_store();
 
-    with_repository_publication(&live_store.layout, || {
+    with_repository_publication(&live_store.layout, |_| {
         staged_store.import_scope(&scope, &ScopeShards::default())
     })
     .unwrap();
@@ -81,7 +85,7 @@ fn scope_import_writes_bindings_before_canonical_shards() {
     let (_dir, live_store, staged_store, scope, _manifest_before) = staged_store();
     crate::test_probes::crash_at("scope_import_contributions_written");
 
-    let error = with_repository_publication(&live_store.layout, || {
+    let error = with_repository_publication(&live_store.layout, |_| {
         staged_store.import_scope(&scope, &ScopeShards::default())
     })
     .unwrap_err();
@@ -105,7 +109,7 @@ fn scope_import_rejects_an_id_shared_by_two_canonical_kinds() {
             description: None,
             status: RequirementStatus::Active,
             domain_id: None,
-            refines: None,
+            refines: Vec::new(),
             depends_on: Vec::new(),
             supersedes: Vec::new(),
             spawned_by: None,
@@ -126,7 +130,7 @@ fn scope_import_rejects_an_id_shared_by_two_canonical_kinds() {
     let requirements = [requirement];
     let boundaries = [boundary];
 
-    let error = with_repository_publication(&live_store.layout, || {
+    let error = with_repository_publication(&live_store.layout, |_| {
         staged_store.import_scope(
             &scope,
             &ScopeShards {
@@ -159,7 +163,7 @@ fn scope_import_does_not_grandfather_a_keyword_id_from_another_canonical_kind() 
     }))
     .unwrap();
 
-    let error = with_repository_publication(&live.layout, || {
+    let error = with_repository_publication(&live.layout, |_| {
         staged.import_scope(
             &scope,
             &ScopeShards {
@@ -210,7 +214,7 @@ fn a_keyword_id_in_another_scope_does_not_grandfather_an_import() {
     }))
     .unwrap();
 
-    let error = with_repository_publication(&live.layout, || {
+    let error = with_repository_publication(&live.layout, |_| {
         staged.import_scope(
             &scope,
             &ScopeShards {
@@ -251,7 +255,7 @@ fn scope_import_preserves_a_keyword_id_from_a_landing_only_record() {
     let landing_path = shards::ideation_landings_path(&staged.layout, &scope);
     seed_shard(&landing_path, &[landing]);
 
-    with_repository_publication(&live.layout, || {
+    with_repository_publication(&live.layout, |_| {
         staged.import_scope(
             &scope,
             &ScopeShards {
@@ -293,7 +297,7 @@ fn a_landing_does_not_grandfather_a_different_keyword_id() {
             dispositions: Vec::new(),
         }],
     );
-    let error = with_repository_publication(&live.layout, || {
+    let error = with_repository_publication(&live.layout, |_| {
         staged.import_scope(
             &scope,
             &ScopeShards {
@@ -338,7 +342,7 @@ fn scope_import_preserves_a_keyword_id_from_a_legacy_disposition() {
 
     let mut new = old.clone();
     new.id = StableId::new("check").unwrap();
-    let error = with_repository_publication(&live.layout, || {
+    let error = with_repository_publication(&live.layout, |_| {
         staged.import_scope(
             &scope,
             &ScopeShards {
@@ -356,7 +360,7 @@ fn scope_import_preserves_a_keyword_id_from_a_legacy_disposition() {
     assert!(!shards::dispositions_path(&staged.layout, &scope).exists());
     assert!(!staged.layout.publication_lock_path().exists());
 
-    with_repository_publication(&live.layout, || {
+    with_repository_publication(&live.layout, |_| {
         staged.import_scope(
             &scope,
             &ScopeShards {
@@ -387,7 +391,7 @@ fn oversized_import_refuses_before_replacing_a_legacy_keyword_record() {
     large.name = "x".repeat(crate::cache::read::page::RESOURCE_RECORD_BYTES);
     let incoming = [old.clone(), large];
 
-    let error = with_repository_publication(&live.layout, || {
+    let error = with_repository_publication(&live.layout, |_| {
         staged.import_scope(
             &scope,
             &ScopeShards {

@@ -33,7 +33,7 @@ impl SearchPort for HostSearchPort {
                 }
             }
             self.host
-                .invoke_scoped_typed::<catalog::Search>(request)
+                .invoke::<catalog::Search>(request, crate::Invocation::native())
                 .await
                 .map_err(|error| operation_error(&error))
         })
@@ -41,7 +41,7 @@ impl SearchPort for HostSearchPort {
 }
 
 fn permitted_node_types(host: &crate::StatementHost) -> Vec<NodeType> {
-    catalog::definitions()
+    provenance_contract::definitions()
         .iter()
         .filter(|definition| host.advertises(definition.name))
         .filter_map(|definition| {

@@ -9,7 +9,7 @@ use super::fields::{self, Field, Source};
 use crate::catalog_cli::ensure_only_fields;
 use axum::http::{HeaderMap, HeaderName, HeaderValue};
 use clap::ArgMatches;
-use provenance_store::operations::catalog::{self, Definition};
+use provenance_contract::Definition;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read as _;
@@ -166,7 +166,7 @@ fn unique_wire_fields(declared: &[Field]) -> Vec<String> {
 
 fn bind_parameter(
     definition: &Definition,
-    parameter: &catalog::Parameter,
+    parameter: &provenance_contract::Parameter,
     flag: &str,
     values: &[String],
     query: &mut BTreeMap<String, String>,
@@ -177,9 +177,9 @@ fn bind_parameter(
     };
     match parameter.location {
         "query" => {
-            let parsed = catalog::parse_parameter_value(parameter, value)
+            let parsed = provenance_contract::parse_parameter_value(parameter, value)
                 .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
-            let encoded = catalog::serialize_parameter_value(parameter, &parsed)
+            let encoded = provenance_contract::serialize_parameter_value(parameter, &parsed)
                 .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
             query.insert(parameter.name.to_owned(), encoded);
         }
@@ -352,7 +352,7 @@ fn parse_typed(request: &Value, schema: &Value, flag: &str, raw: &str) -> anyhow
         );
         return Ok(value);
     }
-    let value = catalog::parse_schema_value_in(request, schema, raw)
+    let value = provenance_contract::parse_schema_value_in(request, schema, raw)
         .map_err(|_| anyhow::anyhow!("invalid value for --{flag}"))?;
     anyhow::ensure!(
         validates(request, schema, &value)?,
@@ -385,9 +385,9 @@ fn validates(root: &Value, schema: &Value, value: &Value) -> anyhow::Result<bool
     if let Some(definitions) = root.get("$defs") {
         object.insert("$defs".into(), definitions.clone());
     }
-    let validator = jsonschema::JSONSchema::options()
+    let validator = jsonschema::options()
         .with_draft(jsonschema::Draft::Draft202012)
-        .compile(&standalone)
+        .build(&standalone)
         .map_err(|error| anyhow::anyhow!("invalid catalog field schema: {error}"))?;
     Ok(validator.is_valid(value))
 }
@@ -481,8 +481,8 @@ fn apply_defaults(definition: &Definition, data: &mut Map<String, Value>) {
     for default in &definition.registration.cli.defaults {
         data.entry(default.field)
             .or_insert_with(|| match default.value {
-                catalog::CliDefaultValue::String(value) => json!(value),
-                catalog::CliDefaultValue::EmptyArray => json!([]),
+                provenance_contract::CliDefaultValue::String(value) => json!(value),
+                provenance_contract::CliDefaultValue::EmptyArray => json!([]),
             });
     }
 }

@@ -60,6 +60,7 @@ impl StateStore {
         let path = shards::resolutions_path(&self.layout, &scope_id);
         let resolution = self.mutate_graph_record(&path, |records: &mut Vec<Resolution>| {
             let resolution = Resolution {
+                archived_in_commit: None,
                 created: None,
                 updated: None,
                 schema_version: REVIEW_SCHEMA_VERSION,
