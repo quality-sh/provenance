@@ -93,13 +93,66 @@ test('a recovery read through a filter or after the write does not count', () =>
   assert.deepEqual(scorePacket(packet({ final, events })).cases.fresh_reads, [{ turn: 1, missing: 'topic_pay' }, { turn: 1, missing: 'question_format' }]);
 });
 
-test('script text that names an action is not a write', () => {
-  const events = [shell("$P requirements req_pay document get > doc.json; python3 - doc.json <<'EOF'\nprint(n['answer'], 'create')\nEOF")];
-  assert.deepEqual(scorePacket(packet({ events })).cases.fresh_reads, []);
+// Each scorer fix has a test that fails without it, and a negative case that must stay a finding.
+const answeredFormat = () => {
+  const final = graph();
+  final.questions = [question('question_format', 'answered'), question('question_schedule'), question('question_delivery')];
+  return final;
+};
+const freshFindings = (...commands) => scorePacket(packet({ final: answeredFormat(), events: commands.map(shell) })).cases.fresh_reads;
+const unread = [{ turn: 1, missing: 'topic_pay' }, { turn: 1, missing: 'question_format' }];
+
+test('a write through a shell variable needs the reads first', () => {
+  assert.deepEqual(freshFindings('$P questions question_format answer --answer table'), unread);
+  assert.deepEqual(freshFindings('"${P}" questions question_format answer --answer table'), unread);
+  assert.deepEqual(freshFindings('$P topics topic_pay get', '$P questions question_format get',
+    '$P questions question_format answer --answer table'), []);
 });
 
-test('a help request before the reads is not a write', () => {
-  const events = [shell('$P requirements create --help | head -40'), shell('provenance topics topic_pay get'),
-    shell('provenance questions question_format get'), shell('provenance questions question_format answer --answer table')];
-  assert.deepEqual(scorePacket(packet({ events })).cases.fresh_reads, []);
+test('script text in a heredoc is not a write', () => {
+  const script = "provenance topics topic_pay get; provenance questions question_format get > q.json; python3 - q.json <<'EOF'\n# update the totals\nEOF";
+  assert.deepEqual(freshFindings(script, 'provenance questions question_format answer --answer table'), []);
+});
+
+test('a help request is not a write, and a help word in an answer does not hide a write', () => {
+  assert.deepEqual(freshFindings('provenance requirements create --help | head -40', 'provenance topics topic_pay get',
+    'provenance questions question_format get', 'provenance questions question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('provenance questions question_format answer --answer "Table; see --help"'), unread);
+  assert.deepEqual(freshFindings('provenance questions question_format answer --help | provenance questions question_format answer --answer table'), unread);
+});
+
+test('a filter removes only the read in its own pipeline', () => {
+  assert.deepEqual(freshFindings('provenance topics topic_pay get; provenance questions question_schedule get | jq .data',
+    'provenance questions question_format get', 'provenance questions question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('provenance topics topic_pay get; provenance questions question_format get | jq .data',
+    'provenance questions question_format answer --answer table'), [{ turn: 1, missing: 'question_format' }]);
+});
+
+test('a read counts for the record that it names or that its loop lists', () => {
+  assert.deepEqual(freshFindings('provenance topics topic_pay get; for q in question_schedule question_format; do $P questions $q get; done',
+    'provenance questions question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('provenance topics topic_pay get; echo question_format',
+    'provenance questions question_format answer --answer table'), [{ turn: 1, missing: 'question_format' }]);
+  assert.deepEqual(freshFindings('provenance topics topic_pay get; for q in question_schedule; do $P questions $q get; done # question_format',
+    'provenance questions question_format answer --answer table'), [{ turn: 1, missing: 'question_format' }]);
+});
+
+test('each Rule is under a child of the anchor and names the Resolution that spawned it', () => {
+  const outside = graph();
+  outside.rules = outside.rules.map(rule => ({ ...rule, requirement_ids: ['req_payroll'] }));
+  assert.deepEqual(scorePacket(packet({ final: outside })).cases.tree_branches_by_decision, [{ rule: 'rule_rows', finding: 'Rule outside the anchor tree' }]);
+  const unlinked = graph();
+  unlinked.rules = unlinked.rules.map(rule => ({ ...rule, resolution_ids: [] }));
+  assert.deepEqual(scorePacket(packet({ final: unlinked })).cases.tree_branches_by_decision, [{ rule: 'rule_rows', finding: 'Rule does not name res_format' }]);
+  const orphan = graph();
+  orphan.rules = [...orphan.rules, { id: 'rule_none', statement: 'Pay is shown.', requirement_ids: [], status: 'draft' }];
+  assert.deepEqual(scorePacket(packet({ final: orphan })).cases.tree_branches_by_decision, [{ rule: 'rule_none', finding: 'Rule outside the anchor tree' }]);
+});
+
+test('every created record needs a review entry', () => {
+  const result = scorePacket(packet({ finalReview: [] }));
+  assert.deepEqual(failing(result), ['resolution_shows_downstream', 'every_record_submitted']);
+  assert.deepEqual(result.cases.every_record_submitted.map(entry => entry.id), ['req_format_table', 'res_format', 'rule_rows']);
+  const partial = scorePacket(packet({ finalReview: review.filter(entry => entry.kind !== 'rules') }));
+  assert.deepEqual(partial.cases.every_record_submitted, [{ kind: 'rules', id: 'rule_rows' }]);
 });
