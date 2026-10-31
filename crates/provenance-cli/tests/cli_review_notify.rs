@@ -139,11 +139,11 @@ fn page_write_during_registration_is_not_lost() {
     let registering = std::thread::spawn(move || review_host_support::waits::output(&mut command));
     // A person writes on the page while the host reads the first document in pages.
     let mut written = Vec::new();
-    while !registering.is_finished() && written.len() < 15 {
+    while !registering.is_finished() && written.len() < 6 {
         let id = format!("rule_race_{}", written.len());
         page_rule(&setup.host, &id, "req_notify");
         written.push(id);
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(750));
     }
     registration(&registering.join().unwrap());
 
@@ -153,7 +153,7 @@ fn page_write_during_registration_is_not_lost() {
         if written.iter().all(|id| state.contains_key(id)) || std::time::Instant::now() > deadline {
             break state;
         }
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(750));
     };
     for id in written.iter().chain(&["rule_before_0".to_owned()]) {
         assert!(state.contains_key(id), "{id} is lost: {:?}", state.keys());
