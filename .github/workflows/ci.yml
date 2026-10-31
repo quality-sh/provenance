@@ -19,6 +19,15 @@ env:
   # Apply the same debug setting to temporary Cargo workspaces used by tests.
   CARGO_PROFILE_DEV_DEBUG: line-tables-only
   CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  # The trybuild compile-fail tests check compile-time refusals, which are the
+  # same on every platform. Only the Compile-fail tests job runs them. The
+  # catalog test in the store binary is a normal test and stays in Test.
+  COMPILE_FAIL_TESTS: >-
+    binary_id(provenance-core::projection_row_refusals)
+    | binary_id(provenance-core::relation_derive_refusals)
+    | binary_id(provenance-macros::compile_fail)
+    | binary_id(provenance-sdk::compile_fail)
+    | (binary_id(provenance-store::compile_fail) & not test(=record_family_catalog_leaves_out_store_only_columns))
 
 jobs:
   # Required checks skipped via `if:` count as passed for the main ruleset,
@@ -470,21 +479,13 @@ jobs:
           }
           RS
           PROVENANCE_TEST_STE100_ASSET_URL=http://127.0.0.1:12345/exported.pdf cargo run --quiet --offline --manifest-path target/test-ste100-env/Cargo.toml
-      # The trybuild compile-fail tests check compile-time refusals, which are
-      # the same on every platform, so only the Linux leg runs them.
+      # The Compile-fail tests job runs the trybuild tests.
       # cargo_nested_sdk runs a real nested Cargo build and stays on every leg.
       # The generated HTTP client is platform neutral and is the slowest crate
       # to compile, so only the Linux leg compiles and tests it.
       - name: Test concurrently
         if: runner.os != 'Linux'
         shell: bash
-        env:
-          COMPILE_FAIL_TESTS: >-
-            binary_id(provenance-core::projection_row_refusals)
-            | binary_id(provenance-core::relation_derive_refusals)
-            | binary_id(provenance-macros::compile_fail)
-            | binary_id(provenance-sdk::compile_fail)
-            | (binary_id(provenance-store::compile_fail) & not test(=record_family_catalog_leaves_out_store_only_columns))
         run: cargo nextest run --profile ci --workspace --exclude provenance-http-client --all-features --no-fail-fast --cargo-profile test --timings -E "not ($COMPILE_FAIL_TESTS)"
       # The Linux leg runs the same suite once with coverage instrumentation.
       # The CRAP gate reads its LCOV output, so the suite does not run twice.
@@ -495,6 +496,7 @@ jobs:
           tool: cargo-llvm-cov@0.9.1
       - name: Test concurrently with coverage
         if: runner.os == 'Linux'
+        shell: bash
         env:
           NEXTEST_PROFILE: ci
         run: |
@@ -502,7 +504,7 @@ jobs:
           # Host lifecycle tests kill instrumented children. llvm-profdata reports
           # each corrupt profile path and merges the remaining valid profiles.
           # Test failures still fail this command; an entirely invalid set fails too.
-          cargo llvm-cov nextest --workspace --all-features --no-fail-fast --lcov --failure-mode all --output-path target/crap/lcov.info
+          cargo llvm-cov nextest --workspace --all-features --no-fail-fast --lcov --failure-mode all --output-path target/crap/lcov.info -E "not ($COMPILE_FAIL_TESTS)"
       # The coverage step has stopped with exit code 143 (SIGTERM) during a
       # compile that printed nothing. These facts show if the runner ran out
       # of memory.
@@ -648,6 +650,75 @@ jobs:
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
       - run: cargo test --workspace --all-features --doc --no-fail-fast
+
+  # The trybuild compile-fail tests, without coverage instrumentation and in
+  # parallel with Test. The selected packages and --all-features give each
+  # crate the same features as the Test job.
+  compile-fail:
+    timeout-minutes: 30
+    name: Compile-fail tests
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true' || needs.changes.outputs.contract == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-socket-firewall
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      # Restore only, like the doc-tests job: the default-features cache
+      # holds most of the same dependencies.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          prefix-key: v1
+          shared-key: test-default-features
+          add-job-id-key: "false"
+          save-if: false
+      # trybuild builds its test crates in target/tests/trybuild, apart from
+      # target/debug. This cache keeps those dependency builds. A new
+      # toolchain starts a new cache, so stale builds do not collect.
+      - name: Read the trybuild cache key
+        id: trybuild-key
+        shell: bash
+        run: echo "rustc=$(rustc -vV | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      - name: Restore the trybuild builds
+        id: trybuild-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/tests/trybuild
+          key: trybuild-Linux-${{ steps.trybuild-key.outputs.rustc }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: trybuild-Linux-${{ steps.trybuild-key.outputs.rustc }}-
+      - name: Fetch crates through Socket Firewall
+        run: sfw cargo fetch --locked
+      - name: Install nextest
+        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        with:
+          tool: nextest@0.9.143
+      - name: Test compile-time refusals
+        shell: bash
+        run: >-
+          cargo nextest run --profile ci
+          -p provenance-core -p provenance-macros -p provenance-sdk -p provenance-store
+          --test compile_fail --test relation_derive_refusals --test projection_row_refusals
+          --all-features --no-fail-fast -E "$COMPILE_FAIL_TESTS"
+      - name: Measure the trybuild builds
+        if: always()
+        shell: bash
+        run: if [[ -d target/tests/trybuild ]]; then du -sh target/tests/trybuild; fi
+      - name: Save the trybuild builds
+        if: github.ref == 'refs/heads/main' && steps.trybuild-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/tests/trybuild
+          key: trybuild-Linux-${{ steps.trybuild-key.outputs.rustc }}-${{ hashFiles('Cargo.lock') }}
+      - name: Save the test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results-compile-fail
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: warn
+          retention-days: 30
 
   crap-quality:
     timeout-minutes: 30
@@ -1267,6 +1338,7 @@ jobs:
       - fmt
       - clippy
       - test
+      - compile-fail
       - test-default-features
       - doc-tests
       - build-cli-linux
