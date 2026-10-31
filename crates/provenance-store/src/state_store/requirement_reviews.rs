@@ -92,7 +92,7 @@ impl StateStore {
         ran_at: i64,
     ) -> anyhow::Result<()> {
         let path = shards::requirement_reviews_path(&self.layout, scope);
-        if !path.exists() {
+        if !self.state_exists(&path)? {
             return Ok(());
         }
         self.mutate_jsonl_records(&path, |records: &mut Vec<RequirementReview>| {

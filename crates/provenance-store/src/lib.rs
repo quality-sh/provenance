@@ -1,5 +1,19 @@
 //! This crate is an implementation part of Provenance. Provenance is pre-release, and this API can
 //! change without compatibility shims. Use `provenance-sdk` for Rust.
+//!
+//! This crate is the repository engine. It owns the use cases and calls storage through a
+//! port. The engine runs where its storage is: in the process over local disk now, and as
+//! Wasm in a Durable Object over the SQLite of that object later.
+//!
+//! The areas of the crate:
+//!
+//! - `repository` owns the identity and the lifecycle of a repository.
+//! - `operations` (with `operations::catalog`) and `review` hold the use cases.
+//! - `state_store` holds validation and the record writers.
+//! - `storage` is the port and its adapters.
+//! - `publication`, `jsonl`, `shards` and `layout` are the local-disk mechanics.
+//! - `cache::connection` manages the SQLite connections.
+//! - `cache::materialize` and `cache::read` are the projection.
 
 pub mod cache;
 pub mod canonical_digest;
@@ -24,6 +38,7 @@ pub mod shards;
 pub mod stale;
 pub mod state_store;
 pub mod statement_analysis;
+pub mod storage;
 mod test_probes;
 #[cfg(test)]
 extern crate self as provenance_store;

@@ -94,10 +94,10 @@ impl CanonicalArtifactIndex {
                     &mut entries,
                     scope_id,
                     NodeType::$kind,
-                    super::readers::read_jsonl_unlocked::<$ty>(&crate::shards::$path(
-                        &store.layout,
-                        scope_id,
-                    ))?,
+                    super::readers::read_jsonl_held::<$ty>(
+                        store,
+                        &crate::shards::$path(&store.layout, scope_id),
+                    )?,
                     |record| (record.scope_id, record.id),
                 )?;
             };
@@ -211,7 +211,7 @@ impl StateStore {
         replacements: impl IntoIterator<Item = (NodeType, &'a StableId)>,
         replaced_kinds: &[NodeType],
     ) -> anyhow::Result<()> {
-        let manifest = super::manifest_from_bytes(&std::fs::read(self.layout.manifest_path())?)?;
+        let manifest = super::manifest_from_bytes(&self.read_state(&self.layout.manifest_path())?)?;
         ensure_replacement_ids_unique(
             Some(scope_id),
             replacements.into_iter().map(|(kind, id)| (Some(kind), id)),
