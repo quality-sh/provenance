@@ -56,7 +56,7 @@ impl Refusal {
         }
     }
 
-    fn failed(message: String) -> Self {
+    const fn failed(message: String) -> Self {
         Self {
             field: None,
             message,
@@ -145,6 +145,7 @@ impl Deliveries {
             active.end().await;
         }
         if request.notify.client == NotifyClient::Off {
+            drop(threads);
             return Ok(Registration {
                 client: NotifyClient::Off,
                 thread,
@@ -199,6 +200,7 @@ impl Deliveries {
             stopped,
         ));
         threads.insert(thread.clone(), Active { stop, task });
+        drop(threads);
         Ok(Registration {
             client: NotifyClient::Codex,
             thread,

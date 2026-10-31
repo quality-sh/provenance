@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 use serde_json::{json, Value};
+use std::fmt::Write as _;
 use std::{
     io::{BufRead as _, BufReader, Read as _, Write as _},
     net::{TcpListener, TcpStream},
@@ -244,10 +245,11 @@ fn answer(mut stream: TcpStream, recorded: &Mutex<Vec<Value>>) {
     let mut sse = String::new();
     for (sequence, mut event) in events.into_iter().enumerate() {
         event["sequence_number"] = json!(sequence);
-        sse.push_str(&format!(
-            "event: {}\ndata: {event}\n\n",
+        let _ = writeln!(
+            sse,
+            "event: {}\ndata: {event}\n",
             event["type"].as_str().unwrap()
-        ));
+        );
     }
     let _ = write!(
         stream,
