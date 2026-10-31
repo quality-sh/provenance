@@ -300,54 +300,84 @@ async fn deliver(
     mut stop: watch::Receiver<bool>,
 ) {
     loop {
-        let received = tokio::select! {
-            frame = subscription.receiver.recv() => frame,
-            _ = stop.changed() => return,
-            _ = subscription.stopped.changed() => Ok(None),
-        };
-        let frame = match received {
-            Ok(Some(frame)) => frame,
-            Err(RecvError::Lagged(_)) => {
+        let frame = match next(&mut subscription, &mut stop, &follower).await {
+            Next::Frame(frame) => frame,
+            Next::Stop => return,
+            Next::Disconnected => {
                 let (epoch, sequence) = follower.position();
-                Frame::Reset {
-                    epoch,
-                    sequence: sequence + 1,
-                    reason: "subscriber-loss".to_owned(),
+                let end = OutputFrame::disconnected(epoch, sequence);
+                let _ = queue_or_report(&inner, &target, &end).await;
+                return;
+            }
+        };
+        match read(&inner, &target, &mut follower, &frame).await {
+            Ok(frames) => {
+                for frame in &frames {
+                    if queue_or_report(&inner, &target, frame).await.is_err() {
+                        return;
+                    }
                 }
             }
-            Ok(None) | Err(RecvError::Closed) => {
-                let (epoch, sequence) = follower.position();
-                let _ =
-                    queue_or_report(&inner, &target, &OutputFrame::disconnected(epoch, sequence))
-                        .await;
-                return;
-            }
-        };
-        // A page write between two document pages makes the later page refuse. The second
-        // read sees no next sequence, so it delivers a full document.
-        let mut read = follower
-            .step(&inner.context, &target.root, target.limit, &frame)
-            .await;
-        if read.is_err() {
-            read = follower
-                .step(&inner.context, &target.root, target.limit, &frame)
-                .await;
-        }
-        let frames = match read {
-            Ok(frames) => frames,
-            Err(error) => {
-                let (epoch, sequence) = follower.position();
-                let failure = OutputFrame::read_error(epoch, sequence, error.to_string());
+            Err(failure) => {
                 let _ = queue_or_report(&inner, &target, &failure).await;
-                return;
-            }
-        };
-        for frame in &frames {
-            if queue_or_report(&inner, &target, frame).await.is_err() {
                 return;
             }
         }
     }
+}
+
+enum Next {
+    Frame(Frame),
+    Stop,
+    Disconnected,
+}
+
+/// Waits for the next native frame. A lost frame becomes a reset, so the next read is full.
+async fn next(
+    subscription: &mut Subscription,
+    stop: &mut watch::Receiver<bool>,
+    follower: &Follower,
+) -> Next {
+    let received = tokio::select! {
+        frame = subscription.receiver.recv() => frame,
+        _ = stop.changed() => return Next::Stop,
+        _ = subscription.stopped.changed() => Ok(None),
+    };
+    match received {
+        Ok(Some(frame)) => Next::Frame(frame),
+        Err(RecvError::Lagged(_)) => {
+            let (epoch, sequence) = follower.position();
+            Next::Frame(Frame::Reset {
+                epoch,
+                sequence: sequence + 1,
+                reason: "subscriber-loss".to_owned(),
+            })
+        }
+        Ok(None) | Err(RecvError::Closed) => Next::Disconnected,
+    }
+}
+
+/// Reads current state for one frame. A page write between two document pages makes the
+/// later page refuse, so a failed read runs once more; that read sees no next sequence and
+/// delivers a full document.
+async fn read(
+    inner: &Inner,
+    target: &Target,
+    follower: &mut Follower,
+    frame: &Frame,
+) -> Result<Vec<OutputFrame>, OutputFrame> {
+    let mut read = follower
+        .step(&inner.context, &target.root, target.limit, frame)
+        .await;
+    if read.is_err() {
+        read = follower
+            .step(&inner.context, &target.root, target.limit, frame)
+            .await;
+    }
+    read.map_err(|error| {
+        let (epoch, sequence) = follower.position();
+        OutputFrame::read_error(epoch, sequence, error.to_string())
+    })
 }
 
 async fn queue_or_report(inner: &Inner, target: &Target, frame: &OutputFrame) -> Result<(), ()> {
