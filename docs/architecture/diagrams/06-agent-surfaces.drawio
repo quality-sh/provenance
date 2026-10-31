@@ -64,19 +64,19 @@
         <mxCell id="t_eval" value='&lt;b&gt;tools/shaping-eval&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;run.mjs: runs Codex and Claude CLIs&lt;br&gt;with the shaping skills against the&lt;br&gt;provenance CLI in a scratch repository;&lt;br&gt;score.mjs scores the graph&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
           <mxGeometry x="1350" y="470" width="340" height="100" as="geometry" />
         </mxCell>
-        <mxCell id="notif" value="tools/agent-notifications (Bun, TypeScript)" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f7f2f9;strokeColor=#9673a6;verticalAlign=top;align=right;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
+        <mxCell id="notif" value='Review notifications (provenance-cli)' style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f7f2f9;strokeColor=#9673a6;verticalAlign=top;align=right;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
           <mxGeometry x="290" y="600" width="610" height="230" as="geometry" />
         </mxCell>
-        <mxCell id="n_stream" value='&lt;b&gt;stream.ts: FollowStream&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;spawns provenance &amp;lt;root&amp;gt; get&lt;br&gt;--view review --follow&lt;br&gt;--format json; checks each&lt;br&gt;frame (output.schema.json);&lt;br&gt;envelope.ts marks record&lt;br&gt;content as data&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="notif">
+        <mxCell id="n_stream" value='&lt;b&gt;review/events/delivery.rs&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;get --view review --notify codex&lt;br&gt;registers a thread; the host checks&lt;br&gt;repository, scope, Codex home and&lt;br&gt;thread cwd; stream.rs Follower reads&lt;br&gt;each change; envelope.rs marks&lt;br&gt;record content as data&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="notif">
           <mxGeometry x="15" y="35" width="280" height="175" as="geometry" />
         </mxCell>
-        <mxCell id="n_codex" value='&lt;b&gt;codex.ts&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Codex App Server over WebSocket:&lt;br&gt;thread/read, thread/queue/add&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="notif">
+        <mxCell id="n_codex" value='&lt;b&gt;codex queue&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;one message per change;&lt;br&gt;codex app-server thread/read for cwd&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="notif">
           <mxGeometry x="315" y="35" width="280" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="n_claude" value='&lt;b&gt;claude.ts&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;MCP server on stdio:&lt;br&gt;notifications/claude/channel&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="notif">
+        <mxCell id="n_claude" value='&lt;b&gt;Claude Code Monitor&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;runs get --view review --follow;&lt;br&gt;starts it again at the deadline&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="notif">
           <mxGeometry x="315" y="130" width="280" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="x_host" value='&lt;b&gt;Agent session host&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Codex App Server (ws://localhost,&lt;br&gt;optional PROVENANCE_CODEX_TOKEN);&lt;br&gt;Claude Code session with&lt;br&gt;the channel enabled&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
+        <mxCell id="x_host" value='&lt;b&gt;Agent session&lt;/b&gt;&lt;br&gt;&lt;font style="font-size:11px"&gt;Codex thread queue in CODEX_HOME;&lt;br&gt;Claude Code session that&lt;br&gt;runs the Monitor tool&lt;/font&gt;' style="rounded=1;arcSize=10;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=13;fontColor=#1a1a1a;verticalAlign=middle;align=center;spacing=4;" vertex="1" parent="1">
           <mxGeometry x="1020" y="640" width="300" height="170" as="geometry" />
         </mxCell>
         <mxCell id="06-agent-surfaces-legend" value="Legend" style="rounded=1;arcSize=2;absoluteArcSize=1;whiteSpace=wrap;html=1;fillColor=#fbfbfb;strokeColor=#666666;verticalAlign=top;align=left;spacingLeft=10;spacingRight=10;spacingTop=2;fontStyle=1;fontSize=14;fontColor=#1a1a1a;container=1;collapsible=0;recursiveResize=0;" vertex="1" parent="1">
@@ -183,7 +183,7 @@
           <mxGeometry x="0" relative="1" as="geometry">
           </mxGeometry>
         </mxCell>
-        <mxCell id="06-agent-surfaces-e12" value="spawns" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="n_stream" target="c_follow">
+        <mxCell id="06-agent-surfaces-e12" value='reads with' style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="n_stream" target="c_follow">
           <mxGeometry x="0" relative="1" as="geometry">
           </mxGeometry>
         </mxCell>
@@ -199,7 +199,7 @@
           <mxGeometry x="0" relative="1" as="geometry">
           </mxGeometry>
         </mxCell>
-        <mxCell id="06-agent-surfaces-e16" value="channel notice" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.7647;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="n_claude" target="x_host">
+        <mxCell id="06-agent-surfaces-e16" value='one line per change' style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;jumpStyle=arc;jumpSize=10;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.7647;entryDx=0;entryDy=0;strokeColor=#1f5fbf;fontSize=11;fontColor=#1a1a1a;labelBackgroundColor=#ffffff;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="n_claude" target="x_host">
           <mxGeometry x="0" relative="1" as="geometry">
           </mxGeometry>
         </mxCell>

@@ -60,6 +60,16 @@ it in the same change.
   `{command} <requirement-id> --scope {selected_scope} --view review --follow --format json`.
   The command needs a running review host. It returns current state, not a delivery journal.
   A reset or disconnect means notification continuity is unknown.
+- In Claude Code, run the follow command with the Monitor tool and `timeout_ms`
+  1800000. A watch ends at its deadline. Start the same command again after the
+  deadline notice, after a `disconnected` line, and when the session resumes.
+  The first line of each start is the full document.
+- In Codex, register the thread with
+  `{command} <requirement-id> --scope {selected_scope} --view review --notify codex --format json`.
+  The host must run outside the sandbox. It queues the full document into the
+  thread, then each saved change. Codex accepted a message when it is in the
+  thread queue. An idle session reads it at its next turn. To stop, run the same
+  command with `--notify off`.
 - A guarded update after a rejection opens a new submission unless a reviewer
   accepted that content. Revise or withdraw a rejected candidate that no later
   submission replaced. To end a pending review without a replacement, withdraw it.
@@ -186,6 +196,7 @@ pub fn project(existing: &[u8], invocation: &Invocation, scope: &str) -> anyhow:
 #[rule("rule_init_review_host_guidance")]
 #[rule("rule_init_description_guidance")]
 #[rule("rule_init_guidance_background_review_host")]
+#[rule("rule_init_follow_monitor_guidance")]
 fn instructions(invocation: &Invocation, scope: &str) -> String {
     INSTRUCTIONS
         .replace("{command}", invocation.0)

@@ -2,7 +2,7 @@
 use super::events::{
     frames::Frame,
     output::{emit, OutputFrame},
-    stream::Baseline,
+    stream::Follower,
 };
 use anyhow::Context as _;
 use futures_util::StreamExt;
@@ -22,8 +22,8 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     anyhow::ensure!(limit > 0, "--limit must be positive");
     let host =
         provenance_transport::local_host::discover(context.repo.as_std_path(), &context.scope)?
-            .context("no review host is running for this repository and scope")?;
-    let key = super::launch::LaunchKey::read(host.instance_nonce())?;
+            .context(provenance_porcelain::get::NO_REVIEW_HOST)?;
+    let key = provenance_cli::notify::read_launch_key(host.instance_nonce())?;
     let mut endpoint = host.endpoint().clone();
     if endpoint.set_scheme("ws").is_err() {
         anyhow::bail!("invalid host endpoint");
@@ -36,10 +36,7 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     let (mut socket, _) = tokio_tungstenite::connect_async(request)
         .await
         .context("cannot subscribe to the review host")?;
-    let mut baseline = Baseline::default();
-    let mut epoch = host.instance_nonce().to_owned();
-    let mut sequence = 0;
-    let mut initialized = false;
+    let mut follower = Follower::new(host.instance_nonce());
     let mut read_failure = None;
     let interrupt = tokio::signal::ctrl_c();
     tokio::pin!(interrupt);
@@ -58,31 +55,17 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
                 Message::Close(_) => anyhow::bail!("review host disconnected"),
                 _ => continue,
             };
-            let (next_epoch, next_sequence) = frame.position();
-            let reset = initialized && (matches!(frame, Frame::Reset { .. }) || next_epoch != epoch
-                || next_sequence != sequence + 1);
-            next_epoch.clone_into(&mut epoch);
-            sequence = next_sequence;
-            if initialized && !reset && matches!(frame, Frame::Changed { .. } | Frame::Ready { .. }) {
-                continue;
-            }
-            let selected = match &frame {
-                Frame::Reviewed { scopes, .. } => Some(scopes.iter()
-                    .filter(|scope| scope.scope == context.scope)
-                    .flat_map(|scope| scope.records.iter().map(|record| record.id.clone()))
-                    .collect::<std::collections::BTreeSet<_>>()),
-                _ => None,
-            };
             tokio::select! {
                 signal = &mut interrupt => {
                     signal.context("cannot install the Ctrl-C handler")?;
                     return Ok(());
                 },
                 result = async {
-                    let frames = match baseline.reconcile(context, &input.target, limit, (&epoch, sequence), reset, selected.as_ref()).await {
+                    let frames = match follower.step(context, &input.target, limit, &frame).await {
                         Ok(frames) => frames,
                         Err(error) => {
-                            read_failure = Some(OutputFrame::read_error(epoch.clone(), sequence, error.to_string()));
+                            let (epoch, sequence) = follower.position();
+                            read_failure = Some(OutputFrame::read_error(epoch, sequence, error.to_string()));
                             return Err(error);
                         }
                     };
@@ -90,10 +73,10 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
                     Ok::<(), anyhow::Error>(())
                 } => result?,
             }
-            initialized = true;
         }
     }.await;
     let emitted = if result.is_err() {
+        let (epoch, sequence) = follower.position();
         emit(&read_failure.unwrap_or_else(|| OutputFrame::disconnected(epoch, sequence))).await
     } else {
         Ok(())

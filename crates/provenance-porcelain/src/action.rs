@@ -131,7 +131,7 @@ impl<P: GetPort> crate::Porcelain<P> {
 
 fn map_read_error(error: ReadError) -> ActionError {
     match error {
-        ReadError::InvalidOptions => ActionError::InvalidOptions,
+        ReadError::InvalidOptions | ReadError::InvalidInput { .. } => ActionError::InvalidOptions,
         ReadError::NotFound => ActionError::NotFound,
         ReadError::AmbiguousIdentity => ActionError::AmbiguousIdentity,
         ReadError::Operation(message) => ActionError::Operation(message),

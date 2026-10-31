@@ -1,3 +1,5 @@
+mod delivery;
+mod envelope;
 pub(super) mod frames;
 mod navigation;
 pub(super) mod output;
@@ -28,6 +30,7 @@ struct RouteState {
     navigation: navigation::Navigation,
     access: Arc<LocalAccess>,
     codes: super::launch::LaunchCodes,
+    deliveries: delivery::Deliveries,
 }
 
 #[derive(Clone)]
@@ -44,7 +47,9 @@ impl ReviewEvents {
         access: Arc<LocalAccess>,
         codes: super::launch::LaunchCodes,
     ) -> Self {
-        let subscribers = Subscribers::new(epoch, scope);
+        let root = repository.working_tree().as_std_path().to_path_buf();
+        let subscribers = Subscribers::new(epoch.clone(), scope.clone());
+        let deliveries = delivery::Deliveries::new(&root, &scope, &epoch, subscribers.clone());
         let observation =
             tokio::task::spawn_blocking(move || watch::Observation::new(repository)).await;
         let observer = match observation {
@@ -76,6 +81,7 @@ impl ReviewEvents {
                 navigation: navigation::Navigation::default(),
                 access,
                 codes,
+                deliveries,
             },
             observer: Arc::new(Mutex::new(observer)),
         }
@@ -85,6 +91,7 @@ impl ReviewEvents {
         axum::Router::new()
             .route("/review-events", get(upgrade))
             .route("/review-navigation", post(navigate))
+            .route(provenance_cli::notify::DELIVERIES_ROUTE, post(deliveries))
             .with_state(self.state.clone())
     }
 
@@ -107,6 +114,7 @@ impl ReviewEvents {
                 eprintln!("Live review observation stopped with an error: {error}");
             }
         }
+        self.state.deliveries.shutdown().await;
     }
 }
 
@@ -200,6 +208,28 @@ async fn navigate(State(state): State<RouteState>, body: axum::body::Bytes) -> R
             Json(serde_json::json!({ "result": result })).into_response()
         }
         _ => super::refusal(OperationFailure::Unauthenticated),
+    }
+}
+
+/// Registers a Codex thread for review changes, or ends its registration. Only the launch
+/// key holder can call it, as for a native subscription.
+async fn deliveries(
+    State(state): State<RouteState>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    if let Err(error) = authenticate_native(&state, &headers) {
+        return super::refusal(error);
+    }
+    let Ok(request) = serde_json::from_slice::<delivery::DeliveryRequest>(&body) else {
+        return super::refusal(OperationFailure::InvalidInput {
+            field: None,
+            reason: provenance_core::protocol::failure::InvalidInputReason::InvalidValue,
+        });
+    };
+    match state.deliveries.register(request).await {
+        Ok(registration) => Json(registration).into_response(),
+        Err(refusal) => refusal.into_response(),
     }
 }
 

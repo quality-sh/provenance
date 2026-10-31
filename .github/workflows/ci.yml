@@ -76,7 +76,6 @@ jobs:
               - ".github/workflows/benchmarks.yml"
               - "tools/bench/**"
             rust:
-              - "tools/agent-notifications/**"
               - *ci
               - *release
               - ".github/scripts/crap_gate.py"
@@ -261,30 +260,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-  agent-notifications:
-    timeout-minutes: 15
-    name: Agent notification adapters
-    needs: [build-cli-linux]
-    if: needs.build-cli-linux.result == 'success'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-socket-firewall
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 24
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: provenance-cli-x86_64-unknown-linux-gnu
-          path: target/debug
-      - run: chmod +x target/debug/provenance
-      - run: sfw npm ci --no-audit --no-fund --prefix tools/agent-notifications
-      - run: npm run typecheck --prefix tools/agent-notifications
-      - name: Test public client adapters
-        env:
-          PROVENANCE_TEST_BIN: ${{ github.workspace }}/target/debug/provenance
-        run: npm test --prefix tools/agent-notifications
-
   build-cli-platforms:
     timeout-minutes: 45
     name: Build provenance-cli (${{ matrix.target }})
@@ -463,6 +438,10 @@ jobs:
         uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
         with:
           tool: nextest@0.9.143
+      # The review notify tests queue messages into a real Codex thread on Linux only.
+      - name: Install Codex for the review notify tests
+        if: runner.os == 'Linux'
+        run: sfw npm install --global --no-audit --no-fund @openai/codex@0.159.1
       - name: Check the test dictionary URL override
         shell: bash
         run: |
@@ -605,6 +584,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
+      - name: Install Codex for the review notify tests
+        run: sfw npm install --global --no-audit --no-fund @openai/codex@0.159.1
       - run: cargo test -p provenance-cli --no-fail-fast --timings
       - name: Save Cargo timing reports
         if: always()
@@ -1343,7 +1324,6 @@ jobs:
       - doc-tests
       - build-cli-linux
       - build-cli-platforms
-      - agent-notifications
       - crap-quality
       - rule-coverage
       - rust-sdk

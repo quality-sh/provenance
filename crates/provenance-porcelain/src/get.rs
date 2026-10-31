@@ -81,6 +81,9 @@ pub struct GetInput {
     #[serde(default)]
     #[schemars(range(min = 1))]
     pub limit: Option<usize>,
+    /// Registers a client thread for review changes, or ends its registration.
+    #[serde(default)]
+    pub notify: Option<Notify>,
 }
 
 impl GetInput {
@@ -91,8 +94,54 @@ impl GetInput {
             max_depth: None,
             returned_kinds: Vec::new(),
             limit: None,
+            notify: None,
         }
     }
+}
+
+/// The refusal message when no review host serves the repository and scope.
+pub const NO_REVIEW_HOST: &str = "no review host is running for this repository and scope";
+
+/// The client that gets review changes: `codex` registers a thread, `off` ends the
+/// registration of that thread.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum NotifyClient {
+    Codex,
+    Off,
+}
+
+/// One notify request for a client thread.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Notify {
+    pub client: NotifyClient,
+    /// The Codex thread UUID.
+    #[schemars(length(min = 1))]
+    pub thread: String,
+}
+
+/// The result of one notify request. `accepted` is true when Codex accepted the full
+/// document message into the thread queue. It does not show that the agent read it.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Registration {
+    pub client: NotifyClient,
+    pub thread: String,
+    pub registered: bool,
+    pub accepted: bool,
+    #[serde(default)]
+    pub removed: bool,
+}
+
+/// Sends a notify request to the review host of the repository and scope.
+pub trait NotifyPort: Send + Sync {
+    fn register<'a>(
+        &'a self,
+        root: &'a str,
+        limit: usize,
+        notify: &'a Notify,
+    ) -> PortFuture<'a, Registration>;
 }
 
 /// The bound and continuation state of a potentially incomplete result.
@@ -146,6 +195,10 @@ pub struct Review {
     pub bounds: Bounds,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_metadata: Option<ResponseMeta>,
+    /// The notify result. The get wire shows it beside the review, not in it.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub notify: Option<Registration>,
 }
 
 /// The data selected by one named view.
@@ -258,6 +311,11 @@ pub enum ReadError {
     InvalidOptions,
     NotFound,
     AmbiguousIdentity,
+    /// The review host refused one request field.
+    InvalidInput {
+        field: String,
+        message: String,
+    },
     Operation(String),
 }
 
@@ -267,12 +325,36 @@ impl Display for ReadError {
             Self::InvalidOptions => formatter.write_str("unsupported read options"),
             Self::NotFound => formatter.write_str("record does not exist"),
             Self::AmbiguousIdentity => formatter.write_str("record ID is not unique"),
-            Self::Operation(message) => formatter.write_str(message),
+            Self::InvalidInput { message, .. } | Self::Operation(message) => {
+                formatter.write_str(message)
+            }
         }
     }
 }
 
 impl std::error::Error for ReadError {}
+
+impl ReadError {
+    /// The `{error, meta}` object that the CLI and MCP both return for this failure.
+    #[rule("rule_mcp_get_failure_matches_cli")]
+    pub fn failure(&self) -> serde_json::Value {
+        let mut error = match self {
+            Self::InvalidOptions => {
+                serde_json::json!({"kind": "invalid_input", "reason": "invalid_value"})
+            }
+            Self::NotFound => serde_json::json!({"kind": "resource_not_found"}),
+            Self::AmbiguousIdentity => serde_json::json!({
+                "kind": "invalid_input", "reason": "invalid_value", "field": "target"
+            }),
+            Self::InvalidInput { field, .. } => serde_json::json!({
+                "kind": "invalid_input", "reason": "invalid_value", "field": field
+            }),
+            Self::Operation(_) => serde_json::json!({"kind": "operation_failed"}),
+        };
+        error["message"] = serde_json::Value::String(self.to_string());
+        serde_json::json!({"error": error, "meta": {}})
+    }
+}
 
 /// Existing operation paths needed to compose a known-record read.
 pub trait GetPort: Send + Sync {
@@ -281,6 +363,14 @@ pub trait GetPort: Send + Sync {
     fn impact<'a>(&'a self, record: &'a GraphNode, limit: usize) -> PortFuture<'a, Impact>;
     fn review<'a>(&'a self, _record: &'a GraphNode, _limit: usize) -> PortFuture<'a, Review> {
         Box::pin(async { Err(ReadError::InvalidOptions) })
+    }
+    fn notify<'a>(
+        &'a self,
+        _root: &'a str,
+        _limit: usize,
+        _notify: &'a Notify,
+    ) -> PortFuture<'a, Registration> {
+        Box::pin(async { Err(ReadError::Operation(NO_REVIEW_HOST.to_owned())) })
     }
 }
 
@@ -292,6 +382,7 @@ impl<P: GetPort> crate::Porcelain<P> {
     #[rule("rule_porcelain_return_filter_keeps_traversal")]
     #[rule("rule_porcelain_get_has_grounding_impact")]
     #[rule("rule_porcelain_read_rejects_bad_options")]
+    #[rule("rule_review_notify_cli_mcp_same")]
     #[rule("rule_shaping_recovery_bounds")]
     pub async fn get(&self, input: GetInput) -> Result<GetOutcome, ReadError> {
         validate(&input)?;
@@ -339,9 +430,18 @@ impl<P: GetPort> crate::Porcelain<P> {
             View::Impact => {
                 ViewResult::Impact(self.port.impact(&record, input.limit.unwrap_or(50)).await?)
             }
-            View::Review => ViewResult::Review(Box::new(
-                self.port.review(&record, input.limit.unwrap_or(50)).await?,
-            )),
+            View::Review => {
+                let limit = input.limit.unwrap_or(50);
+                let mut review = self.port.review(&record, limit).await?;
+                if let Some(notify) = &input.notify {
+                    review.notify = Some(
+                        self.port
+                            .notify(record.id().as_str(), limit, notify)
+                            .await?,
+                    );
+                }
+                ViewResult::Review(Box::new(review))
+            }
         };
         Ok(GetOutcome {
             record,
@@ -361,7 +461,11 @@ fn validate(input: &GetInput) -> Result<(), ReadError> {
         View::Children | View::Grounding => false,
         View::Impact | View::Review => has_traversal_options,
     };
-    if unsupported || input.max_depth == Some(0) || input.limit == Some(0) {
+    let notify_refused = input
+        .notify
+        .as_ref()
+        .is_some_and(|notify| input.view != View::Review || notify.thread.is_empty());
+    if unsupported || notify_refused || input.max_depth == Some(0) || input.limit == Some(0) {
         return Err(ReadError::InvalidOptions);
     }
     Ok(())

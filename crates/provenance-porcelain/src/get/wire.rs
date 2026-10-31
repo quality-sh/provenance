@@ -1,6 +1,6 @@
 //! The get wire shape and its schema come from the same typed projection.
 
-use super::{Bounds, GetInput, GetOutcome, Review, View};
+use super::{Bounds, GetInput, GetOutcome, Registration, Review, View};
 use provenance_core::protocol::{GraphNode, ImpactResult, ResponseMeta};
 use provenance_core::{
     Boundary, Domain, NodeType, Question, Requirement, Resolution, Rule, Source, StableId, Topic,
@@ -71,6 +71,8 @@ struct GetWire<'a> {
     record_metadata: Option<&'a ResponseMeta>,
     #[serde(skip_serializing_if = "Option::is_none")]
     view_metadata: Option<&'a ResponseMeta>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    notify: Option<&'a Registration>,
 }
 
 impl GetOutcome {
@@ -98,6 +100,7 @@ impl GetOutcome {
             shaping: self.shaping(),
             record_metadata: self.record_metadata.as_ref(),
             view_metadata: self.view_metadata(),
+            notify: self.review().and_then(|review| review.notify.as_ref()),
         }
     }
 }
@@ -176,6 +179,12 @@ pub fn render_readable(outcome: &GetOutcome) -> serde_json::Result<String> {
             review.update_precondition,
             serde_json::to_string_pretty(review)?
         ));
+        if let Some(notify) = &review.notify {
+            sections.push(format!(
+                "notify:\n{}",
+                serde_json::to_string_pretty(notify)?
+            ));
+        }
     }
     if let Some(bounds) = outcome.bounds() {
         sections.push(format!(

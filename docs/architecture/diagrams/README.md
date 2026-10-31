@@ -25,7 +25,8 @@ arrows show build-time generation or packaging.
 - `05-cli-dispatch.drawio`: how provenance-cli parses a command and sends it to
   the in-process host or to a built-in handler.
 - `06-agent-surfaces.drawio`: init guidance in AGENTS.md, skill install, prime,
-  dogfood notes, tools/agent-notifications, and tools/shaping-eval.
+  dogfood notes, review notifications for Codex and Claude Code, and
+  tools/shaping-eval.
 - `07-review-host.drawio`: `provenance review`, the launch flow, review events,
   the `--detach` background host, and how tools/review-host builds and checks
   page assets from the pinned provenance-web archive.
