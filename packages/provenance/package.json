@@ -75,11 +75,11 @@
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
-    "effect": "4.0.0-rc.113",
+    "effect": "4.0.4",
     "esbuild": "0.28.2"
   },
   "peerDependencies": {
-    "effect": "4.0.0-rc.113"
+    "effect": "4.0.4"
   },
   "peerDependenciesMeta": {
     "effect": {

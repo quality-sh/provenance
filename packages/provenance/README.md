@@ -431,7 +431,7 @@ server toolchain. The explicit CLI remains a separate packaged executable.
 
 The `@quality-sh/provenance/effect` entry supplies generated Effect operations,
 runtime wire schemas, and `ProvenanceApi`. Applications install the exact peer
-`effect@4.0.0-rc.113`. The existing Promise client requires no Effect setup.
+`effect@4.0.4`. The existing Promise client requires no Effect setup.
 Use an explicitly connected `EffectHttpClient` through `ProvenanceClient` with
 `Atom.runtime` to preserve the shared client policy. Keep the client while
 mutation outcomes remain unresolved. See the
