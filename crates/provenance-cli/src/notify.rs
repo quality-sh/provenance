@@ -86,6 +86,7 @@ fn register(context: &RepoContext, mut body: Value) -> Result<Registration, Read
                     field: field.to_owned(),
                     message,
                 },
+                _ if error["kind"] == "host_busy" => ReadError::HostBusy(message),
                 _ => ReadError::Operation(message),
             });
         }

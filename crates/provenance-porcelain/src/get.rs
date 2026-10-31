@@ -316,6 +316,8 @@ pub enum ReadError {
         field: String,
         message: String,
     },
+    /// The review host could not finish the request now; the same request can run again.
+    HostBusy(String),
     Operation(String),
 }
 
@@ -325,9 +327,9 @@ impl Display for ReadError {
             Self::InvalidOptions => formatter.write_str("unsupported read options"),
             Self::NotFound => formatter.write_str("record does not exist"),
             Self::AmbiguousIdentity => formatter.write_str("record ID is not unique"),
-            Self::InvalidInput { message, .. } | Self::Operation(message) => {
-                formatter.write_str(message)
-            }
+            Self::InvalidInput { message, .. }
+            | Self::HostBusy(message)
+            | Self::Operation(message) => formatter.write_str(message),
         }
     }
 }
@@ -349,6 +351,7 @@ impl ReadError {
             Self::InvalidInput { field, .. } => serde_json::json!({
                 "kind": "invalid_input", "reason": "invalid_value", "field": field
             }),
+            Self::HostBusy(_) => serde_json::json!({"kind": "host_busy"}),
             Self::Operation(_) => serde_json::json!({"kind": "operation_failed"}),
         };
         error["message"] = serde_json::Value::String(self.to_string());
