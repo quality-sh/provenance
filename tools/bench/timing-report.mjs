@@ -80,6 +80,24 @@ export function compare(pairs) {
   });
 }
 
+// The release criterion from docs/release.md on paired data: a gated row
+// fails when the lower bound of its ratio interval is above 2 and its head
+// median is more than 5 ms above the base median. Gated rows are the
+// repository_state operation summaries and catch_up_ms.
+export const RELEASE_RATIO = 2;
+export const RELEASE_MS = 5;
+
+export function isGated(key) {
+  return /^repository_state (\S+ summary|catch_up_ms)$/.test(key);
+}
+
+export function releaseResult(row) {
+  if (!isGated(row.key)) return 'Report only';
+  if (row.missing) return 'Pass';
+  const fails = row.interval[0] > RELEASE_RATIO && row.headMedian - row.baseMedian > RELEASE_MS;
+  return fails ? 'Fail' : 'Pass';
+}
+
 function ms(value) {
   return value.toFixed(1);
 }
@@ -88,7 +106,7 @@ function times(value) {
   return Number.isFinite(value) ? value.toFixed(2) : 'inf';
 }
 
-export function renderReport(rows, info) {
+export function renderReport(rows, info, gate = 'none') {
   const lines = ['# Paired timing report', ''];
   lines.push(`- Baseline: \`${info.baseline}\``);
   lines.push(`- Candidate: \`${info.candidate}\``);
@@ -99,14 +117,22 @@ export function renderReport(rows, info) {
   if (info.harnessChanged) {
     lines.push('> **Warning:** the comparison test files differ between the two commits, so the two sides do not time the same steps.', '');
   }
-  lines.push('| Row | Base median ms | Head median ms | Ratio head/base | 95% interval |', '|---|---:|---:|---:|---|');
+  const release = gate === 'release';
+  if (release) {
+    const failed = rows.filter(row => releaseResult(row) === 'Fail').length;
+    const gated = rows.filter(row => isGated(row.key)).length;
+    lines.push(`Release gate: ${failed === 0 ? 'pass' : `**fail** (${failed} of ${gated} gated rows)`}. A gated row fails when the lower bound of its ratio interval is above ${RELEASE_RATIO} and its head median is more than ${RELEASE_MS} ms above the base median.`, '');
+  }
+  lines.push(`| Row | Base median ms | Head median ms | Ratio head/base | 95% interval |${release ? ' Gate |' : ''}`);
+  lines.push(`|---|---:|---:|---:|---|${release ? '---|' : ''}`);
   for (const row of rows) {
+    const result = release ? ` ${releaseResult(row)} |` : '';
     if (row.missing) {
-      lines.push(`| \`${row.key}\` | | | | missing in ${row.missing} |`);
+      lines.push(`| \`${row.key}\` | | | | missing in ${row.missing} |${result}`);
       continue;
     }
     const interval = row.interval ? `${times(row.interval[0])} to ${times(row.interval[1])}` : 'too few pairs';
-    lines.push(`| \`${row.key}\` | ${ms(row.baseMedian)} | ${ms(row.headMedian)} | ${times(row.ratio)} | ${interval} |`);
+    lines.push(`| \`${row.key}\` | ${ms(row.baseMedian)} | ${ms(row.headMedian)} | ${times(row.ratio)} | ${interval} |${result}`);
   }
   return `${lines.join('\n')}\n`;
 }
@@ -136,10 +162,14 @@ async function main() {
     },
   });
   if (!values.runs) throw new Error('--runs <dir> is necessary');
-  if (values.gate !== 'none') throw new Error(`unknown gate: ${values.gate}`);
+  if (!['none', 'release'].includes(values.gate)) throw new Error(`unknown gate: ${values.gate}`);
   const pairs = await readRuns(values.runs);
   const rows = compare(pairs);
-  process.stdout.write(renderReport(rows, { ...values, harnessChanged: values['harness-changed'], pairs: pairs.length }));
+  if (values.gate === 'release' && rows.some(row => !row.missing && !row.interval)) {
+    throw new Error('the release gate needs at least six pairs');
+  }
+  process.stdout.write(renderReport(rows, { ...values, harnessChanged: values['harness-changed'], pairs: pairs.length }, values.gate));
+  if (values.gate === 'release' && rows.some(row => releaseResult(row) === 'Fail')) process.exitCode = 1;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

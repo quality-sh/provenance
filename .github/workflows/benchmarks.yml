@@ -3,6 +3,8 @@ name: Benchmarks
 # Times two commits in one job on one frozen copy of `.provenance/state`.
 # The timing test of each commit runs in turn, `pairs` times, and the report
 # gives each row's medians and the paired ratio with a 95% interval.
+# A pull request that changes this workflow or tools/bench runs it with the
+# defaults and the release gate.
 on:
   workflow_dispatch:
     inputs:
@@ -22,6 +24,11 @@ on:
         description: Number of paired runs
         type: number
         default: 15
+      gate:
+        description: "Gate: release fails the job on the release criterion of docs/release.md"
+        type: choice
+        options: [none, release]
+        default: none
   pull_request:
     paths:
       - ".github/workflows/benchmarks.yml"
@@ -144,16 +151,19 @@ jobs:
           CANDIDATE: ${{ steps.commits.outputs.candidate }}
           INPUT: ${{ steps.commits.outputs.input }}
           HARNESS_CHANGED: ${{ steps.commits.outputs.harness_changed }}
+          GATE: ${{ inputs.gate || 'release' }}
         run: |
           set -euo pipefail
           flags=()
           if [[ "$HARNESS_CHANGED" == true ]]; then
             flags+=(--harness-changed)
           fi
-          node repo/tools/bench/timing-report.mjs --runs timing-report/runs \
+          status=0
+          node repo/tools/bench/timing-report.mjs --runs timing-report/runs --gate "$GATE" \
             --baseline "$BASELINE ($BASELINE_NAME)" --candidate "$CANDIDATE" --input "$INPUT" \
-            --runner "$ImageOS $ImageVersion" "${flags[@]}" > timing-report/report.md
+            --runner "$ImageOS $ImageVersion" "${flags[@]}" > timing-report/report.md || status=$?
           cat timing-report/report.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:

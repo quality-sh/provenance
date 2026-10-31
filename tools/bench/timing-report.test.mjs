@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { compare, median, medianInterval, parseTiming, renderReport } from './timing-report.mjs';
+import { compare, median, medianInterval, parseTiming, releaseResult, renderReport } from './timing-report.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = await readFile(join(here, 'fixtures/timing-1beedc23.txt'), 'utf8');
@@ -75,4 +77,56 @@ test('the report names the commits and flags a changed harness', () => {
   assert.doesNotMatch(plain, /Warning/);
   const changed = renderReport(compare(pairs), { ...info, harnessChanged: true });
   assert.match(changed, /Warning:\*\* the comparison test files differ/);
+});
+
+function statistics(key, interval, baseMedian, headMedian) {
+  return { key, baseMedian, headMedian, ratio: (interval[0] + interval[1]) / 2, interval };
+}
+
+test('a gated row fails only above twice and 5 ms', () => {
+  const key = 'repository_state get summary';
+  assert.equal(releaseResult(statistics(key, [2.3, 2.9], 4, 10)), 'Fail');
+  assert.equal(releaseResult(statistics(key, [2.3, 2.9], 2, 5)), 'Pass');
+  assert.equal(releaseResult(statistics(key, [1.8, 2.6], 20, 60)), 'Pass');
+  assert.equal(releaseResult(statistics('repository_state catch_up_ms', [2.3, 2.9], 4, 10)), 'Fail');
+  assert.equal(releaseResult({ key, missing: 'base' }), 'Pass');
+});
+
+test('ungated rows never fail', () => {
+  for (const key of ['repository_state scan_ms', 'repository_state rebuild_ms', 'seeded_queries stale summary', 'cache_seeded catch_up_ms']) {
+    assert.equal(releaseResult(statistics(key, [10, 20], 10, 200)), 'Report only');
+  }
+});
+
+async function writeRuns(directory, base, head) {
+  const pairs = [];
+  for (let index = 1; index <= 6; index += 1) {
+    await writeFile(join(directory, `base-${index}.txt`), base);
+    await writeFile(join(directory, `head-${index}.txt`), head);
+    pairs.push({ base: `base-${index}.txt`, head: `head-${index}.txt` });
+  }
+  await writeFile(join(directory, 'runs.json'), JSON.stringify({ pairs }));
+}
+
+test('the release gate sets the exit status and only reports without it', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'timing-report-'));
+  try {
+    const section = 'Timing over repository_state: operation request served_ms\n';
+    await writeRuns(directory, `${section}get summary 4.0\nrebuild_ms 100.0\n`, `${section}get summary 10.0\nrebuild_ms 900.0\n`);
+    const report = script => spawnSync(process.execPath, [join(here, 'timing-report.mjs'), '--runs', directory, ...script], { encoding: 'utf8' });
+    const gated = report(['--gate', 'release']);
+    assert.equal(gated.status, 1, gated.stderr);
+    assert.match(gated.stdout, /Release gate: \*\*fail\*\* \(1 of 1 gated rows\)/);
+    assert.match(gated.stdout, /\| `repository_state get summary` \| 4\.0 \| 10\.0 \| 2\.50 \| 2\.50 to 2\.50 \| Fail \|/);
+    assert.match(gated.stdout, /\| `repository_state rebuild_ms` .* Report only \|/);
+    const plain = report([]);
+    assert.equal(plain.status, 0, plain.stderr);
+    assert.doesNotMatch(plain.stdout, /Release gate/);
+    await writeRuns(directory, `${section}get summary 4.0\n`, `${section}get summary 4.4\n`);
+    const passing = report(['--gate', 'release']);
+    assert.equal(passing.status, 0, passing.stderr);
+    assert.match(passing.stdout, /Release gate: pass\./);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
