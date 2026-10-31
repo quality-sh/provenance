@@ -295,7 +295,8 @@ fn page_writes_during_the_first_read_reach_follow() {
         );
     }
     let host = start(repo.path());
-    let follow = Follow::with_options(&host, repo.path(), "req_follow", &["--limit", "1"]);
+    // One page per read: a follow read that spans pages ends with read-error on a page write.
+    let follow = Follow::start(&host, repo.path(), "req_follow");
     let written = (0..5)
         .map(|index| {
             let id = format!("rule_race_{index}");
