@@ -1,7 +1,7 @@
 //! Characterization of the MCP wire surface, without a Rule binding.
 //!
-//! These tests pin the bytes that the MCP library writes for our server, so a
-//! library upgrade that changes them fails here. They speak raw JSON-RPC over
+//! These tests pin the JSON values and response shapes that the MCP library
+//! writes for our server, so a library upgrade that changes them fails here. They speak raw JSON-RPC over
 //! an in-memory stream and do not use the library's client.
 #![cfg(feature = "test-fixture")]
 
