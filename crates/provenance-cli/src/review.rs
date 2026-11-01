@@ -33,13 +33,20 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     }
     let root = camino::Utf8PathBuf::from_path_buf(options.repo.clone())
         .map_err(|path| anyhow::anyhow!("repository path {} is not UTF-8", path.display()))?;
+    // The check port reads the canonical working tree, as the opened repository does.
+    let working_tree = dunce::canonicalize(&root)
+        .ok()
+        .and_then(|path| camino::Utf8PathBuf::from_path_buf(path).ok())
+        .unwrap_or_else(|| root.clone());
     let signals = ShutdownSignals::install()?;
     let host = provenance_review::start(HostOptions {
-        place: RepositoryScope::new(root.clone(), options.scope),
+        place: RepositoryScope::new(root, options.scope),
         repository_id: options.repository_id,
         port: options.port,
         check_port: Arc::new(crate::handlers::check::RepositoryCheckPort::new(
-            root, false, None,
+            working_tree,
+            false,
+            None,
         )),
     })
     .await?;
