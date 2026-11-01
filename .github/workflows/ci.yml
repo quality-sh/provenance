@@ -867,6 +867,69 @@ jobs:
           retention-days: 1
           if-no-files-found: warn
 
+  statement-check:
+    timeout-minutes: 15
+    name: Statement Check
+    needs: [changes, build-cli-linux]
+    # Statements change only in the graph state, and the policy filter
+    # includes that state.
+    if: github.event_name == 'pull_request' && needs.changes.outputs.policy == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: provenance-cli-x86_64-unknown-linux-gnu
+          path: target/debug
+      - run: chmod +x target/debug/provenance
+      # The index file name holds the source digest and the extractor
+      # version, so the key holds the extractor version with the data digest.
+      - name: Read the dictionary identity from the committed reference
+        id: dictionary
+        run: |
+          key=$(jq -er '"ste100-index-\(.data_sha256)-\(.extractor_version)"' .provenance/state/dictionary.json)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore the dictionary index
+        id: restore-dictionary
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ste100-index
+          key: ${{ steps.dictionary.outputs.key }}
+      # The PDF and the index are licensed material: the step does not print
+      # them, and no step uploads them. Only the index goes into the cache.
+      - name: Download the dictionary and make the index
+        if: steps.restore-dictionary.outputs.cache-hit != 'true'
+        env:
+          PROVENANCE_STE100_INDEX_DIR: ${{ runner.temp }}/ste100-index
+          PROVENANCE_STE100_ASSET_DIR: ${{ runner.temp }}/ste100-asset
+          SCRATCH: ${{ runner.temp }}/ste100-init
+        run: |
+          mkdir -p "$SCRATCH"
+          target/debug/provenance init --path "$SCRATCH" --scope default --path-prefix . > /dev/null
+          rm -rf "$PROVENANCE_STE100_ASSET_DIR"
+          identity='del(.technical_names)'
+          if ! cmp -s <(jq -S "$identity" .provenance/state/dictionary.json) \
+            <(jq -S "$identity" "$SCRATCH/.provenance/state/dictionary.json" 2>/dev/null); then
+            echo "::error::The downloaded dictionary does not match the committed reference."
+            exit 1
+          fi
+          rm -rf "$SCRATCH"
+      - name: Save the dictionary index
+        if: steps.restore-dictionary.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ste100-index
+          key: ${{ steps.dictionary.outputs.key }}
+      # On pull_request the checkout holds the synthetic merge commit, so the
+      # check reads only the statements that the pull request adds or changes.
+      - name: Check new and changed statements
+        env:
+          PROVENANCE_STE100_INDEX_DIR: ${{ runner.temp }}/ste100-index
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: target/debug/provenance check --strict --statements --base "$BASE_SHA" --repo .
+
   rust-sdk:
     timeout-minutes: 30
     name: Rust SDK example
@@ -1326,6 +1389,7 @@ jobs:
       - build-cli-platforms
       - crap-quality
       - rule-coverage
+      - statement-check
       - rust-sdk
       - typescript-sdk
       - typescript-sdk-example
