@@ -28,10 +28,7 @@ fn review_approval_rejects_a_canonical_artifact_for_another_record_kind() {
         .unwrap_err();
 
         assert!(
-            matches!(
-                WriteError(error).safe(),
-                WriteFailure::InvalidUpdate { .. }
-            ),
+            matches!(WriteError(error).safe(), WriteFailure::InvalidUpdate { .. }),
             "{artifact_type}"
         );
     }
