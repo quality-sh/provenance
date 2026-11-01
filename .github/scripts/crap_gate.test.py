@@ -342,7 +342,7 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("NEXTEST_PROFILE: ci", self.test_job)
         self.assertIn("mkdir -p target/crap", self.test_job)
         self.assertIn(
-            "cargo llvm-cov nextest --workspace --all-features --no-fail-fast --lcov",
+            "cargo llvm-cov nextest \"${packages[@]}\" --all-features --no-fail-fast --lcov",
             self.test_job,
         )
         self.assertIn("name: rust-lcov", self.test_job)
