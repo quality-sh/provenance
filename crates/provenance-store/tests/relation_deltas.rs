@@ -227,7 +227,9 @@ fn absent_removals_still_validate_missing_wrong_kind_and_forbidden_targets() {
             "forbidden_list_target",
             json!({"depends_on": {"remove": ["req_cycle"]}}),
             provenance_store::write_error::WriteFailure::InvalidUpdate {
-                message: String::new(),
+                message:
+                    "depends_on forms a cycle: req_cycle -> req_cycle_middle -> req_a -> req_cycle"
+                        .into(),
             },
         ),
         (
@@ -243,8 +245,8 @@ fn absent_removals_still_validate_missing_wrong_kind_and_forbidden_targets() {
     ] {
         let error = store.save_requirement(relations(&store, edit)).unwrap_err();
         assert_eq!(
-            std::mem::discriminant(&provenance_store::write_error::WriteError(error).safe()),
-            std::mem::discriminant(&expected),
+            serde_json::to_value(provenance_store::write_error::WriteError(error).safe()).unwrap(),
+            serde_json::to_value(expected).unwrap(),
             "{case}"
         );
         assert_eq!(record(&store), before);
