@@ -49,6 +49,26 @@ fn concerns_resolve_independently_and_reopen_without_record_changes() {
 }
 
 #[test]
+#[provenance_macros::verifies("rule_record_comments_have_separate_reply_threads", examples)]
+fn a_new_discussion_and_its_replies_leave_sibling_discussions_unchanged() {
+    let (_temp, store) = fixture();
+    let a = start(&store, "concern_a");
+    let a = store.write_discussion(reply(&a, "reply_a")).unwrap();
+    let b = start(&store, "concern_b");
+    let b = store.write_discussion(reply(&b, "reply_b")).unwrap();
+    let discussions = store.list_discussions(&scope()).unwrap();
+    assert_eq!(discussions.len(), 2);
+    assert!(discussions.contains(&a), "a sibling write changed {a:?}");
+    assert!(discussions.contains(&b));
+    assert_eq!((a.version, a.message_ids.len()), (2, 2));
+    let threads = store.list_threads(&scope()).unwrap();
+    assert_eq!(threads.len(), 1, "a new Discussion opened a new Thread");
+    assert_eq!(threads[0].status, ThreadStatus::Active);
+    assert_eq!(a.thread_id, threads[0].id);
+    assert_eq!(b.thread_id, threads[0].id);
+}
+
+#[test]
 fn reply_and_resolve_race_has_one_winner() {
     let (_temp, store) = fixture();
     let a = start(&store, "root");
