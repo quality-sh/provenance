@@ -53,3 +53,4 @@ mod test_support;
 pub const VALIDATION_VERSION: u32 = 2;
 
 pub mod write_error;
+// CI measurement: store change.
