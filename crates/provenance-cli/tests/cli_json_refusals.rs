@@ -156,6 +156,35 @@ fn text_mode_keeps_the_failure_and_the_scoped_hint() {
         .stderr(predicate::str::contains("Error: unknown scope"));
 }
 
+#[test]
+#[verifies("rule_invalid_update_refusal_gives_reason", examples)]
+fn an_invalid_update_refusal_gives_the_reason() {
+    let (_directory, repo) = init();
+    json_output(provenance().args([
+        "topic_shared",
+        "create",
+        "--type",
+        "topic",
+        "--repo",
+        &repo,
+        "--requirement-id",
+        "req_a",
+        "--title",
+        "Shared topic",
+        "--format",
+        "json",
+    ]));
+
+    let error = refusal(&repo, &["topic_shared", "release", "--actor", "alice"]);
+    assert_eq!(
+        error,
+        serde_json::json!({
+            "error": {"kind":"invalid_update", "message":"topic topic_shared is not claimed"},
+            "meta": {},
+        })
+    );
+}
+
 // Implementation aid: an error outside the operation, such as a missing graph, stays text.
 #[test]
 fn a_missing_graph_stays_a_text_error_in_json_mode() {

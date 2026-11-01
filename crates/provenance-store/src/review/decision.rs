@@ -4,7 +4,7 @@ mod resolution;
 mod submission;
 mod withdrawal;
 
-use crate::write_error::{SourceFailure, WriteFailure};
+use crate::write_error::WriteFailure;
 use provenance_core::{IdeationTargetType, NodeType, StableId};
 
 /// Refuses a review submission addressed through another record.
@@ -17,10 +17,9 @@ fn validate_submission_address(
     if addressed.is_none_or(|(kind, id)| kind == proposal_kind && id == proposal_id_value) {
         return Ok(());
     }
-    Err(SourceFailure::wrap(
-        WriteFailure::InvalidUpdate,
-        anyhow::anyhow!("the review submission does not belong to the addressed record"),
-    ))
+    Err(WriteFailure::invalid_update(anyhow::anyhow!(
+        "the review submission does not belong to the addressed record"
+    )))
 }
 
 const fn target_type(kind: NodeType) -> IdeationTargetType {

@@ -1,4 +1,4 @@
-import { OperationError } from "./client.js";
+import { HttpClient, OperationError } from "./client.js";
 import { recordingHost } from "./http-recorder.test-helper.js";
 import { fixtureSettings } from "./http-fixture.test-helper.js";
 import assert from "node:assert/strict";
@@ -711,4 +711,31 @@ test("an active spec Rule reports the store refusal for a proposed Resolution", 
     );
     return true;
   });
+});
+
+test("an SDK release of an unclaimed Topic gives the store reason", async () => {
+  verifies("rule_invalid_update_refusal_gives_reason", "examples");
+  const repo = repository();
+  const settings = await fixtureSettings(repo);
+  catalogWrite(repo, ["requirements", "create"], requirementData(
+    "req_shared", "The shared requirement stands",
+  ));
+  catalogWrite(repo, ["topics", "create"], {
+    id: "topic_shared", requirement_id: "req_shared", title: "Shared topic", status: "open", links: [],
+  });
+  const client = await HttpClient.connectWithBearer(settings.endpoint!, settings.bearer!, fetch, {
+    repository: settings.repositoryId, scope: settings.scope,
+  });
+
+  await assert.rejects(
+    client.releaseTopic({ id: "topic_shared", data: { actor: "alice" } }),
+    (error: unknown) => {
+      assert.ok(error instanceof OperationError);
+      assert.deepEqual(error.failure.error, {
+        kind: "invalid_update", message: "topic topic_shared is not claimed",
+      });
+      assert.equal(error.message, "invalid_update: topic topic_shared is not claimed");
+      return true;
+    },
+  );
 });

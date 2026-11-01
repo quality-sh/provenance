@@ -219,14 +219,21 @@ fn an_absent_native_clear_still_validates_the_named_target() {
             "source_schads",
             crate::write_error::WriteFailure::MissingReference,
         ),
-        ("req_back", crate::write_error::WriteFailure::InvalidUpdate),
+        (
+            "req_back",
+            crate::write_error::WriteFailure::InvalidUpdate {
+                message:
+                    "depends_on forms a cycle: req_back -> req_middle -> req_overtime -> req_back"
+                        .into(),
+            },
+        ),
     ] {
         let error = store
             .clear_requirement_depends_on(&scope, &sid("req_overtime"), &sid(target))
             .unwrap_err();
         assert_eq!(
-            std::mem::discriminant(&crate::write_error::WriteError(error).safe()),
-            std::mem::discriminant(&expected)
+            serde_json::to_value(crate::write_error::WriteError(error).safe()).unwrap(),
+            serde_json::to_value(expected).unwrap()
         );
         let after = store
             .list_requirements(&scope)

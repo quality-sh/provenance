@@ -1,11 +1,13 @@
 //! A shaping claim has one holder; another actor cannot take or drop it.
 #![cfg(feature = "test-fixture")]
 mod support {
+    pub mod mcp;
     pub mod records;
     pub mod resource_http;
 }
 use provenance_macros::verifies;
 use serde_json::{json, Value};
+use support::mcp::Session;
 use support::records::Repository;
 use support::resource_http::{call, host};
 
@@ -21,6 +23,7 @@ async fn act(
 
 #[tokio::test]
 #[verifies("rule_claim_holder_exclusive", examples)]
+#[verifies("rule_invalid_update_refusal_gives_reason", examples)]
 async fn a_claim_has_one_holder_and_only_the_holder_releases_it() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
@@ -55,7 +58,15 @@ async fn a_claim_has_one_holder_and_only_the_holder_releases_it() {
 
         let (status, unclaimed) = act(&host, record, "release", "alice").await;
         assert_eq!(status, 400, "{record}: {unclaimed}");
-        assert_eq!(unclaimed["error"]["kind"], "invalid_update");
+        let id = record.rsplit('/').next().unwrap();
+        let kind = id.split('_').next().unwrap();
+        assert_eq!(
+            unclaimed,
+            json!({
+                "error": {"kind":"invalid_update", "message":format!("{kind} {id} is not claimed")},
+                "meta": {},
+            })
+        );
     }
 }
 
@@ -87,4 +98,25 @@ async fn a_release_names_its_actor() {
     let (status, read) = call(&host, "GET", "/topics/topic_shared", None).await;
     assert_eq!(status, 200, "{read}");
     assert_eq!(read["data"]["claimed_by"], "alice");
+}
+
+#[tokio::test]
+#[verifies("rule_invalid_update_refusal_gives_reason", examples)]
+async fn an_mcp_release_of_an_unclaimed_topic_gives_the_reason() {
+    let repo = Repository::new("The shared graph is readable.");
+    repo.all_kinds();
+    let session = Session::start(host(&repo, true)).await;
+    let refused = support::mcp::call(
+        &session.client,
+        "release",
+        json!({"target":"topic_shared","data":{"actor":"alice"}}),
+    )
+    .await;
+    assert_eq!(refused.is_error, Some(true), "{refused:?}");
+    assert_eq!(
+        refused.structured_content.as_ref().unwrap()["error"],
+        json!({"kind":"invalid_update", "message":"topic topic_shared is not claimed"}),
+        "{refused:?}"
+    );
+    session.close().await;
 }

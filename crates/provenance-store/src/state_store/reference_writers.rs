@@ -44,8 +44,7 @@ fn ensure_no_cycle<T: RelationOwner>(
     targets: &[StableId],
 ) -> anyhow::Result<()> {
     if let Some(cycle) = cycle_with_added_edges(records, name, owner, targets) {
-        return Err(crate::write_error::SourceFailure::wrap(
-            crate::write_error::WriteFailure::InvalidUpdate,
+        return Err(crate::write_error::WriteFailure::invalid_update(
             anyhow::anyhow!("{}", cycle_refusal(name, &cycle)),
         ));
     }

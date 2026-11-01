@@ -138,10 +138,12 @@ fn failed_edits_return_typed_errors_without_uncertainty() {
         .unwrap_err();
     let failure = WriteError(error).safe();
     assert!(!matches!(failure, WriteFailure::WriteFailed));
-    assert!(
-        matches!(failure, WriteFailure::InvalidUpdate),
-        "{failure:?}"
-    );
+    match failure {
+        WriteFailure::InvalidUpdate { message } => {
+            assert_eq!(message, "refines forms a cycle: req_a -> req_b -> req_a");
+        }
+        other => panic!("{other:?}"),
+    }
 
     let state = store.requirement_edit_state(&scope(), &id()).unwrap();
     assert!(state.revision.is_some());

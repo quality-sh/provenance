@@ -188,10 +188,9 @@ fn validate_decision_input(
     input: &DecideRecordReview,
 ) -> anyhow::Result<()> {
     if input.decision == DispositionDecision::Accepted && input.rationale.is_some() {
-        return Err(SourceFailure::wrap(
-            WriteFailure::InvalidUpdate,
-            anyhow::anyhow!("an approval does not take a rationale"),
-        ));
+        return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+            "an approval does not take a rationale"
+        )));
     }
     if let Some(artifact) = &input.canonical_artifact {
         let artifact_kind = match artifact.artifact_type {
@@ -205,10 +204,9 @@ fn validate_decision_input(
             CanonicalArtifactType::Question => NodeType::Question,
         };
         if artifact_kind != kind || artifact.artifact_id != *record_id {
-            return Err(SourceFailure::wrap(
-                WriteFailure::InvalidUpdate,
-                anyhow::anyhow!("the approval artifact is not the reviewed record"),
-            ));
+            return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+                "the approval artifact is not the reviewed record"
+            )));
         }
     }
     Ok(())
