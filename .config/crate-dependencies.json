@@ -59,6 +59,10 @@
     ],
     "provenance-transport": [
       "provenance-cli"
+    ],
+    "provenance-review": [
+      "provenance-cli",
+      "clap"
     ]
   },
   "crates": {
@@ -76,6 +80,7 @@
         "provenance-macros",
         "provenance-porcelain",
         "provenance-report",
+        "provenance-review",
         "provenance-scanner",
         "provenance-ste100",
         "provenance-store",
@@ -164,6 +169,22 @@
         "provenance-store"
       ],
       "dev-dependencies": [
+        "tempfile"
+      ]
+    },
+    "provenance-review": {
+      "dependencies": [
+        "provenance-core",
+        "provenance-macros",
+        "provenance-porcelain",
+        "provenance-store",
+        "provenance-transport",
+        "tokio",
+        "ureq",
+        "windows-sys"
+      ],
+      "dev-dependencies": [
+        "provenance-transport",
         "tempfile"
       ]
     },

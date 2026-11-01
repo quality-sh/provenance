@@ -23,7 +23,7 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     let host =
         provenance_transport::local_host::discover(context.repo.as_std_path(), &context.scope)?
             .context(provenance_porcelain::get::NO_REVIEW_HOST)?;
-    let key = provenance_cli::notify::read_launch_key(host.instance_nonce())?;
+    let key = provenance_review::launch_key::read(host.instance_nonce())?;
     let mut endpoint = host.endpoint().clone();
     if endpoint.set_scheme("ws").is_err() {
         anyhow::bail!("invalid host endpoint");

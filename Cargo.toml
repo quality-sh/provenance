@@ -13,6 +13,7 @@ members = [
     "crates/provenance-contract",
     "crates/provenance-http-client",
     "crates/provenance-report",
+    "crates/provenance-review",
 ]
 resolver = "2"
 
@@ -93,6 +94,7 @@ provenance-core = { path = "crates/provenance-core", version = "0.3.2" }
 provenance-macros = { path = "crates/provenance-macros", version = "0.3.2" }
 provenance-porcelain = { path = "crates/provenance-porcelain", version = "0.3.2" }
 provenance-report = { path = "crates/provenance-report", version = "0.3.2" }
+provenance-review = { path = "crates/provenance-review", version = "0.3.2" }
 provenance-scanner = { path = "crates/provenance-scanner", version = "0.3.2" }
 provenance-ste100 = { path = "crates/provenance-ste100", version = "0.3.2" }
 provenance-store = { path = "crates/provenance-store", version = "0.3.2" }

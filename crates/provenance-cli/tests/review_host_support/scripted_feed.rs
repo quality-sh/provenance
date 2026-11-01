@@ -6,13 +6,11 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use provenance_review::owner_file;
 use provenance_transport::local_host::{LocalHostRegistration, IDENTITY_ROUTE};
 use serde_json::Value;
 use std::io::Write as _;
 
-#[allow(dead_code)]
-#[path = "../../src/owner_file.rs"]
-mod owner_file;
 use std::{
     path::Path,
     sync::{Arc, Mutex},

@@ -2447,6 +2447,7 @@ dependencies = [
  "provenance-macros",
  "provenance-porcelain",
  "provenance-report",
+ "provenance-review",
  "provenance-scanner",
  "provenance-ste100",
  "provenance-store",
@@ -2578,6 +2579,26 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "provenance-review"
+version = "0.3.2"
+dependencies = [
+ "anyhow",
+ "camino",
+ "provenance-core",
+ "provenance-macros",
+ "provenance-porcelain",
+ "provenance-store",
+ "provenance-transport",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "ureq",
+ "url",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

@@ -39,6 +39,7 @@ provenance-core.workspace = true
 provenance-macros.workspace = true
 provenance-porcelain.workspace = true
 provenance-report.workspace = true
+provenance-review.workspace = true
 provenance-scanner.workspace = true
 provenance-ste100.workspace = true
 provenance-contract.workspace = true

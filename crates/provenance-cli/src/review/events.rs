@@ -92,7 +92,10 @@ impl ReviewEvents {
         axum::Router::new()
             .route("/review-events", get(upgrade))
             .route("/review-navigation", post(navigate))
-            .route(provenance_cli::notify::DELIVERIES_ROUTE, post(deliveries))
+            .route(
+                provenance_review::notify::DELIVERIES_ROUTE,
+                post(deliveries),
+            )
             .with_state(self.state.clone())
     }
 

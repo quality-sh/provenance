@@ -80,7 +80,7 @@ impl Deliveries {
                 root,
                 context,
                 epoch: epoch.to_owned(),
-                codex_home: provenance_cli::notify::codex_home(),
+                codex_home: provenance_review::notify::codex_home(),
                 subscribers,
                 threads: Mutex::new(HashMap::new()),
             }),
