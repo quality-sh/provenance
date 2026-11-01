@@ -41,10 +41,14 @@ pub(super) fn requirement(store: &StateStore, scope: &ScopeId, id: &str) -> Requ
 }
 
 pub(super) fn assert_invalid_update(error: anyhow::Error) {
-    assert!(
-        matches!(WriteError(error).safe(), WriteFailure::InvalidUpdate),
-        "expected invalid_update"
-    );
+    invalid_update_message(error);
+}
+
+fn invalid_update_message(error: anyhow::Error) -> String {
+    match WriteError(error).safe() {
+        WriteFailure::InvalidUpdate { message } => message,
+        other => panic!("expected invalid_update, got {other:?}"),
+    }
 }
 
 /// Appends one record as a merge of two branches can leave it.
@@ -95,7 +99,10 @@ fn requirement_archive_stores_commit_and_refuses_live_status() {
             .unwrap(),
         )
         .unwrap_err();
-    assert_invalid_update(error);
+    assert_eq!(
+        invalid_update_message(error),
+        "archived Requirement status is terminal"
+    );
     assert_eq!(requirement(&store, &scope, "req_overtime"), archived);
 }
 
@@ -114,7 +121,10 @@ fn archived_requirement_refuses_a_changed_commit() {
             .unwrap(),
         )
         .unwrap_err();
-    assert_invalid_update(error);
+    assert_eq!(
+        invalid_update_message(error),
+        "archived Requirement commit cannot change"
+    );
     assert_eq!(requirement(&store, &scope, "req_overtime"), archived);
 }
 

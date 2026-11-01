@@ -21,6 +21,7 @@ async fn act(
 
 #[tokio::test]
 #[verifies("rule_claim_holder_exclusive", examples)]
+#[verifies("rule_invalid_update_refusal_gives_reason", examples)]
 async fn a_claim_has_one_holder_and_only_the_holder_releases_it() {
     let repo = Repository::new("The shared graph is readable.");
     repo.all_kinds();
@@ -55,7 +56,15 @@ async fn a_claim_has_one_holder_and_only_the_holder_releases_it() {
 
         let (status, unclaimed) = act(&host, record, "release", "alice").await;
         assert_eq!(status, 400, "{record}: {unclaimed}");
-        assert_eq!(unclaimed["error"]["kind"], "invalid_update");
+        let id = record.rsplit('/').next().unwrap();
+        let kind = id.split('_').next().unwrap();
+        assert_eq!(
+            unclaimed,
+            json!({
+                "error": {"kind":"invalid_update", "message":format!("{kind} {id} is not claimed")},
+                "meta": {},
+            })
+        );
     }
 }
 

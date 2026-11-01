@@ -12,7 +12,7 @@ use provenance_core::model::relations::RelationOwner;
 use provenance_core::ScopeId;
 
 fn invalid(message: &str) -> anyhow::Error {
-    SourceFailure::wrap(WriteFailure::InvalidUpdate, anyhow::anyhow!("{message}"))
+    WriteFailure::invalid_update(anyhow::anyhow!("{message}"))
 }
 
 fn owner_matches(saved: Option<&str>, supplied: Option<&str>) -> anyhow::Result<()> {

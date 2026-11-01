@@ -226,7 +226,9 @@ fn absent_removals_still_validate_missing_wrong_kind_and_forbidden_targets() {
         (
             "forbidden_list_target",
             json!({"depends_on": {"remove": ["req_cycle"]}}),
-            provenance_store::write_error::WriteFailure::InvalidUpdate,
+            provenance_store::write_error::WriteFailure::InvalidUpdate {
+                message: String::new(),
+            },
         ),
         (
             "missing_citation_target",

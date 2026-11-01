@@ -28,7 +28,9 @@ pub enum WriteFailure {
         report: provenance_ste100::Report,
     },
     InvalidDeclaration,
-    InvalidUpdate,
+    InvalidUpdate {
+        message: String,
+    },
     ApprovalEvidenceRequired {
         message: String,
     },
@@ -84,6 +86,15 @@ pub enum WriteFailure {
 }
 
 impl WriteFailure {
+    /// Refuses an update and gives the top-level text of `source` as the
+    /// reason. Nested causes stay in the native diagnostic.
+    #[provenance_macros::rule("rule_invalid_update_refusal_gives_reason")]
+    pub(crate) fn invalid_update(source: impl Into<anyhow::Error>) -> anyhow::Error {
+        let source = source.into();
+        let message = source.to_string();
+        SourceFailure::wrap(Self::InvalidUpdate { message }, source)
+    }
+
     pub(crate) fn invalid_field(field: &str) -> Self {
         Self::InvalidInput {
             field: Some(field.to_owned()),
@@ -266,6 +277,10 @@ impl schemars::JsonSchema for WriteError {
 }
 
 macro_rules! ensure {
+    (InvalidUpdate, $condition:expr, $($message:tt)*) => {
+        if !$condition { return Err($crate::write_error::WriteFailure::invalid_update(
+            anyhow::anyhow!($($message)*))); }
+    };
     ($kind:ident, $condition:expr, $($message:tt)*) => {
         if !$condition { return Err($crate::write_error::SourceFailure::wrap(
             $crate::write_error::WriteFailure::$kind, anyhow::anyhow!($($message)*))); }

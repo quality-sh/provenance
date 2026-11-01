@@ -1,9 +1,6 @@
 use super::read_budget::ensure_within_read_budget;
 use super::{ProposalDemand, StateStore, TopicClaim, UpdateQuestionInput};
-use crate::{
-    shards,
-    write_error::{SourceFailure, WriteFailure},
-};
+use crate::{shards, write_error::WriteFailure};
 use provenance_core::{Question, QuestionStatus, ScopeId, StableId, Topic, TopicStatus};
 
 pub(super) mod artifact_links;
@@ -38,13 +35,10 @@ impl StateStore {
             if let Some(blocking) =
                 claim_blocking_status(ShapingStatus::Topic(current_topic.status))
             {
-                return Err(SourceFailure::wrap(
-                    WriteFailure::InvalidUpdate,
-                    anyhow::anyhow!(
-                        "topic {} is {blocking} and cannot be claimed",
-                        current_topic.id.as_str()
-                    ),
-                ));
+                return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+                    "topic {} is {blocking} and cannot be claimed",
+                    current_topic.id.as_str()
+                )));
             }
             let surfaced_proposals =
                 held.surface_proposals(scope_id, &ProposalDemand::for_topic(&current_topic))?;
@@ -103,13 +97,10 @@ impl StateStore {
         self.mutate_question(scope_id, id, |question| {
             let status = ShapingStatus::Question(question.status);
             if let Some(blocking) = claim_blocking_status(status) {
-                return Err(SourceFailure::wrap(
-                    WriteFailure::InvalidUpdate,
-                    anyhow::anyhow!(
-                        "question {} is {blocking} and cannot be claimed",
-                        question.id.as_str()
-                    ),
-                ));
+                return Err(WriteFailure::invalid_update(anyhow::anyhow!(
+                    "question {} is {blocking} and cannot be claimed",
+                    question.id.as_str()
+                )));
             }
             ensure_claim_holder(
                 "question",
