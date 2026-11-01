@@ -1,3 +1,4 @@
+// Throwaway change to measure CI time. Do not merge.
 mod atomic_file;
 mod browser;
 mod catalog_cli;
