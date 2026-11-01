@@ -69,6 +69,48 @@ fn a_listed_technical_name_matches_with_other_case_and_a_possessive() {
 
 #[test]
 #[verifies("rule_ste_technical_names_accepted", examples)]
+fn a_listed_technical_name_of_more_than_one_word_passes() {
+    let phrase = format!("{UNAPPROVED_WORD} item");
+    let (_scratch, repo, index_directory) = setup(&[&phrase]);
+
+    for (id, statement) in [
+        ("req_phrase", format!("The {UNAPPROVED_WORD} item stops.")),
+        (
+            "req_phrase_folded",
+            format!(
+                "The {}  Item's cover stops.",
+                UNAPPROVED_WORD.to_uppercase()
+            ),
+        ),
+    ] {
+        let output = create_requirement(&repo, &index_directory, id, &statement);
+
+        assert!(
+            output.status.success(),
+            "Rule 1.1 must accept the listed phrase in {statement:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+#[verifies("rule_ste_technical_names_accepted", examples)]
+fn one_word_of_a_listed_phrase_alone_still_fails() {
+    let phrase = format!("{UNAPPROVED_WORD} item");
+    let (_scratch, repo, index_directory) = setup(&[&phrase]);
+    let statement = format!("The {UNAPPROVED_WORD} stops.");
+
+    let output = create_requirement(&repo, &index_directory, "req_part", &statement);
+
+    assert!(!output.status.success(), "the write must fail");
+    assert_eq!(
+        rejected_words(&statement, &error_json(&output)),
+        [UNAPPROVED_WORD]
+    );
+}
+
+#[test]
+#[verifies("rule_ste_technical_names_accepted", examples)]
 #[verifies("rule_ste_dictionary_unapproved_word", examples)]
 fn the_same_write_with_an_unlisted_unapproved_word_fails_and_names_the_word() {
     let (_scratch, repo, index_directory) = setup(&[UNAPPROVED_WORD]);
