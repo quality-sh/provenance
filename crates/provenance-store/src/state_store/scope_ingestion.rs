@@ -331,7 +331,6 @@ impl StateStore {
     /// store refuses: the import replaces a scope folder shard by shard, and
     /// only the swap of a stage publishes that as one change.
     #[rule("rule_scope_import_needs_a_staged_store")]
-    #[rule("rule_staged_sections_run_one_at_a_time")]
     fn with_staged_import<R>(
         &self,
         operation: impl FnOnce(&Self) -> anyhow::Result<R>,
