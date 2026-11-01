@@ -92,6 +92,18 @@ test('family hoisting shares current operation response families', async () => {
   assert.equal(schemas.ListRulesSearchSuccessStamp2, undefined);
 });
 
+test('an invalid_update failure carries the store message', async () => {
+  const document = JSON.parse(await readFile(new URL('../../contracts/operations/openapi.json', import.meta.url), 'utf8'));
+  const schemas = hoistSharedFamilies(document).components.schemas;
+
+  assert.deepEqual(schemas.FailureVariantInvalidUpdate, {
+    properties: { kind: { const: 'invalid_update', type: 'string' }, message: { type: 'string' } },
+    required: ['kind', 'message'],
+    type: 'object',
+  });
+  assert.ok(schemas.WriteFailure.oneOf.some(({ $ref }) => $ref === '#/components/schemas/FailureVariantInvalidUpdate'));
+});
+
 test('family hoisting shares equal groups when one operation differs', () => {
   const envelope = detail => ({
     properties: { error: { $ref: `#/components/schemas/${detail}` } },
