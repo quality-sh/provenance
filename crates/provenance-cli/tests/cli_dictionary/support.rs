@@ -195,3 +195,16 @@ fn build_pdf(approved: usize, unapproved: usize) -> Vec<u8> {
 
     writer.finish().expect("build the synthetic PDF")
 }
+
+/// Writes the project dictionary reference with a list of technical names.
+pub fn write_reference_with_technical_names(
+    repo: &Path,
+    dictionary: &DictionaryImport,
+    technical_names: &[&str],
+) {
+    let mut reference = serde_json::to_value(&dictionary.identity).unwrap();
+    reference["technical_names"] = serde_json::json!(technical_names);
+    let path = reference_path(repo);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, serde_json::to_vec_pretty(&reference).unwrap()).unwrap();
+}
