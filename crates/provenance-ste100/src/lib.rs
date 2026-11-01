@@ -212,14 +212,14 @@ fn unapproved_word_findings(
     dictionary: &DictionaryImport,
     technical_names: &[String],
 ) -> Vec<Finding> {
+    let names = vocabulary::technical_name_spans(text, technical_names);
     vocabulary::classify(text, protected, dictionary)
         .into_iter()
         .filter(|word_use| word_use.category == VocabularyCategory::Unapproved)
         .filter(|word_use| {
-            !is_technical_name(
-                &text[word_use.span.start..word_use.span.end],
-                technical_names,
-            )
+            !names
+                .iter()
+                .any(|name| name.start <= word_use.span.start && word_use.span.end <= name.end)
         })
         .map(|word_use| {
             let rejected = &text[word_use.span.start..word_use.span.end];
@@ -233,24 +233,6 @@ fn unapproved_word_findings(
             }
         })
         .collect()
-}
-
-/// Matches a word or phrase to a listed technical name with the dictionary
-/// folding: case, the spaces between words, and a possessive "'s".
-#[rule("rule_ste_technical_names_accepted")]
-fn is_technical_name(word: &str, technical_names: &[String]) -> bool {
-    let fold = |text: &str| {
-        text.split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" ")
-            .to_lowercase()
-    };
-    let folded = fold(word);
-    let base = folded.strip_suffix("\u{27}s").unwrap_or(&folded);
-    technical_names.iter().any(|name| {
-        let name = fold(name);
-        name == folded || name == base
-    })
 }
 
 fn sort_findings(findings: &mut [Finding]) {

@@ -47,6 +47,53 @@ pub fn classify(
     uses
 }
 
+/// Finds each listed technical name in the text, independent of the
+/// dictionary phrases. A name matches with the dictionary folding: case, the
+/// spaces between words, and a possessive "'s" on the last word.
+#[rule("rule_ste_technical_names_accepted")]
+pub fn technical_name_spans(text: &str, technical_names: &[String]) -> Vec<Span> {
+    let names: Vec<Vec<String>> = technical_names
+        .iter()
+        .map(|name| {
+            name.to_lowercase()
+                .split_whitespace()
+                .map(str::to_owned)
+                .collect()
+        })
+        .filter(|words: &Vec<String>| !words.is_empty())
+        .collect();
+    let tokens = scan_tokens(text);
+    let mut spans = Vec::new();
+    for (position, token) in tokens.iter().enumerate() {
+        for words in &names {
+            if name_matches(text, &tokens, position, words) {
+                spans.push(Span {
+                    start: token.start,
+                    end: tokens[position + words.len() - 1].end,
+                });
+            }
+        }
+    }
+    spans
+}
+
+fn name_matches(text: &str, tokens: &[Token], position: usize, words: &[String]) -> bool {
+    if position + words.len() > tokens.len() {
+        return false;
+    }
+    words.iter().enumerate().all(|(offset, word)| {
+        let token = &tokens[position + offset];
+        let last = offset + 1 == words.len();
+        let folded_matches = token.folded == *word
+            || (last && token.folded.strip_suffix("\u{27}s") == Some(word.as_str()));
+        let gap_is_space = offset == 0
+            || text[tokens[position + offset - 1].end..token.start]
+                .chars()
+                .all(char::is_whitespace);
+        folded_matches && gap_is_space
+    })
+}
+
 struct Token {
     start: usize,
     end: usize,
