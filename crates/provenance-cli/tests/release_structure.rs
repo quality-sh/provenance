@@ -151,7 +151,7 @@ fn release_workflow_uses_crates_io_trusted_publishing() {
 
     assert!(crates_job.contains("id-token: write"));
     assert!(crates_job
-        .contains("rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18"));
+        .contains("rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9"));
     assert!(crates_job.contains("CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}"));
     assert!(!workflow.contains("CRATES_IO_BOOTSTRAP_TOKEN"));
 }
