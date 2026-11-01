@@ -615,13 +615,47 @@ jobs:
         run: rm -rf target/tests
 
   # Default-features lane: runs the dogfood absence tests, which assert the
-  # dev-only command does not exist in feature-less builds.
+  # dev-only command does not exist in feature-less builds. The main ruleset
+  # requires this check name. The suite runs in shards in the next job, and
+  # this job passes only when every shard passed or the selection skipped
+  # them. ci_ok.test.py tests this decision.
   test-default-features:
-    timeout-minutes: 45
+    timeout-minutes: 10
     name: Default-features CLI test
+    needs: [changes, test-default-features-shard]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Check the shard results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: python3 .github/scripts/ci_ok.py
+
+  # The one-source distribution test runs nested Cargo builds and a package
+  # check, and takes most of the suite time. It runs in its own shard, in
+  # parallel with all other provenance-cli tests. The ci profile leaves it out
+  # of the other shard. Each shard stops its tests before the job timeout, so
+  # a stuck test fails with a message and the report steps still run.
+  test-default-features-shard:
+    timeout-minutes: 45
+    name: Default-features CLI test (${{ matrix.shard }})
     needs: changes
     if: github.event_name != 'pull_request' || (needs.changes.outputs.rust == 'true' && contains(fromJSON(needs.changes.outputs.test-crates), 'provenance-cli'))
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: distribution
+            tests: --ignore-default-filter --test cli_skills_single_source
+            minutes: 30
+          - shard: other
+            tests: ""
+            minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: ./.github/actions/setup-socket-firewall
@@ -632,23 +666,55 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
+      # Only the other shard saves: it builds every provenance-cli test
+      # target, and the doc-tests and compile-fail jobs restore this cache.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           prefix-key: v1
           shared-key: test-default-features
           add-job-id-key: "false"
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 'other' }}
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
+      - name: Install nextest
+        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        with:
+          tool: nextest@0.9.143
       - name: Install Codex for the review notify tests
         run: sfw npm install --global --no-audit --no-fund @openai/codex@0.159.1
-      - run: cargo test -p provenance-cli --no-fail-fast --timings
+      - name: Test the CLI with default features
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARD_TESTS: ${{ matrix.tests }}
+          MINUTES: ${{ matrix.minutes }}
+        run: |
+          read -ra tests <<< "$SHARD_TESTS"
+          status=0
+          timeout --kill-after=1m "${MINUTES}m" \
+            cargo nextest run --profile ci -p provenance-cli --no-fail-fast --timings "${tests[@]}" \
+            || status=$?
+          if [[ $status -eq 124 || $status -eq 137 ]]; then
+            echo "::error title=Default-features CLI test timeout::The $SHARD shard did not finish in $MINUTES minutes. The nextest output above names the tests that were still running."
+          fi
+          exit "$status"
+      - name: Test documentation
+        if: matrix.shard == 'other'
+        timeout-minutes: 10
+        run: cargo test -p provenance-cli --doc --no-fail-fast
+      - name: Save the test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results-default-features-${{ matrix.shard }}
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: warn
+          retention-days: 30
       - name: Save Cargo timing reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: cargo-timings-test-default-features
+          name: cargo-timings-test-default-features-${{ matrix.shard }}
           path: target/cargo-timings/*.html
           if-no-files-found: warn
           retention-days: 30
@@ -1472,6 +1538,7 @@ jobs:
       - test
       - compile-fail
       - test-default-features
+      - test-default-features-shard
       - doc-tests
       - build-cli-linux
       - build-cli-platforms

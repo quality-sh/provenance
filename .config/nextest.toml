@@ -2,7 +2,8 @@
 # Bound process concurrency even when the runner receives extra CPUs.
 test-threads = 8
 # The single-source process tests run a full nested Cargo build. The
-# Default-features CLI test job runs them once per CI run.
+# distribution shard of the Default-features CLI test runs them once per CI
+# run; the other shard runs the rest of the provenance-cli tests.
 default-filter = 'not binary(cli_skills_single_source)'
 
 [profile.ci.junit]
