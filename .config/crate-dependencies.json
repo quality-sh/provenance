@@ -32,6 +32,7 @@
       "provenance-contract",
       "provenance-transport",
       "provenance-cli",
+      "provenance-review",
       "tokio",
       "axum"
     ],
@@ -39,12 +40,14 @@
       "provenance-contract",
       "provenance-transport",
       "provenance-cli",
+      "provenance-review",
       "axum",
       "rmcp"
     ],
     "provenance-contract": [
       "provenance-transport",
       "provenance-cli",
+      "provenance-review",
       "tokio",
       "axum",
       "rmcp"
@@ -54,11 +57,13 @@
       "provenance-contract",
       "provenance-transport",
       "provenance-cli",
+      "provenance-review",
       "clap",
       "rmcp"
     ],
     "provenance-transport": [
-      "provenance-cli"
+      "provenance-cli",
+      "provenance-review"
     ],
     "provenance-review": [
       "provenance-cli",
