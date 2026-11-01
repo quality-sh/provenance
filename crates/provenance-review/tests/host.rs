@@ -68,12 +68,15 @@ async fn a_started_host_signs_a_page_in_serves_assets_and_leaves_no_record_after
             .as_str()
             .unwrap()
             .to_owned();
-        let config: Value = ureq::get(&format!("{endpoint}/review-config"))
-            .set("Authorization", &format!("Bearer {session}"))
-            .call()
-            .unwrap()
-            .into_json()
-            .unwrap();
+        let config: Value = serde_json::from_str(
+            &ureq::get(&format!("{endpoint}/review-config"))
+                .set("Authorization", &format!("Bearer {session}"))
+                .call()
+                .unwrap()
+                .into_string()
+                .unwrap(),
+        )
+        .unwrap();
         let page = ureq::get(&format!("{endpoint}/")).call().unwrap();
         let mut bytes = Vec::new();
         std::io::Read::read_to_end(&mut page.into_reader(), &mut bytes).unwrap();
@@ -119,12 +122,13 @@ async fn a_started_host_signs_a_page_in_serves_assets_and_leaves_no_record_after
 }
 
 fn post(endpoint: &str, route: &str, body: &Value) -> Value {
-    ureq::post(&format!("{endpoint}{route}"))
+    let reply = ureq::post(&format!("{endpoint}{route}"))
         .set("Content-Type", "application/json")
         .send_string(&body.to_string())
         .unwrap()
-        .into_json()
-        .unwrap()
+        .into_string()
+        .unwrap();
+    serde_json::from_str(&reply).unwrap()
 }
 
 /// Points every platform's per-user cache at one isolated directory.
