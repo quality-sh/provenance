@@ -2,17 +2,17 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::sync::LazyLock;
-use tokio::io::AsyncWriteExt as _;
+use tokio::io::{AsyncWrite, AsyncWriteExt as _};
 
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
-pub(in crate::review) enum Continuity {
+pub(in crate::host) enum Continuity {
     Current,
     Unknown,
 }
 
 #[derive(Serialize)]
-pub(in crate::review) struct Document {
+pub(in crate::host) struct Document {
     pub epoch: String,
     pub sequence: u64,
     pub continuity: Continuity,
@@ -23,7 +23,7 @@ pub(in crate::review) struct Document {
 
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
-pub(in crate::review) enum OutputFrame {
+pub(in crate::host) enum OutputFrame {
     State {
         #[serde(flatten)]
         document: Document,
@@ -72,12 +72,15 @@ static CONTRACT: LazyLock<jsonschema::Validator> = LazyLock::new(|| {
     jsonschema::draft7::new(&schema).expect("follow contract is a valid schema")
 });
 
-pub(in crate::review) async fn emit(frame: &OutputFrame) -> anyhow::Result<()> {
+/// Writes one frame as a JSON line after the contract check.
+pub(in crate::host) async fn emit(
+    output: &mut (impl AsyncWrite + Unpin),
+    frame: &OutputFrame,
+) -> anyhow::Result<()> {
     let value = serde_json::to_value(frame)?;
     anyhow::ensure!(CONTRACT.is_valid(&value), "invalid follow output frame");
     let mut bytes = serde_json::to_vec(&value)?;
     bytes.push(b'\n');
-    let mut output = tokio::io::stdout();
     output.write_all(&bytes).await?;
     output.flush().await?;
     Ok(())

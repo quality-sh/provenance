@@ -73,7 +73,6 @@
         "dunce",
         "fs2",
         "jsonschema",
-        "notify",
         "open",
         "provenance-contract",
         "provenance-core",
@@ -89,7 +88,6 @@
         "rustix",
         "tempfile",
         "tokio",
-        "tokio-tungstenite",
         "ureq",
         "walkdir",
         "windows-sys"
@@ -175,12 +173,16 @@
     "provenance-review": {
       "dependencies": [
         "axum",
+        "dunce",
+        "jsonschema",
+        "notify",
         "provenance-core",
         "provenance-macros",
         "provenance-porcelain",
         "provenance-store",
         "provenance-transport",
         "tokio",
+        "tokio-tungstenite",
         "ureq",
         "windows-sys"
       ],

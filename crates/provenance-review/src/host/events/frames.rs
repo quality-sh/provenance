@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
-pub(in crate::review) enum Frame {
+pub(in crate::host) enum Frame {
     Ready {
         epoch: String,
         sequence: u64,

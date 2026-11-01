@@ -4,26 +4,34 @@ use super::events::{
     output::{emit, OutputFrame},
     stream::Follower,
 };
+use crate::RepositoryScope;
 use anyhow::Context as _;
 use futures_util::StreamExt;
-use provenance_cli::repo_context::RepoContext;
 use provenance_macros::rule;
 use provenance_porcelain::get::GetInput;
+use std::future::Future;
+use tokio::io::AsyncWrite;
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
-/// Streams saved document state when the repository host sends an invalidation.
+/// Streams saved document state to `output` when the repository host sends an invalidation.
+/// The stream ends with success when `stop` completes.
 #[rule("rule_review_follow_push")]
-pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
+pub async fn follow(
+    place: &RepositoryScope,
+    input: GetInput,
+    mut output: impl AsyncWrite + Unpin + Send,
+    stop: impl Future<Output = ()> + Send,
+) -> anyhow::Result<()> {
     anyhow::ensure!(
         input.max_depth.is_none() && input.returned_kinds.is_empty(),
         "review follow does not accept --depth or --kind"
     );
     let limit = input.limit.unwrap_or(50);
     anyhow::ensure!(limit > 0, "--limit must be positive");
-    let host =
-        provenance_transport::local_host::discover(context.repo.as_std_path(), &context.scope)?
-            .context(provenance_porcelain::get::NO_REVIEW_HOST)?;
-    let key = provenance_review::launch_key::read(host.instance_nonce())?;
+    let host = place
+        .host()?
+        .context(provenance_porcelain::get::NO_REVIEW_HOST)?;
+    let key = crate::launch_key::read(host.instance_nonce())?;
     let mut endpoint = host.endpoint().clone();
     if endpoint.set_scheme("ws").is_err() {
         anyhow::bail!("invalid host endpoint");
@@ -38,15 +46,11 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
         .context("cannot subscribe to the review host")?;
     let mut follower = Follower::new(host.instance_nonce());
     let mut read_failure = None;
-    let interrupt = tokio::signal::ctrl_c();
-    tokio::pin!(interrupt);
+    tokio::pin!(stop);
     let result: anyhow::Result<()> = async {
         loop {
             let incoming = tokio::select! {
-                signal = &mut interrupt => {
-                    signal.context("cannot install the Ctrl-C handler")?;
-                    return Ok(());
-                },
+                () = &mut stop => return Ok(()),
                 frame = socket.next() => frame,
             };
             let Some(incoming) = incoming else { anyhow::bail!("review host disconnected"); };
@@ -56,12 +60,9 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
                 _ => continue,
             };
             tokio::select! {
-                signal = &mut interrupt => {
-                    signal.context("cannot install the Ctrl-C handler")?;
-                    return Ok(());
-                },
+                () = &mut stop => return Ok(()),
                 result = async {
-                    let frames = match follower.step(context, &input.target, limit, &frame).await {
+                    let frames = match follower.step(place, &input.target, limit, &frame).await {
                         Ok(frames) => frames,
                         Err(error) => {
                             let (epoch, sequence) = follower.position();
@@ -69,7 +70,7 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
                             return Err(error);
                         }
                     };
-                    for frame in frames { emit(&frame).await?; }
+                    for frame in frames { emit(&mut output, &frame).await?; }
                     Ok::<(), anyhow::Error>(())
                 } => result?,
             }
@@ -77,7 +78,11 @@ pub async fn run(context: &RepoContext, input: GetInput) -> anyhow::Result<()> {
     }.await;
     let emitted = if result.is_err() {
         let (epoch, sequence) = follower.position();
-        emit(&read_failure.unwrap_or_else(|| OutputFrame::disconnected(epoch, sequence))).await
+        emit(
+            &mut output,
+            &read_failure.unwrap_or_else(|| OutputFrame::disconnected(epoch, sequence)),
+        )
+        .await
     } else {
         Ok(())
     };

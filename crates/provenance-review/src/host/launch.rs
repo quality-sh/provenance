@@ -37,14 +37,14 @@ pub struct LaunchKey {
 impl LaunchKey {
     /// Writes a new key into an owner-only file that names this host instance.
     pub fn publish(nonce: &str) -> anyhow::Result<Self> {
-        let path = provenance_review::launch_key::path(nonce)?;
+        let path = crate::launch_key::path(nonce)?;
         let directory = path.parent().expect("key file has a parent");
         std::fs::create_dir_all(directory)
             .with_context(|| format!("cannot create {}", directory.display()))?;
         #[cfg(unix)]
         std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700))?;
         let value = secret();
-        let file = provenance_review::owner_file::create(&path);
+        let file = crate::owner_file::create(&path);
         let mut file = file
             .with_context(|| format!("cannot create the review launch key {}", path.display()))?;
         std::io::Write::write_all(&mut file, value.as_bytes())?;
@@ -59,7 +59,8 @@ impl Drop for LaunchKey {
     }
 }
 
-fn secret() -> String {
+/// A new 64 hexadecimal character secret: a host bearer, a launch key, a code or a session.
+pub(super) fn secret() -> String {
     format!(
         "{}{}",
         uuid::Uuid::new_v4().simple(),

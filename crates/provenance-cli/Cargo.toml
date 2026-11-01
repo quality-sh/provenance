@@ -26,9 +26,7 @@ path = "src/bin/cargo-provenance.rs"
 
 [dependencies]
 anyhow.workspace = true
-futures-util = "0.3"
-tokio-tungstenite = "0.24"
-axum = { workspace = true, features = ["ws"] }
+axum.workspace = true
 camino.workspace = true
 clap.workspace = true
 fs2.workspace = true
@@ -58,7 +56,6 @@ uuid.workspace = true
 ureq.workspace = true
 url.workspace = true
 walkdir.workspace = true
-notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 dunce.workspace = true
 
 [target.'cfg(not(windows))'.dependencies]

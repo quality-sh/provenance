@@ -227,8 +227,14 @@ impl Invocation {
                             && invocation.format == Some(porcelain::OutputFormat::Json),
                         "--follow requires --view review --format json"
                     );
-                    return crate::review::follow::run(&invocation.context.repo, invocation.input)
-                        .await;
+                    let stop = crate::review::interrupt()?;
+                    return provenance_review::follow(
+                        &invocation.context.repo.place(),
+                        invocation.input,
+                        tokio::io::stdout(),
+                        stop,
+                    )
+                    .await;
                 }
                 if let Delivery::ReviewLink { open } = invocation.delivery {
                     return crate::review_link::print(
