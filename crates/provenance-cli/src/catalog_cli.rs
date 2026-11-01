@@ -172,7 +172,7 @@ pub fn print_target_help(
 pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
     let Invocation {
         context,
-        format: _,
+        format,
         path,
         definition,
         data,
@@ -224,12 +224,12 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
             crate::output::print_json(&value)?;
         }
         Err(failure) => {
-            return Err(failure_with_guidance(
-                &failure,
-                &path,
-                record_id(&path),
-                &context.repo,
-            ))
+            let error = failure_with_guidance(&failure, &path, record_id(&path), &context.repo);
+            if !writes_statement {
+                return Err(error);
+            }
+            let json = format == Some(provenance_cli::porcelain::OutputFormat::Json);
+            return Err(statement_warning::add_to_refusal(error, &repo.repo, json));
         }
     }
     Ok(())
@@ -298,9 +298,13 @@ pub async fn dispatch_target(
                 failure_with_guidance(&failure, &route.path, Some(&target), &context.repo)
             })
     };
+    let json = format == Some(provenance_cli::porcelain::OutputFormat::Json);
     let mut value = match result {
         Ok(value) => value,
-        Err(failure) => return Err(failure),
+        Err(error) if writes_statement => {
+            return Err(statement_warning::add_to_refusal(error, &repo.repo, json));
+        }
+        Err(error) => return Err(error),
     };
     if writes_statement {
         statement_warning::print_if_rule_one_one_did_not_run(&repo.repo);
@@ -312,7 +316,7 @@ pub async fn dispatch_target(
         }
     });
     crate::review_link::annotate_write(&repo, affected, &mut value).await;
-    if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
+    if json {
         crate::output::print_json(&value)?;
     } else {
         println!(
