@@ -76,12 +76,13 @@ fn a_staged_import_holds_the_stage_lock() {
                 Ok(())
             })
         });
+        let waited = on_entry.recv_timeout(Duration::from_millis(300));
+        release.send(()).unwrap();
         assert_eq!(
-            on_entry.recv_timeout(Duration::from_millis(300)),
+            waited,
             Err(mpsc::RecvTimeoutError::Timeout),
             "the section waits for the import"
         );
-        release.send(()).unwrap();
         import.join().unwrap().unwrap();
         assert_eq!(on_entry.recv_timeout(Duration::from_secs(5)), Ok(()));
     });

@@ -375,12 +375,13 @@ fn an_import_waits_for_a_held_staged_section() {
                         .send(result.map_err(|error| format!("{error:#}")))
                         .unwrap();
                 });
+                let waited = on_import.recv_timeout(Duration::from_millis(300));
+                release.send(()).unwrap();
                 assert_eq!(
-                    on_import.recv_timeout(Duration::from_millis(300)),
+                    waited,
                     Err(mpsc::RecvTimeoutError::Timeout),
                     "the import waits for the held section"
                 );
-                release.send(()).unwrap();
                 assert_eq!(on_import.recv_timeout(Duration::from_secs(5)), Ok(Ok(())));
             });
             Ok(())
