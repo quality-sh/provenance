@@ -13,9 +13,9 @@ import json
 from pathlib import Path, PurePosixPath
 import sys
 
-# Files that every build or every CI job reads. A change to one of them
-# selects the full suite.
-FULL_SUITE = (
+# Files that every build reads. A change to one of them selects the full
+# suite. The compile-fail path filter in ci.yml must name each of them too.
+BUILD_INPUTS = (
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain",
@@ -24,6 +24,11 @@ FULL_SUITE = (
     ".config/nextest.toml",
     ".github/workflows/ci.yml",
     ".github/actions/",
+)
+
+# Files that every CI job reads, and files that make the selection. A
+# change to one of them selects the full suite.
+FULL_SUITE = BUILD_INPUTS + (
     ".github/scripts/select_tests",
     ".github/scripts/ci_ok",
     ".github/scripts/crap_gate",
@@ -80,8 +85,13 @@ NOT_TEST_INPUTS = (
 SOURCE_READERS = (
     ("", ".rs", "provenance-cli::cli_structure"),
     ("crates/", "/Cargo.toml", "provenance-cli::crate_dependencies"),
+    # These read the metadata of every workspace crate.
+    ("crates/", "/Cargo.toml", "provenance-cli::release_structure"),
+    ("crates/", "/Cargo.toml", "provenance-cli::release_onboarding_structure"),
     ("crates/provenance-sdk/", "", "provenance-cli::cargo_nested_sdk"),
     ("crates/provenance-transport/src/", "", "provenance-contract::registration_ownership"),
+    # This compares the bindings in the store crate with a text search of it.
+    ("crates/provenance-store/", ".rs", "provenance-scanner::scanner_lexer_regressions"),
     *(
         (f"crates/{name}/src/", ".rs", "provenance-core::no_wildcard_gates")
         for name in (

@@ -88,17 +88,25 @@ jobs:
               - *ci
               - ".github/workflows/benchmarks.yml"
               - "tools/bench/**"
-            # The trybuild tests compile code against these crates.
+            # The trybuild tests compile code against these crates and their
+            # dependencies. The build inputs that select the full suite in
+            # select_tests.py also change the compiler output.
             compile-fail:
               - *ci
               - "crates/provenance-store/**"
               - "crates/provenance-core/**"
               - "crates/provenance-macros/**"
               - "crates/provenance-sdk/**"
+              - "crates/provenance-scanner/**"
+              - "crates/provenance-ste100/**"
               - "fixtures/provenance-macros/**"
+              - "Cargo.toml"
               - "Cargo.lock"
               - "rust-toolchain"
               - "rust-toolchain.toml"
+              - ".cargo/**"
+              - ".config/nextest.toml"
+              - ".github/actions/**"
             rust:
               - *ci
               - *release

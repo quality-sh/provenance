@@ -105,6 +105,31 @@ class SelectionTests(unittest.TestCase):
             self.assertNotIn(crate, crates)
         self.assertTrue(selection["test-filter"].startswith("rdeps(=provenance-store)"))
 
+    def test_a_store_change_selects_the_scanner_test_that_reads_the_store(self):
+        for path in (
+            "crates/provenance-store/src/lib.rs",
+            "crates/provenance-store/tests/shape.rs",
+        ):
+            with self.subTest(path=path):
+                selection = select(path)
+                self.assertIn(
+                    "binary_id(provenance-scanner::scanner_lexer_regressions)",
+                    selection["test-filter"],
+                )
+                self.assertIn("-p provenance-scanner", selection["test-packages"])
+        selection = select("crates/provenance-store/README.md")
+        self.assertNotIn("scanner_lexer_regressions", selection["test-filter"])
+
+    def test_a_manifest_change_selects_the_tests_that_read_every_manifest(self):
+        selection = select("crates/provenance-http-client/Cargo.toml")
+        for binary in (
+            "provenance-cli::crate_dependencies",
+            "provenance-cli::release_structure",
+            "provenance-cli::release_onboarding_structure",
+        ):
+            self.assertIn(f"binary_id({binary})", selection["test-filter"])
+        self.assertIn("-p provenance-cli", selection["test-packages"])
+
     def test_dev_dependencies_count_as_dependents(self):
         # provenance-macros has provenance-scanner only as a dev dependency.
         crates = json.loads(select("crates/provenance-scanner/src/lib.rs")["test-crates"])
@@ -196,15 +221,28 @@ class WorkflowWiringTests(unittest.TestCase):
         filters = self.workflow.split("            compile-fail:", 1)[1].split(
             "            rust:", 1
         )[0]
+        patterns = {
+            line.strip().removeprefix("- ").strip('"') for line in filters.splitlines()
+        }
         for path in (
             "crates/provenance-store/**",
             "crates/provenance-core/**",
             "crates/provenance-macros/**",
             "crates/provenance-sdk/**",
-            "Cargo.lock",
-            "rust-toolchain.toml",
+            "crates/provenance-scanner/**",
+            "crates/provenance-ste100/**",
         ):
-            self.assertIn(path, filters)
+            self.assertIn(path, patterns)
+        # Every build input that selects the full suite can change what the
+        # compiler prints.
+        for path in SELECTOR.BUILD_INPUTS:
+            with self.subTest(path=path):
+                if path == ".github/workflows/ci.yml":
+                    self.assertIn("*ci", patterns)
+                elif path.endswith("/"):
+                    self.assertIn(path + "**", patterns)
+                else:
+                    self.assertIn(path, patterns)
         job = self.job("compile-fail", "crap-quality")
         self.assertIn("needs.changes.outputs.compile-fail == 'true'", job)
 
