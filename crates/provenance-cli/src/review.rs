@@ -31,8 +31,19 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
     if options.detach {
         return detach::run(&options);
     }
-    let root = camino::Utf8PathBuf::from_path_buf(options.repo.clone())
-        .map_err(|path| anyhow::anyhow!("repository path {} is not UTF-8", path.display()))?;
+    let root = match camino::Utf8PathBuf::from_path_buf(options.repo.clone()) {
+        Ok(root) => root,
+        // The repository refuses a root that is not UTF-8; its error is the one to report.
+        Err(path) => {
+            return Err(
+                match provenance_store::repository::Repository::open(&path, &options.scope) {
+                    Err(error) => anyhow::Error::new(error)
+                        .context("cannot configure review repository access"),
+                    Ok(_) => anyhow::anyhow!("repository path {} is not UTF-8", path.display()),
+                },
+            )
+        }
+    };
     // The check port reads the canonical working tree, as the opened repository does.
     let working_tree = dunce::canonicalize(&root)
         .ok()
@@ -48,11 +59,12 @@ pub async fn run(options: Options) -> anyhow::Result<()> {
             false,
             None,
         )),
+        on_read_only: {
+            let warning = crate::reviewer::review_page_warning(&options.repo);
+            Box::new(move || eprintln!("{warning}"))
+        },
     })
     .await?;
-    if !host.has_reviewer() {
-        eprintln!("{}", crate::reviewer::review_page_warning(&options.repo));
-    }
     let startup = host.startup();
     println!(
         "{}",

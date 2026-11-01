@@ -38,6 +38,7 @@ async fn a_started_host_signs_a_page_in_serves_assets_and_leaves_no_record_after
         repository_id: "local".to_owned(),
         port: 0,
         check_port: Arc::new(NoChecks),
+        on_read_only: Box::new(|| {}),
     })
     .await
     .unwrap();

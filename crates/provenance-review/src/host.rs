@@ -45,6 +45,9 @@ pub struct HostOptions {
     pub port: u16,
     /// The repository-aware computations of the `check` operation.
     pub check_port: Arc<dyn CheckPort>,
+    /// Runs when the repository names no reviewer, so that the review page is read-only.
+    /// It runs after the repository opens and before the host is announced.
+    pub on_read_only: Box<dyn FnOnce() + Send>,
 }
 
 /// Where a started host listens and the credential that its operations accept.
@@ -111,6 +114,9 @@ pub async fn start(options: HostOptions) -> anyhow::Result<StartedHost> {
     let (repository, binding, access) = repository_access(&options, &token, address)?;
     let canonical_repo = repository.working_tree().as_std_path().to_path_buf();
     let has_reviewer = !binding.disposition_actor_ids()?.is_empty();
+    if !has_reviewer {
+        (options.on_read_only)();
+    }
     let host = StatementHost::with_access(binding.clone())
         .with_credential(access.clone())
         .with_check_port(options.check_port);
