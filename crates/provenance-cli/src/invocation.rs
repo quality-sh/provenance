@@ -227,7 +227,14 @@ impl Invocation {
                             && invocation.format == Some(porcelain::OutputFormat::Json),
                         "--follow requires --view review --format json"
                     );
-                    let stop = crate::review::interrupt()?;
+                    // The Ctrl-C handler is set up when the follower first polls this, after it
+                    // connects; until then Ctrl-C ends the process at once.
+                    let stop = async {
+                        anyhow::Context::context(
+                            tokio::signal::ctrl_c().await,
+                            "cannot install the Ctrl-C handler",
+                        )
+                    };
                     return provenance_review::follow(
                         &invocation.context.repo.place(),
                         invocation.input,

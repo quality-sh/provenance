@@ -191,16 +191,3 @@ impl Signals {
         self.interrupt.recv().await
     }
 }
-
-/// Installs the interrupt handler, for a command that ends with success on Ctrl-C.
-pub fn interrupt() -> anyhow::Result<impl std::future::Future<Output = ()>> {
-    #[cfg(unix)]
-    let mut interrupt = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
-        .context("cannot install the Ctrl-C handler")?;
-    #[cfg(windows)]
-    let mut interrupt =
-        tokio::signal::windows::ctrl_c().context("cannot install the Ctrl-C handler")?;
-    Ok(async move {
-        let _ = interrupt.recv().await;
-    })
-}

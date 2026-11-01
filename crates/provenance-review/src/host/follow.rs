@@ -14,13 +14,14 @@ use tokio::io::AsyncWrite;
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
 /// Streams saved document state to `output` when the repository host sends an invalidation.
-/// The stream ends with success when `stop` completes.
+/// `stop` is first polled after the connection opens. The stream ends with success when `stop`
+/// completes with `Ok`, and with its error otherwise.
 #[rule("rule_review_follow_push")]
 pub async fn follow(
     place: &RepositoryScope,
     input: GetInput,
     mut output: impl AsyncWrite + Unpin + Send,
-    stop: impl Future<Output = ()> + Send,
+    stop: impl Future<Output = anyhow::Result<()>> + Send,
 ) -> anyhow::Result<()> {
     anyhow::ensure!(
         input.max_depth.is_none() && input.returned_kinds.is_empty(),
@@ -50,7 +51,10 @@ pub async fn follow(
     let result: anyhow::Result<()> = async {
         loop {
             let incoming = tokio::select! {
-                () = &mut stop => return Ok(()),
+                signal = &mut stop => {
+                    signal?;
+                    return Ok(());
+                },
                 frame = socket.next() => frame,
             };
             let Some(incoming) = incoming else { anyhow::bail!("review host disconnected"); };
@@ -60,7 +64,10 @@ pub async fn follow(
                 _ => continue,
             };
             tokio::select! {
-                () = &mut stop => return Ok(()),
+                signal = &mut stop => {
+                    signal?;
+                    return Ok(());
+                },
                 result = async {
                     let frames = match follower.step(place, &input.target, limit, &frame).await {
                         Ok(frames) => frames,
