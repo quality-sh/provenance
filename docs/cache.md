@@ -290,3 +290,4 @@ Typed SDK verification runs are also derived cache data, stored as JSONL under
 or CI callback outcomes without changing Git-tracked canonical state. They may
 be deleted with the rest of the cache; declarations in canonical state remain.
 Verification runs stay outside the projection and outside its digest.
+
