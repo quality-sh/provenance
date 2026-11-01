@@ -28,6 +28,21 @@ fn initialized_store_in(root: camino::Utf8PathBuf) -> (StateStore, ScopeId) {
     (store, scope)
 }
 
+fn staged_store() -> (tempfile::TempDir, StateStore, StateStore, ScopeId, Vec<u8>) {
+    let (dir, live_store, scope) = initialized_store();
+    let manifest_before = std::fs::read(live_store.layout.manifest_path()).unwrap();
+    let staged_root = camino::Utf8PathBuf::from_path_buf(dir.path().join("staged-repo")).unwrap();
+    let staged_layout = ProvenanceLayout::new(staged_root);
+    std::fs::create_dir_all(staged_layout.state_dir()).unwrap();
+    std::fs::write(staged_layout.manifest_path(), &manifest_before).unwrap();
+    let staged_store = StateStore::staged_view(
+        None,
+        staged_layout,
+        super::RecordStamp::ResolveFromRepository,
+    );
+    (dir, live_store, staged_store, scope, manifest_before)
+}
+
 fn seeded_requirement_store() -> (tempfile::TempDir, StateStore, ScopeId) {
     let (dir, store, scope) = initialized_store();
     store
@@ -90,6 +105,7 @@ mod read_budget;
 mod read_budget_boundaries;
 mod references;
 mod reserved_ids;
+mod scope_import_access;
 mod scope_ingestion;
 mod scope_ingestion_order;
 mod shaping;

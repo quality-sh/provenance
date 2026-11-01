@@ -344,6 +344,53 @@ fn workers_of_one_stage_run_their_sections_one_at_a_time() {
 
 #[test]
 #[verifies("rule_staged_sections_run_one_at_a_time", examples)]
+#[verifies("rule_scope_import_needs_a_staged_store", examples)]
+fn an_import_waits_for_a_held_staged_section() {
+    let (_dir, repository) = repository();
+    repository
+        .stage(false, None, |staged| {
+            let mut sources = staged.list_sources(&scope())?;
+            let mut added = sources[0].clone();
+            added.id = StableId::new("source_imported")?;
+            sources.push(added);
+            let (entered, on_entry) = mpsc::channel();
+            let (release, on_release) = mpsc::channel::<()>();
+            let (imported, on_import) = mpsc::channel();
+            std::thread::scope(|threads| {
+                threads.spawn(move || {
+                    staged.with_repository_publication(|_| {
+                        entered.send(()).unwrap();
+                        on_release.recv().unwrap();
+                        Ok(())
+                    })
+                });
+                on_entry.recv().unwrap();
+                let shards = ScopeShards {
+                    sources: &sources,
+                    ..ScopeShards::default()
+                };
+                threads.spawn(move || {
+                    let result = staged.import_scope(&scope(), &shards);
+                    imported
+                        .send(result.map_err(|error| format!("{error:#}")))
+                        .unwrap();
+                });
+                assert_eq!(
+                    on_import.recv_timeout(Duration::from_millis(300)),
+                    Err(mpsc::RecvTimeoutError::Timeout),
+                    "the import waits for the held section"
+                );
+                release.send(()).unwrap();
+                assert_eq!(on_import.recv_timeout(Duration::from_secs(5)), Ok(Ok(())));
+            });
+            Ok(())
+        })
+        .unwrap();
+    assert!(has_source(&repository, "source_imported"));
+}
+
+#[test]
+#[verifies("rule_staged_sections_run_one_at_a_time", examples)]
 fn a_worker_panic_in_a_staged_section_stops_the_publication() {
     let (_dir, repository) = repository();
     let before = state_bytes(&repository);
