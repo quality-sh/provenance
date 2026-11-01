@@ -38,18 +38,18 @@ jobs:
       - name: Compose the pinned renderer and host
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node tools/review-host/prepare.ts crates/provenance-cli/review-assets-generated
+        run: node tools/review-host/prepare.ts crates/provenance-review/review-assets-generated
       - run: node --test tools/review-host/*.test.ts
       - run: node tools/skills/prepare.mjs
       - name: Check Cargo asset inclusion
         run: |
-          cargo package --locked --allow-dirty -p provenance-cli --list > target/review-package-files
+          cargo package --locked --allow-dirty -p provenance-review --list > target/review-package-files
           node --input-type=module <<'JS'
           import { readFileSync, readdirSync } from 'node:fs';
           const listed = new Set(readFileSync('target/review-package-files', 'utf8').split('\n'));
-          for (const file of readdirSync('crates/provenance-cli/review-assets-generated', { recursive: true, withFileTypes: true })) {
+          for (const file of readdirSync('crates/provenance-review/review-assets-generated', { recursive: true, withFileTypes: true })) {
             if (!file.isFile()) continue;
-            const name = `${file.parentPath}/${file.name}`.replace('crates/provenance-cli/', '');
+            const name = `${file.parentPath}/${file.name}`.replace('crates/provenance-review/', '');
             if (!listed.has(name)) throw new Error(`Cargo package omits ${name}`);
           }
           JS
@@ -58,7 +58,7 @@ jobs:
           mkdir -p target/review-sdk/dist target/review-artifact
           cp -rf packages/provenance/dist/. target/review-sdk/dist/
           cp -f packages/provenance/package.json target/review-sdk/
-          tar -czf target/review-artifact/review-composed.tar.gz crates/provenance-cli/review-assets-generated target/review-sdk
+          tar -czf target/review-artifact/review-composed.tar.gz crates/provenance-review/review-assets-generated target/review-sdk
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: review-composed

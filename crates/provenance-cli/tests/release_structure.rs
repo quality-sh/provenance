@@ -6,7 +6,7 @@ use std::{
 
 use serde_json::Value;
 
-const CRATE_ORDER: [&str; 12] = [
+const CRATE_ORDER: [&str; 13] = [
     "provenance-macros",
     "provenance-core",
     "provenance-porcelain",
@@ -18,6 +18,7 @@ const CRATE_ORDER: [&str; 12] = [
     "provenance-http-client",
     "provenance-contract",
     "provenance-transport",
+    "provenance-review",
     "provenance-cli",
 ];
 
@@ -200,12 +201,14 @@ fn cli_package_contains_its_embedded_skills() {
     let files = String::from_utf8(output.stdout).expect("package file list is UTF-8");
     // Cargo can list files with the platform's path separators.
     let files: Vec<_> = files.lines().map(Path::new).collect();
-    for file in [
-        "build/review_assets.rs",
-        "review-assets/index.html",
-        "src/review.rs",
-    ] {
+    for file in ["build.rs", "build/skills.rs", "src/review.rs"] {
         assert!(files.contains(&Path::new(file)), "CLI package omits {file}");
+    }
+    for file in ["build/review_assets.rs", "review-assets/index.html"] {
+        assert!(
+            !files.contains(&Path::new(file)),
+            "CLI package still carries {file}"
+        );
     }
     for skill in [
         "provenance-fork-tournament",
@@ -216,6 +219,42 @@ fn cli_package_contains_its_embedded_skills() {
         assert!(
             files.contains(&Path::new(&format!("skills/{skill}/SKILL.md"))),
             "CLI package omits {skill}",
+        );
+    }
+}
+
+#[test]
+fn review_package_contains_its_asset_build_and_fallback_page() {
+    let workspace = workspace_root();
+    let output = Command::new(env!("CARGO"))
+        .args([
+            "package",
+            "--locked",
+            "--no-verify",
+            "--allow-dirty",
+            "--package",
+            "provenance-review",
+            "--list",
+        ])
+        .current_dir(workspace)
+        .output()
+        .expect("list the review package");
+    assert!(
+        output.status.success(),
+        "cargo package failed: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let files = String::from_utf8(output.stdout).expect("package file list is UTF-8");
+    let files: Vec<_> = files.lines().map(Path::new).collect();
+    for file in [
+        "build.rs",
+        "build/review_assets.rs",
+        "review-assets/index.html",
+        "src/assets.rs",
+    ] {
+        assert!(
+            files.contains(&Path::new(file)),
+            "review package omits {file}"
         );
     }
 }

@@ -29,7 +29,7 @@ packages/*/LICENSE
 /packages/provenance/src/engine-packages.ts
 
 # Composed renderer assets enter packages, not source control.
-/crates/provenance-cli/review-assets-generated/
+/crates/provenance-review/review-assets-generated/
 
 # Bundled skill copies are generated or installed from root sources.
 /crates/provenance-cli/skills/provenance-fork-tournament/

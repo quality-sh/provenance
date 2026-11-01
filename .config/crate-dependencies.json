@@ -32,6 +32,7 @@
       "provenance-contract",
       "provenance-transport",
       "provenance-cli",
+      "provenance-review",
       "tokio",
       "axum"
     ],
@@ -39,12 +40,14 @@
       "provenance-contract",
       "provenance-transport",
       "provenance-cli",
+      "provenance-review",
       "axum",
       "rmcp"
     ],
     "provenance-contract": [
       "provenance-transport",
       "provenance-cli",
+      "provenance-review",
       "tokio",
       "axum",
       "rmcp"
@@ -54,11 +57,17 @@
       "provenance-contract",
       "provenance-transport",
       "provenance-cli",
+      "provenance-review",
       "clap",
       "rmcp"
     ],
     "provenance-transport": [
-      "provenance-cli"
+      "provenance-cli",
+      "provenance-review"
+    ],
+    "provenance-review": [
+      "provenance-cli",
+      "clap"
     ]
   },
   "crates": {
@@ -69,13 +78,13 @@
         "dunce",
         "fs2",
         "jsonschema",
-        "notify",
         "open",
         "provenance-contract",
         "provenance-core",
         "provenance-macros",
         "provenance-porcelain",
         "provenance-report",
+        "provenance-review",
         "provenance-scanner",
         "provenance-ste100",
         "provenance-store",
@@ -84,13 +93,13 @@
         "rustix",
         "tempfile",
         "tokio",
-        "tokio-tungstenite",
         "ureq",
         "walkdir",
         "windows-sys"
       ],
       "dev-dependencies": [
         "jsonschema",
+        "notify",
         "provenance-transport",
         "rmcp",
         "tempfile"
@@ -164,6 +173,27 @@
         "provenance-store"
       ],
       "dev-dependencies": [
+        "tempfile"
+      ]
+    },
+    "provenance-review": {
+      "dependencies": [
+        "axum",
+        "dunce",
+        "jsonschema",
+        "notify",
+        "provenance-core",
+        "provenance-macros",
+        "provenance-porcelain",
+        "provenance-store",
+        "provenance-transport",
+        "tokio",
+        "tokio-tungstenite",
+        "ureq",
+        "windows-sys"
+      ],
+      "dev-dependencies": [
+        "provenance-transport",
         "tempfile"
       ]
     },

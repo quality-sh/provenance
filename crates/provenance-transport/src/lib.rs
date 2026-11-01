@@ -5,7 +5,8 @@
 //!
 //! Isolated adapters for the shared operation contract.
 //!
-//! This library does not open a listener. The CLI owns the local review listener.
+//! This library does not open a listener. The `provenance-review` crate owns the local review
+//! listener.
 mod access;
 mod admission;
 #[cfg(test)]

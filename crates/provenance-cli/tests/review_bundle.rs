@@ -267,7 +267,7 @@ fn assert_served_bundle(config: &Value, files: &BTreeMap<String, Vec<u8>>) {
         assert_eq!(&body(reply), expected, "{path}");
     }
     assert_eq!(
-        response(request(config, "GET", "/metadata", false).call()).status(),
+        response(request(config, "GET", "/metadata", true).call()).status(),
         200
     );
     assert_eq!(call_operation(config).status(), 200);

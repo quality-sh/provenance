@@ -41,10 +41,15 @@ impl RepoContext {
             .map_err(|failure| anyhow::anyhow!(failure))?;
         Ok(
             provenance_transport::StatementHost::with_access(std::sync::Arc::new(repository))
-                .with_notify_port(std::sync::Arc::new(crate::notify::HostNotifyPort::new(
-                    self.clone(),
+                .with_notify_port(std::sync::Arc::new(provenance_review::HostNotifyPort::new(
+                    self.place(),
                 ))),
         )
+    }
+
+    /// The repository root and scope as the review library names them.
+    pub fn place(&self) -> provenance_review::RepositoryScope {
+        provenance_review::RepositoryScope::new(self.repo.clone(), self.scope.clone())
     }
 }
 

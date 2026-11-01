@@ -40,6 +40,7 @@ pub mod state_store;
 pub mod statement_analysis;
 pub mod storage;
 mod test_probes;
+pub mod user_cache;
 #[cfg(test)]
 extern crate self as provenance_store;
 #[cfg(test)]

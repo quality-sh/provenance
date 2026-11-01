@@ -4,7 +4,7 @@ pub mod detached;
 pub mod resolution;
 pub mod waits;
 
-use provenance_transport::local_host::LAUNCH_SESSION_ROUTE;
+use provenance_review::LAUNCH_SESSION_ROUTE;
 use serde_json::{json, Value};
 use std::{
     io::{BufRead, BufReader},

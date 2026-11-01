@@ -37,7 +37,7 @@ pub struct LaunchKey {
 impl LaunchKey {
     /// Writes a new key into an owner-only file that names this host instance.
     pub fn publish(nonce: &str) -> anyhow::Result<Self> {
-        let path = provenance_cli::notify::launch_key_path(nonce)?;
+        let path = crate::launch_key::path(nonce)?;
         let directory = path.parent().expect("key file has a parent");
         std::fs::create_dir_all(directory)
             .with_context(|| format!("cannot create {}", directory.display()))?;
@@ -51,11 +51,6 @@ impl LaunchKey {
         file.sync_all()?;
         Ok(Self { path, value })
     }
-
-    /// Reads the key of a running host instance from the per-user cache.
-    pub fn read(nonce: &str) -> anyhow::Result<String> {
-        provenance_cli::notify::read_launch_key(nonce)
-    }
 }
 
 impl Drop for LaunchKey {
@@ -64,7 +59,8 @@ impl Drop for LaunchKey {
     }
 }
 
-fn secret() -> String {
+/// A new 64 hexadecimal character secret: a host bearer, a launch key, a code or a session.
+pub(super) fn secret() -> String {
     format!(
         "{}{}",
         uuid::Uuid::new_v4().simple(),
