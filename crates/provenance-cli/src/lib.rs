@@ -8,3 +8,4 @@ pub mod porcelain;
 pub mod repo_context;
 pub mod store;
 mod user_cache;
+// CI measurement: CLI-only change.
