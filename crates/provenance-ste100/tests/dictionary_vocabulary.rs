@@ -45,7 +45,7 @@ fn a_word_with_only_unapproved_forms_produces_a_rule_1_1_finding() {
     let dictionary = fixture_dictionary();
     let text = "The bbbad output stops.";
 
-    let report = check_descriptive_with_dictionary(text, &dictionary);
+    let report = check_descriptive_with_dictionary(text, &dictionary, &[]);
 
     assert_eq!(report.findings.len(), 1, "findings: {:?}", report.findings);
     let finding = &report.findings[0];
@@ -60,7 +60,7 @@ fn a_word_with_only_unapproved_forms_produces_a_rule_1_1_finding() {
 fn matching_folds_case() {
     let dictionary = fixture_dictionary();
 
-    let report = check_descriptive_with_dictionary("Bbbad output stops.", &dictionary);
+    let report = check_descriptive_with_dictionary("Bbbad output stops.", &dictionary, &[]);
 
     assert_eq!(report.findings.len(), 1, "findings: {:?}", report.findings);
     assert_eq!(report.findings[0].rule, RuleNumber::OneOne);
@@ -72,7 +72,7 @@ fn an_unapproved_phrase_produces_one_finding_over_its_full_span() {
     let dictionary = fixture_dictionary();
     let text = "Stop bb far from the door.";
 
-    let report = check_descriptive_with_dictionary(text, &dictionary);
+    let report = check_descriptive_with_dictionary(text, &dictionary, &[]);
 
     assert_eq!(report.findings.len(), 1, "findings: {:?}", report.findings);
     assert_eq!(
@@ -86,7 +86,8 @@ fn an_unapproved_phrase_produces_one_finding_over_its_full_span() {
 fn quoted_text_produces_no_vocabulary_finding() {
     let dictionary = fixture_dictionary();
 
-    let report = check_descriptive_with_dictionary("The \"bbbad\" light comes on.", &dictionary);
+    let report =
+        check_descriptive_with_dictionary("The \"bbbad\" light comes on.", &dictionary, &[]);
 
     assert!(
         report.findings.is_empty(),
@@ -100,8 +101,11 @@ fn quoted_text_produces_no_vocabulary_finding() {
 fn identifier_tokens_produce_no_result() {
     let dictionary = fixture_dictionary();
 
-    let report =
-        check_descriptive_with_dictionary("The req_bbbad record and bbbad2 stay.", &dictionary);
+    let report = check_descriptive_with_dictionary(
+        "The req_bbbad record and bbbad2 stay.",
+        &dictionary,
+        &[],
+    );
 
     assert!(
         report.findings.is_empty(),
@@ -149,7 +153,7 @@ fn classification_separates_the_four_categories() {
 fn uncertain_and_unknown_uses_produce_no_finding() {
     let dictionary = fixture_dictionary();
 
-    let report = check_descriptive_with_dictionary("The ccboth ddnew stays.", &dictionary);
+    let report = check_descriptive_with_dictionary("The ccboth ddnew stays.", &dictionary, &[]);
 
     assert!(
         report.findings.is_empty(),
@@ -162,7 +166,7 @@ fn uncertain_and_unknown_uses_produce_no_finding() {
 fn the_data_free_checks_still_run_with_a_dictionary() {
     let dictionary = fixture_dictionary();
 
-    let report = check_descriptive_with_dictionary("The pump runs; it is loud.", &dictionary);
+    let report = check_descriptive_with_dictionary("The pump runs; it is loud.", &dictionary, &[]);
 
     assert_eq!(report.findings.len(), 1, "findings: {:?}", report.findings);
     assert_eq!(report.findings[0].rule, RuleNumber::EightOne);

@@ -69,7 +69,7 @@ fn status(repo: &Utf8Path) -> anyhow::Result<()> {
     let (referenced, identity, index_present, load_problem) =
         match resolve_project_dictionary(&layout) {
             DictionaryResolution::Loaded(dictionary) => {
-                (true, Some(dictionary.identity), true, None)
+                (true, Some(dictionary.import.identity), true, None)
             }
             DictionaryResolution::NoReference => (false, None, false, None),
             DictionaryResolution::Unavailable {

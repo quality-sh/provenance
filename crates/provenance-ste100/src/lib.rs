@@ -184,12 +184,22 @@ pub fn check_descriptive(text: &str) -> Report {
 
 /// Reports determinate violations, with Rule 1.1 vocabulary findings from the
 /// imported dictionary added to the data-free checks.
-pub fn check_descriptive_with_dictionary(text: &str, dictionary: &DictionaryImport) -> Report {
+///
+/// Rule 1.1 accepts each word or phrase in `technical_names`. ASD-STE100 Rule
+/// 1.5 permits technical nouns and Rule 1.12 permits technical verbs.
+pub fn check_descriptive_with_dictionary(
+    text: &str,
+    dictionary: &DictionaryImport,
+    technical_names: &[String],
+) -> Report {
     let mut report = check_descriptive(text);
     let protected = protected_spans::analyze(text);
-    report
-        .findings
-        .extend(unapproved_word_findings(text, &protected, dictionary));
+    report.findings.extend(unapproved_word_findings(
+        text,
+        &protected,
+        dictionary,
+        technical_names,
+    ));
     sort_findings(&mut report.findings);
     report
 }
@@ -200,10 +210,17 @@ fn unapproved_word_findings(
     text: &str,
     protected: &protected_spans::ProtectedSpans,
     dictionary: &DictionaryImport,
+    technical_names: &[String],
 ) -> Vec<Finding> {
     vocabulary::classify(text, protected, dictionary)
         .into_iter()
         .filter(|word_use| word_use.category == VocabularyCategory::Unapproved)
+        .filter(|word_use| {
+            !is_technical_name(
+                &text[word_use.span.start..word_use.span.end],
+                technical_names,
+            )
+        })
         .map(|word_use| {
             let rejected = &text[word_use.span.start..word_use.span.end];
             Finding {
@@ -216,6 +233,24 @@ fn unapproved_word_findings(
             }
         })
         .collect()
+}
+
+/// Matches a word or phrase to a listed technical name with the dictionary
+/// folding: case, the spaces between words, and a possessive "'s".
+#[rule("rule_ste_technical_names_accepted")]
+fn is_technical_name(word: &str, technical_names: &[String]) -> bool {
+    let fold = |text: &str| {
+        text.split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_lowercase()
+    };
+    let folded = fold(word);
+    let base = folded.strip_suffix("\u{27}s").unwrap_or(&folded);
+    technical_names.iter().any(|name| {
+        let name = fold(name);
+        name == folded || name == base
+    })
 }
 
 fn sort_findings(findings: &mut [Finding]) {

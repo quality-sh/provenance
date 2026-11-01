@@ -14,6 +14,7 @@ mod input;
 mod input_guard;
 mod parent_replacement;
 pub mod refusal;
+mod statement_warning;
 
 pub use help::required_discussion_flags;
 
@@ -207,13 +208,18 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
             &layout,
             &request.statement,
         );
+        statement_warning::print_if_rule_one_one_did_not_run(&context.repo.repo);
         return crate::output::print_json(&serde_json::json!({"data": report, "meta": {}}));
     }
+    let writes_statement = method != Method::GET && statement_warning::has_statement(&data);
     match host
         .invoke_resource(method, &path, data, query, headers)
         .await
     {
         Ok(mut value) => {
+            if writes_statement {
+                statement_warning::print_if_rule_one_one_did_not_run(&repo.repo);
+            }
             crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
             crate::output::print_json(&value)?;
         }
@@ -264,6 +270,7 @@ pub async fn dispatch_target(
             "target actions do not accept query options"
         ));
     }
+    let writes_statement = statement_warning::has_statement(&data);
     let replacement = matches.get_one::<String>("replace_parent");
     let result = if let Some(old) = replacement {
         anyhow::ensure!(
@@ -295,6 +302,9 @@ pub async fn dispatch_target(
         Ok(value) => value,
         Err(failure) => return Err(failure),
     };
+    if writes_statement {
+        statement_warning::print_if_rule_one_one_did_not_run(&repo.repo);
+    }
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
             kind,

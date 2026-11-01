@@ -1,10 +1,11 @@
 //! Shared ASD-STE100 analysis for statements changed from a comparison base.
 
+use crate::dictionary_reference::ProjectDictionary;
 use provenance_core::{Requirement, Rule, ScopeId};
 use provenance_macros::rule;
 use provenance_ste100::{
-    check_descriptive, check_descriptive_with_dictionary, DictionaryImport, FindingKind,
-    RuleNumber, Span, Standard, StandardIssue,
+    check_descriptive, check_descriptive_with_dictionary, FindingKind, RuleNumber, Span, Standard,
+    StandardIssue,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -13,11 +14,17 @@ use std::collections::BTreeMap;
 #[must_use]
 pub fn check_statement(
     statement: &str,
-    dictionary: Option<&DictionaryImport>,
+    dictionary: Option<&ProjectDictionary>,
 ) -> provenance_ste100::Report {
     dictionary.map_or_else(
         || check_descriptive(statement),
-        |dictionary| check_descriptive_with_dictionary(statement, dictionary),
+        |dictionary| {
+            check_descriptive_with_dictionary(
+                statement,
+                &dictionary.import,
+                &dictionary.technical_names,
+            )
+        },
     )
 }
 
@@ -75,7 +82,7 @@ pub fn analyze_changed_statements(
     base_rules: &[Rule],
     candidate_requirements: &[Requirement],
     candidate_rules: &[Rule],
-    dictionary: Option<&DictionaryImport>,
+    dictionary: Option<&ProjectDictionary>,
 ) -> Vec<StatementDiagnostic> {
     let requirement_base = statements_by_id(base_requirements, |record| {
         (
@@ -153,7 +160,7 @@ fn analyze_records<'a>(
     kind: StatementRecordKind,
     base: &BTreeMap<(&str, &str), &str>,
     candidates: impl Iterator<Item = (&'a ScopeId, &'a str, &'a str)>,
-    dictionary: Option<&DictionaryImport>,
+    dictionary: Option<&ProjectDictionary>,
     diagnostics: &mut Vec<StatementDiagnostic>,
 ) {
     for (scope_id, id, statement) in candidates {

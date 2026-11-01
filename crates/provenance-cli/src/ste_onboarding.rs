@@ -54,9 +54,7 @@ pub fn prepare(repo: &Utf8Path, selected_pdf: Option<&Utf8Path>) -> anyhow::Resu
         });
     };
     let before = FileSnapshot::read(reference_path.as_std_path())?;
-    let mut bytes = serde_json::to_vec_pretty(&import.identity)
-        .context("serialize the dictionary reference")?;
-    bytes.push(b'\n');
+    let bytes = dictionary_reference::reference_bytes(&layout, &import.identity)?;
     Ok(Plan {
         import: Some(import),
         reference_before: Some(before),

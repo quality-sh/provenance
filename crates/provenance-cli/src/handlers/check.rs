@@ -136,14 +136,18 @@ impl RepositoryCheckPort {
                 }
             })
             .map_err(|error| format!("{:#}", initialization_hint(&self.context.repo, error)))?;
-        let findings = diagnostics
+        // A strict check fails earlier when the index is missing.
+        let skipped_rule = provenance_store::dictionary_reference::missing_index_warning(&layout)
+            .filter(|_| !self.strict)
+            .map(Finding::new);
+        let findings = skipped_rule
             .into_iter()
-            .map(|diagnostic| {
+            .chain(diagnostics.into_iter().map(|diagnostic| {
                 Finding::with_detail(
                     &diagnostic.message,
                     serde_json::to_value(&diagnostic).expect("statement diagnostic is JSON"),
                 )
-            })
+            }))
             .collect::<Vec<_>>();
         let refusal = if self.strict && !findings.is_empty() {
             Refusal::Findings

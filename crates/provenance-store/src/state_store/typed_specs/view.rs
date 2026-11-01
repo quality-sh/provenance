@@ -1,10 +1,10 @@
 //! The records a typed-spec decision reads.
 
+use crate::dictionary_reference::ProjectDictionary;
 use provenance_core::{
     Boundary, ImplementationBinding, Question, Requirement, Resolution, Rule, ScopeId, Source,
     Topic,
 };
-use provenance_ste100::DictionaryImport;
 
 use crate::state_store::StateStore;
 
@@ -23,7 +23,7 @@ pub struct TypedSpecView {
     pub questions: Vec<Question>,
     pub boundaries: Vec<Boundary>,
     /// The project dictionary that statement diagnostics use.
-    pub dictionary: Option<DictionaryImport>,
+    pub dictionary: Option<ProjectDictionary>,
 }
 
 impl StateStore {
