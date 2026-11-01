@@ -19,7 +19,6 @@ pub(super) fn print_if_rule_one_one_did_not_run(repo: &Utf8Path) {
 /// Adds the warning to a refused statement write. A JSON refusal carries it in
 /// `meta.warnings`, so standard error stays one JSON object. Other output
 /// prints it as a `warning:` line.
-#[provenance_macros::rule("rule_ste_dictionary_index_missing_warning")]
 pub(super) fn add_to_refusal(error: anyhow::Error, repo: &Utf8Path, json: bool) -> anyhow::Error {
     let Some(warning) = rule_one_one_warning(repo) else {
         return error;
