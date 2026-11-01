@@ -1,7 +1,7 @@
 use super::read_budget::{ensure_slice_within_read_budget, ReadBudget};
 use super::{
     ensure_new_ids_assignable, overlay_records, read_jsonl_unlocked, read_message_shards_unlocked,
-    serde_name, IdeationLandingBatch, StateStore,
+    serde_name, Access, IdeationLandingBatch, StateStore,
 };
 use crate::cache::{BudgetKind, ProjectionFamily, RecordFamily};
 use crate::jsonl::write_jsonl_atomic_under_publication;
@@ -10,6 +10,7 @@ use provenance_core::{
     AssertionRecord, Contribution, DispositionRecord, NodeType, ProposalCard, ScopeId,
     SynthesisPacket, Thread, ThreadStatus,
 };
+use provenance_macros::rule;
 
 macro_rules! collect_node_ids {
     ($records:ident, $kinds:ident, $shards:ident, $field:ident, [$node:ident]) => {
@@ -272,54 +273,79 @@ macro_rules! define_imported_scope_shards {
                 shards: &ScopeShards<'_>,
             ) -> anyhow::Result<()> {
                 self.ensure_writable()?;
-                validate_threads(shards.threads)?;
-                $(ensure_family_budget(shards.$export_field)?;)*
-                $(ensure_binding_budget!(
-                    shards, verification, $($binding_graph)+, $binding_field
-                );)*
-                $(ensure_family_budget(shards.$canonical_field)?;)*
+                self.with_staged_import(|store| {
+                    validate_threads(shards.threads)?;
+                    $(ensure_family_budget(shards.$export_field)?;)*
+                    $(ensure_binding_budget!(
+                        shards, verification, $($binding_graph)+, $binding_field
+                    );)*
+                    $(ensure_family_budget(shards.$canonical_field)?;)*
 
-                let mut records = Vec::new();
-                let mut kinds = Vec::new();
-                $(collect_node_ids!(records, kinds, shards, $export_field, [$($export_node)*]);)*
-                self.ensure_import_ids_unique(scope, records, &kinds)?;
-                $(ensure_binding_assignable!(
-                    self, scope, shards, verification, $($binding_graph)+,
-                    $binding_field, $binding_path, $binding_strategy, $binding_import
-                );)*
-                $(ensure_binding_assignable!(
-                    self, scope, shards, implementation, $($binding_graph)+,
-                    $binding_field, $binding_path, $binding_strategy, $binding_import
-                );)*
-                $(ensure_assignable!(
-                    self, scope, shards, $canonical_field, $canonical_path,
-                    $canonical_strategy, $canonical_import
-                );)*
+                    let mut records = Vec::new();
+                    let mut kinds = Vec::new();
+                    $(collect_node_ids!(
+                        records, kinds, shards, $export_field, [$($export_node)*]
+                    );)*
+                    store.ensure_import_ids_unique(scope, records, &kinds)?;
+                    $(ensure_binding_assignable!(
+                        store, scope, shards, verification, $($binding_graph)+,
+                        $binding_field, $binding_path, $binding_strategy, $binding_import
+                    );)*
+                    $(ensure_binding_assignable!(
+                        store, scope, shards, implementation, $($binding_graph)+,
+                        $binding_field, $binding_path, $binding_strategy, $binding_import
+                    );)*
+                    $(ensure_assignable!(
+                        store, scope, shards, $canonical_field, $canonical_path,
+                        $canonical_strategy, $canonical_import
+                    );)*
 
-                super::resolution_decisions::ensure_resolution_decisions(
-                    shards.resolutions, shards.questions, shards.rules,
-                )?;
-                let scope_dir = self.layout.scopes_dir().join(scope.as_str());
-                if scope_dir.exists() {
-                    std::fs::remove_dir_all(&scope_dir)?;
-                }
-                $(write_family!(self, scope, shards, $export_variant, $export_field);)*
-                $(write_binding!(
-                    verification, self, scope, shards, $binding_variant,
-                    $binding_field, $($binding_graph)+
-                );)*
-                $(write_binding!(
-                    implementation, self, scope, shards, $binding_variant,
-                    $binding_field, $($binding_graph)+
-                );)*
-                $(write_family!(self, scope, shards, $canonical_variant, $canonical_field);)*
-                Ok(())
+                    super::resolution_decisions::ensure_resolution_decisions(
+                        shards.resolutions, shards.questions, shards.rules,
+                    )?;
+                    let scope_dir = store.layout.scopes_dir().join(scope.as_str());
+                    if scope_dir.exists() {
+                        std::fs::remove_dir_all(&scope_dir)?;
+                    }
+                    $(write_family!(store, scope, shards, $export_variant, $export_field);)*
+                    $(write_binding!(
+                        verification, store, scope, shards, $binding_variant,
+                        $binding_field, $($binding_graph)+
+                    );)*
+                    $(write_binding!(
+                        implementation, store, scope, shards, $binding_variant,
+                        $binding_field, $($binding_graph)+
+                    );)*
+                    $(write_family!(store, scope, shards, $canonical_variant, $canonical_field);)*
+                    Ok(())
+                })
             }
         }
     };
 }
 
 crate::cache::family_table::record_family_rows!(define_imported_scope_shards);
+
+impl StateStore {
+    /// Runs a scope import in one section of the stage of this store. A live
+    /// store refuses: the import replaces a scope folder shard by shard, and
+    /// only the swap of a stage publishes that as one change.
+    #[rule("rule_scope_import_needs_a_staged_store")]
+    fn with_staged_import<R>(
+        &self,
+        operation: impl FnOnce(&Self) -> anyhow::Result<R>,
+    ) -> anyhow::Result<R> {
+        anyhow::ensure!(
+            matches!(
+                self.access,
+                Access::Staged { .. } | Access::StagedSection { .. }
+            ),
+            "a scope import needs a staged store of {}",
+            self.layout.root()
+        );
+        self.with_repository_publication(operation)
+    }
+}
 
 struct StoredIdeationRecords {
     contributions: Vec<Contribution>,

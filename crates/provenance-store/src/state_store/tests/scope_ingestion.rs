@@ -1,33 +1,11 @@
-use super::initialized_store;
+use super::staged_store;
 use crate::cache::ProjectionFamily;
-use crate::layout::ProvenanceLayout;
 use crate::publication::with_repository_publication;
 use crate::shards;
+use crate::state_store::ScopeShards;
 use crate::state_store::{CreateBoundaryInput, CreateRequirementInput};
-use crate::state_store::{ScopeShards, StateStore};
 use provenance_core::{RepoPathPrefix, RequirementStatus, Scope, ScopeId, StableId};
 use provenance_macros::verifies;
-
-fn staged_store() -> (
-    tempfile::TempDir,
-    StateStore,
-    StateStore,
-    provenance_core::ScopeId,
-    Vec<u8>,
-) {
-    let (dir, live_store, scope) = initialized_store();
-    let manifest_before = std::fs::read(live_store.layout.manifest_path()).unwrap();
-    let staged_root = camino::Utf8PathBuf::from_path_buf(dir.path().join("staged-repo")).unwrap();
-    let staged_layout = ProvenanceLayout::new(staged_root);
-    std::fs::create_dir_all(staged_layout.state_dir()).unwrap();
-    std::fs::write(staged_layout.manifest_path(), &manifest_before).unwrap();
-    let staged_store = StateStore::staged_view(
-        None,
-        staged_layout,
-        crate::state_store::RecordStamp::ResolveFromRepository,
-    );
-    (dir, live_store, staged_store, scope, manifest_before)
-}
 
 fn seed_shard<T: serde::Serialize>(path: &camino::Utf8Path, records: &[T]) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();

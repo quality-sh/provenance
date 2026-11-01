@@ -1,4 +1,4 @@
-use super::initialized_store;
+use super::staged_store;
 use crate::state_store::ScopeShards;
 use provenance_core::{Thread, VerificationBinding};
 
@@ -30,7 +30,7 @@ fn verification_binding(id: &str, file: &str) -> VerificationBinding {
 
 #[test]
 fn assignability_checks_verification_bindings_before_canonical_families() {
-    let (_dir, store, scope) = initialized_store();
+    let (_dir, _live, store, scope, _) = staged_store();
     let threads = [thread("search", "worker")];
     let bindings = [verification_binding("check", "tests/check.rs")];
 
@@ -57,7 +57,7 @@ fn budget_checks_verification_bindings_before_canonical_families() {
     let threads = [thread("thread_large", &oversized)];
     let bindings = [verification_binding("verification_large", &oversized)];
 
-    let (_expected_dir, expected_store, expected_scope) = initialized_store();
+    let (_expected_dir, _expected_live, expected_store, expected_scope, _) = staged_store();
     let expected = expected_store
         .import_scope(
             &expected_scope,
@@ -68,7 +68,7 @@ fn budget_checks_verification_bindings_before_canonical_families() {
         )
         .unwrap_err();
 
-    let (_actual_dir, actual_store, actual_scope) = initialized_store();
+    let (_actual_dir, _actual_live, actual_store, actual_scope, _) = staged_store();
     let actual = actual_store
         .import_scope(
             &actual_scope,

@@ -1,4 +1,4 @@
-use super::initialized_store;
+use super::{initialized_store, staged_store};
 use crate::state_store::{CreateSourceInput, ScopeShards};
 use provenance_core::{
     Message, MessageRole, NodeType, SourceType, StableId, Thread, ThreadParent, ThreadStatus,
@@ -37,7 +37,7 @@ fn a_writer_refuses_a_command_keyword_as_a_new_record_id() {
 
 #[test]
 fn scope_import_refuses_a_new_command_keyword_id() {
-    let (_directory, store, scope) = initialized_store();
+    let (_directory, _live, store, scope, _) = staged_store();
     let source = provenance_core::Source {
         created: None,
         updated: None,
@@ -71,7 +71,7 @@ fn scope_import_refuses_a_new_command_keyword_id() {
 #[test]
 fn an_existing_keyword_id_survives_a_scope_import() {
     for keyword in ["search", "discussions", "discussion", "discuss", "reply"] {
-        let (_directory, store, scope) = initialized_store();
+        let (_directory, _live, store, scope, _) = staged_store();
         let source = provenance_core::Source {
             created: None,
             updated: None,
@@ -104,7 +104,7 @@ fn an_existing_keyword_id_survives_a_scope_import() {
 
 #[test]
 fn a_keyword_id_from_another_record_kind_is_not_preserved() {
-    let (_directory, store, scope) = initialized_store();
+    let (_directory, _live, store, scope, _) = staged_store();
     let message = Message {
         schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
@@ -141,7 +141,7 @@ fn a_keyword_id_from_another_record_kind_is_not_preserved() {
 
 #[test]
 fn an_existing_keyword_message_id_survives_a_scope_import() {
-    let (_directory, store, scope) = initialized_store();
+    let (_directory, _live, store, scope, _) = staged_store();
     let message = Message {
         schema_version: provenance_core::SUPPORTED_SCHEMA_VERSION,
         scope_id: scope.clone(),
