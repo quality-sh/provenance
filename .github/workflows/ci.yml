@@ -905,10 +905,12 @@ jobs:
           PROVENANCE_STE100_INDEX_DIR: ${{ runner.temp }}/ste100-index
           PROVENANCE_STE100_ASSET_DIR: ${{ runner.temp }}/ste100-asset
           SCRATCH: ${{ runner.temp }}/ste100-init
+        # The trap removes the PDF also when init fails after it saves the PDF.
+        # The step then fails with the exit code of init.
         run: |
+          trap 'rm -rf "$PROVENANCE_STE100_ASSET_DIR"' EXIT
           mkdir -p "$SCRATCH"
           target/debug/provenance init --path "$SCRATCH" --scope default --path-prefix . > /dev/null
-          rm -rf "$PROVENANCE_STE100_ASSET_DIR"
           identity='del(.technical_names)'
           if ! cmp -s <(jq -S "$identity" .provenance/state/dictionary.json) \
             <(jq -S "$identity" "$SCRATCH/.provenance/state/dictionary.json" 2>/dev/null); then
