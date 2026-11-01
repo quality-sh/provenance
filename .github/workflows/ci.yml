@@ -486,7 +486,7 @@ jobs:
           CARGO_HTTP_CHECK_REVOKE: ${{ runner.os == 'Windows' && 'false' || 'true' }}
         run: sfw cargo fetch --locked
       - name: Install nextest
-        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2
         with:
           tool: nextest@0.9.143
       # The review notify tests queue messages into a real Codex thread on Linux only.
@@ -522,7 +522,7 @@ jobs:
       # On a pull request it builds and runs only the selected tests.
       - name: Install pinned coverage tool
         if: runner.os == 'Linux'
-        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2
         with:
           tool: cargo-llvm-cov@0.9.1
       - name: Test concurrently with coverage
@@ -678,7 +678,7 @@ jobs:
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
       - name: Install nextest
-        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2
         with:
           tool: nextest@0.9.143
       - name: Install Codex for the review notify tests
@@ -800,7 +800,7 @@ jobs:
       - name: Fetch crates through Socket Firewall
         run: sfw cargo fetch --locked
       - name: Install nextest
-        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2
         with:
           tool: nextest@0.9.143
       - name: Test compile-time refusals
@@ -849,7 +849,7 @@ jobs:
         with:
           toolchain: stable
       - name: Install pinned CRAP tool
-        uses: taiki-e/install-action@a4d3f3f761dcd95cce1b72cb61cb6d1963438177 # v2
+        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2
         with:
           tool: cargo-crap@0.5.0
       - name: Test the gate with native cargo-crap fixtures
