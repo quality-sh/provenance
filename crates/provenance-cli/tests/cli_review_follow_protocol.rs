@@ -141,3 +141,40 @@ fn native_subscription_refuses_a_wrong_host() {
     );
     assert_eq!(status, 403);
 }
+
+#[cfg(unix)]
+#[test]
+// Implementation aid: Ctrl-C while the follower connects ends it at once; the handler is set up only after the connection.
+fn interrupt_while_connecting_ends_the_follower_at_once() {
+    use std::os::unix::process::ExitStatusExt as _;
+    use std::process::Stdio;
+    let repo = repository();
+    let host = scripted_feed::Stalled::start(repo.path());
+    let mut child = host
+        .command(repo.path())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    host.connecting
+        .recv_timeout(review_host_support::waits::LIMIT)
+        .unwrap();
+    assert!(std::process::Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .unwrap()
+        .success());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if std::time::Instant::now() > deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("Ctrl-C while connecting must end the follower");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert_eq!(status.signal(), Some(2), "{status:?}");
+}

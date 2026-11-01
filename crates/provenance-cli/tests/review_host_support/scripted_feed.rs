@@ -116,3 +116,91 @@ impl Drop for Feed {
         self.worker.take().unwrap().join().unwrap();
     }
 }
+
+/// A host that takes the follower's subscription request and never answers it, so the
+/// follower stays in its connect step.
+pub struct Stalled {
+    /// Receives one message when the follower's subscription request arrives.
+    pub connecting: std::sync::mpsc::Receiver<()>,
+    stop: Option<oneshot::Sender<()>>,
+    worker: Option<std::thread::JoinHandle<()>>,
+    _registration: LocalHostRegistration,
+    cache: tempfile::TempDir,
+}
+
+impl Stalled {
+    pub fn start(root: &Path) -> Self {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let registration =
+            LocalHostRegistration::publish(root, "default", &endpoint, "fixture").unwrap();
+        let identity = registration.identity();
+        let cache = tempfile::tempdir().unwrap();
+        let directory = cache_directory(cache.path()).join("provenance/review-launch");
+        std::fs::create_dir_all(&directory).unwrap();
+        owner_file::create(&directory.join(format!("{}.key", identity.instance_nonce)))
+            .unwrap()
+            .write_all("a".repeat(64).as_bytes())
+            .unwrap();
+        let (stop, stopped) = oneshot::channel::<()>();
+        let (arrived, connecting) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(async move {
+                    let app = Router::new()
+                        .route(
+                            IDENTITY_ROUTE,
+                            get(move || {
+                                let identity = identity.clone();
+                                async move { Json(identity) }
+                            }),
+                        )
+                        .route(
+                            "/review-events",
+                            get(move || {
+                                let _ = arrived.send(());
+                                std::future::pending::<()>()
+                            }),
+                        );
+                    let serve =
+                        axum::serve(tokio::net::TcpListener::from_std(listener).unwrap(), app);
+                    // Dropping the runtime ends the stalled request; a graceful shutdown would wait for it.
+                    tokio::select! {
+                        _ = serve => {},
+                        _ = stopped => {},
+                    }
+                });
+        });
+        Self {
+            connecting,
+            stop: Some(stop),
+            worker: Some(worker),
+            _registration: registration,
+            cache,
+        }
+    }
+    pub fn command(&self, root: &Path) -> std::process::Command {
+        let mut command = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"));
+        use_user_cache(&mut command, self.cache.path());
+        command.args([
+            "req_follow",
+            "get",
+            "--view",
+            "review",
+            "--follow",
+            "--format",
+            "json",
+            "--repo",
+            root.to_str().unwrap(),
+        ]);
+        command
+    }
+}
+impl Drop for Stalled {
+    fn drop(&mut self) {
+        let _ = self.stop.take().unwrap().send(());
+        self.worker.take().unwrap().join().unwrap();
+    }
+}
