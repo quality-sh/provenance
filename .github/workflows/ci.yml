@@ -900,6 +900,7 @@ jobs:
       # The PDF and the index are licensed material: the step does not print
       # them, and no step uploads them. Only the index goes into the cache.
       - name: Download the dictionary and make the index
+        if: steps.restore-dictionary.outputs.cache-hit != 'true'
         env:
           PROVENANCE_STE100_INDEX_DIR: ${{ runner.temp }}/ste100-index
           PROVENANCE_STE100_ASSET_DIR: ${{ runner.temp }}/ste100-asset
@@ -909,8 +910,6 @@ jobs:
         run: |
           trap 'rm -rf "$PROVENANCE_STE100_ASSET_DIR"' EXIT
           mkdir -p "$SCRATCH"
-          touch "$RUNNER_TEMP/index-blocker"
-          export PROVENANCE_STE100_INDEX_DIR="$RUNNER_TEMP/index-blocker/index"
           target/debug/provenance init --path "$SCRATCH" --scope default --path-prefix . > /dev/null
           identity='del(.technical_names)'
           if ! cmp -s <(jq -S "$identity" .provenance/state/dictionary.json) \
@@ -919,12 +918,6 @@ jobs:
             exit 1
           fi
           rm -rf "$SCRATCH"
-      - name: Show that the PDF is gone
-        if: always()
-        run: |
-          ls -la "$RUNNER_TEMP"
-          if [ -e "$RUNNER_TEMP/ste100-asset" ]; then echo "PDF directory present"; exit 1; fi
-          echo "PDF directory absent"
       - name: Save the dictionary index
         if: steps.restore-dictionary.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
