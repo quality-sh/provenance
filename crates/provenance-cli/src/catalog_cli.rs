@@ -14,6 +14,7 @@ mod input;
 mod input_guard;
 mod parent_replacement;
 pub mod refusal;
+mod statement_warning;
 
 pub use help::required_discussion_flags;
 
@@ -171,7 +172,7 @@ pub fn print_target_help(
 pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
     let Invocation {
         context,
-        format: _,
+        format,
         path,
         definition,
         data,
@@ -207,23 +208,28 @@ pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
             &layout,
             &request.statement,
         );
+        statement_warning::print_if_rule_one_one_did_not_run(&context.repo.repo);
         return crate::output::print_json(&serde_json::json!({"data": report, "meta": {}}));
     }
+    let writes_statement = method != Method::GET && statement_warning::has_statement(&data);
     match host
         .invoke_resource(method, &path, data, query, headers)
         .await
     {
         Ok(mut value) => {
+            if writes_statement {
+                statement_warning::print_if_rule_one_one_did_not_run(&repo.repo);
+            }
             crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
             crate::output::print_json(&value)?;
         }
         Err(failure) => {
-            return Err(failure_with_guidance(
-                &failure,
-                &path,
-                record_id(&path),
-                &context.repo,
-            ))
+            let error = failure_with_guidance(&failure, &path, record_id(&path), &context.repo);
+            if !writes_statement {
+                return Err(error);
+            }
+            let json = format == Some(provenance_cli::porcelain::OutputFormat::Json);
+            return Err(statement_warning::add_to_refusal(error, &repo.repo, json));
         }
     }
     Ok(())
@@ -264,6 +270,7 @@ pub async fn dispatch_target(
             "target actions do not accept query options"
         ));
     }
+    let writes_statement = statement_warning::has_statement(&data);
     let replacement = matches.get_one::<String>("replace_parent");
     let result = if let Some(old) = replacement {
         anyhow::ensure!(
@@ -291,10 +298,17 @@ pub async fn dispatch_target(
                 failure_with_guidance(&failure, &route.path, Some(&target), &context.repo)
             })
     };
+    let json = format == Some(provenance_cli::porcelain::OutputFormat::Json);
     let mut value = match result {
         Ok(value) => value,
-        Err(failure) => return Err(failure),
+        Err(error) if writes_statement => {
+            return Err(statement_warning::add_to_refusal(error, &repo.repo, json));
+        }
+        Err(error) => return Err(error),
     };
+    if writes_statement {
+        statement_warning::print_if_rule_one_one_did_not_run(&repo.repo);
+    }
     let affected = route.definition.registration.review_link.map(|kind| {
         crate::review_link::AffectedReviewRecord {
             kind,
@@ -302,7 +316,7 @@ pub async fn dispatch_target(
         }
     });
     crate::review_link::annotate_write(&repo, affected, &mut value).await;
-    if format == Some(provenance_cli::porcelain::OutputFormat::Json) {
+    if json {
         crate::output::print_json(&value)?;
     } else {
         println!(

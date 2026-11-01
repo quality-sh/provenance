@@ -37,7 +37,7 @@ pub(super) fn analyze_typed_statements(
     resources: &[ReconciledResource],
     requirements: &[Requirement],
     rules: &[Rule],
-    dictionary: Option<&provenance_ste100::DictionaryImport>,
+    dictionary: Option<&crate::dictionary_reference::ProjectDictionary>,
 ) -> Vec<TypedSpecDiagnostic> {
     resources
         .iter()

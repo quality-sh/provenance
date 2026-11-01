@@ -184,12 +184,22 @@ pub fn check_descriptive(text: &str) -> Report {
 
 /// Reports determinate violations, with Rule 1.1 vocabulary findings from the
 /// imported dictionary added to the data-free checks.
-pub fn check_descriptive_with_dictionary(text: &str, dictionary: &DictionaryImport) -> Report {
+///
+/// Rule 1.1 accepts each word or phrase in `technical_names`. ASD-STE100 Rule
+/// 1.5 permits technical nouns and Rule 1.12 permits technical verbs.
+pub fn check_descriptive_with_dictionary(
+    text: &str,
+    dictionary: &DictionaryImport,
+    technical_names: &[String],
+) -> Report {
     let mut report = check_descriptive(text);
     let protected = protected_spans::analyze(text);
-    report
-        .findings
-        .extend(unapproved_word_findings(text, &protected, dictionary));
+    report.findings.extend(unapproved_word_findings(
+        text,
+        &protected,
+        dictionary,
+        technical_names,
+    ));
     sort_findings(&mut report.findings);
     report
 }
@@ -200,10 +210,17 @@ fn unapproved_word_findings(
     text: &str,
     protected: &protected_spans::ProtectedSpans,
     dictionary: &DictionaryImport,
+    technical_names: &[String],
 ) -> Vec<Finding> {
+    let names = vocabulary::technical_name_spans(text, technical_names);
     vocabulary::classify(text, protected, dictionary)
         .into_iter()
         .filter(|word_use| word_use.category == VocabularyCategory::Unapproved)
+        .filter(|word_use| {
+            !names
+                .iter()
+                .any(|name| name.start <= word_use.span.start && word_use.span.end <= name.end)
+        })
         .map(|word_use| {
             let rejected = &text[word_use.span.start..word_use.span.end];
             Finding {
