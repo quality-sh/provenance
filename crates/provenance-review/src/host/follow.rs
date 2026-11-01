@@ -14,6 +14,7 @@ use tokio::io::AsyncWrite;
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
 /// Streams saved document state to `output` when the repository host sends an invalidation.
+///
 /// `stop` is first polled after the connection opens. The stream ends with success when `stop`
 /// completes with `Ok`, and with its error otherwise.
 #[rule("rule_review_follow_push")]
