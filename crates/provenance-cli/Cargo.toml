@@ -75,6 +75,7 @@ assert_cmd.workspace = true
 flate2.workspace = true
 pdf_oxide = { version = "=0.3.78", default-features = false, features = ["legacy-crypto"] }
 jsonschema.workspace = true
+notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 tempfile.workspace = true
 predicates.workspace = true
 rmcp = { version = "=2.2.0", default-features = false, features = ["client"] }

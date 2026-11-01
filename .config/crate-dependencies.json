@@ -94,6 +94,7 @@
       ],
       "dev-dependencies": [
         "jsonschema",
+        "notify",
         "provenance-transport",
         "rmcp",
         "tempfile"

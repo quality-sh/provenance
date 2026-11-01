@@ -2437,6 +2437,7 @@ dependencies = [
  "fs2",
  "hex",
  "jsonschema",
+ "notify",
  "open",
  "pdf_oxide",
  "predicates",
