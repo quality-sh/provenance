@@ -109,6 +109,7 @@ class SelectionTests(unittest.TestCase):
         for path in (
             "crates/provenance-store/src/lib.rs",
             "crates/provenance-store/tests/shape.rs",
+            "crates/provenance-store/README.md",
         ):
             with self.subTest(path=path):
                 selection = select(path)
@@ -117,8 +118,20 @@ class SelectionTests(unittest.TestCase):
                     selection["test-filter"],
                 )
                 self.assertIn("-p provenance-scanner", selection["test-packages"])
-        selection = select("crates/provenance-store/README.md")
-        self.assertNotIn("scanner_lexer_regressions", selection["test-filter"])
+
+    def test_a_store_ignore_file_selects_the_scanner_test_that_reads_the_store(self):
+        # The scan obeys these files and the text search in the test does not.
+        for path in (
+            "crates/provenance-store/.gitignore",
+            "crates/provenance-store/src/.gitignore",
+        ):
+            with self.subTest(path=path):
+                selection = select(path)
+                self.assertIn(
+                    "binary_id(provenance-scanner::scanner_lexer_regressions)",
+                    selection["test-filter"],
+                )
+                self.assertIn("-p provenance-scanner", selection["test-packages"])
 
     def test_a_manifest_change_selects_the_tests_that_read_every_manifest(self):
         selection = select("crates/provenance-http-client/Cargo.toml")

@@ -91,7 +91,9 @@ SOURCE_READERS = (
     ("crates/provenance-sdk/", "", "provenance-cli::cargo_nested_sdk"),
     ("crates/provenance-transport/src/", "", "provenance-contract::registration_ownership"),
     # This compares the bindings in the store crate with a text search of it.
-    ("crates/provenance-store/", ".rs", "provenance-scanner::scanner_lexer_regressions"),
+    # The scan obeys the .gitignore files in the store tree and the text
+    # search does not, so every file in the tree is an input.
+    ("crates/provenance-store/", "", "provenance-scanner::scanner_lexer_regressions"),
     *(
         (f"crates/{name}/src/", ".rs", "provenance-core::no_wildcard_gates")
         for name in (
