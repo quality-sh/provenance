@@ -11,8 +11,6 @@ use std::{
 use provenance_macros::verifies;
 use review_host_support::{repository, start};
 
-include!(concat!(env!("OUT_DIR"), "/review_assets.rs"));
-
 #[test]
 /// This flow tries every asset and the router's access checks over GET and HEAD.
 #[verifies("rule_cli_serves_review_assets", exhaustion)]
@@ -20,9 +18,10 @@ fn accepted_inventory_uses_the_composed_router_and_origin_checks() {
     let repo = repository();
     let host = start(repo.path());
     let endpoint = host.config["endpoint"].as_str().unwrap();
-    for (path, expected) in ASSETS.iter().copied().chain(std::iter::once((
+    let assets = provenance_review::bundle();
+    for (path, expected) in assets.iter().copied().chain(std::iter::once((
         "/",
-        ASSETS
+        assets
             .iter()
             .find(|(path, _)| *path == "/index.html")
             .unwrap()

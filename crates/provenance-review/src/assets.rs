@@ -1,16 +1,30 @@
-use axum::{body::Body, extract::Request, http::Method, response::Response};
-use provenance_core::protocol::failure::OperationFailure;
+//! The review page bundle this crate was compiled with, and the route that serves it.
+
+use axum::{
+    body::Body,
+    extract::Request,
+    http::{Method, StatusCode},
+    response::{IntoResponse, Response},
+    Json,
+};
+use provenance_core::protocol::failure::{FailureEnvelope, OperationFailure};
 use provenance_macros::rule;
 use provenance_transport::{HttpCredential, LocalAccess};
 
 include!(concat!(env!("OUT_DIR"), "/review_assets.rs"));
 
-/// Answers every asset path the review page asks for from the bundle this
-/// package was compiled with. The `include!` above embeds that bundle at
-/// compile time, so the bytes handed out are the bytes the package carries.
-/// Any other request gets the same authenticated route refusals as the host API.
+/// Every file in the embedded bundle, as its URL path and its bytes, in path order.
+pub const fn bundle() -> &'static [(&'static str, &'static [u8])] {
+    ASSETS
+}
+
+/// Answers every asset path the review page asks for from the embedded bundle.
+///
+/// The `include!` above embeds that bundle at compile time, so the bytes handed
+/// out are the bytes the package carries. Any other request gets the same
+/// authenticated route refusals as the host API.
 #[rule("rule_cli_serves_review_assets")]
-pub(super) fn serve(access: &LocalAccess, request: &Request) -> Response {
+pub fn serve(access: &LocalAccess, request: &Request) -> Response {
     let path = match request.uri().path() {
         "/" => "/index.html",
         path => path,
@@ -37,13 +51,22 @@ pub(super) fn serve(access: &LocalAccess, request: &Request) -> Response {
 /// authenticate before the route is classified.
 fn refuse(access: &LocalAccess, request: &Request, known_path: bool) -> Response {
     if let Err(error) = access.authenticate(request.headers()) {
-        return super::refusal(error);
+        return refusal(error);
     }
-    super::refusal(if known_path {
+    refusal(if known_path {
         OperationFailure::MethodNotAllowed
     } else {
         OperationFailure::UnknownOperation
     })
+}
+
+/// A failure envelope with the status code of the failure, as the host API answers.
+fn refusal(error: OperationFailure) -> Response {
+    (
+        StatusCode::from_u16(error.status_code()).expect("operation failure status"),
+        Json(FailureEnvelope::new(None, error)),
+    )
+        .into_response()
 }
 
 /// The media type for each file extension that the review bundle can hold.

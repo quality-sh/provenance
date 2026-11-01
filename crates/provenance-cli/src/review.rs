@@ -1,4 +1,3 @@
-mod assets;
 mod connection;
 mod detach;
 mod events;
@@ -174,7 +173,7 @@ fn review_router(
         )
         .merge(events.router())
         .fallback(move |request: Request| {
-            std::future::ready(assets::serve(&asset_access, &request))
+            std::future::ready(provenance_review::serve(&asset_access, &request))
         })
         .layer(middleware::from_fn_with_state(
             (access, codes.clone(), format!("ws://{address}")),

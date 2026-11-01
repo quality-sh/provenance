@@ -193,8 +193,8 @@ jobs:
           native=$(find target/review-native -type f -name '${{ matrix.binary }}' -print -quit)
           engine=$(find target/review-engine -type f -name '${{ matrix.binary }}' -print -quit)
           test -n "$native" && test -n "$engine"
-          node tools/review-host/verify-native.ts "$native" crates/provenance-cli/review-assets-generated target/review-sdk
-          node tools/review-host/verify-native.ts "$engine" crates/provenance-cli/review-assets-generated target/review-sdk
+          node tools/review-host/verify-native.ts "$native" crates/provenance-review/review-assets-generated target/review-sdk
+          node tools/review-host/verify-native.ts "$engine" crates/provenance-review/review-assets-generated target/review-sdk
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:

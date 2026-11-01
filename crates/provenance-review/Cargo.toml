@@ -8,13 +8,16 @@ repository.workspace = true
 homepage.workspace = true
 readme.workspace = true
 publish.workspace = true
-include = ["src/**", "tests/**", "Cargo.toml", "README.md"]
+# The composed review page bundle is prepared before packaging and is not tracked.
+# Run node tools/review-host/prepare.ts crates/provenance-review/review-assets-generated before Cargo collects package files.
+include = ["src/**", "build.rs", "build/**", "review-assets/**", "review-assets-generated/**", "tests/**", "Cargo.toml", "README.md"]
 
 [lints]
 workspace = true
 
 [dependencies]
 anyhow.workspace = true
+axum.workspace = true
 camino.workspace = true
 provenance-core.workspace = true
 provenance-macros.workspace = true
