@@ -2,7 +2,9 @@
 //! creation, on a content change to a record that was never submitted, on
 //! archive parent pruning, and once for a race of two guarded writes.
 
+#[path = "native_review_submissions/entry_paths.rs"]
 mod entry_paths;
+#[path = "native_review_submissions/support.rs"]
 mod support;
 
 use provenance_core::NodeType;
