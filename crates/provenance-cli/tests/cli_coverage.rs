@@ -214,14 +214,14 @@ fn strict_scan_reports_unverified_and_unimplemented_as_independent_findings() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_anchor",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "req_anchor",
             "--statement",
             "The anchor requirement holds",
         ])
@@ -230,14 +230,14 @@ fn strict_scan_reports_unverified_and_unimplemented_as_independent_findings() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "rules",
+            "rule_pays_overtime",
             "create",
+            "--type",
+            "rule",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "rule_pays_overtime",
             "--requirement-id",
             "req_anchor",
             "--statement",
@@ -306,14 +306,14 @@ fn partial_scan_does_not_claim_scope_wide_binding_absence() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_anchor",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "req_anchor",
             "--statement",
             "The anchor requirement holds",
         ])
@@ -322,14 +322,14 @@ fn partial_scan_does_not_claim_scope_wide_binding_absence() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "rules",
+            "rule_outside_selected_path",
             "create",
+            "--type",
+            "rule",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "rule_outside_selected_path",
             "--requirement-id",
             "req_anchor",
             "--statement",

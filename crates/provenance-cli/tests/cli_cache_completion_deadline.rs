@@ -26,8 +26,22 @@ fn a_held_close_lock_fails_the_read_naming_the_stage() {
             json!({"id":"topic_deadline", "requirement_id":"req_deadline", "title":"Deadline"}),
         ),
     ] {
+        let mut body = body;
+        let id = body.as_object_mut().unwrap().remove("id").unwrap();
+        let kind = collection.strip_suffix("ies").map_or_else(
+            || collection.trim_end_matches('s').to_owned(),
+            |stem| format!("{stem}y"),
+        );
         provenance()
-            .args([collection, "create", "--repo", &repo, "--stdin"])
+            .args([
+                id.as_str().unwrap(),
+                "create",
+                "--type",
+                &kind,
+                "--stdin",
+                "--repo",
+                &repo,
+            ])
             .write_stdin(body.to_string())
             .assert()
             .success();
@@ -45,7 +59,7 @@ fn a_held_close_lock_fails_the_read_naming_the_stage() {
     lock.lock_exclusive().unwrap();
 
     let mut command = provenance();
-    command.args(["topics", "topic_deadline", "get", "--repo", &repo]);
+    command.args(["api", "topics/topic_deadline", "--repo", &repo]);
     let started = Instant::now();
     let output = command.output().unwrap();
     let elapsed = started.elapsed();

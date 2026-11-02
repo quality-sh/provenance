@@ -35,32 +35,32 @@ fn seed(repo: &str) {
         ".",
     ]);
     success(&[
-        "sources",
+        "source_search",
         "create",
+        "--type",
+        "source",
         "--repo",
         repo,
-        "--id",
-        "source_search",
         "--name",
         "Archive needle source",
     ]);
     success(&[
-        "requirements",
+        "req_search",
         "create",
+        "--type",
+        "requirement",
         "--repo",
         repo,
-        "--id",
-        "req_search",
         "--statement",
         "Shared needle requirement.",
     ]);
     success(&[
-        "rules",
+        "rule_search",
         "create",
+        "--type",
+        "rule",
         "--repo",
         repo,
-        "--id",
-        "rule_search",
         "--requirement-id",
         "req_search",
         "--statement",
@@ -196,12 +196,12 @@ fn continuation_has_no_loss_and_refuses_wrong_query_or_revision() {
     );
 
     success(&[
-        "sources",
+        "source_revision_change",
         "create",
+        "--type",
+        "source",
         "--repo",
         repo,
-        "--id",
-        "source_revision_change",
         "--name",
         "Revision change",
     ]);
@@ -243,12 +243,12 @@ fn search_help_is_available_without_a_repository() {
 
 fn rule(repo: &str, id: &str, statement: &str, status: &str) {
     success(&[
-        "rules",
+        id,
         "create",
+        "--type",
+        "rule",
         "--repo",
         repo,
-        "--id",
-        id,
         "--requirement-id",
         "req_search",
         "--statement",
@@ -308,14 +308,16 @@ fn file_search_returns_bound_rules_symbol_first_like_resolve_symbol() {
     assert_eq!(page["has_more"], false);
 
     let resolved = json(&[
+        "api",
         "rules",
-        "resolve-symbol",
+        "--query",
+        "query=resolve-symbol",
         "--repo",
         repo,
-        "--file",
-        "code.rs",
-        "--symbol",
-        "pay",
+        "--query",
+        "file=code.rs",
+        "--query",
+        "symbol=pay",
         "--format",
         "json",
     ]);

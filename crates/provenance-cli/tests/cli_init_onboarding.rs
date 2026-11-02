@@ -86,6 +86,15 @@ fn typescript_init_writes_a_package_local_command() {
         agents.contains("`npx --no provenance check --statement \"<statement>\" --format json`")
     );
     assert!(!agents.contains("`provenance prime --quiet`"));
+    assert!(agents.contains("npx --no provenance rule_<slug> create --type rule"));
+    for collection_form in [
+        "provenance rules ",
+        "provenance requirements ",
+        "provenance questions ",
+        "provenance topics ",
+    ] {
+        assert!(!agents.contains(collection_form), "{collection_form}");
+    }
 }
 
 #[cfg(unix)]

@@ -46,10 +46,10 @@ async function probe(adapter, binary) {
   if (adapter.name === 'claude') {
     const compacted = await adapter.invoke({ repo, session: first.session, transcript: join(dir, 'compact.jsonl'), prompt: '/compact' });
     assert.ok(compacted.events.some(event => event.type === 'system' && event.subtype === 'compact_boundary'), 'no real compaction event');
-    cli(binary, repo, ['topics', 'topic_pay', 'release', '--actor', 'eval-writer']);
-    cli(binary, repo, ['topics', 'topic_pay', 'claim', '--actor', 'other-worker']);
-    const current = cli(binary, repo, ['questions', 'question_threshold', 'get']);
-    cli(binary, repo, ['questions', 'question_threshold', 'update', '--if-match', current.data.edit.etag, '--stdin'], { resolution_method: 'verify' });
+    cli(binary, repo, ['topic_pay', 'release', '--actor', 'eval-writer']);
+    cli(binary, repo, ['topic_pay', 'claim', '--actor', 'other-worker']);
+    const current = cli(binary, repo, ['question_threshold', 'get', '--view', 'review']);
+    cli(binary, repo, ['question_threshold', 'update', '--if-match', current.review.edit.etag, '--stdin'], { resolution_method: 'verify' });
     const before = readGraph(binary, repo);
     const recovered = await adapter.invoke({ repo, session: first.session, transcript: join(dir, 'compact-recovery.jsonl'),
       prompt: `Resume Topic topic_pay and Question question_threshold from stored state. Establish the stored claim and method before any work. Use ${binary}. Do not change records. Report the stored Topic actor and Question method.` });
@@ -91,7 +91,7 @@ async function trial(adapter, build, number, variant) {
   let session = turns.at(-1)?.session;
   for (const [index, turn] of script.entries()) {
     if (index < turns.length) continue;
-    const controller_action = turn.release_claim ? cli(build.binary, repo, ['questions', 'question_delivery', 'release', '--actor', 'other-worker']) : undefined;
+    const controller_action = turn.release_claim ? cli(build.binary, repo, ['question_delivery', 'release', '--actor', 'other-worker']) : undefined;
     if (turn.restart) {
       if (!existsSync(join(repo, '.scenario/handoff.md'))) throw new Error(`Missing real handoff in ${repo}`);
       session = undefined;

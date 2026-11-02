@@ -35,7 +35,7 @@ pub enum PackageManager {
     after_help = concat!(
         "Dynamic commands:\n",
         "  provenance api [PATH]\n",
-        "  provenance <collection> --help\n",
+        "  provenance api --filter <text>\n",
         "  provenance <id> get --view children --depth <N>\n\n",
         "Discussion actions: provenance discussions [<discussion-id> get], or provenance ",
         "<record-id> discussions|discuss, or provenance <discussion-id> reply."

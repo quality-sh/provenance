@@ -19,11 +19,12 @@ fn top_level_help_keeps_product_commands_and_retires_the_sdk_dispatcher() {
 }
 
 #[test]
-fn product_and_catalog_help_are_available() {
+fn root_help_names_api_and_no_collection_command() {
     provenance().args(["docs", "--help"]).assert().success();
-    provenance()
-        .args(["requirements", "--help"])
-        .assert()
-        .success()
-        .stdout(contains("requirements list"));
+    provenance().arg("--help").assert().success().stdout(
+        contains("provenance api [PATH]")
+            .and(contains("provenance api --filter <text>"))
+            .and(contains("<collection>").not())
+            .and(contains("requirements list").not()),
+    );
 }

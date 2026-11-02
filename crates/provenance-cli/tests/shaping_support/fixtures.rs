@@ -55,14 +55,14 @@ pub fn create_source_and_requirement(repo: &str) {
     .success();
 
     provenance(&[
-        "sources",
+        "source_schads",
         "create",
+        "--type",
+        "source",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "source_schads",
         "--name",
         "SCHADS Award",
         "--format",
@@ -72,17 +72,7 @@ pub fn create_source_and_requirement(repo: &str) {
 }
 
 pub fn create_topic(repo: &str) {
-    provenance_stdin(&[
-        "topics",
-        "create",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--stdin",
-        "--format",
-        "json",
-    ], r#"{"id":"topic_overtime","requirement_id":"req_overtime","title":"Overtime eligibility","status":"open","links":[{"target_type":"source","target_id":"source_schads"}]}"#)
+    provenance_stdin(&["topic_overtime", "create", "--type", "topic", "--stdin", "--repo", repo, "--scope", "default", "--format", "json"], r#"{"requirement_id":"req_overtime","title":"Overtime eligibility","status":"open","links":[{"target_type":"source","target_id":"source_schads"}]}"#)
     .success()
     .stdout(contains("topic_overtime"))
     .stdout(contains(r#""status": "open""#));

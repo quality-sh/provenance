@@ -185,7 +185,7 @@ reuse. Sources linked with `.from(...)` are collected transitively by `build()`.
 
 A spec cannot set a Rule status. Apply creates each new spec Rule as `draft`.
 To make the Rule active, a person changes its status with
-`provenance rules <id> update --status active --declared-by <owner> --if-match <etag>`,
+`provenance <id> update --status active --declared-by <owner> --if-match <etag>`,
 where `<owner>` is the declaration owner from `PROVENANCE_SPEC_OWNER`. A later
 apply keeps that status. A new key or a move to a different Requirement gives a
 new `draft` Rule, and apply deletes the old Rule. A move between a Requirement

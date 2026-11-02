@@ -62,13 +62,13 @@ Prerequisite: the fork exists as a Question with `resolution_method: prototype`.
 Claim the **single question** before spawning (see the methods table in docs/shaping.md):
 
 ```sh
-provenance questions <question_id> claim --scope <scope> \
+provenance <question_id> claim --scope <scope> \
   --actor <agent> --format json
 ```
 
 1. **Spawn N agents in parallel** — one Agent tool call per stance, all in one message.
    Each spawn prompt carries: the anchor requirement and boundaries (loaded with the
-   graph and boundary commands; `provenance rules list` supplies Rules and
+   graph and boundary commands; `provenance search --kind rule` supplies Rules and
    `provenance gaps` supplies computed gaps),
    the question, the stance (values + quality bar + exit
    criterion), its evidence partition, and its task framing. Each agent produces one
@@ -80,10 +80,10 @@ provenance questions <question_id> claim --scope <scope> \
 
    ```sh
    provenance schema show contribution --format json
-   provenance contributions create --scope <scope> --stdin --format json < contribution.json
+   provenance api contributions --method post --input contribution.json --scope <scope> --format json
 
    provenance schema show proposal --format json
-   provenance proposals create --scope <scope> --stdin --format json < proposal.json
+   provenance api proposals --method post --input proposal.json --scope <scope> --format json
    ```
 
    Note `--stance` on contributions is the enum stance toward the target
@@ -97,22 +97,22 @@ provenance questions <question_id> claim --scope <scope> \
 
    ```sh
    provenance schema show synthesis-packet --format json
-   provenance synthesis-packets create --scope <scope> --stdin --format json < synthesis.json
+   provenance api synthesis-packets --method post --input synthesis.json --scope <scope> --format json
    ```
 
     Include one exact `suggested_artifacts` entry for every competing proposal. Each
     entry's `proposal_id`, key, and type must match its proposal definition.
 
 4. **Mark the Question `blocked_on_human`** and post the Proposal IDs to a Discussion.
-   A Question update needs the current etag from `data.edit.etag` of the read:
+   A Question update needs the current etag from `review.edit.etag` of the review view:
 
     ```sh
-    provenance questions <question_id> get --scope <scope> --format json
-    provenance questions <question_id> update --scope <scope> \
+    provenance <question_id> --view review --scope <scope> --format json
+    provenance <question_id> update --scope <scope> \
       --if-match <etag> \
       --status blocked_on_human
 
-    provenance questions <question_id> discussions create --scope <scope> \
+    provenance <question_id> discuss --scope <scope> \
       --role assistant \
       --body "BLOCKED-ON-HUMAN: fork tournament landed. Competing proposals: prop_<...>, prop_<...>. Awaiting disposal."
     ```
@@ -126,20 +126,19 @@ provenance questions <question_id> claim --scope <scope> \
 
 The promotion gate, with a clock. This is a grill-shaped turn against the artifacts.
 
-1. **Present** — `provenance proposals list --scope <scope> --format json`; show each
+1. **Present** — `provenance api proposals --scope <scope> --format json`; show each
    manifesto + artifact side by side. Lead with the contested claims from the synthesis
    packet, not a neutral tour.
 
 2. **Extract reactions** — the reactions are the point. As the human reacts, start a
    Discussion on the Question or append Messages to an existing Discussion. Use
-   `questions <id> discussions create` or the nested `messages create` command. Push past
+   `<question_id> discuss`, or `<discussion_id> reply` for an existing Discussion. Push past
    "I like B": *which property* of B, and what from the losers still matters?
 
 3. **Land the decision the moment it resolves:**
 
    ```sh
-   provenance resolutions create --scope <scope> \
-     --id res_<question> \
+   provenance res_<question> create --type resolution --scope <scope> \
      --title "<the fork, decided>" \
      --requirement-id <anchor_requirement_id> \
      --position "<winning direction + grafts>" \
@@ -156,7 +155,7 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
 4. **Mark the question answered.** Creating the resolution does not update question state:
 
    ```sh
-   provenance questions <question_id> answer --scope <scope> \
+   provenance <question_id> answer --scope <scope> \
      --answer "<winning direction + grafts>" \
      --resolution-id res_<question> \
      --format json
@@ -167,23 +166,17 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
    Assertion with the exact supporting claim from phase 1:
 
     ```sh
-    provenance proposals prop_<question>_<winner_slot> assertions create --scope <scope> \
-      --id assertion_<question>_<winner_slot> \
-      --synthesis-packet-id synth_<question> \
-      --supporting-claim-ids claim_<question>_<winner_slot>
+    printf '%s' '{"id":"assertion_<question>_<winner_slot>","synthesis_packet_id":"synth_<question>","supporting_claim_ids":["claim_<question>_<winner_slot>"]}' | \
+      provenance api proposals/prop_<question>_<winner_slot>/assertions --method post --input - --scope <scope>
     ```
 
 6. **Dispose of every proposal** — winner accepted with the resolution as canonical
    artifact; losers rejected (rationale names the superseding resolution — see Gaps):
 
    ```sh
-   provenance proposals prop_<question>_<slot> dispositions create --scope <scope> \
-     --id pd_<question>_<slot> \
-     --decision accepted \
-     --rationale "<from the reactions>" \
-     --actor-json '{"identity_type":"human","id":"<human_id>"}' \
-     --canonical-artifact-json '{"artifact_type":"resolution","artifact_id":"res_<question>"}'
-   # losers: --decision rejected --rationale "superseded by res_<question>; grafted: <idea>"
+   printf '%s' '{"id":"pd_<question>_<slot>","decision":"accepted","rationale":"<from the reactions>","actor":{"identity_type":"human","id":"<human_id>"},"canonical_artifact":{"artifact_type":"resolution","artifact_id":"res_<question>"}}' | \
+     provenance api proposals/prop_<question>_<slot>/dispositions --method post --input - --scope <scope>
+   # losers: "decision":"rejected", "rationale":"superseded by res_<question>; grafted: <idea>"
    ```
 
    This flips each proposal's `promotion_state` — no separate update step.
@@ -216,10 +209,10 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
 
 ## CLI gaps and conventions (as of this writing)
 
-- **Question status and method are first-class** — use `questions <id> update --if-match
-  <etag> --status blocked_on_human` for the phase boundary, and `questions <id> update
+- **Question status and method are first-class** — use `<question_id> update --if-match
+  <etag> --status blocked_on_human` for the phase boundary, and `<question_id> update
   --if-match <etag> --method prototype` if an existing Question has the wrong method. Every
-  Question update carries the current `data.edit.etag` from `questions <id> get`. Keep the
+  Question update carries the current `review.edit.etag` from `<question_id> --view review`. Keep the
   Discussion Message because the Proposal IDs are not Question link targets.
 - **Proposal definitions are immutable and always `proposed`.** Before disposition, create an
   assertion only when the exact proposal suggestion has positive owned evidence and no
@@ -228,6 +221,6 @@ The promotion gate, with a clock. This is a grill-shaped turn against the artifa
   The actor ID must be repository-allowlisted and is an audit attestation, not a signature.
 - **References are fields on the records, not separate commands.** Use each owning record's
   create or update command. Requirement relationship changes use guarded
-  `requirements <id> update --relationships-json <json> --if-match <etag>`. Proposals are
+  `<requirement_id> update --relationships-json <json> --if-match <etag>`. Proposals are
   not graph endpoints, so graft traceability to competing Proposals rides on Resolution
   input references.

@@ -24,15 +24,15 @@ const review = [
   { kind: 'rules', id: 'rule_rows', pending: true, decisions: 0 },
 ];
 function packet({ pages = [{ root: 'req_payroll', url: 'http://127.0.0.1:1/?root=req_payroll' }], answer = 'View: http://127.0.0.1:1/?root=req_payroll',
-  final = graph(), finalReview = review, events = [shell('provenance topics topic_pay get'), shell('provenance questions question_format get'),
-    shell('provenance questions question_format answer --answer table')] } = {}) {
+  final = graph(), finalReview = review, events = [shell('provenance topic_pay get'), shell('provenance question_format get'),
+    shell('provenance question_format answer --answer table')] } = {}) {
   return {
     packet: 'test', anchor: 'req_pay', anchor_parent: 'req_payroll', fixture_records: ['req_payroll', 'req_pay'],
     dependencies: { question_delivery: ['question_schedule'] },
     expected_decisions: [{ id: 'req_format_table', terms: ['table'], choice: true }],
     refused_terms: [['bonus']],
     turns: [
-      { index: 0, opened_pages: pages, answer, tool_events: [shell('provenance topics topic_pay get')], before: graph(), after: graph() },
+      { index: 0, opened_pages: pages, answer, tool_events: [shell('provenance topic_pay get')], before: graph(), after: graph() },
       { index: 1, opened_pages: [], answer: '', tool_events: events, before: graph(), after: final, review: finalReview },
     ],
   };
@@ -80,9 +80,9 @@ test('failure 5: the page shows the anchor as a root', () => {
 test('a claim while a stored prerequisite stays open is a prerequisite violation', () => {
   const final = graph();
   final.questions = [question('question_format', 'answered'), question('question_schedule'), question('question_delivery', 'open', 'eval-writer')];
-  const events = [shell('provenance topics topic_pay get'), shell('provenance questions question_delivery get'),
-    shell('provenance questions question_format get'), shell('provenance questions question_delivery claim --actor eval-writer'),
-    shell('provenance questions question_format answer --answer table')];
+  const events = [shell('provenance topic_pay get'), shell('provenance question_delivery get'),
+    shell('provenance question_format get'), shell('provenance question_delivery claim --actor eval-writer'),
+    shell('provenance question_format answer --answer table')];
   const result = scorePacket(packet({ final, events }));
   assert.deepEqual(result.cases.prerequisite_order, [{ turn: 1, question: 'question_delivery', action: 'claimed', open_prerequisite: 'question_schedule' }]);
 });
@@ -90,8 +90,8 @@ test('a claim while a stored prerequisite stays open is a prerequisite violation
 test('a recovery read through a filter or after the write does not count', () => {
   const final = graph();
   final.questions = [question('question_format', 'answered'), question('question_schedule'), question('question_delivery')];
-  const events = [shell('provenance topics topic_pay get | jq .data'), shell('provenance questions question_format answer --answer table'),
-    shell('provenance questions question_format get')];
+  const events = [shell('provenance topic_pay get | jq .data'), shell('provenance question_format answer --answer table'),
+    shell('provenance question_format get')];
   assert.deepEqual(scorePacket(packet({ final, events })).cases.fresh_reads, [{ turn: 1, missing: 'topic_pay' }, { turn: 1, missing: 'question_format' }]);
 });
 
@@ -105,38 +105,38 @@ const freshFindings = (...commands) => scorePacket(packet({ final: answeredForma
 const unread = [{ turn: 1, missing: 'topic_pay' }, { turn: 1, missing: 'question_format' }];
 
 test('a write through a shell variable needs the reads first', () => {
-  assert.deepEqual(freshFindings('$P questions question_format answer --answer table'), unread);
-  assert.deepEqual(freshFindings('"${P}" questions question_format answer --answer table'), unread);
-  assert.deepEqual(freshFindings('$P topics topic_pay get', '$P questions question_format get',
-    '$P questions question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('$P question_format answer --answer table'), unread);
+  assert.deepEqual(freshFindings('"${P}" question_format answer --answer table'), unread);
+  assert.deepEqual(freshFindings('$P topic_pay get', '$P question_format get',
+    '$P question_format answer --answer table'), []);
 });
 
 test('script text in a heredoc is not a write', () => {
-  const script = "provenance topics topic_pay get; provenance questions question_format get > q.json; python3 - q.json <<'EOF'\n# update the totals\nEOF";
-  assert.deepEqual(freshFindings(script, 'provenance questions question_format answer --answer table'), []);
+  const script = "provenance topic_pay get; provenance question_format get > q.json; python3 - q.json <<'EOF'\n# update the totals\nEOF";
+  assert.deepEqual(freshFindings(script, 'provenance question_format answer --answer table'), []);
 });
 
 test('a help request is not a write, and a help word in an answer does not hide a write', () => {
-  assert.deepEqual(freshFindings('provenance requirements create --help | head -40', 'provenance topics topic_pay get',
-    'provenance questions question_format get', 'provenance questions question_format answer --answer table'), []);
-  assert.deepEqual(freshFindings('provenance questions question_format answer --answer "Table; see --help"'), unread);
-  assert.deepEqual(freshFindings('provenance questions question_format answer --help | provenance questions question_format answer --answer table'), unread);
+  assert.deepEqual(freshFindings('provenance req_new create --type requirement --help | head -40', 'provenance topic_pay get',
+    'provenance question_format get', 'provenance question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('provenance question_format answer --answer "Table; see --help"'), unread);
+  assert.deepEqual(freshFindings('provenance question_format answer --help | provenance question_format answer --answer table'), unread);
 });
 
 test('a filter removes only the read in its own pipeline', () => {
-  assert.deepEqual(freshFindings('provenance topics topic_pay get; provenance questions question_schedule get | jq .data',
-    'provenance questions question_format get', 'provenance questions question_format answer --answer table'), []);
-  assert.deepEqual(freshFindings('provenance topics topic_pay get; provenance questions question_format get | jq .data',
-    'provenance questions question_format answer --answer table'), [{ turn: 1, missing: 'question_format' }]);
+  assert.deepEqual(freshFindings('provenance topic_pay get; provenance question_schedule get | jq .data',
+    'provenance question_format get', 'provenance question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('provenance topic_pay get; provenance question_format get | jq .data',
+    'provenance question_format answer --answer table'), [{ turn: 1, missing: 'question_format' }]);
 });
 
 test('a read counts for the record that it names or that its loop lists', () => {
-  assert.deepEqual(freshFindings('provenance topics topic_pay get; for q in question_schedule question_format; do $P questions $q get; done',
-    'provenance questions question_format answer --answer table'), []);
-  assert.deepEqual(freshFindings('provenance topics topic_pay get; echo question_format',
-    'provenance questions question_format answer --answer table'), [{ turn: 1, missing: 'question_format' }]);
-  assert.deepEqual(freshFindings('provenance topics topic_pay get; for q in question_schedule; do $P questions $q get; done # question_format',
-    'provenance questions question_format answer --answer table'), [{ turn: 1, missing: 'question_format' }]);
+  assert.deepEqual(freshFindings('provenance topic_pay get; for q in question_schedule question_format; do $P $q get; done',
+    'provenance question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('provenance topic_pay get; echo question_format',
+    'provenance question_format answer --answer table'), [{ turn: 1, missing: 'question_format' }]);
+  assert.deepEqual(freshFindings('provenance topic_pay get; for q in question_schedule; do $P $q get; done # question_format',
+    'provenance question_format answer --answer table'), [{ turn: 1, missing: 'question_format' }]);
 });
 
 test('each Rule is under a child of the anchor and names the Resolution that spawned it', () => {
@@ -161,20 +161,20 @@ test('every created record needs a review entry', () => {
 
 test('a write after a command prefix needs the reads first', () => {
   for (const prefix of ['env', 'env -i P=1', 'command', 'exec', 'time', 'nohup', 'xargs -n 1', 'echo x | xargs']) {
-    assert.deepEqual(freshFindings(`${prefix} provenance questions question_format answer --answer table`), unread, prefix);
+    assert.deepEqual(freshFindings(`${prefix} provenance question_format answer --answer table`), unread, prefix);
   }
-  assert.deepEqual(freshFindings('env provenance topics topic_pay get', 'nohup provenance questions question_format get',
-    'provenance questions question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('env provenance topic_pay get', 'nohup provenance question_format get',
+    'provenance question_format answer --answer table'), []);
 });
 
 test('a write in a command substitution needs the reads first, also inside double quotes', () => {
-  assert.deepEqual(freshFindings('echo "$(provenance questions question_format answer --answer table)"'), unread);
-  assert.deepEqual(freshFindings('echo "`provenance questions question_format answer --answer table`"'), unread);
-  assert.deepEqual(freshFindings('echo "done: $(env provenance questions question_format answer --answer "a table")."'), unread);
-  assert.deepEqual(freshFindings('echo "$(provenance topics topic_pay get)" "`provenance questions question_format get`"',
-    'provenance questions question_format answer --answer table'), []);
-  assert.deepEqual(freshFindings('echo "provenance questions question_format answer --answer table"; echo \'$(provenance questions question_format answer)\'',
-    'provenance topics topic_pay get', 'provenance questions question_format get', 'provenance questions question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('echo "$(provenance question_format answer --answer table)"'), unread);
+  assert.deepEqual(freshFindings('echo "`provenance question_format answer --answer table`"'), unread);
+  assert.deepEqual(freshFindings('echo "done: $(env provenance question_format answer --answer "a table")."'), unread);
+  assert.deepEqual(freshFindings('echo "$(provenance topic_pay get)" "`provenance question_format get`"',
+    'provenance question_format answer --answer table'), []);
+  assert.deepEqual(freshFindings('echo "provenance question_format answer --answer table"; echo \'$(provenance question_format answer)\'',
+    'provenance topic_pay get', 'provenance question_format get', 'provenance question_format answer --answer table'), []);
 });
 
 test('an inactive record that the session created needs review evidence', () => {

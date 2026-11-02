@@ -50,7 +50,7 @@ fn shaping_guidance_makes_descriptions_state_behaviour_not_history() {
     assert!(
         prose.contains(
             "read the tree as a builder would. Read the anchor's requirement document with \
-             `provenance requirements <anchor_requirement_id> document get"
+             `provenance api requirements/<anchor_requirement_id>/document"
         ),
         "{shaping}"
     );

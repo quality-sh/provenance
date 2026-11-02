@@ -11,7 +11,12 @@ fn run(repo: &str, args: &[&str], input: Option<Value>) -> std::process::Output 
         .args(args)
         .args(["--repo", repo, "--format", "json"]);
     if let Some(input) = input {
-        command.arg("--stdin").write_stdin(input.to_string());
+        let body = if args.first() == Some(&"api") {
+            ["--input", "-"].as_slice()
+        } else {
+            ["--stdin"].as_slice()
+        };
+        command.args(body).write_stdin(input.to_string());
     }
     command.output().unwrap()
 }
@@ -47,10 +52,10 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
     let created = success(&run(
         repo,
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_review",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "The system stores each result.",
         ],
@@ -60,15 +65,14 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
         .as_str()
         .unwrap();
     let decision = json!({"actor":{"identity_type":"human","id":"reviewer"},"decision":"accepted"});
-    let before = success(&run(repo, &["requirements", "req_review", "get"], None));
+    let before = success(&run(repo, &["api", "requirements/req_review"], None));
     let refused = run(
         repo,
         &[
-            "requirements",
-            "req_review",
-            "submissions",
-            proposal,
-            "decide",
+            "api",
+            &format!("requirements/req_review/submissions/{proposal}/decide"),
+            "--method",
+            "post",
         ],
         Some(decision.clone()),
     );
@@ -78,7 +82,8 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
     );
     assert!(!refused.status.success());
     let diagnostic = String::from_utf8(refused.stderr).unwrap();
-    let error: Value = serde_json::from_str(diagnostic.trim_end()).unwrap();
+    let error: Value =
+        serde_json::from_str(diagnostic.trim_end().trim_start_matches("Error: ")).unwrap();
     assert_eq!(
         error["error"]["kind"], "approval_evidence_required",
         "{error}"
@@ -88,7 +93,7 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
         "An approval requires a prior assertion or a human canonical_artifact."
     );
     assert_eq!(
-        success(&run(repo, &["requirements", "req_review", "get"], None)),
+        success(&run(repo, &["api", "requirements/req_review"], None)),
         before
     );
     let mut complete = decision;
@@ -97,15 +102,14 @@ fn incomplete_approval_reports_missing_evidence_and_keeps_submission_pending() {
     success(&run(
         repo,
         &[
-            "requirements",
-            "req_review",
-            "submissions",
-            proposal,
-            "decide",
+            "api",
+            &format!("requirements/req_review/submissions/{proposal}/decide"),
+            "--method",
+            "post",
         ],
         Some(complete),
     ));
-    let after = success(&run(repo, &["requirements", "req_review", "get"], None));
+    let after = success(&run(repo, &["api", "requirements/req_review"], None));
     eprintln!("After guarded approval read: {}", after["data"]["decision"]);
     assert!(after["data"]["decision"]["pending"].is_null());
     assert_eq!(
@@ -136,10 +140,10 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
     success(&run(
         repo,
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_review",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "The system stores each result.",
         ],
@@ -147,7 +151,7 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
     ));
     success(&run(
         repo,
-        &["proposals", "create"],
+        &["api", "proposals", "--method", "post"],
         Some(json!({
             "id":"proposal_review", "proposal_key":"review",
             "proposal_type":"requirement_candidate", "title":"Store the result",
@@ -157,7 +161,7 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
             "builds_on":[]
         })),
     ));
-    let before = success(&run(repo, &["proposals", "proposal_review", "get"], None));
+    let before = success(&run(repo, &["api", "proposals/proposal_review"], None));
     let mut decision = json!({"id":"disposition_review",
         "decision":"accepted",
         "actor":{"identity_type":"human","id":"reviewer"}});
@@ -167,7 +171,12 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
         }
         let refused = run(
             repo,
-            &["proposals", "proposal_review", "dispositions", "create"],
+            &[
+                "api",
+                "proposals/proposal_review/dispositions",
+                "--method",
+                "post",
+            ],
             Some(decision.clone()),
         );
         eprintln!(
@@ -176,7 +185,8 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
         );
         assert!(!refused.status.success());
         let diagnostic = String::from_utf8(refused.stderr).unwrap();
-        let error: Value = serde_json::from_str(diagnostic.trim_end()).unwrap();
+        let error: Value =
+            serde_json::from_str(diagnostic.trim_end().trim_start_matches("Error: ")).unwrap();
         assert_eq!(
             error["error"]["kind"], "approval_evidence_required",
             "{error}"
@@ -186,12 +196,12 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
             "An approval requires a prior assertion or a human canonical_artifact."
         );
         assert_eq!(
-            success(&run(repo, &["proposals", "proposal_review", "get"], None)),
+            success(&run(repo, &["api", "proposals/proposal_review"], None)),
             before
         );
         let dispositions = success(&run(
             repo,
-            &["proposals", "proposal_review", "dispositions", "get"],
+            &["api", "proposals/proposal_review/dispositions"],
             None,
         ));
         assert_eq!(dispositions["data"]["items"], json!([]), "{dispositions}");
@@ -200,10 +210,15 @@ fn disposition_approval_reports_missing_evidence_with_or_without_rationale() {
         json!({"artifact_type":"requirement","artifact_id":"req_review"});
     success(&run(
         repo,
-        &["proposals", "proposal_review", "dispositions", "create"],
+        &[
+            "api",
+            "proposals/proposal_review/dispositions",
+            "--method",
+            "post",
+        ],
         Some(decision),
     ));
-    let after = success(&run(repo, &["proposals", "proposal_review", "get"], None));
+    let after = success(&run(repo, &["api", "proposals/proposal_review"], None));
     eprintln!("After direct approval read: {after}");
     assert_eq!(after["data"]["promotion_state"], "accepted", "{after}");
 }

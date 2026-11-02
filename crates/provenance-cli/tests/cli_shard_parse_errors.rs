@@ -15,14 +15,14 @@ fn create_requirement(repo: &str, id: &str, statement: &str) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            id,
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--id",
-            id,
             "--statement",
             statement,
             "--format",

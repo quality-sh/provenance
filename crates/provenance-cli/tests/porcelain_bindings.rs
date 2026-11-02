@@ -17,7 +17,7 @@ fn init_with_source(repo: &str) {
         .arg(repo)
         .assert()
         .success();
-    let create = "sources create --id source_live_inventory --name";
+    let create = "source_live_inventory create --type source --name";
     let mut cli = provenance();
     cli.args(create.split(' ')).arg("Live inventory");
     cli.args(["--repo", repo]).assert().success();
@@ -265,14 +265,14 @@ fn cli(repo: &str, command: &str, extra: &[&str]) -> std::process::Output {
 fn init_with_bound_code(repo: &str) {
     init_with_source(repo);
     let statement = ["--statement", "Shared needle requirement."];
-    let created = cli(repo, "requirements create --id req_pay", &statement);
+    let created = cli(repo, "req_pay create --type requirement", &statement);
     assert!(created.status.success());
     for (id, statement, status) in [
         ("rule_pay", "Pay overtime after the threshold.", "active"),
         ("rule_other", "Other pay rule.", "deprecated"),
     ] {
         let command = format!(
-            "rules create --id {id} --requirement-id req_pay --severity medium --status {status}"
+            "{id} create --type rule --requirement-id req_pay --severity medium --status {status}"
         );
         let created = cli(repo, &command, &["--statement", statement]);
         assert!(created.status.success());
@@ -420,12 +420,12 @@ fn cli_readable_get_includes_the_record_view_context_and_bounds() {
         .success();
     provenance()
         .args([
-            "requirements",
+            "req_readable",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
-            "--id",
-            "req_readable",
             "--statement",
             "Readable output identifies the selected record.",
         ])
@@ -433,12 +433,12 @@ fn cli_readable_get_includes_the_record_view_context_and_bounds() {
         .success();
     provenance()
         .args([
-            "rules",
+            "rule_readable",
             "create",
+            "--type",
+            "rule",
             "--repo",
             &repo,
-            "--id",
-            "rule_readable",
             "--requirement-id",
             "req_readable",
             "--statement",

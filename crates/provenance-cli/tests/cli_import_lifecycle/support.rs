@@ -27,14 +27,14 @@ pub fn init_repo_with_actors(repo: &Path, disposition_actor_ids: &[&str]) {
 pub fn create_system_source(repo: &Path) {
     provenance()
         .args([
-            "sources",
+            "source_a",
             "create",
+            "--type",
+            "source",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "source_a",
             "--name",
             "Source A",
             "--source-type",

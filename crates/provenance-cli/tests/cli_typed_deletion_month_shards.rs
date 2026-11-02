@@ -13,7 +13,12 @@ fn provenance(repo: &Path, args: &[&str], input: Option<Value>) -> Value {
         .args(args)
         .args(["--repo", repo.to_str().unwrap(), "--format", "json"]);
     if let Some(input) = input {
-        command.arg("--stdin").write_stdin(input.to_string());
+        let body = if args.first() == Some(&"api") {
+            ["--input", "-"].as_slice()
+        } else {
+            ["--stdin"].as_slice()
+        };
+        command.args(body).write_stdin(input.to_string());
     }
     let output = command.output().unwrap();
     assert!(
@@ -77,7 +82,7 @@ fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
     let legacy = json!([{"key":"legacy", "id":"source_legacy", "name":"Legacy", "kind":"policy"}]);
     provenance(
         repo,
-        &["authoring-changes", "create"],
+        &["api", "authoring-changes", "--method", "post"],
         Some(spec(&legacy, &json!([]))),
     );
     // No writer makes a new month shard, but readers accept the shards that
@@ -113,7 +118,12 @@ fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
     git(repo, &["commit", "-q", "-m", "Legacy month shard"]);
     let started = provenance(
         repo,
-        &["sources", "source_legacy", "discussions", "create"],
+        &[
+            "api",
+            "sources/source_legacy/discussions",
+            "--method",
+            "post",
+        ],
         Some(json!({
             "actor":"reviewer", "declared_by":"spec://fx", "role":"user", "body":"A concern."
         })),
@@ -122,7 +132,7 @@ fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
 
     let applied = provenance(
         repo,
-        &["authoring-changes", "create"],
+        &["api", "authoring-changes", "--method", "post"],
         Some(spec(&json!([]), &json!([]))),
     );
 
@@ -130,7 +140,7 @@ fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
     assert_eq!(thread_lines(&september), 0);
     assert_eq!(thread_lines(&threads.join("2026-07.jsonl")), 0);
     assert_eq!(thread_lines(&threads.join("threads.jsonl")), 0);
-    let listed = provenance(repo, &["messages", "list"], None);
+    let listed = provenance(repo, &["api", "messages"], None);
     assert_eq!(listed["data"]["items"], json!([]), "{listed}");
     provenance(repo, &["check"], None);
 }

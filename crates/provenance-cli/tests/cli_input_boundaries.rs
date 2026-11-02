@@ -39,10 +39,10 @@ fn fixture() -> tempfile::TempDir {
     command(
         repo,
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_parent",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "The system records one parent.",
         ],
@@ -101,48 +101,4 @@ fn discussion_write_refuses_repeated_actor_without_creating_a_discussion() {
     .stderr(contains("--actor is supplied more than once"));
     let list = output(&mut command(repo, &["req_parent", "discussions"]));
     assert_eq!(list["result"]["entries"], json!([]));
-}
-
-#[test]
-fn free_string_array_items_preserve_json_looking_text() {
-    let directory = fixture();
-    let repo = directory.path().to_str().unwrap();
-    let body = json!({
-        "id": "contrib_literals",
-        "target": {"artifact_type": "requirement", "artifact_id": "req_parent"},
-        "participant_slot": "reviewer",
-        "stance": "support",
-        "strongest_finding": "The evidence contains literal examples.",
-        "evidence_references": [],
-        "material_claims": [],
-        "objections": [],
-        "challenges": [],
-        "suggested_artifact_changes": [],
-        "unsupported_recommendations": [],
-        "uncertainty": {"level": "low", "rationale": "Direct evidence"}
-    });
-    let created = output(
-        command(
-            repo,
-            &[
-                "contributions",
-                "create",
-                "--stdin",
-                "--risks",
-                "[]",
-                "--risks",
-                "{}",
-                "--open-questions",
-                "null",
-            ],
-        )
-        .write_stdin(body.to_string()),
-    );
-    assert_eq!(created["data"]["risks"], json!(["[]", "{}"]));
-    assert_eq!(created["data"]["open_questions"], json!(["null"]));
-    let stored = output(&mut command(
-        repo,
-        &["contributions", "contrib_literals", "get"],
-    ));
-    assert_eq!(stored["data"]["risks"], json!(["[]", "{}"]));
 }

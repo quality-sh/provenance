@@ -32,7 +32,9 @@ fn target_actions_are_declared_once_by_canonical_registrations() {
     }
     expected.extend([
         ("answer", "question", "answer-question".to_owned()),
+        ("claim", "question", "claim-question".to_owned()),
         ("claim", "topic", "claim-topic".to_owned()),
+        ("release", "question", "release-question".to_owned()),
         ("release", "topic", "release-topic".to_owned()),
     ]);
     let actual = actual

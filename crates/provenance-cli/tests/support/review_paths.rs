@@ -51,12 +51,12 @@ pub fn json_output(command: &mut Command) -> Value {
 
 pub fn create_requirement(repo: &str, id: &str) -> Value {
     json_output(provenance().args([
-        "requirements",
+        id,
         "create",
+        "--type",
+        "requirement",
         "--repo",
         repo,
-        "--id",
-        id,
         "--statement",
         "The system keeps review feedback available.",
         "--format",

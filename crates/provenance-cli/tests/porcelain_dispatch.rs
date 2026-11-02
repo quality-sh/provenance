@@ -36,12 +36,12 @@ fn target_first_get_runs_through_the_cli_entrypoint() {
         .success();
     provenance()
         .args([
-            "sources",
+            "source_porcelain_entrypoint",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_porcelain_entrypoint",
             "--name",
             "Porcelain entrypoint",
         ])
@@ -89,12 +89,12 @@ fn target_first_get_accepts_global_options_before_the_target() {
         .success();
     provenance()
         .args([
-            "sources",
+            "source_global_options",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_global_options",
             "--name",
             "Global options",
         ])
@@ -133,12 +133,12 @@ fn a_non_command_record_id_uses_get_when_the_action_is_omitted() {
         .success();
     provenance()
         .args([
-            "sources",
+            "source_bare_get",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_bare_get",
             "--name",
             "Bare get",
         ])
@@ -178,12 +178,12 @@ fn an_omitted_get_action_accepts_view_options_and_global_option_positions() {
         .success();
     provenance()
         .args([
-            "requirements",
+            "req_omitted_options",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
-            "--id",
-            "req_omitted_options",
             "--statement",
             "Omitted get actions retain their options.",
         ])
@@ -191,12 +191,12 @@ fn an_omitted_get_action_accepts_view_options_and_global_option_positions() {
         .success();
     provenance()
         .args([
-            "rules",
+            "rule_omitted_options",
             "create",
+            "--type",
+            "rule",
             "--repo",
             &repo,
-            "--id",
-            "rule_omitted_options",
             "--requirement-id",
             "req_omitted_options",
             "--statement",

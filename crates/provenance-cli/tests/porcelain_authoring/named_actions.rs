@@ -96,12 +96,12 @@ fn target_first_question_actions_infer_kind_and_reject_a_mismatched_action() {
 
     provenance()
         .args([
-            "question_actions",
-            "claim",
+            "topic_actions",
+            "answer",
             "--repo",
             &repo,
-            "--actor",
-            "worker",
+            "--answer",
+            "Yes.",
         ])
         .assert()
         .failure()
@@ -115,9 +115,8 @@ fn target_first_question_actions_infer_kind_and_reject_a_mismatched_action() {
 fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
     let (_directory, repo) = named_action_repo();
     let current = json_output(&[
-        "requirements",
-        "req_actions",
-        "get",
+        "api",
+        "requirements/req_actions",
         "--repo",
         &repo,
         "--format",
@@ -128,14 +127,14 @@ fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
         .unwrap();
     json_stdin_output(
         &[
-            "requirements",
-            "req_actions",
-            "submissions",
-            automatic,
-            "withdraw",
+            "api",
+            &format!("requirements/req_actions/submissions/{automatic}/withdraw"),
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             &repo,
-            "--stdin",
             "--format",
             "json",
         ],

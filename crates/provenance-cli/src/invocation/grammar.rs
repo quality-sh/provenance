@@ -170,24 +170,6 @@ pub(super) struct DiscussionsCommand {
 }
 
 #[derive(Parser)]
-#[command(name = "provenance", about = "Work with records in one scope")]
-pub struct CatalogArgs {
-    #[command(flatten)]
-    pub common: Common,
-    pub collection: String,
-    #[arg(num_args = 0..)]
-    pub address: Vec<String>,
-    #[arg(long)]
-    pub stdin: bool,
-}
-
-impl CatalogArgs {
-    pub fn from_matches(matches: &ArgMatches) -> Self {
-        Self::from_arg_matches(matches).unwrap_or_else(|error| error.exit())
-    }
-}
-
-#[derive(Parser)]
 #[command(name = "provenance", about = "Read or change one record")]
 pub struct TargetArgs {
     #[command(flatten)]
@@ -367,10 +349,6 @@ pub fn target_command() -> Command {
                 .requires("review-link")
                 .help("Print the review link and do not open it in a browser."),
         )
-}
-
-pub fn catalog_command() -> Command {
-    CatalogArgs::command()
 }
 
 pub fn discussions_command() -> anyhow::Result<Command> {

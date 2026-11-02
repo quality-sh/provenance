@@ -50,8 +50,22 @@ fn records() -> (tempfile::TempDir, String) {
                 "question":"Is the work complete?", "resolution_method":"research"}),
         ),
     ] {
+        let mut body = body;
+        let id = body.as_object_mut().unwrap().remove("id").unwrap();
+        let kind = collection.strip_suffix("ies").map_or_else(
+            || collection.trim_end_matches('s').to_owned(),
+            |stem| format!("{stem}y"),
+        );
         provenance()
-            .args([collection, "create", "--repo", &repo, "--stdin"])
+            .args([
+                id.as_str().unwrap(),
+                "create",
+                "--type",
+                &kind,
+                "--stdin",
+                "--repo",
+                &repo,
+            ])
             .write_stdin(body.to_string())
             .assert()
             .success();
@@ -60,14 +74,14 @@ fn records() -> (tempfile::TempDir, String) {
 }
 
 fn etag(repo: &str, collection: &str, id: &str) -> String {
-    let read =
-        json_output(provenance().args([collection, id, "get", "--repo", repo, "--format", "json"]));
+    let path = format!("{collection}/{id}");
+    let read = json_output(provenance().args(["api", &path, "--repo", repo, "--format", "json"]));
     read["data"]["edit"]["etag"].as_str().unwrap().to_owned()
 }
 
-fn update(repo: &str, collection: &str, id: &str, guard: Option<&str>, change: &[&str]) -> Value {
+fn update(repo: &str, id: &str, guard: Option<&str>, change: &[&str]) -> Value {
     let mut command = provenance();
-    command.args([collection, id, "update", "--repo", repo, "--format", "json"]);
+    command.args([id, "update", "--repo", repo, "--format", "json"]);
     if let Some(etag) = guard {
         command.args(["--if-match", etag]);
     }
@@ -98,7 +112,6 @@ fn assert_guarded(collection: &str, id: &str, flag: &str, conflict: &str) {
 
     let written = update(
         &repo,
-        collection,
         id,
         Some(&current),
         &[flag, "The first change holds."],
@@ -106,16 +119,20 @@ fn assert_guarded(collection: &str, id: &str, flag: &str, conflict: &str) {
     assert_eq!(written["succeeded"], true, "{collection}: {written}");
     let stale = update(
         &repo,
-        collection,
         id,
         Some(&current),
         &[flag, "The stale change holds."],
     );
     assert_eq!(stale["succeeded"], false, "{collection}: {stale}");
     assert_eq!(stale["error"]["kind"], conflict, "{collection}: {stale}");
-    let after = json_output(
-        provenance().args([collection, id, "get", "--repo", &repo, "--format", "json"]),
-    );
+    let after = json_output(provenance().args([
+        "api",
+        &format!("{collection}/{id}"),
+        "--repo",
+        &repo,
+        "--format",
+        "json",
+    ]));
     let field = flag.trim_start_matches("--");
     assert_eq!(
         after["data"][field], "The first change holds.",
@@ -210,13 +227,7 @@ fn only_requirement_topic_and_question_updates_require_the_guard() {
         ("domains", "domain_guard", "--name", false),
         ("boundaries", "boundary_guard", "--statement", false),
     ] {
-        let result = update(
-            &repo,
-            collection,
-            id,
-            None,
-            &[flag, "The unguarded change holds."],
-        );
+        let result = update(&repo, id, None, &[flag, "The unguarded change holds."]);
         if required {
             assert_eq!(result["succeeded"], false, "{collection}: {result}");
             assert_eq!(
@@ -233,9 +244,14 @@ fn only_requirement_topic_and_question_updates_require_the_guard() {
             );
         } else {
             assert_eq!(result["succeeded"], true, "{collection}: {result}");
-            let after = json_output(
-                provenance().args([collection, id, "get", "--repo", &repo, "--format", "json"]),
-            );
+            let after = json_output(provenance().args([
+                "api",
+                &format!("{collection}/{id}"),
+                "--repo",
+                &repo,
+                "--format",
+                "json",
+            ]));
             assert_eq!(
                 after["data"][flag.trim_start_matches("--")],
                 "The unguarded change holds.",
@@ -261,15 +277,7 @@ fn no_review_update_accepts_expected_etag() {
     ] {
         let etag = etag(&repo, collection, id);
         provenance()
-            .args([
-                collection,
-                id,
-                "update",
-                "--repo",
-                &repo,
-                "--expected-etag",
-                &etag,
-            ])
+            .args([id, "update", "--repo", &repo, "--expected-etag", &etag])
             .assert()
             .code(2)
             .stderr(predicate::str::contains("--expected-etag"));

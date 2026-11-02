@@ -5,12 +5,12 @@ use std::{io::Write as _, path::Path};
 pub fn create_resolution(root: &Path, owner: Option<&str>) {
     let output = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
         .args([
-            "requirements",
+            "req_reject",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             root.to_str().unwrap(),
-            "--id",
-            "req_reject",
             "--statement",
             "The system stores each result.",
         ])
@@ -23,11 +23,13 @@ pub fn create_resolution(root: &Path, owner: Option<&str>) {
     );
     let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
         .args([
-            "resolutions",
+            "res_reject",
             "create",
+            "--type",
+            "resolution",
+            "--stdin",
             "--repo",
             root.to_str().unwrap(),
-            "--stdin",
             "--format",
             "json",
         ])
@@ -42,7 +44,7 @@ pub fn create_resolution(root: &Path, owner: Option<&str>) {
         .unwrap()
         .write_all(
             json!({
-                "id":"res_reject", "title":"Keep the result",
+                "title":"Keep the result",
                 "position":"The system stores each result.",
                 "rationale":"The result must remain available.",
                 "status":"proposed", "made_by":owner,

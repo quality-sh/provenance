@@ -1,6 +1,6 @@
 use crate::support::{
-    create_requirement, error_json, imported_dictionary, init, provenance, write_reference,
-    UNAPPROVED_WORD,
+    create_requirement, error_json, imported_dictionary, init, provenance, statement_report,
+    write_reference, UNAPPROVED_WORD,
 };
 use provenance_macros::verifies;
 use provenance_ste100::store_dictionary_index;
@@ -14,13 +14,12 @@ fn statement() -> String {
 fn check_statement(repo: &Path, index_directory: &Path, statement: &str) -> Value {
     let output = provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", index_directory)
-        .write_stdin(serde_json::json!({"statement": statement}).to_string())
         .args([
-            "statement-checks",
-            "create",
+            "check",
+            "--statement",
+            statement,
             "--repo",
             repo.to_str().unwrap(),
-            "--stdin",
             "--format",
             "json",
         ])
@@ -31,7 +30,7 @@ fn check_statement(repo: &Path, index_directory: &Path, statement: &str) -> Valu
         "the preflight must succeed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    serde_json::from_slice(&output.stdout).unwrap()
+    statement_report(&output)
 }
 
 fn setup_dictionary() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
@@ -81,14 +80,14 @@ fn rule_preflight_matches_the_typed_write_for_the_trial_statement() {
     let output = provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
         .args([
-            "rules",
+            "rule_trial",
             "create",
+            "--type",
+            "rule",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "rule_trial",
             "--requirement-id",
             "req_anchor",
             "--statement",

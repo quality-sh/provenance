@@ -17,12 +17,11 @@ fn run(repo: &str, args: &[&str]) -> Value {
 }
 
 fn archive(repo: &str, family: &str, id: &str) -> Value {
-    let current = run(repo, &[family, id, "get"]);
+    let current = run(repo, &["api", &format!("{family}/{id}")]);
     let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            family,
             id,
             "update",
             "--repo",
@@ -66,10 +65,10 @@ fn initialized_records() -> tempfile::TempDir {
     run(
         repo,
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_archive",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "The system keeps history.",
         ],
@@ -77,10 +76,10 @@ fn initialized_records() -> tempfile::TempDir {
     run(
         repo,
         &[
-            "topics",
-            "create",
-            "--id",
             "topic_archive",
+            "create",
+            "--type",
+            "topic",
             "--requirement-id",
             "req_archive",
             "--title",
@@ -91,10 +90,10 @@ fn initialized_records() -> tempfile::TempDir {
         run(
             repo,
             &[
-                "questions",
-                "create",
-                "--id",
                 id,
+                "create",
+                "--type",
+                "question",
                 "--topic-id",
                 "topic_archive",
                 "--question",
@@ -121,7 +120,7 @@ fn archiving_a_question_keeps_its_topic_and_discussion_history() {
     let archived = archive(repo, "questions", "question_one");
     assert_eq!(archived["data"]["status"], "archived");
     assert_eq!(
-        run(repo, &["topics", "topic_archive", "get"])["data"]["status"],
+        run(repo, &["api", "topics/topic_archive"])["data"]["status"],
         "open"
     );
     assert_eq!(
@@ -139,7 +138,7 @@ fn archiving_a_topic_archives_all_of_its_questions_in_one_update() {
     let topic = archive(repo, "topics", "topic_archive");
     assert_eq!(topic["data"]["status"], "archived");
     for id in ["question_one", "question_two"] {
-        let question = run(repo, &["questions", id, "get"]);
+        let question = run(repo, &["api", &format!("questions/{id}")]);
         assert_eq!(question["data"]["status"], "archived");
         assert_eq!(
             question["data"]["archived_in_commit"]["commit"],
@@ -157,12 +156,11 @@ fn topic_and_question_updates_require_the_current_etag() {
         ("topics", "topic_archive", "title"),
         ("questions", "question_one", "question"),
     ] {
-        let before = run(repo, &[family, id, "get"]);
+        let before = run(repo, &["api", &format!("{family}/{id}")]);
         let output = Command::cargo_bin("provenance")
             .unwrap()
             .args([
-                family, id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format",
-                "json",
+                id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format", "json",
             ])
             .write_stdin(serde_json::json!({field: "No unguarded update"}).to_string())
             .assert()
@@ -179,14 +177,15 @@ fn topic_and_question_updates_require_the_current_etag() {
                 reason: InvalidInputReason::Required,
             }
         );
-        assert_eq!(run(repo, &[family, id, "get"])["data"], before["data"]);
+        let after = run(repo, &["api", &format!("{family}/{id}")]);
+        assert_eq!(after["data"], before["data"]);
     }
     assert_eq!(
-        run(repo, &["topics", "topic_archive", "get"])["data"]["status"],
+        run(repo, &["api", "topics/topic_archive"])["data"]["status"],
         "open"
     );
     assert_eq!(
-        run(repo, &["questions", "question_one", "get"])["data"]["status"],
+        run(repo, &["api", "questions/question_one"])["data"]["status"],
         "open"
     );
 }

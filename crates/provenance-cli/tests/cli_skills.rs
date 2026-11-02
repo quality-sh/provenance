@@ -99,11 +99,14 @@ fn fork_tournament_skill_documents_the_assertable_winner_lifecycle() {
     ));
 
     assert!(skill.contains("provenance schema show proposal --format json"));
-    assert!(skill.contains("provenance proposals prop_<question>_<winner_slot> assertions create"));
-    assert!(skill.contains("--id assertion_<question>_<winner_slot>"));
-    assert!(skill.contains("--supporting-claim-ids claim_<question>_<winner_slot>"));
-    assert!(skill.contains("provenance proposals prop_<question>_<slot> dispositions create"));
-    assert!(skill.contains("--canonical-artifact-json"));
+    assert!(skill.contains(
+        "provenance api proposals/prop_<question>_<winner_slot>/assertions --method post"
+    ));
+    assert!(skill.contains(r#""id":"assertion_<question>_<winner_slot>""#));
+    assert!(skill.contains(r#""supporting_claim_ids":["claim_<question>_<winner_slot>"]"#));
+    assert!(skill
+        .contains("provenance api proposals/prop_<question>_<slot>/dispositions --method post"));
+    assert!(skill.contains(r#""canonical_artifact":"#));
 }
 
 #[test]
@@ -274,41 +277,15 @@ fn graph_read_reports_missing_skills_and_install_command() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
     init_repo(&repo);
+    seed_topic(&repo);
     std::fs::remove_file(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "questions",
-            "list",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
+    create_question(&repo, "question_hint_1", false)
         .stderr(predicate::str::contains("provenance skills install"));
 
     install(&repo, &["--copy"]).success();
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "questions",
-            "list",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .stderr(predicate::str::is_empty());
+    create_question(&repo, "question_hint_2", false).stderr(predicate::str::is_empty());
 }
 
 #[test]
@@ -316,6 +293,7 @@ fn install_status_uses_canonical_agents_skill_files_as_source_of_truth() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
     init_repo(&repo);
+    seed_topic(&repo);
 
     install(&repo, &["--copy"]).success();
     std::fs::remove_file(repo.join(".agents/skills/provenance-fork-tournament/SKILL.md")).unwrap();
@@ -323,20 +301,7 @@ fn install_status_uses_canonical_agents_skill_files_as_source_of_truth() {
         .join(".claude/skills/provenance-fork-tournament/SKILL.md")
         .exists());
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "questions",
-            "list",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
+    create_question(&repo, "question_hint_3", false)
         .stderr(predicate::str::contains("provenance skills install"));
 }
 
@@ -345,60 +310,18 @@ fn shaping_and_ideation_commands_emit_suppressible_skill_install_hint() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
     init_repo(&repo);
+    seed_topic(&repo);
     std::fs::remove_file(repo.join(".agents/skills/provenance-shaping/SKILL.md")).unwrap();
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "questions",
-            "list",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .stderr(predicate::str::contains(
-            "hint: provenance skills are not installed; run `provenance skills install`",
-        ));
+    create_question(&repo, "question_hint_4", false).stderr(predicate::str::contains(
+        "hint: provenance skills are not installed; run `provenance skills install`",
+    ));
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "proposals",
-            "list",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .stderr(predicate::str::contains(
-            "hint: provenance skills are not installed; run `provenance skills install`",
-        ));
+    create_question(&repo, "question_hint_5", false).stderr(predicate::str::contains(
+        "hint: provenance skills are not installed; run `provenance skills install`",
+    ));
 
-    Command::cargo_bin("provenance")
-        .unwrap()
-        .args([
-            "--quiet",
-            "questions",
-            "list",
-            "--repo",
-            repo.to_str().unwrap(),
-            "--scope",
-            "default",
-            "--format",
-            "json",
-        ])
-        .assert()
-        .success()
-        .stderr(predicate::str::is_empty());
+    create_question(&repo, "question_hint_6", true).stderr(predicate::str::is_empty());
 }
 
 /// Runs `provenance skills install` in `dir`, always asking for the JSON
@@ -458,4 +381,63 @@ fn workspace_skill_files() -> std::collections::BTreeMap<String, String> {
         skills.insert(name, contents);
     }
     skills
+}
+
+/// Creates the Requirement and Topic that a test Question belongs to.
+fn seed_topic(repo: &std::path::Path) {
+    for args in [
+        &[
+            "req_hint",
+            "create",
+            "--type",
+            "requirement",
+            "--statement",
+            "The system stores records.",
+        ][..],
+        &[
+            "topic_hint",
+            "create",
+            "--type",
+            "topic",
+            "--requirement-id",
+            "req_hint",
+            "--title",
+            "Hints",
+        ][..],
+    ] {
+        Command::cargo_bin("provenance")
+            .unwrap()
+            .args(args)
+            .args(["--repo", repo.to_str().unwrap(), "--quiet"])
+            .assert()
+            .success();
+    }
+}
+
+/// Creates one Question, a shaping record whose actions hint when the
+/// shaping skills are missing.
+fn create_question(repo: &std::path::Path, id: &str, quiet: bool) -> assert_cmd::assert::Assert {
+    let mut command = Command::cargo_bin("provenance").unwrap();
+    if quiet {
+        command.arg("--quiet");
+    }
+    command
+        .args([
+            id,
+            "create",
+            "--type",
+            "question",
+            "--topic-id",
+            "topic_hint",
+            "--question",
+            "Which value applies?",
+            "--method",
+            "grill",
+            "--repo",
+            repo.to_str().unwrap(),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
 }

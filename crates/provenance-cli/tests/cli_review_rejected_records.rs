@@ -24,10 +24,10 @@ fn create_resolution(root: &Path, id: &str) {
     provenance(
         root,
         &[
-            "resolutions",
-            "create",
-            "--id",
             id,
+            "create",
+            "--type",
+            "resolution",
             "--title",
             "Keep the result",
             "--position",
@@ -49,10 +49,10 @@ fn repository() -> tempfile::TempDir {
     provenance(
         repo.path(),
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_hide",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "The system stores each result.",
         ],
@@ -133,7 +133,6 @@ fn reviewed() -> (tempfile::TempDir, Host) {
     provenance(
         repo.path(),
         &[
-            "resolutions",
             "res_changed",
             "update",
             "--position",

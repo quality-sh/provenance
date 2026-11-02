@@ -19,14 +19,14 @@ pub fn init_repo(repo: &Path) {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "requirements",
+            "req_anchor",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            "req_anchor",
             "--statement",
             "The anchor requirement holds",
         ])
@@ -37,13 +37,16 @@ pub fn init_repo(repo: &Path) {
 pub fn create_rule(repo: &Path, id: &str, status: &str) {
     let mut command = Command::cargo_bin("provenance").unwrap();
     command.args([
+        "api",
         "rules",
-        "create",
+        "--method",
+        "post",
+        "--input",
+        "-",
         "--repo",
         repo.to_str().unwrap(),
         "--scope",
         "default",
-        "--stdin",
     ]);
     let archived = (status == "archived")
         .then(|| json!({"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}));

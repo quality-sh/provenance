@@ -19,14 +19,14 @@ fn active_rule(repo: &Path, scope: &str, rule: &str) {
     let requirement = format!("req_{scope}");
     provenance()
         .args([
-            "requirements",
+            &requirement,
             "create",
+            "--type",
+            "requirement",
             "--repo",
             repo,
             "--scope",
             scope,
-            "--id",
-            &requirement,
             "--statement",
             "The system records topics.",
         ])
@@ -34,7 +34,7 @@ fn active_rule(repo: &Path, scope: &str, rule: &str) {
         .success();
     provenance()
         .args([
-            "rules", "create", "--repo", repo, "--scope", scope, "--stdin",
+            "api", "rules", "--method", "post", "--input", "-", "--repo", repo, "--scope", scope,
         ])
         .write_stdin(
             json!({

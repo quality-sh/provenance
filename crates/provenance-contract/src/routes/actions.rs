@@ -39,18 +39,24 @@ fn topic_actions(out: &mut Vec<Definition>) {
 }
 
 fn question_actions(out: &mut Vec<Definition>) {
-    out.push(native::<operation::ClaimQuestion>(
-        "claim-question",
-        "claimQuestion",
-        "/questions/{id}/claim",
-        "Claim one open Question for an actor.",
-    ));
-    out.push(native::<operation::ReleaseQuestion>(
-        "release-question",
-        "releaseQuestion",
-        "/questions/{id}/release",
-        "Release the claim on one Question.",
-    ));
+    out.push(
+        native::<operation::ClaimQuestion>(
+            "claim-question",
+            "claimQuestion",
+            "/questions/{id}/claim",
+            "Claim one open Question for an actor.",
+        )
+        .target(TargetAction::Claim, Some(NodeType::Question)),
+    );
+    out.push(
+        native::<operation::ReleaseQuestion>(
+            "release-question",
+            "releaseQuestion",
+            "/questions/{id}/release",
+            "Release the claim on one Question.",
+        )
+        .target(TargetAction::Release, Some(NodeType::Question)),
+    );
     out.push(
         native::<operation::AnswerQuestion>(
             "answer-question",
@@ -224,18 +230,15 @@ fn native<O: Operation>(
 }
 
 fn computations(out: &mut Vec<Definition>) {
-    out.push(
-        backed::<operation::CheckStatement>(
-            "check-statement",
-            "checkStatement",
-            HttpMethod::Post,
-            "/statement-checks",
-            "Check one statement against the configured writing standard.",
-            ResponseKind::Result,
-            Vec::new(),
-        )
-        .cli_execution(CliExecution::ProjectStatementCheck),
-    );
+    out.push(backed::<operation::CheckStatement>(
+        "check-statement",
+        "checkStatement",
+        HttpMethod::Post,
+        "/statement-checks",
+        "Check one statement against the configured writing standard.",
+        ResponseKind::Result,
+        Vec::new(),
+    ));
     out.push(backed::<operation::Plan>(
         "plan-authoring",
         "planAuthoring",

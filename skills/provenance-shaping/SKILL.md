@@ -91,13 +91,13 @@ by question; expensive methods claim one question and often stop at a phase boun
 
    ```sh
    provenance prime
-   provenance rules list --scope <scope> --format json
+   provenance search --kind rule --scope <scope> --format json
    provenance gaps --scope <scope> --format json
    provenance graph <anchor_requirement_id> --scope <scope> --format json
-   provenance requirements <anchor_requirement_id> get --scope <scope> --format json
-   provenance topics list --scope <scope> --format json
-   provenance questions list --scope <scope> --format json
-   provenance boundaries list --scope <scope> --format json
+   provenance <anchor_requirement_id> get --scope <scope> --format json
+   provenance search --kind topic --scope <scope> --format json
+   provenance search --kind question --scope <scope> --format json
+   provenance search --kind boundary --scope <scope> --format json
    ```
 
 4. Treat the map as an index, not a store. Keep only gists in your working context and
@@ -124,7 +124,7 @@ A Question is answered only when the answer covers all of it. If an answer settl
 a Question, land that part, leave the Question open, and narrow its text to what remains.
 
 Before you hand off, read the tree as a builder would. Read the anchor's requirement
-document with `provenance requirements <anchor_requirement_id> document get --scope <scope>
+document with `provenance api requirements/<anchor_requirement_id>/document --scope <scope>
 --format json`, and read every statement and description in order. Fix each description
 that retells history, describes another record's behaviour, or lists open items.
 
@@ -188,8 +188,7 @@ resolve the questions you create.
    shaping effort.
 
    ```sh
-   provenance requirements create --scope <scope> \
-     --id req_<stable_slug> \
+   provenance req_<stable_slug> create --type requirement --scope <scope> \
      --statement "<feature-sized idea as a requirement>" \
      --description "<how the product behaves, as far as the brief says>" \
      --refines <parent_requirement_id> \
@@ -204,7 +203,7 @@ resolve the questions you create.
    exists.
 
    ```sh
-   provenance requirements <anchor_requirement_id> update --scope <scope> \
+   provenance <anchor_requirement_id> update --scope <scope> \
      --relationships-json '{"cites":{"add":[{"source_id":"<source_id>","clause":"<clause or section>"}]}}' \
      --if-match <etag> \
      --format json
@@ -218,8 +217,7 @@ resolve the questions you create.
    exists.
 
    ```sh
-   provenance boundaries create --scope <scope> \
-     --id boundary_<stable_slug> \
+   provenance boundary_<stable_slug> create --type boundary --scope <scope> \
      --requirement-id <anchor_requirement_id> \
      --statement "<constraint on solution space>" \
      --source-ref-json '{"source_id":"<source_id>","clause":"<clause or section>"}' \
@@ -230,7 +228,7 @@ resolve the questions you create.
    decisions that cannot yet be stated precisely.
 
    ```sh
-   provenance requirements <anchor_requirement_id> update --scope <scope> \
+   provenance <anchor_requirement_id> update --scope <scope> \
      --fog "<not-yet-sharp investigations and worries>" \
      --if-match <etag> \
      --format json
@@ -241,14 +239,12 @@ resolve the questions you create.
    `task`.
 
    ```sh
-   provenance topics create --scope <scope> \
-     --id topic_<stable_slug> \
+   provenance topic_<stable_slug> create --type topic --scope <scope> \
      --requirement-id <anchor_requirement_id> \
      --title "<area of investigation>" \
      --format json
 
-   provenance questions create --scope <scope> \
-     --id question_<stable_slug> \
+   provenance question_<stable_slug> create --type question --scope <scope> \
      --topic-id <topic_id> \
      --question "<precise question>" \
      --method grill \
@@ -259,7 +255,7 @@ resolve the questions you create.
    rationale on the requirement thread.
 
    ```sh
-   provenance requirements <anchor_requirement_id> discussions create --scope <scope> \
+   provenance <anchor_requirement_id> discuss --scope <scope> \
      --role assistant \
      --body "CHART: appetite=<...>; boundaries=<...>; fog=<...>; first frontier=<...>" \
      --format json
@@ -276,7 +272,7 @@ frontier.
 ### 1. Prime
 
 Load the map with the commands from **Start every session**. `provenance prime`
-explains the domain. Use `provenance rules list` for Rules and `provenance gaps` for
+explains the domain. Use `provenance search --kind rule` for Rules and `provenance gaps` for
 computed gaps. Load the anchor graph, fog, boundaries, topics, and questions with
 their separate commands. The
 shaping-focused subset of the computed graph frontier includes:
@@ -296,7 +292,7 @@ as such rather than being replaced by a vague Rule merely to close the gap.
 Proposals are not part of the computed graph frontier and are not a batch-review inbox.
 Claiming a Topic atomically returns undisposed `proposed` and `asserted` proposals in its
 explicit territory. The CLI has no standalone proposal-surface command. For diff-driven
-work, use `provenance proposals list --scope <scope> --format json` and inspect explicit
+work, use `provenance api proposals --scope <scope> --format json` and inspect explicit
 evidence paths. Do not infer territory from titles or graph proximity. Use a complete list
 only for a deliberately bounded set of proposals that jointly blocks the turn.
 
@@ -310,10 +306,10 @@ work so concurrent sessions skip what you are touching. A claim is a graph write
 
 | Method | Claim | Command |
 |---|---|---|
-| `grill` | whole topic | `provenance topics <topic_id> claim --scope <scope> --actor <agent> --format json` |
-| `prototype` | single question | `provenance questions <question_id> claim --scope <scope> --actor <agent> --format json` |
-| `research` | single question | `provenance questions <question_id> claim --scope <scope> --actor <agent> --format json` |
-| `verify` | single question | `provenance questions <question_id> claim --scope <scope> --actor <agent> --format json` |
+| `grill` | whole topic | `provenance <topic_id> claim --scope <scope> --actor <agent> --format json` |
+| `prototype` | single question | `provenance <question_id> claim --scope <scope> --actor <agent> --format json` |
+| `research` | single question | `provenance <question_id> claim --scope <scope> --actor <agent> --format json` |
+| `verify` | single question | `provenance <question_id> claim --scope <scope> --actor <agent> --format json` |
 | `task` | single question | claim its open question if represented; there is no separate task record or task claim |
 
 If claim fails, do not work that item. Pick another frontier item or hand off that it is
@@ -343,8 +339,8 @@ output capacity before work. Read every selected Question, even if you will sett
 several Questions from one owner reply:
 
 ```sh
-provenance topics <topic_id> get --scope <scope> --format json
-provenance questions <question_id> get --scope <scope> --format json
+provenance <topic_id> get --scope <scope> --format json
+provenance <question_id> get --scope <scope> --format json
 ```
 
 Check that the Question belongs to the selected Topic and is open. Check both claims
@@ -435,7 +431,7 @@ sequence of commands.
 Record the dialogue on the selected Requirement:
 
 ```sh
-provenance requirements <relevant_requirement_id> discussions create --scope <scope> \
+provenance <relevant_requirement_id> discuss --scope <scope> \
   --role user \
   --body "Q <question_id>: <human answer>" \
   --format json
@@ -445,8 +441,7 @@ For a decision that settles a Question, run these commands in this order. Then c
 each record as "Every record goes to review" says.
 
 ```sh
-provenance resolutions create --scope <scope> \
-  --id res_<stable_slug> \
+provenance res_<stable_slug> create --type resolution --scope <scope> \
   --title "<decision title>" \
   --requirement-id <relevant_requirement_id> \
   --context "<problem that remains without this choice>" \
@@ -455,8 +450,7 @@ provenance resolutions create --scope <scope> \
   --status proposed \
   --format json
 
-provenance requirements create --scope <scope> \
-  --id req_<child_slug> \
+provenance req_<child_slug> create --type requirement --scope <scope> \
   --statement "<what the product does because of the decision>" \
   --description "<states, what changes them, what the person sees, one example>" \
   --refines <relevant_requirement_id> \
@@ -464,8 +458,7 @@ provenance requirements create --scope <scope> \
   --status discovery \
   --format json
 
-provenance rules create --scope <scope> \
-  --id rule_<stable_slug> \
+provenance rule_<stable_slug> create --type rule --scope <scope> \
   --requirement-id req_<child_slug> \
   --resolution-id res_<stable_slug> \
   --statement "<atomic behavioural obligation, in one clause>" \
@@ -481,7 +474,7 @@ not replace `refines`. When no decision produced a record, omit `--spawned-by` a
 created:
 
 ```sh
-provenance questions <question_id> answer --scope <scope> \
+provenance <question_id> answer --scope <scope> \
   --answer "<answer with references to the resulting records, if any>" \
   --format json
 ```
@@ -606,19 +599,18 @@ After each landed answer, revisit fog on the anchor requirement.
 - Do not pre-slice fog into speculative question nodes.
 
 ```sh
-provenance requirements <anchor_requirement_id> update --scope <scope> \
+provenance <anchor_requirement_id> update --scope <scope> \
   --fog "<remaining fog only>" \
   --if-match <etag> \
   --format json
 
 # If no fog remains:
-provenance requirements <anchor_requirement_id> update --scope <scope> \
+provenance <anchor_requirement_id> update --scope <scope> \
   --fog-json null \
   --if-match <etag> \
   --format json
 
-provenance questions create --scope <scope> \
-  --id question_<graduated_slug> \
+provenance question_<graduated_slug> create --type question --scope <scope> \
   --topic-id <topic_id> \
   --question "<newly precise question>" \
   --method <grill|prototype|research|verify|task> \
@@ -644,9 +636,9 @@ Before final response:
    claims automatically, while unanswered questions should be released.
 
    ```sh
-   provenance topics <topic_id> close --scope <scope> --format json
-   provenance topics <topic_id> release --actor <actor> --scope <scope> --format json
-   provenance questions <question_id> release --actor <actor> --scope <scope> --format json
+   printf '{}' | provenance api topics/<topic_id>/close --method post --input - --scope <scope> --format json
+   provenance <topic_id> release --actor <actor> --scope <scope> --format json
+   provenance <question_id> release --actor <actor> --scope <scope> --format json
    ```
 
    To archive a Question or Topic, use the commit that contains the
@@ -658,15 +650,15 @@ Before final response:
 
    ```sh
    printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | \
-     provenance questions <question_id> update --scope <scope> --if-match <current_etag> --stdin --format json
+     provenance <question_id> update --scope <scope> --if-match <current_etag> --stdin --format json
    printf '%s' '{"status":"archived","archived_in_commit":{"commit":"<full_commit_sha>"}}' | \
-     provenance topics <topic_id> update --scope <scope> --if-match <current_etag> --stdin --format json
+     provenance <topic_id> update --scope <scope> --if-match <current_etag> --stdin --format json
    ```
 
 3. Post a handoff on the requirement thread:
 
    ```sh
-   provenance requirements <anchor_requirement_id> discussions create --scope <scope> \
+   provenance <anchor_requirement_id> discuss --scope <scope> \
      --role assistant \
      --body "HANDOFF: landed=<named artifacts>; remaining fog=<...>; frontier=<copy-paste commands>" \
      --format json

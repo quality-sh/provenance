@@ -116,7 +116,7 @@ fn init_guidance_says_what_a_description_holds() {
     assert!(
         prose.contains(
             "Before you hand off, read a Requirement and every record under it in order, as a \
-             builder would: `provenance requirements <requirement-id> document get --scope \
+             builder would: `provenance api requirements/<requirement-id>/document --scope \
              default --format json`."
         ),
         "{agents}"

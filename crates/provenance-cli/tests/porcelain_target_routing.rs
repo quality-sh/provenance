@@ -86,24 +86,24 @@ async fn target_first_action_names_match_on_the_live_cli_and_mcp_surfaces() {
 fn named_actions_work_for_ordinary_targets() {
     let (_directory, repo) = initialized_repo();
     json_output(&[
-        "requirements",
+        "req_routing",
         "create",
+        "--type",
+        "requirement",
         "--repo",
         &repo,
-        "--id",
-        "req_routing",
         "--statement",
         "The grammar routes explicit target actions.",
         "--format",
         "json",
     ]);
     json_output(&[
-        "topics",
+        "topic_routing",
         "create",
+        "--type",
+        "topic",
         "--repo",
         &repo,
-        "--id",
-        "topic_routing",
         "--requirement-id",
         "req_routing",
         "--title",
@@ -112,12 +112,12 @@ fn named_actions_work_for_ordinary_targets() {
         "json",
     ]);
     json_output(&[
-        "questions",
+        "question_routing",
         "create",
+        "--type",
+        "question",
         "--repo",
         &repo,
-        "--id",
-        "question_routing",
         "--topic-id",
         "topic_routing",
         "--question",
@@ -139,6 +139,28 @@ fn named_actions_work_for_ordinary_targets() {
         "json",
     ]);
     assert_eq!(claimed["data"]["claimed_by"], "worker");
+    let question_claimed = json_output(&[
+        "question_routing",
+        "claim",
+        "--repo",
+        &repo,
+        "--actor",
+        "worker",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(question_claimed["data"]["claimed_by"], "worker");
+    let question_released = json_output(&[
+        "question_routing",
+        "release",
+        "--repo",
+        &repo,
+        "--actor",
+        "worker",
+        "--format",
+        "json",
+    ]);
+    assert!(question_released["data"]["claimed_by"].is_null());
     let answered = json_output(&[
         "question_routing",
         "answer",
@@ -153,7 +175,7 @@ fn named_actions_work_for_ordinary_targets() {
 }
 
 #[test]
-fn reserved_commands_global_flags_and_legacy_catalog_forms_keep_their_meaning() {
+fn reserved_commands_global_flags_and_api_forms_keep_their_meaning() {
     let (_directory, repo) = initialized_repo();
     provenance().arg("--help").assert().success();
     provenance()
@@ -161,20 +183,20 @@ fn reserved_commands_global_flags_and_legacy_catalog_forms_keep_their_meaning() 
         .assert()
         .success();
 
-    let legacy = json_output(&[
-        "sources",
+    let created = json_output(&[
+        "source_legacy",
         "create",
+        "--type",
+        "source",
         "--repo",
         &repo,
-        "--id",
-        "source_legacy",
         "--name",
         "Legacy",
         "--format",
         "json",
     ]);
-    assert_eq!(legacy["data"]["id"], "source_legacy");
-    let listed = json_output(&["--repo", &repo, "sources", "list", "--format", "json"]);
+    assert_eq!(created["data"]["id"], "source_legacy");
+    let listed = json_output(&["--repo", &repo, "api", "sources", "--format", "json"]);
     assert!(listed["data"]["items"]
         .as_array()
         .unwrap()

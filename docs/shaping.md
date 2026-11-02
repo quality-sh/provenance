@@ -287,7 +287,7 @@ surfaces undisposed proposals when the claim enters territory they already name:
   or one of the topic's explicit artifact links; or
 - an external work item such as a bug explicitly identifies one of those typed targets.
 
-Run `provenance topics <topic_id> claim --scope <scope> --actor <actor> --format json`.
+Run `provenance <topic_id> claim --scope <scope> --actor <actor> --format json`.
 The result includes proposals that match the Topic, its anchor Requirement, or its explicit
 artifact links. The command persists the claim and returns the matching `proposed` and
 `asserted` views in one operation. Provenance does not infer territory from issue text,

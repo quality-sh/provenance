@@ -43,10 +43,10 @@ fn archived_repository() -> tempfile::TempDir {
     run(
         repo,
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_current",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "The system is safe.",
         ],
@@ -54,10 +54,10 @@ fn archived_repository() -> tempfile::TempDir {
     run(
         repo,
         &[
-            "requirements",
-            "create",
-            "--id",
             "req_retired",
+            "create",
+            "--type",
+            "requirement",
             "--statement",
             "The system is safe.",
             "--refines",
@@ -91,18 +91,26 @@ fn archived_repository() -> tempfile::TempDir {
 fn archived_requirement_is_hidden_from_default_reads_and_explicit_reads_show_it() {
     let directory = archived_repository();
     let repo = directory.path().to_str().unwrap();
-    assert_eq!(
-        listed_ids(&run(repo, &["requirements", "list", "--format", "json"])),
-        ["req_current"]
-    );
+    let searched: serde_json::Value = serde_json::from_str(&run(
+        repo,
+        &["search", "--kind", "requirement", "--format", "json"],
+    ))
+    .unwrap();
+    let searched_ids = searched["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|node| node["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(searched_ids, ["req_current"]);
     assert_eq!(
         listed_ids(&run(
             repo,
             &[
+                "api",
                 "requirements",
-                "list",
-                "--exclude-terminal",
-                "false",
+                "--query",
+                "exclude_terminal=false",
                 "--format",
                 "json"
             ]

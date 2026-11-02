@@ -15,7 +15,12 @@ fn provenance(repo: &Path, args: &[&str], input: Option<Value>) -> Value {
         .args(args)
         .args(["--repo", repo.to_str().unwrap(), "--format", "json"]);
     if let Some(input) = input {
-        command.arg("--stdin").write_stdin(input.to_string());
+        let body = if args.first() == Some(&"api") {
+            ["--input", "-"].as_slice()
+        } else {
+            ["--stdin"].as_slice()
+        };
+        command.args(body).write_stdin(input.to_string());
     }
     let output = command.output().unwrap();
     assert!(
@@ -79,7 +84,7 @@ fn discussion(id: &str, thread_id: &str, source: &str, message_ids: &[&str]) -> 
 fn cite(repo: &Path, requirement: &str, message_id: &str) {
     let created = provenance(
         repo,
-        &["requirements", "create"],
+        &["api", "requirements", "--method", "post"],
         Some(json!({
             "actor":"reviewer", "id":requirement, "statement":"The host stops.",
             "status":"active", "depends_on":[], "supersedes":[],
@@ -159,7 +164,7 @@ fn a_thread_with_sequential_and_random_message_ids_is_deleted() {
     let kept = json!({"key":"kept", "id":"source_kept", "name":"Kept", "kind":"policy"});
     provenance(
         repo,
-        &["authoring-changes", "create"],
+        &["api", "authoring-changes", "--method", "post"],
         Some(spec(
             &json!([
                 {"key":"legacy", "id":"source_legacy", "name":"Legacy", "kind":"policy"},
@@ -198,19 +203,19 @@ fn a_thread_with_sequential_and_random_message_ids_is_deleted() {
 
     let applied = provenance(
         repo,
-        &["authoring-changes", "create"],
+        &["api", "authoring-changes", "--method", "post"],
         Some(spec(&json!([kept]), &json!([]))),
     );
 
     assert_eq!(applied["data"]["deleted"], 1, "{applied}");
     for requirement in ["req_from_sequential", "req_from_random"] {
-        let cleared = provenance(repo, &["requirements", requirement, "get"], None);
+        let cleared = provenance(repo, &["api", &format!("requirements/{requirement}")], None);
         assert_eq!(cleared["data"]["origin_thread"], Value::Null, "{cleared}");
         assert_eq!(cleared["data"]["origin_message"], Value::Null, "{cleared}");
     }
     // The September shard is rewritten with the other Thread's Message only,
     // and the full read after the rewrite finds no duplicate id.
-    let listed = provenance(repo, &["messages", "list"], None);
+    let listed = provenance(repo, &["api", "messages"], None);
     let ids = listed["data"]["items"]
         .as_array()
         .unwrap()

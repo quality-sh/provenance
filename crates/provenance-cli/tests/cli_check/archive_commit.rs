@@ -15,7 +15,7 @@ fn graph_check_reports_an_archive_commit_that_a_squash_merge_dropped() {
     let base = commit(repo, "Base");
     init(repo);
     let statement = ["--statement", "The system is safe."];
-    cli(repo, "requirements create --id req_safe", &statement);
+    cli(repo, "req_safe create --type requirement", &statement);
     for id in ["rule_kept", "rule_dropped"] {
         let create = format!("{id} create --type rule --requirement-id req_safe");
         cli(repo, &create, &statement);

@@ -15,10 +15,10 @@ pub fn create_rule(repo: &str, id: &str, requirement: &str) {
     data(
         repo,
         &[
-            "rules",
-            "create",
-            "--id",
             id,
+            "create",
+            "--type",
+            "rule",
             "--statement",
             "The system keeps each record.",
             "--requirement-id",
@@ -31,10 +31,10 @@ pub fn create_resolution(repo: &str, id: &str, requirement: &str) {
     data(
         repo,
         &[
-            "resolutions",
-            "create",
-            "--id",
             id,
+            "create",
+            "--type",
+            "resolution",
             "--title",
             "Store records",
             "--position",
@@ -92,16 +92,10 @@ pub fn decide(repo: &str, collection: &str, kind: &str, id: &str, proposal: &str
             "declared_by":null
         })
     };
+    let path = format!("{collection}/{id}/submissions/{proposal}/decide");
     provenance()
         .args([
-            collection,
-            id,
-            "submissions",
-            proposal,
-            "decide",
-            "--repo",
-            repo,
-            "--stdin",
+            "api", &path, "--method", "post", "--input", "-", "--repo", repo,
         ])
         .write_stdin(decision.to_string())
         .assert()
@@ -110,14 +104,14 @@ pub fn decide(repo: &str, collection: &str, kind: &str, id: &str, proposal: &str
 
 /// Reads one record with its edit and decision state.
 pub fn read(repo: &str, collection: &str, id: &str) -> Value {
-    data(repo, &[collection, id, "get"])
+    data(repo, &["api", &format!("{collection}/{id}")])
 }
 
 /// Applies a guarded update with the current edit etag.
 pub fn guarded_update(repo: &str, collection: &str, id: &str, change: &[&str]) {
     let before = read(repo, collection, id);
     let etag = before["edit"]["etag"].as_str().unwrap().to_owned();
-    let mut args = vec![collection, id, "update", "--if-match", &etag];
+    let mut args = vec![id, "update", "--if-match", &etag];
     args.extend(change);
     data(repo, &args);
 }
@@ -141,7 +135,7 @@ pub fn accept_current(repo: &str, collection: &str, kind: &str, id: &str) -> Str
 /// the Proposal list.
 pub fn submissions(repo: &str, kind: &str, id: &str) -> usize {
     let key = format!("review:{kind}:{id}:");
-    let listed = data(repo, &["proposals", "list", "--limit", "100"]);
+    let listed = data(repo, &["api", "proposals", "--query", "limit=100"]);
     listed["items"]
         .as_array()
         .unwrap_or_else(|| panic!("no Proposal list: {listed}"))

@@ -47,7 +47,7 @@ fn the_simulation_passes_on_a_clean_sandbox_and_removes_it() {
         .stdout(predicate::str::contains(
             "Have your agent run provenance prime to get acclimated.",
         ))
-        .stdout(predicate::str::contains("requirements create"))
+        .stdout(predicate::str::contains("create --type requirement"))
         .stdout(predicate::str::contains("coverage scan"))
         .stdout(predicate::str::contains("verdict: pass"))
         .stdout(predicate::str::contains("sandbox removed"));

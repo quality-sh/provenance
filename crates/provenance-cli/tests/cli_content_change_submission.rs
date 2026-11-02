@@ -187,10 +187,10 @@ fn creating_a_rule_or_resolution_in_review_opens_its_pending_submission() {
     data(
         &repo,
         &[
-            "rules",
-            "create",
-            "--id",
             "rule_a",
+            "create",
+            "--type",
+            "rule",
             "--status",
             "review",
             "--statement",
@@ -202,10 +202,10 @@ fn creating_a_rule_or_resolution_in_review_opens_its_pending_submission() {
     data(
         &repo,
         &[
-            "resolutions",
-            "create",
-            "--id",
             "res_a",
+            "create",
+            "--type",
+            "resolution",
             "--status",
             "review",
             "--title",

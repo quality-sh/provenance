@@ -12,8 +12,8 @@ From this directory, with the Rust CLI built:
 ../../target/debug/provenance init --path . --scope default --path-prefix .
 PROVENANCE_REPO="$PWD" cargo run --bin apply
 PROVENANCE_REPO="$PWD" cargo test
-../../target/debug/provenance rules list --format json
-../../target/debug/provenance verification-runs list --format json
+../../target/debug/provenance api rules --format json
+../../target/debug/provenance api verification-runs --format json
 ```
 
 `cargo run --bin apply` reconciles the spec; `cargo test` runs the

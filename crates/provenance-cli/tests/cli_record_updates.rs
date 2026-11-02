@@ -21,14 +21,14 @@ fn source_update_uses_the_local_writer_and_explicit_clears() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
+            "source_one",
             "create",
+            "--type",
+            "source",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--id",
-            "source_one",
             "--name",
             "Policy",
             "--url",
@@ -39,7 +39,6 @@ fn source_update_uses_the_local_writer_and_explicit_clears() {
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
             "source_one",
             "update",
             "--repo",
@@ -64,7 +63,6 @@ fn source_update_uses_the_local_writer_and_explicit_clears() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "sources",
             "source_one",
             "update",
             "--repo",
@@ -139,8 +137,7 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
         let fields = format!("@{}", patch_path.display());
         let mut command = Command::cargo_bin("provenance").unwrap();
         command.args([
-            group, id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format",
-            "json",
+            id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format", "json",
         ]);
         if group == "requirements" {
             use provenance_core::{ScopeId, StableId};
@@ -156,11 +153,11 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
                 .etag;
             command.args(["--if-match", &etag]);
         } else if matches!(group, "topics" | "questions") {
+            let path = format!("{group}/{id}");
+            let read = ["api", &path, "--repo", repo, "--format", "json"];
             let current = Command::cargo_bin("provenance")
                 .unwrap()
-                .args([
-                    group, id, "get", "--repo", repo, "--scope", "default", "--format", "json",
-                ])
+                .args(read)
                 .output()
                 .unwrap();
             let current: Value = serde_json::from_slice(&current.stdout).unwrap();

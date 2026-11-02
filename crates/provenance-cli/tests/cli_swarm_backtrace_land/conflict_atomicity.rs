@@ -68,8 +68,8 @@ fn swarm_backtrace_land_rejects_duplicate_run_ids_before_writing() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "proposals",
-            "list",
             "--repo",
             &repo,
             "--scope",
@@ -121,8 +121,8 @@ fn qualifying_swarm_proposal_requires_an_assertion_before_any_write() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "proposals",
-            "list",
             "--repo",
             &repo,
             "--scope",
@@ -258,8 +258,8 @@ fn existing_evidence_requires_and_supports_incoming_proposal_assertion() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "proposals",
-            "list",
             "--repo",
             &repo,
             "--scope",
@@ -280,8 +280,8 @@ fn existing_evidence_requires_and_supports_incoming_proposal_assertion() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "proposals",
-            "list",
             "--repo",
             &repo,
             "--scope",
@@ -326,13 +326,16 @@ fn swarm_backtrace_land_rejects_existing_ids_before_writing() {
     Command::cargo_bin("provenance")
         .unwrap()
         .args([
+            "api",
             "contributions",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--stdin",
             "--format",
             "json",
         ])

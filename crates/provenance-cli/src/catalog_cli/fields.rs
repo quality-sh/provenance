@@ -123,14 +123,6 @@ fn insert(
     Ok(())
 }
 
-pub(super) fn augment(
-    command: Command,
-    definitions: impl IntoIterator<Item = &'static Definition>,
-    static_flags: &[&str],
-) -> anyhow::Result<Command> {
-    augment_with_overrides(command, definitions, static_flags, &[])
-}
-
 pub(super) fn augment_with_overrides(
     mut command: Command,
     definitions: impl IntoIterator<Item = &'static Definition>,
@@ -321,7 +313,7 @@ mod tests {
                 .iter()
                 .any(|alias| alias.wrap_array)
         }));
-        let mut command = augment(Command::new("test"), rules, &[]).unwrap();
+        let mut command = augment_with_overrides(Command::new("test"), rules, &[], &[]).unwrap();
         let declared = command
             .get_arguments()
             .filter_map(|argument| argument.get_long().map(str::to_owned))
@@ -359,7 +351,8 @@ mod tests {
                     wire_fields.insert(json_flag(&wire_field));
                 }
             }
-            let command = augment(Command::new("test"), definitions, &[]).unwrap();
+            let command =
+                augment_with_overrides(Command::new("test"), definitions, &[], &[]).unwrap();
             for argument in command.get_arguments() {
                 let Some(long) = argument.get_long() else {
                     continue;

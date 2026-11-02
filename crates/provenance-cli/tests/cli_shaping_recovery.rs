@@ -18,22 +18,15 @@ fn setup() -> (tempfile::TempDir, String) {
 }
 
 fn create(repo: &str, id: &str, dependencies: Option<Value>) -> Value {
-    let mut input = json!({"id":id,"topic_id":"topic_overtime",
+    let mut input = json!({"topic_id":"topic_overtime",
         "question":"Which threshold applies?","resolution_method":"research"});
     if let Some(dependencies) = dependencies {
         input["depends_on"] = dependencies;
     }
     let output = provenance_stdin(
         &[
-            "questions",
-            "create",
-            "--repo",
-            repo,
-            "--scope",
-            "default",
-            "--stdin",
-            "--format",
-            "json",
+            id, "create", "--type", "question", "--stdin", "--repo", repo, "--scope", "default",
+            "--format", "json",
         ],
         &input.to_string(),
     )
@@ -84,7 +77,6 @@ fn readiness_matches_answered_prerequisite_oracle_after_restart() {
     assert_eq!(state["ready_ids"], json!(["question_a", "question_b"]));
     assert_eq!(state["complete"], true);
     provenance(&[
-        "questions",
         "question_a",
         "answer",
         "--repo",
@@ -99,7 +91,6 @@ fn readiness_matches_answered_prerequisite_oracle_after_restart() {
     assert_matches_oracle(&repo, &state);
     assert_eq!(state["ready_ids"], json!(["question_b"]));
     provenance(&[
-        "questions",
         "question_b",
         "answer",
         "--repo",
@@ -127,8 +118,9 @@ fn bounded_children_cannot_authorize_selection() {
 }
 
 fn get(repo: &str, family: &str, id: &str) -> Value {
+    let path = format!("{family}/{id}");
     let output = provenance(&[
-        family, id, "get", "--repo", repo, "--scope", "default", "--format", "json",
+        "api", &path, "--repo", repo, "--scope", "default", "--format", "json",
     ])
     .success()
     .get_output()
@@ -142,7 +134,6 @@ fn update(repo: &str, family: &str, id: &str, input: &Value) -> Value {
     let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     let output = provenance_stdin(
         &[
-            family,
             id,
             "update",
             "--repo",
@@ -195,7 +186,6 @@ fn dependencies_replace_clear_and_reject_without_publication() {
         let etag = current["data"]["edit"]["etag"].as_str().unwrap();
         provenance_stdin(
             &[
-                "questions",
                 "question_b",
                 "update",
                 "--repo",
@@ -238,7 +228,6 @@ fn human_blocked_archived_and_closed_states_are_not_ready() {
     assert_eq!(summary(&repo, &[])["ready_ids"], json!([]));
     update(&repo, "questions", "question_b", &json!({"depends_on":[]}));
     provenance(&[
-        "questions",
         "question_b",
         "claim",
         "--repo",
@@ -250,7 +239,6 @@ fn human_blocked_archived_and_closed_states_are_not_ready() {
     ])
     .success();
     provenance(&[
-        "questions",
         "question_b",
         "claim",
         "--repo",
@@ -262,7 +250,6 @@ fn human_blocked_archived_and_closed_states_are_not_ready() {
     ])
     .failure();
     provenance(&[
-        "topics",
         "topic_overtime",
         "claim",
         "--repo",
@@ -292,49 +279,59 @@ fn cross_topic_prerequisites_are_rejected_before_write() {
     let (_dir, repo) = setup();
     provenance_stdin(
         &[
-            "topics", "create", "--repo", &repo, "--scope", "default", "--stdin",
+            "topic_other",
+            "create",
+            "--type",
+            "topic",
+            "--stdin",
+            "--repo",
+            &repo,
+            "--scope",
+            "default",
         ],
-        &json!({"id":"topic_other","requirement_id":"req_overtime",
+        &json!({"requirement_id":"req_overtime",
         "title":"Another threshold"})
         .to_string(),
     )
     .success();
     provenance_stdin(
         &[
-            "questions",
+            "question_other",
             "create",
+            "--type",
+            "question",
+            "--stdin",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--stdin",
         ],
-        &json!({"id":"question_other","topic_id":"topic_other",
+        &json!({"topic_id":"topic_other",
         "question":"Which rate?","resolution_method":"grill"})
         .to_string(),
     )
     .success();
     let result = provenance_stdin(
         &[
-            "questions",
+            "question_local",
             "create",
+            "--type",
+            "question",
+            "--stdin",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--stdin",
         ],
-        &json!({"id":"question_local",
-        "topic_id":"topic_overtime","question":"Which rate?","resolution_method":"grill",
+        &json!({"topic_id":"topic_overtime","question":"Which rate?","resolution_method":"grill",
         "depends_on":["question_other"]})
         .to_string(),
     )
     .failure();
     assert!(String::from_utf8_lossy(&result.get_output().stderr).contains("invalid_update"));
     provenance(&[
-        "questions",
-        "question_local",
-        "get",
+        "api",
+        "questions/question_local",
         "--repo",
         &repo,
         "--scope",
@@ -352,7 +349,6 @@ fn existing_error_precedence_and_failed_write_state() {
     let etag = before["data"]["edit"]["etag"].as_str().unwrap();
     let result = provenance_stdin(
         &[
-            "questions",
             "question_a",
             "update",
             "--repo",

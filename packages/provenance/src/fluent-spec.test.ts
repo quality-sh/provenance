@@ -67,10 +67,12 @@ function catalogCreate(
   data: Record<string, unknown>,
   headers: string[] = [],
 ): void {
+  const { id, ...fields } = data;
+  const type = collection === "boundaries" ? "boundary" : collection.replace(/s$/, "");
   execFileSync(
     engine,
-    [collection, "create", "--repo", repo, "--scope", "default", ...headers, "--stdin"],
-    { input: JSON.stringify(data) },
+    [String(id), "create", "--type", type, "--repo", repo, "--scope", "default", ...headers, "--stdin"],
+    { input: JSON.stringify(fields) },
   );
 }
 
@@ -386,8 +388,8 @@ test("direct nested Rule handles apply and verify through the Rust engine", asyn
     execFileSync(
       engine,
       [
+        "api",
         "verification-runs",
-        "list",
         "--repo",
         repo,
         "--scope",

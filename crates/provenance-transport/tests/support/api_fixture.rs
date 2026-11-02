@@ -68,17 +68,6 @@ impl ApiSession {
             .unwrap()
     }
 
-    /// Call one named catalog tool with structured arguments.
-    pub async fn call_named(&self, name: &str, arguments: Value) -> CallToolResult {
-        self.client
-            .call_tool(
-                CallToolRequestParams::new(name.to_owned())
-                    .with_arguments(arguments.as_object().cloned().unwrap_or_default()),
-            )
-            .await
-            .unwrap()
-    }
-
     /// The listed tools of the served host.
     pub async fn tools(&self) -> Vec<Tool> {
         self.client.list_all_tools().await.unwrap()

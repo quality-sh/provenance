@@ -54,10 +54,10 @@ async fn graph_queries_apply_declared_relation_filters() {
     let client = ().serve(client_io).await.unwrap();
     let result = client
         .call_tool(
-            CallToolRequestParams::new("get-requirement").with_arguments(
+            CallToolRequestParams::new("api").with_arguments(
                 json!({
-                    "id":"req_shared", "query":"neighbors",
-                    "relations":["domain_id"], "limit":20
+                    "path":"requirements/req_shared",
+                    "query":{"query":"neighbors", "relations":"domain_id", "limit":"20"}
                 })
                 .as_object()
                 .unwrap()
@@ -406,13 +406,15 @@ async fn mcp_keeps_role_subsets_and_returns_the_http_envelope() {
     let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert!(tools.iter().any(|tool| tool.name == "list-sources"));
-    assert!(!tools.iter().any(|tool| tool.name == "create-source"));
+    assert!(!tools.iter().any(|tool| tool.name == "list-sources"));
     assert!(tools
         .iter()
         .all(|tool| tool.description.as_deref() != Some("Invoke the shared operation.")));
     let result = client
-        .call_tool(CallToolRequestParams::new("list-sources"))
+        .call_tool(
+            CallToolRequestParams::new("api")
+                .with_arguments(json!({"path":"sources"}).as_object().unwrap().clone()),
+        )
         .await
         .unwrap();
     assert_ne!(result.is_error, Some(true), "{result:?}");
@@ -421,9 +423,12 @@ async fn mcp_keeps_role_subsets_and_returns_the_http_envelope() {
     assert!(value["meta"].is_object());
 
     let filter_only_arguments: serde_json::Map<String, Value> =
-        json!({"query":"search"}).as_object().unwrap().clone();
+        json!({"path":"sources", "query":{"query":"search"}})
+            .as_object()
+            .unwrap()
+            .clone();
     let filter_only: rmcp::model::CallToolResult = client
-        .call_tool(CallToolRequestParams::new("list-sources").with_arguments(filter_only_arguments))
+        .call_tool(CallToolRequestParams::new("api").with_arguments(filter_only_arguments))
         .await
         .unwrap();
     assert_ne!(filter_only.is_error, Some(true), "{filter_only:?}");
@@ -431,25 +436,25 @@ async fn mcp_keeps_role_subsets_and_returns_the_http_envelope() {
     assert!(filter_only_value["data"]["items"].is_array());
 
     let search_arguments: serde_json::Map<String, Value> = json!({
-        "query":"search", "text":"shared"
+        "path":"sources", "query":{"query":"search", "text":"shared"}
     })
     .as_object()
     .unwrap()
     .clone();
     let search: rmcp::model::CallToolResult = client
-        .call_tool(CallToolRequestParams::new("list-sources").with_arguments(search_arguments))
+        .call_tool(CallToolRequestParams::new("api").with_arguments(search_arguments))
         .await
         .unwrap();
     assert_ne!(search.is_error, Some(true), "{search:?}");
 
     let extra_arguments: serde_json::Map<String, Value> = json!({
-        "query":"search", "text":"shared", "base":"main"
+        "path":"sources", "query":{"query":"search", "text":"shared", "base":"main"}
     })
     .as_object()
     .unwrap()
     .clone();
     let extra: rmcp::model::CallToolResult = client
-        .call_tool(CallToolRequestParams::new("list-sources").with_arguments(extra_arguments))
+        .call_tool(CallToolRequestParams::new("api").with_arguments(extra_arguments))
         .await
         .unwrap();
     assert_eq!(extra.is_error, Some(true), "{extra:?}");

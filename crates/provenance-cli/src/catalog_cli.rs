@@ -1,13 +1,9 @@
-//! CLI dispatch over the registered resource catalog.
+//! CLI dispatch of record actions over the registered resource catalog.
 use crate::invocation::{grammar, GlobalContext};
-use axum::http::{HeaderMap, Method};
-use clap::{parser::ValueSource, Arg, ArgAction, ArgMatches, Command};
-use provenance_contract::{Definition, TargetAction};
+use clap::{parser::ValueSource, Arg, ArgMatches, Command};
+use provenance_contract::TargetAction;
 use provenance_porcelain::action::Action;
-use serde_json::Value;
-use std::collections::BTreeMap;
 
-mod address;
 pub mod fields;
 mod help;
 mod input;
@@ -19,100 +15,6 @@ mod statement_warning;
 pub use help::required_discussion_flags;
 
 use refusal::HostRefusal;
-
-pub struct Invocation {
-    context: GlobalContext,
-    format: Option<provenance_cli::porcelain::OutputFormat>,
-    path: String,
-    definition: &'static Definition,
-    data: Value,
-    query: BTreeMap<String, String>,
-    headers: HeaderMap,
-    affected_review_record: Option<crate::review_link::AffectedReviewRecord>,
-}
-
-impl Invocation {
-    pub fn new(args: &grammar::CatalogArgs, matches: &ArgMatches) -> Self {
-        if matches.get_flag("help") {
-            help::print_selection(&args.collection, &args.address);
-        }
-        let context = args.common.context();
-        let resolved = address::resolve_in(&args.collection, &args.address, Some(&context.repo))
-            .unwrap_or_else(|error| usage_error(error));
-        let (data, query, headers) = input::parse(
-            resolved.address.definition,
-            matches,
-            args.stdin,
-            resolved.query,
-            &["stdin"],
-        )
-        .unwrap_or_else(|error| usage_error(error));
-        if resolved.address.definition.method == provenance_contract::HttpMethod::Post {
-            if let Some(id) = data.get("id").and_then(Value::as_str) {
-                provenance_core::ensure_record_id_assignable(id)
-                    .unwrap_or_else(|error| usage_error(error));
-            }
-        }
-        let affected_review_record = resolved
-            .address
-            .definition
-            .registration
-            .review_link
-            .and_then(|kind| {
-                resolved
-                    .values
-                    .get("id")
-                    .cloned()
-                    .or_else(|| data.get("id").and_then(Value::as_str).map(str::to_owned))
-                    .map(|id| crate::review_link::AffectedReviewRecord { kind, id })
-            });
-        Self {
-            context,
-            format: args.common.format(),
-            path: resolved.path,
-            definition: resolved.address.definition,
-            data,
-            query,
-            headers,
-            affected_review_record,
-        }
-    }
-
-    pub const fn json_output(&self) -> bool {
-        matches!(
-            self.format,
-            Some(provenance_cli::porcelain::OutputFormat::Json)
-        )
-    }
-}
-
-pub fn is_collection(word: &str) -> bool {
-    !address::registrations(word).is_empty()
-}
-
-pub fn command(collection: &str) -> anyhow::Result<Command> {
-    let registrations = address::registrations(collection);
-    let mut command = grammar::catalog_command().disable_help_flag(true).arg(
-        Arg::new("help")
-            .long("help")
-            .short('h')
-            .action(ArgAction::SetTrue)
-            .help("Print help for the addressed operation, or the collection overview"),
-    );
-    let mut help = help::collection(collection);
-    help.push_str(
-        "\n\nFor a bounded view across related record kinds, run:\n  provenance <id> --view children --depth N",
-    );
-    if collection == "questions" {
-        help.push_str(help::question_guidance());
-    }
-    command = command.after_help(help);
-    fields::augment(
-        command,
-        registrations.into_iter().map(|address| address.definition),
-        &["repo", "scope", "format", "quiet", "stdin"],
-    )
-}
 
 pub fn target_command() -> anyhow::Result<Command> {
     let definitions = TargetAction::RECORD
@@ -166,73 +68,6 @@ pub fn print_target_help(
     kind: Option<provenance_core::NodeType>,
 ) -> anyhow::Result<()> {
     help::target(command, action, kind)
-}
-
-/// Dispatch one catalog request through the local in-process host.
-pub async fn dispatch(invocation: Invocation) -> anyhow::Result<()> {
-    let Invocation {
-        context,
-        format,
-        path,
-        definition,
-        data,
-        query,
-        headers,
-        affected_review_record,
-    } = invocation;
-    let method = match definition.method {
-        provenance_contract::HttpMethod::Get => Method::GET,
-        provenance_contract::HttpMethod::Post => Method::POST,
-        provenance_contract::HttpMethod::Patch => Method::PATCH,
-    };
-    if matches!(
-        path.split('/').nth(1),
-        Some("questions" | "contributions" | "synthesis-packets" | "proposals")
-    ) {
-        warn_if_skills_missing(context.repo.repo.as_str(), context.quiet)?;
-    }
-    let repo = context.repo.clone();
-    let host = repo.local_host()?;
-    if matches!(
-        definition.registration.cli.execution,
-        provenance_contract::CliExecution::ProjectStatementCheck
-    ) {
-        let request: provenance_core::protocol::CheckStatementRequest =
-            serde_json::from_value(data)?;
-        let root = dunce::canonicalize(&context.repo.repo)?;
-        let layout = provenance_store::layout::ProvenanceLayout::new(
-            camino::Utf8PathBuf::from_path_buf(root)
-                .map_err(|_| anyhow::anyhow!("the repository path is not valid UTF-8"))?,
-        );
-        let report = provenance_store::statement_analysis::check_project_statement(
-            &layout,
-            &request.statement,
-        );
-        statement_warning::print_if_rule_one_one_did_not_run(&context.repo.repo);
-        return crate::output::print_json(&serde_json::json!({"data": report, "meta": {}}));
-    }
-    let writes_statement = method != Method::GET && statement_warning::has_statement(&data);
-    match host
-        .invoke_resource(method, &path, data, query, headers)
-        .await
-    {
-        Ok(mut value) => {
-            if writes_statement {
-                statement_warning::print_if_rule_one_one_did_not_run(&repo.repo);
-            }
-            crate::review_link::annotate_write(&repo, affected_review_record, &mut value).await;
-            crate::output::print_json(&value)?;
-        }
-        Err(failure) => {
-            let error = failure_with_guidance(&failure, &path, record_id(&path), &context.repo);
-            if !writes_statement {
-                return Err(error);
-            }
-            let json = format == Some(provenance_cli::porcelain::OutputFormat::Json);
-            return Err(statement_warning::add_to_refusal(error, &repo.repo, json));
-        }
-    }
-    Ok(())
 }
 
 pub async fn dispatch_target(
@@ -327,10 +162,6 @@ pub async fn dispatch_target(
     Ok(())
 }
 
-fn record_id(path: &str) -> Option<&str> {
-    path.trim_matches('/').split('/').nth(1)
-}
-
 fn failure_with_guidance(
     failure: &provenance_core::protocol::failure::ErasedFailure,
     path: &str,
@@ -384,8 +215,8 @@ fn actionable_failure(
             let hint = format!(
                 "record {id} already has pending submission {submission}; \
                  run `{}` to see it; to withdraw it, run \
-                 `provenance {collection} {id} submissions {submission} withdraw --actor <actor>{}`. \
-                 For an owned record, also pass --declared-by <owner>",
+                 `printf '%s' '{{\"actor\":\"<actor>\"}}' | provenance api {collection}/{id}/submissions/{submission}/withdraw --method post --input -{}`. \
+                 For an owned record, also put \"declared_by\":\"<owner>\" in the body",
                 review_read_command(id, Some(context)),
                 context_options(Some(context))
             );
@@ -424,8 +255,6 @@ const COMMON: &[&str] = &[
     "quiet",
     "target",
     "action",
-    "collection",
-    "address",
     "command",
     "discussion_id",
 ];

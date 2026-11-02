@@ -1,6 +1,6 @@
 use crate::support::{
-    create_requirement, imported_dictionary, init, provenance, write_reference, NOUN_AND_VERB_WORD,
-    UNAPPROVED_NOUN, UNAPPROVED_VERB,
+    create_requirement, imported_dictionary, init, provenance, statement_report, write_reference,
+    NOUN_AND_VERB_WORD, UNAPPROVED_NOUN, UNAPPROVED_VERB,
 };
 use provenance_macros::verifies;
 use provenance_ste100::store_dictionary_index;
@@ -26,13 +26,12 @@ fn setup(repo_is_git: bool) -> (tempfile::TempDir, PathBuf, PathBuf) {
 fn rule_one_one_words(repo: &Path, index_directory: &Path, statement: &str) -> Vec<String> {
     let output = provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", index_directory)
-        .write_stdin(serde_json::json!({"statement": statement}).to_string())
         .args([
-            "statement-checks",
-            "create",
+            "check",
+            "--statement",
+            statement,
             "--repo",
             repo.to_str().unwrap(),
-            "--stdin",
             "--format",
             "json",
         ])
@@ -43,7 +42,7 @@ fn rule_one_one_words(repo: &Path, index_directory: &Path, statement: &str) -> V
         "the preflight must succeed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let report = statement_report(&output);
     report["data"]["findings"]
         .as_array()
         .unwrap()

@@ -55,14 +55,14 @@ pub fn create_requirement(repo: &Path, id: &str, statement: &str) {
 pub fn create_rule(repo: &Path, id: &str, statement: &str) {
     provenance()
         .args([
-            "rules",
+            id,
             "create",
+            "--type",
+            "rule",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
-            "--id",
-            id,
             "--requirement-id",
             "req_rule_anchor",
             "--statement",

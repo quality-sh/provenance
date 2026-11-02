@@ -84,12 +84,11 @@ fn update_help_lists_only_the_fields_of_the_existing_record_type() {
 fn header_bound_body_fields_stay_out_of_help_and_are_usage_errors() {
     let (_directory, repo) = init_with_requirement();
 
-    let text = help(&repo, &["requirements", "req_a", "update"]);
+    let text = help(&repo, &["req_a", "update"]);
     assert!(text.contains("--if-match"), "{text}");
     assert!(!text.contains("--expected-etag"), "{text}");
     provenance()
         .args([
-            "requirements",
             "req_a",
             "update",
             "--repo",
@@ -158,4 +157,39 @@ fn help_returns_at_once_while_another_process_holds_the_publication_lock() {
 
     assert_eq!(tree(directory.path(), &lock_path), before);
     fs2::FileExt::unlock(&lock).unwrap();
+}
+
+#[test]
+#[verifies("rule_create_help_accepted_fields", examples)]
+fn update_help_excludes_other_operations_inputs() {
+    let output = help(
+        "/no-repository",
+        &["req_example", "update", "--type", "requirement"],
+    );
+
+    for flag in ["--statement", "--relationships-json", "--if-match"] {
+        assert!(output.contains(flag), "{flag}: {output}");
+    }
+    for flag in [
+        "--idempotency-key",
+        "--id ",
+        "--depends-on",
+        "--max-depth",
+        "--direction",
+    ] {
+        assert!(!output.contains(flag), "{flag}: {output}");
+    }
+}
+
+#[test]
+#[verifies("rule_create_help_accepted_fields", examples)]
+fn create_help_excludes_update_only_controls() {
+    let output = help(
+        "/no-repository",
+        &["req_example", "create", "--type", "requirement"],
+    );
+
+    assert!(output.contains("--depends-on"), "{output}");
+    assert!(!output.contains("--if-match"), "{output}");
+    assert!(!output.contains("--relationships-json"), "{output}");
 }

@@ -128,7 +128,7 @@ fn a_refused_text_write_without_the_index_prints_the_warning() {
     let (_scratch, repo, index_directory) = setup(true);
 
     for arguments in [
-        vec!["requirements", "create", "--id", "req_text"],
+        vec!["req_text", "create", "--type", "requirement"],
         vec!["req_target", "create", "--type", "requirement"],
     ] {
         let output = provenance()
@@ -158,13 +158,12 @@ fn a_preflight_without_the_index_gives_a_json_report_and_the_warning() {
 
     let output = provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
-        .write_stdin(serde_json::json!({"statement": REFUSED_STATEMENT}).to_string())
         .args([
-            "statement-checks",
-            "create",
+            "check",
+            "--statement",
+            REFUSED_STATEMENT,
             "--repo",
             repo.to_str().unwrap(),
-            "--stdin",
             "--format",
             "json",
         ])
@@ -173,10 +172,18 @@ fn a_preflight_without_the_index_gives_a_json_report_and_the_warning() {
 
     assert!(output.status.success(), "the preflight must succeed");
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let findings = report["categories"][0]["findings"].as_array().unwrap();
     assert!(
-        !report["data"]["findings"].as_array().unwrap().is_empty(),
+        findings[0]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with(WARNING),
+        "{report}"
+    );
+    assert!(
+        findings[1..]
+            .iter()
+            .any(|finding| finding["detail"]["rule"] == "8.1"),
         "the preflight must report the semicolon: {report}"
     );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains(&format!("warning: {WARNING}")), "{stderr}");
 }

@@ -56,8 +56,22 @@ fn reviewed_records() -> (tempfile::TempDir, String) {
                 "question":"Is the work complete?", "resolution_method":"research"}),
         ),
     ] {
+        let mut body = body;
+        let id = body.as_object_mut().unwrap().remove("id").unwrap();
+        let kind = collection.strip_suffix("ies").map_or_else(
+            || collection.trim_end_matches('s').to_owned(),
+            |stem| format!("{stem}y"),
+        );
         provenance()
-            .args([collection, "create", "--repo", &repo, "--stdin"])
+            .args([
+                id.as_str().unwrap(),
+                "create",
+                "--type",
+                &kind,
+                "--stdin",
+                "--repo",
+                &repo,
+            ])
             .write_stdin(body.to_string())
             .assert()
             .success();

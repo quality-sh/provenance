@@ -27,12 +27,12 @@ fn init() -> (tempfile::TempDir, String) {
 fn seed_source(repo: &str) {
     provenance()
         .args([
-            "sources",
+            "source_api",
             "create",
+            "--type",
+            "source",
             "--repo",
             repo,
-            "--id",
-            "source_api",
             "--name",
             "Shared source",
         ])
@@ -366,12 +366,12 @@ fn api_query_values_follow_their_contracts() {
     let (_directory, repo) = init();
     provenance()
         .args([
-            "sources",
+            "source_q",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_q",
             "--name",
             "Needle source",
         ])
@@ -379,12 +379,12 @@ fn api_query_values_follow_their_contracts() {
         .success();
     provenance()
         .args([
-            "requirements",
+            "req_q",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             &repo,
-            "--id",
-            "req_q",
             "--statement",
             "Shared needle requirement.",
         ])
@@ -392,12 +392,12 @@ fn api_query_values_follow_their_contracts() {
         .success();
     provenance()
         .args([
-            "rules",
+            "rule_q",
             "create",
+            "--type",
+            "rule",
             "--repo",
             &repo,
-            "--id",
-            "rule_q",
             "--requirement-id",
             "req_q",
             "--statement",

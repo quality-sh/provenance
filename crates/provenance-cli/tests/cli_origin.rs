@@ -46,14 +46,14 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
         .assert()
         .success();
     provenance_json(&[
-        "requirements",
+        "req_origin_seed",
         "create",
+        "--type",
+        "requirement",
         "--repo",
         &repo,
         "--scope",
         "default",
-        "--id",
-        "req_origin_seed",
         "--statement",
         "Seed requirement for origin thread",
         "--format",
@@ -61,19 +61,20 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
     ]);
     let posted = provenance_json_stdin(
         &[
-            "requirements",
-            "req_origin_seed",
-            "discussions",
-            "create",
+            "api",
+            "requirements/req_origin_seed/discussions",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--stdin",
             "--format",
             "json",
         ],
-        r#"{"role":"user","body":"Promote this conversation into artifacts"}"#,
+        r#"{"actor":"cli","role":"user","body":"Promote this conversation into artifacts"}"#,
     );
     let discussion_id = posted["data"]["discussion_id"]
         .as_str()
@@ -86,14 +87,14 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
         .to_string();
 
     let source = provenance_json(&[
-        "sources",
+        "source_origin",
         "create",
+        "--type",
+        "source",
         "--repo",
         &repo,
         "--scope",
         "default",
-        "--id",
-        "source_origin",
         "--name",
         "Origin Source",
         "--origin-thread",
@@ -105,18 +106,19 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
     ]);
     let requirement = provenance_json_stdin(
         &[
-            "requirements",
+            "req_origin_child",
             "create",
+            "--type",
+            "requirement",
+            "--stdin",
             "--repo",
             &repo,
             "--scope",
             "default",
-            "--stdin",
             "--format",
             "json",
         ],
         &serde_json::json!({
-            "id":"req_origin_child",
             "statement":"Origin child requirement",
             "origin":{
                 "thread_id": origin_thread,
@@ -127,16 +129,16 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
         .to_string(),
     );
     let resolution = provenance_json(&[
-        "resolutions",
+        "res_origin",
         "create",
+        "--type",
+        "resolution",
         "--status",
         "approved",
         "--repo",
         &repo,
         "--scope",
         "default",
-        "--id",
-        "res_origin",
         "--title",
         "Origin resolution",
         "--requirement-id",
@@ -153,14 +155,14 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
         "json",
     ]);
     let rule = provenance_json(&[
-        "rules",
+        "rule_origin",
         "create",
+        "--type",
+        "rule",
         "--repo",
         &repo,
         "--scope",
         "default",
-        "--id",
-        "rule_origin",
         "--requirement-id",
         "req_origin_child",
         "--resolution-id",

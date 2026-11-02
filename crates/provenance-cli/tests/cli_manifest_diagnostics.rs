@@ -15,7 +15,7 @@ fn requirements_list_identifies_the_selected_malformed_manifest() {
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .current_dir(temporary.path())
-        .args(["requirements", "list", "--repo", selected.to_str().unwrap()])
+        .args(["api", "requirements", "--repo", selected.to_str().unwrap()])
         .output()
         .unwrap();
 

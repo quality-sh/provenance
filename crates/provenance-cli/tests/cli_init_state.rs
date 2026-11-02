@@ -159,10 +159,10 @@ fn missing_manifest_gives_init_guidance_before_graph_reads_or_catalog_writes() {
         vec!["health"],
         vec!["search", "--text", "probe"],
         vec![
-            "sources",
-            "create",
-            "--id",
             "source_probe",
+            "create",
+            "--type",
+            "source",
             "--name",
             "Probe",
             "--source-type",

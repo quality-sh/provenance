@@ -180,7 +180,7 @@ fn cli_rejection_removes_the_resolution_from_the_review_document() {
 
     // The agent rejects the proposal through the CLI after the owner decides.
     let output = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
-        .args(["resolutions", "res_reject", "update", "--repo"])
+        .args(["res_reject", "update", "--repo"])
         .arg(repo.path())
         .args(["--status", "rejected"])
         .output()

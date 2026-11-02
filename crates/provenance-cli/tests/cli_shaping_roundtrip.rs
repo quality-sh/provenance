@@ -23,17 +23,7 @@ fn cli_shaping_records_materialize_and_accept_topic_question_discussions() {
 }
 
 fn create_boundary(repo: &str) {
-    provenance_stdin(&[
-        "boundaries",
-        "create",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--stdin",
-        "--format",
-        "json",
-    ], r#"{"id":"boundary_no_manual_rework","requirement_id":"req_overtime","statement":"No manual payroll reconciliation","source_ref":{"source_id":"source_schads","clause":"28.1"}}"#)
+    provenance_stdin(&["boundary_no_manual_rework", "create", "--type", "boundary", "--stdin", "--repo", repo, "--scope", "default", "--format", "json"], r#"{"requirement_id":"req_overtime","statement":"No manual payroll reconciliation","source_ref":{"source_id":"source_schads","clause":"28.1"}}"#)
     .success()
     .stdout(contains("boundary_no_manual_rework"))
     .stdout(contains(r#""source_id": "source_schads""#));
@@ -41,14 +31,14 @@ fn create_boundary(repo: &str) {
 
 fn create_question(repo: &str) {
     provenance(&[
-        "questions",
+        "question_overtime_threshold",
         "create",
+        "--type",
+        "question",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "question_overtime_threshold",
         "--topic-id",
         "topic_overtime",
         "--question",
@@ -71,19 +61,20 @@ fn create_question(repo: &str) {
 fn post_topic_thread(repo: &str) {
     provenance_stdin(
         &[
-            "topics",
-            "topic_overtime",
-            "discussions",
-            "create",
+            "api",
+            "topics/topic_overtime/discussions",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--stdin",
             "--format",
             "json",
         ],
-        r#"{"role":"assistant","body":"Work this topic before shaping the pitch"}"#,
+        r#"{"actor":"cli","role":"assistant","body":"Work this topic before shaping the pitch"}"#,
     )
     .success()
     .stdout(contains("discussion"));
@@ -92,19 +83,20 @@ fn post_topic_thread(repo: &str) {
 fn post_question_thread(repo: &str) {
     provenance_stdin(
         &[
-            "questions",
-            "question_overtime_threshold",
-            "discussions",
-            "create",
+            "api",
+            "questions/question_overtime_threshold/discussions",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo,
             "--scope",
             "default",
-            "--stdin",
             "--format",
             "json",
         ],
-        r#"{"role":"assistant","body":"Answered from SCHADS clause 28.1"}"#,
+        r#"{"actor":"cli","role":"assistant","body":"Answered from SCHADS clause 28.1"}"#,
     )
     .success()
     .stdout(contains("discussion"));
@@ -115,13 +107,13 @@ fn verify_materialized_lists(repo: &str) {
         .success()
         .stdout(contains(r#""records_loaded""#));
     provenance(&[
-        "topics", "list", "--repo", repo, "--scope", "default", "--format", "json",
+        "api", "topics", "--repo", repo, "--scope", "default", "--format", "json",
     ])
     .success()
     .stdout(contains("topic_overtime"));
     provenance(&[
+        "api",
         "questions",
-        "list",
         "--repo",
         repo,
         "--scope",
@@ -132,8 +124,8 @@ fn verify_materialized_lists(repo: &str) {
     .success()
     .stdout(contains("question_overtime_threshold"));
     provenance(&[
+        "api",
         "boundaries",
-        "list",
         "--repo",
         repo,
         "--scope",

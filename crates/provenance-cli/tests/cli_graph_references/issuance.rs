@@ -206,14 +206,14 @@ fn identity_changes_by_commit_and_graph_while_digest_tracks_graph_only() {
 
     provenance(temp.path())
         .args([
-            "requirements",
+            "req_pinned",
             "create",
+            "--type",
+            "requirement",
             "--repo",
             ".",
             "--scope",
             "default",
-            "--id",
-            "req_pinned",
             "--statement",
             "Pinned graph content",
         ])

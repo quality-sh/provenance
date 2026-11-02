@@ -14,14 +14,14 @@ fn issue_rejects_unsupported_pinned_record_schema_versions() {
     let temp = committed_store();
     provenance(temp.path())
         .args([
-            "sources",
+            "source_future_version",
             "create",
+            "--type",
+            "source",
             "--repo",
             ".",
             "--scope",
             "default",
-            "--id",
-            "source_future_version",
             "--name",
             "Future source",
         ])
@@ -66,14 +66,14 @@ fn issue_rejects_unknown_fields_in_pinned_graph_records() {
     let temp = committed_store();
     provenance(temp.path())
         .args([
-            "sources",
+            "source_typo",
             "create",
+            "--type",
+            "source",
             "--repo",
             ".",
             "--scope",
             "default",
-            "--id",
-            "source_typo",
             "--name",
             "Typo source",
         ])

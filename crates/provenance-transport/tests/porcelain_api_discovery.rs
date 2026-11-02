@@ -285,10 +285,7 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
     );
 
     // The described base form schema must also describe the live result
-    // that the named catalog tool returns on the same public path.
-    let named = session
-        .call_named("get-source", json!({"id": "source_shared"}))
-        .await;
+    // that the api tool returns on the same public path.
     let routes = discovery.structured_content.as_ref().unwrap()["routes"]
         .as_array()
         .unwrap();
@@ -305,8 +302,8 @@ async fn mcp_api_outputs_validate_against_the_published_schema() {
         .clone();
     let base_contract = compile(&base_schema).expect("the described base form schema compiles");
     assert!(
-        base_contract.is_valid(named.structured_content.as_ref().unwrap()),
-        "named tool output violates the described route schema: {named:?}"
+        base_contract.is_valid(invoked.structured_content.as_ref().unwrap()),
+        "api output violates the described route schema: {invoked:?}"
     );
 
     session.shutdown().await;

@@ -11,8 +11,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /** Writes records into the fixture repository before the host starts. */
 export interface FixtureRepository {
-  /** Runs `<collection> create --stdin` with the body. */
-  create(collection: string, body: object): void;
+  /** Runs `<id> create --type <kind> --stdin` with the rest of the body; `id` names the record. */
+  create(collection: string, body: { id: string } & Record<string, unknown>): void;
 }
 
 /** The first line that the review host writes: its origin and the bearer for its operations. */
@@ -52,9 +52,9 @@ export async function withFixtureHost<T>(
       cwd: work, encoding: 'utf8', timeout: 180_000, env,
     });
     seed({
-      create(collection, body) {
-        execFileSync(binary, [collection, 'create', '--repo', repository, '--scope', 'default', '--stdin'], {
-          cwd: work, encoding: 'utf8', timeout: 30_000, env, input: JSON.stringify(body),
+      create(collection, { id, ...fields }) {
+        execFileSync(binary, [id, 'create', '--type', recordType(collection), '--stdin', '--repo', repository, '--scope', 'default'], {
+          cwd: work, encoding: 'utf8', timeout: 30_000, env, input: JSON.stringify(fields),
         });
       },
     });
@@ -80,4 +80,9 @@ export async function withFixtureHost<T>(
     }
     await rm(work, { recursive: true, force: true });
   }
+}
+
+/** The record type of one collection name, such as `rule` for `rules`. */
+function recordType(collection: string): string {
+  return collection === 'boundaries' ? 'boundary' : collection.replace(/s$/, '');
 }

@@ -13,8 +13,8 @@ mod discussion;
 pub mod grammar;
 mod help_kind;
 use grammar::{
-    ApiArgs, ApiCommand, CatalogArgs, Delivery, DiscussionsArgs, DiscussionsCommand,
-    DiscussionsRoute, RootWord, SearchArgs, SearchCommand, TargetArgs, TargetVerb,
+    ApiArgs, ApiCommand, Delivery, DiscussionsArgs, DiscussionsCommand, DiscussionsRoute, RootWord,
+    SearchArgs, SearchCommand, TargetArgs, TargetVerb,
 };
 
 #[cfg(test)]
@@ -24,7 +24,6 @@ mod tests;
 pub enum Invocation {
     Builtin(Cli),
     Api(ApiArgs),
-    Catalog(catalog_cli::Invocation),
     Get(GetInvocation),
     Search(SearchArgs),
     DiscussionRoot(DiscussionsArgs, Box<clap::ArgMatches>),
@@ -99,13 +98,8 @@ impl Invocation {
                 Cli::try_parse_from(arguments).unwrap_or_else(|error| error.exit()),
             ));
         }
-        if catalog_cli::is_collection(word) {
-            let command = catalog_cli::command(word)?;
-            let matches = command
-                .try_get_matches_from(arguments)
-                .unwrap_or_else(|error| error.exit());
-            let args = CatalogArgs::from_matches(&matches);
-            return Ok(Self::Catalog(catalog_cli::Invocation::new(&args, &matches)));
+        if is_collection(word) {
+            refuse_collection_word(word);
         }
 
         Self::parse_target(arguments)
@@ -205,7 +199,6 @@ impl Invocation {
         let format = match self {
             Self::Builtin(_) => None,
             Self::Api(args) => args.common.format(),
-            Self::Catalog(invocation) => return invocation.json_output(),
             Self::Get(invocation) => invocation.format,
             Self::Search(args) => args.common.format(),
             Self::DiscussionRoot(args, _) => args.common.format(),
@@ -219,7 +212,6 @@ impl Invocation {
         match self {
             Self::Builtin(cli) => handlers::dispatch(cli.command, cli.quiet).await,
             Self::Api(args) => api::dispatch(args).await,
-            Self::Catalog(invocation) => catalog_cli::dispatch(invocation).await,
             Self::Get(invocation) => {
                 if invocation.delivery == Delivery::Follow {
                     anyhow::ensure!(
@@ -325,6 +317,27 @@ impl TargetInvocation {
         )
         .await
     }
+}
+
+/// Whether a word names an API collection, the first segment of a catalog path.
+fn is_collection(word: &str) -> bool {
+    provenance_contract::definitions()
+        .iter()
+        .any(|definition| definition.path.split('/').nth(1) == Some(word))
+}
+
+/// Refuses a command that starts with an API collection name and shows the
+/// help command. Plumbing operations are reachable only through `api`.
+#[rule("rule_cli_collection_word_shows_help")]
+fn refuse_collection_word(word: &str) -> ! {
+    clap::Error::raw(
+        clap::error::ErrorKind::InvalidSubcommand,
+        format!(
+            "'{word}' is an API collection, not a command\n\n\
+             For more information, try 'provenance --help'.\n"
+        ),
+    )
+    .exit()
 }
 
 /// Reads `--notify` and its thread: `--thread`, else `CODEX_THREAD_ID` from a Codex session.

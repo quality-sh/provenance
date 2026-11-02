@@ -29,10 +29,10 @@ fn catalog_flag_like_values_are_not_taken_as_global_options() {
 
     provenance()
         .args([
-            "sources",
-            "create",
-            "--id",
             "source_flag_like_value",
+            "create",
+            "--type",
+            "source",
             "--name",
             "--repo",
             "--repo",
@@ -62,28 +62,16 @@ fn catalog_flag_like_values_are_not_taken_as_global_options() {
 }
 
 #[test]
-fn help_keeps_catalog_grammar_with_trailing_global_options() {
-    let directory = tempfile::tempdir().unwrap();
-    let repo = directory.path().to_string_lossy().into_owned();
-
-    provenance()
-        .args(["sources", "--help", "--repo", &repo])
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("sources create"));
-}
-
-#[test]
 fn explicit_get_reads_an_ordinary_record_id() {
     let (_directory, repo) = initialized_repo();
     provenance()
         .args([
-            "sources",
+            "source_routing_get",
             "create",
+            "--type",
+            "source",
             "--repo",
             &repo,
-            "--id",
-            "source_routing_get",
             "--name",
             "Get target",
         ])
@@ -113,7 +101,7 @@ fn explicit_get_reads_an_ordinary_record_id() {
 #[test]
 fn invalid_explicit_get_options_do_not_fall_back_to_the_catalog() {
     provenance()
-        .args(["sources", "get", "--unknown-option", "value"])
+        .args(["source_x", "get", "--unknown-option", "value"])
         .assert()
         .code(2)
         .stderr(predicates::str::contains(

@@ -12,9 +12,8 @@ fn question_etag(repo: &str, id: &str) -> String {
     let output = assert_cmd::Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            "questions",
-            id,
-            "get",
+            "api",
+            &format!("questions/{id}"),
             "--repo",
             repo,
             "--scope",
@@ -45,14 +44,14 @@ fn cli_questions_update_changes_method_status_links_and_resolution_id() {
 
 fn create_claimed_fork_question(repo: &str) {
     provenance(&[
-        "questions",
+        "question_fork",
         "create",
+        "--type",
+        "question",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "question_fork",
         "--topic-id",
         "topic_overtime",
         "--question",
@@ -64,7 +63,6 @@ fn create_claimed_fork_question(repo: &str) {
     ])
     .success();
     provenance(&[
-        "questions",
         "question_fork",
         "claim",
         "--repo",
@@ -82,14 +80,14 @@ fn create_claimed_fork_question(repo: &str) {
 
 fn create_resolution(repo: &str) {
     provenance(&[
-        "resolutions",
+        "res_overtime",
         "create",
+        "--type",
+        "resolution",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "res_overtime",
         "--title",
         "Overtime threshold",
         "--requirement-id",
@@ -107,20 +105,7 @@ fn create_resolution(repo: &str) {
 
 fn update_question_to_blocked_prototype(repo: &str) {
     let etag = question_etag(repo, "question_fork");
-    let updated = provenance_stdin(&[
-        "questions",
-        "question_fork",
-        "update",
-        "--repo",
-        repo,
-        "--scope",
-        "default",
-        "--if-match",
-        &etag,
-        "--stdin",
-        "--format",
-        "json",
-    ], r#"{"resolution_method":"prototype","status":"blocked_on_human","links":[{"target_type":"source","target_id":"source_schads"},{"target_type":"resolution","target_id":"res_overtime"}],"resolution_id":"res_overtime"}"#)
+    let updated = provenance_stdin(&["question_fork", "update", "--repo", repo, "--scope", "default", "--if-match", &etag, "--stdin", "--format", "json"], r#"{"resolution_method":"prototype","status":"blocked_on_human","links":[{"target_type":"source","target_id":"source_schads"},{"target_type":"resolution","target_id":"res_overtime"}],"resolution_id":"res_overtime"}"#)
     .success()
     .stdout(contains(r#""resolution_method": "prototype""#))
     .stdout(contains(r#""status": "blocked_on_human""#))
@@ -131,7 +116,6 @@ fn update_question_to_blocked_prototype(repo: &str) {
     assert!(!updated_stdout.contains("claimed_by"));
 
     provenance(&[
-        "questions",
         "question_fork",
         "claim",
         "--repo",
@@ -149,7 +133,6 @@ fn question_update_rejects_invalid_links(repo: &str) {
     let etag = question_etag(repo, "question_fork");
     provenance_stdin(
         &[
-            "questions",
             "question_fork",
             "update",
             "--repo",
@@ -168,14 +151,14 @@ fn question_update_rejects_invalid_links(repo: &str) {
 
 fn question_update_rejects_answered_without_answer(repo: &str) {
     provenance(&[
-        "questions",
+        "question_unanswered",
         "create",
+        "--type",
+        "question",
         "--repo",
         repo,
         "--scope",
         "default",
-        "--id",
-        "question_unanswered",
         "--topic-id",
         "topic_overtime",
         "--question",
@@ -189,7 +172,6 @@ fn question_update_rejects_answered_without_answer(repo: &str) {
     let etag = question_etag(repo, "question_unanswered");
     provenance_stdin(
         &[
-            "questions",
             "question_unanswered",
             "update",
             "--repo",

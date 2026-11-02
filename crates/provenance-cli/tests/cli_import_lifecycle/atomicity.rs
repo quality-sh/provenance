@@ -104,12 +104,12 @@ fn import_preserves_a_keyword_contribution_from_a_landing() {
     init_repo(&repo, None);
     super::support::provenance()
         .args([
-            "sources",
+            "source_anchor",
             "create",
+            "--type",
+            "source",
             "--repo",
             repo.to_str().unwrap(),
-            "--id",
-            "source_anchor",
             "--name",
             "Anchor",
         ])

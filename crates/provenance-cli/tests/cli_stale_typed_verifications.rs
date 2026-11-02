@@ -79,15 +79,18 @@ fn init_repo() -> tempfile::TempDir {
     });
     provenance()
         .args([
+            "api",
             "authoring-changes",
-            "create",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             directory.path().to_str().unwrap(),
             "--scope",
             "default",
             "--format",
             "json",
-            "--stdin",
         ])
         .write_stdin(serde_json::to_vec(&input).unwrap())
         .assert()
@@ -98,15 +101,18 @@ fn init_repo() -> tempfile::TempDir {
 fn verify(repo: &Path, rule: &str, key: &str, file: &str) {
     provenance()
         .args([
-            "verification-runs",
-            "begin-verification",
+            "api",
+            "verification-runs/begin-verification",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
             "--format",
             "json",
-            "--stdin",
         ])
         .write_stdin(
             serde_json::to_vec(&json!({
@@ -125,12 +131,14 @@ fn verify(repo: &Path, rule: &str, key: &str, file: &str) {
 fn verification_sites(repo: &Path, base: &str, head: &str) -> Vec<Value> {
     let output = provenance()
         .args([
+            "api",
             "rules",
-            "stale",
-            "--base",
-            base,
-            "--head",
-            head,
+            "--query",
+            "query=stale",
+            "--query",
+            &format!("base={base}"),
+            "--query",
+            &format!("head={head}"),
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
@@ -218,8 +226,8 @@ fn canonical_rule_changes_binding_identity_with_the_same_owner_and_key() {
 fn listed_verification_bindings(repo: &Path) -> Vec<Value> {
     let output = provenance()
         .args([
+            "api",
             "verification-bindings",
-            "list",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",

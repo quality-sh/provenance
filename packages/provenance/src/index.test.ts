@@ -95,9 +95,11 @@ function engineJson(repo: string, args: string[]): unknown {
   let list = false;
   if (args[0] === "rules" && args[1] === "show") {
     const id = args[args.indexOf("--id") + 1]!;
-    command = ["rules", id, "get"];
+    command = ["api", `rules/${id}`];
   } else if (args[0] === "sdk" && args[1] === "verification-runs") {
-    command = ["verification-runs", "list", ...args.slice(2)];
+    command = ["api", "verification-runs", ...args.slice(2).flatMap((option, index, options) =>
+      option === "--rule" ? ["--query", `rule=${options[index + 1]}`]
+        : options[index - 1] === "--rule" ? [] : [option])];
     list = true;
   }
   const envelope = JSON.parse(execFileSync(
