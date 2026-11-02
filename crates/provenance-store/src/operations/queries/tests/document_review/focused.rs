@@ -11,7 +11,7 @@ async fn document_revision_clears_the_prior_outcome_for_each_reviewable_kind() {
 
     for (kind, id) in records {
         let proposal = if kind == NodeType::Requirement {
-            pending(&store, &scope, kind, &id)
+            pending_proposal(&store, &scope, kind, &id)
         } else {
             submit(&store, &scope, kind, &id)
         };

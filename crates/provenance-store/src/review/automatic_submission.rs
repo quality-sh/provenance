@@ -10,7 +10,7 @@ use provenance_core::{review::ReviewRecord, NodeType};
 use provenance_macros::rule;
 
 /// The submission actor of a server write that names no actor.
-pub(crate) const AUTHORING_ACTOR: &str = "authoring";
+pub(super) const AUTHORING_ACTOR: &str = "authoring";
 
 impl StateStore {
     /// Opens the review submission of a content change in the same write.
@@ -19,7 +19,7 @@ impl StateStore {
     /// review after its first submission. A lifecycle-only change keeps the
     /// review revision and opens no submission.
     #[rule("rule_content_change_opens_review_submission")]
-    pub(crate) fn open_content_change_submission(
+    pub(super) fn open_content_change_submission(
         &self,
         before: &ReviewRecord,
         after: &ReviewRecord,

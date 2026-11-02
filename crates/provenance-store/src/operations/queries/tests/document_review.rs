@@ -128,7 +128,12 @@ fn submit(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) ->
 }
 
 /// The submission that a write opened on the current revision of a record.
-fn pending(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) -> StableId {
+fn pending_proposal(
+    store: &StateStore,
+    scope: &ScopeId,
+    kind: NodeType,
+    id: &StableId,
+) -> StableId {
     store
         .record_decision_state(scope, kind, id)
         .unwrap()
@@ -260,7 +265,7 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
         let initial = page(&root, 50, false).await;
         let first = if kind == NodeType::Requirement {
             assert_eq!(review(&initial, id.as_str())["outcome"], "pending");
-            pending(&store, &scope, kind, &id)
+            pending_proposal(&store, &scope, kind, &id)
         } else {
             assert_eq!(review(&initial, id.as_str())["outcome"], Value::Null);
             submit(&store, &scope, kind, &id)
@@ -284,7 +289,7 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
         assert_eq!(review(&accepted, id.as_str())["outcome"], "accepted");
 
         revise(&store, kind, &id);
-        let second = pending(&store, &scope, kind, &id);
+        let second = pending_proposal(&store, &scope, kind, &id);
         decide(
             &store,
             &scope,
