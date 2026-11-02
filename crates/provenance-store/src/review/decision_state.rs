@@ -178,8 +178,22 @@ impl CycleFacts {
             .any(|submission| submission.id == *proposal)
     }
 
-    pub(super) fn has_submissions(&self, kind: NodeType, record_id: &StableId) -> bool {
-        self.of_record(kind, record_id).next().is_some()
+    /// Whether a reviewer accepted or rejected a submission of the record.
+    pub(super) fn has_decided_submission(&self, kind: NodeType, record_id: &StableId) -> bool {
+        self.of_record(kind, record_id)
+            .any(|proposal| self.is_decided(&proposal.id))
+    }
+
+    /// The submissions of the record that have no decision and no Withdrawal.
+    pub(super) fn undecided_submissions(
+        &self,
+        kind: NodeType,
+        record_id: &StableId,
+    ) -> Vec<StableId> {
+        self.of_record(kind, record_id)
+            .filter(|proposal| !self.is_decided(&proposal.id) && !self.is_withdrawn(&proposal.id))
+            .map(|proposal| proposal.id.clone())
+            .collect()
     }
 
     fn of_record<'a>(
