@@ -28,7 +28,7 @@ fn stamp() -> Stamp {
     }
 }
 
-fn outcome(response: QueryResponse<SearchResult>) -> SearchOutcome {
+const fn outcome(response: QueryResponse<SearchResult>) -> SearchOutcome {
     SearchOutcome {
         response,
         file: None,
@@ -38,7 +38,7 @@ fn outcome(response: QueryResponse<SearchResult>) -> SearchOutcome {
 }
 
 fn site(
-    rule: &str,
+    rule_id: &str,
     role: ResolveSymbolRole,
     line: Option<usize>,
     item: &str,
@@ -46,7 +46,7 @@ fn site(
     match_kind: ResolveSymbolMatchKind,
 ) -> ResolveSymbolMatch {
     ResolveSymbolMatch {
-        rule_id: StableId::new(rule).unwrap(),
+        rule_id: StableId::new(rule_id).unwrap(),
         role,
         line,
         item_name: Some(item.into()),
