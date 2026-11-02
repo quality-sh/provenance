@@ -328,12 +328,13 @@ fn two_guarded_rule_writes_with_one_etag_publish_one_change_and_one_submission()
         writers.map(|writer| writer.join().unwrap())
     });
 
-    let winner = results.iter().find_map(|result| result.as_ref().ok());
-    let winner = winner.expect("one guarded write succeeds");
-    let loser = results
-        .into_iter()
-        .find_map(Result::err)
-        .expect("one write loses");
+    let (winners, losers): (Vec<_>, Vec<_>) = results.into_iter().partition(Result::is_ok);
+    let [Ok(winner)] = <[_; 1]>::try_from(winners).unwrap() else {
+        panic!("one guarded write succeeds")
+    };
+    let [Err(loser)] = <[_; 1]>::try_from(losers).unwrap() else {
+        panic!("one guarded write loses")
+    };
     assert!(matches!(
         WriteError(loser).safe(),
         WriteFailure::RecordEditConflict { .. }
