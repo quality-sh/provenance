@@ -19,7 +19,12 @@ pub enum OutputFormat {
     Json,
 }
 /// Translate the live CLI selector fields into one semantic check request.
-pub fn check_input_from_selectors(graph: bool, statements: bool, bindings: bool) -> CheckInput {
+pub fn check_input_from_selectors(
+    graph: bool,
+    statements: bool,
+    bindings: bool,
+    statement: Option<String>,
+) -> CheckInput {
     let mut categories = Vec::new();
     if graph {
         categories.push(Category::Graph);
@@ -30,7 +35,9 @@ pub fn check_input_from_selectors(graph: bool, statements: bool, bindings: bool)
     if bindings {
         categories.push(Category::Bindings);
     }
-    CheckInput::new(categories)
+    statement
+        .into_iter()
+        .fold(CheckInput::new(categories), CheckInput::with_statement)
 }
 
 /// Run one fully parsed target-first Porcelain get command.

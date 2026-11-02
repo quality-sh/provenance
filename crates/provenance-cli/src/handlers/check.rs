@@ -21,11 +21,12 @@ mod statement_report;
 
 use index::CheckIndex;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct Selectors {
     pub graph: bool,
     pub statements: bool,
     pub bindings: bool,
+    pub statement: Option<String>,
 }
 
 impl Selectors {
@@ -34,6 +35,7 @@ impl Selectors {
             self.graph,
             self.statements,
             self.bindings,
+            self.statement,
         )
     }
 }
@@ -136,29 +138,73 @@ impl RepositoryCheckPort {
                 }
             })
             .map_err(|error| format!("{:#}", initialization_hint(&self.context.repo, error)))?;
-        // A strict check fails earlier when the index is missing.
-        let skipped_rule = provenance_store::dictionary_reference::missing_index_warning(&layout)
-            .filter(|_| !self.strict)
-            .map(Finding::new);
-        let findings = skipped_rule
-            .into_iter()
-            .chain(diagnostics.into_iter().map(|diagnostic| {
+        let (findings, refusal) = self.statement_findings(
+            &layout,
+            diagnostics.into_iter().map(|diagnostic| {
                 Finding::with_detail(
                     &diagnostic.message,
                     serde_json::to_value(&diagnostic).expect("statement diagnostic is JSON"),
                 )
-            }))
-            .collect::<Vec<_>>();
-        let refusal = if self.strict && !findings.is_empty() {
-            Refusal::Findings
-        } else {
-            Refusal::None
-        };
+            }),
+        );
         Ok(CategoryRun::Statements {
             findings,
             context,
             refusal,
         })
+    }
+
+    /// Checks one supplied statement with the project dictionary, in place of
+    /// the committed statements. Each finding carries the ste100 finding.
+    fn supplied_statement_run(
+        &self,
+        statement: &str,
+        scope: Option<&str>,
+    ) -> Result<CategoryRun, String> {
+        let layout = ProvenanceLayout::new(&self.context.repo);
+        let report = provenance_store::layout::with_initialized_graph(&layout, |manifest| {
+            if let Some(scope) = scope {
+                declared_scope(&manifest, scope)?;
+            }
+            if self.strict {
+                ensure_strict_dictionary_index(&layout)?;
+            }
+            Ok(provenance_store::statement_analysis::check_project_statement(&layout, statement))
+        })
+        .map_err(|error| format!("{:#}", initialization_hint(&self.context.repo, error)))?;
+        let (findings, refusal) = self.statement_findings(
+            &layout,
+            report.findings.iter().map(|finding| {
+                Finding::with_detail(
+                    &finding.message,
+                    serde_json::to_value(finding).expect("statement finding is JSON"),
+                )
+            }),
+        );
+        Ok(CategoryRun::Statements {
+            findings,
+            context: None,
+            refusal,
+        })
+    }
+
+    /// Puts the missing-index warning first and refuses findings only in
+    /// strict mode. A strict run fails earlier when the index is missing.
+    fn statement_findings(
+        &self,
+        layout: &ProvenanceLayout,
+        details: impl Iterator<Item = Finding>,
+    ) -> (Vec<Finding>, Refusal) {
+        let skipped_rule = provenance_store::dictionary_reference::missing_index_warning(layout)
+            .filter(|_| !self.strict)
+            .map(Finding::new);
+        let findings = skipped_rule.into_iter().chain(details).collect::<Vec<_>>();
+        let refusal = if self.strict && !findings.is_empty() {
+            Refusal::Findings
+        } else {
+            Refusal::None
+        };
+        (findings, refusal)
     }
 
     /// Finds missing code bindings without running project tests.
@@ -265,6 +311,23 @@ impl CheckPort for RepositoryCheckPort {
             tokio::task::spawn_blocking(move || port.compute(category, scope.as_deref()))
                 .await
                 .map_err(|error| format!("check worker failed: {error}"))?
+        })
+    }
+
+    /// Reports the ASD-STE100 findings of a supplied statement through the
+    /// analysis and project dictionary that a Requirement or Rule write uses.
+    #[rule("rule_porcelain_check_supplied_statement")]
+    #[rule("rule_porcelain_check_supplied_statement_matches_write")]
+    fn check_statement<'a>(&'a self, statement: &'a str, scope: Option<&'a str>) -> PortFuture<'a> {
+        let port = self.clone();
+        let statement = statement.to_owned();
+        let scope = scope.map(str::to_owned);
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || {
+                port.supplied_statement_run(&statement, scope.as_deref())
+            })
+            .await
+            .map_err(|error| format!("check worker failed: {error}"))?
         })
     }
 }
