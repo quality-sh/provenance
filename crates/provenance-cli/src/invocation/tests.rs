@@ -108,7 +108,12 @@ fn target_grammar_uses_shared_action_and_view_values() {
 
 #[test]
 fn collection_words_are_the_first_catalog_path_segments() {
-    for word in ["rules", "requirements", "statement-checks", "verification-runs"] {
+    for word in [
+        "rules",
+        "requirements",
+        "statement-checks",
+        "verification-runs",
+    ] {
         assert!(super::is_collection(word), "{word}");
     }
     for word in ["req_live", "rule_live", "rule"] {
