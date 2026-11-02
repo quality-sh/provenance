@@ -290,15 +290,20 @@ impl CheckInput {
         self
     }
 
-    /// Return selected categories. Without a selector, a supplied statement
-    /// selects the statements category and a bare check selects all.
-    pub fn categories(&self) -> &[Category] {
-        const STATEMENTS: [Category; 1] = [Category::Statements];
-        match (self.selectors.is_empty(), &self.statement) {
-            (false, _) => &self.selectors,
-            (true, Some(_)) => &STATEMENTS,
-            (true, None) => &Category::ALL,
+    /// Return the categories to run, in run order. A bare check selects all.
+    /// A supplied statement selects the statements category, and the
+    /// selectors add to it.
+    pub fn categories(&self) -> Vec<Category> {
+        let mut categories = match (self.selectors.is_empty(), &self.statement) {
+            (false, _) => self.selectors.clone(),
+            (true, Some(_)) => Vec::new(),
+            (true, None) => Category::ALL.to_vec(),
+        };
+        if self.statement.is_some() && !categories.contains(&Category::Statements) {
+            categories.push(Category::Statements);
+            categories.sort_unstable();
         }
+        categories
     }
 }
 
@@ -360,7 +365,7 @@ impl<P: CheckPort> crate::Porcelain<P> {
     pub async fn check(&self, input: CheckInput) -> CheckOutcome {
         let scope = input.scope.as_deref();
         let mut categories = Vec::new();
-        for &category in input.categories() {
+        for category in input.categories() {
             let run = match (category, input.statement.as_deref()) {
                 (Category::Statements, Some(statement)) => {
                     self.port.check_statement(statement, scope).await

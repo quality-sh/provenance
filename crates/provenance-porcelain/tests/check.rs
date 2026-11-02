@@ -125,7 +125,7 @@ fn explicit_selectors_produce_their_union() {
     "rule_porcelain_check_supplied_statement_selects_statements",
     exhaustion
 )]
-fn a_supplied_statement_selects_statements_unless_a_selector_is_given() {
+fn a_supplied_statement_selects_statements_and_keeps_the_other_selectors() {
     let categories = [Category::Graph, Category::Statements, Category::Bindings];
     for mask in 0_u8..8 {
         let selected = categories
@@ -135,11 +135,11 @@ fn a_supplied_statement_selects_statements_unless_a_selector_is_given() {
             .collect::<Vec<_>>();
         let input = CheckInput::new(selected.clone()).with_statement("The pump stops.");
 
-        let expected = if selected.is_empty() {
-            vec![Category::Statements]
-        } else {
-            selected
-        };
+        let mut expected = selected;
+        if !expected.contains(&Category::Statements) {
+            expected.push(Category::Statements);
+            expected.sort_unstable();
+        }
         assert_eq!(input.categories(), expected, "mask {mask}");
     }
 }
