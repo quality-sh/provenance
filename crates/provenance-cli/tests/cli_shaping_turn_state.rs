@@ -141,14 +141,19 @@ fn cli_shaping_actions_and_requirement_patch_share_the_catalog() {
         "agent-one",
     ])
     .success();
-    provenance(&[
-        "api",
-        "topics/topic_overtime/close",
-        "--method",
-        "post",
-        "--repo",
-        &repo,
-    ])
+    provenance_stdin(
+        &[
+            "api",
+            "topics/topic_overtime/close",
+            "--method",
+            "post",
+            "--input",
+            "-",
+            "--repo",
+            &repo,
+        ],
+        "{}",
+    )
     .success()
     .stdout(contains(r#""status": "closed""#));
 

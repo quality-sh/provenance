@@ -17,12 +17,11 @@ fn run(repo: &str, args: &[&str]) -> Value {
 }
 
 fn archive(repo: &str, family: &str, id: &str) -> Value {
-    let current = run(repo, &[family, id, "get"]);
+    let current = run(repo, &["api", &format!("{family}/{id}")]);
     let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     let output = Command::cargo_bin("provenance")
         .unwrap()
         .args([
-            family,
             id,
             "update",
             "--repo",
@@ -157,12 +156,11 @@ fn topic_and_question_updates_require_the_current_etag() {
         ("topics", "topic_archive", "title"),
         ("questions", "question_one", "question"),
     ] {
-        let before = run(repo, &[family, id, "get"]);
+        let before = run(repo, &["api", &format!("{family}/{id}")]);
         let output = Command::cargo_bin("provenance")
             .unwrap()
             .args([
-                family, id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format",
-                "json",
+                id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format", "json",
             ])
             .write_stdin(serde_json::json!({field: "No unguarded update"}).to_string())
             .assert()
@@ -179,7 +177,8 @@ fn topic_and_question_updates_require_the_current_etag() {
                 reason: InvalidInputReason::Required,
             }
         );
-        assert_eq!(run(repo, &[family, id, "get"])["data"], before["data"]);
+        let after = run(repo, &["api", &format!("{family}/{id}")]);
+        assert_eq!(after["data"], before["data"]);
     }
     assert_eq!(
         run(repo, &["api", "topics/topic_archive"])["data"]["status"],

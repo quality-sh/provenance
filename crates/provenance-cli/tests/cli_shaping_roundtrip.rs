@@ -23,7 +23,7 @@ fn cli_shaping_records_materialize_and_accept_topic_question_discussions() {
 }
 
 fn create_boundary(repo: &str) {
-    provenance_stdin(&["api", "boundaries", "--method", "post", "--input", "-", "--repo", repo, "--scope", "default", "--format", "json"], r#"{"id":"boundary_no_manual_rework","requirement_id":"req_overtime","statement":"No manual payroll reconciliation","source_ref":{"source_id":"source_schads","clause":"28.1"}}"#)
+    provenance_stdin(&["boundary_no_manual_rework", "create", "--type", "boundary", "--stdin", "--repo", repo, "--scope", "default", "--format", "json"], r#"{"requirement_id":"req_overtime","statement":"No manual payroll reconciliation","source_ref":{"source_id":"source_schads","clause":"28.1"}}"#)
     .success()
     .stdout(contains("boundary_no_manual_rework"))
     .stdout(contains(r#""source_id": "source_schads""#));
@@ -74,7 +74,7 @@ fn post_topic_thread(repo: &str) {
             "--format",
             "json",
         ],
-        r#"{"role":"assistant","body":"Work this topic before shaping the pitch"}"#,
+        r#"{"actor":"cli","role":"assistant","body":"Work this topic before shaping the pitch"}"#,
     )
     .success()
     .stdout(contains("discussion"));
@@ -96,7 +96,7 @@ fn post_question_thread(repo: &str) {
             "--format",
             "json",
         ],
-        r#"{"role":"assistant","body":"Answered from SCHADS clause 28.1"}"#,
+        r#"{"actor":"cli","role":"assistant","body":"Answered from SCHADS clause 28.1"}"#,
     )
     .success()
     .stdout(contains("discussion"));

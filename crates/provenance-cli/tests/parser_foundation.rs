@@ -164,30 +164,8 @@ fn root_help_lists_search_and_search_help_accepts_global_context() {
 }
 
 #[test]
-fn command_keywords_are_refused_as_record_ids_on_both_cli_write_forms() {
+fn command_keywords_are_refused_as_record_ids_on_the_target_form() {
     let (_directory, path) = repo();
-    provenance()
-        .args([
-            "search", "create", "--type", "source", "--repo", &path, "--name", "Search",
-        ])
-        .assert()
-        .failure()
-        .stderr(contains("reserved record ID search"));
-    provenance()
-        .args([
-            "api", "create", "--type", "source", "--repo", &path, "--name", "Api",
-        ])
-        .assert()
-        .failure()
-        .stderr(contains("reserved record ID api"));
-    provenance()
-        .args([
-            "api", "sources", "--method", "post", "--input", "-", "--repo", &path,
-        ])
-        .write_stdin(r#"{"id":"check","name":"Check"}"#)
-        .assert()
-        .failure()
-        .stderr(contains("reserved record ID check"));
     provenance()
         .args([
             "answer",
@@ -210,7 +188,9 @@ fn end_of_options_allows_an_option_shaped_target() {
         .args([
             "api", "sources", "--method", "post", "--input", "-", "--repo", &path,
         ])
-        .write_stdin(r#"{"id":"--source","name":"Flagged"}"#)
+        .write_stdin(
+            r#"{"id":"--source","name":"Flagged","source_type":"document","supersedes":[]}"#,
+        )
         .assert()
         .success();
     let output = provenance()

@@ -26,9 +26,21 @@ fn a_held_close_lock_fails_the_read_naming_the_stage() {
             json!({"id":"topic_deadline", "requirement_id":"req_deadline", "title":"Deadline"}),
         ),
     ] {
+        let mut body = body;
+        let id = body.as_object_mut().unwrap().remove("id").unwrap();
+        let kind = collection.strip_suffix("ies").map_or_else(
+            || collection.trim_end_matches('s').to_owned(),
+            |stem| format!("{stem}y"),
+        );
         provenance()
             .args([
-                "api", collection, "--method", "post", "--input", "-", "--repo", &repo,
+                id.as_str().unwrap(),
+                "create",
+                "--type",
+                &kind,
+                "--stdin",
+                "--repo",
+                &repo,
             ])
             .write_stdin(body.to_string())
             .assert()

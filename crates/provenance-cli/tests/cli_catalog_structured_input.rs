@@ -25,7 +25,7 @@ fn init() -> (tempfile::TempDir, String) {
 }
 
 fn output(command: &mut Command) -> Value {
-    let output = command.output().unwrap();
+    let output = command.args(["--format", "json"]).output().unwrap();
     assert!(
         output.status.success(),
         "{}",

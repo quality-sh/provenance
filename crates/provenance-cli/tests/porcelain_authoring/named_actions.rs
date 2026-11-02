@@ -96,12 +96,12 @@ fn target_first_question_actions_infer_kind_and_reject_a_mismatched_action() {
 
     provenance()
         .args([
-            "question_actions",
-            "claim",
+            "topic_actions",
+            "answer",
             "--repo",
             &repo,
-            "--actor",
-            "worker",
+            "--answer",
+            "Yes.",
         ])
         .assert()
         .failure()

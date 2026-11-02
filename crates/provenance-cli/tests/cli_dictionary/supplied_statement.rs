@@ -292,8 +292,8 @@ fn the_check_findings_equal_the_rule_write_refusal() {
     let checked = check(&repo, &index_directory, &statement, &["--format", "json"]);
     let write = provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
-        .args(["rules", "create", "--repo", repo.to_str().unwrap()])
-        .args(["--scope", "default", "--id", "rule_trial"])
+        .args(["rule_trial", "create", "--type", "rule"])
+        .args(["--repo", repo.to_str().unwrap(), "--scope", "default"])
         .args(["--requirement-id", "req_anchor", "--statement", &statement])
         .args([
             "--status",

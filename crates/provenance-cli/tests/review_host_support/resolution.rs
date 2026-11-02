@@ -23,12 +23,11 @@ pub fn create_resolution(root: &Path, owner: Option<&str>) {
     );
     let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("provenance"))
         .args([
-            "api",
-            "resolutions",
-            "--method",
-            "post",
-            "--input",
-            "-",
+            "res_reject",
+            "create",
+            "--type",
+            "resolution",
+            "--stdin",
             "--repo",
             root.to_str().unwrap(),
             "--format",
@@ -45,7 +44,7 @@ pub fn create_resolution(root: &Path, owner: Option<&str>) {
         .unwrap()
         .write_all(
             json!({
-                "id":"res_reject", "title":"Keep the result",
+                "title":"Keep the result",
                 "position":"The system stores each result.",
                 "rationale":"The result must remain available.",
                 "status":"proposed", "made_by":owner,

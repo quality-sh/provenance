@@ -52,17 +52,29 @@ function readRecords(repo: string, relative: string): WrittenRecord[] {
     .map((line) => JSON.parse(line) as WrittenRecord);
 }
 
+/** Writes one record with a record command: `[collection, "create"]` runs
+ *  `<id> create --type <kind>` and `[collection, id, "update"]` runs `<id> update`. */
 function catalogWrite(
   repo: string,
   address: string[],
   data: Record<string, unknown>,
   headers: string[] = [],
 ): any {
+  const [collection, action, verb] = address;
+  const { id, ...fields } = data;
+  const [command, body] = action === "create"
+    ? [[String(id), "create", "--type", recordType(collection!)], fields]
+    : [[action!, verb!], data];
   return JSON.parse(execFileSync(
     engine,
-    [...address, "--repo", repo, "--scope", "default", "--format", "json", ...headers, "--stdin"],
-    { encoding: "utf8", input: JSON.stringify(data) },
+    [...command, "--repo", repo, "--scope", "default", "--format", "json", ...headers, "--stdin"],
+    { encoding: "utf8", input: JSON.stringify(body) },
   ));
+}
+
+/** The record type of one collection name, such as `rule` for `rules`. */
+function recordType(collection: string): string {
+  return collection === "boundaries" ? "boundary" : collection.replace(/s$/, "");
 }
 
 const requirementData = (id: string, statement: string) => ({
@@ -83,9 +95,23 @@ function seedResolution(repo: string, status = "approved"): void {
 }
 
 
+/** Turns `--rule <id>` into the api query `rule=<id>`; other options stay. */
+function queryOptions(options: string[]): string[] {
+  const out: string[] = [];
+  for (let index = 0; index < options.length; index += 1) {
+    if (options[index] === "--rule") {
+      out.push("--query", `rule=${options[index + 1]}`);
+      index += 1;
+    } else {
+      out.push(options[index]!);
+    }
+  }
+  return out;
+}
+
 function engineJson(repo: string, args: string[]): unknown {
   const command = args[0] === "sdk" && args[1] === "verification-runs"
-    ? ["verification-runs", "list", ...args.slice(2)]
+    ? ["api", "verification-runs", ...queryOptions(args.slice(2))]
     : args;
   const envelope = JSON.parse(execFileSync(
     engine,
@@ -690,7 +716,7 @@ test("an active spec Rule reports the store refusal for a proposed Resolution", 
   const id = result.resources.find((resource) => resource.kind === "rule")!.id;
   const current = JSON.parse(execFileSync(
     engine,
-    ["rules", id, "get", "--repo", repo, "--scope", "default", "--format", "json"],
+    ["api", `rules/${id}`, "--repo", repo, "--scope", "default", "--format", "json"],
     { encoding: "utf8" },
   ));
   catalogWrite(repo, ["rules", id, "update"], {

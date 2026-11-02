@@ -1,6 +1,6 @@
 use crate::support::{
-    create_requirement, error_json, imported_dictionary, init, provenance, write_reference,
-    UNAPPROVED_WORD,
+    create_requirement, error_json, imported_dictionary, init, provenance, statement_report,
+    write_reference, UNAPPROVED_WORD,
 };
 use provenance_macros::verifies;
 use provenance_ste100::store_dictionary_index;
@@ -14,14 +14,10 @@ fn statement() -> String {
 fn check_statement(repo: &Path, index_directory: &Path, statement: &str) -> Value {
     let output = provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", index_directory)
-        .write_stdin(serde_json::json!({"statement": statement}).to_string())
         .args([
-            "api",
-            "statement-checks",
-            "--method",
-            "post",
-            "--input",
-            "-",
+            "check",
+            "--statement",
+            statement,
             "--repo",
             repo.to_str().unwrap(),
             "--format",
@@ -34,7 +30,7 @@ fn check_statement(repo: &Path, index_directory: &Path, statement: &str) -> Valu
         "the preflight must succeed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    serde_json::from_slice(&output.stdout).unwrap()
+    statement_report(&output)
 }
 
 fn setup_dictionary() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {

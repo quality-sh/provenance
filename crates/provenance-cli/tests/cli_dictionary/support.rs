@@ -90,6 +90,19 @@ pub fn write_reference(repo: &Path, dictionary: &DictionaryImport) {
     .unwrap();
 }
 
+/// The analyzer findings of one `check --statement --format json` run, in
+/// the `{data: {findings}}` shape of the statement check route.
+pub fn statement_report(output: &Output) -> serde_json::Value {
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let findings = report["categories"][0]["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|finding| finding.get("detail").cloned())
+        .collect::<Vec<_>>();
+    serde_json::json!({"data": {"findings": findings}})
+}
+
 pub fn error_json(output: &Output) -> serde_json::Value {
     let stderr = String::from_utf8(output.stderr.clone()).unwrap();
     // A JSON-mode record command prints the refusal object bare.

@@ -103,18 +103,19 @@ fn cli_answer_refuses_proposed_resolution_and_keeps_question_open() {
 fn cli_active_rule_refuses_proposed_resolution() {
     let dir = setup();
     let repo = dir.path().to_str().unwrap();
-    provenance_stdin(&["api", "rules", "--method", "post", "--input", "-", "--repo", repo, "--scope", "default"], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#)
+    provenance_stdin(&["rule_code_scores_health", "create", "--type", "rule", "--stdin", "--repo", repo, "--scope", "default"], r#"{"statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#)
         .failure().code(1).stderr(contains(r#""kind":"resolution_not_approved""#));
 }
 
 fn edit(repo: &str, kind: &str, id: &str, body: &str) -> assert_cmd::assert::Assert {
     let mut args = vec![
-        kind, id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format", "json",
+        id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format", "json",
     ];
     let etag;
     if kind == "questions" {
+        let path = format!("{kind}/{id}");
         let output = provenance(&[
-            kind, id, "get", "--repo", repo, "--scope", "default", "--format", "json",
+            "api", &path, "--repo", repo, "--scope", "default", "--format", "json",
         ])
         .success()
         .get_output()
@@ -214,7 +215,7 @@ fn cli_answered_question_edit_refuses_proposed_resolution() {
 fn cli_active_rule_edit_refuses_proposed_resolution() {
     let dir = setup();
     let repo = dir.path().to_str().unwrap();
-    provenance_stdin(&["api", "rules", "--method", "post", "--input", "-", "--repo", repo, "--scope", "default"], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"draft","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
+    provenance_stdin(&["rule_code_scores_health", "create", "--type", "rule", "--stdin", "--repo", repo, "--scope", "default"], r#"{"statement":"Code scores affect health.","status":"draft","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
     edit(
         repo,
         "rules",
@@ -265,7 +266,7 @@ fn cli_approved_resolution_allows_answer_and_active_rule() {
     ])
     .success()
     .stdout(contains(r#""status": "answered""#));
-    provenance_stdin(&["api", "rules", "--method", "post", "--input", "-", "--repo", repo, "--scope", "default"], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
+    provenance_stdin(&["rule_code_scores_health", "create", "--type", "rule", "--stdin", "--repo", repo, "--scope", "default"], r#"{"statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
 }
 
 #[test]
@@ -423,7 +424,7 @@ fn cli_resolution_cannot_lose_approval_while_it_produces_an_active_rule() {
         r#"{"status":"approved"}"#,
     )
     .success();
-    provenance_stdin(&["api", "rules", "--method", "post", "--input", "-", "--repo", repo, "--scope", "default"], r#"{"id":"rule_code_scores_health","statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
+    provenance_stdin(&["rule_code_scores_health", "create", "--type", "rule", "--stdin", "--repo", repo, "--scope", "default"], r#"{"statement":"Code scores affect health.","status":"active","severity":"high","requirement_ids":["req_overtime"],"resolution_ids":["res_code_scores_health"]}"#).success();
     edit(
         repo,
         "resolutions",

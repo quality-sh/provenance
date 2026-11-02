@@ -636,7 +636,7 @@ Before final response:
    claims automatically, while unanswered questions should be released.
 
    ```sh
-   provenance api topics/<topic_id>/close --method post --scope <scope> --format json
+   printf '{}' | provenance api topics/<topic_id>/close --method post --input - --scope <scope> --format json
    provenance <topic_id> release --actor <actor> --scope <scope> --format json
    provenance <question_id> release --actor <actor> --scope <scope> --format json
    ```

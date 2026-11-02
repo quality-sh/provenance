@@ -118,15 +118,18 @@ fn begin_verification(repo: &Path, rule: &str, key: &str, file: &str) {
     std::fs::write(&path, "// exercises the rule\n").unwrap();
     provenance()
         .args([
-            "verification-runs",
-            "begin-verification",
+            "api",
+            "verification-runs/begin-verification",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
             "--format",
             "json",
-            "--stdin",
         ])
         .write_stdin(
             serde_json::to_vec(&json!({

@@ -158,14 +158,10 @@ fn a_preflight_without_the_index_gives_a_json_report_and_the_warning() {
 
     let output = provenance()
         .env("PROVENANCE_STE100_INDEX_DIR", &index_directory)
-        .write_stdin(serde_json::json!({"statement": REFUSED_STATEMENT}).to_string())
         .args([
-            "api",
-            "statement-checks",
-            "--method",
-            "post",
-            "--input",
-            "-",
+            "check",
+            "--statement",
+            REFUSED_STATEMENT,
             "--repo",
             repo.to_str().unwrap(),
             "--format",
@@ -176,10 +172,18 @@ fn a_preflight_without_the_index_gives_a_json_report_and_the_warning() {
 
     assert!(output.status.success(), "the preflight must succeed");
     let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let findings = report["categories"][0]["findings"].as_array().unwrap();
     assert!(
-        !report["data"]["findings"].as_array().unwrap().is_empty(),
+        findings[0]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with(WARNING),
+        "{report}"
+    );
+    assert!(
+        findings[1..]
+            .iter()
+            .any(|finding| finding["detail"]["rule"] == "8.1"),
         "the preflight must report the semicolon: {report}"
     );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains(&format!("warning: {WARNING}")), "{stderr}");
 }

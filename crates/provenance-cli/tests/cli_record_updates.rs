@@ -137,8 +137,7 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
         let fields = format!("@{}", patch_path.display());
         let mut command = Command::cargo_bin("provenance").unwrap();
         command.args([
-            group, id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format",
-            "json",
+            id, "update", "--repo", repo, "--scope", "default", "--stdin", "--format", "json",
         ]);
         if group == "requirements" {
             use provenance_core::{ScopeId, StableId};
@@ -157,7 +156,14 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
             let current = Command::cargo_bin("provenance")
                 .unwrap()
                 .args([
-                    group, id, "get", "--repo", repo, "--scope", "default", "--format", "json",
+                    "api",
+                    &format!("{group}/{id}"),
+                    "--repo",
+                    repo,
+                    "--scope",
+                    "default",
+                    "--format",
+                    "json",
                 ])
                 .output()
                 .unwrap();

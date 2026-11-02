@@ -82,10 +82,10 @@ fn managed_guidance_carries_the_selected_scope_on_every_review_command() {
         "provenance <record-id> --scope app --review-link --no-open --format json`",
         "provenance <record-id> --scope app --view review`",
         "provenance <requirement-id> --scope app --view review --follow --format json`",
-        "provenance questions <question_id> get --scope app --format json`",
-        "provenance topics <topic_id> get --scope app --format json`",
-        "provenance questions <question_id> update --scope app --if-match <etag> --stdin --format json`",
-        "provenance topics <topic_id> update --scope app --if-match <etag> --stdin --format json`",
+        "provenance <question_id> --scope app --view review --format json`",
+        "provenance <topic_id> --scope app --view review --format json`",
+        "provenance api questions/<question_id> --method patch --header \"If-Match: <etag>\" --input - --scope app --format json`",
+        "provenance api topics/<topic_id> --method patch --header \"If-Match: <etag>\" --input - --scope app --format json`",
     ] {
         assert!(agents.contains(line), "missing {line}\n{agents}");
     }
@@ -125,21 +125,24 @@ fn the_documented_archive_commands_run_as_written() {
 
     for (family, id) in [("questions", "q_one"), ("topics", "topic_open")] {
         let read = json(provenance().args([
-            family, id, "get", "--repo", repo, "--scope", "app", "--format", "json",
+            id, "--repo", repo, "--scope", "app", "--view", "review", "--format", "json",
         ]));
-        let etag = read["data"]["edit"]["etag"].as_str().unwrap().to_owned();
+        let etag = read["review"]["edit"]["etag"].as_str().unwrap().to_owned();
+        let path = format!("{family}/{id}");
         provenance()
             .args([
-                family,
-                id,
-                "update",
+                "api",
+                &path,
+                "--method",
+                "patch",
+                "--header",
+                &format!("If-Match: {etag}"),
+                "--input",
+                "-",
                 "--repo",
                 repo,
                 "--scope",
                 "app",
-                "--if-match",
-                &etag,
-                "--stdin",
                 "--format",
                 "json",
             ])
@@ -147,7 +150,7 @@ fn the_documented_archive_commands_run_as_written() {
             .assert()
             .success();
         let after = json(provenance().args([
-            family, id, "get", "--repo", repo, "--scope", "app", "--format", "json",
+            "api", &path, "--repo", repo, "--scope", "app", "--format", "json",
         ]));
         assert_eq!(after["data"]["status"], "archived", "{family} {id}");
     }
@@ -187,8 +190,14 @@ fn a_record_read_shows_the_edit_etag() {
     shaping_records(repo, "default");
 
     for (family, id) in [("requirements", "req_a"), ("topics", "topic_open")] {
-        let expected =
-            json(provenance().args([family, id, "get", "--repo", repo, "--format", "json"]));
+        let expected = json(provenance().args([
+            "api",
+            &format!("{family}/{id}"),
+            "--repo",
+            repo,
+            "--format",
+            "json",
+        ]));
         let etag = expected["data"]["edit"]["etag"].as_str().unwrap();
         let read = json(provenance().args([id, "--repo", repo, "--format", "json"]));
         assert_eq!(read["edit"]["etag"].as_str(), Some(etag), "{id}");
@@ -210,7 +219,7 @@ fn the_fork_tournament_skill_passes_the_question_etag() {
     .unwrap();
     let words = skill.split_whitespace().collect::<Vec<_>>().join(" ");
 
-    assert!(words.contains("provenance questions <question_id> get --scope <scope> --format json"));
+    assert!(words.contains("provenance <question_id> --view review --scope <scope> --format json"));
     assert!(
         words.contains("update --scope <scope> \\ --if-match <etag> \\ --status blocked_on_human")
     );

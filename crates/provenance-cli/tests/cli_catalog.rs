@@ -158,12 +158,9 @@ fn api_list_filters_are_query_parameters() {
         .success();
     for rule in ["rule_catalog_a", "rule_catalog_b"] {
         provenance()
-            .args([
-                "api", "rules", "--method", "post", "--input", "-", "--repo", &repo,
-            ])
+            .args([rule, "create", "--type", "rule", "--stdin", "--repo", &repo])
             .write_stdin(
                 json!({
-                    "id": rule,
                     "statement": "The system records verification evidence.",
                     "requirement_ids": ["req_catalog"],
                     "resolution_ids": [],

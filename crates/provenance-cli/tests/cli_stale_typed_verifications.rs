@@ -101,15 +101,18 @@ fn init_repo() -> tempfile::TempDir {
 fn verify(repo: &Path, rule: &str, key: &str, file: &str) {
     provenance()
         .args([
-            "verification-runs",
-            "begin-verification",
+            "api",
+            "verification-runs/begin-verification",
+            "--method",
+            "post",
+            "--input",
+            "-",
             "--repo",
             repo.to_str().unwrap(),
             "--scope",
             "default",
             "--format",
             "json",
-            "--stdin",
         ])
         .write_stdin(
             serde_json::to_vec(&json!({

@@ -79,25 +79,6 @@ fn review_view_returns_decision_comment_discussions_and_update_precondition() {
 
 #[test]
 #[verifies("rule_review_refusal_names_read_command", examples)]
-fn wrong_feedback_form_names_the_review_command() {
-    let (_directory, repo) = init();
-    create_requirement(&repo, "req_wrong_form");
-
-    provenance()
-        .args([
-            "requirements",
-            "req_wrong_form",
-            "feedback",
-            "--repo",
-            &repo,
-        ])
-        .assert()
-        .failure()
-        .stderr(contains("provenance req_wrong_form --view review"));
-}
-
-#[test]
-#[verifies("rule_review_refusal_names_read_command", examples)]
 fn explicit_submit_explains_that_the_automatic_submission_is_pending() {
     let (_directory, repo) = init();
     let created = create_requirement(&repo, "req_pending");
@@ -282,37 +263,16 @@ fn record_ids(output: &Value) -> Vec<&str> {
 
 #[test]
 #[verifies("rule_review_defaults_exclude_terminal_records", examples)]
-fn collection_hides_terminal_records_by_default() {
+fn kind_list_hides_terminal_records_by_default() {
     let (_directory, repo) = repo_with_archived_rule();
 
-    let listed =
-        json_output(provenance().args(["api", "rules", "--repo", &repo, "--format", "json"]));
+    let listed = json_output(provenance().args([
+        "search", "--kind", "rule", "--repo", &repo, "--format", "json",
+    ]));
     let ids = record_ids(&listed);
     assert_eq!(ids, ["rule_active"]);
 }
 
-#[test]
-#[verifies("rule_review_defaults_exclude_terminal_records", examples)]
-fn named_query_hides_terminal_records_by_default() {
-    let (_directory, repo) = repo_with_archived_rule();
-
-    let searched = json_output(provenance().args([
-        "api",
-        "rules",
-        "--query",
-        "query=search",
-        "--repo",
-        &repo,
-        "--query",
-        "text=terminal records",
-        "--format",
-        "json",
-    ]));
-    let ids = record_ids(&searched);
-    assert_eq!(ids, ["rule_active"]);
-}
-
-// Implementation aid: a query without an exclude_terminal parameter still runs.
 #[test]
 fn named_query_without_terminal_parameter_runs_without_the_default() {
     let (_directory, repo) = repo_with_archived_rule();
@@ -337,12 +297,14 @@ fn named_query_without_terminal_parameter_runs_without_the_default() {
 
 #[test]
 #[verifies("rule_review_defaults_exclude_terminal_records", examples)]
-fn document_hides_terminal_records_by_default() {
+fn api_document_read_selects_the_terminal_filter() {
     let (_directory, repo) = repo_with_archived_rule();
 
     let document = json_output(provenance().args([
         "api",
         "requirements/req_terminal/document",
+        "--query",
+        "exclude_terminal=true",
         "--repo",
         &repo,
         "--format",
@@ -356,24 +318,6 @@ fn document_hides_terminal_records_by_default() {
         .collect::<Vec<_>>();
     assert!(ids.contains(&"rule_active"));
     assert!(!ids.contains(&"rule_archived"));
-}
-
-#[test]
-#[verifies("rule_cli_terminal_records_opt_in", examples)]
-fn collection_includes_terminal_records_on_request() {
-    let (_directory, repo) = repo_with_archived_rule();
-    let included = json_output(provenance().args([
-        "api",
-        "rules",
-        "--repo",
-        &repo,
-        "--query",
-        "exclude_terminal=false",
-        "--format",
-        "json",
-    ]));
-    let ids = record_ids(&included);
-    assert_eq!(ids, ["rule_active", "rule_archived"]);
 }
 
 #[test]

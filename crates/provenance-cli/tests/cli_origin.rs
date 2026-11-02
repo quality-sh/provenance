@@ -74,7 +74,7 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
             "--format",
             "json",
         ],
-        r#"{"role":"user","body":"Promote this conversation into artifacts"}"#,
+        r#"{"actor":"cli","role":"user","body":"Promote this conversation into artifacts"}"#,
     );
     let discussion_id = posted["data"]["discussion_id"]
         .as_str()
@@ -106,12 +106,11 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
     ]);
     let requirement = provenance_json_stdin(
         &[
-            "api",
-            "requirements",
-            "--method",
-            "post",
-            "--input",
-            "-",
+            "req_origin_child",
+            "create",
+            "--type",
+            "requirement",
+            "--stdin",
             "--repo",
             &repo,
             "--scope",
@@ -120,7 +119,6 @@ fn cli_create_commands_preserve_origin_thread_and_message() {
             "json",
         ],
         &serde_json::json!({
-            "id":"req_origin_child",
             "statement":"Origin child requirement",
             "origin":{
                 "thread_id": origin_thread,

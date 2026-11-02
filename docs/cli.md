@@ -139,11 +139,14 @@ only when you need all request and response schemas.
 Every catalog result uses `{data,meta}` or `{error,meta}`. Lists put their
 records in `data.items`.
 
-With `--format json`, `provenance api`, a record read, search,
+With `--format json`, a record read, search,
 or action, and a Discussion command print a refusal from the operation as one
 `{error,meta}` object. The object is the only line on standard error, it has no
 prefix, and the command exits with code 1. When the CLI knows the next command
 to run, `error.hint` names it.
+
+`provenance api` prints a refusal as one `{error,meta}` object after `Error: `
+on standard error and exits with code 1.
 
 These errors stay text after `Error: ` and exit with code 1, also with
 `--format json`:

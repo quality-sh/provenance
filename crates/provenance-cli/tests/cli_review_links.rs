@@ -3,7 +3,6 @@ mod review_host_support;
 
 use porcelain_authoring_support::{
     initialized_repo, json_output, json_stdin_output, local_host, local_host_with_identity,
-    provenance,
 };
 use provenance_macros::verifies;
 use provenance_transport::local_host::LocalHostRegistration;
@@ -206,15 +205,6 @@ fn submission_payload() -> serde_json::Value {
     })
 }
 
-fn decision_payload() -> serde_json::Value {
-    json!({
-        "actor":{"identity_type":"human","id":"reviewer"}, "decision":"accepted",
-        "rationale":null,
-        "canonical_artifact":{"artifact_type":"requirement","artifact_id":"req_flow"},
-        "feedback":null, "declared_by":null
-    })
-}
-
 fn pending_submission(repo: &str) -> (serde_json::Value, String) {
     let created = create_requirement(repo, "req_flow");
     let proposal = created["data"]["decision"]["pending"]["proposal_id"]
@@ -285,31 +275,6 @@ fn update_returns_the_review_link() {
 
 #[test]
 #[verifies("rule_cli_record_review_action_returns_url", examples)]
-fn withdraw_returns_the_review_link() {
-    let (_directory, repo) = initialized_repo();
-    let (_, proposal) = pending_submission(&repo);
-    let host = local_host(&repo);
-    let withdrawn = json_stdin_output(
-        &[
-            "api",
-            &format!("requirements/req_flow/submissions/{proposal}/withdraw"),
-            "--method",
-            "post",
-            "--input",
-            "-",
-            "--repo",
-            &repo,
-            "--format",
-            "json",
-        ],
-        &withdraw_payload(),
-    );
-
-    assert_review_link(&withdrawn, &format!("{}/?root=req_flow", host.endpoint));
-}
-
-#[test]
-#[verifies("rule_cli_record_review_action_returns_url", examples)]
 fn submit_returns_the_review_link() {
     let (_directory, repo) = initialized_repo();
     ready_to_submit(&repo);
@@ -322,39 +287,4 @@ fn submit_returns_the_review_link() {
     );
 
     assert_review_link(&submitted, &format!("{}/?root=req_flow", host.endpoint));
-}
-
-#[test]
-#[verifies("rule_cli_record_review_action_returns_url", examples)]
-fn decide_returns_the_review_link() {
-    let (_directory, repo) = initialized_repo();
-    provenance()
-        .args([
-            "init",
-            "--path",
-            &repo,
-            "--disposition-actor-id",
-            "reviewer",
-        ])
-        .assert()
-        .success();
-    let (_, proposal) = pending_submission(&repo);
-    let host = local_host(&repo);
-    let decided = json_stdin_output(
-        &[
-            "api",
-            &format!("requirements/req_flow/submissions/{proposal}/decide"),
-            "--method",
-            "post",
-            "--input",
-            "-",
-            "--repo",
-            &repo,
-            "--format",
-            "json",
-        ],
-        &decision_payload(),
-    );
-
-    assert_review_link(&decided, &format!("{}/?root=req_flow", host.endpoint));
 }

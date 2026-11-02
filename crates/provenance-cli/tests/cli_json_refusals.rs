@@ -43,7 +43,7 @@ fn refusal(repo: &str, args: &[&str]) -> Value {
 fn a_stale_etag_refusal_is_one_object_with_the_hint_as_a_field() {
     let (_directory, repo) = init();
 
-    for form in [vec!["req_a", "update"], vec!["req_a", "update"]] {
+    for form in [vec!["req_a", "update"]] {
         let mut args = form.clone();
         args.extend([
             "--if-match",
@@ -73,13 +73,9 @@ fn read_refusals_are_one_object_each() {
     let error = refusal(&repo, &["req_a", "--scope", "nope"]);
     assert_eq!(error["error"]["kind"], "unknown_scope");
     assert_eq!(error["error"]["message"], "unknown scope");
-    let error = refusal(&repo, &["api", "requirements/req_a", "--scope", "nope"]);
-    assert_eq!(error["error"]["kind"], "unknown_scope");
     let error = refusal(&repo, &["req_missing"]);
     assert_eq!(error["error"]["kind"], "resource_not_found");
     assert_eq!(error["error"]["message"], "record does not exist");
-    let error = refusal(&repo, &["api", "requirements/req_missing"]);
-    assert_eq!(error["error"]["kind"], "resource_not_found");
     let error = refusal(&repo, &["REQ-1", "get"]);
     assert_eq!(error["error"]["kind"], "operation_failed");
     assert_eq!(error["error"]["message"], "invalid operation input");

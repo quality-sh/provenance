@@ -18,25 +18,15 @@ fn setup() -> (tempfile::TempDir, String) {
 }
 
 fn create(repo: &str, id: &str, dependencies: Option<Value>) -> Value {
-    let mut input = json!({"id":id,"topic_id":"topic_overtime",
+    let mut input = json!({"topic_id":"topic_overtime",
         "question":"Which threshold applies?","resolution_method":"research"});
     if let Some(dependencies) = dependencies {
         input["depends_on"] = dependencies;
     }
     let output = provenance_stdin(
         &[
-            "api",
-            "questions",
-            "--method",
-            "post",
-            "--input",
-            "-",
-            "--repo",
-            repo,
-            "--scope",
-            "default",
-            "--format",
-            "json",
+            id, "create", "--type", "question", "--stdin", "--repo", repo, "--scope", "default",
+            "--format", "json",
         ],
         &input.to_string(),
     )
@@ -128,8 +118,9 @@ fn bounded_children_cannot_authorize_selection() {
 }
 
 fn get(repo: &str, family: &str, id: &str) -> Value {
+    let path = format!("{family}/{id}");
     let output = provenance(&[
-        family, id, "get", "--repo", repo, "--scope", "default", "--format", "json",
+        "api", &path, "--repo", repo, "--scope", "default", "--format", "json",
     ])
     .success()
     .get_output()
@@ -143,7 +134,6 @@ fn update(repo: &str, family: &str, id: &str, input: &Value) -> Value {
     let etag = current["data"]["edit"]["etag"].as_str().unwrap();
     let output = provenance_stdin(
         &[
-            family,
             id,
             "update",
             "--repo",
@@ -289,47 +279,51 @@ fn cross_topic_prerequisites_are_rejected_before_write() {
     let (_dir, repo) = setup();
     provenance_stdin(
         &[
-            "api", "topics", "--method", "post", "--input", "-", "--repo", &repo, "--scope",
+            "topic_other",
+            "create",
+            "--type",
+            "topic",
+            "--stdin",
+            "--repo",
+            &repo,
+            "--scope",
             "default",
         ],
-        &json!({"id":"topic_other","requirement_id":"req_overtime",
+        &json!({"requirement_id":"req_overtime",
         "title":"Another threshold"})
         .to_string(),
     )
     .success();
     provenance_stdin(
         &[
-            "api",
-            "questions",
-            "--method",
-            "post",
-            "--input",
-            "-",
+            "question_other",
+            "create",
+            "--type",
+            "question",
+            "--stdin",
             "--repo",
             &repo,
             "--scope",
             "default",
         ],
-        &json!({"id":"question_other","topic_id":"topic_other",
+        &json!({"topic_id":"topic_other",
         "question":"Which rate?","resolution_method":"grill"})
         .to_string(),
     )
     .success();
     let result = provenance_stdin(
         &[
-            "api",
-            "questions",
-            "--method",
-            "post",
-            "--input",
-            "-",
+            "question_local",
+            "create",
+            "--type",
+            "question",
+            "--stdin",
             "--repo",
             &repo,
             "--scope",
             "default",
         ],
-        &json!({"id":"question_local",
-        "topic_id":"topic_overtime","question":"Which rate?","resolution_method":"grill",
+        &json!({"topic_id":"topic_overtime","question":"Which rate?","resolution_method":"grill",
         "depends_on":["question_other"]})
         .to_string(),
     )

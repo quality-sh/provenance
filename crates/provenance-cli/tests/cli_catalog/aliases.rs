@@ -18,11 +18,17 @@ fn question_update_method_alias_is_resolved_before_schema_validation() {
         .success();
     provenance()
         .args([
-            "api", "topics", "--method", "post", "--input", "-", "--repo", &repo,
+            "topic_question_alias",
+            "create",
+            "--type",
+            "topic",
+            "--stdin",
+            "--repo",
+            &repo,
         ])
         .write_stdin(
             json!({
-                "id":"topic_question_alias", "requirement_id":"req_question_alias",
+                "requirement_id":"req_question_alias",
                 "title":"Question aliases", "status":"open", "links":[]
             })
             .to_string(),
