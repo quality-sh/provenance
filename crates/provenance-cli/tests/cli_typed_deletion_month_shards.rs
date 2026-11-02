@@ -55,6 +55,7 @@ fn thread_lines(path: &Path) -> usize {
 
 #[test]
 #[verifies("rule_typed_deletion_deletes_discussions", examples)]
+#[verifies("rule_typed_deletion_withdraws_undecided_submissions", examples)]
 fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path();
@@ -72,13 +73,17 @@ fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
         .args(["--path-prefix", "."])
         .assert()
         .success();
-    // A native create opens a review submission, and typed-spec apply does not
-    // delete a record that has one. The typed spec creates the Source instead.
-    let legacy = json!([{"key":"legacy", "id":"source_legacy", "name":"Legacy", "kind":"policy"}]);
     provenance(
         repo,
-        &["authoring-changes", "create"],
-        Some(spec(&legacy, &json!([]))),
+        &[
+            "sources",
+            "create",
+            "--id",
+            "source_legacy",
+            "--name",
+            "Legacy",
+        ],
+        None,
     );
     // No writer makes a new month shard, but readers accept the shards that
     // earlier builds wrote.
@@ -111,6 +116,15 @@ fn a_discussion_with_messages_in_an_earlier_month_shard_is_deleted() {
     .unwrap();
     git(repo, &["add", "-A"]);
     git(repo, &["commit", "-q", "-m", "Legacy month shard"]);
+    let legacy = json!([{"key":"legacy", "id":"source_legacy", "name":"Legacy", "kind":"policy"}]);
+    provenance(
+        repo,
+        &["authoring-changes", "create"],
+        Some(spec(
+            &legacy,
+            &json!([{"kind":"source", "id":"source_legacy"}]),
+        )),
+    );
     let started = provenance(
         repo,
         &["sources", "source_legacy", "discussions", "create"],
