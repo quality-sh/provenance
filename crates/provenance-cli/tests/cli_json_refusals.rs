@@ -43,26 +43,24 @@ fn refusal(repo: &str, args: &[&str]) -> Value {
 fn a_stale_etag_refusal_is_one_object_with_the_hint_as_a_field() {
     let (_directory, repo) = init();
 
-    for form in [vec!["req_a", "update"]] {
-        let mut args = form.clone();
-        args.extend([
+    let error = refusal(
+        &repo,
+        &[
+            "req_a",
+            "update",
             "--if-match",
             STALE,
             "--statement",
             "The system records two topics.",
-        ]);
-        let error = refusal(&repo, &args);
-        assert_eq!(
-            error["error"]["kind"], "requirement_edit_conflict",
-            "{form:?}"
-        );
-        assert!(error["error"]["current_etag"].is_string());
-        let hint = error["error"]["hint"].as_str().unwrap();
-        assert_eq!(
-            hint,
-            format!("run `provenance req_a --view review --scope default --repo {repo}`"),
-        );
-    }
+        ],
+    );
+    assert_eq!(error["error"]["kind"], "requirement_edit_conflict");
+    assert!(error["error"]["current_etag"].is_string());
+    let hint = error["error"]["hint"].as_str().unwrap();
+    assert_eq!(
+        hint,
+        format!("run `provenance req_a --view review --scope default --repo {repo}`"),
+    );
 }
 
 #[test]

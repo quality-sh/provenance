@@ -128,10 +128,7 @@ fn target_first_requirement_submit_infers_kind_and_records_the_submission() {
     json_stdin_output(
         &[
             "api",
-            &format!(
-                "requirements/req_actions/submissions/{}/withdraw",
-                automatic
-            ),
+            &format!("requirements/req_actions/submissions/{automatic}/withdraw"),
             "--method",
             "post",
             "--input",

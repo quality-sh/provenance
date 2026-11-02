@@ -160,7 +160,9 @@ fn check_help(command: &str, repo: &Path) -> Result<(), String> {
             .output()
             .map_err(|error| error.to_string())?;
         if !output.status.success() {
-            last_error = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+            String::from_utf8_lossy(&output.stderr)
+                .trim()
+                .clone_into(&mut last_error);
             continue;
         }
         let help = String::from_utf8_lossy(&output.stdout);

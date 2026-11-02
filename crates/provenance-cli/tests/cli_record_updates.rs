@@ -153,18 +153,11 @@ fn every_descriptive_update_command_uses_the_local_catalog() {
                 .etag;
             command.args(["--if-match", &etag]);
         } else if matches!(group, "topics" | "questions") {
+            let path = format!("{group}/{id}");
+            let read = ["api", &path, "--repo", repo, "--format", "json"];
             let current = Command::cargo_bin("provenance")
                 .unwrap()
-                .args([
-                    "api",
-                    &format!("{group}/{id}"),
-                    "--repo",
-                    repo,
-                    "--scope",
-                    "default",
-                    "--format",
-                    "json",
-                ])
+                .args(read)
                 .output()
                 .unwrap();
             let current: Value = serde_json::from_slice(&current.stdout).unwrap();
