@@ -35,6 +35,13 @@ fn init_with_source(repo: &str) {
         .success();
 }
 
+/// The MCP host that the CLI builds for one local repository.
+fn local_host(path: &std::path::Path) -> provenance_transport::StatementHost {
+    let repository = provenance_store::repository::Repository::open(path, "default").unwrap();
+    let access = provenance_store::operations::LocalRepository::bind(repository, "native");
+    provenance_transport::StatementHost::with_access(Arc::new(access.unwrap()))
+}
+
 async fn assert_get_readable(
     client: &rmcp::service::RunningService<rmcp::RoleClient, ()>,
     repo: &str,
@@ -133,13 +140,7 @@ async fn cli_uses_the_names_from_the_live_mcp_inventory() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_source(&repo);
-    let access = provenance_store::operations::LocalRepository::bind(
-        provenance_store::repository::Repository::open(directory.path(), "default").unwrap(),
-        "native",
-    )
-    .unwrap();
-    let host = provenance_transport::StatementHost::with_access(Arc::new(access))
-        .with_check_port(Arc::new(EmptyCheckPort));
+    let host = local_host(directory.path()).with_check_port(Arc::new(EmptyCheckPort));
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
@@ -244,12 +245,7 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_source(&repo);
-    let access = provenance_store::operations::LocalRepository::bind(
-        provenance_store::repository::Repository::open(directory.path(), "default").unwrap(),
-        "native",
-    )
-    .unwrap();
-    let host = provenance_transport::StatementHost::with_access(Arc::new(access));
+    let host = local_host(directory.path());
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
@@ -278,63 +274,33 @@ async fn mcp_get_failures_are_the_cli_json_refusals() {
     server.await.unwrap().cancel().await.unwrap();
 }
 
-fn create(repo: &str, args: &[&str]) {
-    provenance()
-        .args(&args[..2])
-        .args(["--repo", repo])
-        .args(&args[2..])
-        .assert()
-        .success();
+/// Runs the CLI on `repo` with the arguments in `command`, split on spaces, then `extra`.
+fn cli(repo: &str, command: &str, extra: &[&str]) -> std::process::Output {
+    let mut cli = provenance();
+    cli.args(command.split(' '))
+        .args(extra)
+        .args(["--repo", repo]);
+    cli.output().unwrap()
 }
 
-/// A repository with two Rules bound in `code.rs`: one to `pay`, one to `other`.
+/// A repository where `code.rs` binds `rule_pay` to `pay` and `rule_other` to `other`.
 fn init_with_bound_code(repo: &str) {
     init_with_source(repo);
-    create(
-        repo,
-        &[
-            "requirements",
-            "create",
-            "--id",
-            "req_pay",
-            "--statement",
-            "Shared needle requirement.",
-        ],
-    );
+    let statement = ["--statement", "Shared needle requirement."];
+    let created = cli(repo, "requirements create --id req_pay", &statement);
+    assert!(created.status.success());
     for (id, statement, status) in [
         ("rule_pay", "Pay overtime after the threshold.", "active"),
         ("rule_other", "Other pay rule.", "deprecated"),
     ] {
-        create(
-            repo,
-            &[
-                "rules",
-                "create",
-                "--id",
-                id,
-                "--requirement-id",
-                "req_pay",
-                "--statement",
-                statement,
-                "--status",
-                status,
-                "--severity",
-                "medium",
-            ],
+        let command = format!(
+            "rules create --id {id} --requirement-id req_pay --severity medium --status {status}"
         );
+        let created = cli(repo, &command, &["--statement", statement]);
+        assert!(created.status.success());
     }
-    std::fs::write(
-        std::path::Path::new(repo).join("code.rs"),
-        concat!(
-            "#[rule(\"rule_other\")]\n",
-            "fn other() {}\n",
-            "#[rule(\"rule_pay\")]\n",
-            "fn pay() {}\n",
-            "#[verifies(\"rule_pay\", examples)]\n",
-            "fn checks_pay() {}\n",
-        ),
-    )
-    .unwrap();
+    let code = "#[rule(\"rule_other\")]\nfn other() {}\n#[rule(\"rule_pay\")]\nfn pay() {}\n#[verifies(\"rule_pay\", examples)]\nfn checks_pay() {}\n";
+    std::fs::write(std::path::Path::new(repo).join("code.rs"), code).unwrap();
 }
 
 #[tokio::test]
@@ -345,91 +311,47 @@ async fn cli_and_mcp_file_search_return_the_same_result() {
     let directory = tempfile::tempdir().unwrap();
     let repo = directory.path().to_string_lossy().into_owned();
     init_with_bound_code(&repo);
-    let access = provenance_store::operations::LocalRepository::bind(
-        provenance_store::repository::Repository::open(directory.path(), "default").unwrap(),
-        "native",
-    )
-    .unwrap();
-    let host = provenance_transport::StatementHost::with_access(Arc::new(access));
+    let host = local_host(directory.path());
     let (client_io, server_io) = tokio::io::duplex(256 * 1024);
     let server = tokio::spawn(async move { host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
     let search = tools.iter().find(|tool| tool.name == "search").unwrap();
     for field in ["file", "symbol", "line"] {
-        assert!(
-            search.input_schema["properties"][field].is_object(),
-            "{field}"
-        );
+        assert!(search.input_schema["properties"][field].is_object());
     }
     // The search schemas are generated as JSON Schema 2020-12 and sent without `$schema`.
-    let validator =
-        jsonschema::draft202012::new(&json!(search.output_schema.as_ref().unwrap())).unwrap();
+    let output = json!(search.output_schema.as_ref().unwrap());
+    let validator = jsonschema::draft202012::new(&output).unwrap();
+    let call = |arguments: serde_json::Value| {
+        let arguments = arguments.as_object().unwrap().clone();
+        client.call_tool(CallToolRequestParams::new("search").with_arguments(arguments))
+    };
 
-    let search_args = ["search", "--file", "code.rs", "--symbol", "pay", "--repo"];
-    let cli_json = provenance()
-        .args(search_args)
-        .args([repo.as_str(), "--format", "json"])
-        .output()
-        .unwrap();
-    assert!(
-        cli_json.status.success(),
-        "{}",
-        String::from_utf8_lossy(&cli_json.stderr)
-    );
+    let lookup = "search --file code.rs --symbol pay";
+    let cli_json = cli(&repo, lookup, &["--format", "json"]);
+    assert!(cli_json.status.success());
     let cli_json: serde_json::Value = serde_json::from_slice(&cli_json.stdout).unwrap();
-    let cli_text = provenance().args(search_args).arg(&repo).output().unwrap();
-    assert!(cli_text.status.success());
-    let mcp = client
-        .call_tool(
-            CallToolRequestParams::new("search").with_arguments(
-                json!({"file":"code.rs","symbol":"pay"})
-                    .as_object()
-                    .unwrap()
-                    .clone(),
-            ),
-        )
-        .await
-        .unwrap();
+    let cli_text = cli(&repo, lookup, &[]);
+    let mcp = call(json!({"file":"code.rs","symbol":"pay"})).await;
+    let mcp = mcp.unwrap();
     assert_ne!(mcp.is_error, Some(true), "{mcp:?}");
     let structured = mcp.structured_content.as_ref().unwrap();
     assert_eq!(&cli_json, structured);
     assert_eq!(cli_json["nodes"][0]["id"], "rule_pay");
-    let errors = validator
-        .iter_errors(structured)
-        .map(|error| format!("{} at {}", error, error.instance_path()))
-        .collect::<Vec<_>>();
-    assert!(errors.is_empty(), "{errors:?}");
-    assert_eq!(
-        String::from_utf8(cli_text.stdout).unwrap().trim_end(),
-        mcp.content[0].as_text().unwrap().text
-    );
+    assert!(validator.is_valid(structured), "{structured}");
+    let cli_text = String::from_utf8(cli_text.stdout).unwrap();
+    assert_eq!(cli_text.trim_end(), mcp.content[0].as_text().unwrap().text);
 
-    let cli_refusal = provenance()
-        .args(["search", "--symbol", "pay", "--repo", &repo])
-        .output()
-        .unwrap();
+    let cli_refusal = cli(&repo, "search --symbol pay", &[]);
     assert!(!cli_refusal.status.success());
-    let mcp_refusal = client
-        .call_tool(
-            CallToolRequestParams::new("search")
-                .with_arguments(json!({"symbol":"pay"}).as_object().unwrap().clone()),
-        )
-        .await
-        .unwrap();
+    let mcp_refusal = call(json!({"symbol":"pay"})).await.unwrap();
     assert_eq!(mcp_refusal.is_error, Some(true), "{mcp_refusal:?}");
-    let message = mcp_refusal.structured_content.as_ref().unwrap()["error"]["message"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    assert!(
-        message.contains("provenance search --file <path>"),
-        "{message}"
-    );
-    assert_eq!(
-        String::from_utf8(cli_refusal.stderr).unwrap().trim_end(),
-        format!("Error: {message}")
-    );
+    let error = &mcp_refusal.structured_content.as_ref().unwrap()["error"];
+    let message = error["message"].as_str().unwrap();
+    assert!(message.contains("search --file <path>"), "{message}");
+    let cli_message = String::from_utf8(cli_refusal.stderr).unwrap();
+    assert_eq!(cli_message.trim_end(), format!("Error: {message}"));
     client.cancel().await.unwrap();
     server.await.unwrap().cancel().await.unwrap();
 }
