@@ -85,6 +85,7 @@ impl StateStore {
             revises: None,
         };
         check_request_size(&input)?;
+        crate::test_probes::at("automatic_submission_before_commit")?;
         let path = shards::proposal_cards_path(&self.layout, record.scope_id());
         self.permitting(&[&path], "*", |store| store.commit_submission(input))?;
         Ok(())

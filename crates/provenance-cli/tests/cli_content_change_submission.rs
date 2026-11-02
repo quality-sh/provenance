@@ -1,5 +1,5 @@
-//! A content change to a record in review opens its review submission in the
-//! same write, for each native record kind.
+//! Creating a record and a content change to it open its review submission
+//! in the same write, for each native record kind.
 
 use provenance_macros::verifies;
 use serde_json::Value;
@@ -9,7 +9,8 @@ mod support {
     pub mod review_paths;
 }
 use support::record_review::{
-    accept_current, create_resolution, create_rule, decide, guarded_update, read, submit,
+    accept_current, create_resolution, create_rule, current_submission, data, decide,
+    guarded_update, read,
 };
 use support::review_paths::{create_requirement, init};
 
@@ -79,7 +80,7 @@ fn statement_change_after_a_rejection_opens_a_pending_submission() {
     let (_directory, repo) = init();
     create_requirement(&repo, "req_a");
     create_rule(&repo, "rule_a", "req_a");
-    let proposal = submit(&repo, "rule_a");
+    let proposal = current_submission(&repo, "rules", "rule_a");
     decide(&repo, "rules", "rule", "rule_a", &proposal, false);
     let rejected = read(&repo, "rules", "rule_a");
     assert!(rejected["decision"]["pending"].is_null());
@@ -143,4 +144,55 @@ fn position_change_to_an_accepted_resolution_opens_a_pending_submission() {
     let after = read(&repo, "resolutions", "res_a");
     assert_eq!(after["position"], "The system stores records in two files.");
     assert_pending_at_current_revision(&after, status.as_str().unwrap());
+}
+
+#[test]
+#[verifies("rule_content_change_opens_review_submission", examples)]
+fn creating_a_rule_or_resolution_in_review_opens_its_pending_submission() {
+    let (_directory, repo) = init();
+    create_requirement(&repo, "req_a");
+    data(
+        &repo,
+        &[
+            "rules",
+            "create",
+            "--id",
+            "rule_a",
+            "--status",
+            "review",
+            "--statement",
+            "The system keeps each record.",
+            "--requirement-id",
+            "req_a",
+        ],
+    );
+    data(
+        &repo,
+        &[
+            "resolutions",
+            "create",
+            "--id",
+            "res_a",
+            "--status",
+            "review",
+            "--title",
+            "Store records",
+            "--position",
+            "The system stores records in one file.",
+            "--rationale",
+            "One file is simple.",
+            "--requirement-id",
+            "req_a",
+        ],
+    );
+
+    for (collection, id) in [("rules", "rule_a"), ("resolutions", "res_a")] {
+        let created = read(&repo, collection, id);
+        assert_pending_at_current_revision(&created, "review");
+        let review = data(&repo, &[id, "get", "--view", "review"]);
+        assert_eq!(
+            review["review"]["decision"]["pending"]["proposal_id"],
+            created["decision"]["pending"]["proposal_id"]
+        );
+    }
 }

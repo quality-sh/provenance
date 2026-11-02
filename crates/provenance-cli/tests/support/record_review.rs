@@ -122,9 +122,18 @@ pub fn guarded_update(repo: &str, collection: &str, id: &str, change: &[&str]) {
     data(repo, &args);
 }
 
-/// Submits and accepts the current revision of a record.
+/// The pending submission of the current revision, opened first when the
+/// record has none.
+pub fn current_submission(repo: &str, collection: &str, id: &str) -> String {
+    match read(repo, collection, id)["decision"]["pending"]["proposal_id"].as_str() {
+        Some(proposal) => proposal.to_owned(),
+        None => submit(repo, id),
+    }
+}
+
+/// Accepts the current revision of a record.
 pub fn accept_current(repo: &str, collection: &str, kind: &str, id: &str) -> String {
-    let proposal = submit(repo, id);
+    let proposal = current_submission(repo, collection, id);
     decide(repo, collection, kind, id, &proposal, true);
     proposal
 }
