@@ -6,7 +6,7 @@ use crate::PartOfSpeech;
 
 /// One regular ending that a token can carry.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Inflection {
+pub enum Inflection {
     ThirdPerson,
     Past,
     PresentParticiple,
@@ -15,7 +15,7 @@ pub(crate) enum Inflection {
 
 impl Inflection {
     /// The part of speech of an entry that can take this ending.
-    pub(crate) const fn part_of_speech(self) -> PartOfSpeech {
+    pub const fn part_of_speech(self) -> PartOfSpeech {
         match self {
             Self::ThirdPerson | Self::Past | Self::PresentParticiple => PartOfSpeech::Verb,
             Self::Plural => PartOfSpeech::Noun,
@@ -31,7 +31,7 @@ const MINIMUM_BASE_LENGTH: usize = 2;
 /// The past form also covers the past participle, because regular verbs use
 /// one spelling for both. A possessive "'s" is removed first.
 #[rule("rule_ste_dictionary_inflected_unapproved_form")]
-pub(crate) fn base_candidates(folded: &str) -> Vec<(String, Inflection)> {
+pub fn base_candidates(folded: &str) -> Vec<(String, Inflection)> {
     let word = folded.strip_suffix("\u{27}s").unwrap_or(folded);
     let mut candidates = Vec::new();
 
@@ -102,7 +102,7 @@ fn push(candidates: &mut Vec<(String, Inflection)>, base: &str, inflection: Infl
     }
 }
 
-fn is_consonant(character: char) -> bool {
+const fn is_consonant(character: char) -> bool {
     character.is_ascii_alphabetic() && !matches!(character, 'a' | 'e' | 'i' | 'o' | 'u')
 }
 
