@@ -362,7 +362,12 @@ async fn cli_and_mcp_file_search_return_the_same_result() {
             "{field}"
         );
     }
-    let validator = compile(&json!(search.output_schema.as_ref().unwrap())).unwrap();
+    let mut output = json!(search.output_schema.as_ref().unwrap());
+    let success = output["oneOf"][0].take();
+    let output = output.as_object_mut().unwrap();
+    output.remove("oneOf");
+    output.extend(success.as_object().unwrap().clone());
+    let validator = compile(&serde_json::Value::Object(output.clone())).unwrap();
 
     let search_args = ["search", "--file", "code.rs", "--symbol", "pay", "--repo"];
     let cli_json = provenance()
