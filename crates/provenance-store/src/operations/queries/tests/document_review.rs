@@ -101,12 +101,14 @@ fn create_document_records(store: &StateStore, scope: &ScopeId) -> Vec<(NodeType
     ]
 }
 
+/// The pending submission of the current revision. A create opens one;
+/// this submits the current revision when none is pending.
 fn submit(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) -> StableId {
-    let revision = store
-        .record_decision_state(scope, kind, id)
-        .unwrap()
-        .current_revision
-        .unwrap();
+    let state = store.record_decision_state(scope, kind, id).unwrap();
+    if let Some(pending) = state.pending {
+        return pending.proposal_id;
+    }
+    let revision = state.current_revision.unwrap();
     store
         .submit_record_review(SubmitRecordReview {
             scope_id: scope.clone(),
@@ -123,6 +125,21 @@ fn submit(store: &StateStore, scope: &ScopeId, kind: NodeType, id: &StableId) ->
             expected_revision: Some(revision),
             revises: None,
         })
+        .unwrap()
+        .proposal_id
+}
+
+/// The submission that a write opened on the current revision of a record.
+fn pending_proposal(
+    store: &StateStore,
+    scope: &ScopeId,
+    kind: NodeType,
+    id: &StableId,
+) -> StableId {
+    store
+        .record_decision_state(scope, kind, id)
+        .unwrap()
+        .pending
         .unwrap()
         .proposal_id
 }
@@ -248,18 +265,9 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
 
     for (kind, id) in records {
         let initial = page(&root, 50, false).await;
-        let first = if kind == NodeType::Requirement {
-            assert_eq!(review(&initial, id.as_str())["outcome"], "pending");
-            store
-                .record_decision_state(&scope, kind, &id)
-                .unwrap()
-                .pending
-                .unwrap()
-                .proposal_id
-        } else {
-            assert_eq!(review(&initial, id.as_str())["outcome"], Value::Null);
-            submit(&store, &scope, kind, &id)
-        };
+        // The create opened the first submission.
+        assert_eq!(review(&initial, id.as_str())["outcome"], "pending");
+        let first = pending_proposal(&store, &scope, kind, &id);
         let pending = page(&root, 50, false).await;
         assert_eq!(review(&pending, id.as_str())["outcome"], "pending");
         assert_eq!(
@@ -279,16 +287,7 @@ async fn document_reports_each_reviewable_kind_through_the_full_decision_cycle()
         assert_eq!(review(&accepted, id.as_str())["outcome"], "accepted");
 
         revise(&store, kind, &id);
-        let second = if kind == NodeType::Requirement {
-            store
-                .record_decision_state(&scope, kind, &id)
-                .unwrap()
-                .pending
-                .unwrap()
-                .proposal_id
-        } else {
-            submit(&store, &scope, kind, &id)
-        };
+        let second = pending_proposal(&store, &scope, kind, &id);
         decide(
             &store,
             &scope,
@@ -343,14 +342,14 @@ async fn document_review_totals_follow_the_filter_and_repeat_on_each_page() {
     assert_eq!(
         page(&root, 50, false).await["review_totals"],
         json!({
-            "pending":1, "accepted":1, "rejected":1
+            "pending":4, "accepted":1, "rejected":1
         })
     );
     let filtered = page(&root, 1, true).await;
     assert_eq!(
         filtered["review_totals"],
         json!({
-            "pending":1, "accepted":1, "rejected":0
+            "pending":4, "accepted":1, "rejected":0
         })
     );
     let cursor = filtered["next_cursor"].as_str().unwrap();

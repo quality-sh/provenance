@@ -82,9 +82,9 @@ fn typescript_init_writes_a_package_local_command() {
 
     let agents = read_agents(&repo);
     assert!(agents.contains("`npx --no provenance prime --quiet`"));
-    assert!(agents.contains(
-        "`npx --no provenance statement-checks create --statement \"<statement>\" --format json`"
-    ));
+    assert!(
+        agents.contains("`npx --no provenance check --statement \"<statement>\" --format json`")
+    );
     assert!(!agents.contains("`provenance prime --quiet`"));
 }
 

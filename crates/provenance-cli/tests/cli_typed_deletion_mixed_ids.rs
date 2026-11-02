@@ -154,16 +154,8 @@ fn a_thread_with_sequential_and_random_message_ids_is_deleted() {
         .args(["--path-prefix", "."])
         .assert()
         .success();
-    for (id, name) in [("source_legacy", "Legacy"), ("source_kept", "Kept")] {
-        provenance(
-            repo,
-            &["sources", "create", "--id", id, "--name", name],
-            None,
-        );
-    }
-    let september = write_sequential_state(repo);
-    git(repo, &["add", "-A"]);
-    git(repo, &["commit", "-q", "-m", "Sequential Message ids"]);
+    // A native create opens a review submission, and typed-spec apply does not
+    // delete a record that has one. The typed spec creates the Sources instead.
     let kept = json!({"key":"kept", "id":"source_kept", "name":"Kept", "kind":"policy"});
     provenance(
         repo,
@@ -173,12 +165,12 @@ fn a_thread_with_sequential_and_random_message_ids_is_deleted() {
                 {"key":"legacy", "id":"source_legacy", "name":"Legacy", "kind":"policy"},
                 kept
             ]),
-            &json!([
-                {"kind":"source", "id":"source_legacy"},
-                {"kind":"source", "id":"source_kept"}
-            ]),
+            &json!([]),
         )),
     );
+    let september = write_sequential_state(repo);
+    git(repo, &["add", "-A"]);
+    git(repo, &["commit", "-q", "-m", "Sequential Message ids"]);
     let replied = provenance(
         repo,
         &[

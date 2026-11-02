@@ -15,7 +15,7 @@ it in the same change.
   tense: its states, what changes them, what the person sees, and one example.
   History goes on the record's thread. Unknowns go in fog or a Question.
 - Before a graph write, run
-  `{command} statement-checks create --statement "<statement>" --format json`. A clean report covers only the
+  `{command} check --statement "<statement>" --format json`. A clean report covers only the
   ASD-STE100 Issue 9 checks that Provenance implements. It does not prove full
   conformance.
 - Run `{command} --version` before the first graph write of a session. If the
@@ -30,7 +30,8 @@ it in the same change.
 - Annotate implementation with `rule`, tests with `verifies`. Annotations move
   with code.
 - Change a Requirement, Rule, or Resolution with a guarded record update.
-  A content change opens a review submission unless a reviewer accepted that content.
+  A native create command opens its review submission. A content change opens a
+  review submission, unless a reviewer accepted that content.
   Git supplies record history and change evidence. Proposal, Disposition, Withdrawal,
   and Discussion records hold review state.
 - When a session starts to write records, start or reuse the review host:

@@ -27,17 +27,8 @@ fn read(host: &Host) -> Value {
     serde_json::from_str::<Value>(&result.into_string().unwrap()).unwrap()["data"].clone()
 }
 
+/// The submission that the Resolution create opened.
 fn pending(host: &Host) -> String {
-    let (status, submitted) = post(
-        host,
-        "/resolutions/res_reject/submit",
-        &json!({
-            "actor":"shaping_agent", "declared_by":"shaping_agent", "title":"Keep the result",
-            "summary":"The system stores each result.", "source_ids":[],
-            "evidence_references":[], "builds_on":[]
-        }),
-    );
-    assert_eq!(status, 200, "{submitted}");
     read(host)["decision"]["pending"]["proposal_id"]
         .as_str()
         .unwrap()

@@ -3,7 +3,6 @@ use crate::operations::catalog::{
     self, ContextResolver, ExecutionNeeds, PreparedContext, PreparedRead, RequestedContext,
 };
 use crate::operations::{queries, read_policy::ReadPolicy};
-use crate::review::SubmitRecordReview;
 use crate::state_store::{
     CreateQuestionInput, CreateResolutionInput, CreateRuleInput, CreateTopicInput,
     EditQuestionInput, StateStore, UpdateTopicInput,
@@ -144,35 +143,6 @@ fn seed_archived_shaping_records(store: &StateStore, scope: &ScopeId) {
                 links: Vec::new(),
                 resolution_id: None,
                 contradicts: None,
-            })
-            .unwrap();
-    }
-    for (kind, id) in [
-        (NodeType::Topic, "topic_archived"),
-        (NodeType::Question, "question_archived_one"),
-        (NodeType::Question, "question_archived_two"),
-    ] {
-        let id = sid(id);
-        let revision = store
-            .record_decision_state(scope, kind, &id)
-            .unwrap()
-            .current_revision
-            .unwrap();
-        store
-            .submit_record_review(SubmitRecordReview {
-                scope_id: scope.clone(),
-                actor: "author".into(),
-                record_kind: kind,
-                record_id: id,
-                declared_by: None,
-                title: "Review archive candidate".into(),
-                summary: "Review this shaping record.".into(),
-                confidence: None,
-                source_ids: Vec::new(),
-                evidence_references: Vec::new(),
-                builds_on: Vec::new(),
-                expected_revision: Some(revision),
-                revises: None,
             })
             .unwrap();
     }
@@ -378,7 +348,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     .unwrap();
     assert_eq!(
         serde_json::to_value(unfiltered_document.result).unwrap()["review_totals"],
-        json!({"pending":4,"accepted":0,"rejected":0})
+        json!({"pending":5,"accepted":0,"rejected":0})
     );
 
     let document = queries::read_document(
@@ -402,7 +372,7 @@ async fn archived_topics_and_questions_are_hidden_from_filtered_reads_and_totals
     }));
     assert_eq!(
         document["review_totals"],
-        json!({"pending":1,"accepted":0,"rejected":0})
+        json!({"pending":2,"accepted":0,"rejected":0})
     );
 }
 

@@ -12,7 +12,7 @@ interface HttpSettings { endpoint?: string; bearer?: string; repositoryId?: stri
 function configureHttp(settings: HttpSettings): void { configure(settings); }
 function spec() {
   return defineSpec("connection-test", ({ requirement }) => ({
-    sharing: requirement("sharing", { statement: "The record remains readable." }),
+    sharing: requirement("sharing", { statement: "The record stays readable." }),
   }));
 }
 function named(name: string) { return (error: unknown) => error instanceof Error && error.constructor.name === name; }

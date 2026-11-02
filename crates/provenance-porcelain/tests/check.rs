@@ -121,6 +121,102 @@ fn explicit_selectors_produce_their_union() {
 }
 
 #[test]
+#[verifies(
+    "rule_porcelain_check_supplied_statement_selects_statements",
+    exhaustion
+)]
+fn a_supplied_statement_selects_statements_and_keeps_the_other_selectors() {
+    let categories = [Category::Graph, Category::Statements, Category::Bindings];
+    for mask in 0_u8..8 {
+        let selected = categories
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, category)| (mask & (1 << index) != 0).then_some(category))
+            .collect::<Vec<_>>();
+        let input = CheckInput::new(selected.clone()).with_statement("The pump stops.");
+
+        let mut expected = selected;
+        if !expected.contains(&Category::Statements) {
+            expected.push(Category::Statements);
+            expected.sort_unstable();
+        }
+        assert_eq!(input.categories(), expected, "mask {mask}");
+    }
+}
+
+/// Records the text its statement check receives and refuses the committed run.
+struct StatementRecordingPort(std::sync::Mutex<Vec<(String, Option<String>)>>);
+
+impl CheckPort for StatementRecordingPort {
+    fn run<'a>(&'a self, category: Category, scope: Option<&'a str>) -> PortFuture<'a> {
+        FixturePort.run(category, scope)
+    }
+
+    fn check_statement<'a>(&'a self, statement: &'a str, scope: Option<&'a str>) -> PortFuture<'a> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((statement.to_owned(), scope.map(str::to_owned)));
+        Box::pin(async {
+            Ok(CategoryRun::Statements {
+                findings: vec![Finding::new("the supplied statement has a finding")],
+                context: None,
+                refusal: Refusal::None,
+            })
+        })
+    }
+}
+
+#[tokio::test]
+#[verifies("rule_porcelain_check_supplied_statement_selects_statements", examples)]
+async fn a_supplied_statement_replaces_the_committed_statements_in_its_category() {
+    let port = StatementRecordingPort(std::sync::Mutex::new(Vec::new()));
+    let service = Porcelain::new(port);
+
+    let outcome = service
+        .check(
+            CheckInput::new([Category::Graph])
+                .with_statement("The pump stops.")
+                .in_scope("default"),
+        )
+        .await;
+
+    assert_eq!(
+        outcome.categories,
+        vec![
+            CategoryReport::findings(
+                Category::Graph,
+                vec![Finding::new("dangling requirement reference")]
+            ),
+            CategoryReport::findings(
+                Category::Statements,
+                vec![Finding::new("the supplied statement has a finding")]
+            ),
+        ]
+    );
+    assert_eq!(
+        service.into_port().0.into_inner().unwrap(),
+        vec![("The pump stops.".to_owned(), Some("default".to_owned()))]
+    );
+}
+
+#[tokio::test]
+#[verifies("rule_porcelain_check_unavailable", examples)]
+async fn a_port_without_a_statement_check_reports_statements_unavailable() {
+    let outcome = Porcelain::new(FixturePort)
+        .check(CheckInput::default().with_statement("The pump stops."))
+        .await;
+
+    assert_eq!(outcome.categories.len(), 1);
+    assert_eq!(outcome.categories[0].category, Category::Statements);
+    assert_eq!(outcome.categories[0].status, Status::Unavailable);
+    assert_eq!(
+        outcome.categories[0].unavailable_reason.as_deref(),
+        Some("this host does not check a supplied statement")
+    );
+}
+
+#[test]
 #[verifies("rule_porcelain_check_categories", examples)]
 fn findings_can_keep_surface_neutral_structured_details() {
     let finding = Finding::with_detail(

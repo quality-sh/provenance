@@ -78,7 +78,7 @@ function catalogCreate(
  *  declarations that name a resolution by canonical id. */
 function seedResolution(repo: string): void {
   catalogCreate(repo, "requirements", {
-    actor: "sdk-test", id: "req_seed", statement: "The seed requirement stands",
+    actor: "sdk-test", id: "req_seed", statement: "The seed requirement holds",
     status: "discovery", depends_on: [], supersedes: [],
   });
   catalogCreate(repo, "resolutions", {
@@ -97,7 +97,7 @@ test("fluent declarations and their finalized handles are immutable", async () =
   const policy = sourceDraft.document("docs/policy.md");
   const ruleDraft = rule("expiry");
   const identified = ruleDraft.id("rule_expiry");
-  const statedRule = identified.statement("Share links expire in 30 days");
+  const statedRule = identified.statement("Share URLs expire in 30 days");
   const expiry = statedRule.implementedBy(startWorkflow);
   const requirementDraft = requirement("sharing");
   const stated = requirementDraft.statement("Users can share the documents");
@@ -156,7 +156,7 @@ test("top-level fluent declarations author source names and Requirement descript
     .description("Covers externally shared documentation");
   const statedRequirement = requirementDraft
     .statement("Users can share the documents");
-  const expiry = rule("expiry").statement("Shared links expire");
+  const expiry = rule("expiry").statement("Shared URLs expire");
   const sharing = statedRequirement.from(namedPolicy).rules(expiry);
   const spec = defineSpec("fluent-metadata")
     .sources(namedPolicy)
@@ -194,7 +194,7 @@ test("top-level fluent declarations author source names and Requirement descript
       {
         key: "expiry",
         requirements: ["sharing"],
-        statement: "Shared links expire",
+        statement: "Shared URLs expire",
       },
     ],
   });
@@ -274,7 +274,7 @@ test("build collects Sources referenced by Requirements", async () => {
       requirement("sharing")
         .statement("Users can share the documents")
         .from(source("policy").name("Sharing policy").document("docs/policy.md"))
-        .rules(rule("expiry").statement("Share links expire")),
+        .rules(rule("expiry").statement("Share URLs expire")),
     )
     .build();
 
@@ -346,8 +346,8 @@ test("built fluent specs expose direct typed semantic handles", () => {
   const spec = defineSpec("direct-handles")
     .requirements(
       requirement("sharing")
-        .statement("Shares are time bounded")
-        .rules(rule("expiry").statement("Share links expire")),
+        .statement("Shares have a time limit")
+        .rules(rule("expiry").statement("Share URLs expire")),
     )
     .build();
 
@@ -365,8 +365,8 @@ test("direct nested Rule handles apply and verify through the Rust engine", asyn
   const spec = defineSpec("direct-verification")
     .requirements(
       requirement("sharing")
-        .statement("Shares are time bounded")
-        .rules(rule("expiry").statement("Share links expire")),
+        .statement("Shares have a time limit")
+        .rules(rule("expiry").statement("Share URLs expire")),
     )
     .build();
 
@@ -416,7 +416,7 @@ test("a preferred fluent spec collects linked Sources and exposes its typed Rule
             .document("docs/sharing-policy.md"),
         )
         .rules(
-          rule("expiry").statement("Share links must expire in 30 days"),
+          rule("expiry").statement("Share URLs must expire in 30 days"),
         ),
     )
     .build();
@@ -443,11 +443,11 @@ test("one shared Rule materializes once and refines both Requirements", async ()
   const policy = source("access-policy").document("docs/access-policy.md");
   const expiry = rule("expiry").statement("Authenticated access expires");
   const sharing = requirement("sharing")
-    .statement("Share links are time bounded")
+    .statement("Share URLs have a time limit")
     .from(policy)
     .rules(expiry);
   const sessions = requirement("sessions")
-    .statement("Sessions are time bounded")
+    .statement("Sessions have a time limit")
     .from(policy)
     .rules(expiry);
   const spec = defineSpec("lifecycles")
@@ -472,10 +472,10 @@ test("one shared Rule materializes once and refines both Requirements", async ()
 test("distinct local Rules may reuse a key under unrelated Requirements", async () => {
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/local" });
-  const shareExpiry = rule("expiry").statement("Share links expire in 30 days");
+  const shareExpiry = rule("expiry").statement("Share URLs expire in 30 days");
   const sessionExpiry = rule("expiry").statement("Sessions expire in 24 hours");
-  const sharing = requirement("sharing").statement("Shares are time bounded").rules(shareExpiry);
-  const sessions = requirement("sessions").statement("Sessions are time bounded").rules(sessionExpiry);
+  const sharing = requirement("sharing").statement("Shares have a time limit").rules(shareExpiry);
+  const sessions = requirement("sessions").statement("Sessions have a time limit").rules(sessionExpiry);
   const spec = defineSpec("lifecycles").requirements(sharing, sessions).build();
 
   const result = await apply(spec);
@@ -496,10 +496,10 @@ test("an explicit Rule id resolves an ambiguous local-to-shared merge", async ()
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/merge" });
   const sharing = requirement("sharing")
-    .statement("Shares are time bounded")
-    .rules(rule("expiry").statement("Share links expire"));
+    .statement("Shares have a time limit")
+    .rules(rule("expiry").statement("Share URLs expire"));
   const sessions = requirement("sessions")
-    .statement("Sessions are time bounded")
+    .statement("Sessions have a time limit")
     .rules(rule("expiry").statement("Sessions expire"));
   const locals = await apply(defineSpec("lifecycles").requirements(sharing, sessions).build());
   const chosen = locals.resources.find(
@@ -510,8 +510,8 @@ test("an explicit Rule id resolves an ambiguous local-to-shared merge", async ()
     .statement("Authenticated access expires");
   const shared = defineSpec("lifecycles")
     .requirements(
-      requirement("sharing").statement("Shares are time bounded").rules(sharedExpiry),
-      requirement("sessions").statement("Sessions are time bounded").rules(sharedExpiry),
+      requirement("sharing").statement("Shares have a time limit").rules(sharedExpiry),
+      requirement("sessions").statement("Sessions have a time limit").rules(sharedExpiry),
     )
     .build();
 
@@ -523,10 +523,10 @@ test("an explicit Rule id resolves an ambiguous local-to-shared merge", async ()
 });
 
 test("distinct Rule declarations collide explicitly inside one Requirement", () => {
-  const first = rule("expiry").statement("Share links expire in 30 days");
-  const second = rule("expiry").statement("Share links expire in 14 days");
+  const first = rule("expiry").statement("Share URLs expire in 30 days");
+  const second = rule("expiry").statement("Share URLs expire in 14 days");
   const sharing = requirement("sharing")
-    .statement("Share links are time bounded")
+    .statement("Share URLs have a time limit")
     .rules(first, second);
 
   assert.throws(
@@ -537,9 +537,9 @@ test("distinct Rule declarations collide explicitly inside one Requirement", () 
 
 test("the callback defineSpec form remains compatible", () => {
   const spec = defineSpec("legacy", ({ requirement }) => {
-    const sharing = requirement("sharing", { statement: "Shares are time bounded" });
+    const sharing = requirement("sharing", { statement: "Shares have a time limit" });
     return {
-      expiry: sharing.rule("expiry", { statement: "Share links expire" }),
+      expiry: sharing.rule("expiry", { statement: "Share URLs expire" }),
     };
   });
 
@@ -558,13 +558,13 @@ test("relation fields on fluent declarations reach the written records", async (
   seedResolution(repo);
   const older = source("policy-2024").document("docs/policy-2024.md");
   const policy = source("policy").document("docs/policy.md").supersedes(older);
-  const parent = requirement("parent").statement("Access is governed").from(policy);
-  const retired = requirement("retired").statement("Access was governed loosely").from(older);
+  const parent = requirement("parent").statement("Access is controlled").from(policy);
+  const retired = requirement("retired").statement("Access was controlled loosely").from(older);
   const decision = rule("decision")
     .statement("Access follows the seed decision")
     .resolutions("res_seed");
   const refined = requirement("child")
-    .statement("Share links are governed")
+    .statement("Share URLs are controlled")
     .from(policy)
     .refines(parent)
     .dependsOn(parent)
@@ -602,10 +602,10 @@ test("a fluent requirement keeps both parents it refines", async () => {
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/fluent-parents" });
   const policy = source("policy").document("docs/policy.md");
-  const access = requirement("access").statement("Access is governed").from(policy);
-  const sharing = requirement("sharing").statement("Sharing is governed").from(policy);
+  const access = requirement("access").statement("Access is controlled").from(policy);
+  const sharing = requirement("sharing").statement("Sharing is controlled").from(policy);
   const child = requirement("child")
-    .statement("Share links are governed")
+    .statement("Share URLs are controlled")
     .from(policy)
     .refines(access)
     .refines(sharing)
@@ -621,8 +621,8 @@ test("a fluent requirement keeps both parents it refines", async () => {
 });
 
 test("a fluent relation to a requirement outside the build is refused", () => {
-  const parent = requirement("parent").statement("Access is governed");
-  const child = requirement("child").statement("Shares are governed").refines(parent);
+  const parent = requirement("parent").statement("Access is controlled");
+  const child = requirement("child").statement("Shares are controlled").refines(parent);
   assert.throws(
     () => defineSpec("relations").requirements(child).build(),
     /Requirement `child` names Requirement `parent` not included in the spec/,

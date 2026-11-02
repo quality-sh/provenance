@@ -42,17 +42,11 @@ impl StateStore {
         })
     }
 
-    /// Opens the review submission of a typed change to Requirement content.
+    /// Opens the review submission of a typed change to record content.
     fn commit_typed_change(&self, actor: &str, change: &TypedChange) -> anyhow::Result<()> {
-        let kind = change.after.kind();
-        let fields = classifier::changed_fields(kind, &change.before, &change.after)?;
-        if classifier::changes_revision(kind, &fields) {
-            if let Some(requirement) = change.after.as_requirement() {
-                let revision = classifier::review_revision(kind, &change.after)?;
-                self.commit_automatic_submission(requirement, actor, &revision)?;
-            }
-        }
-        Ok(())
+        // Refuses a changed field that has no review classification.
+        classifier::changed_fields(change.after.kind(), &change.before, &change.after)?;
+        self.open_content_change_submission(&change.before, &change.after, actor)
     }
 }
 

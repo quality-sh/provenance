@@ -5,9 +5,11 @@
 
 mod contracted_verbs;
 mod dictionary;
+mod inflection;
 mod paragraph;
 mod protected_spans;
 mod vocabulary;
+mod word_class;
 
 pub use dictionary::{
     import_dictionary, load_dictionary_index, load_dictionary_index_for_source,
@@ -127,8 +129,10 @@ pub struct WordUse {
 
 /// Dictionary membership for one word or phrase.
 ///
-/// Membership cannot settle a restricted meaning or part of speech, so an
-/// approved word can still break Rule 1.2 or Rule 1.3.
+/// When a spelling has approved and unapproved entries, the words next to it
+/// can settle the word class and so pick the entries. Membership cannot
+/// settle a restricted meaning, so an approved word can still break Rule 1.2
+/// or Rule 1.3.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

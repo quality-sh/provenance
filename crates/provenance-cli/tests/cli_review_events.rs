@@ -2,7 +2,7 @@
 mod review_host_support;
 use provenance_macros::verifies;
 use review_host_support::{
-    events::{source, source_before_host, Socket},
+    events::{source, source_before_host, without_submissions, Socket},
     repository, request, start,
 };
 use serde_json::{json, Value};
@@ -26,8 +26,13 @@ fn external_cli_write_reaches_two_clients_and_committed_read() {
         changed["sequence"].as_u64(),
         Some(ready["sequence"].as_u64().unwrap() + 1)
     );
+    // The create also opened its review submission in the same change.
     assert_eq!(
-        changed["scopes"],
+        changed["scopes"][0]["families"],
+        json!(["proposal_cards", "source"])
+    );
+    assert_eq!(
+        without_submissions(&changed["scopes"]),
         json!([{"scope":"default", "records":[{"kind":"source", "id":"source_external"}], "families":["source"]}])
     );
     let read: Value = serde_json::from_str(
@@ -118,7 +123,7 @@ fn unrelated_scope_cache_and_equal_content_do_not_invalidate() {
     socket.quiet();
     source(&host, repo.path(), "source_local");
     assert_eq!(
-        socket.frame()["scopes"][0]["records"][0]["id"],
+        without_submissions(&socket.frame()["scopes"])[0]["records"][0]["id"],
         "source_local"
     );
     let shard = repo
@@ -212,7 +217,7 @@ fn replacing_a_repository_alias_does_not_change_the_observed_repository() {
     socket.quiet();
     source(&host, first.path(), "source_selected");
     assert_eq!(
-        socket.frame()["scopes"][0]["records"][0]["id"],
+        without_submissions(&socket.frame()["scopes"])[0]["records"][0]["id"],
         "source_selected"
     );
 }

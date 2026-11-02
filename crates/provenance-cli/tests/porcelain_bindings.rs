@@ -1,5 +1,8 @@
 use assert_cmd::Command;
 use provenance_macros::verifies;
+use provenance_porcelain::check::{
+    BindingContext, BindingPolicy, Category, CategoryRun, CheckInput, PortFuture, Refusal,
+};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -8,31 +11,16 @@ fn provenance() -> Command {
 }
 
 fn init_with_source(repo: &str) {
+    let init = "init --scope default --path-prefix . --path";
     provenance()
-        .args([
-            "init",
-            "--path",
-            repo,
-            "--scope",
-            "default",
-            "--path-prefix",
-            ".",
-        ])
+        .args(init.split(' '))
+        .arg(repo)
         .assert()
         .success();
-    provenance()
-        .args([
-            "sources",
-            "create",
-            "--repo",
-            repo,
-            "--id",
-            "source_live_inventory",
-            "--name",
-            "Live inventory",
-        ])
-        .assert()
-        .success();
+    let create = "sources create --id source_live_inventory --name";
+    let mut cli = provenance();
+    cli.args(create.split(' ')).arg("Live inventory");
+    cli.args(["--repo", repo]).assert().success();
 }
 
 /// The MCP host that the CLI builds for one local repository.
@@ -99,35 +87,25 @@ async fn assert_check_readable(
 struct EmptyCheckPort;
 
 impl provenance_porcelain::check::CheckPort for EmptyCheckPort {
-    fn run<'a>(
-        &'a self,
-        category: provenance_porcelain::check::Category,
-        _: Option<&'a str>,
-    ) -> provenance_porcelain::check::PortFuture<'a> {
+    fn run<'a>(&'a self, category: Category, _: Option<&'a str>) -> PortFuture<'a> {
         Box::pin(async move {
             Ok(match category {
-                provenance_porcelain::check::Category::Graph => {
-                    provenance_porcelain::check::CategoryRun::Graph {
-                        findings: Vec::new(),
-                        refusal: provenance_porcelain::check::Refusal::None,
-                    }
-                }
-                provenance_porcelain::check::Category::Statements => {
-                    provenance_porcelain::check::CategoryRun::Statements {
-                        findings: Vec::new(),
-                        context: None,
-                        refusal: provenance_porcelain::check::Refusal::None,
-                    }
-                }
-                provenance_porcelain::check::Category::Bindings => {
-                    provenance_porcelain::check::CategoryRun::Bindings {
-                        findings: Vec::new(),
-                        context: provenance_porcelain::check::BindingContext {
-                            policy: provenance_porcelain::check::BindingPolicy::Warning,
-                        },
-                        refusal: provenance_porcelain::check::Refusal::None,
-                    }
-                }
+                Category::Graph => CategoryRun::Graph {
+                    findings: Vec::new(),
+                    refusal: Refusal::None,
+                },
+                Category::Statements => CategoryRun::Statements {
+                    findings: Vec::new(),
+                    context: None,
+                    refusal: Refusal::None,
+                },
+                Category::Bindings => CategoryRun::Bindings {
+                    findings: Vec::new(),
+                    context: BindingContext {
+                        policy: BindingPolicy::Warning,
+                    },
+                    refusal: Refusal::None,
+                },
             })
         })
     }
@@ -359,13 +337,29 @@ async fn cli_and_mcp_file_search_return_the_same_result() {
 #[test]
 #[verifies("rule_porcelain_check_selector_union", examples)]
 fn live_cli_and_mcp_check_selectors_keep_shared_semantics() {
-    let cli = provenance_cli::porcelain::check_input_from_selectors(true, false, true);
-    let mcp: provenance_porcelain::check::CheckInput = serde_json::from_value(json!({
+    let cli = provenance_cli::porcelain::check_input_from_selectors(true, false, true, None);
+    let mcp: CheckInput = serde_json::from_value(json!({
         "categories": ["graph", "bindings"]
     }))
     .unwrap();
 
     assert_eq!(cli.categories(), mcp.categories());
+}
+
+#[test]
+#[verifies("rule_porcelain_check_statement_field_shared", examples)]
+fn live_cli_and_mcp_check_statement_fields_produce_the_same_input() {
+    let statement = "The pump stops.";
+    let cli = provenance_cli::porcelain::check_input_from_selectors(
+        false,
+        false,
+        false,
+        Some(statement.to_owned()),
+    );
+    let mcp: CheckInput = serde_json::from_value(json!({"statement": statement})).unwrap();
+
+    assert_eq!(cli, mcp);
+    assert_eq!(cli.categories(), [Category::Statements]);
 }
 
 #[test]

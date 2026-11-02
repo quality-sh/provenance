@@ -5,16 +5,29 @@ use provenance_ste100::{
     StandardIssue, VocabularyCategory,
 };
 
-fn entry(headword: &str, forms: &[&str], status: DictionaryStatus) -> DictionaryEntry {
+fn entry(
+    headword: &str,
+    forms: &[&str],
+    part_of_speech: PartOfSpeech,
+    status: DictionaryStatus,
+) -> DictionaryEntry {
     DictionaryEntry {
         headword: headword.to_owned(),
         word_forms: forms.iter().map(|form| (*form).to_owned()).collect(),
-        part_of_speech: PartOfSpeech::Noun,
+        part_of_speech,
         status,
         approved_meaning_or_alternatives: "A meaning".to_owned(),
         ste_example: "USE THE ITEM.".to_owned(),
         non_ste_example: None,
     }
+}
+
+fn noun(headword: &str, forms: &[&str], status: DictionaryStatus) -> DictionaryEntry {
+    entry(headword, forms, PartOfSpeech::Noun, status)
+}
+
+fn verb(headword: &str, forms: &[&str], status: DictionaryStatus) -> DictionaryEntry {
+    entry(headword, forms, PartOfSpeech::Verb, status)
 }
 
 fn fixture_dictionary() -> DictionaryImport {
@@ -26,15 +39,44 @@ fn fixture_dictionary() -> DictionaryImport {
             extractor_version: "test".to_owned(),
         },
         entries: vec![
-            entry("AAGOOD", &["AAGOOD", "AAGOODS"], DictionaryStatus::Approved),
-            entry("bbbad", &["bbbad"], DictionaryStatus::Unapproved),
-            entry(
+            noun("AAGOOD", &["AAGOOD", "AAGOODS"], DictionaryStatus::Approved),
+            noun("bbbad", &["bbbad"], DictionaryStatus::Unapproved),
+            noun(
                 "bb far from",
                 &["bb far from"],
                 DictionaryStatus::Unapproved,
             ),
-            entry("CCBOTH", &["CCBOTH"], DictionaryStatus::Approved),
-            entry("ccboth", &["ccboth"], DictionaryStatus::Unapproved),
+            noun("CCBOTH", &["CCBOTH"], DictionaryStatus::Approved),
+            noun("ccboth", &["ccboth"], DictionaryStatus::Unapproved),
+            verb(
+                "bfrobnicate",
+                &["bfrobnicate"],
+                DictionaryStatus::Unapproved,
+            ),
+            verb("bzap", &["bzap"], DictionaryStatus::Unapproved),
+            verb("bzorply", &["bzorply"], DictionaryStatus::Unapproved),
+            noun("bzorp", &["bzorp"], DictionaryStatus::Unapproved),
+            noun("AAWIDGET", &["AAWIDGET"], DictionaryStatus::Approved),
+            verb(
+                "AAMOVE",
+                &["AAMOVE", "AAMOVES", "AAMOVED"],
+                DictionaryStatus::Approved,
+            ),
+            verb("ccwin", &["ccwin"], DictionaryStatus::Unapproved),
+            noun("CCWINS", &["CCWINS"], DictionaryStatus::Approved),
+            noun("CCPAIR", &["CCPAIR"], DictionaryStatus::Approved),
+            verb("ccpair", &["ccpair"], DictionaryStatus::Unapproved),
+            entry(
+                "CCFULL",
+                &["CCFULL"],
+                PartOfSpeech::Adjective,
+                DictionaryStatus::Approved,
+            ),
+            verb("ccfull", &["ccfull"], DictionaryStatus::Unapproved),
+            noun("bzax", &["bzax"], DictionaryStatus::Unapproved),
+            verb("bglint", &["bglint"], DictionaryStatus::Unapproved),
+            noun("bzas", &["bzas"], DictionaryStatus::Unapproved),
+            noun("q", &["q"], DictionaryStatus::Unapproved),
         ],
     }
 }
@@ -170,4 +212,255 @@ fn the_data_free_checks_still_run_with_a_dictionary() {
 
     assert_eq!(report.findings.len(), 1, "findings: {:?}", report.findings);
     assert_eq!(report.findings[0].rule, RuleNumber::EightOne);
+}
+
+fn categories(text: &str) -> Vec<(String, VocabularyCategory)> {
+    classify_vocabulary(text, &fixture_dictionary())
+        .into_iter()
+        .map(|word_use| {
+            (
+                text[word_use.span.start..word_use.span.end].to_owned(),
+                word_use.category,
+            )
+        })
+        .collect()
+}
+
+fn category_of(text: &str, word: &str) -> VocabularyCategory {
+    categories(text)
+        .into_iter()
+        .find(|(found, _)| found == word)
+        .unwrap_or_else(|| panic!("{word} must be classified in {text}"))
+        .1
+}
+
+fn rule_one_one_words(text: &str) -> Vec<String> {
+    check_descriptive_with_dictionary(text, &fixture_dictionary(), &[])
+        .findings
+        .into_iter()
+        .filter(|finding| finding.rule == RuleNumber::OneOne)
+        .map(|finding| text[finding.span.start..finding.span.end].to_owned())
+        .collect()
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn each_regular_inflection_of_an_unapproved_verb_produces_a_finding() {
+    for (text, word) in [
+        ("The registry bfrobnicates the command.", "bfrobnicates"),
+        ("The registry bfrobnicated the command.", "bfrobnicated"),
+        (
+            "The registry is bfrobnicating the command.",
+            "bfrobnicating",
+        ),
+        ("The registry bzaps the command.", "bzaps"),
+        ("The registry bzapped the command.", "bzapped"),
+        ("The registry is bzapping the command.", "bzapping"),
+        ("The registry bzorplies the command.", "bzorplies"),
+        ("The registry bzorplied the command.", "bzorplied"),
+    ] {
+        assert_eq!(rule_one_one_words(text), [word], "text: {text}");
+    }
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn the_plural_of_an_unapproved_noun_produces_a_finding() {
+    assert_eq!(rule_one_one_words("Bzorps stay here."), ["Bzorps"]);
+    assert_eq!(rule_one_one_words("The bzorps's door opens."), ["bzorps's"]);
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn an_es_plural_and_a_plain_past_produce_findings() {
+    assert_eq!(rule_one_one_words("Bzaxes stay here."), ["Bzaxes"]);
+    assert_eq!(
+        rule_one_one_words("The registry bglinted the command."),
+        ["bglinted"]
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn a_double_s_or_a_one_letter_base_is_not_an_inflection() {
+    assert_eq!(rule_one_one_words("The bzass stays."), Vec::<String>::new());
+    assert_eq!(rule_one_one_words("The qs stay."), Vec::<String>::new());
+    assert_eq!(rule_one_one_words("The bzas stays."), ["bzas"]);
+    assert_eq!(rule_one_one_words("The q stays."), ["q"]);
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn the_plural_of_an_approved_noun_is_approved() {
+    assert_eq!(
+        category_of("The aawidgets stay.", "aawidgets"),
+        VocabularyCategory::Approved
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn an_approved_verb_keeps_only_its_printed_forms() {
+    assert_eq!(
+        category_of("The unit aamoved.", "aamoved"),
+        VocabularyCategory::Approved
+    );
+    assert_eq!(
+        category_of("The unit is aamoving.", "aamoving"),
+        VocabularyCategory::Unknown
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_inflected_unapproved_form", examples)]
+fn a_printed_form_wins_over_a_derived_form() {
+    assert_eq!(
+        category_of("The ccwins stay.", "ccwins"),
+        VocabularyCategory::Approved
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+fn a_noun_position_picks_the_approved_noun_entry() {
+    for text in [
+        "The ccpair is open.",
+        "The unit's ccpair is open.",
+        "Stop with ccpair here.",
+        "The ccpairs stay.",
+    ] {
+        assert_eq!(
+            rule_one_one_words(text),
+            Vec::<String>::new(),
+            "text: {text}"
+        );
+    }
+    assert_eq!(
+        category_of("The ccpair is open.", "ccpair"),
+        VocabularyCategory::Approved
+    );
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+fn a_verb_position_picks_the_unapproved_verb_entry() {
+    for (text, word) in [
+        ("Ccpair the panel.", "Ccpair"),
+        ("It ccpairs the panel.", "ccpairs"),
+        ("You must ccpair the panel.", "ccpair"),
+        ("Make sure to ccpair the panel.", "ccpair"),
+    ] {
+        assert_eq!(rule_one_one_words(text), [word], "text: {text}");
+    }
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+fn an_unsettled_word_class_stays_uncertain() {
+    for (text, word) in [
+        ("Ccpairs stay here.", "Ccpairs"),
+        ("The bbbad ccpair stays.", "ccpair"),
+        ("Stop, ccpair here.", "ccpair"),
+        ("The ccboth is open.", "ccboth"),
+        ("Ccpair output stops.", "Ccpair"),
+        ("The tank is ccfull.", "ccfull"),
+        ("Ccfull the tank.", "Ccfull"),
+    ] {
+        assert_eq!(
+            category_of(text, word),
+            VocabularyCategory::Uncertain,
+            "text: {text}"
+        );
+    }
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_sentence_word_class", examples)]
+fn an_ambiguous_cue_leaves_a_noun_use_uncertain() {
+    for (text, word) in [
+        ("The unit has ccpair.", "ccpair"),
+        ("It is ccpair.", "ccpair"),
+        ("Ccpair of the unit is stable.", "Ccpair"),
+        ("Ccpair in the tank is stable.", "Ccpair"),
+        ("Connect the cable to ccpair.", "ccpair"),
+    ] {
+        assert_eq!(
+            rule_one_one_words(text),
+            Vec::<String>::new(),
+            "text: {text}"
+        );
+        assert_eq!(
+            category_of(text, word),
+            VocabularyCategory::Uncertain,
+            "text: {text}"
+        );
+    }
+}
+
+#[test]
+#[verifies("rule_ste_dictionary_unapproved_word", examples)]
+fn a_word_with_only_unapproved_entries_stays_unapproved_in_any_position() {
+    assert_eq!(
+        rule_one_one_words("The bfrobnicate shows it."),
+        ["bfrobnicate"]
+    );
+}
+
+fn rule_one_one_words_with_names(text: &str, technical_names: &[&str]) -> Vec<String> {
+    let names: Vec<String> = technical_names
+        .iter()
+        .map(|name| (*name).to_owned())
+        .collect();
+    check_descriptive_with_dictionary(text, &fixture_dictionary(), &names)
+        .findings
+        .into_iter()
+        .filter(|finding| finding.rule == RuleNumber::OneOne)
+        .map(|finding| text[finding.span.start..finding.span.end].to_owned())
+        .collect()
+}
+
+#[test]
+#[verifies("rule_ste_technical_names_accepted", examples)]
+fn a_technical_name_accepts_its_regular_inflections() {
+    for text in [
+        "Bzorps stay here.",
+        "The bzorps's door opens.",
+        "The registry bzaps the command.",
+        "The registry bzapped the command.",
+        "The registry is bzapping the command.",
+        "The registry bzorplies the command.",
+        "The registry bzorplied the command.",
+    ] {
+        assert_eq!(
+            rule_one_one_words_with_names(text, &["bzorp", "bzap", "bzorply"]),
+            Vec::<String>::new(),
+            "text: {text}"
+        );
+    }
+}
+
+#[test]
+#[verifies("rule_ste_technical_names_accepted", examples)]
+fn the_last_word_of_a_technical_phrase_accepts_its_plural() {
+    assert_eq!(
+        rule_one_one_words_with_names("The aagood bzorps stay.", &["aagood bzorp"]),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        rule_one_one_words_with_names("The bzorps aagood stay.", &["bzorp aagood"]),
+        ["bzorps"]
+    );
+}
+
+#[test]
+#[verifies("rule_ste_technical_names_accepted", examples)]
+fn an_unrelated_unapproved_word_still_gives_a_finding_next_to_an_inflected_name() {
+    assert_eq!(
+        rule_one_one_words_with_names("The bzorps and the bbbad stay.", &["bzorp"]),
+        ["bbbad"]
+    );
+    assert_eq!(
+        rule_one_one_words_with_names("The registry bfrobnicates the bzorps.", &["bzorp"]),
+        ["bfrobnicates"]
+    );
 }
