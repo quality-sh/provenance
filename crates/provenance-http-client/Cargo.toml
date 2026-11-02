@@ -14,6 +14,12 @@ include = ["src/**", "Cargo.toml", "README.md"]
 [lints]
 workspace = true
 
+# The library has no unit tests; the tests directory tests it. A unit test
+# build compiles the whole generated client a second time, and on the Linux
+# coverage leg the two compiles used about 7 GB of memory each.
+[lib]
+test = false
+
 [dependencies]
 chrono = { version = "=0.4.45", features = ["serde"] }
 jsonschema = { version = "=0.60.2", default-features = false }
