@@ -362,12 +362,9 @@ async fn cli_and_mcp_file_search_return_the_same_result() {
             "{field}"
         );
     }
-    let mut output = json!(search.output_schema.as_ref().unwrap());
-    let success = output["oneOf"][0].take();
-    let output = output.as_object_mut().unwrap();
-    output.remove("oneOf");
-    output.extend(success.as_object().unwrap().clone());
-    let validator = compile(&serde_json::Value::Object(output.clone())).unwrap();
+    // The search schemas are generated as JSON Schema 2020-12 and sent without `$schema`.
+    let validator =
+        jsonschema::draft202012::new(&json!(search.output_schema.as_ref().unwrap())).unwrap();
 
     let search_args = ["search", "--file", "code.rs", "--symbol", "pay", "--repo"];
     let cli_json = provenance()
