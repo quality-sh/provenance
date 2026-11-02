@@ -346,7 +346,7 @@ test("built fluent specs expose direct typed semantic handles", () => {
   const spec = defineSpec("direct-handles")
     .requirements(
       requirement("sharing")
-        .statement("Shares are time bounded")
+        .statement("Shares have a time limit")
         .rules(rule("expiry").statement("Share URLs expire")),
     )
     .build();
@@ -365,7 +365,7 @@ test("direct nested Rule handles apply and verify through the Rust engine", asyn
   const spec = defineSpec("direct-verification")
     .requirements(
       requirement("sharing")
-        .statement("Shares are time bounded")
+        .statement("Shares have a time limit")
         .rules(rule("expiry").statement("Share URLs expire")),
     )
     .build();
@@ -443,11 +443,11 @@ test("one shared Rule materializes once and refines both Requirements", async ()
   const policy = source("access-policy").document("docs/access-policy.md");
   const expiry = rule("expiry").statement("Authenticated access expires");
   const sharing = requirement("sharing")
-    .statement("Share URLs are time bounded")
+    .statement("Share URLs have a time limit")
     .from(policy)
     .rules(expiry);
   const sessions = requirement("sessions")
-    .statement("Sessions are time bounded")
+    .statement("Sessions have a time limit")
     .from(policy)
     .rules(expiry);
   const spec = defineSpec("lifecycles")
@@ -474,8 +474,8 @@ test("distinct local Rules may reuse a key under unrelated Requirements", async 
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/local" });
   const shareExpiry = rule("expiry").statement("Share URLs expire in 30 days");
   const sessionExpiry = rule("expiry").statement("Sessions expire in 24 hours");
-  const sharing = requirement("sharing").statement("Shares are time bounded").rules(shareExpiry);
-  const sessions = requirement("sessions").statement("Sessions are time bounded").rules(sessionExpiry);
+  const sharing = requirement("sharing").statement("Shares have a time limit").rules(shareExpiry);
+  const sessions = requirement("sessions").statement("Sessions have a time limit").rules(sessionExpiry);
   const spec = defineSpec("lifecycles").requirements(sharing, sessions).build();
 
   const result = await apply(spec);
@@ -496,10 +496,10 @@ test("an explicit Rule id resolves an ambiguous local-to-shared merge", async ()
   const repo = repository();
   configure({ ...await fixtureSettings(repo), owner: "spec://typescript/merge" });
   const sharing = requirement("sharing")
-    .statement("Shares are time bounded")
+    .statement("Shares have a time limit")
     .rules(rule("expiry").statement("Share URLs expire"));
   const sessions = requirement("sessions")
-    .statement("Sessions are time bounded")
+    .statement("Sessions have a time limit")
     .rules(rule("expiry").statement("Sessions expire"));
   const locals = await apply(defineSpec("lifecycles").requirements(sharing, sessions).build());
   const chosen = locals.resources.find(
@@ -510,8 +510,8 @@ test("an explicit Rule id resolves an ambiguous local-to-shared merge", async ()
     .statement("Authenticated access expires");
   const shared = defineSpec("lifecycles")
     .requirements(
-      requirement("sharing").statement("Shares are time bounded").rules(sharedExpiry),
-      requirement("sessions").statement("Sessions are time bounded").rules(sharedExpiry),
+      requirement("sharing").statement("Shares have a time limit").rules(sharedExpiry),
+      requirement("sessions").statement("Sessions have a time limit").rules(sharedExpiry),
     )
     .build();
 
@@ -526,7 +526,7 @@ test("distinct Rule declarations collide explicitly inside one Requirement", () 
   const first = rule("expiry").statement("Share URLs expire in 30 days");
   const second = rule("expiry").statement("Share URLs expire in 14 days");
   const sharing = requirement("sharing")
-    .statement("Share URLs are time bounded")
+    .statement("Share URLs have a time limit")
     .rules(first, second);
 
   assert.throws(
@@ -537,7 +537,7 @@ test("distinct Rule declarations collide explicitly inside one Requirement", () 
 
 test("the callback defineSpec form remains compatible", () => {
   const spec = defineSpec("legacy", ({ requirement }) => {
-    const sharing = requirement("sharing", { statement: "Shares are time bounded" });
+    const sharing = requirement("sharing", { statement: "Shares have a time limit" });
     return {
       expiry: sharing.rule("expiry", { statement: "Share URLs expire" }),
     };

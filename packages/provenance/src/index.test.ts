@@ -359,7 +359,7 @@ test("equal local rule keys under different requirements reconcile separately", 
     statement: "Share URLs expire in 30 days",
   });
   const sessions = requirement("sessions", {
-    statement: "User sessions are time bounded",
+    statement: "User sessions have a time limit",
   });
   const sessionExpiry = sessions.rule("expiry", {
     statement: "Sessions that are not active expire in 24 hours",
@@ -382,7 +382,7 @@ test("defineSpec finalizes pure builders into immutable hierarchical handles", (
       statement: "Share URLs expire in 30 days",
     });
     const sessions = requirement("sessions", {
-      statement: "User sessions are time bounded",
+      statement: "User sessions have a time limit",
     });
     const sessionExpiry = sessions.rule("expiry", {
       statement: "Sessions that are not active expire in 24 hours",

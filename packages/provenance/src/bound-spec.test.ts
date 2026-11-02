@@ -324,12 +324,12 @@ test("a spec-scoped Rule materializes once for several Requirements", async () =
   const expiry = provenance.rule("expiry").statement("Authenticated access expires");
   const sharing = provenance
     .requirement("sharing")
-    .statement("Share URLs are time bounded")
+    .statement("Share URLs have a time limit")
     .from(policy)
     .rules(expiry);
   const sessions = provenance
     .requirement("sessions")
-    .statement("Sessions are time bounded")
+    .statement("Sessions have a time limit")
     .from(policy)
     .rules(expiry);
 
@@ -397,7 +397,7 @@ test("one Requirement keeps a spec-scoped implemented Rule at its exact root add
     .implementedBy(startWorkflow);
   const sharing = provenance
     .requirement("sharing")
-    .statement("Shares are time bounded")
+    .statement("Shares have a time limit")
     .rules(expiry);
 
   const result = await plan(provenance.build(sharing));
@@ -461,7 +461,7 @@ test("a local Rule attaches to another immutable snapshot of its Requirement", (
 test("a local Rule rejects another Requirement declaration with the same key", () => {
   const provenance = defineSpec("lifecycles");
   const first = provenance.requirement("sharing").statement("Shares expire");
-  const second = provenance.requirement("sharing").statement("URLs are time bounded");
+  const second = provenance.requirement("sharing").statement("URLs have a time limit");
   const expiry = first.rule("expiry").statement("Share URLs expire");
 
   assert.throws(

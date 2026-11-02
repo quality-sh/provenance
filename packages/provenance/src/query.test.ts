@@ -70,7 +70,7 @@ async function readsTheEnginesBoundedAnswers(): Promise<void> {
       name: "Retention policy",
     });
     const sharing = requirement("sharing", {
-      statement: "Shares are time bounded",
+      statement: "Shares have a time limit",
       sources: [retention],
     });
     const expiry = sharing.rule("expiry", {
@@ -83,7 +83,7 @@ async function readsTheEnginesBoundedAnswers(): Promise<void> {
     assert.ok(fetched.meta.stamp);
     assert.equal(fetched.meta.freshness_error, null);
 
-    const matched = await search({ collection: "requirements", text: "time bounded" });
+    const matched = await search({ collection: "requirements", text: "time limit" });
     assert.equal(matched.meta.has_more, false);
     assert.deepEqual(matched.data.items.map((node) => node.id), [sharing.id]);
 
