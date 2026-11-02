@@ -404,7 +404,10 @@ async fn mcp_regular_graph_work_executes_a_record_command() {
     let client = ().serve(client_io).await.unwrap();
 
     let result = client
-        .call_tool(CallToolRequestParams::new("list-requirements"))
+        .call_tool(
+            CallToolRequestParams::new("api")
+                .with_arguments(json!({"path":"requirements"}).as_object().unwrap().clone()),
+        )
         .await
         .unwrap();
 

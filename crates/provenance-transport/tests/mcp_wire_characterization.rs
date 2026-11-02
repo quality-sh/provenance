@@ -20,9 +20,9 @@ use std::sync::Arc;
 use support::{check_port::FixtureCheckPort, records::Repository};
 use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _, BufReader, DuplexStream, Lines};
 
-const TOOL_LIST_FNV1A: u64 = 10_468_206_372_994_181_353;
+const TOOL_LIST_FNV1A: u64 = 7_191_326_753_012_155_185;
 
-/// The tools that follow the catalog tools, in list order.
+/// The porcelain tools, in list order. The list has no plumbing tools.
 const PORCELAIN_TOOL_NAMES: &[&str] = &[
     "get",
     "search",
@@ -123,6 +123,10 @@ fn full_host(repository: &Repository) -> StatementHost {
     StatementHost::with_fixture_access(access).with_check_port(Arc::new(FixtureCheckPort))
 }
 
+fn check_host() -> StatementHost {
+    StatementHost::default().with_check_port(Arc::new(FixtureCheckPort))
+}
+
 #[tokio::test]
 async fn initialize_response_keeps_its_fields() {
     for requested in ["2025-06-18", "2024-11-05"] {
@@ -161,52 +165,27 @@ async fn tool_list_keeps_its_names_order_and_schemas() {
         .iter()
         .map(|tool| tool["name"].as_str().unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(names.len(), 190);
-    let (catalog, porcelain) = names.split_at(names.len() - PORCELAIN_TOOL_NAMES.len());
-    let definitions = provenance_contract::definitions()
-        .iter()
-        .map(|definition| definition.name)
-        .collect::<Vec<_>>();
-    assert_eq!(catalog, definitions);
-    assert_eq!(porcelain, PORCELAIN_TOOL_NAMES);
+    assert_eq!(names, PORCELAIN_TOOL_NAMES);
     assert_eq!(fnv1a(&result.to_string()), TOOL_LIST_FNV1A);
 }
 
 #[tokio::test]
 async fn tool_call_result_keeps_its_shape() {
-    let mut wire = Wire::start(StatementHost::default());
+    let mut wire = Wire::start(check_host());
     wire.initialize("2025-06-18").await;
     let response = wire
         .request(
             "tools/call",
-            json!({
-                "name":"check-statement",
-                "arguments":{"data":{"statement":"The system stores records."}}
-            }),
+            json!({"name":"check","arguments":{"categories":["graph"]}}),
         )
         .await;
-    let mut result = response["result"].clone();
-    let text = result["content"][0]["text"].as_str().unwrap();
     assert_eq!(
-        serde_json::from_str::<Value>(text).unwrap(),
-        result["structuredContent"]
-    );
-    result["content"][0]["text"] = json!("<structured content>");
-    // The analyzer reports the package version of this build.
-    let analyzer = result["structuredContent"]["data"]
-        .as_object_mut()
-        .unwrap()
-        .remove("analyzer_version")
-        .unwrap();
-    assert!(analyzer.is_string());
-    assert_eq!(
-        result,
+        response["result"],
         json!({
-            "content":[{"type":"text","text":"<structured content>"}],
+            "content":[{"type":"text","text":"graph: passed"}],
             "isError":false,
             "structuredContent":{
-                "data":{"findings":[],"issue":9,"standard":"ASD-STE100"},
-                "meta":{}
+                "categories":[{"category":"graph","status":"passed","findings":[]}]
             }
         })
     );
@@ -214,16 +193,16 @@ async fn tool_call_result_keeps_its_shape() {
 
 #[tokio::test]
 async fn typed_refusal_and_unknown_tool_keep_their_shape() {
-    let mut wire = Wire::start(StatementHost::default());
+    let mut wire = Wire::start(check_host());
     wire.initialize("2025-06-18").await;
     let refusal = wire
         .request(
             "tools/call",
-            json!({"name":"check-statement","arguments":{"data":{}}}),
+            json!({"name":"check","arguments":{"statement":"The pump stops.","strict":true}}),
         )
         .await;
     let envelope = json!({
-        "error":{"field":"request.statement","kind":"invalid_input","reason":"required"},
+        "error":{"kind":"invalid_options","message":"unsupported check options"},
         "meta":{}
     });
     assert_eq!(

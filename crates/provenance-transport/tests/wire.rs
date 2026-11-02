@@ -84,29 +84,26 @@ async fn mcp_projects_the_same_resource_operation() {
     let server = tokio::spawn(async move { server_host.serve_mcp(server_io).await.unwrap() });
     let client = ().serve(client_io).await.unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert!(tools.iter().any(|tool| {
+    assert!(!tools.iter().any(|tool| {
         provenance_contract::definitions()
             .iter()
             .any(|definition| definition.name == tool.name)
     }));
-    let tool = tools
-        .iter()
-        .find(|tool| tool.name == "check-statement")
-        .unwrap();
-    assert_ne!(
-        tool.description.as_deref(),
-        Some("Invoke the shared operation.")
-    );
+    let tool = tools.iter().find(|tool| tool.name == "api").unwrap();
     assert!(tool.input_schema["properties"]
         .get("protocol_version")
         .is_none());
     let result = client
         .call_tool(
-            CallToolRequestParams::new("check-statement").with_arguments(
-                json!({"data":{"statement":"The system stores records."}})
-                    .as_object()
-                    .unwrap()
-                    .clone(),
+            CallToolRequestParams::new("api").with_arguments(
+                json!({
+                    "path":"statement-checks",
+                    "method":"post",
+                    "body":{"statement":"The system stores records."}
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
             ),
         )
         .await

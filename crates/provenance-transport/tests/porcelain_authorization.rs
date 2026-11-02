@@ -52,8 +52,6 @@ async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert!(tools.iter().any(|tool| tool.name == "update-source"));
-    assert!(!tools.iter().any(|tool| tool.name == "get-source"));
     let update = tools.iter().find(|tool| tool.name == "update").unwrap();
     let schema = Value::Object((*update.input_schema).clone()).to_string();
     assert!(!schema.contains("source_type"), "{schema}");
@@ -73,8 +71,12 @@ async fn non_create_schema_excludes_a_writable_but_unreadable_kind() {
 
     let direct = call(
         &client,
-        "update-source",
-        json!({"id":"source_shared","data":{"name":"Direct source update"}}),
+        "api",
+        json!({
+            "path":"sources/source_shared",
+            "method":"patch",
+            "body":{"name":"Direct source update"}
+        }),
     )
     .await;
     assert_ne!(direct.is_error, Some(true), "{direct:?}");
@@ -98,8 +100,6 @@ async fn non_create_schema_and_dispatch_deny_a_hidden_mutation() {
     let client = ().serve(client_io).await.unwrap();
 
     let tools = client.list_all_tools().await.unwrap();
-    assert!(tools.iter().any(|tool| tool.name == "get-source"));
-    assert!(!tools.iter().any(|tool| tool.name == "update-source"));
     let update = tools.iter().find(|tool| tool.name == "update").unwrap();
     let schema = Value::Object((*update.input_schema).clone()).to_string();
     assert!(!schema.contains("source_type"), "{schema}");
@@ -116,7 +116,7 @@ async fn non_create_schema_and_dispatch_deny_a_hidden_mutation() {
         denied.structured_content.unwrap()["error"]["kind"],
         "access_denied"
     );
-    let source = call(&client, "get-source", json!({"id":"source_shared"})).await;
+    let source = call(&client, "api", json!({"path":"sources/source_shared"})).await;
     assert_ne!(source.is_error, Some(true), "{source:?}");
     assert_eq!(
         source.structured_content.unwrap()["data"]["name"],

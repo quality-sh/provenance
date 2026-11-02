@@ -24,7 +24,7 @@ fn refusal(result: &CallToolResult) -> Value {
 }
 
 #[tokio::test]
-async fn api_read_returns_the_named_catalog_tool_result_on_the_same_path() {
+async fn api_read_returns_the_record_on_its_public_path() {
     let repository = Repository::new("The shared graph is readable.");
     repository.all_kinds();
     let session = ApiSession::start(StatementHost::with_fixture_access(
@@ -32,17 +32,9 @@ async fn api_read_returns_the_named_catalog_tool_result_on_the_same_path() {
     ))
     .await;
 
-    let named = session
-        .call_named("get-source", json!({"id": "source_shared"}))
-        .await;
-    assert_ne!(named.is_error, Some(true), "{named:?}");
     let shared = session.call(json!({"path": "sources/source_shared"})).await;
 
     assert_ne!(shared.is_error, Some(true), "{shared:?}");
-    assert_eq!(
-        shared.structured_content, named.structured_content,
-        "one public path gives one result"
-    );
     assert_eq!(
         shared.structured_content.as_ref().unwrap()["data"]["id"],
         "source_shared"
@@ -180,21 +172,6 @@ async fn api_mutations_keep_the_operation_specific_preconditions() {
     );
 
     let stale = session.call(edit("A stale edit.")).await;
-    let named = session
-        .call_named(
-            "update-requirement",
-            json!({
-                "id": "req_shared",
-                "if_match": etag,
-                "data": {"actor": "api", "description": "A stale edit."}
-            }),
-        )
-        .await;
-    assert_eq!(
-        refusal(&stale),
-        refusal(&named),
-        "a stale If-Match refuses as the named tool refuses"
-    );
     let failure = refusal(&stale);
     assert_eq!(failure["kind"], "requirement_edit_conflict");
     assert_eq!(

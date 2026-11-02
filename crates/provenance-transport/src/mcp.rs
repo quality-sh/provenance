@@ -21,25 +21,13 @@ impl ServerHandler for StatementHost {
         info
     }
 
-    /// Lists the live MCP action names.
+    /// Lists the porcelain MCP tools.
     fn list_tools(
         &self,
         _: Option<PaginatedRequestParams>,
         _: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + '_ {
-        let mut tools = provenance_contract::definitions()
-            .iter()
-            .filter(|definition| self.advertises(definition.name))
-            .map(|definition| {
-                mcp_surface::tool(
-                    definition.name,
-                    definition.description,
-                    definition.mcp_input_schema(),
-                    definition.mcp_output_schema(),
-                    mcp_surface::SchemaDeclaration::Keep,
-                )
-            })
-            .collect::<Vec<_>>();
+        let mut tools = Vec::new();
         if crate::porcelain::get_is_available(self) {
             tools.push(crate::porcelain::get_tool());
         }
@@ -60,6 +48,8 @@ impl ServerHandler for StatementHost {
         }))
     }
 
+    /// Calls one porcelain tool; plumbing operations are reachable only through the api tool.
+    #[provenance_macros::rule("rule_porcelain_plumbing_only_through_api")]
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
@@ -106,43 +96,12 @@ impl ServerHandler for StatementHost {
         {
             return call_authoring_action(self, action, request.arguments).await;
         }
-        if let Some(definition) = provenance_contract::definitions()
-            .iter()
-            .find(|d| d.name == request.name)
-        {
-            return call_catalog_tool(self, definition, request.arguments).await;
-        }
         Err(ErrorData::new(
             ErrorCode::METHOD_NOT_FOUND,
             "Unknown tool",
             None,
         ))
     }
-}
-
-async fn call_catalog_tool(
-    host: &StatementHost,
-    definition: &'static provenance_contract::Definition,
-    arguments: Option<serde_json::Map<String, Value>>,
-) -> Result<CallToolResult, ErrorData> {
-    if !host.advertises(definition.name) {
-        return Ok(mcp_surface::failure_result(ErasedFailure::new(
-            None,
-            OperationFailure::AccessDenied,
-        )));
-    }
-    mcp_surface::admitted_call(host, arguments, |arguments| async move {
-        let arguments = Value::Object(arguments);
-        let (matched, data, query, headers) = match mcp_call(definition, &arguments) {
-            Ok(call) => call,
-            Err(failure) => return mcp_surface::failure_result(failure),
-        };
-        match routing::invoke(host, &matched, data, query, &headers, false).await {
-            Ok((value, _)) => CallToolResult::structured(value.into_value()),
-            Err(failure) => mcp_surface::failure_result(failure),
-        }
-    })
-    .await
 }
 
 async fn call_discussion(
@@ -210,13 +169,6 @@ type McpCall = (
     BTreeMap<String, String>,
     axum::http::HeaderMap,
 );
-
-pub fn mcp_call(
-    definition: &'static provenance_contract::Definition,
-    value: &Value,
-) -> Result<McpCall, ErasedFailure> {
-    mcp_call_with_path(definition, value, BTreeMap::new())
-}
 
 pub fn mcp_target_call(
     definition: &'static provenance_contract::Definition,
